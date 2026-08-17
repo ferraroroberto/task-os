@@ -748,3 +748,289 @@ a.chip:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   .task-row, .tree-row, .toast { transition: none; }
 }
+
+/* ======================================================= Step 5 surfaces */
+/* Board (five status columns — the launcher's board layout, ported) and
+   Today (due ≤ today grouped by project). Same rule as above: markup +
+   token values on top of the vendored components, no vendored file touched. */
+
+/* ------------------------------------------------------------- board */
+.board { display: flex; flex-direction: column; gap: var(--gap); }
+/* Phone strip: column switcher + counts — a segmented control that doubles
+   as the column header while the carousel shows one column at a time. */
+.board-strip { display: flex; gap: 4px; }
+.board-strip-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  padding: 6px 1px;
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-strip-btn.active { background: var(--card-2); color: var(--fg); border-color: var(--accent-border-soft); }
+.board-count, .board-col-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: var(--font-caption);
+  font-weight: 600;
+  text-align: center;
+}
+.board-strip-btn.active .board-count { background: var(--accent-soft); color: var(--accent); }
+
+/* Carousel (phone / narrow): one column per viewport, swipe between them —
+   scroll-snap gives the swipe for free, no gesture JS. */
+.board-columns {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.board-columns::-webkit-scrollbar { display: none; }
+.board-col {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+/* The strip is the column header on the carousel; the per-column title only
+   earns space in the desktop grid below. */
+.board-col-title { display: none; }
+.board-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* Cards = flat separator rows inside the column (the launcher look), the
+   priority accent on the row's left edge. */
+.board-item { position: relative; border-top: 1px solid var(--line-muted); }
+.board-item:first-child { border-top: 0; }
+.board-item.is-high > .board-card { border-left: 3px solid var(--danger); }
+.board-item.is-dragging { opacity: 0.5; }
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: var(--row-lg);
+  padding: 10px 12px;
+  color: var(--fg);
+  cursor: pointer;
+}
+.board-card:hover { background: var(--card-2); }
+.board-card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.board-card.is-new { background: var(--accent-soft); }
+.board-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1em;
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+.board-card-project {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.board-card-person { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.board-card-title {
+  font-size: var(--font-label);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.board-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+.board-card-meta .icon, .board-card-comment .icon, .board-card-person .icon { width: 12px; height: 12px; }
+.board-card-due { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); }
+.board-card-prio { text-transform: capitalize; }
+.board-card-prio::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+.board-card-recur, .board-card-kids { display: inline-flex; align-items: center; gap: 3px; }
+.board-card-meta .chip { max-width: 100%; }
+.board-card-comment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+.board-card-comment .icon { flex: none; }
+.board-card-comment-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-card-comment .chip { max-width: 70%; vertical-align: bottom; }
+/* Drop target: the whole column lights up while a card hovers over it. */
+.board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+/* Touch fallback for the drag: a status select under the card, only shown
+   where there is no pointer to drag with. */
+.board-card-status { display: none; }
+@media (pointer: coarse) {
+  .board-card-status { display: block; width: auto; margin: 0 12px 10px; height: var(--row-sm); }
+  .board-strip-btn { min-height: var(--row-sm); }
+}
+/* Small empty state per column — a peer of the cards, not a full-height card. */
+.board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: 4px; }
+.board-empty .empty-state-icon { width: 20px; height: 20px; }
+.board-empty .empty-state-message { font-size: var(--font-caption); }
+
+/* Desktop / wide: all five columns side by side using the full width, equal
+   widths, each scrolling on its own under a sticky header with the count. */
+@media (min-width: 1024px) {
+  .board-strip { display: none; }
+  .board-columns {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--gap);
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+  .board-col {
+    max-height: calc(100vh - 290px);
+    min-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .board-col-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 9px 12px;
+    background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: var(--font-caption);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .board-col-count { background: var(--card); }
+}
+
+/* ------------------------------------------------------------- today */
+.today-card { padding: 0; overflow: hidden; }
+.today-head { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.today-counts.has-overdue { color: var(--danger); }
+.today-group { padding: 0 0 4px; }
+.today-group + .today-group { border-top: 1px solid var(--line-muted); }
+.today-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px 2px;
+  color: var(--muted);
+  font-size: var(--font-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.today-group-title.is-loose { font-weight: 600; }
+.today-group-link {
+  border: 0;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.today-group-link:hover { background: var(--accent-soft); }
+.today-group-count { color: var(--muted); font-weight: 400; }
+.today-list { display: flex; flex-direction: column; }
+/* Repeating entries = flat list rows on a hairline (design.md list-row). */
+.today-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 64px 150px;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: var(--row-sm);
+  padding: 4px 14px 4px 8px;
+  border-top: 1px solid var(--line-muted);
+  cursor: pointer;
+}
+.today-group .today-row:first-child { border-top: 0; }
+.today-row:hover { background: var(--card-2); }
+.today-check {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.today-check .icon { width: var(--icon-title); height: var(--icon-title); }
+.today-check .icon:last-child { display: none; }
+.today-check:hover { color: var(--success); }
+.today-check:hover .icon:first-child, .today-check[aria-checked="true"] .icon:first-child { display: none; }
+.today-check:hover .icon:last-child, .today-check[aria-checked="true"] .icon:last-child { display: inline-block; }
+.today-check[aria-checked="true"] { color: var(--success); }
+.today-check:disabled { cursor: progress; }
+.today-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.today-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); }
+.today-recur { display: inline-flex; color: var(--muted); }
+.today-recur .icon { width: 12px; height: 12px; }
+.today-crumb { color: var(--muted); font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-due { font-size: var(--font-caption); white-space: nowrap; color: var(--fg); text-align: right; }
+.today-person { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; min-width: 0; overflow: hidden; }
+.today-person .icon { width: 12px; height: 12px; }
+.today-later .collapse-body { padding: 0 0 4px; }
+.today-later .today-group-title { padding-top: 10px; }
+@media (pointer: coarse) {
+  .today-check { width: var(--row-sm); height: var(--row-sm); }
+  .today-row { min-height: var(--row-md); }
+}
+@media (max-width: 520px) {
+  .today-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .today-person { grid-column: 2; grid-row: 2; }
+  .today-person:empty { display: none; }
+  .today-crumb { display: none; }
+}

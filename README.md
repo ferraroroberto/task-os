@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -39,6 +39,8 @@ Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwrig
 
 PC-first and full-width; the phone gets the same views as an adaptive second rendering (bottom pill, table as cards, drawer as a full-screen sheet).
 
+- **Board** — five status columns over `/api/board`: **Inbox · Todo · Doing · Standby · Done today** (done today = completed on the current local day; older done tasks never show). On a wide screen (≥ 1024 px) all five sit side by side using the full width, each scrolling on its own under a sticky header with its count; on the phone the columns are a one-column scroll-snap carousel and the count strip above doubles as the column switcher (the fleet launcher's board layout, ported). Cards show the project (top ancestor) line, person, title, due (relative, overdue in the danger tone), priority marker, repeat glyph, folder / issue chips, children count and the last comment. Click a card to open the drawer; **drag a card onto another column** to change its status (`PATCH`, an activity row, a toast on error) — on a touch device each card carries a status select instead. The filter row (project · person · text) is shared with the Table and encoded in the URL (`?project=12`); the status / due / sort filters stay Table-only.
+- **Today** — open tasks due ≤ today (overdue first, then today) grouped by root project, recurring tasks first inside each group; each row: a checkbox to mark done (a recurring task rolls its due one cadence forward instead of closing — toast `Done — next: <date>`), title, breadcrumb, due badge, person. **Later this week** (tomorrow … +7 days) sits collapsed below. This is the phone's landing tab: on a first visit a touch device opens on Today, the desktop on the Board (the last tab is remembered after that).
 - **Table** — one full-width grid over `/api/tasks`: code · title (breadcrumb `Parent › Child` under it) · due (relative, ISO on hover, overdue in the danger tone) · status (inline select) · priority · person · project (the top ancestor) · folder chip · last comment (links rendered as chips) · next action. The filter bar (status chips, project, person, due window, text, sort) **is the URL** — `?status=doing&project=12` is a shareable, bookmarkable view; the default is open tasks. Click the due cell to edit it inline: type a natural phrase (`tomorrow`, `fri`, `in 2 weeks`) or pick a date. Row click / Enter opens the drawer.
 - **Tree** — the whole hierarchy as an outliner: indent = nesting, collapse/expand persists, every node with children carries a **project** chip and a rollup (open descendants, nearest due). Drag a row onto another to re-parent it (`POST /api/tasks/{id}/move`; a cycle is refused with a toast); drop on the dashed zone at the bottom to move to the top level. Keyboard: ↑/↓ walk, →/← expand/collapse, Enter opens.
 - **Task drawer** — a right-hand side panel on desktop (≥ 1024 px, the list stays visible beside it), full-screen on the phone; deep-linkable as `#task/42`. Breadcrumb (clickable) → editable title → fields (status, priority, due, repeat, person, code) → description (markdown, edit/preview) → links (add/remove) → comments newest-first with URLs / `{folder}` refs / `repo#N` as clickable chips + a composer (Ctrl+Enter sends, `origin = ui`) → activity log (`field old → new · actor · time`) → children (click to navigate, add child) → issue panel (placeholder until Step 8).
@@ -62,8 +64,9 @@ tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground 
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, JSON error envelope), event_loop.py, manager.py
 app/webapp/routers/       misc (shell, /healthz, /api/version) · tasks (/api/tasks…, /api/activity) · people · search
-app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js (state + routing), table.js,
-                          tree.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
+                          · views (/api/board, /api/today)
+app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js (state + routing), board.js, table.js,
+                          tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
@@ -117,6 +120,8 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `GET /api/activity?task=&limit=` | activity log, newest first (all tasks when no `task`) |
 | `POST /api/parse` `{text, today?}` | quick-add split → `{title, due, due_phrase, parent_ref, parent}` (`parent` resolved to `{id, title}` or `null`) |
 | `GET/POST /api/people` · `GET/PATCH/DELETE /api/people/{id}` | people CRUD (`open_tasks` count included) |
+| `GET /api/board?project=&person=&q=` | `{today, columns: {inbox, todo, doing, standby, done}}` — the Board's buckets, same enriched summaries as the list; `done` = completed on the current local day only |
+| `GET /api/today?person=` | `{today, due: [{root, items}], week: [{root, items}], counts: {overdue, today, week}}` — open tasks due ≤ today grouped by root project (recurring first inside a group), plus tomorrow … +7 days in the same shape |
 | `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
 
 Also `GET /` shell · `GET /healthz` liveness.
@@ -185,7 +190,7 @@ The e2e suite boots its own disposable webapp on a free port with a temp DB; it 
 
 ## Phone / PWA
 
-Arrives with Step 7: Tailscale HTTPS certificate (`gen_tailscale_cert.py`), Add-to-Home-Screen install, phone-tuned Board carousel. Until then the app is plain HTTP on the LAN/loopback; the manifest + icons already ship.
+Arrives with Step 7: Tailscale HTTPS certificate (`gen_tailscale_cert.py`), Add-to-Home-Screen install, phone verification of the Board carousel and the Today landing tab on a real device. Until then the app is plain HTTP on the LAN/loopback; the manifest + icons already ship.
 
 ## Roadmap
 
