@@ -210,6 +210,22 @@ html, body {
   padding: 1px 5px;
 }
 
+/* Settings — the mirror/backup status rows (definition list, label + value). */
+.status-rows { margin: 0; display: grid; gap: var(--space-xs); }
+.status-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
+.status-row dt { color: var(--muted); font-size: var(--font-caption); text-transform: uppercase; letter-spacing: 0.04em; }
+.status-row dd { margin: 0; font-size: var(--font-label); overflow-wrap: anywhere; }
+.status-row .status-ok { color: var(--success, var(--fg)); font-weight: 600; }
+.status-row .status-off { color: var(--muted); font-weight: 600; }
+.status-row .status-warn { color: var(--danger, var(--fg)); font-weight: 600; }
+.status-row code {
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  font-size: 0.92em;
+  background: var(--card-off);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
 /* ============================================================ theme toggle */
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
    ACTION: moon in light (tap → dark), sun in dark (tap → light). */

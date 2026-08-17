@@ -51,12 +51,13 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
+from tests.conftest import write_test_config
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import REPO_ROOT, _boot, _terminate
+from tests.e2e.conftest import _boot, _terminate
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -84,10 +85,10 @@ def authed_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 
     work = tmp_path_factory.mktemp("taskos-e2e-authed")
     seed_db(work / "tasks.db")
-    sample = json.loads((REPO_ROOT / "config" / "config.sample.json").read_text(encoding="utf-8"))
-    sample["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
-    cfg = work / "config.json"
-    cfg.write_text(json.dumps(sample), encoding="utf-8")
+    cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    raw["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
     proc, base, log = _boot(work, work / "tasks.db", cfg)
     try:
         yield base

@@ -11,6 +11,7 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 03 | [Import my Notion](validation/story-03-notion-import.md) | `tests/test_import_notion.py` | verified | 2026-08-17 |
 | 04 | [Monday triage](validation/story-04-triage.md) | `tests/e2e/test_story_04_triage.py` | verified | 2026-08-17 |
 | 05 | [Board day](validation/story-05-board.md) | `tests/e2e/test_story_05_board.py` | verified | 2026-08-17 |
+| 06 | [Edit in a text editor](validation/story-06-mirror.md) | `tests/e2e/test_story_06_mirror.py` | verified (typing inside the editor window itself not verified — see record) | 2026-08-17 |
 | 07 | [Phone](validation/story-07-phone.md) | `tests/e2e/test_story_07_phone.py` · `tests/test_auth.py` | verified in the browser · **real phone not verified** (owner's checklist in the write-up) | 2026-08-17 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.

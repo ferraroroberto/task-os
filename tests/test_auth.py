@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from src import config as cfgmod
 from src import db as dbmod
 from src.auth import COOKIE_NAME, hash_password, verify_password
+from tests.conftest import write_test_config
 
 LOOPBACK = ("127.0.0.1", 50000)
 PHONE = ("100.101.102.103", 50000)  # a tailnet client
@@ -20,9 +21,10 @@ TOKEN = "t0ken-for-tests-only"
 
 
 def _write_config(path: Path, token: str = "", password_hash: str = "") -> Path:
-    sample = json.loads((cfgmod.CONFIG_SAMPLE_PATH).read_text(encoding="utf-8"))
-    sample["auth"] = {"token": token, "password_hash": password_hash}
-    path.write_text(json.dumps(sample), encoding="utf-8")
+    write_test_config(path)                                  # sample, mirror / backup dirs blanked
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["auth"] = {"token": token, "password_hash": password_hash}
+    path.write_text(json.dumps(raw), encoding="utf-8")
     return path
 
 

@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,23 @@ CONFIG_SAMPLE_PATH = CONFIG_DIR / "config.sample.json"
 CONFIG_PATH_ENV = "TASKOS_CONFIG_PATH"
 
 DEFAULT_PORT = 8448
+
+_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
+
+
+def resolve_placeholders(value: str, placeholders: Mapping[str, str]) -> str:
+    """Expand ``{onedrive}``-style tokens from ``config.placeholders``.
+
+    Unknown tokens are left verbatim so the caller can see (and report) what
+    is missing — see :func:`unresolved_placeholders`. Used for the mirror /
+    backup dirs here; folder refs reuse it from Step 9 on.
+    """
+    return _PLACEHOLDER_RE.sub(lambda m: str(placeholders.get(m.group(1), m.group(0))), value or "")
+
+
+def unresolved_placeholders(value: str) -> list[str]:
+    """The ``{tokens}`` still present after :func:`resolve_placeholders`."""
+    return _PLACEHOLDER_RE.findall(value or "")
 
 
 @dataclass(frozen=True)

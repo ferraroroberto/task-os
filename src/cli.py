@@ -11,6 +11,8 @@
     tasks move N --parent M     (--parent root → top level)
     tasks search "q"
     tasks people
+    tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
+    tasks backup                        copy the database to mirror.backup_dir now
 
 Every command takes ``--json`` for machine-readable output (the same shapes
 the REST API returns). Talks to the running server over HTTP when it answers
@@ -145,6 +147,18 @@ class HttpBackend:
     def people(self) -> list[dict[str, Any]]:
         return self._call("GET", "/api/people")["items"]
 
+    def mirror_export(self) -> dict[str, Any]:
+        return self._call("POST", "/api/mirror/export")
+
+    def mirror_import(self) -> dict[str, Any]:
+        return self._call("POST", "/api/mirror/import")
+
+    def status(self) -> dict[str, Any]:
+        return self._call("GET", "/api/status")
+
+    def backup(self) -> dict[str, Any]:
+        return self._call("POST", "/api/backup")
+
 
 class LocalBackend:
     """Opens the database directly — the app-down path."""
@@ -159,6 +173,35 @@ class LocalBackend:
         self._repo = tasks_repo
         init_db()
         self.conn: sqlite3.Connection = connect()
+        # Writes made here bypass the app's debounced exporter, so collect the
+        # touched ids and mirror them synchronously in finish().
+        self._touched: set[int] = set()
+        self._repo.add_write_listener(self._on_write)
+        self._mirror: Any = None
+
+    def _on_write(self, ids: list[int]) -> None:
+        self._touched.update(ids)
+
+    def _mirror_service(self) -> Any:
+        if self._mirror is None:
+            from src.mirror import Mirror
+
+            self._mirror = Mirror(load_config())
+        return self._mirror
+
+    def finish(self) -> int:
+        """Export the tasks this command touched (when the mirror is configured); returns the count."""
+        self._repo.remove_write_listener(self._on_write)
+        if not self._touched:
+            return 0
+        mirror = self._mirror_service()
+        if not mirror.enabled:
+            return 0
+        try:
+            return mirror.export_ids(self.conn, sorted(self._touched))
+        except Exception as exc:  # noqa: BLE001 — the command already succeeded; the app's next full export catches up
+            logger.warning("⚠️ mirror export after the command failed: %s", exc)
+            return 0
 
     def _wrap(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         try:
@@ -207,6 +250,34 @@ class LocalBackend:
 
     def people(self) -> list[dict[str, Any]]:
         return self._wrap(self._repo.list_people)
+
+    def mirror_export(self) -> dict[str, Any]:
+        mirror = self._mirror_service()
+        if not mirror.enabled:
+            raise CliError(mirror.reason, code="mirror_disabled")
+        return mirror.export_all(self.conn)
+
+    def mirror_import(self) -> dict[str, Any]:
+        mirror = self._mirror_service()
+        if not mirror.enabled:
+            raise CliError(mirror.reason, code="mirror_disabled")
+        return mirror.import_tick(self.conn)
+
+    def status(self) -> dict[str, Any]:
+        from src.backup import BackupScheduler
+
+        return {"mirror": self._mirror_service().status(), "backup": BackupScheduler(load_config()).status()}
+
+    def backup(self) -> dict[str, Any]:
+        from src.backup import BackupScheduler
+
+        scheduler = BackupScheduler(load_config())
+        if not scheduler.enabled:
+            raise CliError(scheduler.reason, code="backup_disabled")
+        target = scheduler.run_now()
+        if target is None:
+            raise CliError(scheduler.last_error or "backup failed", code="backup_failed")
+        return {"file": target.name, "dir": str(target.parent), "path": str(target)}
 
 
 def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
@@ -332,6 +403,27 @@ def fmt_people(items: list[dict[str, Any]]) -> str:
                      + f"  ({p.get('open_tasks', 0)} open)" for p in items)
 
 
+def fmt_status(status: dict[str, Any]) -> str:
+    m = status.get("mirror") or {}
+    b = status.get("backup") or {}
+    lines = []
+    if m.get("enabled"):
+        lines.append(f"mirror   enabled · {m.get('dir')} · {m.get('files')} file(s)"
+                     f" · last export {m.get('last_export') or '-'} · last import {m.get('last_import') or '-'}"
+                     f" · errors {m.get('errors', 0)}"
+                     + (f" ({', '.join(m.get('error_files') or [])})" if m.get("error_files") else "")
+                     + (" · watching" if m.get("watching") else ""))
+    else:
+        lines.append(f"mirror   not configured — {m.get('reason') or 'unknown'}")
+    if b.get("enabled"):
+        lines.append(f"backup   enabled · {b.get('dir')} · last {b.get('last_file') or '-'}"
+                     f" · next {b.get('next_run') or '(app not running)'}"
+                     + (f" · last error {b['last_error']}" if b.get("last_error") else ""))
+    else:
+        lines.append(f"backup   not configured — {b.get('reason') or 'unknown'}")
+    return "\n".join(lines)
+
+
 # ------------------------------------------------------------------ commands
 
 
@@ -426,6 +518,27 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "people":
         items = backend.people()
         return items, fmt_people(items)
+    if cmd == "mirror":
+        if args.action == "export":
+            r = backend.mirror_export()
+            return r, f"mirror: {r['tasks']} task(s) → {r['written']} written, {r['removed']} removed"
+        if args.action == "import":
+            r = backend.mirror_import()
+            imported = r.get("imported") or []
+            errors = r.get("errors") or []
+            detail = "".join(
+                f"\n  {i['path']}: applied {list(i['applied']) or '-'} · {i['comments_added']} comment(s)"
+                + (f" · conflicts {i['conflicts']}" if i.get("conflicts") else "")
+                + (f" · rejected {i['rejected']}" if i.get("rejected") else "")
+                for i in imported
+            ) + "".join(f"\n  {e['path']}: skipped — {e['error']}" for e in errors)
+            return r, (f"mirror: checked {r.get('checked', 0)} file(s), imported {len(imported)}, "
+                       f"skipped {len(errors)}" + detail)
+        r = backend.status()
+        return r, fmt_status(r)
+    if cmd == "backup":
+        r = backend.backup()
+        return r, f"backup written: {r['path']}"
     raise CliError(f"unknown command {cmd!r}", code="usage")
 
 
@@ -485,6 +598,13 @@ def build_parser() -> argparse.ArgumentParser:
     se.add_argument("query")
 
     sub.add_parser("people", parents=[common], help="list people")
+
+    mi = sub.add_parser("mirror", parents=[common], help="markdown mirror: export · import · status")
+    mi.add_argument("action", choices=("export", "import", "status"), nargs="?", default="status",
+                    help="export = every task to mirror.dir now · import = one watcher pass · status (default)")
+
+    sub.add_parser("backup", parents=[common],
+                   help="copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)")
     return p
 
 
@@ -504,6 +624,8 @@ def main(argv: list[str] | None = None, backend: HttpBackend | LocalBackend | No
                 where = "database directly (--local)" if args.local else "database directly (app not answering)"
             print(f"[tasks] via {be.name}: {where}", file=sys.stderr)
         payload, text = run(args, be)
+        if isinstance(be, LocalBackend):
+            be.finish()
     except CliError as exc:
         if as_json:
             err: dict[str, Any] = {"error": {"code": exc.code, "message": str(exc)}}

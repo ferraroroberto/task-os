@@ -41,6 +41,9 @@ const els = {
   accessClient: document.getElementById('accessClient'),
   accessRows: document.getElementById('accessRows'),
   signOutBtn: document.getElementById('signOutBtn'),
+  mirrorCardMeta: document.getElementById('mirrorCardMeta'),
+  statusMirror: document.getElementById('statusMirror'),
+  statusBackup: document.getElementById('statusBackup'),
   boardFilters: document.getElementById('boardFilters'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
@@ -362,12 +365,7 @@ function accessRow(label, ok, text) {
   return [dt, dd];
 }
 
-async function fetchAccessStatus() {
-  let st;
-  try { st = await api('/api/status'); } catch (_) {
-    els.accessRows.replaceChildren(...accessRow('Status', false, 'unknown — /api/status unreachable'));
-    return;
-  }
+function renderAccessCard(st) {
   const client = { loopback: 'this PC', token: 'signed in', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
   els.accessClient.textContent = client;
   els.accessRows.replaceChildren(
@@ -378,11 +376,83 @@ async function fetchAccessStatus() {
   els.signOutBtn.hidden = st.auth.client !== 'token';
 }
 
+function renderAccessUnknown(message) {
+  els.accessRows.replaceChildren(...accessRow('Status', false, 'unknown — ' + message));
+}
+
 function wireSignOut() {
   els.signOutBtn.addEventListener('click', async function () {
     try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
     location.assign('/login');
   });
+
+// ------------------------------------------------- mirror + backup status
+function statusPart(state, text) {
+  const s = document.createElement('span');
+  s.className = 'status-' + state;
+  s.textContent = text;
+  return s;
+}
+
+function codeEl(text) {
+  const c = document.createElement('code');
+  c.textContent = text;
+  return c;
+}
+
+function renderMirrorRow(dd, m) {
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!m || !m.enabled) {
+    dd.append(statusPart('off', 'not configured'), ' — ' + ((m && m.reason) || 'unknown'));
+    return;
+  }
+  dd.append(
+    statusPart(m.errors ? 'warn' : 'ok', m.errors ? 'enabled · ' + m.errors + ' file(s) skipped' : 'enabled'),
+    ' · ', codeEl(m.dir), ' · ' + (m.files == null ? '?' : m.files) + ' file(s)',
+    ' · last export ' + (m.last_export ? fmtTsShort(m.last_export) : '–'),
+    ' · last import ' + (m.last_import ? fmtTsShort(m.last_import) : '–')
+  );
+  if (m.error_files && m.error_files.length) dd.append(' · skipped: ' + m.error_files.join(', '));
+}
+
+function renderBackupRow(dd, b) {
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!b || !b.enabled) {
+    dd.append(statusPart('off', 'not configured'), ' — ' + ((b && b.reason) || 'unknown'));
+    return;
+  }
+  dd.append(
+    statusPart(b.last_error ? 'warn' : 'ok', b.last_error ? 'error' : 'enabled'),
+    ' · ', codeEl(b.dir), ' · last ' + (b.last_file || '–'), ' · next ' + (b.next_run ? fmtTsShort(b.next_run) : '–')
+  );
+  if (b.last_error) dd.append(' · ' + b.last_error);
+}
+
+function fmtTsShort(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// One GET /api/status feeds the Settings pane's Phone access card (https +
+// auth, Step 7) and the mirror / backup card (Step 6).
+async function fetchStatus() {
+  if (!els.statusMirror) return;
+  try {
+    const body = await api('/api/status');
+    renderAccessCard(body);
+    renderMirrorRow(els.statusMirror, body.mirror);
+    renderBackupRow(els.statusBackup, body.backup);
+    const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
+    els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
+  } catch (err) {
+    // An unreachable status is its own visible state, never a stale "Loading…".
+    renderAccessUnknown(err.message);
+    els.statusMirror.textContent = 'unknown — ' + err.message;
+    els.statusBackup.textContent = 'unknown — ' + err.message;
+    els.mirrorCardMeta.textContent = 'unknown';
+  }
 }
 
 // ---------------------------------------------------------------- boot
@@ -403,7 +473,11 @@ async function boot() {
   nav = initNavTabs({
     storageKey: TAB_KEY,
     defaultTab: coarse ? 'today' : 'board',
-    onChange: function (tab) { state.tab = tab; if (tab === 'board' && board) board.show(); },
+    onChange: function (tab) {
+      state.tab = tab;
+      if (tab === 'board' && board) board.show();
+      if (tab === 'settings') fetchStatus();
+    },
   });
   if (wantsTable) nav.setTab('table');
   mountQuickAdds();
@@ -413,7 +487,7 @@ async function boot() {
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   fetchVersion();
-  fetchAccessStatus();
+  fetchStatus();
   wireSignOut();
   await loadPeople();
   await refreshAll();

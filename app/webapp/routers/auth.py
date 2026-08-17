@@ -7,9 +7,10 @@
                          cookie for 90 days; 401 on refusal, 503 when no token
                          is configured (nothing to hand back)
     POST /api/logout   → clears the cookie
-    GET  /api/status   → {https, auth: {enabled, password, client}} — how this
-                         request came in and what the install accepts; drives
-                         the Settings pane's "Phone access" card
+
+``access_status(request)`` — ``{https, auth: {enabled, password, client}}``:
+how this request came in and what the install accepts. Folded into the one
+``GET /api/status`` (``routers/mirror``) that drives the Settings pane.
 
 Failed and successful sign-ins are logged with the client host (info level)
 so a phone-side review is one grep of ``data/logs/task-os.log``.
@@ -86,8 +87,8 @@ async def logout(request: Request) -> JSONResponse:
     return response
 
 
-@router.get("/api/status")
-async def status(request: Request) -> dict[str, Any]:
+def access_status(request: Request) -> dict[str, Any]:
+    """The transport + access facts for ``GET /api/status``."""
     auth = _auth(request)
     return {
         "https": request.url.scheme == "https",
