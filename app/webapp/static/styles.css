@@ -768,7 +768,33 @@ a.chip:hover { text-decoration: underline; }
 .child-row:hover { background: var(--card-2); }
 .child-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .child-due { color: var(--muted); font-size: var(--font-caption); }
-.issue-panel { display: flex; align-items: center; gap: 8px; font-size: var(--font-label); }
+/* ------------------------------------------------------- issue panel */
+/* Step 8: the linked issue (chip · state pill · labels · meta · unlink) or
+   the create / link forms for a plain task. Chips carry the state: an open
+   issue reads as any link chip, a closed one goes muted with a check. */
+.issue-panel { display: flex; flex-direction: column; gap: 8px; font-size: var(--font-label); }
+.issue-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.issue-state { text-transform: none; }
+.issue-labels { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.chip-label-tag { color: var(--muted); font-size: 0.7rem; padding: 0 6px; }
+.issue-meta { font-size: var(--font-caption); }
+.issue-actions { display: flex; gap: 6px; }
+.issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
+.issue-form { display: flex; gap: 6px; }
+.issue-form .input-native { flex: 1 1 auto; min-width: 0; }
+.issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
+a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); border-color: var(--line); }
+.chip-issue-closed .chip-label { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.chip-issue .chip-state { width: 12px; height: 12px; color: var(--success); }
+.chip-issue-unknown { border-style: dashed; }
+.card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
+.card-actions .button-surface { display: inline-flex; align-items: center; gap: 4px; }
+.card-actions .button-surface .icon { width: 14px; height: 14px; }
+/* the header ↻ sits left of the theme toggle; both pin right */
+.home-head .home-sync { margin-left: auto; }
+.home-head .home-sync:not([hidden]) + .home-toggle { margin-left: var(--space-xs); }
+.is-busy .icon { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ------------------------------------------------------------ toasts */
 .toasts {
@@ -822,6 +848,7 @@ a.chip:hover { text-decoration: underline; }
   .filter-count { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .is-busy .icon { animation: none; }
   .task-row, .tree-row, .toast { transition: none; }
 }
 

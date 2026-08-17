@@ -13,6 +13,7 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 05 | [Board day](validation/story-05-board.md) | `tests/e2e/test_story_05_board.py` | verified | 2026-08-17 |
 | 06 | [Edit in a text editor](validation/story-06-mirror.md) | `tests/e2e/test_story_06_mirror.py` | verified (typing inside the editor window itself not verified — see record) | 2026-08-17 |
 | 07 | [Phone](validation/story-07-phone.md) | `tests/e2e/test_story_07_phone.py` · `tests/test_auth.py` | verified in the browser · **real phone not verified** (owner's checklist in the write-up) | 2026-08-17 |
+| 08 | [An issue becomes a task](validation/story-08-issues.md) | `tests/e2e/test_story_08_issues.py` | verified (fake provider on screen + real GitHub walk, counts only) | 2026-08-17 |
 | 09 | [Open a folder](validation/story-09-folders.md) | `tests/e2e/test_story_09_folders.py` · `tests/test_opener.py` · `tests/test_placeholders.py` · `tests/test_folder_index.py` | verified on PC #1 (browser → opener → Explorer) · **second PC not verified** (steps in the write-up) | 2026-08-17 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.

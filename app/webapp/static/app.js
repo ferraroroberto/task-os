@@ -4,9 +4,10 @@
  * Tree, the task drawer (↔ #task/<id>) and the quick-add bars; Step 5 adds
  * the Board (five status columns, the project/person/text filters shared
  * with the Table) and Today (due ≤ today grouped by project — the phone's
- * landing tab). Every write funnels through `patchTask` / `moveTask` /
- * `doneTask` / the drawer, then `refreshAll()` re-fetches and re-renders, so
- * the views never drift.
+ * landing tab); Step 8 adds the issue sync (↻ in the header + Settings card,
+ * `syncIssues()` → POST /api/issues/sync → refreshAll). Every write funnels
+ * through `patchTask` / `moveTask` / `doneTask` / the drawer, then
+ * `refreshAll()` re-fetches and re-renders, so the views never drift.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -54,6 +55,11 @@ const els = {
   openerEnv: document.getElementById('openerEnv'),
   openerEnvCopy: document.getElementById('openerEnvCopy'),
   reindexBtn: document.getElementById('reindexBtn'),
+  issuesSync: document.getElementById('issuesSync'),
+  issuesCardMeta: document.getElementById('issuesCardMeta'),
+  statusIssues: document.getElementById('statusIssues'),
+  statusIssuesSync: document.getElementById('statusIssuesSync'),
+  issuesSyncNow: document.getElementById('issuesSyncNow'),
   boardFilters: document.getElementById('boardFilters'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
@@ -73,6 +79,7 @@ const state = {
   today: null,      // /api/today → {today, due, week, counts}
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
+  issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
 };
 
 let nav = null;
@@ -529,6 +536,97 @@ async function fetchStatus() {
   }
 }
 
+// ------------------------------------------------------------ issue sync
+function renderIssuesStatus() {
+  const st = state.issues;
+  const configured = !!(st && st.enabled);
+  if (els.issuesSync) {
+    els.issuesSync.hidden = !configured;
+    els.issuesSync.title = configured
+      ? 'Sync issues now (' + st.provider + (st.last_sync ? ' · last ' + fmtTsShort(st.last_sync) : '') + ')'
+      : 'Issue provider not configured';
+  }
+  if (els.issuesSyncNow) els.issuesSyncNow.disabled = !configured;
+  if (!els.statusIssues) return;
+  els.statusIssues.replaceChildren();
+  els.statusIssuesSync.replaceChildren();
+  els.statusIssues.classList.remove('muted');
+  els.statusIssuesSync.classList.remove('muted');
+  if (!st) {
+    els.statusIssues.textContent = 'unknown';
+    els.statusIssuesSync.textContent = '–';
+    els.issuesCardMeta.textContent = 'unknown';
+    return;
+  }
+  if (!configured) {
+    els.statusIssues.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
+    els.statusIssuesSync.textContent = '–';
+    els.issuesCardMeta.textContent = 'off';
+    return;
+  }
+  els.statusIssues.append(
+    statusPart(st.last_error ? 'warn' : 'ok', st.last_error ? 'error' : 'enabled'),
+    ' · ', codeEl(st.provider), ' · every ' + st.sync_minutes + ' min',
+    st.next_run ? ' · next ' + fmtTsShort(st.next_run) : ''
+  );
+  if (st.last_error) els.statusIssues.append(' · ' + (st.last_error_code ? st.last_error_code + ': ' : '') + st.last_error);
+  const r = st.last_result;
+  if (!st.last_sync) {
+    els.statusIssuesSync.textContent = 'not yet';
+  } else {
+    els.statusIssuesSync.append(fmtTsShort(st.last_sync));
+    if (r) {
+      els.statusIssuesSync.append(' · ' + r.listed + ' open issue(s) · ' + r.created + ' new · ' + r.retitled + ' retitled · ' + r.reopened + ' reopened · ' + r.closed + ' closed' + (r.errors && r.errors.length ? ' · ' + r.errors.length + ' error(s)' : ''));
+    }
+  }
+  if (st.repos && st.repos.length) els.statusIssuesSync.append(' · repos: ' + st.repos.join(', '));
+  els.issuesCardMeta.textContent = st.last_error ? 'error' : (st.last_sync ? 'synced' : 'on');
+}
+
+async function fetchIssuesStatus() {
+  try {
+    state.issues = await api('/api/issues/status');
+  } catch (err) {
+    state.issues = null;
+  }
+  renderIssuesStatus();
+}
+
+let syncing = null;
+/** One sync pass now; every ↻ in the app funnels here (header, Settings, drawer). */
+async function syncIssues() {
+  if (syncing) return syncing;
+  syncing = (async function () {
+    els.issuesSync.classList.add('is-busy');
+    try {
+      const r = await api('/api/issues/sync', { method: 'POST' });
+      const bits = [];
+      if (r.created) bits.push(r.created + ' new');
+      if (r.retitled) bits.push(r.retitled + ' retitled');
+      if (r.reopened) bits.push(r.reopened + ' reopened');
+      if (r.closed) bits.push(r.closed + ' closed');
+      if (r.errors && r.errors.length) bits.push(r.errors.length + ' error(s)');
+      toast('Issues synced: ' + r.listed + ' open' + (bits.length ? ' · ' + bits.join(' · ') : ' · nothing changed'), r.errors && r.errors.length ? 'error' : 'success');
+      await refreshAll();
+      if (drawer.currentId() != null) drawer.refresh();
+      return r;
+    } catch (err) {
+      toast('Issue sync failed: ' + (err.message || 'unknown'), 'error');
+      throw err;
+    } finally {
+      els.issuesSync.classList.remove('is-busy');
+      await fetchIssuesStatus();
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+function wireIssueSync() {
+  if (els.issuesSync) els.issuesSync.addEventListener('click', function () { syncIssues().catch(function () {}); });
+  if (els.issuesSyncNow) els.issuesSyncNow.addEventListener('click', function () { syncIssues().catch(function () {}); });
+}
+
 // ---------------------------------------------------------------- boot
 async function boot() {
   wireTheme();
@@ -537,6 +635,8 @@ async function boot() {
     onOpen: openTask,
     onClose: closeTask,
     people: function () { return state.people; },
+    issues: function () { return state.issues; },
+    onSyncIssues: syncIssues,
   });
   // A shared Table view (?status=doing…) lands on the Table, whatever tab was
   // last used; project / person / q are shared with the Board and don't move
@@ -550,7 +650,7 @@ async function boot() {
     onChange: function (tab) {
       state.tab = tab;
       if (tab === 'board' && board) board.show();
-      if (tab === 'settings') fetchStatus();
+      if (tab === 'settings') { fetchStatus(); fetchIssuesStatus(); }
     },
   });
   if (wantsTable) nav.setTab('table');
@@ -560,12 +660,13 @@ async function boot() {
   });
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
+  wireIssueSync();
   fetchVersion();
   fetchStatus();
   wireSignOut();
   wireReindex();
   await loadPeople();
-  await refreshAll();
+  await Promise.all([refreshAll(), fetchIssuesStatus()]);
   onHashChange();
 }
 

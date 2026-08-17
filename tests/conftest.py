@@ -7,7 +7,9 @@ mirror watcher against it. This autouse session fixture writes a copy of the
 sample with both folders blanked (→ the services report "not configured")
 and points ``TASKOS_CONFIG_PATH`` at it, unless the caller already set one.
 Tests that need a live mirror build their own config on top (see
-``tests/test_mirror.py`` / the e2e conftest).
+``tests/test_mirror.py`` / the e2e conftest). It also forces the issue
+provider off (``TASKOS_ISSUE_PROVIDER=none``) so no test spawns ``gh``;
+``tests/test_issues.py`` and the story 08 e2e fixture opt into the fake.
 """
 
 from __future__ import annotations
@@ -47,6 +49,9 @@ def write_test_config(
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolated_config(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    # No test process ever spawns ``gh``: the issue provider is forced off
+    # unless the caller picked one (the e2e story 08 fixture sets ``fake``).
+    os.environ.setdefault("TASKOS_ISSUE_PROVIDER", "none")
     if os.environ.get("TASKOS_CONFIG_PATH"):
         yield
         return

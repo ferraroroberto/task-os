@@ -24,7 +24,7 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, chipFor, linkify, relDue } from './format.js';
+import { STATUSES, chipFor, issueChip, linkify, relDue } from './format.js';
 import { filterSelect } from './table.js';
 
 export const BOARD_COLUMNS = [
@@ -284,10 +284,7 @@ function buildCard(t, handlers) {
     meta.appendChild(r);
   }
   if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
-  if (t.issue_ref) {
-    const ref = t.issue_ref.repo + '#' + t.issue_ref.number;
-    meta.appendChild(chipFor(t.issue_ref.url || ref, ref));
-  }
+  if (t.issue_ref) meta.appendChild(issueChip(t.issue_ref));
   if (t.child_count) {
     const kids = document.createElement('span');
     kids.className = 'board-card-kids';
