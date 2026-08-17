@@ -342,7 +342,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeProvider) 
     monkeypatch.setenv(FAKE_PATH_ENV, str(fake.path))
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         yield c
 
 
@@ -395,7 +395,7 @@ def test_routes_report_not_configured_and_provider_errors(tmp_path: Path, monkey
     monkeypatch.setenv(PROVIDER_ENV, "none")
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         st = c.get("/api/issues/status").json()
         assert st["enabled"] is False and "TASKOS_ISSUE_PROVIDER=none" in st["reason"]
         r = c.post("/api/issues/sync")
@@ -406,7 +406,7 @@ def test_routes_report_not_configured_and_provider_errors(tmp_path: Path, monkey
     fake = FakeProvider.from_issues(tmp_path / "forge.json", [], error={"code": "not_authenticated", "message": "gh auth login"})
     monkeypatch.setenv(PROVIDER_ENV, "fake")
     monkeypatch.setenv(FAKE_PATH_ENV, str(fake.path))
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         r = c.post("/api/issues/sync")
         assert r.status_code == 502 and r.json()["error"] == {"code": "provider_error", "message": "gh auth login", "detail": {"code": "not_authenticated"}}
         st = c.get("/api/issues/status").json()
