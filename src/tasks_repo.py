@@ -588,6 +588,9 @@ def list_tasks(
     - ``q``: FTS over title/description/comments (see :func:`search`).
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
+
+    Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
+    top ancestor — the Table's project column) and ``last_comment``.
     """
     where: list[str] = []
     args: list[Any] = []
@@ -655,7 +658,46 @@ def list_tasks(
     )
     if limit:
         sql += f" LIMIT {int(limit)}"
-    return [_summary(conn, dict(r)) for r in conn.execute(sql, args).fetchall()]
+    items = [_summary(conn, dict(r)) for r in conn.execute(sql, args).fetchall()]
+    _enrich_list(conn, items)
+    return items
+
+
+def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
+    """Add what the Table needs per row — ``breadcrumb`` (root → parent),
+    ``root`` (the top ancestor, i.e. the project column) and ``last_comment``
+    — in three queries total instead of three per row."""
+    if not items:
+        return
+    titles: dict[int, tuple[int | None, str]] = {
+        r["id"]: (r["parent_id"], r["title"])
+        for r in conn.execute("SELECT id, parent_id, title FROM tasks").fetchall()
+    }
+    ids = [it["id"] for it in items]
+    last: dict[int, dict[str, Any]] = {}
+    for r in conn.execute(
+        f"""
+        SELECT c.task_id, c.ts, c.author, c.body, c.origin
+          FROM comments c
+          JOIN (SELECT task_id, MAX(ts) AS ts, MAX(id) AS id FROM comments
+                 WHERE task_id IN ({', '.join('?' * len(ids))}) GROUP BY task_id) m
+            ON m.task_id = c.task_id AND m.id = c.id
+        """,
+        ids,
+    ).fetchall():
+        last[r["task_id"]] = {"ts": r["ts"], "author": r["author"], "body": r["body"], "origin": r["origin"]}
+    for it in items:
+        chain: list[dict[str, Any]] = []
+        pid = it["parent_id"]
+        seen: set[int] = set()
+        while pid is not None and pid in titles and pid not in seen:
+            seen.add(pid)
+            chain.append({"id": pid, "title": titles[pid][1]})
+            pid = titles[pid][0]
+        chain.reverse()
+        it["breadcrumb"] = chain
+        it["root"] = chain[0] if chain else None
+        it["last_comment"] = last.get(it["id"])
 
 
 def tree(

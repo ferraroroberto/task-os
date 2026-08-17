@@ -16,11 +16,17 @@
     PUT    /api/tasks/{id}/issue         {provider, repo, number, url?, state?} → type=coding
     DELETE /api/tasks/{id}/issue         detach → type=task
     GET    /api/activity?task=N&limit=   newest first (all tasks when no task)
+    POST   /api/parse                    {text} → quick-add split: title, due, parent
 
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
 · ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``,
 ``q`` (full text), ``include_closed``, ``limit``.
+
+``due`` on create / update accepts the same natural phrases the CLI does
+(``tomorrow``, ``next friday``, ``in 2 weeks``, ISO) — resolved here through
+``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
+unknown phrase is a 422, never a silently unset date.
 
 The actor written to ``activity`` / ``comments`` is the body's ``actor`` /
 ``author`` field, else the ``X-Actor`` header, else the configured default
@@ -31,13 +37,16 @@ envelope via the app-level ``RepoError`` handler.
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from app.webapp.routers._helpers import resolve_actor
+from src import quick_add
 from src import tasks_repo as repo
+from src.dates import DateParseError, parse_date
 from src.db import get_db
 
 router = APIRouter(prefix="/api", tags=["tasks"])
@@ -98,6 +107,27 @@ class LinkBody(BaseModel):
     kind: str = "web"
 
 
+class ParseBody(BaseModel):
+    text: str
+    today: str | None = None
+
+
+def _resolve_due(fields: dict[str, Any]) -> dict[str, Any]:
+    """Natural ``due`` phrase → ISO (in place); ``None`` / ``""`` clear it."""
+    if "due" not in fields:
+        return fields
+    value = fields["due"]
+    if value is None or str(value).strip() == "":
+        fields["due"] = None
+        return fields
+    try:
+        d = parse_date(str(value))
+    except DateParseError as exc:
+        raise repo.ValidationError(str(exc)) from exc
+    fields["due"] = d.isoformat() if d else None
+    return fields
+
+
 class IssueBody(BaseModel):
     provider: str = "github"
     repo: str
@@ -152,7 +182,7 @@ def list_tasks(
 def create_task(
     body: TaskCreate, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    fields = body.model_dump(exclude={"title", "actor"}, exclude_none=True)
+    fields = _resolve_due(body.model_dump(exclude={"title", "actor"}, exclude_none=True))
     return repo.create_task(db, body.title, actor=resolve_actor(request, body.actor), **fields)
 
 
@@ -177,7 +207,7 @@ def get_task(task_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict[str
 def update_task(
     task_id: int, body: TaskUpdate, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    changes = body.model_dump(exclude={"actor"}, exclude_unset=True)
+    changes = _resolve_due(body.model_dump(exclude={"actor"}, exclude_unset=True))
     return repo.update_task(db, task_id, actor=resolve_actor(request, body.actor), **changes)
 
 
@@ -280,3 +310,25 @@ def activity(
     if task is not None:
         repo.get_task(db, task)
     return {"items": repo.list_activity(db, task, limit=limit)}
+
+
+# ------------------------------------------------------------- quick-add
+
+
+@router.post("/parse")
+def parse_quick_add(body: ParseBody, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    """Split a quick-add line: ``{title, due, due_phrase, parent, parent_ref}``.
+
+    ``parent`` is the resolved ``{id, title}`` (or ``None`` when the reference
+    names nothing — the UI shows that rather than guessing); ``today`` pins
+    the reference date (tests / a client in another zone).
+    """
+    today = None
+    if body.today:
+        try:
+            today = date.fromisoformat(body.today)
+        except ValueError as exc:
+            raise repo.ValidationError(f"today must be YYYY-MM-DD (got {body.today!r})") from exc
+    parsed = quick_add.parse(body.text, today)
+    parsed["parent"] = quick_add.resolve_parent(db, parsed["parent_ref"])
+    return parsed
