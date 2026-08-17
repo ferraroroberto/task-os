@@ -3,14 +3,14 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA<br/>app/webapp/static/"]
+    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>table.js · tree.js · drawer.js · quickadd.js<br/>format.js · api.js · toast.js"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
   end
 
   subgraph webapp["FastAPI webapp · :8448<br/>app/webapp/server.py"]
     misc["routers/misc<br/>/ · /healthz · /api/version"]
-    tasksr["routers/tasks<br/>/api/tasks… · /api/activity"]
+    tasksr["routers/tasks<br/>/api/tasks… · /api/activity<br/>/api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
@@ -19,6 +19,7 @@ flowchart LR
   subgraph domain["Domain · src/"]
     repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity"]
     dates["dates.py<br/>parse_date · advance"]
+    qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v2 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json"]
@@ -42,11 +43,16 @@ flowchart LR
   end
 
   pwa -->|fetch| misc
+  pwa -->|fetch| tasksr
+  pwa -->|fetch| peopler
   llm --> tasksr
   cli -->|"app up: HTTP (X-Actor)"| tasksr
   cli -->|"app down: direct"| repo
   cli --> dates
   tasksr --> repo
+  tasksr --> qa
+  tasksr -->|"due phrases"| dates
+  qa --> dates
   peopler --> repo
   searchr --> repo
   tasksr -.-> errors
