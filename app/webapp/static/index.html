@@ -41,8 +41,8 @@
   <!-- Lucide sprite — the per-app trim of _vendored/icons/icons-sprite.html.
        Inline (iOS Safari does not resolve external <use> references), hidden
        via the 0-size idiom, never display:none. Glyphs not in the scaffold
-       sprite (list-checks, table, list-tree) are pasted from lucide-static
-       verbatim, same id/viewBox/fill contract. -->
+       sprite (list-checks, table, list-tree, square-check) are pasted from
+       lucide-static verbatim, same id/viewBox/fill contract. -->
 <svg width="0" height="0" aria-hidden="true" focusable="false"
      style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none">
   <symbol id="i-list-checks" viewBox="0 0 24 24" fill="none">
@@ -207,6 +207,14 @@
     <circle cx="12" cy="12" r="10" />
     <path d="m9 12 2 2 4-4" />
   </symbol>
+  <!-- Step 5 glyphs (Today's done checkbox) -->
+  <symbol id="i-square" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+  </symbol>
+  <symbol id="i-square-check" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="m9 12 2 2 4-4" />
+  </symbol>
 </svg>
 
   <!-- Body-level nav, sibling of <main class="app"> — never nested inside it
@@ -269,7 +277,12 @@
     <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board">
       <div class="pane-body">
         <div class="quick-add" data-quick-add="board"></div>
-        <div data-empty="tasks"></div>
+        <!-- Project · person · text filters — the same shared state (and URL
+             query, ?project=12) as the Table's bar; status/due/sort stay Table-only. -->
+        <div class="card filter-bar" id="boardFilters" hidden></div>
+        <!-- Five status columns (board.js): side by side on a wide screen,
+             a one-column scroll-snap carousel on the phone. -->
+        <div id="boardHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneTable" class="pane" role="tabpanel" aria-labelledby="tabTable" aria-label="Table" hidden>
@@ -288,7 +301,11 @@
       </div>
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
-      <div class="pane-body" data-empty="tasks"></div>
+      <div class="pane-body">
+        <!-- Due ≤ today grouped by project, recurring first; "Later this week"
+             collapsed below (today.js). The phone's landing tab. -->
+        <div id="todayHost" data-empty="tasks"></div>
+      </div>
     </section>
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body" data-empty="tasks"></div>

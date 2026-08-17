@@ -5,7 +5,7 @@
 **Steps → expected**
 
 1. Run `tray.bat` → a tray icon appears; the webapp comes up on `http://127.0.0.1:8448` (`/healthz` 200).
-2. Open the URL (left-click the tray icon) → the shell renders: top nav `Board · Table · Tree · Today · Search · Settings` (Board active), the `task-os` header card, the empty state **"Add your first task"** in every task pane, and a footer `Build: <sha> · <time>` where `<sha>` equals `/api/version`'s `git_sha`.
+2. Open the URL (left-click the tray icon) → the shell renders: top nav `Board · Table · Tree · Today · Search · Settings` (Board active on the desktop; since Step 5 a touch device lands on Today), the `task-os` header card, the empty state **"Add your first task"** in every task pane, and a footer `Build: <sha> · <time>` where `<sha>` equals `/api/version`'s `git_sha`.
 3. Click the theme toggle → the page flips to dark; reload → still dark (persisted under `task-os.theme`); click again → light.
 4. Switch to another tab and reload → the tab persists.
 5. On a 390-wide phone (WebKit emulation) → the nav is the floating bottom pill, all targets ≥ 44 px, no horizontal overflow; the same toggle flips and persists.

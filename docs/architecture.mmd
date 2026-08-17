@@ -3,7 +3,7 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>table.js · tree.js · drawer.js · quickadd.js<br/>format.js · api.js · toast.js"]
+    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>board.js · table.js · tree.js · today.js<br/>drawer.js · quickadd.js · format.js · api.js · toast.js"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
@@ -14,11 +14,12 @@ flowchart LR
     tasksr["routers/tasks<br/>/api/tasks… · /api/activity<br/>/api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search"]
+    viewsr["routers/views<br/>/api/board · /api/today"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
   end
 
   subgraph domain["Domain · src/"]
-    repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity"]
+    repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v3 · migrate()"]
@@ -46,6 +47,7 @@ flowchart LR
   pwa -->|fetch| misc
   pwa -->|fetch| tasksr
   pwa -->|fetch| peopler
+  pwa -->|fetch| viewsr
   llm --> tasksr
   cli -->|"app up: HTTP (X-Actor)"| tasksr
   cli -->|"app down: direct"| repo
@@ -57,6 +59,7 @@ flowchart LR
   qa --> dates
   peopler --> repo
   searchr --> repo
+  viewsr --> repo
   tasksr -.-> errors
   repo --> dates
   repo --> db

@@ -40,14 +40,17 @@ def _version(base: str) -> dict:
         return json.loads(res.read().decode("utf-8"))
 
 
-def _assert_shell(page: Page, sha: str) -> None:
-    """The parts of the story every surface must show."""
+def _assert_shell(page: Page, sha: str, landing: str = "board") -> None:
+    """The parts of the story every surface must show. ``landing`` is the tab
+    a first visit opens on: the Board on a fine pointer, Today on a touch
+    device (Step 5) — both empty panes carry the same first-task prompt."""
     tabs = page.locator("nav.tabs .tab")
     expect(tabs).to_have_count(len(TABS))
     assert tabs.all_inner_texts() == TABS
-    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", landing)
     expect(page.locator(".home-head .home-title")).to_contain_text("task-os")
-    expect(page.locator("#paneBoard .empty-state-message")).to_have_text("Add your first task")
+    pane = "#paneToday" if landing == "today" else "#paneBoard"
+    expect(page.locator(f"{pane} .empty-state-message")).to_have_text("Add your first task")
     expect(page.locator("#buildReadout")).to_contain_text(f"Build: {sha}")
 
 
@@ -126,7 +129,7 @@ def test_phone_open_pill_toggle(webapp: str, playwright: Playwright, shots: Path
         )
         page = context.new_page()
         page.goto(webapp)
-        _assert_shell(page, sha)
+        _assert_shell(page, sha, landing="today")
 
         # The nav is the floating bottom pill: fixed, anchored near the bottom.
         nav = page.locator("nav.tabs")
