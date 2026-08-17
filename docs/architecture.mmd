@@ -1,0 +1,60 @@
+%% task-os — internal architecture (hand-authored; update in the same PR as
+%% any material structural change: a new route family, a new src module, a
+%% new client surface, a schema step). Not generated, not checked by the gate.
+flowchart LR
+  subgraph clients["Clients"]
+    pwa["PWA<br/>app/webapp/static/"]
+    cli["tasks CLI<br/>src/cli.py · tasks.bat"]
+    llm["LLM / scripts<br/>(HTTP or CLI --json)"]
+  end
+
+  subgraph webapp["FastAPI webapp · :8448<br/>app/webapp/server.py"]
+    misc["routers/misc<br/>/ · /healthz · /api/version"]
+    tasksr["routers/tasks<br/>/api/tasks… · /api/activity"]
+    peopler["routers/people<br/>/api/people…"]
+    searchr["routers/search<br/>/api/search"]
+    errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
+  end
+
+  subgraph domain["Domain · src/"]
+    repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity"]
+    dates["dates.py<br/>parse_date · advance"]
+    schema["schema.py<br/>MIGRATIONS v1→v2 · migrate()"]
+    db["db.py<br/>connect · init_db · get_db"]
+    config["config.py<br/>config/config.json"]
+  end
+
+  subgraph storage["SQLite (WAL) · data/tasks.db"]
+    t["tasks ⟲ parent_id"]
+    l["links"]
+    c["comments"]
+    a["activity"]
+    p["people"]
+    i["issue_refs"]
+    s["settings.schema_version"]
+    fts["tasks_fts · comments_fts<br/>(FTS5, trigger-synced)"]
+  end
+
+  subgraph ops["Process / proof"]
+    tray["app/tray · tray.bat --restart"]
+    gate["scripts/verify-before-ship.ps1"]
+    seed["tests/fixtures/seed.py<br/>synthetic dataset"]
+  end
+
+  pwa -->|fetch| misc
+  llm --> tasksr
+  cli -->|"app up: HTTP (X-Actor)"| tasksr
+  cli -->|"app down: direct"| repo
+  cli --> dates
+  tasksr --> repo
+  peopler --> repo
+  searchr --> repo
+  tasksr -.-> errors
+  repo --> dates
+  repo --> db
+  db --> schema
+  db --> storage
+  misc --> db
+  tray -->|owns| webapp
+  gate -.->|pytest / e2e| seed
+  seed --> repo
