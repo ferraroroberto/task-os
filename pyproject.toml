@@ -12,7 +12,7 @@ ignore = [
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's `Depends(get_db)` default-arg idiom (project-scaffolding#96).
-extend-immutable-calls = ["fastapi.Depends"]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "src", "scripts", "tests"]
