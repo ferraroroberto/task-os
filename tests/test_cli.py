@@ -125,8 +125,12 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
     code, out, _ = run("comment", "2", "note about the archive box")
     code, out, _ = run("search", "archive")
     assert code == 0 and "#2  Child A" in out and "comment: note about the [archive] box" in out
-    code, out, _ = run("search", "nothing-here", "--json")
-    assert code == 0 and _json(out) == []
+    assert "folders: not configured" in out and "emails: not configured" in out and "issues: not configured" in out
+    code, out, _ = run("search", "nothing-here", "--json", "--kind", "tasks")
+    assert code == 0
+    groups = {g["kind"]: g for g in _json(out)["groups"]}
+    assert groups["tasks"]["hits"] == [] and groups["tasks"]["configured"] is True
+    assert groups["emails"]["skipped"] is True and groups["emails"]["configured"] is False
     code, out, _ = run("people")
     assert code == 0 and out.strip() == "(no people)"
     code, out, err = run("add", "With person", "--person", "Nobody")

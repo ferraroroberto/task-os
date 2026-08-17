@@ -32,15 +32,19 @@ def write_test_config(
     backup_dir: str = "",
     folder_roots: list[str] | None = None,
     placeholders: dict[str, str] | None = None,
+    email_db: str = "",
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
-    folder index stays off — the sample points at a real synced folder) and,
-    optionally, the ``placeholders`` map (Step 9 tests point ``{onedrive}`` at a
-    temp tree)."""
+    folder index stays off — the sample points at a real synced folder),
+    ``search.email_db`` (blank = the emails adapter reports not configured —
+    the sample points at the real email-archiver index; Step 10 tests pass the
+    synthetic fixture) and, optionally, the ``placeholders`` map (Step 9 tests
+    point ``{onedrive}`` at a temp tree)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
     raw["mirror"] = {"dir": dir, "backup_dir": backup_dir}
     raw.setdefault("search", {})["folder_roots"] = list(folder_roots or [])
+    raw["search"]["email_db"] = email_db
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     target.write_text(json.dumps(raw, indent=2), encoding="utf-8")

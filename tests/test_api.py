@@ -119,7 +119,9 @@ def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     sub = seeded.get("/api/tasks/tree?root=20").json()["items"]
     assert sub[0]["title"] == "Side project: garden-bot" and sub[0]["children"]
     s = seeded.get("/api/search?q=washer").json()
-    assert s["count"] == 1 and s["items"][0]["matched_in"] == "comment"
+    tasks = next(g for g in s["groups"] if g["kind"] == "tasks")
+    assert tasks["count"] == 1 and tasks["hits"][0]["matched_in"] == "comment"
+    assert [g["kind"] for g in s["groups"]] == ["tasks", "folders", "emails", "issues"]
     assert seeded.get("/api/search?q=").status_code == 422
     assert seeded.get("/api/tasks?q=balcony").json()["items"][0]["title"] == "Side project: garden-bot"
 

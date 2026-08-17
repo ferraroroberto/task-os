@@ -3,7 +3,7 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>board.js · table.js · tree.js · today.js<br/>drawer.js · quickadd.js · format.js · api.js · toast.js<br/>login.html (token / password → cookie)"]
+    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>board.js · table.js · tree.js · today.js<br/>drawer.js · quickadd.js · format.js · api.js · toast.js<br/>search.js (Search tab) · palette.js (Ctrl+K)<br/>login.html (token / password → cookie)"]
     phone["Phone · https://‹host›.ts.net:8448<br/>installed PWA (manifest · icons · iOS meta)"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
@@ -19,13 +19,13 @@ flowchart LR
     authr["routers/auth<br/>/login · /api/login · /api/logout<br/>access_status() → /api/status"]
     tasksr["routers/tasks<br/>/api/tasks… · /api/activity<br/>/api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
-    searchr["routers/search<br/>/api/search"]
+    searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
     viewsr["routers/views<br/>/api/board · /api/today"]
     mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>/api/resolve · /api/folders/search<br/>/api/folders/reindex · /opener/opener.cmd (public)"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
-    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· repo.set_folder_resolver()"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver()"]
   end
 
   subgraph domain["Domain · src/"]
@@ -37,6 +37,7 @@ flowchart LR
     placeholders["placeholders.py<br/>resolve(ref) · to_ref(path) · opener_url"]
     folderidx["folder_index.py<br/>FolderIndexService: roots · reindex (24 h) · search<br/>vendor/foldersearcher_core.py (verbatim)"]
     openerinfo["opener.py<br/>install.txt commands · opener.env template"]
+    fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v4 · migrate()"]
@@ -62,6 +63,10 @@ flowchart LR
     bakfiles["backup_dir/tasks-YYYYMMDD.db"]
     roots["search.folder_roots<br/>({onedrive}/Documentos …)"]
     idxfile["data/folder_index.txt"]
+  end
+
+  subgraph external["Other repos' data (read-only)"]
+    emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>config.search.email_db"]
   end
 
   subgraph ops["Process / proof"]
@@ -90,7 +95,13 @@ flowchart LR
   tasksr -->|"due phrases"| dates
   qa --> dates
   peopler --> repo
-  searchr --> repo
+  searchr --> fedsearch
+  fedsearch -->|"tasks_repo.search"| repo
+  fedsearch -->|"search"| folderidx
+  fedsearch -->|"file:…?mode=ro"| emaildb
+  fedsearch -->|"list_issue_refs + cache"| issync
+  fedsearch --> placeholders
+  cli -->|"search (app down)"| fedsearch
   viewsr --> repo
   mirrorr --> mirror
   mirrorr --> backup

@@ -33,7 +33,9 @@ import { toast } from './toast.js';
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
  *          issues: () => ({enabled:boolean, reason?:string, provider?:string, repos?:string[]}|null),
- *          onSyncIssues: () => Promise<any>}} opts
+ *          onSyncIssues: () => Promise<any>,
+ *          onToggle?: (id:number|null) => void}} opts   onToggle fires once a task is
+ *          shown (its id) and on close (null) — the Search tab's Attach buttons follow it
  */
 export function createDrawer(el, opts) {
   let current = null;      // the detail payload
@@ -259,7 +261,8 @@ export function createDrawer(el, opts) {
     (t.links || []).forEach(function (l) {
       const row = document.createElement('div');
       row.className = 'link-row';
-      row.appendChild(chipFor(l.url, l.label || null));
+      // an email link is a .msg ref the opener opens as a file — same chip, mail glyph
+      row.appendChild(chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'icon-btn hit-target';
@@ -783,6 +786,7 @@ export function createDrawer(el, opts) {
         el.hidden = false;
         document.body.dataset.drawer = 'open';
         el.scrollTop = 0;
+        if (opts.onToggle) opts.onToggle(current.id);
       } catch (err) {
         toast(err.message || 'Task not found', 'error');
         opts.onClose();
@@ -793,6 +797,7 @@ export function createDrawer(el, opts) {
       el.hidden = true;
       el.innerHTML = '';
       delete document.body.dataset.drawer;
+      if (opts.onToggle) opts.onToggle(null);
     },
     refresh: refresh,
     currentId() { return current ? current.id : null; },
