@@ -1,0 +1,9 @@
+{
+  "site": "home",
+  "port": 8448,
+  "issues":  { "provider": "github", "owner": "ferraroroberto", "assignee": "@me", "sync_minutes": 10 },
+  "placeholders": { "onedrive": "E:/onedrive", "user": "rober" },
+  "mirror":  { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" },
+  "search":  { "folder_roots": ["{onedrive}/Documentos"], "email_db": "E:/automation/email-archiver/data/emails.db" },
+  "team":    { "enabled": false, "people": ["Roberto Ferraro"] }
+}

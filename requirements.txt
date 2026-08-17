@@ -1,0 +1,22 @@
+# task-os â€” runtime + dev dependencies (one file; the app has no separate
+# prod install target: it runs from this checkout under its own .venv).
+# Policy: lower bounds, so a `pip install -r` picks up the fleet's current
+# minor line without a churn commit per patch release.
+
+# --- runtime ---------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pystray>=0.19
+Pillow>=10.0
+
+# --- dev / verification gate ----------------------------------------------
+pytest>=8.0
+# starlette's TestClient dependency (fastapi.testclient) — test-only.
+httpx2>=0.1
+pytest-playwright>=0.5
+playwright>=1.45
+ruff>=0.5
+# Brand-icon generation only (scripts/gen_icons.py -> project-scaffolding's
+# brand_gen). The generated PNG/ICO assets are committed; the runtime never
+# imports this.
+resvg-py>=0.1

@@ -1,0 +1,25 @@
+# --- private / machine-local (never committed) ------------------------------
+.venv/
+data/
+config/*.json
+!config/*.sample.json
+.env
+mirror/
+/webapp/
+.launcher-tmp/
+*.log
+
+# --- python / tooling ------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- e2e scratch (screenshots the suite keeps live in docs/screenshots) ------
+tests/e2e/_shots/
+test-results/
+
+# --- agent noise (real config lives machine-scope; AGENTS.md IS committed) --
+.agents/
+.codex/

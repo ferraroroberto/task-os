@@ -1,0 +1,29 @@
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+  # E501 line length is advisory in this repo (docstrings quote long paths/URLs)
+  "E501",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's `Depends(get_db)` default-arg idiom (project-scaffolding#96).
+extend-immutable-calls = ["fastapi.Depends"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "src", "scripts", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Vendor-verbatim files keep their upstream style byte-for-byte.
+"app/tray/single_instance.py" = ["ALL"]
+"app/tray/watchdog.py" = ["ALL"]
+"tests/e2e/_e2e_live_guard.py" = ["ALL"]
+"tests/e2e/_geometry.py" = ["ALL"]
+"tests/e2e/_browser_sweep.py" = ["ALL"]
+"scripts/classify_e2e.py" = ["ALL"]
+"src/static_versioning.py" = ["ALL"]
+"app/webapp/event_loop.py" = ["ALL"]

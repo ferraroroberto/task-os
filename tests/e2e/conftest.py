@@ -1,0 +1,153 @@
+"""Session fixtures for the Playwright e2e suite.
+
+Isolation by construction: ``webapp`` boots a **disposable** uvicorn on a free
+loopback port with ``TASKOS_DB_PATH`` → a temp database and
+``TASKOS_CONFIG_PATH`` → the committed sample config, so a run never reads or
+writes the live ``:8448`` app, its ``data/tasks.db``, or ``config/config.json``.
+
+``TASKOS_E2E_LIVE=1`` is the one loudly-named opt-in: the suite then runs
+*read-only* against the live ``http://127.0.0.1:8448`` instead of booting
+(never a kill — reclaiming the port is ``tray.bat --restart``'s job). The
+check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
+
+Screenshots: ``shots`` yields ``docs/screenshots`` so a story test saves its
+numbered proof there directly (the public repo carries them; the fixture DB
+is synthetic/empty, never personal data).
+
+``pytest_sessionfinish`` runs the vendored leaked-browser sweep (#203) once
+every fixture — pytest-playwright's ``browser`` included — has torn down.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+from collections.abc import Iterator
+from pathlib import Path
+from typing import IO
+
+import pytest
+
+from tests.e2e._browser_sweep import sweep_browser_helpers
+from tests.e2e._e2e_live_guard import require_disposable_instance
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
+LIVE_PORT = 8448
+LIVE_ENV = "TASKOS_E2E_LIVE"
+LOOP_FACTORY = "app.webapp.event_loop:selector_loop_factory"
+
+# Bounded Playwright waits: 15 s fails fast with a TimeoutError naming the
+# locator instead of stacking opaque 30 s waits (project-scaffolding#61).
+_DEFAULT_TIMEOUT_MS = int(os.environ.get("E2E_DEFAULT_TIMEOUT_MS", "15000"))
+
+
+def _free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def _wait_healthz(base: str, timeout: float) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"{base}/healthz", timeout=2) as res:
+                if res.status == 200:
+                    return True
+        except OSError:
+            pass
+        time.sleep(0.3)
+    return False
+
+
+def _terminate(proc: subprocess.Popen | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            try:
+                proc.send_signal(signal.CTRL_BREAK_EVENT)
+            except Exception:  # noqa: BLE001 — best effort
+                pass
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=3)
+    except Exception:  # noqa: BLE001 — best effort
+        pass
+
+
+@pytest.fixture(scope="session")
+def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """Base URL of the instance under test — disposable by default."""
+    if os.environ.get(LIVE_ENV) == "1":
+        require_disposable_instance(LIVE_PORT, LIVE_ENV)
+        base = f"http://127.0.0.1:{LIVE_PORT}"
+        if not _wait_healthz(base, timeout=5):
+            pytest.exit(f"{LIVE_ENV}=1 but nothing answers {base}/healthz", returncode=2)
+        yield base
+        return
+
+    work = tmp_path_factory.mktemp("taskos-e2e")
+    port = _free_tcp_port()
+    print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db + config in {work})")
+    log: IO[str] = (work / "webapp.log").open("w", encoding="utf-8")
+    env = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
+        "TASKOS_DB_PATH": str(work / "tasks.db"),
+        "TASKOS_CONFIG_PATH": str(REPO_ROOT / "config" / "config.sample.json"),
+    }
+    cmd = [
+        sys.executable, "-m", "uvicorn", "app.webapp.server:app",
+        "--host", "127.0.0.1", "--port", str(port),
+        "--log-level", "warning", "--loop", LOOP_FACTORY,
+    ]
+    kwargs: dict = dict(cwd=str(REPO_ROOT), stdout=log, stderr=subprocess.STDOUT, env=env)
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    proc = subprocess.Popen(cmd, **kwargs)
+    base = f"http://127.0.0.1:{port}"
+    try:
+        if not _wait_healthz(base, timeout=20):
+            _terminate(proc)
+            log.close()
+            tail = (work / "webapp.log").read_text(encoding="utf-8", errors="replace")[-2000:]
+            pytest.fail(f"disposable webapp did not answer {base}/healthz within 20s\n{tail}")
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
+@pytest.fixture(scope="session")
+def shots() -> Path:
+    """Where story tests save their numbered proof screenshots."""
+    SHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    return SHOTS_DIR
+
+
+@pytest.fixture(autouse=True)
+def _bound_default_timeouts(context) -> None:
+    context.set_default_timeout(_DEFAULT_TIMEOUT_MS)
+    context.set_default_navigation_timeout(_DEFAULT_TIMEOUT_MS)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Advisory sweep of browser helpers this run orphaned inside this checkout."""
+    result = sweep_browser_helpers(REPO_ROOT)
+    print(f"\n{result.summary()}")
+    for entry in result.killed:
+        print(f"  reclaimed leaked helper: {entry}")
+    # Playwright's own scratch dir under the checkout — nothing of ours lives there.
+    shutil.rmtree(REPO_ROOT / "test-results", ignore_errors=True)
