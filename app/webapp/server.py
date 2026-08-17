@@ -2,10 +2,17 @@
 
 Route families (each in ``app/webapp/routers/``):
 
-    misc   GET /                → PWA shell (hash-stamped, no-cache)
-           GET /static/{path}   → CSS / JS / icons (CachingStaticFiles mount)
-           GET /healthz         → liveness
-           GET /api/version     → build identity (git_sha, asset_hash, …)
+    misc    GET /                → PWA shell (hash-stamped, no-cache)
+            GET /static/{path}   → CSS / JS / icons (CachingStaticFiles mount)
+            GET /healthz         → liveness
+            GET /api/version     → build identity (git_sha, asset_hash, schema_version)
+    tasks   /api/tasks…          → CRUD, tree, move, done, comments, links, issue; /api/activity
+    people  /api/people…         → contacts / assignees CRUD
+    search  /api/search?q=       → full text over tasks + comments
+
+Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
+"detail"?}}`` — for domain errors (``src.tasks_repo.RepoError`` → its
+``http_status``), request-validation failures (422) and plain HTTP errors.
 
 Run under uvicorn with the pinned selector loop (Windows proactor wedges on an
 aborted client — app-launcher#388):
@@ -23,16 +30,19 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import misc
-from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR
+from app.webapp.routers import misc, people, search, tasks
+from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src.config import load_config
 from src.db import db_path, init_db
 from src.logger import configure_logging
+from src.tasks_repo import RepoError
 
 logger = logging.getLogger(__name__)
 
@@ -99,14 +109,33 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def _install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RepoError)
+    async def _repo_error(request: Request, exc: RepoError) -> Response:
+        return error_response(exc.http_status, exc.code, str(exc))
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(request: Request, exc: RequestValidationError) -> Response:
+        return error_response(422, "validation_error", "invalid request", exc.errors())
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        code = "not_found" if exc.status_code == 404 else "http_error"
+        return error_response(exc.status_code, code, str(exc.detail))
+
+
 def create_app() -> FastAPI:
     configure_logging()
-    app = FastAPI(title="task-os", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(title="task-os", version="0.2.0", lifespan=_lifespan)
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
+    _install_error_handlers(app)
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(misc.router)
+    app.include_router(tasks.router)
+    app.include_router(people.router)
+    app.include_router(search.router)
     return app
 
 

@@ -1,0 +1,213 @@
+"""Versioned schema migrations — the one place DDL lives.
+
+``MIGRATIONS`` maps a target version to the SQL that upgrades a database from
+``version - 1``. ``migrate(conn)`` reads ``settings.schema_version`` (0 when
+the table is missing), applies every step above it inside one transaction
+each, and stamps the new version in the same transaction — a crash leaves the
+DB at the last fully-applied version, and re-running is a no-op.
+
+Version history:
+
+    1  settings(key, value) + schema_version marker                (Step 1)
+    2  tasks / links / comments / activity / people / issue_refs   (Step 2)
+       + FTS5 external-content indexes over tasks(title, description) and
+       comments(body) kept in sync by triggers, + indices on parent_id /
+       status / due.
+
+Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
+``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
+status / parent / priority change writes ``activity``; recurrence rolls the
+same task's due forward on done.
+"""
+
+from __future__ import annotations
+
+import logging
+import sqlite3
+
+logger = logging.getLogger(__name__)
+
+TASK_TYPES = ("task", "coding", "note")
+TASK_STATUSES = ("inbox", "todo", "doing", "standby", "done", "cancelled")
+TASK_PRIORITIES = ("high", "medium", "low", "none")
+RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
+LINK_KINDS = ("web", "folder", "email", "issue")
+COMMENT_ORIGINS = ("ui", "cli", "md", "notion", "import", "sync")
+ISSUE_PROVIDERS = ("github", "gitlab")
+
+
+def _in(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+_V1 = """
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
+_V2 = f"""
+CREATE TABLE people (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    email       TEXT,
+    avatar_path TEXT,
+    external_id TEXT
+);
+
+CREATE TABLE tasks (
+    id          INTEGER PRIMARY KEY,
+    parent_id   INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    code        TEXT,
+    title       TEXT NOT NULL,
+    type        TEXT NOT NULL DEFAULT 'task'  CHECK (type IN ({_in(TASK_TYPES)})),
+    status      TEXT NOT NULL DEFAULT 'inbox' CHECK (status IN ({_in(TASK_STATUSES)})),
+    priority    TEXT NOT NULL DEFAULT 'none'  CHECK (priority IN ({_in(TASK_PRIORITIES)})),
+    due         TEXT,
+    recurrence  TEXT CHECK (recurrence IS NULL OR recurrence IN ({_in(RECURRENCES)})),
+    description TEXT NOT NULL DEFAULT '',
+    folder_ref  TEXT,
+    next_action TEXT,
+    person_id   INTEGER REFERENCES people(id) ON DELETE SET NULL,
+    created_by  TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    done_at     TEXT
+);
+CREATE INDEX idx_tasks_parent   ON tasks(parent_id);
+CREATE INDEX idx_tasks_status   ON tasks(status);
+CREATE INDEX idx_tasks_due      ON tasks(due);
+CREATE INDEX idx_tasks_person   ON tasks(person_id);
+
+CREATE TABLE links (
+    id      INTEGER PRIMARY KEY,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    url     TEXT NOT NULL,
+    label   TEXT,
+    kind    TEXT NOT NULL DEFAULT 'web' CHECK (kind IN ({_in(LINK_KINDS)}))
+);
+CREATE INDEX idx_links_task ON links(task_id);
+
+CREATE TABLE comments (
+    id      INTEGER PRIMARY KEY,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    author  TEXT,
+    ts      TEXT NOT NULL,
+    body    TEXT NOT NULL,
+    origin  TEXT NOT NULL DEFAULT 'ui' CHECK (origin IN ({_in(COMMENT_ORIGINS)}))
+);
+CREATE INDEX idx_comments_task ON comments(task_id, ts);
+
+CREATE TABLE activity (
+    id        INTEGER PRIMARY KEY,
+    task_id   INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    ts        TEXT NOT NULL,
+    actor     TEXT,
+    field     TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT
+);
+CREATE INDEX idx_activity_task ON activity(task_id, ts);
+
+CREATE TABLE issue_refs (
+    task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    provider    TEXT NOT NULL CHECK (provider IN ({_in(ISSUE_PROVIDERS)})),
+    repo        TEXT NOT NULL,
+    number      INTEGER NOT NULL,
+    state       TEXT,
+    url         TEXT,
+    last_synced TEXT
+);
+
+-- Full-text search: external-content FTS5 over tasks(title, description) and
+-- comments(body); triggers keep both in sync (the FTS5-documented pattern).
+CREATE VIRTUAL TABLE tasks_fts USING fts5(
+    title, description,
+    content='tasks', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER tasks_ai AFTER INSERT ON tasks BEGIN
+    INSERT INTO tasks_fts(rowid, title, description) VALUES (new.id, new.title, new.description);
+END;
+CREATE TRIGGER tasks_ad AFTER DELETE ON tasks BEGIN
+    INSERT INTO tasks_fts(tasks_fts, rowid, title, description)
+        VALUES ('delete', old.id, old.title, old.description);
+END;
+CREATE TRIGGER tasks_au AFTER UPDATE OF title, description ON tasks BEGIN
+    INSERT INTO tasks_fts(tasks_fts, rowid, title, description)
+        VALUES ('delete', old.id, old.title, old.description);
+    INSERT INTO tasks_fts(rowid, title, description) VALUES (new.id, new.title, new.description);
+END;
+
+CREATE VIRTUAL TABLE comments_fts USING fts5(
+    body,
+    content='comments', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER comments_ai AFTER INSERT ON comments BEGIN
+    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
+END;
+CREATE TRIGGER comments_ad AFTER DELETE ON comments BEGIN
+    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
+END;
+CREATE TRIGGER comments_au AFTER UPDATE OF body ON comments BEGIN
+    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
+    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
+END;
+"""
+
+#: version → SQL script that upgrades from version - 1.
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2}
+
+#: The version a freshly migrated database carries.
+SCHEMA_VERSION = max(MIGRATIONS)
+
+
+def current_version(conn: sqlite3.Connection) -> int:
+    """The stored ``schema_version``; 0 when the settings table does not exist yet."""
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = 'schema_version'").fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    return int(row[0]) if row else 0
+
+
+def migrate(conn: sqlite3.Connection) -> int:
+    """Apply every pending migration in order; return the resulting version.
+
+    Each step runs as one transaction with its version stamp, so a failure
+    mid-script rolls that step back and leaves the stamp at the previous
+    version. Idempotent: a current DB is left untouched.
+    """
+    start = current_version(conn)
+    version = start
+    for target in sorted(MIGRATIONS):
+        if target <= version:
+            continue
+        # executescript() issues an implicit COMMIT first, so open the
+        # transaction inside the script and stamp before it ends.
+        script = (
+            "BEGIN;\n"
+            + MIGRATIONS[target]
+            + "\nINSERT INTO settings(key, value) VALUES('schema_version', "
+            f"'{target}') ON CONFLICT(key) DO UPDATE SET value = excluded.value;\n"
+            "COMMIT;"
+        )
+        try:
+            conn.executescript(script)
+        except sqlite3.Error:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            logger.error("❌ db: migration to schema_version %d failed (stays at %d)", target, version)
+            raise
+        version = target
+    if version != start:
+        logger.info("ℹ️ db: schema_version %d → %d", start, version)
+    return version
+
+
+def table_names(conn: sqlite3.Connection) -> set[str]:
+    """Every table + virtual table name (handy for tests and health checks)."""
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    return {r[0] for r in rows}

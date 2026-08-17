@@ -1,11 +1,10 @@
 """SQLite lifecycle — one ``get_db()`` dependency, WAL, ``sqlite3.Row``.
 
-Step 1 opens ``data/tasks.db`` and owns only the ``settings`` table with a
-``schema_version`` marker; the task schema (tasks / links / comments /
-activity / people / issue_refs / tasks_fts) arrives in Step 2 as migrations
-keyed on that version. Every handler takes ``db: sqlite3.Connection =
-Depends(get_db)`` — never a per-handler ``sqlite3.connect`` (the fleet's
-one-dependency rule, project-scaffolding#96).
+Opens ``data/tasks.db`` and brings it to the current schema through the
+versioned migrations in ``src/schema.py`` (``settings.schema_version`` is the
+marker). Every handler takes ``db: sqlite3.Connection = Depends(get_db)`` —
+never a per-handler ``sqlite3.connect`` (the fleet's one-dependency rule,
+project-scaffolding#96).
 
 ``TASKOS_DB_PATH`` overrides the file location — the e2e harness and unit
 tests point at a temp file so no test ever touches the real database.
@@ -19,6 +18,8 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+from src.schema import SCHEMA_VERSION, migrate
+
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -26,15 +27,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_DB_PATH = DATA_DIR / "tasks.db"
 DB_PATH_ENV = "TASKOS_DB_PATH"
 
-#: Bumped by every migration; Step 1 ships the settings table only.
-SCHEMA_VERSION = 1
-
-_SETTINGS_DDL = """
-CREATE TABLE IF NOT EXISTS settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-)
-"""
+__all__ = ["SCHEMA_VERSION", "connect", "db_path", "get_db", "init_db", "schema_version"]
 
 
 def db_path() -> Path:
@@ -56,27 +49,17 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 
 
 def init_db(path: Path | None = None) -> int:
-    """Create the settings table + stamp ``schema_version``; return the version.
+    """Bring the database at ``path`` to :data:`SCHEMA_VERSION`; return the version.
 
-    Idempotent — safe to call at every startup. Later migrations key on the
-    stored version and advance it in the same transaction.
+    Idempotent — safe to call at every startup: :func:`src.schema.migrate`
+    applies only the steps above the stored marker, each in its own
+    transaction with its stamp.
     """
     conn = connect(path)
     try:
-        conn.execute(_SETTINGS_DDL)
-        row = conn.execute("SELECT value FROM settings WHERE key = 'schema_version'").fetchone()
-        current = int(row["value"]) if row else 0
-        if current < SCHEMA_VERSION:
-            conn.execute(
-                "INSERT INTO settings(key, value) VALUES('schema_version', ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (str(SCHEMA_VERSION),),
-            )
-            conn.commit()
-            logger.info(
-                "ℹ️ db: schema_version %d → %d at %s", current, SCHEMA_VERSION, path or db_path()
-            )
-        return SCHEMA_VERSION
+        version = migrate(conn)
+        logger.debug("db: %s at schema v%d", path or db_path(), version)
+        return version
     finally:
         conn.close()
 

@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
+from src.schema import SCHEMA_VERSION
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -67,7 +68,7 @@ def test_healthz_and_version(webapp: str) -> None:
     body = _version(webapp)
     assert body["git_sha"] and body["git_sha"] != "unknown"
     assert body["asset_hash"] and body["asset_hash"] != "missing"
-    assert body["schema_version"] == 1
+    assert body["schema_version"] == SCHEMA_VERSION
 
 
 # ----------------------------------------------------------- desktop leg
