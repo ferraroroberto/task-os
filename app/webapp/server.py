@@ -19,9 +19,9 @@ from __future__ import annotations
 import logging
 import mimetypes
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -57,7 +57,7 @@ class CachingStaticFiles(StaticFiles):
 
     def file_response(
         self,
-        full_path: "os.PathLike[str]",
+        full_path: os.PathLike[str],
         stat_result: os.stat_result,
         scope: Scope,
         status_code: int = 200,

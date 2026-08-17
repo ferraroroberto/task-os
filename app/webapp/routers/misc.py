@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -35,13 +35,13 @@ async def index() -> HTMLResponse:
 
 
 @router.get("/healthz")
-async def healthz() -> Dict[str, Any]:
+async def healthz() -> dict[str, Any]:
     return {"ok": True}
 
 
 @router.get("/api/version")
-async def version(db: sqlite3.Connection = Depends(get_db)) -> Dict[str, Any]:
-    payload: Dict[str, Any] = dict(BUILD_INFO.as_dict())
+async def version(db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    payload: dict[str, Any] = dict(BUILD_INFO.as_dict())
     # ``None`` (not a number) when the settings table is missing — an
     # unestablished fact is reported as unknown, never folded into "fine".
     payload["schema_version"] = schema_version(db)

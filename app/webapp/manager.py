@@ -27,7 +27,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.tray.single_instance import cross_process_lock
 from app.webapp.event_loop import LOOP_FACTORY
@@ -55,13 +55,13 @@ class WebappManagerConfig:
 class WebappStatus:
     running: bool
     ownership: str
-    pid: Optional[int]
+    pid: int | None
     port: int
     base_url: str
     detail: str
 
 
-def cert_paths(project_root: Optional[Path] = None) -> Optional[tuple[Path, Path]]:
+def cert_paths(project_root: Path | None = None) -> tuple[Path, Path] | None:
     """``(cert.pem, key.pem)`` under ``webapp/certificates/`` when both exist.
 
     HTTPS is Step 7 (Tailscale cert); until then the pair is absent and the
@@ -100,9 +100,9 @@ def stop_process(proc: subprocess.Popen, name: str) -> None:
 class WebappManager:
     """Start / stop / health-check the webapp uvicorn process."""
 
-    def __init__(self, config: Optional[WebappManagerConfig] = None) -> None:
+    def __init__(self, config: WebappManagerConfig | None = None) -> None:
         self.config = config or WebappManagerConfig()
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
 
     @property
     def base_url(self) -> str:
@@ -171,7 +171,7 @@ class WebappManager:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
-            popen_kwargs: Dict[str, Any] = dict(
+            popen_kwargs: dict[str, Any] = dict(
                 cwd=str(PROJECT_ROOT),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -213,8 +213,8 @@ class WebappManager:
             self._proc = None
         return WebappStatus(False, OWNERSHIP_NONE, None, self.config.port, self.base_url, "stopped")
 
-    def _build_command(self) -> List[str]:
-        cmd: List[str] = [
+    def _build_command(self) -> list[str]:
+        cmd: list[str] = [
             sys.executable, "-m", "uvicorn", "app.webapp.server:app",
             "--host", self.config.host,
             "--port", str(self.config.port),
