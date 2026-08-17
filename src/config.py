@@ -76,6 +76,21 @@ class TeamConfig:
 
 
 @dataclass(frozen=True)
+class AuthConfig:
+    """Non-loopback access (Step 7). ``token`` is the bearer secret
+    ``scripts/gen_token.py`` writes; ``password_hash`` the optional memorable
+    alternative ``scripts/set_password.py`` stores (PBKDF2, never plaintext).
+    Both empty (the committed sample) = only this PC can use the app."""
+
+    token: str = ""
+    password_hash: str = ""
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.token)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     site: str = "home"
     port: int = DEFAULT_PORT
@@ -84,6 +99,7 @@ class AppConfig:
     mirror: MirrorConfig = field(default_factory=MirrorConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
 
 
@@ -129,6 +145,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     mirror = _as_dict(raw.get("mirror"))
     search = _as_dict(raw.get("search"))
     team = _as_dict(raw.get("team"))
+    auth = _as_dict(raw.get("auth"))
     placeholders = {str(k): str(v) for k, v in _as_dict(raw.get("placeholders")).items()}
 
     try:
@@ -159,5 +176,38 @@ def load_config(path: Path | None = None) -> AppConfig:
             enabled=bool(team.get("enabled", False)),
             people=_as_str_list(team.get("people")),
         ),
+        auth=AuthConfig(
+            token=str(auth.get("token", "") or "").strip(),
+            password_hash=str(auth.get("password_hash", "") or "").strip(),
+        ),
         source_path=src,
     )
+
+
+def save_auth(*, token: str | None = None, password_hash: str | None = None, path: Path | None = None) -> Path:
+    """Write ``auth.token`` / ``auth.password_hash`` into the **real** config.
+
+    Only the fields passed (non-``None``) change; everything else in the file
+    is preserved. A missing ``config/config.json`` is created from the
+    committed sample first — the sample itself is never written (it is the
+    public twin and must keep both fields empty). Used by ``scripts/gen_token.py``
+    and ``scripts/set_password.py``; the running app re-reads config on
+    restart only (``tray.bat --restart``).
+    """
+    target = path or CONFIG_PATH
+    if target == CONFIG_SAMPLE_PATH:
+        raise ValueError("refusing to write secrets into config.sample.json")
+    if target.exists():
+        raw = _as_dict(json.loads(target.read_text(encoding="utf-8")))
+    else:
+        raw = _as_dict(json.loads(CONFIG_SAMPLE_PATH.read_text(encoding="utf-8")))
+        logger.info("ℹ️ config: creating %s from the sample", target)
+    auth = _as_dict(raw.get("auth"))
+    if token is not None:
+        auth["token"] = token
+    if password_hash is not None:
+        auth["password_hash"] = password_hash
+    raw["auth"] = {"token": str(auth.get("token", "")), "password_hash": str(auth.get("password_hash", ""))}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return target

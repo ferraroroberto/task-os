@@ -8,6 +8,9 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pystray>=0.19
 Pillow>=10.0
+# scripts/gen_tailscale_cert.py --check (auto-renew) reads the leaf's expiry
+# and SAN; src/certs.py reads the tailnet name off it for the tray's URL.
+cryptography>=42
 
 # --- dev / verification gate ----------------------------------------------
 pytest>=8.0

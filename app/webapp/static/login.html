@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="task-os">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+  <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+  <!-- Vendored fleet components (byte-for-byte): the card, the button tiers,
+       modal.css for the shared .input-native control. Tokens from styles.css. -->
+  <link rel="stylesheet" href="/static/_vendored/card/card.css">
+  <link rel="stylesheet" href="/static/_vendored/button/button.css">
+  <link rel="stylesheet" href="/static/_vendored/modal/modal.css">
+  <link rel="stylesheet" href="/static/styles.css">
+  <title>Sign in · task-os</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('task-os.theme');
+      var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+</head>
+<body class="login-body">
+<svg width="0" height="0" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none">
+  <symbol id="i-list-checks" viewBox="0 0 24 24" fill="none">
+    <path d="m3 17 2 2 4-4" />
+    <path d="m3 7 2 2 4-4" />
+    <path d="M13 6h8" />
+    <path d="M13 12h8" />
+    <path d="M13 18h8" />
+  </symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </symbol>
+</svg>
+
+  <main class="login-main">
+    <form id="loginForm" class="card login-card" autocomplete="off" novalidate>
+      <div class="card-head">
+        <h1 class="card-title">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+          task-os
+        </h1>
+        <span class="card-head-meta"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-lock"></use></svg></span>
+      </div>
+      <p class="card-meta">Sign in with the access token or the password set on the host. This device stays signed in for 90 days.</p>
+      <label class="field">
+        <span class="field-label">Token or password</span>
+        <input id="loginSecret" class="input-native field-control" type="password" name="secret"
+               autocomplete="current-password" autocapitalize="off" spellcheck="false" required
+               placeholder="Paste the token or type the password">
+      </label>
+      <button id="loginSubmit" type="submit" class="button-primary">Sign in</button>
+      <p id="loginError" class="login-error" role="alert" hidden></p>
+    </form>
+  </main>
+
+  <script>
+    (function () {
+      var form = document.getElementById('loginForm');
+      var input = document.getElementById('loginSecret');
+      var err = document.getElementById('loginError');
+      var btn = document.getElementById('loginSubmit');
+      var params = new URLSearchParams(location.search);
+      var next = params.get('next') || '/';
+      // Only a same-origin path is an acceptable destination — never an
+      // absolute URL someone pasted into ?next=.
+      if (!/^\/(?!\/)/.test(next)) next = '/';
+
+      function fail(msg) {
+        err.textContent = msg;
+        err.hidden = false;
+        btn.disabled = false;
+        input.focus();
+        input.select();
+      }
+
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var secret = input.value.trim();
+        if (!secret) { fail('Enter the token or the password.'); return; }
+        err.hidden = true;
+        btn.disabled = true;
+        fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret: secret }),
+          credentials: 'same-origin',
+          cache: 'no-store',
+        }).then(function (res) {
+          return res.text().then(function (text) {
+            var body = null;
+            try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+            if (res.ok) { location.replace(next); return; }
+            var e = (body && body.error) || {};
+            fail(e.message === 'authentication required' ? (e.detail || e.message) : (e.message || ('HTTP ' + res.status)));
+          });
+        }).catch(function () { fail('Server unreachable.'); });
+      });
+      input.focus();
+    })();
+  </script>
+</body>
+</html>

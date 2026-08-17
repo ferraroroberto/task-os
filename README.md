@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 8** GitHub issues as coding tasks. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA, **Step 8** GitHub issues as coding tasks. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -17,10 +17,10 @@ py -m venv .venv
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 copy config\config.sample.json config\config.json      # then edit paths for this machine
 
-tray.bat            # tray icon → owns the webapp on http://127.0.0.1:8448
+tray.bat            # tray icon → owns the webapp on :8448 (HTTPS once a cert exists — see "Phone access & auth")
 ```
 
-Left-click the tray icon (or **Open task-os**) to open the app. `tray.bat` is idempotent — a second run is a no-op while a tray is up. Without the tray: `webapp.bat` runs uvicorn in the foreground.
+Left-click the tray icon (or **Open task-os**) to open the app; **Copy URL** puts the same address on the clipboard for the phone. `tray.bat` is idempotent — a second run is a no-op while a tray is up. Without the tray: `webapp.bat` runs uvicorn in the foreground.
 
 From a terminal, `tasks.bat` (put the repo on `PATH` or alias it) is the CLI — it works whether or not the app is running:
 
@@ -64,24 +64,29 @@ PC-first and full-width; the phone gets the same views as an adaptive second ren
 launcher.py               entrypoint: `tray` (default) | `webapp`
 tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground dev server
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
-app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, JSON error envelope), event_loop.py, manager.py
-app/webapp/routers/       misc (shell, /healthz, /api/version) · tasks (/api/tasks…, /api/activity) · people · search
-                          · views (/api/board, /api/today) · mirror (/api/status, /api/mirror/export|import, /api/backup)
+app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
+                          event_loop.py, manager.py (adopt-or-spawn uvicorn; cert --check → --ssl-* when a cert exists)
+app/webapp/routers/       misc (shell, /healthz, /api/version) · auth (/login, /api/login|logout) · tasks (/api/tasks…,
+                          /api/activity) · people · search · views (/api/board, /api/today)
+                          · mirror (/api/status — install status incl. https + auth, /api/mirror/export|import, /api/backup)
                           · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
-app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js (state + routing), board.js, table.js,
-                          tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
+app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
+                          table.js, tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
+                          auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract · github.py via gh · fake.py for tests) · issue_sync.py (sync pass + scheduler)
                           logger.py · static_versioning.py
-scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat)
+scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
+                          gen_tailscale_cert.py (vendored from the scaffold), gen_token.py, set_password.py
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
 data/                     tasks.db, logs, avatars, backups — gitignored, never committed
+webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log — gitignored
 ```
 
 ## Configuration — `config/config.json`
@@ -95,6 +100,7 @@ data/                     tasks.db, logs, avatars, backups — gitignored, never
 | `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. See [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
 | `search` | folder roots + email index path for federated search — Step 10 |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
+| `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
 Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider (the test harness uses all three for isolation).
 
@@ -130,10 +136,11 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `GET /api/board?project=&person=&q=` | `{today, columns: {inbox, todo, doing, standby, done}}` — the Board's buckets, same enriched summaries as the list; `done` = completed on the current local day only |
 | `GET /api/today?person=` | `{today, due: [{root, items}], week: [{root, items}], counts: {overdue, today, week}}` — open tasks due ≤ today grouped by root project (recurring first inside a group), plus tomorrow … +7 days in the same shape |
 | `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
-| `GET /api/status` | `{mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}}` — a disabled service carries its `reason` |
+| `GET /api/status` | `{https, auth: {enabled, password, client}, mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}}` — how this request came in (`client`: `loopback` · `token` · `public`) and what the install accepts; a disabled service carries its `reason` |
 | `POST /api/mirror/export` · `POST /api/mirror/import` · `POST /api/backup` | run a full export / one watcher pass / one backup now (409 `mirror_disabled` / `backup_disabled` when not configured) |
+| `POST /api/login` `{secret}` · `POST /api/logout` | token or password → the 90-day `taskos_token` cookie · clear it |
 
-Also `GET /` shell · `GET /healthz` liveness.
+Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness. Every `/api/` route except `/api/version` and `/api/login` needs the caller to be loopback or to carry the token (see "Phone access & auth").
 
 ## CLI — `tasks`
 
@@ -288,9 +295,37 @@ tray.bat --restart                     # orphan-proof reclaim-then-start; verifi
 
 The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md`.
 
-## Phone / PWA
+## Phone access & auth
 
-Arrives with Step 7: Tailscale HTTPS certificate (`gen_tailscale_cert.py`), Add-to-Home-Screen install, phone verification of the Board carousel and the Today landing tab on a real device. Until then the app is plain HTTP on the LAN/loopback; the manifest + icons already ship.
+The phone reaches the same app over **Tailscale**, as an installed PWA. Three pieces, all optional for a PC-only install:
+
+**1. HTTPS — a real certificate for the tailnet name.** Once per tailnet, enable *HTTPS Certificates* in the Tailscale admin console (DNS page). Then, on the host:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\gen_tailscale_cert.py     # tailscale cert → webapp/certificates/{cert,key}.pem
+tray.bat --restart
+```
+
+`gen_tailscale_cert.py` (vendored verbatim from `project-scaffolding`) detects this machine's MagicDNS name and asks `tailscale cert` for a Let's Encrypt leaf — trusted by every device on the tailnet, **zero per-device trust steps**. With the pair present the launcher (the tray's `manager.py`, `launcher.py webapp`, `webapp.bat` — all agree) serves **`https://<your-host>.ts.net:8448`**; without it the app serves plain HTTP and says so loudly in the log and in `GET /api/status` (`https: false`). The leaf lives ~90 days: every launcher runs `gen_tailscale_cert.py --check` **before uvicorn binds**, which renews a `.ts.net` cert expiring within ~30 days and never blocks a start. `localhost` is not in the cert — the tray's **Open task-os** / **Copy URL** use the `.ts.net` name (it resolves on the host too), the restart probe uses loopback and skips verification.
+
+**2. Who may call the API.** Loopback (this PC — the browser on it, the tray, the `tasks` CLI, the restart probe) is the owner and needs nothing. **Any other client must present the bearer token**, either as `Authorization: Bearer <token>` (scripts, an LLM on another machine) or as the `taskos_token` cookie the sign-in page sets. With no token configured — the committed sample — the gate is **closed**: non-loopback gets `401` on `/api/*` and is sent to `/login`, which explains what to run.
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\gen_token.py                # writes auth.token into config/config.json (created from the sample if missing)
+& .\.venv\Scripts\python.exe scripts\set_password.py <password>  # optional: a memorable secret to type instead (PBKDF2 hash stored, never the password)
+tray.bat --restart                                               # config is read at startup
+```
+
+`gen_token.py --force` rotates the token and signs every device out at once (the cookie *is* the token); `--clear` goes back to loopback-only. `set_password.py --clear` removes the password. Failed and successful sign-ins are logged with the client address in `data/logs/task-os.log`.
+
+**3. Sign in and install.** On the phone (Tailscale connected) open `https://<your-host>.ts.net:8448` → the sign-in card → paste the token or type the password → this device stays signed in for **90 days** (HttpOnly cookie, `Secure` over HTTPS). Then:
+
+- **iOS (Safari):** Share → **Add to Home Screen** — the app launches full-screen (`display: standalone`), lands on **Today**, keeps the bottom pill above the home indicator.
+- **Android (Chrome):** page menu → **Install app**.
+
+Settings → **Phone access** shows what this connection is (`this PC` · `signed in`), whether HTTPS and the token are on, and a **Sign out on this device** button when signed in with the cookie.
+
+**What stays public** on any client: the static assets under `/static/` (the manifest and icons a phone needs before it can sign in), `/healthz`, `/api/version` (the build-identity contract), the `/login` page and `/api/login` itself. Everything else under `/api/` is gated; a page request from a signed-out phone redirects to `/login?next=…` and comes back where it started.
 
 ## Roadmap
 

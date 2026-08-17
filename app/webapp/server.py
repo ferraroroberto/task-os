@@ -10,11 +10,20 @@ Route families (each in ``app/webapp/routers/``):
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=       → full text over tasks + comments
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
-    mirror  /api/status          → markdown mirror + backup status; POST /api/mirror/export,
-                                   /api/mirror/import, /api/backup run them on demand
+    mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
+                                   backup; POST /api/mirror/export, /api/mirror/import,
+                                   /api/backup run them on demand
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
                                  → the issue provider (GitHub via gh): status, sync now,
                                    the drawer's issue panel, create an issue from a task
+    auth    GET /login · POST /api/login|logout — the token / password →
+            cookie swap (Step 7)
+
+Access (``src.auth.AuthMiddleware``): loopback is the owner; any other client
+needs the bearer token (header or the ``taskos_token`` cookie ``/login``
+sets). Static assets, ``/healthz``, ``/api/version`` and ``/login`` stay
+public. HTTPS is uvicorn's job (``--ssl-*`` from ``app.webapp.manager`` /
+``webapp.bat`` when ``webapp/certificates/{cert,key}.pem`` exist).
 
 Background services (started in the lifespan, stopped on shutdown, exposed
 on ``app.state``): ``src.mirror.Mirror`` (debounced export on every write via
@@ -52,9 +61,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import issues, mirror, misc, people, search, tasks, views
+from app.webapp.routers import auth, issues, mirror, misc, people, search, tasks, views
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
+from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
 from src.issue_sync import IssueSyncService
@@ -124,6 +135,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         db_path(),
         version,
     )
+    # Access + transport, said once and loudly: an unestablished fact is its
+    # own visible state, never folded into "fine".
+    if app.state.config.auth.enabled:
+        logger.info("🔐 auth: token configured — non-loopback clients sign in at /login")
+    else:
+        logger.warning("⚠️ auth: no token in config — only this PC (loopback) can use the app; run scripts/gen_token.py")
+    if cert_paths() is None:
+        logger.warning("⚠️ https: no webapp/certificates/{cert,key}.pem — the launcher serves plain HTTP; run scripts/gen_tailscale_cert.py")
     config = app.state.config
     app.state.mirror = Mirror(config)
     app.state.backup = BackupScheduler(config)
@@ -160,9 +179,11 @@ def create_app() -> FastAPI:
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
     _install_error_handlers(app)
+    app.add_middleware(AuthMiddleware, get_auth=lambda: app.state.config.auth)
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(misc.router)
+    app.include_router(auth.router)
     app.include_router(tasks.router)
     app.include_router(people.router)
     app.include_router(search.router)
