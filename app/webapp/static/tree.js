@@ -11,7 +11,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { relDue, statusPill } from './format.js';
+import { issueChip, relDue, statusPill } from './format.js';
 
 const COLLAPSE_KEY = 'task-os.tree.collapsed';
 const CLOSED = { done: 1, cancelled: 1 };
@@ -123,6 +123,11 @@ function buildNode(node, collapsed, handlers) {
     chip.className = 'chip chip-project';
     chip.textContent = 'project';
     row.appendChild(chip);
+  }
+  if (node.issue_ref) {
+    const ic = issueChip(node.issue_ref);
+    ic.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    row.appendChild(ic);
   }
 
   const meta = document.createElement('span');

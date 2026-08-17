@@ -7,7 +7,10 @@
  * description (markdown, edit/preview) → links (add/remove) → comments
  * newest-first with URLs as clickable chips + composer (Ctrl+Enter sends,
  * origin=ui) → activity log (field old → new · actor · time) → children
- * (click to navigate, add child) → issue panel (placeholder until Step 8).
+ * (click to navigate, add child) → issue panel: the linked issue (provider
+ * glyph, repo#N link, state, labels from the last sync, last synced, unlink)
+ * or — for a plain task — "Create issue…" (repo from the last-seen list or
+ * typed) and "Link existing" (owner/repo#N).
  *
  * Every write goes through the API and then `refresh()`, and the caller's
  * `onChanged` re-renders the Table / Tree so the three surfaces never drift.
@@ -18,13 +21,17 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, STATUSES, chipFor, fmtTs, linkify, relDue, renderMarkdown, statusPill,
+  PRIORITIES, RECURRENCES, STATUSES, chipFor, fmtTs, issueChip, linkify, providerIcon, relDue,
+  renderMarkdown, statusPill,
 } from './format.js';
 import { toast } from './toast.js';
 
 /**
  * @param {HTMLElement} el     the <aside id="taskDrawer">
- * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void, people: () => Array<{id:number,name:string}>}} opts
+ * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
+ *          people: () => Array<{id:number,name:string}>,
+ *          issues: () => ({enabled:boolean, reason?:string, provider?:string, repos?:string[]}|null),
+ *          onSyncIssues: () => Promise<any>}} opts
  */
 export function createDrawer(el, opts) {
   let current = null;      // the detail payload
@@ -448,24 +455,154 @@ export function createDrawer(el, opts) {
     children.appendChild(addChild);
     el.appendChild(children);
 
-    // ---- issue panel (Step 8 wires the providers)
-    const issue = section('issue', 'Issue', 'git-branch');
+    // ---- issue panel
+    el.appendChild(renderIssuePanel(t));
+  }
+
+  function renderIssuePanel(t) {
+    const st = (opts.issues && opts.issues()) || null;
+    const configured = !!(st && st.enabled);
+    const issue = section('issue', 'Issue', t.issue_ref ? providerIcon(t.issue_ref.provider) : 'git-branch');
+    const tools = document.createElement('div');
+    tools.className = 'drawer-tools';
+    const sync = document.createElement('button');
+    sync.type = 'button';
+    sync.className = 'button-ghost issue-sync';
+    sync.innerHTML = icon('refresh-cw') + ' Sync now';
+    sync.title = configured ? 'Run an issue sync now' : ('Issue provider not configured' + (st && st.reason ? ': ' + st.reason : ''));
+    sync.disabled = !configured;
+    sync.addEventListener('click', async function () {
+      sync.disabled = true;
+      sync.classList.add('is-busy');
+      try { await opts.onSyncIssues(); await refresh(); } finally { sync.disabled = !configured; sync.classList.remove('is-busy'); }
+    });
+    tools.appendChild(sync);
+    issue.querySelector('h3').appendChild(tools);
+
     const ib = document.createElement('div');
     ib.className = 'issue-panel';
     if (t.issue_ref) {
       const ref = t.issue_ref;
-      const chip = chipFor(ref.url || ('https://github.com/' + ref.repo + '/issues/' + ref.number), ref.repo + '#' + ref.number);
-      ib.appendChild(chip);
-      const st = document.createElement('span');
-      st.className = 'pill pill-' + (ref.state === 'closed' ? 'done' : 'doing');
-      st.textContent = ref.state || 'unknown';
-      ib.appendChild(st);
+      const head = document.createElement('div');
+      head.className = 'issue-head';
+      head.appendChild(issueChip(ref));
+      const stPill = document.createElement('span');
+      stPill.className = 'pill issue-state pill-' + (ref.state === 'closed' ? 'done' : (ref.state === 'open' ? 'doing' : 'inbox'));
+      stPill.textContent = ref.state || 'state unknown';
+      head.appendChild(stPill);
+      const labels = document.createElement('span');
+      labels.className = 'issue-labels';
+      head.appendChild(labels);
+      ib.appendChild(head);
+      const meta = document.createElement('div');
+      meta.className = 'issue-meta muted';
+      meta.textContent = (ref.provider || 'issue') + ' · ' + (ref.last_synced ? 'last synced ' + fmtTs(ref.last_synced) : 'not synced yet');
+      ib.appendChild(meta);
+      const actions = document.createElement('div');
+      actions.className = 'issue-actions';
+      const unlink = document.createElement('button');
+      unlink.type = 'button';
+      unlink.className = 'button-ghost issue-unlink';
+      unlink.innerHTML = icon('unlink') + ' Unlink';
+      unlink.title = 'Detach the issue — the task becomes a plain task; the issue is untouched';
+      unlink.addEventListener('click', async function () {
+        try {
+          await api('/api/tasks/' + t.id + '/issue', { method: 'DELETE' });
+          toast('Unlinked ' + ref.repo + '#' + ref.number, 'success');
+          await refresh();
+          opts.onChanged();
+        } catch (err) { toast(err.message || 'Unlink failed', 'error'); }
+      });
+      actions.appendChild(unlink);
+      ib.appendChild(actions);
+      // labels + the forge's updated time from the last sync (cached server-side; async, best effort)
+      api('/api/tasks/' + t.id + '/issue').then(function (res) {
+        if (!current || current.id !== t.id || !res || !res.info) return;
+        (res.info.labels || []).forEach(function (name) {
+          const l = document.createElement('span');
+          l.className = 'chip chip-label-tag';
+          l.textContent = name;
+          labels.appendChild(l);
+        });
+        if (res.info.updated_at) meta.textContent += ' · updated ' + fmtTs(res.info.updated_at);
+      }).catch(function () { /* the panel already shows the stored ref */ });
     } else {
-      ib.className += ' muted';
-      ib.textContent = 'No issue linked.';
+      const none = document.createElement('p');
+      none.className = 'muted drawer-none';
+      none.textContent = configured ? 'No issue linked.' : ('No issue linked. Issue provider not configured' + (st && st.reason ? ' — ' + st.reason : '') + '.');
+      ib.appendChild(none);
+
+      // create an issue from this task
+      const createForm = document.createElement('form');
+      createForm.className = 'issue-form issue-create';
+      const repoInput = document.createElement('input');
+      repoInput.type = 'text';
+      repoInput.className = 'input-native';
+      repoInput.placeholder = 'owner/repo';
+      repoInput.setAttribute('aria-label', 'Repository for the new issue');
+      repoInput.setAttribute('list', 'issueRepos');
+      const repos = (st && st.repos) || [];
+      let dl = document.getElementById('issueRepos');
+      if (!dl) { dl = document.createElement('datalist'); dl.id = 'issueRepos'; document.body.appendChild(dl); }
+      dl.replaceChildren();
+      repos.forEach(function (r) { const o = document.createElement('option'); o.value = r; dl.appendChild(o); });
+      if (repos.length === 1) repoInput.value = repos[0];
+      const createBtn = document.createElement('button');
+      createBtn.type = 'submit';
+      createBtn.className = 'button-surface';
+      createBtn.innerHTML = icon('plus') + ' Create issue';
+      createBtn.disabled = !configured;
+      createBtn.title = configured ? "Open an issue with this task's title and description, then link it" : 'Issue provider not configured';
+      createForm.append(repoInput, createBtn);
+      createForm.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const r = repoInput.value.trim();
+        if (!r) { repoInput.focus(); return; }
+        createBtn.disabled = true;
+        try {
+          const res = await api('/api/tasks/' + t.id + '/issue', { method: 'POST', body: { repo: r } });
+          const ref = res.issue_ref || {};
+          toast('Created ' + ref.repo + '#' + ref.number, 'success');
+          await refresh();
+          opts.onChanged();
+        } catch (err) {
+          toast(err.message || 'Could not create the issue', 'error');
+          createBtn.disabled = !configured;
+        }
+      });
+      ib.appendChild(createForm);
+
+      // link an existing issue
+      const linkForm = document.createElement('form');
+      linkForm.className = 'issue-form issue-link';
+      const refInput = document.createElement('input');
+      refInput.type = 'text';
+      refInput.className = 'input-native';
+      refInput.placeholder = 'link existing: owner/repo#12 or its URL';
+      refInput.setAttribute('aria-label', 'Existing issue reference');
+      const linkBtn = document.createElement('button');
+      linkBtn.type = 'submit';
+      linkBtn.className = 'button-surface';
+      linkBtn.innerHTML = icon('link') + ' Link';
+      linkForm.append(refInput, linkBtn);
+      linkForm.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const v = refInput.value.trim();
+        const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(v) || /(?:github|gitlab)\.com\/([^/\s]+\/[^/\s#?]+)\/(?:-\/)?issues\/(\d+)/.exec(v);
+        if (!m) { toast('Use owner/repo#N or the issue URL', 'error'); refInput.focus(); return; }
+        const provider = /gitlab\.com/.test(v) ? 'gitlab' : ((st && st.provider) || 'github');
+        try {
+          await api('/api/tasks/' + t.id + '/issue', { method: 'PUT', body: { provider: provider, repo: m[1], number: Number(m[2]) } });
+          toast('Linked ' + m[1] + '#' + m[2], 'success');
+          if (configured) { try { await opts.onSyncIssues(); } catch (_) { /* the sync toast said it */ } }
+          await refresh();
+          opts.onChanged();
+        } catch (err) { toast(err.message || 'Link failed', 'error'); }
+      });
+      ib.appendChild(linkForm);
     }
     issue.appendChild(ib);
-    el.appendChild(issue);
+    return issue;
   }
 
   async function refresh() {

@@ -14,7 +14,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, STATUSES, breadcrumbText, chipFor, linkify, priorityLabel, relDue, statusPill,
+  PRIORITIES, STATUSES, breadcrumbText, chipFor, issueChip, linkify, priorityLabel, relDue, statusPill,
 } from './format.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: '', due: '', q: '', sort: 'due' };
@@ -254,7 +254,8 @@ function buildRow(t, handlers) {
     pc.textContent = 'project';
     tt.appendChild(pc);
   }
-  if (t.type === 'coding') {
+  if (t.issue_ref) tt.appendChild(issueChip(t.issue_ref));
+  else if (t.type === 'coding') {
     const cc = document.createElement('span');
     cc.className = 'chip chip-type';
     cc.innerHTML = icon('git-branch');
