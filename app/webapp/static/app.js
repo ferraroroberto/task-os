@@ -32,6 +32,9 @@ const els = {
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
+  mirrorCardMeta: document.getElementById('mirrorCardMeta'),
+  statusMirror: document.getElementById('statusMirror'),
+  statusBackup: document.getElementById('statusBackup'),
   tableFilters: document.getElementById('tableFilters'),
   tableHost: document.getElementById('tableHost'),
   treeHost: document.getElementById('treeHost'),
@@ -287,6 +290,73 @@ async function fetchVersion() {
   }
 }
 
+// ------------------------------------------------- mirror + backup status
+function statusPart(state, text) {
+  const s = document.createElement('span');
+  s.className = 'status-' + state;
+  s.textContent = text;
+  return s;
+}
+
+function codeEl(text) {
+  const c = document.createElement('code');
+  c.textContent = text;
+  return c;
+}
+
+function renderMirrorRow(dd, m) {
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!m || !m.enabled) {
+    dd.append(statusPart('off', 'not configured'), ' — ' + ((m && m.reason) || 'unknown'));
+    return;
+  }
+  dd.append(
+    statusPart(m.errors ? 'warn' : 'ok', m.errors ? 'enabled · ' + m.errors + ' file(s) skipped' : 'enabled'),
+    ' · ', codeEl(m.dir), ' · ' + (m.files == null ? '?' : m.files) + ' file(s)',
+    ' · last export ' + (m.last_export ? fmtTsShort(m.last_export) : '–'),
+    ' · last import ' + (m.last_import ? fmtTsShort(m.last_import) : '–')
+  );
+  if (m.error_files && m.error_files.length) dd.append(' · skipped: ' + m.error_files.join(', '));
+}
+
+function renderBackupRow(dd, b) {
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!b || !b.enabled) {
+    dd.append(statusPart('off', 'not configured'), ' — ' + ((b && b.reason) || 'unknown'));
+    return;
+  }
+  dd.append(
+    statusPart(b.last_error ? 'warn' : 'ok', b.last_error ? 'error' : 'enabled'),
+    ' · ', codeEl(b.dir), ' · last ' + (b.last_file || '–'), ' · next ' + (b.next_run ? fmtTsShort(b.next_run) : '–')
+  );
+  if (b.last_error) dd.append(' · ' + b.last_error);
+}
+
+function fmtTsShort(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function fetchStatus() {
+  if (!els.statusMirror) return;
+  try {
+    const res = await fetch('/api/status', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const body = await res.json();
+    renderMirrorRow(els.statusMirror, body.mirror);
+    renderBackupRow(els.statusBackup, body.backup);
+    const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
+    els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
+  } catch (err) {
+    // An unreachable status is its own visible state, never a stale "Loading…".
+    els.statusMirror.textContent = 'unknown — ' + err.message;
+    els.statusBackup.textContent = 'unknown — ' + err.message;
+    els.mirrorCardMeta.textContent = 'unknown';
+  }
+}
+
 // ---------------------------------------------------------------- boot
 async function boot() {
   wireTheme();
@@ -298,7 +368,10 @@ async function boot() {
   });
   // A shared Table view (?status=doing…) lands on the Table, whatever tab was last used.
   const wantsTable = !isDefaultFilters(state.filters);
-  nav = initNavTabs({ storageKey: TAB_KEY, onChange: function (tab) { state.tab = tab; } });
+  nav = initNavTabs({ storageKey: TAB_KEY, onChange: function (tab) {
+    state.tab = tab;
+    if (tab === 'settings') fetchStatus();
+  } });
   if (wantsTable) nav.setTab('table');
   mountQuickAdds();
   document.addEventListener('keydown', function (ev) {

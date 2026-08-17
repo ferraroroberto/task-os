@@ -7,6 +7,7 @@ flowchart LR
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
+    editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
   end
 
   subgraph webapp["FastAPI webapp · :8448<br/>app/webapp/server.py"]
@@ -14,14 +15,18 @@ flowchart LR
     tasksr["routers/tasks<br/>/api/tasks… · /api/activity<br/>/api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search"]
+    mirrorr["routers/mirror<br/>/api/status · /api/mirror/export|import<br/>/api/backup"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()"]
   end
 
   subgraph domain["Domain · src/"]
-    repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity"]
+    repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity<br/>write listeners (touched ids)"]
+    mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict → comment"]
+    backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
-    schema["schema.py<br/>MIGRATIONS v1→v3 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v4 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json"]
   end
@@ -33,8 +38,14 @@ flowchart LR
     a["activity"]
     p["people"]
     i["issue_refs"]
+    ms["mirror_state (v4)<br/>path · exported_at · mtime · hash"]
     s["settings.schema_version"]
     fts["tasks_fts · comments_fts<br/>(FTS5, trigger-synced)"]
+  end
+
+  subgraph files["Synced folder · config.mirror"]
+    mdfiles["mirror.dir/&lt;id&gt;-&lt;slug&gt;.md<br/>frontmatter · Description · Comments · Log"]
+    bakfiles["backup_dir/tasks-YYYYMMDD.db"]
   end
 
   subgraph ops["Process / proof"]
@@ -57,6 +68,18 @@ flowchart LR
   qa --> dates
   peopler --> repo
   searchr --> repo
+  mirrorr --> mirror
+  mirrorr --> backup
+  lifespan --> mirror
+  lifespan --> backup
+  repo -.->|"write listener → touch(ids)"| mirror
+  mirror -->|"update_task(actor=md) · add_comment(origin=md)"| repo
+  mirror -->|"export · re-export"| mdfiles
+  mdfiles -->|"mtime moved → import"| mirror
+  editor -.-> mdfiles
+  mirror --> ms
+  backup -->|"daily / on demand"| bakfiles
+  cli -->|"mirror · backup (app down)"| mirror
   tasksr -.-> errors
   repo --> dates
   repo --> db

@@ -10,5 +10,6 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 02 | [Add and nest from the terminal](validation/story-02-terminal.md) | `tests/test_cli.py::test_story_02_add_nest_comment_tree_due_show` · `tests/test_api.py::test_story_02_over_http` | verified | 2026-08-17 |
 | 03 | [Import my Notion](validation/story-03-notion-import.md) | `tests/test_import_notion.py` | verified | 2026-08-17 |
 | 04 | [Monday triage](validation/story-04-triage.md) | `tests/e2e/test_story_04_triage.py` | verified | 2026-08-17 |
+| 06 | [Edit in a text editor](validation/story-06-mirror.md) | `tests/e2e/test_story_06_mirror.py` | verified (typing inside the editor window itself not verified — see record) | 2026-08-17 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.

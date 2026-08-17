@@ -16,6 +16,13 @@ Version history:
     3  tasks.external_id + comments.external_id (partial unique indexes)  (Step 3)
        — the source-system key an importer (Notion) is idempotent on:
        a re-run finds the row by external_id and updates instead of duplicating.
+    4  mirror_state(task_id, path, exported_at, file_mtime_ns, content_hash)  (Step 6)
+       — one row per task file the markdown mirror last wrote: the watcher
+       compares a file's mtime against ``file_mtime_ns`` to spot an edit,
+       ``exported_at`` is the conflict baseline ("did the DB change after the
+       file was written?"), ``content_hash`` skips no-op rewrites. No FK
+       cascade on purpose: the exporter needs the old ``path`` after a task is
+       deleted so it can remove the file, then drops the row itself.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -167,8 +174,18 @@ ALTER TABLE comments ADD COLUMN external_id TEXT;
 CREATE UNIQUE INDEX idx_comments_external_id ON comments(external_id) WHERE external_id IS NOT NULL;
 """
 
+_V4 = """
+CREATE TABLE mirror_state (
+    task_id       INTEGER PRIMARY KEY,
+    path          TEXT NOT NULL,
+    exported_at   TEXT NOT NULL,
+    file_mtime_ns INTEGER NOT NULL,
+    content_hash  TEXT NOT NULL
+);
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

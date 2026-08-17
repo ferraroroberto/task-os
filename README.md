@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 6** the markdown mirror + nightly backup. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -31,6 +31,7 @@ tasks comment 2 "called the office"
 tasks tree
 tasks due 2 2026-09-01
 tasks show 2            # activity log shows due: ∅ → 2026-09-01
+tasks mirror status     # markdown mirror + backup: enabled? where? last export / import
 ```
 
 Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwright install chromium webkit` (once).
@@ -62,11 +63,13 @@ tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground 
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, JSON error envelope), event_loop.py, manager.py
 app/webapp/routers/       misc (shell, /healthz, /api/version) · tasks (/api/tasks…, /api/activity) · people · search
+                          mirror (/api/status, /api/mirror/export|import, /api/backup)
 app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js (state + routing), table.js,
                           tree.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
-src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules)
+src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
+                          mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           logger.py · static_versioning.py
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat)
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
@@ -84,7 +87,7 @@ data/                     tasks.db, logs, avatars, backups — gitignored, never
 | `port` | webapp port (default **8448**) |
 | `issues` | `provider` (`github`/`gitlab`), `owner`, `assignee`, `sync_minutes` — Step 8 |
 | `placeholders` | `{onedrive}`, `{user}`, … expanded in folder refs per machine — Step 9 |
-| `mirror` | markdown mirror dir + nightly backup dir — Step 6 |
+| `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. See [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
 | `search` | folder roots + email index path for federated search — Step 10 |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 
@@ -92,9 +95,9 @@ Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, option
 
 ## Data model
 
-One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **3**):
+One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **4**):
 
-`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, recurrence daily|weekly|monthly|quarterly|yearly, description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at, external_id)` · `links(task_id, url, label, kind web|folder|email|issue)` · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync, external_id)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
+`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, recurrence daily|weekly|monthly|quarterly|yearly, description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at, external_id)` · `links(task_id, url, label, kind web|folder|email|issue)` · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync, external_id)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `mirror_state(task_id, path, exported_at, file_mtime_ns, content_hash)` (v4 — what the markdown mirror last wrote per task) · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
 
 Rules the repo layer enforces (`src/tasks_repo.py`): a task with children **is** a project (the `project` filter means "descendant of"); `move` refuses cycles; every due / status / parent / priority (and title, type, recurrence, person, description) change writes an `activity` row; `done` on a recurring task rolls the **same** task's due one cadence forward from its due date (month-end clamps) and logs the completion, otherwise it sets `done` + `done_at`; `type = coding` **iff** an `issue_refs` row exists (attach an issue to make a task coding — setting the type by hand is rejected); deleting a task deletes its subtree.
 
@@ -118,6 +121,8 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `POST /api/parse` `{text, today?}` | quick-add split → `{title, due, due_phrase, parent_ref, parent}` (`parent` resolved to `{id, title}` or `null`) |
 | `GET/POST /api/people` · `GET/PATCH/DELETE /api/people/{id}` | people CRUD (`open_tasks` count included) |
 | `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
+| `GET /api/status` | `{mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}}` — a disabled service carries its `reason` |
+| `POST /api/mirror/export` · `POST /api/mirror/import` · `POST /api/backup` | run a full export / one watcher pass / one backup now (409 `mirror_disabled` / `backup_disabled` when not configured) |
 
 Also `GET /` shell · `GET /healthz` liveness.
 
@@ -137,9 +142,77 @@ tasks done N               recurring tasks roll forward and stay open
 tasks move N --parent M    M = root for top level; cycles are refused
 tasks search "q"           full text incl. comments, with the matched snippet
 tasks people
+tasks mirror [export|import|status]   markdown mirror: full export · one watcher pass · status (default)
+tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
 ```
 
 Dates (`--due`, `due` — and the API's `due` field, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
+
+## Markdown mirror
+
+The database is canonical; the mirror is a folder with **one `.md` per task** — `<mirror.dir>/<id:04d>-<slug>.md` — that a human, an editor, `grep` or an LLM can read and edit, and that a sync client (OneDrive, a shared drive) can carry to another machine. Point `mirror.dir` in `config/config.json` at a folder whose parent exists (`{onedrive}/task-os/mirror` with `placeholders.onedrive` set — create `{onedrive}/task-os` once; the leaf is created for you) and restart: the app exports every task on startup, then keeps the folder current.
+
+```markdown
+---
+id: 3
+external_id: null
+parent: 2
+title: Get three quotes
+code: null
+type: task
+status: doing
+priority: none
+due: 2026-08-20
+recurrence: null
+person: Sam Rivera
+folder_ref: null
+next_action: null
+links:
+  - url: https://example.com/quotes/1
+    label: null
+    kind: web
+created_at: 2026-07-18T00:03:00+02:00
+updated_at: 2026-07-18T00:47:00+02:00
+done_at: null
+exported_at: 2026-08-17T11:12:03+02:00
+---
+
+## Description
+
+Markdown, free.
+
+## Comments
+
+- 2026-07-18T00:45:00+02:00 · Sam Rivera · ui: First quote in: https://example.com/quotes/1 — a bit high.
+- 2026-07-18T00:47:00+02:00 · Alex Chen · ui: Plans are in {onedrive}/house/kitchen/plans
+
+## Log
+
+- 2026-07-18T00:03:00+02:00 · seed · created: ∅ → Get three quotes
+```
+
+**Export** runs in full on startup and on `tasks mirror export`, and **debounced (~1 s) after every write** through the repo layer's write hook — API, CLI and importers alike — for the touched tasks only. Output is deterministic (same DB state → byte-identical file; an unchanged task is not rewritten, so a synced folder does not churn); a title change renames the file (the id prefix keeps it findable), a deleted task removes it. `mirror_state` (schema v4) records what was written per task: path, `exported_at`, the file's mtime, a content hash.
+
+**Import** — a watcher polls the folder's mtimes every 2 s (stdlib, no extra dependency; also on startup, so edits made while the app was down are picked up before the export) and, for a file that changed since it was written:
+
+- **frontmatter fields** `title`, `code`, `status`, `priority`, `due` (ISO or a natural phrase — `tomorrow`, `next friday`), `recurrence`, `person` (by name), `folder_ref`, `next_action`, `parent` (id; the cycle guard applies) and the **`## Description`** body are applied through the same repo layer as the UI, with **actor `md`** — every change lands in the activity log like any other;
+- **new lines under `## Comments`** become comments with `origin = md`: a bare `- your text` (author = the first `team.people` entry, time = now) or a full `- <ISO ts> · <author> · md: text` line; a body may continue on lines indented by two spaces. Comments are **append-only** — a deleted line is not a deletion, an edited existing line reads as a new comment (the original stays);
+- `id`, `external_id`, `type` (derived from the issue link), `links`, the timestamps, `## Log` and any unknown section are read-only / ignored.
+
+After a successful import the file is **re-exported**, so it always converges to the canonical form above (your `due: tomorrow` becomes the ISO date, your bare comment line gains its timestamp and author).
+
+**Conflict policy** — per field: if the database changed that field *after* the file was written (the latest `activity` row for the field is newer than the file's `exported_at`), **the database wins** and the rejected file value is kept as a comment `origin = md`: `import conflict on due: file said 2026-10-10, kept 2026-11-11`. A value the rules refuse (an unknown status or person, a parent that would make a cycle) is recorded the same way — `import rejected on status: file said later (…), kept todo`. Nothing is silently lost, and the file converges to the value that won.
+
+**Failure mode** — a file that does not parse (broken frontmatter, no integer `id`) is **skipped**: one warning in the log per changed version, the file counted under `errors` / `error_files` in `/api/status`, `tasks mirror status` and the Settings tab; the app never crashes on a bad file, and fixing the file is picked up on the next tick. A file in the folder that matches no task is left alone. Not configured (blank `mirror.dir`, an unresolved `{placeholder}`, a missing parent folder) is a **visible** state — the reason is logged at startup and shown in the same three places — never a silent no-op.
+
+## Backups
+
+`src/backup.py` copies `data/tasks.db` to `<mirror.backup_dir>/tasks-YYYYMMDD.db` with SQLite's online backup API (a consistent snapshot while the app keeps writing under WAL), via a temp file + atomic rename, and keeps the **newest 30** dated copies. Two ways to run it:
+
+- **In-app (default):** the webapp runs it **daily at 03:00 local** while it is up, plus once at startup when today's copy is missing (a PC that was off at 03:00 still gets one). Status — last file, next run, last error — in `/api/status` and the Settings tab; `POST /api/backup` runs one now.
+- **From a scheduler:** `tasks backup` does the same from the terminal (over HTTP when the app is up, else against the file directly) — put `E:utomation	ask-os	asks.bat backup` in Windows Task Scheduler / an app-launcher job if you would rather not depend on the app being up at 03:00; the pruning keeps both paths at 30 files.
+
+Point `mirror.backup_dir` at a synced folder (`{onedrive}/task-os/backup`); the database itself stays out of the sync client by design — only the mirror and the dated copies travel.
 
 ## Importing from Notion
 
