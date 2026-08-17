@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA, **Step 9** folders that open on any PC — placeholders, the `taskos://` opener, the folder index. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -32,6 +32,7 @@ tasks tree
 tasks due 2 2026-09-01
 tasks show 2            # activity log shows due: ∅ → 2026-09-01
 tasks mirror status     # markdown mirror + backup: enabled? where? last export / import
+tasks folders search kitchen   # the folder index (search.folder_roots) — refs you can paste on a task
 ```
 
 Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwright install chromium webkit` (once).
@@ -65,9 +66,10 @@ tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground 
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           event_loop.py, manager.py (adopt-or-spawn uvicorn; cert --check → --ssl-* when a cert exists)
-app/webapp/routers/       misc (shell, /healthz, /api/version) · auth (/login, /api/login|logout) · tasks (/api/tasks…,
-                          /api/activity) · people · search · views (/api/board, /api/today)
-                          · mirror (/api/status — install status incl. https + auth, /api/mirror/export|import, /api/backup)
+app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.cmd) · auth (/login, /api/login|logout) · tasks
+                          (/api/tasks…, /api/activity) · people · search · views (/api/board, /api/today)
+                          · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,
+                          /api/backup) · folders (/api/resolve, /api/folders/search, /api/folders/reindex)
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
                           table.js, tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
@@ -75,14 +77,18 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
+                          placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
+                          (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
                           logger.py · static_versioning.py
+opener/                   the per-PC folder opener: opener.cmd (the taskos:// handler) · install.txt (one-line PowerShell
+                          install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
                           gen_tailscale_cert.py (vendored from the scaffold), gen_token.py, set_password.py
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
-data/                     tasks.db, logs, avatars, backups — gitignored, never committed
+data/                     tasks.db, folder_index.txt, logs, avatars, backups — gitignored, never committed
 webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log — gitignored
 ```
 
@@ -93,9 +99,9 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | `site` | `home` or a second site name — selects nothing yet; later steps key providers on it |
 | `port` | webapp port (default **8448**) |
 | `issues` | `provider` (`github`/`gitlab`), `owner`, `assignee`, `sync_minutes` — Step 8 |
-| `placeholders` | `{onedrive}`, `{user}`, … expanded in folder refs per machine — Step 9 |
+| `placeholders` | `onedrive`, `user`, and a `sharepoint` map (`{"docs": "E:/…"}` → `{sharepoint:docs}`) — what **this** server expands folder refs with for display; the opener on each PC expands the same tokens from its own environment. See [Folders that open on any PC](#folders-that-open-on-any-pc) |
 | `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. See [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
-| `search` | folder roots + email index path for federated search — Step 10 |
+| `search` | `folder_roots` — placeholder-aware roots the folder index scans (`["{onedrive}/Documentos"]`; empty = index off, visibly); `email_db` — the email index for federated search (Step 10) |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
@@ -131,11 +137,13 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `GET /api/board?project=&person=&q=` | `{today, columns: {inbox, todo, doing, standby, done}}` — the Board's buckets, same enriched summaries as the list; `done` = completed on the current local day only |
 | `GET /api/today?person=` | `{today, due: [{root, items}], week: [{root, items}], counts: {overdue, today, week}}` — open tasks due ≤ today grouped by root project (recurring first inside a group), plus tomorrow … +7 days in the same shape |
 | `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
-| `GET /api/status` | `{https, auth: {enabled, password, client}, mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}}` — how this request came in (`client`: `loopback` · `token` · `public`) and what the install accepts; a disabled service carries its `reason` |
+| `GET /api/status` | `{https, auth: {enabled, password, client}, mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}, folders: {enabled, roots, entries, last_indexed, indexing, stale, reason}, opener: {install, uninstall, env_template, installed_here}, placeholders}` — how this request came in (`client`: `loopback` · `token` · `public`) and what the install accepts; a disabled service carries its `reason` |
 | `POST /api/mirror/export` · `POST /api/mirror/import` · `POST /api/backup` | run a full export / one watcher pass / one backup now (409 `mirror_disabled` / `backup_disabled` when not configured) |
+| `GET /api/resolve?ref=` | a folder ref **or** an absolute path → `{ref, path, resolved, unresolved, href}`: `ref` folded onto the placeholders (`E:\onedrive\house` → `{onedrive}/house`), `path` this server's absolute path (display only), `href` the `taskos://open?ref=…` link. Task payloads carry `folder_resolved` + `folder_url` (a `links(kind=folder)` web URL, when one exists) so no client resolves a ref itself |
+| `GET /api/folders/search?q=&limit=` · `POST /api/folders/reindex` | the folder index: substring AND over every indexed path → `{items: [{path, ref, name, depth}], count, indexing}` · rescan `search.folder_roots` now (409 `folders_disabled` when no root is configured / usable) |
 | `POST /api/login` `{secret}` · `POST /api/logout` | token or password → the 90-day `taskos_token` cookie · clear it |
 
-Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness. Every `/api/` route except `/api/version` and `/api/login` needs the caller to be loopback or to carry the token (see "Phone access & auth").
+Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `GET /opener/opener.cmd` (the per-PC opener handler, public so a second PC's install one-liner can download it). Every `/api/` route except `/api/version` and `/api/login` needs the caller to be loopback or to carry the token (see "Phone access & auth").
 
 ## CLI — `tasks`
 
@@ -155,6 +163,7 @@ tasks search "q"           full text incl. comments, with the matched snippet
 tasks people
 tasks mirror [export|import|status]   markdown mirror: full export · one watcher pass · status (default)
 tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
+tasks folders [reindex|status|search "q"]   folder index: rescan search.folder_roots · status (default) · substring search → refs
 ```
 
 Dates (`--due`, `due` — and the API's `due` field, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
@@ -224,6 +233,21 @@ After a successful import the file is **re-exported**, so it always converges to
 - **From a scheduler:** `tasks backup` does the same from the terminal (over HTTP when the app is up, else against the file directly) — put `E:utomation	ask-os	asks.bat backup` in Windows Task Scheduler / an app-launcher job if you would rather not depend on the app being up at 03:00; the pruning keeps both paths at 30 files.
 
 Point `mirror.backup_dir` at a synced folder (`{onedrive}/task-os/backup`); the database itself stays out of the sync client by design — only the mirror and the dated copies travel.
+
+## Folders that open on any PC
+
+A task's **folder** is stored as a portable ref — `{onedrive}/house/kitchen`, `{user}/code/garden-bot`, `{sharepoint:docs}/plans` — never as one machine's path. Two things resolve it, never the browser:
+
+- **This server**, for display: `config.placeholders` (`onedrive`, `user`, and a `sharepoint` map whose keys become `{sharepoint:<name>}`) turn the ref into `folder_resolved` on every task payload — the chip's tooltip, the drawer's Folder section, the phone's copy popover. A token missing from the config is reported (`unresolved`), never guessed. Paste an absolute path in the drawer's Folder field and it is folded back onto the longest matching placeholder (`E:\onedrive\house` → `{onedrive}/house`) before it is stored (`GET /api/resolve`).
+- **The per-PC opener**, for opening: the folder chip is `<a href="taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen">`. A browser cannot touch the file system, so Windows hands the URL to a tiny handler registered for **your user** — [`opener/opener.cmd`](opener/opener.cmd) — which URL-decodes the ref, expands `{onedrive}` from `%OneDriveCommercial%` (when set) else `%OneDrive%`, `{user}` from `%USERNAME%`, `{sharepoint:<name>}` from a `<name>=<path>` line in `%LOCALAPPDATA%\task-os\opener.env`, and opens **that PC's** synced copy in Explorer (a file opens with its default app). A path that is not synced there gets a visible console notice with the resolved path to copy. Same mechanism on the server PC and on any other machine.
+
+**Install the opener — 30 s per PC, no admin, no Python:** Settings → **Folder opener** shows the one-line PowerShell command from [`opener/install.txt`](opener/install.txt) with this install's address filled in (Copy → paste into PowerShell → Enter). It copies `opener.cmd` to `%LOCALAPPDATA%\task-os\`, creates an empty `opener.env` and registers `HKCU\Software\Classes\taskos` through the registry API (`New-Item` / `Set-ItemProperty`) — the route that keeps working where `reg.exe` / regedit and `.ps1` files are blocked. On a PC with Python, `python opener\install_opener.py` (`--dry-run` prints the plan, `--uninstall` removes it) does the same via `winreg`. Then click any folder chip: the browser asks once *"Open task-os opener?"* (tick *always allow*), and Explorer opens. If nothing opens, a one-time hint appears under the chip pointing at the Settings card. Details, what was verified and the caveats: [`opener/README.md`](opener/README.md).
+
+**`opener.env`** — one `name=path` line per placeholder that PC needs beyond the two Windows knows: `docs=C:\Users\me\Tenant\docs - Documents` serves `{sharepoint:docs}` (and `{docs}`); `onedrive=D:\OneDrive` overrides the environment; values may use `%VARS%`. The Settings card shows a template built from this install's placeholders.
+
+**Phone / tablet:** no Explorer to open — tapping the chip shows the resolved path with a **Copy** button (and the web link when the task carries one).
+
+**Folder index** — `search.folder_roots` (placeholder-aware, `["{onedrive}/Documentos"]`) is scanned into `data/folder_index.txt` by the vendored `foldersearcher_core` (the GUI-free half of the fleet's folder searcher): at startup when the file is missing or older than 24 h (in the background), on **Reindex folders now** in Settings, `POST /api/folders/reindex` or `tasks folders reindex`. Search is substring-AND over every path (`kitchen plans`), each hit carrying the portable `ref` — the drawer's **Pick from folder index…** attaches one with Enter; `tasks folders search "q"` prints them. Not configured / no usable root is a visible state in `/api/status`, Settings and `tasks folders`, never an empty result.
 
 ## Importing from Notion
 

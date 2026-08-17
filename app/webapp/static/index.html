@@ -123,6 +123,13 @@
   <symbol id="i-folder" viewBox="0 0 24 24" fill="none">
     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
   </symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none">
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none">
+    <path d="M20 6 9 17l-5-5" />
+  </symbol>
   <symbol id="i-link" viewBox="0 0 24 24" fill="none">
     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -359,6 +366,48 @@
             <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
             <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
           </dl>
+        </div>
+        <!-- Folder opener + folder index (Step 9): the one-line install command
+             for the per-PC opener (opener/install.txt with this address filled
+             in), the opener.env template built from this install's placeholders,
+             and the folder-index status. Filled from GET /api/status by app.js. -->
+        <div class="card" id="folderCard">
+          <div class="card-head">
+            <h2 class="card-title">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
+              Folder opener &amp; folder index
+            </h2>
+            <span class="card-head-meta" id="folderCardMeta"></span>
+          </div>
+          <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
+          <dl class="status-rows" aria-live="polite">
+            <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Folder index</dt><dd id="statusIndex" class="muted">Loading…</dd></div>
+          </dl>
+          <div class="opener-block">
+            <div class="opener-block-head">
+              <span class="opener-block-title">Install on a PC — paste into PowerShell, no admin (30 s)</span>
+              <button type="button" id="openerCopy" class="button-surface">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copy command
+              </button>
+            </div>
+            <pre class="opener-cmd" id="openerInstall">Loading…</pre>
+            <details class="opener-more">
+              <summary>Uninstall · <code>opener.env</code> template · reindex</summary>
+              <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your <code>opener.env</code>):</p>
+              <pre class="opener-cmd" id="openerUninstall"></pre>
+              <div class="opener-block-head">
+                <span class="opener-block-title"><code>%LOCALAPPDATA%\task-os\opener.env</code> — this install's placeholders (edit the paths for that PC)</span>
+                <button type="button" id="openerEnvCopy" class="button-ghost">
+                  <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copy
+                </button>
+              </div>
+              <pre class="opener-cmd" id="openerEnv"></pre>
+              <div class="access-actions">
+                <button type="button" id="reindexBtn" class="button-ghost" hidden>Reindex folders now</button>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     </section>

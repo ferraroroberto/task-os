@@ -285,6 +285,66 @@ a.chip:hover { text-decoration: underline; }
 }
 .chip-type { padding: 2px 5px; color: var(--muted); }
 
+/* Folder popover (format.js): the path to copy on a phone / no opener, or the
+   one-time "Nothing opened? Install the opener" hint under the chip. Fixed,
+   anchored to the chip, dismissed on outside click / Escape / scroll. */
+.folder-pop {
+  position: fixed;
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+  box-shadow: var(--shadow);
+}
+.folder-pop-title, .folder-pop-hint { margin: 0; font-size: var(--font-caption); color: var(--muted); }
+.folder-pop-hint { color: var(--fg); }
+.folder-pop-install { font-weight: 600; }
+.folder-pop-path {
+  display: block;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--card-off);
+  border: 1px solid var(--line);
+  font-size: var(--font-caption);
+  word-break: break-all;
+  user-select: all;
+}
+.folder-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.folder-pop-actions .button-ghost, .folder-pop-actions .button-surface { min-height: 32px; padding: 0 10px; font-size: var(--font-caption); text-decoration: none; }
+
+/* Drawer: Folder section — chip + resolved path + editor + folder-index picker */
+.drawer-folder { display: grid; gap: 8px; }
+.folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.folder-resolved { font-size: var(--font-caption); word-break: break-all; }
+.folder-copy { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); }
+.folder-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.folder-form .input-native { min-width: 0; }
+.folder-pick { grid-column: 1 / -1; justify-self: start; white-space: nowrap; }
+.folder-picker { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
+.folder-picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
+.folder-picker-btn {
+  display: grid; width: 100%; text-align: left; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center;
+  padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--fg); cursor: pointer;
+}
+.folder-picker-btn .icon { grid-row: 1 / span 2; width: 16px; height: 16px; color: var(--muted); }
+.folder-picker-name { font-weight: 600; font-size: var(--font-body); }
+.folder-picker-ref { color: var(--muted); font-size: var(--font-caption); word-break: break-all; }
+.folder-picker-item.is-active .folder-picker-btn, .folder-picker-btn:hover { background: var(--accent-soft); border-color: var(--accent-border-soft); }
+.folder-picker-note { margin: 0; font-size: var(--font-caption); }
+
+/* Settings: opener card */
+.opener-block { display: grid; gap: 8px; margin-top: 8px; }
+.opener-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.opener-block-title { font-size: var(--font-caption); color: var(--muted); }
+.opener-cmd {
+  margin: 0; padding: 8px 10px; max-height: 160px; overflow: auto;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
+  font-size: var(--font-caption); white-space: pre-wrap; word-break: break-all;
+}
+.opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
+.opener-more { display: grid; gap: 8px; }
+
 /* Status pills — status colors signal state (design.md). */
 .pill {
   display: inline-flex;

@@ -39,7 +39,8 @@ def resolve_placeholders(value: str, placeholders: Mapping[str, str]) -> str:
 
     Unknown tokens are left verbatim so the caller can see (and report) what
     is missing — see :func:`unresolved_placeholders`. Used for the mirror /
-    backup dirs here; folder refs reuse it from Step 9 on.
+    backup dirs here; folder refs go through ``src.placeholders`` (Step 9),
+    which builds on this.
     """
     return _PLACEHOLDER_RE.sub(lambda m: str(placeholders.get(m.group(1), m.group(0))), value or "")
 
@@ -123,6 +124,24 @@ def _as_str_list(value: Any) -> list[str]:
     return [str(v) for v in value]
 
 
+def _flatten_placeholders(raw: dict[str, Any]) -> dict[str, str]:
+    """``{"onedrive": "E:/onedrive", "sharepoint": {"docs": "…"}}`` → flat tokens.
+
+    A nested map becomes ``<group>:<name>`` keys (``sharepoint:docs``), which
+    is exactly the token spelled inside a folder ref (``{sharepoint:docs}``),
+    so :func:`resolve_placeholders` needs no special case. Scalars stay as
+    they are.
+    """
+    flat: dict[str, str] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            for sub, sub_value in value.items():
+                flat[f"{key}:{sub}"] = str(sub_value)
+        else:
+            flat[str(key)] = str(value)
+    return flat
+
+
 def load_config(path: Path | None = None) -> AppConfig:
     """Parse ``path`` (default: :func:`config_path`) into an :class:`AppConfig`.
 
@@ -146,7 +165,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     search = _as_dict(raw.get("search"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
-    placeholders = {str(k): str(v) for k, v in _as_dict(raw.get("placeholders")).items()}
+    placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
 
     try:
         port = int(raw.get("port", DEFAULT_PORT))

@@ -1,0 +1,28 @@
+# task-os folder opener — install on this PC in ~30 s. No admin, no Python, no
+# script file: paste ONE line into PowerShell (Win+X → Terminal / Windows
+# PowerShell), press Enter. It copies opener.cmd to %LOCALAPPDATA%\task-os\,
+# creates an empty opener.env there and registers the taskos:// URL scheme for
+# your user only (HKCU\Software\Classes\taskos) through the registry API — the
+# route that keeps working where reg.exe / regedit and .ps1 files are blocked.
+#
+# Replace <base-url> with your task-os address (e.g. https://your-host.ts.net:8448
+# or http://127.0.0.1:8448 on the server itself). Settings → "Folder opener" in
+# the app shows this line with the address already filled in and a Copy button.
+#
+# File format: the first non-comment line below is the INSTALL command, the
+# second the UNINSTALL command (the app reads them from here — keep that order).
+
+$d="$env:LOCALAPPDATA\task-os"; New-Item -ItemType Directory -Force $d | Out-Null; Invoke-WebRequest "<base-url>/opener/opener.cmd" -OutFile "$d\opener.cmd" -UseBasicParsing; if (-not (Test-Path "$d\opener.env")) { Set-Content "$d\opener.env" "# task-os opener placeholders — one name=path line per placeholder, e.g. docs=C:\Users\me\Tenant\docs - Documents  ({sharepoint:docs} and {docs}); onedrive=D:\OneDrive overrides {onedrive}" }; $k="HKCU:\Software\Classes\taskos"; New-Item $k -Force | Out-Null; Set-ItemProperty $k "(default)" "URL:task-os opener"; Set-ItemProperty $k "URL Protocol" ""; New-Item "$k\DefaultIcon" -Force | Out-Null; Set-ItemProperty "$k\DefaultIcon" "(default)" "explorer.exe,0"; New-Item "$k\shell\open\command" -Force | Out-Null; Set-ItemProperty "$k\shell\open\command" "(default)" ('cmd.exe /c ""' + $d + '\opener.cmd" "%1""'); "task-os opener installed: $d\opener.cmd — placeholders in $d\opener.env"
+
+Remove-Item "HKCU:\Software\Classes\taskos" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\task-os\opener.cmd" -Force -ErrorAction SilentlyContinue; "task-os opener removed (opener.env kept in $env:LOCALAPPDATA\task-os)"
+
+# Variants:
+#   From a clone of the repo instead of a download — swap the Invoke-WebRequest part for:
+#     Copy-Item "E:\automation\task-os\opener\opener.cmd" "$d\opener.cmd" -Force;
+#   From GitHub instead of your server:
+#     <base-url>/opener/opener.cmd  →  https://raw.githubusercontent.com/ferraroroberto/task-os/main/opener/opener.cmd
+#   With Python available: python opener\install_opener.py [--dry-run] [--uninstall] does the same via winreg.
+#
+# Then click any folder chip in the app: the browser asks once "Open task-os opener?" — tick
+# "always allow" — and Explorer opens the folder in THIS PC's synced copy. Test without the
+# app: run  start taskos://open?ref=%7Bonedrive%7D  in a terminal.

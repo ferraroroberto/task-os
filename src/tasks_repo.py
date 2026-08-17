@@ -32,6 +32,13 @@ with the task ids it touched (:func:`add_write_listener`) — the markdown
 mirror's debounced exporter (``src/mirror.py``) hangs off this so a change
 made through the API, the CLI's local backend or an importer all reach the
 mirror through the one layer that owns the rules.
+
+Folder refs stay unresolved in the row (``{onedrive}/house`` — plan §04); the
+one presentation hook, :func:`set_folder_resolver`, lets the app plug the
+placeholder resolution in so every summary carries ``folder_resolved`` (this
+server's absolute path, for display) and ``folder_url`` (the web link from a
+``links(kind=folder)`` row, when one exists) — the UI never resolves a ref
+client-side (Step 9).
 """
 
 from __future__ import annotations
@@ -121,6 +128,21 @@ def use_clock(fn: Callable[[], datetime]) -> Iterator[None]:
         yield
     finally:
         _clock = previous
+
+
+# ------------------------------------------------------- folder resolver
+
+FolderResolver = Callable[[str], str | None]
+_folder_resolver: FolderResolver | None = None
+
+
+def set_folder_resolver(fn: FolderResolver | None) -> None:
+    """Install (or clear, with ``None``) the ``ref → absolute path`` hook every
+    summary calls for ``folder_resolved``. The app sets it from its config
+    (``src.placeholders.resolve``); with none installed the field is ``None``
+    — unknown, never a guessed path."""
+    global _folder_resolver
+    _folder_resolver = fn
 
 
 # ----------------------------------------------------------- write hooks
@@ -259,6 +281,21 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
         out["person"] = _row(p)
     else:
         out["person"] = None
+    ref = row.get("folder_ref")
+    out["folder_resolved"] = None
+    out["folder_url"] = None
+    if ref:
+        if _folder_resolver is not None:
+            try:
+                out["folder_resolved"] = _folder_resolver(str(ref))
+            except Exception:  # noqa: BLE001 — a resolver bug never breaks a list
+                logger.exception("⚠️ folder resolver failed for %r", ref)
+        link = conn.execute(
+            "SELECT url FROM links WHERE task_id = ? AND kind = 'folder'"
+            " AND (url LIKE 'http://%' OR url LIKE 'https://%') ORDER BY id LIMIT 1",
+            (row["id"],),
+        ).fetchone()
+        out["folder_url"] = link["url"] if link else None
     return out
 
 

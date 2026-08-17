@@ -13,6 +13,7 @@
     tasks people
     tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
     tasks backup                        copy the database to mirror.backup_dir now
+    tasks folders reindex|status|search "q"   the folder index (search.folder_roots)
 
 Every command takes ``--json`` for machine-readable output (the same shapes
 the REST API returns). Talks to the running server over HTTP when it answers
@@ -159,6 +160,12 @@ class HttpBackend:
     def backup(self) -> dict[str, Any]:
         return self._call("POST", "/api/backup")
 
+    def folders_reindex(self) -> dict[str, Any]:
+        return self._call("POST", "/api/folders/reindex")
+
+    def folders_search(self, q: str) -> dict[str, Any]:
+        return self._call("GET", "/api/folders/search?" + urllib.parse.urlencode({"q": q}))
+
 
 class LocalBackend:
     """Opens the database directly — the app-down path."""
@@ -265,8 +272,20 @@ class LocalBackend:
 
     def status(self) -> dict[str, Any]:
         from src.backup import BackupScheduler
+        from src.folder_index import FolderIndexService
 
-        return {"mirror": self._mirror_service().status(), "backup": BackupScheduler(load_config()).status()}
+        config = load_config()
+        folders = FolderIndexService(config)
+        if folders.enabled:
+            try:
+                folders.load()
+            except OSError:
+                pass
+        return {
+            "mirror": self._mirror_service().status(),
+            "backup": BackupScheduler(config).status(),
+            "folders": folders.status(),
+        }
 
     def backup(self) -> dict[str, Any]:
         from src.backup import BackupScheduler
@@ -278,6 +297,23 @@ class LocalBackend:
         if target is None:
             raise CliError(scheduler.last_error or "backup failed", code="backup_failed")
         return {"file": target.name, "dir": str(target.parent), "path": str(target)}
+
+    def _folders(self) -> Any:
+        from src.folder_index import FolderIndexService
+
+        svc = FolderIndexService(load_config())
+        if not svc.enabled:
+            raise CliError(svc.reason, code="folders_disabled")
+        return svc
+
+    def folders_reindex(self) -> dict[str, Any]:
+        return self._folders().reindex()
+
+    def folders_search(self, q: str) -> dict[str, Any]:
+        svc = self._folders()
+        svc.load()
+        items = svc.search(q)
+        return {"q": q, "items": items, "count": len(items), "indexing": False, "entries": svc.status()["entries"]}
 
 
 def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
@@ -424,6 +460,26 @@ def fmt_status(status: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def fmt_folders_status(f: dict[str, Any]) -> str:
+    if not f.get("enabled"):
+        return f"folders  not configured — {f.get('reason') or 'unknown'}"
+    roots = ", ".join(
+        f"{r.get('ref')} → {r.get('path')}" + ("" if r.get("exists") else f" ({r.get('error') or 'missing'})")
+        for r in f.get("roots") or []
+    )
+    return (f"folders  {f.get('entries', 0)} folder(s) · roots {roots} · last indexed {f.get('last_indexed') or '-'}"
+            + (" · indexing now" if f.get("indexing") else "")
+            + (" · stale (>24 h)" if f.get("stale") and f.get("last_indexed") else "")
+            + (f" · last error {f['last_error']}" if f.get("last_error") else ""))
+
+
+def fmt_folders_search(r: dict[str, Any]) -> str:
+    items = r.get("items") or []
+    if not items:
+        return "(no folders match)" + (" — index still building" if r.get("indexing") else "")
+    return "\n".join(f"{i['ref']}\n    {i['path']}" for i in items)
+
+
 # ------------------------------------------------------------------ commands
 
 
@@ -539,6 +595,17 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "backup":
         r = backend.backup()
         return r, f"backup written: {r['path']}"
+    if cmd == "folders":
+        if args.action == "reindex":
+            r = backend.folders_reindex()
+            return r, f"folders: {r['entries']} folder(s) indexed under {', '.join(r['roots'])} in {r['seconds']}s → {r['index_file']}"
+        if args.action == "search":
+            if not args.query:
+                raise CliError("folders search needs a query", code="usage")
+            r = backend.folders_search(args.query)
+            return r, fmt_folders_search(r)
+        r = backend.status()
+        return r.get("folders", {}), fmt_folders_status(r.get("folders") or {})
     raise CliError(f"unknown command {cmd!r}", code="usage")
 
 
@@ -605,6 +672,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("backup", parents=[common],
                    help="copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)")
+
+    fo = sub.add_parser("folders", parents=[common], help="folder index: reindex · status · search")
+    fo.add_argument("action", choices=("reindex", "status", "search"), nargs="?", default="status",
+                    help="reindex = rescan search.folder_roots now · search = substring AND over the index · status (default)")
+    fo.add_argument("query", nargs="?", help="search terms (for: search)")
     return p
 
 

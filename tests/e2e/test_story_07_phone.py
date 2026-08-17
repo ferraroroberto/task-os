@@ -13,9 +13,9 @@ allowed on screen). What a browser can prove of the story:
   icons all 200), the iOS meta tags and touch icon are in the shell;
 - 390×844: Today is the landing tab → quick-add a task from Today → the
   Board is a one-column scroll-snap carousel and a swipe (scroll) moves the
-  active column → a card opens the drawer full-screen → the folder chip is
-  the display-only ref (span, no href, ref as tooltip — the per-PC opener is
-  Step 9) → the theme toggle persists across a reload;
+  active column → a card opens the drawer full-screen → the folder chip
+  carries the ref as a taskos:// opener link (a tap shows the path to copy —
+  story 09) → the theme toggle persists across a reload;
 - a 430-wide leg (the larger phones) of the same carousel;
 - the vendored geometry contract at 320 / 390 / 430 / 772: no horizontal
   overflow, ≥ 44 px targets on the nav pill + the column strip;
@@ -173,7 +173,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-07-phone-3-phone.png"))
 
-        # 4. Card → drawer full-screen; the folder chip is the display-only ref.
+        # 4. Card → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
         columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
         expect(page.locator(".board-strip-btn[data-col='todo']")).to_have_class(re.compile(r"\bactive\b"))
         kitchen = page.locator(".board-item", has=page.locator(".board-card-title", has_text=re.compile(r"^Kitchen$"))).first
@@ -187,11 +187,16 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
         box = drawer.bounding_box()
         assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
-        chip = drawer.locator(".chip-folder").first
+        # Step 9: the chip is a taskos:// link (the per-PC opener); on a phone a
+        # tap shows the path to copy instead of navigating (story 09 walks that).
+        chip = drawer.locator(".drawer-folder .chip-folder").first
         expect(chip).to_be_visible()
-        expect(chip).to_have_text(re.compile("Kitchen folder"))
-        assert chip.evaluate("el => el.tagName") == "SPAN" and chip.get_attribute("href") is None
-        assert "{onedrive}/house/kitchen" in (chip.get_attribute("title") or "")   # the unresolved ref, per PC
+        expect(chip).to_have_text("{onedrive}/house/kitchen")
+        assert chip.evaluate("el => el.tagName") == "A"
+        assert (chip.get_attribute("href") or "").startswith("taskos://open?ref=%7Bonedrive%7D")
+        link_chip = drawer.locator(".drawer-links .chip-folder").first
+        expect(link_chip).to_have_text(re.compile("Kitchen folder"))
+        assert "{onedrive}/house/kitchen" in (link_chip.get_attribute("title") or "")   # the unresolved ref, per PC
         assert_min_target(drawer.locator(".drawer-close"))
         page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
         expect(page.locator(".toast")).to_have_count(0)

@@ -49,7 +49,7 @@ function Invoke-Stage {
     Write-Host "[PASS] $Name" -ForegroundColor Green
 }
 
-Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests launcher.py }
+Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests opener launcher.py }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -236,9 +236,12 @@ def test_appended_comment_lines_become_md_comments(env, mirror: Mirror) -> None:
     repo.add_comment(conn, tid, "existing thread", author="Sam", origin="ui")
     mirror.export_task(conn, tid)
     text = path.read_text(encoding="utf-8")
+    # a dated line one hour ahead of now, so it sorts after the two "now" comments
+    # whatever the wall clock (a fixed date here became a date-bomb once passed)
+    later = (datetime.now().astimezone() + timedelta(hours=1)).isoformat(timespec="seconds")
     text = text.replace(
         "\n## Log",
-        "- hello from the editor\n- 2026-08-17T12:00:00+02:00 · Alex Chen · md: dated line\n  with a second line\n\n## Log",
+        f"- hello from the editor\n- {later} · Alex Chen · md: dated line\n  with a second line\n\n## Log",
     )
     _touch(path, text)
     res = mirror.import_tick(conn)["imported"][0]
@@ -247,7 +250,7 @@ def test_appended_comment_lines_become_md_comments(env, mirror: Mirror) -> None:
     assert [c["body"] for c in comments] == ["existing thread", "hello from the editor", "dated line\nwith a second line"]
     assert comments[1]["origin"] == "md" and comments[1]["author"] == "Roberto Ferraro"  # configured owner
     assert comments[2]["origin"] == "md" and comments[2]["author"] == "Alex Chen"
-    assert comments[2]["ts"] == "2026-08-17T12:00:00+02:00"
+    assert comments[2]["ts"] == later
     # the known lines were not duplicated; a second import of the canonical file adds nothing
     _touch(path, path.read_text(encoding="utf-8"))
     assert mirror.import_tick(conn)["imported"][0]["comments_added"] == 0

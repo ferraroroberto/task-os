@@ -1,0 +1,4 @@
+# The opener handler must stay CRLF: cmd.exe mis-parses LF-only batch files
+# in places (labels, multi-line blocks) and a clone with autocrlf=false would
+# otherwise ship a broken handler.
+opener/*.cmd text eol=crlf
