@@ -322,6 +322,22 @@
           </div>
           <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed). Phone install and the Tailscale HTTPS certificate arrive with the phone step.</p>
         </div>
+        <!-- Markdown mirror + backup: read-only status from GET /api/status
+             (refreshed when this tab is shown). Vendored card; rows built by app.js. -->
+        <div class="card" id="mirrorCard">
+          <div class="card-head">
+            <h2 class="card-title">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
+              Markdown mirror &amp; backup
+            </h2>
+            <span class="card-head-meta" id="mirrorCardMeta"></span>
+          </div>
+          <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
+          <dl class="status-rows" id="mirrorStatus" aria-live="polite">
+            <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
+          </dl>
+        </div>
       </div>
     </section>
 

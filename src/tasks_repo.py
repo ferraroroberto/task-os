@@ -26,10 +26,17 @@ Rules enforced here (plan §04):
 
 Timestamps come from :func:`now_iso` (local time, second precision, offset
 kept) so a seed or a test can pin the clock with :func:`use_clock`.
+
+Write hooks: every mutation ends by calling the registered write listeners
+with the task ids it touched (:func:`add_write_listener`) — the markdown
+mirror's debounced exporter (``src/mirror.py``) hangs off this so a change
+made through the API, the CLI's local backend or an importer all reach the
+mirror through the one layer that owns the rules.
 """
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -46,6 +53,8 @@ from src.schema import (
     TASK_STATUSES,
     TASK_TYPES,
 )
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ACTOR = "me"
 
@@ -112,6 +121,34 @@ def use_clock(fn: Callable[[], datetime]) -> Iterator[None]:
         yield
     finally:
         _clock = previous
+
+
+# ----------------------------------------------------------- write hooks
+
+WriteListener = Callable[[list[int]], None]
+_write_listeners: list[WriteListener] = []
+
+
+def add_write_listener(fn: WriteListener) -> None:
+    """Register ``fn(task_ids)`` to run after every committed mutation."""
+    if fn not in _write_listeners:
+        _write_listeners.append(fn)
+
+
+def remove_write_listener(fn: WriteListener) -> None:
+    if fn in _write_listeners:
+        _write_listeners.remove(fn)
+
+
+def _touched(*task_ids: int | None) -> None:
+    ids = [int(t) for t in task_ids if t is not None]
+    if not ids:
+        return
+    for fn in list(_write_listeners):
+        try:
+            fn(ids)
+        except Exception:  # noqa: BLE001 — a listener never breaks the write
+            logger.exception("⚠️ write listener %r failed for tasks %s", fn, ids)
 
 
 # --------------------------------------------------------------- helpers
@@ -290,6 +327,7 @@ def create_task(
     task_id = int(cur.lastrowid)
     _log(conn, task_id, actor, "created", None, title, ts)
     conn.commit()
+    _touched(task_id, values["parent_id"])
     return get_task(conn, task_id)
 
 
@@ -366,6 +404,7 @@ def update_task(
             continue
         _log(conn, task_id, actor, field, current[field], value, ts)
     conn.commit()
+    _touched(task_id)
     return get_task(conn, task_id)
 
 
@@ -411,6 +450,7 @@ def move(
     )
     _log(conn, task_id, actor, "parent", current["parent_id"], new_parent_id, ts)
     conn.commit()
+    _touched(task_id, current["parent_id"], new_parent_id)
     return get_task(conn, task_id)
 
 
@@ -432,16 +472,18 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
         _log(conn, task_id, actor, "done", current["due"], nxt, ts)
         _log(conn, task_id, actor, "due", current["due"], nxt, ts)
         conn.commit()
+        _touched(task_id)
         return get_task(conn, task_id)
     return set_status(conn, task_id, "done", actor=actor)
 
 
 def delete_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     """Delete a task **and its subtree** (FK cascade); returns ``{id, deleted}`` counts."""
-    _require_task(conn, task_id)
+    current = _require_task(conn, task_id)
     subtree = _descendant_ids(conn, task_id)
     conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
+    _touched(task_id, *subtree, current["parent_id"])
     return {"id": task_id, "deleted": 1 + len(subtree)}
 
 
@@ -496,6 +538,7 @@ def import_task(
             (external_id, task_id),
         )
         conn.commit()
+        _touched(task_id)
         return get_task(conn, task_id), "created"
 
     task_id = existing["id"]
@@ -509,6 +552,7 @@ def import_task(
     # source's own completion time wins (and a bare done_at drift is applied too).
     conn.execute("UPDATE tasks SET done_at = ? WHERE id = ?", (new_done_at, task_id))
     conn.commit()
+    _touched(task_id)
     return get_task(conn, task_id), "updated"
 
 
@@ -783,6 +827,7 @@ def add_comment(
     if not historical:
         conn.execute("UPDATE tasks SET updated_at = ? WHERE id = ?", (ts, task_id))
     conn.commit()
+    _touched(task_id)
     return _row(conn.execute("SELECT * FROM comments WHERE id = ?", (cur.lastrowid,)).fetchone())  # type: ignore[return-value]
 
 
@@ -796,10 +841,12 @@ def list_comments(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]
 
 
 def delete_comment(conn: sqlite3.Connection, comment_id: int) -> None:
-    cur = conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
-    conn.commit()
-    if cur.rowcount == 0:
+    row = conn.execute("SELECT task_id FROM comments WHERE id = ?", (comment_id,)).fetchone()
+    if row is None:
         raise NotFound(f"comment {comment_id} not found")
+    conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
+    conn.commit()
+    _touched(row["task_id"])
 
 
 # ------------------------------------------------------------------ links
@@ -823,6 +870,7 @@ def add_link(
         "INSERT INTO links(task_id, url, label, kind) VALUES (?,?,?,?)", (task_id, url, label, kind)
     )
     conn.commit()
+    _touched(task_id)
     return _row(conn.execute("SELECT * FROM links WHERE id = ?", (cur.lastrowid,)).fetchone())  # type: ignore[return-value]
 
 
@@ -835,6 +883,7 @@ def remove_link(conn: sqlite3.Connection, task_id: int, link_id: int) -> None:
     conn.commit()
     if cur.rowcount == 0:
         raise NotFound(f"link {link_id} on task {task_id} not found")
+    _touched(task_id)
 
 
 # --------------------------------------------------------------- activity
@@ -891,6 +940,7 @@ def set_issue_ref(
         _log(conn, task_id, actor, "type", current["type"], "coding", ts)
     _log(conn, task_id, actor, "issue", None, f"{repo}#{number}", ts)
     conn.commit()
+    _touched(task_id)
     return get_task(conn, task_id)
 
 
@@ -906,6 +956,7 @@ def remove_issue_ref(conn: sqlite3.Connection, task_id: int, *, actor: str | Non
     _log(conn, task_id, actor, "type", current["type"], "task", ts)
     _log(conn, task_id, actor, "issue", f"{ref['repo']}#{ref['number']}", None, ts)
     conn.commit()
+    _touched(task_id)
     return get_task(conn, task_id)
 
 
@@ -960,14 +1011,23 @@ def update_person(conn: sqlite3.Connection, person_id: int, **changes: Any) -> d
         assignments = ", ".join(f"{k} = :{k}" for k in changes)
         conn.execute(f"UPDATE people SET {assignments} WHERE id = :id", {**changes, "id": person_id})
         conn.commit()
+        if "name" in changes:
+            _touched(*_person_task_ids(conn, person_id))
     return get_person(conn, person_id)
 
 
 def delete_person(conn: sqlite3.Connection, person_id: int) -> None:
     """Remove a person; tasks pointing at them keep going with ``person_id = NULL``."""
     _require_person(conn, person_id)
+    affected = _person_task_ids(conn, person_id)
     conn.execute("DELETE FROM people WHERE id = ?", (person_id,))
     conn.commit()
+    _touched(*affected)
+
+
+def _person_task_ids(conn: sqlite3.Connection, person_id: int) -> list[int]:
+    rows = conn.execute("SELECT id FROM tasks WHERE person_id = ?", (person_id,)).fetchall()
+    return [r["id"] for r in rows]
 
 
 # ----------------------------------------------------------------- search

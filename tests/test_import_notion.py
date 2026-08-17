@@ -286,7 +286,7 @@ def test_migration_v3_upgrades_v2_and_is_idempotent(db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db(db) == 3
+    assert dbmod.init_db(db) == schema.SCHEMA_VERSION
     conn = dbmod.connect(db)
     try:
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
@@ -294,7 +294,7 @@ def test_migration_v3_upgrades_v2_and_is_idempotent(db: Path) -> None:
         assert "external_id" in {r["name"] for r in conn.execute("PRAGMA table_info(comments)")}
         assert conn.execute("SELECT external_id FROM tasks WHERE title = 'old'").fetchone()[0] is None
         n = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 3
+        assert schema.migrate(conn) == schema.SCHEMA_VERSION
         assert conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == n
         conn.execute("INSERT INTO tasks(title, created_at, updated_at, external_id) VALUES ('a', 't', 't', 'x')")
         with pytest.raises(sqlite3.IntegrityError):

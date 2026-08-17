@@ -2,8 +2,10 @@
 
 Isolation by construction: ``webapp`` boots a **disposable** uvicorn on a free
 loopback port with ``TASKOS_DB_PATH`` → a temp database and
-``TASKOS_CONFIG_PATH`` → the committed sample config, so a run never reads or
-writes the live ``:8448`` app, its ``data/tasks.db``, or ``config/config.json``.
+``TASKOS_CONFIG_PATH`` → a temp copy of the committed sample config with the
+mirror / backup folders blanked (or pointed into the temp dir — see
+``mirrored_webapp``), so a run never reads or writes the live ``:8448`` app,
+its ``data/tasks.db``, ``config/config.json`` or the real mirror folder.
 
 ``TASKOS_E2E_LIVE=1`` is the one loudly-named opt-in: the suite then runs
 *read-only* against the live ``http://127.0.0.1:8448`` instead of booting
@@ -12,7 +14,9 @@ check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
 
 ``seeded_webapp`` boots a second disposable instance over the synthetic
 fixture (``tests/fixtures/seed.py``) for the stories that need data on
-screen (Step 4 on); ``webapp`` stays empty for story 01.
+screen (Step 4 on); ``webapp`` stays empty for story 01. ``mirrored_webapp``
+(story 06) is a seeded instance whose ``mirror.dir`` / ``backup_dir`` are
+temp folders the test can edit and list.
 
 Screenshots: ``shots`` yields ``docs/screenshots`` so a story test saves its
 numbered proof there directly (the public repo carries them; the fixture DB
@@ -38,6 +42,7 @@ from typing import IO
 
 import pytest
 
+from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
 
@@ -90,17 +95,23 @@ def _terminate(proc: subprocess.Popen | None) -> None:
         pass
 
 
-def _boot(work: Path, db_path: Path) -> tuple[subprocess.Popen, str, IO[str]]:
-    """Start a disposable uvicorn on a free loopback port over ``db_path``."""
+def _boot(work: Path, db_path: Path, config_path: Path | None = None) -> tuple[subprocess.Popen, str, IO[str]]:
+    """Start a disposable uvicorn on a free loopback port over ``db_path``.
+
+    ``config_path`` defaults to a temp copy of the sample with the mirror and
+    backup folders blanked, so the instance never touches a real synced folder.
+    """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
     log: IO[str] = (work / "webapp.log").open("w", encoding="utf-8")
+    if config_path is None:
+        config_path = write_test_config(work / "config.json")
     env = {
         **os.environ,
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUTF8": "1",
         "TASKOS_DB_PATH": str(db_path),
-        "TASKOS_CONFIG_PATH": str(REPO_ROOT / "config" / "config.sample.json"),
+        "TASKOS_CONFIG_PATH": str(config_path),
     }
     cmd = [
         sys.executable, "-m", "uvicorn", "app.webapp.server:app",
@@ -159,6 +170,38 @@ def seeded_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     proc, base, log = _boot(work, db)
     try:
         yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
+class MirroredInstance:
+    """What story 06 needs: the base URL plus the folders the instance writes."""
+
+    def __init__(self, base: str, mirror_dir: Path, backup_dir: Path, db: Path) -> None:
+        self.base = base
+        self.mirror_dir = mirror_dir
+        self.backup_dir = backup_dir
+        self.db = db
+
+
+@pytest.fixture(scope="session")
+def mirrored_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MirroredInstance]:
+    """A seeded disposable instance with ``mirror.dir`` / ``backup_dir`` under a temp folder."""
+    if os.environ.get(LIVE_ENV) == "1":
+        pytest.skip(f"{LIVE_ENV}=1: the mirrored fixture never runs against the live database")
+    from tests.fixtures.seed import seed_db
+
+    work = tmp_path_factory.mktemp("taskos-e2e-mirror")
+    db = work / "tasks.db"
+    seed_db(db)
+    mirror_dir = work / "mirror"
+    backup_dir = work / "backup"
+    mirror_dir.mkdir()
+    config = write_test_config(work / "config.json", dir=str(mirror_dir), backup_dir=str(backup_dir))
+    proc, base, log = _boot(work, db, config)
+    try:
+        yield MirroredInstance(base, mirror_dir, backup_dir, db)
     finally:
         _terminate(proc)
         log.close()

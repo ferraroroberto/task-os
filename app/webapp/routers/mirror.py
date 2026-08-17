@@ -1,0 +1,69 @@
+"""Mirror + backup route family — status and on-demand runs.
+
+    GET  /api/status          {mirror: {enabled, dir, files, last_export, last_import,
+                               errors, …}, backup: {enabled, dir, last_file, next_run, …}}
+    POST /api/mirror/export   full export now → {tasks, written, removed}
+    POST /api/mirror/import   one watcher pass now → {checked, imported, errors}
+    POST /api/backup          one backup now → {file, dir} (409 when disabled)
+
+The services live on ``app.state.mirror`` / ``app.state.backup`` (started by
+the lifespan); when the mirror is not configured the status says so and the
+run endpoints answer 409 with the reason — never a silent no-op. The
+``tasks`` CLI calls these when the app is up so a single process owns the
+watcher's bookkeeping.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request
+
+from app.webapp.routers._helpers import error_response
+from src.db import get_db
+
+router = APIRouter(prefix="/api", tags=["mirror"])
+
+
+def _services(request: Request) -> tuple[Any, Any]:
+    return getattr(request.app.state, "mirror", None), getattr(request.app.state, "backup", None)
+
+
+@router.get("/status")
+def status(request: Request) -> dict[str, Any]:
+    mirror, backup = _services(request)
+    return {
+        "mirror": mirror.status() if mirror else {"enabled": False, "reason": "mirror service not started"},
+        "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
+    }
+
+
+@router.post("/mirror/export")
+def mirror_export(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
+    mirror, _ = _services(request)
+    if mirror is None or not mirror.enabled:
+        reason = mirror.reason if mirror else "mirror service not started"
+        return error_response(409, "mirror_disabled", reason)
+    return mirror.export_all(db)
+
+
+@router.post("/mirror/import")
+def mirror_import(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
+    mirror, _ = _services(request)
+    if mirror is None or not mirror.enabled:
+        reason = mirror.reason if mirror else "mirror service not started"
+        return error_response(409, "mirror_disabled", reason)
+    return mirror.import_tick(db)
+
+
+@router.post("/backup")
+def backup_now(request: Request) -> Any:
+    _, backup = _services(request)
+    if backup is None or not backup.enabled:
+        reason = backup.reason if backup else "backup service not started"
+        return error_response(409, "backup_disabled", reason)
+    target = backup.run_now()
+    if target is None:
+        return error_response(500, "backup_failed", backup.last_error or "backup failed")
+    return {"file": target.name, "dir": str(target.parent), "path": str(target)}

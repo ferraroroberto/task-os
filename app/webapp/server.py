@@ -10,6 +10,15 @@ Route families (each in ``app/webapp/routers/``):
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=       → full text over tasks + comments
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
+    mirror  /api/status          → markdown mirror + backup status; POST /api/mirror/export,
+                                   /api/mirror/import, /api/backup run them on demand
+
+Background services (started in the lifespan, stopped on shutdown, exposed
+on ``app.state``): ``src.mirror.Mirror`` (debounced export on every write via
+the repo's write listener + the 2 s import watcher) and
+``src.backup.BackupScheduler`` (daily 03:00 copy + a startup copy when
+today's is missing). Both stay disabled — with a logged, ``/api/status``-
+visible reason — when their folder is not configured.
 
 Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
 "detail"?}}`` — for domain errors (``src.tasks_repo.RepoError`` → its
@@ -38,11 +47,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import misc, people, search, tasks, views
+from app.webapp.routers import mirror, misc, people, search, tasks, views
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from src.backup import BackupScheduler
 from src.config import load_config
 from src.db import db_path, init_db
 from src.logger import configure_logging
+from src.mirror import Mirror
 from src.tasks_repo import RepoError
 
 logger = logging.getLogger(__name__)
@@ -107,7 +118,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         db_path(),
         version,
     )
-    yield
+    config = app.state.config
+    app.state.mirror = Mirror(config)
+    app.state.backup = BackupScheduler(config)
+    app.state.mirror.start()
+    app.state.backup.start()
+    try:
+        yield
+    finally:
+        app.state.mirror.stop()
+        app.state.backup.stop()
 
 
 def _install_error_handlers(app: FastAPI) -> None:
@@ -138,6 +158,7 @@ def create_app() -> FastAPI:
     app.include_router(people.router)
     app.include_router(search.router)
     app.include_router(views.router)
+    app.include_router(mirror.router)
     return app
 
 
