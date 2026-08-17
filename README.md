@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -68,7 +68,7 @@ app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
                           logger.py · static_versioning.py
-scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py
+scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat)
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
@@ -88,13 +88,13 @@ data/                     tasks.db, logs, avatars, backups — gitignored, never
 | `search` | folder roots + email index path for federated search — Step 10 |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 
-Secrets (a Notion token for the one-shot import) go in `.env`, never in config. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location (the test harness uses them for isolation).
+Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location (the test harness uses them for isolation).
 
 ## Data model
 
-One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **2**):
+One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **3**):
 
-`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, recurrence daily|weekly|monthly|quarterly|yearly, description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at)` · `links(task_id, url, label, kind web|folder|email|issue)` · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
+`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, recurrence daily|weekly|monthly|quarterly|yearly, description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at, external_id)` · `links(task_id, url, label, kind web|folder|email|issue)` · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync, external_id)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
 
 Rules the repo layer enforces (`src/tasks_repo.py`): a task with children **is** a project (the `project` filter means "descendant of"); `move` refuses cycles; every due / status / parent / priority (and title, type, recurrence, person, description) change writes an `activity` row; `done` on a recurring task rolls the **same** task's due one cadence forward from its due date (month-end clamps) and logs the completion, otherwise it sets `done` + `done_at`; `type = coding` **iff** an `issue_refs` row exists (attach an issue to make a task coding — setting the type by hand is rejected); deleting a task deletes its subtree.
 
@@ -140,6 +140,35 @@ tasks people
 ```
 
 Dates (`--due`, `due` — and the API's `due` field, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
+
+## Importing from Notion
+
+`scripts/import_notion.py` (`scripts\import_notion.bat`) is a one-shot, idempotent importer for a Notion tasks database — the way an existing Notion list becomes the master list here. It reads every page with its comments, body blocks and people relation over the Notion REST API (stdlib `urllib`, no SDK), maps them onto the schema and writes through the same `src/tasks_repo.py` layer the API uses.
+
+```powershell
+# token: NOTION_API_TOKEN in the OS env or a dotenv file (--env-file, default ./.env)
+# database id: --database-id, or NOTION_TASKS_DB_ID in the env / env-file
+scripts\import_notion.bat --dry-run --database-id <id> --env-file E:\path\.env    # report only, writes nothing
+scripts\import_notion.bat --database-id <id> --env-file E:\path\.env              # import into data\tasks.db
+scripts\import_notion.bat --database-id <id> --env-file … --limit 20 --json-dump E:\tmp\export.json   # smoke + keep the raw export
+scripts\import_notion.bat --from-json E:\tmp\export.json --db E:\tmp\other.db     # replay a saved export, no API call
+```
+
+| Notion | task-os |
+| --- | --- |
+| `status` not started · In progress · Done | `todo` · `doing` · `done` (+ `done_at` = page `last_edited_time`) |
+| `status` empty | `todo` — or `inbox` when `priority` = inbox |
+| `priority` high · medium · low · backlog · inbox | `high` · `medium` · `low` · `none` · `none` |
+| `recurrent` daily · weekly · monthly · three months · yearly | `daily` · `weekly` · `monthly` · `quarterly` · `yearly` |
+| `Date.start` | `due` (date part) |
+| `link` | `links` (`kind = web`) |
+| page body (paragraph, headings, lists, to-do, quote, code, table, image, divider; nested children) | `description` as markdown — unknown block types degrade to their text |
+| comments | `comments` (`author` = the commenter's display name, `ts` = original time, `origin = notion`) in created order |
+| first `connection` relation | `people` row (`external_id` = the person's page id) + `person_id` |
+| further relations | a comment `also linked: <name>` |
+| `created_time` / `last_edited_time` | `created_at` / `updated_at` |
+
+Idempotent on the Notion ids: `tasks.external_id` and `comments.external_id` (schema v3), `people.external_id`. A re-run updates the fields that changed in Notion (logged per field like any other change) and never duplicates a task, comment, link or person; an identical page touches nothing. The first import writes **one** activity row per task (`actor = notion-import`, `field = imported`). `--dry-run` prints the report — counts per status / priority / recurrence, comments, people, anything unmapped or skipped, and what a write would create / update / leave alone — and writes nothing, not even the migration. Unmapped select values are counted and fall back to the default (never dropped silently). The running app picks the new schema up on its next restart (`tray.bat --restart`).
 
 ## Fixture data
 
