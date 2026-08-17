@@ -18,3 +18,20 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 10 | [Find anything](validation/story-10-search.md) | `tests/e2e/test_story_10_search.py` · `tests/test_search_adapters.py` | verified (fixture indexes on screen · real email index via CLI, counts only) · **opening a `.msg` through the opener not verified** | 2026-08-17 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
+
+## Phase gates
+
+| Phase | Stories | Gate run | Result |
+| --- | --- | --- | --- |
+| A — v1 | 01–07 | 2026-08-17 13:1x local, `scripts\verify-before-ship.ps1` on `main` `3d37a86`: byte-compile · ruff · 253 unit · e2e full tier 14 tests (~43 s), all green in one sitting | **closed** — with the owner's checklist below still open |
+| B — integrations | 08–10 | same run | **closed** — same checklist |
+| C — second site | 11–13 | not started | open — needs a machine with a GitLab host / a second person / the real list export |
+
+### Owner's checklist — the on-screen items only the owner can walk
+
+- [ ] **Phone (Story 07):** open `https://<your-host>.ts.net:8448` on the phone (on the tailnet) → sign in with the token/password → Add to Home Screen → launch standalone → quick-add, Board swipe, drawer, folder-chip long-press → theme persists.
+- [ ] **Second PC (Story 09):** paste the one-line install from `opener/install.txt` (or run `opener/install_opener.py`) → click a folder chip in the browser → the browser's one-time prompt → Explorer opens that PC's synced copy.
+- [ ] **Email through the opener (Story 10):** click an email hit's chip → the `.msg` opens in the mail client.
+- [ ] **Story 06:** type in a real editor window and save (the harness could only script the save).
+
+Each item's exact steps are in the story's write-up. Tick here (and in the story) when walked; the tick means "seen", not "should work".
