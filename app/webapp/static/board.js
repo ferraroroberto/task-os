@@ -283,7 +283,7 @@ function buildCard(t, handlers) {
     r.title = t.recurrence;
     meta.appendChild(r);
   }
-  if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref));
+  if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
   if (t.issue_ref) meta.appendChild(issueChip(t.issue_ref));
   if (t.child_count) {
     const kids = document.createElement('span');

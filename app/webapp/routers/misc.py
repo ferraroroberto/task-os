@@ -7,6 +7,9 @@
                          the build-identity contract the restart recipe
                          verifies against (a stale process passes /healthz;
                          it cannot fake this)
+    GET /opener/opener.cmd → the per-PC folder opener handler (Step 9), served
+                         as text so a second PC's install one-liner can
+                         Invoke-WebRequest it (public — see src/auth.py)
 """
 
 from __future__ import annotations
@@ -15,10 +18,11 @@ import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR
 from src.db import get_db, schema_version
+from src.opener import HANDLER_PATH
 
 router = APIRouter()
 
@@ -37,6 +41,16 @@ async def index() -> HTMLResponse:
 @router.get("/healthz")
 async def healthz() -> dict[str, Any]:
     return {"ok": True}
+
+
+@router.get("/opener/opener.cmd", include_in_schema=False)
+async def opener_handler() -> FileResponse:
+    if not HANDLER_PATH.exists():
+        raise HTTPException(status_code=404, detail="opener.cmd missing")
+    return FileResponse(
+        str(HANDLER_PATH), media_type="text/plain; charset=utf-8", filename="opener.cmd",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.get("/api/version")

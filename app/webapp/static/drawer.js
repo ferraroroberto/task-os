@@ -4,7 +4,9 @@
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
  * title → fields row (status, priority, due, recurrence, person, code) →
- * description (markdown, edit/preview) → links (add/remove) → comments
+ * folder (the ref as an opener chip + resolved path, an editor that folds a
+ * pasted absolute path onto the placeholders, a picker over the folder
+ * index — Step 9) → description (markdown, edit/preview) → links (add/remove) → comments
  * newest-first with URLs as clickable chips + composer (Ctrl+Enter sends,
  * origin=ui) → activity log (field old → new · actor · time) → children
  * (click to navigate, add child) → issue panel: the linked issue (provider
@@ -21,7 +23,7 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, STATUSES, chipFor, fmtTs, issueChip, linkify, providerIcon, relDue,
+  PRIORITIES, RECURRENCES, STATUSES, chipFor, copyText, fmtTs, issueChip, linkify, providerIcon, relDue,
   renderMarkdown, statusPill,
 } from './format.js';
 import { toast } from './toast.js';
@@ -36,6 +38,7 @@ import { toast } from './toast.js';
 export function createDrawer(el, opts) {
   let current = null;      // the detail payload
   let descEditing = false;
+  let pickerOpen = false;  // the folder-index picker under the Folder field
 
   function section(name, title, iconName) {
     const s = document.createElement('section');
@@ -201,6 +204,9 @@ export function createDrawer(el, opts) {
     }));
     fields.appendChild(textField('Code', 'code', t.code, 'optional'));
     el.appendChild(fields);
+
+    // ---- folder (Step 9)
+    el.appendChild(folderSection(t));
 
     // ---- description
     const desc = section('description', 'Description', 'file-text');
@@ -605,6 +611,156 @@ export function createDrawer(el, opts) {
     return issue;
   }
 
+  // ---- folder section: chip + resolved path + editor + folder-index picker
+  function folderSection(t) {
+    const sec = section('folder', 'Folder', 'folder');
+    const body = document.createElement('div');
+    body.className = 'drawer-folder';
+    if (t.folder_ref) {
+      const cur = document.createElement('div');
+      cur.className = 'folder-current';
+      cur.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+      const path = document.createElement('code');
+      path.className = 'folder-resolved' + (t.folder_resolved ? '' : ' muted');
+      path.textContent = t.folder_resolved || 'placeholder not configured on this server';
+      path.title = t.folder_resolved ? 'this server resolves the ref to this path' : 'add the placeholder to config.placeholders';
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'button-ghost folder-copy';
+      copy.innerHTML = icon('copy') + ' Copy path';
+      copy.addEventListener('click', function () { copyText(t.folder_resolved || t.folder_ref, copy); });
+      cur.append(path, copy);
+      body.appendChild(cur);
+    }
+    const form = document.createElement('form');
+    form.className = 'folder-form';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'drawerFolder';
+    input.className = 'input-native';
+    input.value = t.folder_ref || '';
+    input.placeholder = '{onedrive}/folder  — or paste an absolute path';
+    input.setAttribute('aria-label', 'Folder ref');
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'button-surface';
+    save.textContent = t.folder_ref ? 'Change' : 'Set folder';
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'button-ghost folder-pick';
+    pick.innerHTML = icon('search') + ' Pick from folder index…';
+    pick.setAttribute('aria-expanded', String(pickerOpen));
+    form.append(input, save, pick);
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      const v = input.value.trim();
+      if (v === (t.folder_ref || '')) return;
+      await commitFolder(v);
+    });
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') { input.value = t.folder_ref || ''; input.blur(); }
+    });
+    body.appendChild(form);
+    const picker = document.createElement('div');
+    picker.className = 'folder-picker';
+    picker.hidden = !pickerOpen;
+    if (pickerOpen) mountPicker(picker);
+    pick.addEventListener('click', function () {
+      pickerOpen = !pickerOpen;
+      picker.hidden = !pickerOpen;
+      pick.setAttribute('aria-expanded', String(pickerOpen));
+      if (pickerOpen) { mountPicker(picker); picker.querySelector('input').focus(); }
+    });
+    body.appendChild(picker);
+    sec.appendChild(body);
+    return sec;
+  }
+
+  /** Empty / a ref / an absolute path → the ref the task stores (absolute paths
+   *  fold onto the placeholders via GET /api/resolve — never resolved client-side). */
+  async function commitFolder(value) {
+    if (!value) { await patch({ folder_ref: null }); return; }
+    let ref = value;
+    if (!/^\{/.test(value)) {
+      try {
+        const r = await api('/api/resolve?ref=' + encodeURIComponent(value));
+        ref = r.ref;
+        if (ref !== value) toast('Stored as ' + ref, 'info');
+      } catch (err) { toast(err.message || 'Could not resolve the path', 'error'); return; }
+    }
+    pickerOpen = false;
+    await patch({ folder_ref: ref });
+  }
+
+  function mountPicker(host) {
+    if (host.dataset.mounted) return;
+    host.dataset.mounted = '1';
+    const q = document.createElement('input');
+    q.type = 'search';
+    q.className = 'input-native folder-picker-q';
+    q.placeholder = 'Search folders… (Enter attaches the first hit)';
+    q.setAttribute('aria-label', 'Search the folder index');
+    const list = document.createElement('ul');
+    list.className = 'folder-picker-list';
+    list.setAttribute('role', 'listbox');
+    const note = document.createElement('p');
+    note.className = 'muted folder-picker-note';
+    note.textContent = 'Type to search the folder index.';
+    host.append(q, list, note);
+    let timer = null;
+    let items = [];
+    let active = -1;
+    function paint() {
+      list.innerHTML = '';
+      items.forEach(function (it, i) {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.className = 'folder-picker-item' + (i === active ? ' is-active' : '');
+        li.dataset.ref = it.ref;
+        li.title = it.path;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'folder-picker-btn';
+        b.innerHTML = icon('folder');
+        const name = document.createElement('span');
+        name.className = 'folder-picker-name';
+        name.textContent = it.name;
+        const ref = document.createElement('span');
+        ref.className = 'folder-picker-ref';
+        ref.textContent = it.ref;
+        b.append(name, ref);
+        b.addEventListener('click', function () { commitFolder(it.ref); });
+        li.appendChild(b);
+        list.appendChild(li);
+      });
+    }
+    async function search() {
+      const text = q.value.trim();
+      if (!text) { items = []; active = -1; paint(); note.textContent = 'Type to search the folder index.'; return; }
+      try {
+        const r = await api('/api/folders/search?q=' + encodeURIComponent(text) + '&limit=15');
+        items = r.items || [];
+        active = items.length ? 0 : -1;
+        paint();
+        note.textContent = items.length
+          ? r.count + ' hit(s)' + (r.indexing ? ' · index still building' : '')
+          : (r.indexing ? 'No hits yet — the index is still building.' : 'No folder matches.');
+      } catch (err) {
+        items = []; active = -1; paint();
+        note.textContent = err.code === 'folders_disabled'
+          ? 'Folder index not configured — set search.folder_roots in config.json (' + err.message + ').'
+          : ('Search failed: ' + err.message);
+      }
+    }
+    q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(search, 220); });
+    q.addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowDown' && items.length) { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
+      else if (ev.key === 'ArrowUp' && items.length) { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
+      else if (ev.key === 'Enter') { ev.preventDefault(); if (active >= 0 && items[active]) commitFolder(items[active].ref); }
+      else if (ev.key === 'Escape') { pickerOpen = false; host.hidden = true; }
+    });
+  }
+
   async function refresh() {
     if (current == null) return;
     const id = current.id;
@@ -619,6 +775,7 @@ export function createDrawer(el, opts) {
   return {
     async open(id) {
       descEditing = false;
+      pickerOpen = false;
       try {
         const data = await api('/api/tasks/' + id);
         current = data;

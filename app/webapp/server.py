@@ -11,8 +11,12 @@ Route families (each in ``app/webapp/routers/``):
     search  /api/search?q=       → full text over tasks + comments
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
-                                   backup; POST /api/mirror/export, /api/mirror/import,
-                                   /api/backup run them on demand
+                                   backup, folder index + opener (Step 9); POST
+                                   /api/mirror/export, /api/mirror/import, /api/backup
+                                   run them on demand
+    folders /api/resolve         → folder ref ↔ absolute path (placeholders, Step 9)
+            /api/folders/search  → the folder index; POST /api/folders/reindex
+            /opener/opener.cmd   → the per-PC handler a second PC downloads (public)
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
                                  → the issue provider (GitHub via gh): status, sync now,
                                    the drawer's issue panel, create an issue from a task
@@ -27,12 +31,16 @@ public. HTTPS is uvicorn's job (``--ssl-*`` from ``app.webapp.manager`` /
 
 Background services (started in the lifespan, stopped on shutdown, exposed
 on ``app.state``): ``src.mirror.Mirror`` (debounced export on every write via
-the repo's write listener + the 2 s import watcher) and
+the repo's write listener + the 2 s import watcher),
 ``src.backup.BackupScheduler`` (daily 03:00 copy + a startup copy when
-today's is missing) and ``src.issue_sync.IssueSyncService`` (the forge's
+today's is missing), ``src.issue_sync.IssueSyncService`` (the forge's
 open issues → coding tasks, first pass 10 s after startup then every
-``issues.sync_minutes``). All three stay disabled — with a logged,
-status-visible reason — when not configured.
+``issues.sync_minutes``) and ``src.folder_index.FolderIndexService`` (startup
+reindex when the index file is missing / older than 24 h, hourly re-check).
+All stay disabled — with a logged, status-visible reason — when not
+configured. The lifespan also installs the repo's folder resolver
+(``src.placeholders``) so every task payload carries ``folder_resolved`` /
+``folder_url``.
 
 Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
 "detail"?}}`` — for domain errors (``src.tasks_repo.RepoError`` → its
@@ -61,13 +69,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import auth, issues, mirror, misc, people, search, tasks, views
+from app.webapp.routers import auth, folders, issues, mirror, misc, people, search, tasks, views
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from src import placeholders
+from src import tasks_repo as repo
 from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
 from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
+from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
 from src.mirror import Mirror
@@ -125,6 +136,15 @@ class CachingStaticFiles(StaticFiles):
         return response
 
 
+def _folder_resolver_for(ph: dict[str, str]):
+    """``ref → absolute path`` for the repo's summaries; ``None`` (unknown) when
+    a placeholder is missing from this install's config — never a half path."""
+    def _resolve(ref: str) -> str | None:
+        r = placeholders.resolve(ref, ph)
+        return r.path if r.resolved else None
+    return _resolve
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     version = init_db()
@@ -147,15 +167,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mirror = Mirror(config)
     app.state.backup = BackupScheduler(config)
     app.state.issues = IssueSyncService(config)
+    app.state.folders = FolderIndexService(config)
+    repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
     app.state.mirror.start()
     app.state.backup.start()
     app.state.issues.start()
+    app.state.folders.start()
     try:
         yield
     finally:
         app.state.mirror.stop()
         app.state.backup.stop()
         app.state.issues.stop()
+        app.state.folders.stop()
+        repo.set_folder_resolver(None)
 
 
 def _install_error_handlers(app: FastAPI) -> None:
@@ -190,6 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(views.router)
     app.include_router(mirror.router)
     app.include_router(issues.router)
+    app.include_router(folders.router)
     return app
 
 

@@ -310,9 +310,9 @@ function buildRow(t, handlers) {
   project.textContent = t.root ? t.root.title : '';
   tr.appendChild(project);
 
-  // folder chip (Step 9 wires the opener; the chip renders the ref today)
+  // folder chip → taskos://open?ref=… (the per-PC opener); tooltip = the resolved path
   const folder = td('folder', 'Folder');
-  if (t.folder_ref) folder.appendChild(chipFor(t.folder_ref));
+  if (t.folder_ref) folder.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
   tr.appendChild(folder);
 
   // last comment

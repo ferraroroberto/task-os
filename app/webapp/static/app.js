@@ -21,7 +21,7 @@ import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
 import { mountBoard, renderBoardFilters } from './board.js';
 import { createDrawer } from './drawer.js';
-import { relDue } from './format.js';
+import { copyText, relDue } from './format.js';
 import { mountQuickAdd } from './quickadd.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, renderFilterBar,
@@ -45,6 +45,16 @@ const els = {
   mirrorCardMeta: document.getElementById('mirrorCardMeta'),
   statusMirror: document.getElementById('statusMirror'),
   statusBackup: document.getElementById('statusBackup'),
+  folderCard: document.getElementById('folderCard'),
+  folderCardMeta: document.getElementById('folderCardMeta'),
+  statusOpener: document.getElementById('statusOpener'),
+  statusIndex: document.getElementById('statusIndex'),
+  openerInstall: document.getElementById('openerInstall'),
+  openerCopy: document.getElementById('openerCopy'),
+  openerUninstall: document.getElementById('openerUninstall'),
+  openerEnv: document.getElementById('openerEnv'),
+  openerEnvCopy: document.getElementById('openerEnvCopy'),
+  reindexBtn: document.getElementById('reindexBtn'),
   issuesSync: document.getElementById('issuesSync'),
   issuesCardMeta: document.getElementById('issuesCardMeta'),
   statusIssues: document.getElementById('statusIssues'),
@@ -313,6 +323,13 @@ function closeTask() {
 }
 
 function onHashChange() {
+  if (location.hash === '#settings/opener') {
+    // The folder chip's one-time hint links here: Settings → the Folder opener card.
+    nav.setTab('settings');
+    history.replaceState(null, '', location.pathname + location.search);
+    if (els.folderCard) els.folderCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return;
+  }
   const id = hashTaskId();
   if (id == null) { if (drawer.currentId() != null) drawer.close(); return; }
   if (drawer.currentId() !== id) drawer.open(id);
@@ -443,6 +460,55 @@ function fmtTsShort(iso) {
   return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// ---------------------------------------------- folder opener + index card
+function renderOpener(op) {
+  const dd = els.statusOpener;
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!op) { dd.append(statusPart('warn', 'unknown')); return; }
+  if (op.installed_here === true) dd.append(statusPart('ok', 'installed on the server PC'));
+  else if (op.installed_here === false) dd.append(statusPart('off', 'not installed on the server PC'));
+  else dd.append(statusPart('warn', 'unknown on this OS'));
+  dd.append(' · other PCs: paste the command below once (this browser asks "Open task-os opener?" the first time)');
+  const cmd = (op.install || '').split(op.base_url_token || '<base-url>').join(location.origin);
+  els.openerInstall.textContent = cmd || 'install.txt missing';
+  els.openerUninstall.textContent = op.uninstall || '';
+  els.openerEnv.textContent = op.env_template || '';
+  els.openerCopy.onclick = function () { copyText(cmd, els.openerCopy); };
+  els.openerEnvCopy.onclick = function () { copyText(op.env_template || '', els.openerEnvCopy); };
+}
+
+function renderIndexRow(dd, f) {
+  dd.replaceChildren();
+  dd.classList.remove('muted');
+  if (!f || !f.enabled) {
+    dd.append(statusPart('off', 'not configured'), ' — ' + ((f && f.reason) || 'unknown'));
+    els.reindexBtn.hidden = true;
+    return;
+  }
+  els.reindexBtn.hidden = false;
+  const roots = (f.roots || []).map(function (r) { return r.ref + (r.exists ? '' : ' (missing)'); }).join(', ');
+  dd.append(
+    statusPart(f.indexing ? 'warn' : (f.last_error ? 'warn' : 'ok'), f.indexing ? 'indexing…' : (f.last_error ? 'error' : 'ready')),
+    ' · ', codeEl(roots), ' · ' + (f.entries == null ? '?' : f.entries) + ' folder(s)',
+    ' · last indexed ' + (f.last_indexed ? fmtTsShort(f.last_indexed) : '–') + (f.stale && f.last_indexed ? ' (stale, >24 h)' : '')
+  );
+  if (f.last_error) dd.append(' · ' + f.last_error);
+}
+
+function wireReindex() {
+  if (!els.reindexBtn) return;
+  els.reindexBtn.addEventListener('click', async function () {
+    els.reindexBtn.disabled = true;
+    try {
+      const r = await api('/api/folders/reindex', { method: 'POST', body: {} });
+      toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success');
+    } catch (err) { toast(err.message || 'Reindex failed', 'error'); }
+    els.reindexBtn.disabled = false;
+    fetchStatus();
+  });
+}
+
 // One GET /api/status feeds the Settings pane's Phone access card (https +
 // auth, Step 7) and the mirror / backup card (Step 6).
 async function fetchStatus() {
@@ -454,12 +520,19 @@ async function fetchStatus() {
     renderBackupRow(els.statusBackup, body.backup);
     const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
     els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
+    if (els.folderCard) {
+      renderOpener(body.opener);
+      renderIndexRow(els.statusIndex, body.folders);
+      els.folderCardMeta.textContent = body.folders && body.folders.enabled
+        ? (body.folders.entries || 0) + ' folders indexed' : 'index off';
+    }
   } catch (err) {
     // An unreachable status is its own visible state, never a stale "Loading…".
     renderAccessUnknown(err.message);
     els.statusMirror.textContent = 'unknown — ' + err.message;
     els.statusBackup.textContent = 'unknown — ' + err.message;
     els.mirrorCardMeta.textContent = 'unknown';
+    if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
   }
 }
 
@@ -591,6 +664,7 @@ async function boot() {
   fetchVersion();
   fetchStatus();
   wireSignOut();
+  wireReindex();
   await loadPeople();
   await Promise.all([refreshAll(), fetchIssuesStatus()]);
   onHashChange();

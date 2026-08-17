@@ -68,9 +68,9 @@ export function fmtTs(iso) {
 
 // ------------------------------------------------------------------ chips
 // Anything that looks like a target inside free text becomes a chip: URLs
-// (clickable, new tab), folder placeholders like {onedrive}/house (Step 9
-// wires the opener — until then a plain chip), owner/repo#N issue refs
-// (GitHub link — Step 8 makes them provider-aware).
+// (clickable, new tab), folder placeholders like {onedrive}/house (a
+// taskos://open?ref=… link the per-PC opener handles — Step 9), owner/repo#N
+// issue refs (GitHub link — Step 8 makes them provider-aware).
 const TOKEN_RE = /(https?:\/\/[^\s<>"')\]]+|mailto:[^\s<>"']+|\{[a-z][a-z0-9:_-]*\}[^\s<>"']*|\b[\w.-]+\/[\w.-]+#\d+\b)/g;
 
 function chipEl(kind, label, href) {
@@ -78,8 +78,10 @@ function chipEl(kind, label, href) {
   el.className = 'chip chip-' + kind;
   if (href) {
     el.href = href;
-    el.target = '_blank';
-    el.rel = 'noopener';
+    if (kind !== 'folder') {
+      el.target = '_blank';
+      el.rel = 'noopener';
+    }
   }
   el.innerHTML = icon(kind === 'folder' ? 'folder' : (kind === 'issue' ? 'git-branch' : (kind === 'email' ? 'mail' : 'link')));
   const t = document.createElement('span');
@@ -101,8 +103,153 @@ function shortUrl(u) {
   }
 }
 
-/** Build a chip for one target string, kind inferred from its shape. */
-export function chipFor(target, label) {
+// ------------------------------------------------------- folder chips
+// A folder ref is a link the browser hands to the per-PC opener
+// (taskos://open?ref=…, opener/README.md). The page never resolves a ref
+// itself: `resolved` is the server's absolute path (this install's
+// placeholders) and is only ever shown — as the tooltip, in the copy popover.
+// Coarse pointer (phone): no Explorer to open, so the click shows the path
+// to copy (+ the web URL when the task carries one). Fine pointer: the link
+// goes to the opener, and once — the first click ever on this browser — a
+// hint appears under the chip: "Nothing opened? Install the opener".
+const HINT_KEY = 'task-os.opener-hint';
+export const OPENER_SCHEME = 'taskos://open?ref=';
+
+export function openerHref(ref) {
+  return OPENER_SCHEME + encodeURIComponent(String(ref || ''));
+}
+
+let pop = null;
+function popEl() {
+  if (pop) return pop;
+  pop = document.createElement('div');
+  pop.id = 'folderPop';
+  pop.className = 'folder-pop card';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Folder');
+  pop.hidden = true;
+  document.body.appendChild(pop);
+  document.addEventListener('click', function (ev) {
+    if (!pop.hidden && !pop.contains(ev.target) && !ev.target.closest('.chip-folder')) hideFolderPopover();
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') hideFolderPopover(); });
+  window.addEventListener('scroll', hideFolderPopover, true);
+  window.addEventListener('resize', hideFolderPopover);
+  return pop;
+}
+
+export function hideFolderPopover() {
+  if (pop) pop.hidden = true;
+}
+
+/** Clipboard write with the button flashing "Copied" (exported for the drawer + Settings). */
+export async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) {
+      const prev = btn.innerHTML;
+      btn.innerHTML = icon('check') + ' Copied';
+      setTimeout(function () { btn.innerHTML = prev; }, 1200);
+    }
+  } catch (_) {
+    if (btn) btn.textContent = 'Copy failed';
+  }
+}
+
+/**
+ * Show the folder popover under `anchor`.
+ * @param {HTMLElement} anchor
+ * @param {{ref: string, resolved?: string|null, url?: string|null}} info
+ * @param {'copy'|'hint'} mode  copy = the path to copy (phone / no opener);
+ *                              hint = "Nothing opened? Install the opener" (once, desktop)
+ */
+export function showFolderPopover(anchor, info, mode) {
+  const el = popEl();
+  el.innerHTML = '';
+  el.dataset.mode = mode;
+  const path = info.resolved || info.ref;
+  if (mode === 'hint') {
+    const p = document.createElement('p');
+    p.className = 'folder-pop-hint';
+    p.appendChild(document.createTextNode('Nothing opened? '));
+    const a = document.createElement('a');
+    a.href = '#settings/opener';
+    a.className = 'folder-pop-install';
+    a.textContent = 'Install the opener — 30 s';
+    a.addEventListener('click', function () { hideFolderPopover(); });
+    p.appendChild(a);
+    p.appendChild(document.createTextNode(' — the browser asks once, then Explorer opens the folder on this PC.'));
+    el.appendChild(p);
+  } else {
+    const t = document.createElement('p');
+    t.className = 'folder-pop-title';
+    t.textContent = info.resolved ? 'Folder — path on the server PC' : 'Folder ref';
+    el.appendChild(t);
+  }
+  const code = document.createElement('code');
+  code.className = 'folder-pop-path';
+  code.textContent = path;
+  el.appendChild(code);
+  const row = document.createElement('div');
+  row.className = 'folder-pop-actions';
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'button-surface folder-pop-copy';
+  copy.innerHTML = icon('copy') + ' Copy path';
+  copy.addEventListener('click', function () { copyText(path, copy); });
+  row.appendChild(copy);
+  if (info.url) {
+    const web = document.createElement('a');
+    web.className = 'button-ghost';
+    web.href = info.url;
+    web.target = '_blank';
+    web.rel = 'noopener';
+    web.innerHTML = icon('globe') + ' Open web link';
+    row.appendChild(web);
+  }
+  el.appendChild(row);
+  el.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth || 320;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  let top = r.bottom + 6;
+  if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
+/**
+ * The folder chip: `<a class="chip chip-folder" href="taskos://open?ref=…" title="<resolved>">`.
+ * @param {string} ref                    the unresolved ref ({onedrive}/…)
+ * @param {{resolved?: string|null, url?: string|null, label?: string|null}} [opts]
+ */
+export function folderChip(ref, opts) {
+  const o = opts || {};
+  const info = { ref: String(ref || ''), resolved: o.resolved || null, url: o.url || null };
+  const el = chipEl('folder', o.label || info.ref, openerHref(info.ref));
+  el.title = info.resolved || info.ref;
+  el.dataset.ref = info.ref;
+  if (info.resolved) el.dataset.resolved = info.resolved;
+  el.addEventListener('click', function (ev) {
+    ev.stopPropagation();          // never also opens the row's drawer
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      ev.preventDefault();
+      showFolderPopover(el, info, 'copy');
+      return;
+    }
+    let seen = false;
+    try { seen = localStorage.getItem(HINT_KEY) === '1'; } catch (_) { /* private mode */ }
+    if (!seen) {
+      try { localStorage.setItem(HINT_KEY, '1'); } catch (_) { /* private mode */ }
+      setTimeout(function () { showFolderPopover(el, info, 'hint'); }, 350);
+    }
+  });
+  return el;
+}
+
+/** Build a chip for one target string, kind inferred from its shape.
+ *  `opts` (folder refs only): {resolved, url} from the task payload. */
+export function chipFor(target, label, opts) {
   const t = String(target || '');
   if (/^https?:\/\//i.test(t)) {
     const issue = /github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/.exec(t);
@@ -111,14 +258,7 @@ export function chipFor(target, label) {
   }
   if (/^mailto:/i.test(t)) return chipEl('email', label || t.slice(7), t);
   if (/^mail:\/\//i.test(t)) return chipEl('email', label || t.slice(7), null);
-  if (/^\{/.test(t)) {
-    // Display-only until Step 9 wires the per-PC opener: the tooltip is the
-    // unresolved ref even when a label is shown, so the path is always there
-    // to read / copy (the phone's fallback — long-press → copy).
-    const el = chipEl('folder', label || t, null);
-    el.title = t;
-    return el;
-  }
+  if (/^\{/.test(t)) return folderChip(t, Object.assign({ label: label || null }, opts || {}));
   const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(t);
   if (m) return chipEl('issue', label || t, 'https://github.com/' + m[1] + '/issues/' + m[2]);
   return chipEl('web', label || t, null);

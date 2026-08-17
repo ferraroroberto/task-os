@@ -49,7 +49,10 @@ COOKIE_MAX_AGE = 90 * 24 * 3600  # 90 days — one login per phone per quarter
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 PUBLIC_PREFIXES = ("/static/",)
-PUBLIC_EXACT = frozenset({"/healthz", "/api/version", "/login", "/api/login"})
+# /opener/opener.cmd: the per-PC folder opener (Step 9) — a second PC's install
+# one-liner downloads it with Invoke-WebRequest, which carries no cookie; the
+# file is public source anyway (it lives in the repo).
+PUBLIC_EXACT = frozenset({"/healthz", "/api/version", "/login", "/api/login", "/opener/opener.cmd"})
 
 _PBKDF2_ITERATIONS = 200_000
 _HASH_PREFIX = "pbkdf2_sha256"

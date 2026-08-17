@@ -10,6 +10,7 @@ flowchart LR
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI)<br/>issues assigned to me"]
+    opener["per-PC opener · opener/opener.cmd<br/>HKCU taskos:// scheme (install.txt one-liner · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer"]
   end
 
   subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]
@@ -20,10 +21,11 @@ flowchart LR
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search"]
     viewsr["routers/views<br/>/api/board · /api/today"]
-    mirrorr["routers/mirror<br/>/api/status · /api/mirror/export|import<br/>/api/backup"]
+    mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
+    foldersr["routers/folders<br/>/api/resolve · /api/folders/search<br/>/api/folders/reindex · /opener/opener.cmd (public)"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
-    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start()"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· repo.set_folder_resolver()"]
   end
 
   subgraph domain["Domain · src/"]
@@ -32,6 +34,9 @@ flowchart LR
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>IssueSyncService: 10 s after start, every sync_minutes"]
     issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>fake.py (tests, e2e) · get_provider(config)"]
+    placeholders["placeholders.py<br/>resolve(ref) · to_ref(path) · opener_url"]
+    folderidx["folder_index.py<br/>FolderIndexService: roots · reindex (24 h) · search<br/>vendor/foldersearcher_core.py (verbatim)"]
+    openerinfo["opener.py<br/>install.txt commands · opener.env template"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v4 · migrate()"]
@@ -55,6 +60,8 @@ flowchart LR
   subgraph files["Synced folder · config.mirror"]
     mdfiles["mirror.dir/&lt;id&gt;-&lt;slug&gt;.md<br/>frontmatter · Description · Comments · Log"]
     bakfiles["backup_dir/tasks-YYYYMMDD.db"]
+    roots["search.folder_roots<br/>({onedrive}/Documentos …)"]
+    idxfile["data/folder_index.txt"]
   end
 
   subgraph ops["Process / proof"]
@@ -89,6 +96,19 @@ flowchart LR
   mirrorr --> backup
   issuesr --> issync
   issuesr -->|"create · get"| issues
+  mirrorr --> folderidx
+  mirrorr --> openerinfo
+  foldersr --> placeholders
+  foldersr --> folderidx
+  pwa -->|"fetch"| foldersr
+  pwa -.->|"folder chip → taskos://open?ref=…"| opener
+  opener -.->|"start explorer"| roots
+  cli -->|"folders (app down)"| folderidx
+  repo -->|"folder_resolved via set_folder_resolver"| placeholders
+  folderidx --> placeholders
+  folderidx -->|"scan"| roots
+  folderidx <-->|"save / load"| idxfile
+  lifespan --> folderidx
   lifespan --> mirror
   lifespan --> backup
   lifespan --> issync
