@@ -3,14 +3,17 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>board.js · table.js · tree.js · today.js<br/>drawer.js · quickadd.js · format.js · api.js · toast.js"]
+    pwa["PWA · app/webapp/static/<br/>app.js (state · URL ↔ filters · #task/id)<br/>board.js · table.js · tree.js · today.js<br/>drawer.js · quickadd.js · format.js · api.js · toast.js<br/>login.html (token / password → cookie)"]
+    phone["Phone · https://‹host›.ts.net:8448<br/>installed PWA (manifest · icons · iOS meta)"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
   end
 
-  subgraph webapp["FastAPI webapp · :8448<br/>app/webapp/server.py"]
+  subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]
+    authmw["src/auth.py · AuthMiddleware<br/>loopback = owner · else bearer / cookie<br/>public: /static /healthz /api/version /login"]
     misc["routers/misc<br/>/ · /healthz · /api/version"]
+    authr["routers/auth<br/>/login · /api/login · /api/logout · /api/status"]
     tasksr["routers/tasks<br/>/api/tasks… · /api/activity<br/>/api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search"]
@@ -24,7 +27,8 @@ flowchart LR
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v3 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
-    config["config.py<br/>config/config.json"]
+    config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
+    certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
   end
 
   subgraph storage["SQLite (WAL) · data/tasks.db"]
@@ -39,11 +43,17 @@ flowchart LR
   end
 
   subgraph ops["Process / proof"]
-    tray["app/tray · tray.bat --restart"]
+    tray["app/tray · tray.bat --restart<br/>manager.py: cert --check → uvicorn --ssl-*"]
     gate["scripts/verify-before-ship.ps1"]
     seed["tests/fixtures/seed.py<br/>synthetic dataset"]
   end
 
+  phone -->|"cookie (90 d)"| authmw
+  pwa -->|fetch| authmw
+  authmw --> misc
+  authmw --> authr
+  authmw --> tasksr
+  authr --> config
   pwa -->|fetch| misc
   pwa -->|fetch| tasksr
   pwa -->|fetch| peopler
@@ -67,5 +77,6 @@ flowchart LR
   db --> storage
   misc --> db
   tray -->|owns| webapp
+  tray --> certs
   gate -.->|pytest / e2e| seed
   seed --> repo

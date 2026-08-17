@@ -35,7 +35,7 @@ def run(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.Monk
     else:
         from app.webapp.server import create_app
 
-        client = TestClient(create_app())
+        client = TestClient(create_app(), client=("127.0.0.1", 50000))
         client.__enter__()
         request.addfinalizer(lambda: client.__exit__(None, None, None))
 

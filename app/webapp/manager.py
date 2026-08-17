@@ -6,7 +6,10 @@ Same shape as the sister trays (photo-ocr / voice-transcriber / app-launcher):
 - ``start()``  — adopts an already-listening webapp (no second spawn) or
   spawns ``python -m uvicorn app.webapp.server:app`` from this venv, under the
   vendored ``cross_process_lock`` so two trays starting at once can't both
-  spawn (project-scaffolding#39).
+  spawn (project-scaffolding#39). Before the spawn it runs the cert
+  auto-renew (``src.certs.ensure_cert_fresh``) and passes ``--ssl-*`` when
+  ``webapp/certificates/{cert,key}.pem`` exist — HTTPS on the tailnet name,
+  plain HTTP (logged loudly) otherwise.
 - ``stop()``   — terminates only a process *this* manager spawned; an
   externally started uvicorn is left alone (``tray.bat --restart`` reclaims
   those by port, scoped to this repo's ``.venv``).
@@ -31,6 +34,7 @@ from typing import Any
 
 from app.tray.single_instance import cross_process_lock
 from app.webapp.event_loop import LOOP_FACTORY
+from src.certs import cert_hostname, cert_paths, ensure_cert_fresh, uvicorn_ssl_args
 from src.no_window import NO_WINDOW
 
 logger = logging.getLogger(__name__)
@@ -59,20 +63,6 @@ class WebappStatus:
     port: int
     base_url: str
     detail: str
-
-
-def cert_paths(project_root: Path | None = None) -> tuple[Path, Path] | None:
-    """``(cert.pem, key.pem)`` under ``webapp/certificates/`` when both exist.
-
-    HTTPS is Step 7 (Tailscale cert); until then the pair is absent and the
-    webapp serves plain HTTP on the loopback/LAN.
-    """
-    root = project_root or PROJECT_ROOT
-    cert = root / "webapp" / "certificates" / "cert.pem"
-    key = root / "webapp" / "certificates" / "key.pem"
-    if cert.exists() and key.exists():
-        return cert, key
-    return None
 
 
 def _loopback_host(host: str) -> str:
@@ -106,8 +96,19 @@ class WebappManager:
 
     @property
     def base_url(self) -> str:
+        """Loopback URL — the health probe and the owner bypass."""
         scheme = "https" if cert_paths() else "http"
         return f"{scheme}://{_loopback_host(self.config.host)}:{self.config.port}"
+
+    @property
+    def public_url(self) -> str:
+        """The URL to open / share: ``https://<host>.ts.net:<port>`` when the
+        served cert names the tailnet host (no browser warning, works from the
+        phone too), else the loopback URL."""
+        host = cert_hostname()
+        if host:
+            return f"https://{host}:{self.config.port}"
+        return self.base_url
 
     def is_reachable(self) -> bool:
         """A real ``/healthz`` round-trip — a port check cannot see a wedge."""
@@ -166,6 +167,9 @@ class WebappManager:
                 logger.info("🔗 Adopting external webapp at %s", current.base_url)
                 return current
 
+            # Auto-renew a Tailscale leaf expiring within ~30 days BEFORE
+            # uvicorn binds (scaffold app-onboarding §2a) — never blocks.
+            ensure_cert_fresh(sys.executable)
             cmd = self._build_command()
             logger.info("🚀 Starting webapp: %s", " ".join(cmd))
             env = os.environ.copy()
@@ -221,10 +225,7 @@ class WebappManager:
             "--log-level", "warning",
             "--loop", LOOP_FACTORY,
         ]
-        certs = cert_paths()
-        if certs is not None:
-            cert, key = certs
-            cmd.extend(["--ssl-keyfile", str(key), "--ssl-certfile", str(cert)])
+        cmd.extend(uvicorn_ssl_args())  # [] + a loud log line when no cert pair
         return cmd
 
     def _wait_until_ready(self) -> None:

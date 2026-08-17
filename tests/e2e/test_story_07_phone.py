@@ -1,0 +1,301 @@
+"""Story 07 — Phone (Step 7/13, issue #8).
+
+    Open the tailnet URL on the phone → Add to Home Screen → Today tab → add
+    a task → Board carousel swipe → open a drawer full-screen → tap a folder
+    chip → the copy-path fallback is shown.
+
+WebKit device emulation (iOS-class) against the **seeded** disposable
+instance (``tests/fixtures/seed.py`` — synthetic data, the only dataset
+allowed on screen). What a browser can prove of the story:
+
+- the install metadata a phone reads before "Add to Home Screen": the
+  manifest is reachable and well-formed (``standalone``, 192/512 + maskable
+  icons all 200), the iOS meta tags and touch icon are in the shell;
+- 390×844: Today is the landing tab → quick-add a task from Today → the
+  Board is a one-column scroll-snap carousel and a swipe (scroll) moves the
+  active column → a card opens the drawer full-screen → the folder chip is
+  the display-only ref (span, no href, ref as tooltip — the per-PC opener is
+  Step 9) → the theme toggle persists across a reload;
+- a 430-wide leg (the larger phones) of the same carousel;
+- the vendored geometry contract at 320 / 390 / 430 / 772: no horizontal
+  overflow, ≥ 44 px targets on the nav pill + the column strip;
+- the /login page renders (phone + desktop shot) and signs in with the token
+  against an instance booted with a temp config that carries one — the cookie
+  comes back and the shell loads. The non-loopback gate itself is unit-level
+  (``tests/test_auth.py``: a spoofed client address gets 401 / a redirect).
+
+Screenshots the validation record links to:
+
+    docs/screenshots/story-07-phone-1-phone.png    Today, the landing tab (390)
+    docs/screenshots/story-07-phone-2-phone.png    quick-added task in Today
+    docs/screenshots/story-07-phone-3-phone.png    Board carousel after a swipe
+    docs/screenshots/story-07-phone-4-phone.png    drawer full-screen, folder chip
+    docs/screenshots/story-07-phone-5-phone.png    dark theme persisted (Today)
+    docs/screenshots/story-07-phone-6-phone.png    Board carousel at 430 wide
+    docs/screenshots/story-07-phone-7-phone.png    /login on the phone
+    docs/screenshots/story-07-phone-8-desktop.png  /login on the desktop
+
+What no browser can prove — the real iPhone install over the tailnet HTTPS
+URL — is recorded **not verified** in docs/validation/story-07-phone.md with
+the owner's checklist.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from playwright.sync_api import Browser, Page, Playwright, expect
+
+from tests.e2e._geometry import (
+    assert_min_target,
+    assert_no_horizontal_overflow,
+    assert_no_overlap,
+)
+from tests.e2e.conftest import REPO_ROOT, _boot, _terminate
+
+PHONE = {"width": 390, "height": 844}
+PHONE_LG = {"width": 430, "height": 932}
+DESKTOP = {"width": 1440, "height": 900}
+COLUMNS = ["inbox", "todo", "doing", "standby", "done"]
+E2E_TOKEN = "e2e-story-07-token"
+# E2E_HEADED=1 shows the WebKit window — the headed walk of the same story.
+HEADLESS = os.environ.get("E2E_HEADED", "") != "1"
+
+
+def _col(page: Page, key: str):
+    return page.locator(f".board-col[data-col='{key}']")
+
+
+def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
+    return pw.new_context(
+        viewport=viewport, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme=scheme,
+    )
+
+
+@pytest.fixture(scope="module")
+def authed_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """A seeded disposable instance whose config carries an auth token — the /login walk."""
+    from tests.fixtures.seed import seed_db
+
+    work = tmp_path_factory.mktemp("taskos-e2e-authed")
+    seed_db(work / "tasks.db")
+    sample = json.loads((REPO_ROOT / "config" / "config.sample.json").read_text(encoding="utf-8"))
+    sample["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
+    cfg = work / "config.json"
+    cfg.write_text(json.dumps(sample), encoding="utf-8")
+    proc, base, log = _boot(work, work / "tasks.db", cfg)
+    try:
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
+# ---------------------------------------------------------- phone story
+
+def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
+    base = seeded_webapp
+    try:
+        wk = playwright.webkit.launch(headless=HEADLESS)
+    except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
+        pytest.fail(f"WebKit is required for the phone story: {exc}")
+    try:
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/")
+
+        # 0. "Add to Home Screen" metadata: manifest + icons reachable, iOS tags present.
+        manifest_href = page.locator("link[rel='manifest']").get_attribute("href")
+        assert manifest_href, "no <link rel=manifest>"
+        res = page.request.get(f"{base}{manifest_href}")
+        assert res.status == 200, res.status
+        manifest = res.json()
+        assert manifest["name"] == "task-os" and manifest["display"] == "standalone"
+        assert manifest["start_url"] == "/" and manifest["scope"] == "/"
+        sizes = {(i["sizes"], i.get("purpose", "any")) for i in manifest["icons"]}
+        assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes, sizes
+        for icon in manifest["icons"]:
+            r = page.request.get(f"{base}{icon['src']}")
+            assert r.status == 200 and r.headers.get("content-type", "").startswith("image/png"), icon
+        expect(page.locator("meta[name='apple-mobile-web-app-capable']")).to_have_attribute("content", "yes")
+        expect(page.locator("meta[name='apple-mobile-web-app-title']")).to_have_attribute("content", "task-os")
+        touch = page.locator("link[rel='apple-touch-icon']").get_attribute("href")
+        assert touch and page.request.get(f"{base}{touch}").status == 200
+        viewport = page.locator("meta[name='viewport']").get_attribute("content") or ""
+        assert "viewport-fit=cover" in viewport and "width=device-width" in viewport
+        assert page.locator("meta[name='theme-color']").count() >= 1
+
+        # 1. Fresh phone → Today is the landing tab.
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+        expect(page.locator(".today-card .today-row").first).to_be_visible()
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-07-phone-1-phone.png"))
+
+        # 2. Quick-add from Today: a task due today lands in the due list.
+        qa = page.locator("#paneToday .quick-add-input")
+        expect(qa).to_be_visible()
+        qa.fill("Water the balcony plants today")
+        expect(page.locator("#paneToday .quick-add-chips .chip").first).to_be_visible()   # parsed preview
+        qa.press("Enter")
+        expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
+        added = page.locator(".today-card .today-row", has=page.locator(".today-title", has_text=re.compile(r"^Water the balcony plants$")))
+        expect(added).to_be_visible()
+        new_id = int(added.get_attribute("data-id"))
+        detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
+        assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
+        page.screenshot(path=str(shots / "story-07-phone-2-phone.png"))
+
+        # 3. Board: one-column carousel; a swipe (scroll) moves the active column.
+        page.locator("nav.tabs .tab[data-tab='board']").tap()
+        expect(page.locator("#paneBoard")).to_be_visible()
+        columns = page.locator(".board-columns")
+        assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
+        strip = page.locator(".board-strip-btn")
+        expect(strip).to_have_count(5)
+        assert_min_target(strip)
+        assert_no_overlap(strip)
+        # the Board opens on Todo (the working column); exactly one column in view
+        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        assert visible == ["todo"], visible
+        # swipe left (a scroll of one column width) → Doing becomes the active column
+        columns.evaluate("el => el.scrollBy({left: el.clientWidth, behavior: 'auto'})")
+        expect(page.locator(".board-strip-btn[data-col='doing']")).to_have_class(re.compile(r"\bactive\b"))
+        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        assert visible == ["doing"], visible
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-07-phone-3-phone.png"))
+
+        # 4. Card → drawer full-screen; the folder chip is the display-only ref.
+        columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
+        expect(page.locator(".board-strip-btn[data-col='todo']")).to_have_class(re.compile(r"\bactive\b"))
+        kitchen = page.locator(".board-item", has=page.locator(".board-card-title", has_text=re.compile(r"^Kitchen$"))).first
+        kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
+        page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
+        expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
+        expect(kitchen.locator(".board-card-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+        kitchen.locator(".board-card").tap()
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+        expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
+        box = drawer.bounding_box()
+        assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
+        chip = drawer.locator(".chip-folder").first
+        expect(chip).to_be_visible()
+        expect(chip).to_have_text(re.compile("Kitchen folder"))
+        assert chip.evaluate("el => el.tagName") == "SPAN" and chip.get_attribute("href") is None
+        assert "{onedrive}/house/kitchen" in (chip.get_attribute("title") or "")   # the unresolved ref, per PC
+        assert_min_target(drawer.locator(".drawer-close"))
+        page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
+        expect(page.locator(".toast")).to_have_count(0)
+        page.screenshot(path=str(shots / "story-07-phone-4-phone.png"))
+        drawer.locator(".drawer-close").tap()
+        expect(drawer).to_be_hidden()
+
+        # 5. Theme toggle → dark; a reload keeps it (localStorage) and the tab.
+        page.locator("nav.tabs .tab[data-tab='today']").tap()
+        page.locator("#themeToggle").tap()
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        page.reload()
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+        expect(page.locator(".today-card .today-row").first).to_be_visible()
+        page.screenshot(path=str(shots / "story-07-phone-5-phone.png"))
+        assert errors == [], errors
+        context.close()
+
+        # 6. The 430-wide leg: same carousel, one column at a time.
+        context = _phone_context(wk, PHONE_LG)
+        page = context.new_page()
+        page.goto(f"{base}/")
+        page.locator("nav.tabs .tab[data-tab='board']").tap()
+        wrap = page.locator(".board-columns").bounding_box()
+        first = _col(page, "inbox").bounding_box()
+        assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
+        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE_LG["width"] - 1]
+        assert len(visible) == 1, visible
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-07-phone-6-phone.png"))
+        context.close()
+
+        # 7. Geometry contract across the phone widths + the tablet edge.
+        for width in (320, 390, 430, 772):
+            context = _phone_context(wk, {"width": width, "height": 844})
+            page = context.new_page()
+            page.goto(f"{base}/")
+            expect(page.locator(".today-card .today-row").first).to_be_visible()
+            assert_no_horizontal_overflow(page)
+            tabs = page.locator("nav.tabs .tab")
+            # The vendored nav is the floating pill on the phone widths (fixed)
+            # and the desktop segmented control at 772 (its own, smaller
+            # geometry). Six pill tabs at 320 wide are ~42px across — the
+            # component's auto-fit, not this app's — so the 44px floor is
+            # asserted on the pill from 390 up and the height floor at 320.
+            pill = page.locator("nav.tabs").evaluate("el => getComputedStyle(el).position") == "fixed"
+            assert pill == (width < 772), (width, pill)
+            if pill and width >= 390:
+                assert_min_target(tabs)
+            elif pill:
+                assert all(b["height"] >= 44 for b in tabs.evaluate_all("els => els.map(e => e.getBoundingClientRect().toJSON())"))
+            assert_no_overlap(tabs)
+            page.locator("nav.tabs .tab[data-tab='board']").tap()
+            expect(page.locator(".board-strip-btn").first).to_be_visible()
+            assert_min_target(page.locator(".board-strip-btn"))
+            assert_no_horizontal_overflow(page)
+            context.close()
+    finally:
+        wk.close()
+
+
+# ------------------------------------------------------------- login page
+
+def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright, browser: Browser, shots: Path) -> None:
+    base = authed_webapp
+    # phone: the page renders (vendored card, one field) and a wrong secret is refused
+    wk = playwright.webkit.launch(headless=HEADLESS)
+    try:
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        page.goto(f"{base}/login?next=%2F%23task%2F1")
+        expect(page.locator("#loginForm.card")).to_be_visible()
+        expect(page.locator("#loginSecret")).to_be_focused()
+        assert_min_target(page.locator("#loginSubmit"))
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-07-phone-7-phone.png"))
+        page.fill("#loginSecret", "not-the-token")
+        page.locator("#loginSubmit").tap()
+        expect(page.locator("#loginError")).to_have_text("wrong token or password")
+        # the token → cookie → the shell, deep link preserved
+        page.fill("#loginSecret", E2E_TOKEN)
+        page.locator("#loginSubmit").tap()
+        expect(page.locator("nav.tabs .tab.active")).to_be_visible()
+        assert page.url == f"{base}/#task/1"
+        names = {c["name"]: c for c in context.cookies()}
+        assert "taskos_token" in names and names["taskos_token"]["httpOnly"] is True
+        expect(page.locator("#taskDrawer")).to_be_visible()
+        # Settings → Phone access: the token is configured; this browser is on
+        # loopback, so it reads as the owner ("this PC") — a phone reads "signed in".
+        page.locator("#taskDrawer .drawer-close").tap()
+        page.locator("nav.tabs .tab[data-tab='settings']").tap()
+        expect(page.locator("#accessClient")).to_have_text("this PC")
+        expect(page.locator("#accessRows")).to_contain_text("configured")
+        st = page.request.get(f"{base}/api/status").json()
+        assert st["auth"]["enabled"] is True and st["https"] is False
+        context.close()
+    finally:
+        wk.close()
+    # desktop shot of the same page
+    context = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    try:
+        page = context.new_page()
+        page.goto(f"{base}/login")
+        expect(page.locator("#loginForm.card")).to_be_visible()
+        page.screenshot(path=str(shots / "story-07-phone-8-desktop.png"))
+    finally:
+        context.close()

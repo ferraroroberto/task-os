@@ -1034,3 +1034,31 @@ a.chip:hover { text-decoration: underline; }
   .today-person:empty { display: none; }
   .today-crumb { display: none; }
 }
+
+/* ------------------------------------------------- login page (Step 7) */
+/* /login: one vendored card centred on the canvas, one field, one button.
+   Where a non-loopback page request lands (src/auth.py); the SPA redirects
+   here on a 401 (api.js). Safe-area padded so it sits right on the phone. */
+.login-body { min-height: 100dvh; display: grid; }
+.login-main {
+  display: grid;
+  place-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--space-xl)) var(--gap)
+           calc(env(safe-area-inset-bottom, 0px) + var(--space-xl));
+}
+.login-card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--space-md); }
+.login-card .card-title { font-size: var(--font-heading-lg); }
+.login-card .card-head-meta { display: inline-flex; color: var(--muted); }
+.login-card .card-head-meta .icon { width: var(--icon-title); height: var(--icon-title); }
+.login-card .card-meta { margin: 0; }
+.login-card .input-native { height: var(--row-md); font-size: var(--font-body); }
+.login-card .button-primary { min-height: var(--row-md); }
+.login-error { margin: 0; color: var(--danger); font-size: var(--font-label); }
+
+/* Settings → Phone access card: status rows from GET /api/status. */
+.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: var(--font-label); }
+.access-rows dt { color: var(--muted); }
+.access-rows dd { margin: 0; }
+.access-rows .ok { color: var(--success); }
+.access-rows .warn { color: var(--danger); }
+.access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }

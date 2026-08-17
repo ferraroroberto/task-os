@@ -29,6 +29,7 @@ geometry       = { src = "tests/e2e/_geometry.py",                    sha = "d15
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "tests/e2e/_browser_sweep.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "scripts/classify_e2e.py" }
 no_window      = { src = "src/no_window.py",                          sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "src/no_window.py" }
+tailscale_cert = { src = "scripts/gen_tailscale_cert.py",             sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "scripts/gen_tailscale_cert.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
 # app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop, verbatim)

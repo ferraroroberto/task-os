@@ -38,6 +38,9 @@ const els = {
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
+  accessClient: document.getElementById('accessClient'),
+  accessRows: document.getElementById('accessRows'),
+  signOutBtn: document.getElementById('signOutBtn'),
   boardFilters: document.getElementById('boardFilters'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
@@ -314,6 +317,7 @@ function focusRow(task) {
   if (tab === 'table') target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]');
   else if (tab === 'tree') target = els.treeHost.querySelector('.tree-node[data-id="' + task.id + '"]');
   else if (tab === 'board') target = els.boardHost.querySelector('.board-item[data-id="' + task.id + '"] .board-card');
+  else if (tab === 'today') target = els.todayHost.querySelector('.today-row[data-id="' + task.id + '"]');  // only if due ≤ today; the toast already confirmed
   else { nav.setTab('table'); target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]'); }
   if (target) {
     target.tabIndex = 0;
@@ -348,6 +352,39 @@ async function fetchVersion() {
   }
 }
 
+// ------------------------------------------------------ phone access card
+function accessRow(label, ok, text) {
+  const dt = document.createElement('dt');
+  dt.textContent = label;
+  const dd = document.createElement('dd');
+  dd.className = ok === null ? '' : (ok ? 'ok' : 'warn');
+  dd.textContent = text;
+  return [dt, dd];
+}
+
+async function fetchAccessStatus() {
+  let st;
+  try { st = await api('/api/status'); } catch (_) {
+    els.accessRows.replaceChildren(...accessRow('Status', false, 'unknown — /api/status unreachable'));
+    return;
+  }
+  const client = { loopback: 'this PC', token: 'signed in', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
+  els.accessClient.textContent = client;
+  els.accessRows.replaceChildren(
+    ...accessRow('HTTPS', st.https, st.https ? 'on — Tailscale certificate' : 'off — plain HTTP (run scripts/gen_tailscale_cert.py)'),
+    ...accessRow('Access token', st.auth.enabled, st.auth.enabled ? 'configured — other devices sign in at /login' : 'not set — only this PC can use the app (scripts/gen_token.py)'),
+    ...accessRow('Password', null, st.auth.password ? 'set — accepted at /login' : 'not set (optional; scripts/set_password.py)'),
+  );
+  els.signOutBtn.hidden = st.auth.client !== 'token';
+}
+
+function wireSignOut() {
+  els.signOutBtn.addEventListener('click', async function () {
+    try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
+    location.assign('/login');
+  });
+}
+
 // ---------------------------------------------------------------- boot
 async function boot() {
   wireTheme();
@@ -376,6 +413,8 @@ async function boot() {
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   fetchVersion();
+  fetchAccessStatus();
+  wireSignOut();
   await loadPeople();
   await refreshAll();
   onHashChange();

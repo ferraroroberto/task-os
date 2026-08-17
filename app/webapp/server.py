@@ -10,6 +10,14 @@ Route families (each in ``app/webapp/routers/``):
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=       → full text over tasks + comments
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
+    auth    GET /login · POST /api/login|logout · GET /api/status — the
+            token / password → cookie swap and the access status (Step 7)
+
+Access (``src.auth.AuthMiddleware``): loopback is the owner; any other client
+needs the bearer token (header or the ``taskos_token`` cookie ``/login``
+sets). Static assets, ``/healthz``, ``/api/version`` and ``/login`` stay
+public. HTTPS is uvicorn's job (``--ssl-*`` from ``app.webapp.manager`` /
+``webapp.bat`` when ``webapp/certificates/{cert,key}.pem`` exist).
 
 Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
 "detail"?}}`` — for domain errors (``src.tasks_repo.RepoError`` → its
@@ -38,8 +46,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import misc, people, search, tasks, views
+from app.webapp.routers import auth, misc, people, search, tasks, views
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from src.auth import AuthMiddleware
+from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
 from src.logger import configure_logging
@@ -107,6 +117,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         db_path(),
         version,
     )
+    # Access + transport, said once and loudly: an unestablished fact is its
+    # own visible state, never folded into "fine".
+    if app.state.config.auth.enabled:
+        logger.info("🔐 auth: token configured — non-loopback clients sign in at /login")
+    else:
+        logger.warning("⚠️ auth: no token in config — only this PC (loopback) can use the app; run scripts/gen_token.py")
+    if cert_paths() is None:
+        logger.warning("⚠️ https: no webapp/certificates/{cert,key}.pem — the launcher serves plain HTTP; run scripts/gen_tailscale_cert.py")
     yield
 
 
@@ -131,9 +149,11 @@ def create_app() -> FastAPI:
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
     _install_error_handlers(app)
+    app.add_middleware(AuthMiddleware, get_auth=lambda: app.state.config.auth)
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(misc.router)
+    app.include_router(auth.router)
     app.include_router(tasks.router)
     app.include_router(people.router)
     app.include_router(search.router)

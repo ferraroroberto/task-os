@@ -3,8 +3,9 @@
 Launched by ``tray.bat`` (idempotent start; ``--restart`` is the orphan-proof
 reclaim-then-start owned by the shared ``tray_lifecycle.ps1``). Menu:
 
-    Open task-os      — open the local URL in the default browser
-    Copy local URL    — clipboard the local URL
+    Open task-os      — open the app (the tailnet HTTPS URL when the served
+                        cert names it, else the loopback URL)
+    Copy URL          — clipboard that same URL (paste it on the phone)
     Restart webapp    — stop + start so a fresh build is picked up
     Status            — toast with the webapp state
     --
@@ -152,11 +153,11 @@ class TrayApp:
     # -- menu actions ---------------------------------------------------------
 
     def open_local(self, icon, item) -> None:  # noqa: ARG002
-        webbrowser.open(self.manager.base_url)
+        webbrowser.open(self.manager.public_url)
 
     def copy_local(self, icon, item) -> None:  # noqa: ARG002
-        url = self.manager.base_url
-        _notify("Copied local URL" if _clipboard_copy(url) else "Local URL", url)
+        url = self.manager.public_url
+        _notify("Copied URL" if _clipboard_copy(url) else "URL", url)
 
     def restart_webapp(self, icon, item) -> None:  # noqa: ARG002
         def _do_restart() -> None:
@@ -200,7 +201,7 @@ class TrayApp:
 
         menu = Menu(
             MenuItem("Open task-os", self.open_local, default=True),
-            MenuItem("Copy local URL", self.copy_local),
+            MenuItem("Copy URL", self.copy_local),
             Menu.SEPARATOR,
             MenuItem("Restart webapp", self.restart_webapp),
             MenuItem("Status", self.show_status),
