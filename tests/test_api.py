@@ -18,7 +18,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         yield c
 
 
@@ -29,7 +29,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     seed_db(path)
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         yield c
 
 

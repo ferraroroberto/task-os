@@ -207,6 +207,11 @@
     <circle cx="12" cy="12" r="10" />
     <path d="m9 12 2 2 4-4" />
   </symbol>
+  <!-- Step 7 glyph (Settings → Phone access) -->
+  <symbol id="i-smartphone" viewBox="0 0 24 24" fill="none">
+    <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+    <path d="M12 18h.01" />
+  </symbol>
   <!-- Step 5 glyphs (Today's done checkbox) -->
   <symbol id="i-square" viewBox="0 0 24 24" fill="none">
     <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -302,6 +307,7 @@
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
       <div class="pane-body">
+        <div class="quick-add" data-quick-add="today"></div>
         <!-- Due ≤ today grouped by project, recurring first; "Later this week"
              collapsed below (today.js). The phone's landing tab. -->
         <div id="todayHost" data-empty="tasks"></div>
@@ -320,7 +326,23 @@
             </h2>
             <span class="card-head-meta" id="settingsSite"></span>
           </div>
-          <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed). Phone install and the Tailscale HTTPS certificate arrive with the phone step.</p>
+          <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
+        </div>
+        <!-- Phone access (Step 7): how this connection came in and what the
+             install accepts — filled from GET /api/status by app.js. -->
+        <div class="card" id="accessCard">
+          <div class="card-head">
+            <h2 class="card-title">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
+              Phone access
+            </h2>
+            <span class="card-head-meta" id="accessClient"></span>
+          </div>
+          <dl class="access-rows" id="accessRows"></dl>
+          <p class="card-meta">Install: iOS Safari → Share → Add to Home Screen · Android Chrome → Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
+          <div class="access-actions">
+            <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
+          </div>
         </div>
         <!-- Markdown mirror + backup: read-only status from GET /api/status
              (refreshed when this tab is shown). Vendored card; rows built by app.js. -->

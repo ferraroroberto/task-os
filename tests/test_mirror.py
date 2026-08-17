@@ -401,7 +401,7 @@ def test_migration_v4_adds_mirror_state_and_is_idempotent(tmp_path: Path, monkey
 def test_api_status_and_on_demand_runs(env) -> None:
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         st = c.get("/api/status").json()
         assert st["mirror"]["enabled"] is True and st["mirror"]["dir"] == str(env["dir"])
         assert st["backup"]["enabled"] is True and st["backup"]["next_run"]
@@ -421,7 +421,7 @@ def test_api_status_reports_not_configured(tmp_path: Path, monkeypatch: pytest.M
 
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "t.db"))
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(write_test_config(tmp_path / "c.json")))
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         st = c.get("/api/status").json()
         assert st["mirror"] == {**st["mirror"], "enabled": False, "reason": "mirror.dir not configured", "files": None}
         assert st["backup"]["enabled"] is False and st["backup"]["reason"] == "mirror.backup_dir not configured"

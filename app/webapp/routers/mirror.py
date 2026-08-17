@@ -1,7 +1,10 @@
-"""Mirror + backup route family — status and on-demand runs.
+"""Mirror + backup route family — the install status and on-demand runs.
 
-    GET  /api/status          {mirror: {enabled, dir, files, last_export, last_import,
+    GET  /api/status          {https, auth: {enabled, password, client},
+                               mirror: {enabled, dir, files, last_export, last_import,
                                errors, …}, backup: {enabled, dir, last_file, next_run, …}}
+                              — the one status the Settings pane reads (the https /
+                              auth part comes from routers/auth.access_status)
     POST /api/mirror/export   full export now → {tasks, written, removed}
     POST /api/mirror/import   one watcher pass now → {checked, imported, errors}
     POST /api/backup          one backup now → {file, dir} (409 when disabled)
@@ -21,6 +24,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 
 from app.webapp.routers._helpers import error_response
+from app.webapp.routers.auth import access_status
 from src.db import get_db
 
 router = APIRouter(prefix="/api", tags=["mirror"])
@@ -34,6 +38,7 @@ def _services(request: Request) -> tuple[Any, Any]:
 def status(request: Request) -> dict[str, Any]:
     mirror, backup = _services(request)
     return {
+        **access_status(request),
         "mirror": mirror.status() if mirror else {"enabled": False, "reason": "mirror service not started"},
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
     }

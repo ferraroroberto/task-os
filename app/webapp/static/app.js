@@ -38,6 +38,9 @@ const els = {
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
+  accessClient: document.getElementById('accessClient'),
+  accessRows: document.getElementById('accessRows'),
+  signOutBtn: document.getElementById('signOutBtn'),
   mirrorCardMeta: document.getElementById('mirrorCardMeta'),
   statusMirror: document.getElementById('statusMirror'),
   statusBackup: document.getElementById('statusBackup'),
@@ -317,6 +320,7 @@ function focusRow(task) {
   if (tab === 'table') target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]');
   else if (tab === 'tree') target = els.treeHost.querySelector('.tree-node[data-id="' + task.id + '"]');
   else if (tab === 'board') target = els.boardHost.querySelector('.board-item[data-id="' + task.id + '"] .board-card');
+  else if (tab === 'today') target = els.todayHost.querySelector('.today-row[data-id="' + task.id + '"]');  // only if due ≤ today; the toast already confirmed
   else { nav.setTab('table'); target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]'); }
   if (target) {
     target.tabIndex = 0;
@@ -349,6 +353,38 @@ async function fetchVersion() {
     els.buildReadout.textContent = 'Build: unknown';
     els.homeHeadStatus.textContent = 'Server unreachable';
   }
+}
+
+// ------------------------------------------------------ phone access card
+function accessRow(label, ok, text) {
+  const dt = document.createElement('dt');
+  dt.textContent = label;
+  const dd = document.createElement('dd');
+  dd.className = ok === null ? '' : (ok ? 'ok' : 'warn');
+  dd.textContent = text;
+  return [dt, dd];
+}
+
+function renderAccessCard(st) {
+  const client = { loopback: 'this PC', token: 'signed in', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
+  els.accessClient.textContent = client;
+  els.accessRows.replaceChildren(
+    ...accessRow('HTTPS', st.https, st.https ? 'on — Tailscale certificate' : 'off — plain HTTP (run scripts/gen_tailscale_cert.py)'),
+    ...accessRow('Access token', st.auth.enabled, st.auth.enabled ? 'configured — other devices sign in at /login' : 'not set — only this PC can use the app (scripts/gen_token.py)'),
+    ...accessRow('Password', null, st.auth.password ? 'set — accepted at /login' : 'not set (optional; scripts/set_password.py)'),
+  );
+  els.signOutBtn.hidden = st.auth.client !== 'token';
+}
+
+function renderAccessUnknown(message) {
+  els.accessRows.replaceChildren(...accessRow('Status', false, 'unknown — ' + message));
+}
+
+function wireSignOut() {
+  els.signOutBtn.addEventListener('click', async function () {
+    try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
+    location.assign('/login');
+  });
 }
 
 // ------------------------------------------------- mirror + backup status
@@ -400,18 +436,20 @@ function fmtTsShort(iso) {
   return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// One GET /api/status feeds the Settings pane's Phone access card (https +
+// auth, Step 7) and the mirror / backup card (Step 6).
 async function fetchStatus() {
   if (!els.statusMirror) return;
   try {
-    const res = await fetch('/api/status', { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const body = await res.json();
+    const body = await api('/api/status');
+    renderAccessCard(body);
     renderMirrorRow(els.statusMirror, body.mirror);
     renderBackupRow(els.statusBackup, body.backup);
     const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
     els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
   } catch (err) {
     // An unreachable status is its own visible state, never a stale "Loading…".
+    renderAccessUnknown(err.message);
     els.statusMirror.textContent = 'unknown — ' + err.message;
     els.statusBackup.textContent = 'unknown — ' + err.message;
     els.mirrorCardMeta.textContent = 'unknown';
@@ -450,6 +488,8 @@ async function boot() {
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   fetchVersion();
+  fetchStatus();
+  wireSignOut();
   await loadPeople();
   await refreshAll();
   onHashChange();

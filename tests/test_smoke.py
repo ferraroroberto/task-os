@@ -31,7 +31,7 @@ def _temp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def client() -> TestClient:
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
         yield c
 
 

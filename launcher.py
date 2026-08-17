@@ -12,6 +12,7 @@ root of its own repository.
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -37,13 +38,24 @@ def main(argv: list[str]) -> int:
         import uvicorn
 
         from app.webapp.event_loop import LOOP_FACTORY
+        from src.certs import cert_paths, ensure_cert_fresh
 
+        ensure_cert_fresh()  # renew a Tailscale leaf expiring soon, before the bind
+        pair = cert_paths()
+        ssl: dict[str, str] = {}
+        if pair is not None:
+            ssl = {"ssl_certfile": str(pair[0]), "ssl_keyfile": str(pair[1])}
+        else:
+            logging.getLogger(__name__).warning(
+                "⚠️ https: no webapp/certificates pair — serving PLAIN HTTP on :%d", config.port
+            )
         uvicorn.run(
             "app.webapp.server:app",
             host="0.0.0.0",
             port=config.port,
             log_level="info",
             loop=LOOP_FACTORY,
+            **ssl,
         )
         return 0
 

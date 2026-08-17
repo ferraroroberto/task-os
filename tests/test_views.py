@@ -151,7 +151,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     c.close()
     from app.webapp.server import create_app
 
-    with TestClient(create_app()) as tc:
+    with TestClient(create_app(), client=("127.0.0.1", 50000)) as tc:
         yield tc
 
 

@@ -7,6 +7,13 @@ mirror / backup folders blanked (or pointed into the temp dir — see
 ``mirrored_webapp``), so a run never reads or writes the live ``:8448`` app,
 its ``data/tasks.db``, ``config/config.json`` or the real mirror folder.
 
+Auth (Step 7): the browser reaches the disposable instance over loopback,
+which ``src.auth`` treats as the owner — no token, cookie or env switch is
+needed; there is deliberately no ``TASKOS_AUTH_DISABLED`` flag. The
+non-loopback gate is proven at unit level (``tests/test_auth.py``) with a
+spoofed client address; story 07 walks the /login page against an instance
+booted with a temp config that carries a token.
+
 ``TASKOS_E2E_LIVE=1`` is the one loudly-named opt-in: the suite then runs
 *read-only* against the live ``http://127.0.0.1:8448`` instead of booting
 (never a kill — reclaiming the port is ``tray.bat --restart``'s job). The
@@ -99,7 +106,10 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None) -> tuple[s
     """Start a disposable uvicorn on a free loopback port over ``db_path``.
 
     ``config_path`` defaults to a temp copy of the sample with the mirror and
-    backup folders blanked, so the instance never touches a real synced folder.
+    backup folders blanked, so the instance never touches a real synced folder
+    (and no auth token → the instance is loopback-only, which is exactly what
+    the browser is). Story 07 passes a temp config carrying a token to walk
+    the /login page.
     """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")

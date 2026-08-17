@@ -111,7 +111,14 @@ export function chipFor(target, label) {
   }
   if (/^mailto:/i.test(t)) return chipEl('email', label || t.slice(7), t);
   if (/^mail:\/\//i.test(t)) return chipEl('email', label || t.slice(7), null);
-  if (/^\{/.test(t)) return chipEl('folder', label || t, null);
+  if (/^\{/.test(t)) {
+    // Display-only until Step 9 wires the per-PC opener: the tooltip is the
+    // unresolved ref even when a label is shown, so the path is always there
+    // to read / copy (the phone's fallback — long-press → copy).
+    const el = chipEl('folder', label || t, null);
+    el.title = t;
+    return el;
+  }
   const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(t);
   if (m) return chipEl('issue', label || t, 'https://github.com/' + m[1] + '/issues/' + m[2]);
   return chipEl('web', label || t, null);
