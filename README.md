@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA, **Step 8** GitHub issues as coding tasks. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -32,6 +32,7 @@ tasks tree
 tasks due 2 2026-09-01
 tasks show 2            # activity log shows due: ∅ → 2026-09-01
 tasks mirror status     # markdown mirror + backup: enabled? where? last export / import
+tasks issues sync       # my open GitHub issues → coding tasks in Inbox; closed ones → done
 ```
 
 Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwright install chromium webkit` (once).
@@ -44,7 +45,7 @@ PC-first and full-width; the phone gets the same views as an adaptive second ren
 - **Today** — open tasks due ≤ today (overdue first, then today) grouped by root project, recurring tasks first inside each group; each row: a checkbox to mark done (a recurring task rolls its due one cadence forward instead of closing — toast `Done — next: <date>`), title, breadcrumb, due badge, person. **Later this week** (tomorrow … +7 days) sits collapsed below. This is the phone's landing tab: on a first visit a touch device opens on Today, the desktop on the Board (the last tab is remembered after that).
 - **Table** — one full-width grid over `/api/tasks`: code · title (breadcrumb `Parent › Child` under it) · due (relative, ISO on hover, overdue in the danger tone) · status (inline select) · priority · person · project (the top ancestor) · folder chip · last comment (links rendered as chips) · next action. The filter bar (status chips, project, person, due window, text, sort) **is the URL** — `?status=doing&project=12` is a shareable, bookmarkable view; the default is open tasks. Click the due cell to edit it inline: type a natural phrase (`tomorrow`, `fri`, `in 2 weeks`) or pick a date. Row click / Enter opens the drawer.
 - **Tree** — the whole hierarchy as an outliner: indent = nesting, collapse/expand persists, every node with children carries a **project** chip and a rollup (open descendants, nearest due). Drag a row onto another to re-parent it (`POST /api/tasks/{id}/move`; a cycle is refused with a toast); drop on the dashed zone at the bottom to move to the top level. Keyboard: ↑/↓ walk, →/← expand/collapse, Enter opens.
-- **Task drawer** — a right-hand side panel on desktop (≥ 1024 px, the list stays visible beside it), full-screen on the phone; deep-linkable as `#task/42`. Breadcrumb (clickable) → editable title → fields (status, priority, due, repeat, person, code) → description (markdown, edit/preview) → links (add/remove) → comments newest-first with URLs / `{folder}` refs / `repo#N` as clickable chips + a composer (Ctrl+Enter sends, `origin = ui`) → activity log (`field old → new · actor · time`) → children (click to navigate, add child) → issue panel (placeholder until Step 8).
+- **Task drawer** — a right-hand side panel on desktop (≥ 1024 px, the list stays visible beside it), full-screen on the phone; deep-linkable as `#task/42`. Breadcrumb (clickable) → editable title → fields (status, priority, due, repeat, person, code) → description (markdown, edit/preview) → links (add/remove) → comments newest-first with URLs / `{folder}` refs / `repo#N` as clickable chips + a composer (Ctrl+Enter sends, `origin = ui`) → activity log (`field old → new · actor · time`) → children (click to navigate, add child) → **issue panel**: the linked issue (provider glyph, `repo#N` chip, state pill, labels, last synced, *Sync now*, *Unlink*) or, for a plain task, *Create issue* (repo from the last-seen list or typed) and *Link existing* (`owner/repo#N` or the URL). See [Issues as tasks](#issues-as-tasks).
 - **Quick-add** — the `+ Add task…` bar at the top of Board / Table / Tree. One line of natural language, parsed server-side by `POST /api/parse` (so the CLI and the UI agree) and previewed as chips before you press Enter:
 
   | You type | Result |
@@ -68,6 +69,7 @@ app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles
 app/webapp/routers/       misc (shell, /healthz, /api/version) · auth (/login, /api/login|logout) · tasks (/api/tasks…,
                           /api/activity) · people · search · views (/api/board, /api/today)
                           · mirror (/api/status — install status incl. https + auth, /api/mirror/export|import, /api/backup)
+                          · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
                           table.js, tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
@@ -75,6 +77,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
+                          issues/ (IssueProvider contract · github.py via gh · fake.py for tests) · issue_sync.py (sync pass + scheduler)
                           logger.py · static_versioning.py
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
                           gen_tailscale_cert.py (vendored from the scaffold), gen_token.py, set_password.py
@@ -92,14 +95,14 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | --- | --- |
 | `site` | `home` or a second site name — selects nothing yet; later steps key providers on it |
 | `port` | webapp port (default **8448**) |
-| `issues` | `provider` (`github`/`gitlab`), `owner`, `assignee`, `sync_minutes` — Step 8 |
+| `issues` | `provider` (`github`; `gitlab` arrives with Step 11; blank = off), `owner` (whose repos are searched), `assignee` (`@me`), `sync_minutes` (default 10). See [Issues as tasks](#issues-as-tasks) |
 | `placeholders` | `{onedrive}`, `{user}`, … expanded in folder refs per machine — Step 9 |
 | `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. See [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
 | `search` | folder roots + email index path for federated search — Step 10 |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
-Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location (the test harness uses them for isolation).
+Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider (the test harness uses all three for isolation).
 
 ## Data model
 
@@ -124,7 +127,9 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `POST /api/tasks/{id}/move` `{parent_id\|null}` · `POST /api/tasks/{id}/done` | re-parent · complete (recurring → roll) |
 | `GET/POST /api/tasks/{id}/comments` `{body, origin?, author?}` | thread · add → 201 |
 | `GET/POST /api/tasks/{id}/links` `{url, label?, kind?}` · `DELETE …/links/{lid}` | links |
-| `PUT /api/tasks/{id}/issue` `{provider?, repo, number, url?, state?}` · `DELETE …/issue` | attach (→ `coding`) · detach (→ `task`) |
+| `PUT /api/tasks/{id}/issue` `{provider?, repo, number, url?, state?}` · `DELETE …/issue` | attach an existing issue (→ `coding`; the next sync fills state / url) · detach (→ `task`; the issue is untouched) |
+| `GET /api/tasks/{id}/issue` · `POST /api/tasks/{id}/issue` `{repo}` | the drawer's panel: `{ref, info}` (the stored ref + the last-seen labels / updated time from the sync cache; `?live=1` asks the provider now) · **create an issue from the task** (title + description → `gh issue create`, assigned to you) and link it → 201 with the task (`409 already_linked` / `issues_disabled`, `502 provider_error`) |
+| `GET /api/issues/status` · `POST /api/issues/sync` | `{provider, enabled, reason, sync_minutes, last_sync, last_result, last_error, last_error_code, next_run, repos}` · one sync pass now → the result counts (`409 issues_disabled` when not configured, `502 provider_error` with the classified `code` when `gh` fails) |
 | `GET /api/activity?task=&limit=` | activity log, newest first (all tasks when no `task`) |
 | `POST /api/parse` `{text, today?}` | quick-add split → `{title, due, due_phrase, parent_ref, parent}` (`parent` resolved to `{id, title}` or `null`) |
 | `GET/POST /api/people` · `GET/PATCH/DELETE /api/people/{id}` | people CRUD (`open_tasks` count included) |
@@ -155,6 +160,8 @@ tasks search "q"           full text incl. comments, with the matched snippet
 tasks people
 tasks mirror [export|import|status]   markdown mirror: full export · one watcher pass · status (default)
 tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
+tasks issues [sync|status] issue provider: one sync pass now (new / retitled / reopened / closed, ids) · status (default)
+tasks issue create N --repo owner/name   open an issue from task N (title + description) and link it → coding
 ```
 
 Dates (`--due`, `due` — and the API's `due` field, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
@@ -224,6 +231,27 @@ After a successful import the file is **re-exported**, so it always converges to
 - **From a scheduler:** `tasks backup` does the same from the terminal (over HTTP when the app is up, else against the file directly) — put `E:utomation	ask-os	asks.bat backup` in Windows Task Scheduler / an app-launcher job if you would rather not depend on the app being up at 03:00; the pruning keeps both paths at 30 files.
 
 Point `mirror.backup_dir` at a synced folder (`{onedrive}/task-os/backup`); the database itself stays out of the sync client by design — only the mirror and the dated copies travel.
+
+## Issues as tasks
+
+A coding task **is** an issue: `type = coding` ⇔ an `issue_refs` row (provider, `owner/repo`, number, state, url, last synced). The sync keeps the two in step, **read-mostly** — task-os never edits an issue's title, labels or state on the forge; the one write is *Create issue* below.
+
+**Provider** — `config/config.json → issues`: `provider` (`github` today; `gitlab` arrives with Step 11; blank / `none` = off), `owner` (whose repositories are searched), `assignee` (`@me`), `sync_minutes` (default 10). GitHub goes through the **`gh` CLI** (`gh auth login` once; no token in config): `gh search issues --assignee @me --state open --owner <owner> --json …`, `gh issue view`, `gh issue create` — each a subprocess with a 20 s timeout, never on a poll. Not configured (blank owner, `gh` not on PATH) and every failure (`not_authenticated`, `timeout`, `rate_limited`, `not_found`, `error` — classified from `gh`'s stderr) are **visible states**: `GET /api/issues/status`, the Settings card *Issues as tasks* and `tasks issues status` say which; a failed listing changes nothing — never an empty list read as "no issues".
+
+**Sync** — a pass runs 10 s after startup, then every `sync_minutes` while the app is up, and on demand: **↻** in the header, *Sync now* on the Settings card or in a task's issue panel, `POST /api/issues/sync`, `tasks issues sync`. One pass:
+
+| On the forge | In task-os |
+| --- | --- |
+| an open issue assigned to you with no task | a new **coding** task in **Inbox**: `title` = the issue title, `code` = `<repo>#<n>` (short repo name), `description` = the issue body, a link (`kind = issue`), the ref (state `open`, url); `created_by = sync`. Dedupe key = (provider, repo, number) — a re-run touches nothing it already made |
+| the issue's **title changed** | the task title follows (activity `title` by `sync`) — the issue title is canonical for a coding task; rename it on the forge |
+| an issue that was **closed** is open again | the ref goes `open`; a task that was done / cancelled is **reopened** to `todo` (activity by `sync`) |
+| a ref that should be open is **missing from the list** | confirmed first with one `gh issue view`: **closed** → the ref goes `closed` and the task is **done** (skipped when already done / cancelled; activity `status … → done · sync` + `issue_state open → closed · sync`); still open (unassigned from you, another owner) → nothing but `last_synced` moves; the lookup failed → the task is left alone and the error is in the result. Closed refs are not polled again |
+
+GitHub's search index is eventually consistent — an issue closed seconds ago can still be listed *open* for ~30 s; the next pass catches it. Every task the sync creates or changes goes through the same repo layer as the UI, so the activity log, the markdown mirror and the Board see it like any other write.
+
+**Create / link / unlink** — in the drawer's issue panel of a plain task: *Create issue* (repo from the last-seen list or typed as `owner/repo`) runs `gh issue create` with the task's title and description, assigns it to you and links it — the task becomes coding with `code = repo#N` (`tasks issue create N --repo owner/name` from the terminal). *Link existing* takes `owner/repo#N` or the issue URL (`PUT /api/tasks/{id}/issue`) — the next sync fills state and url. *Unlink* (`DELETE`) makes it a plain task again; the issue is untouched. Board / Table / Tree cards carry the chip (`repo#N`, provider glyph, muted with a check once closed) that opens the issue.
+
+**Never written back:** titles, labels, state, assignees, comments. A local rename of a coding task is overwritten by the next sync; a task marked done locally does **not** close its issue.
 
 ## Importing from Notion
 

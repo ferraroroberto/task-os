@@ -124,6 +124,38 @@ export function chipFor(target, label) {
   return chipEl('web', label || t, null);
 }
 
+/** The chip for a task's issue_ref: provider glyph, repo#N, state on the
+ *  chip (open = accent, closed = muted + check) — opens the issue's URL. */
+export function issueChip(ref) {
+  // short repo name on the chip (cards are narrow); the full owner/repo#N in the title
+  const label = String(ref.repo || '').split('/').pop() + '#' + ref.number;
+  const href = ref.url || issueUrl(ref.provider, ref.repo, ref.number);
+  const el = document.createElement('a');
+  const state = ref.state === 'closed' ? 'closed' : (ref.state === 'open' ? 'open' : 'unknown');
+  el.className = 'chip chip-issue chip-issue-' + state;
+  el.href = href;
+  el.target = '_blank';
+  el.rel = 'noopener';
+  el.innerHTML = icon(providerIcon(ref.provider));
+  const t = document.createElement('span');
+  t.className = 'chip-label';
+  t.textContent = label;
+  el.appendChild(t);
+  if (state === 'closed') el.innerHTML += icon('circle-check', 'chip-state');
+  el.title = ref.repo + '#' + ref.number + ' · ' + (ref.state || 'state unknown') + (ref.last_synced ? ' · synced ' + fmtTs(ref.last_synced) : '');
+  el.dataset.state = state;
+  return el;
+}
+
+export function providerIcon(provider) {
+  return provider === 'github' ? 'github' : 'git-branch';
+}
+
+export function issueUrl(provider, repo, number) {
+  const host = provider === 'gitlab' ? 'https://gitlab.com/' : 'https://github.com/';
+  return host + repo + (provider === 'gitlab' ? '/-/issues/' : '/issues/') + number;
+}
+
 /** Text with its targets rendered as chips → DocumentFragment. */
 export function linkify(text) {
   const frag = document.createDocumentFragment();

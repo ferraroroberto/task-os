@@ -767,12 +767,14 @@ def tree(
     by_parent: dict[int | None, list[dict[str, Any]]] = {}
     for r in rows:
         by_parent.setdefault(r["parent_id"], []).append(dict(r))
+    refs = {r["task_id"]: dict(r) for r in conn.execute("SELECT * FROM issue_refs").fetchall()}
 
     def build(pid: int | None, depth: int) -> list[dict[str, Any]]:
         out = []
         for row in by_parent.get(pid, []):
             node = dict(row)
             node["depth"] = depth
+            node["issue_ref"] = refs.get(row["id"])
             node["children"] = build(row["id"], depth + 1)
             node["child_count"] = len(by_parent.get(row["id"], []))
             node["is_project"] = node["child_count"] > 0
@@ -787,6 +789,7 @@ def tree(
     root = _require_task(conn, root_id)
     node = dict(root)
     node["depth"] = 0
+    node["issue_ref"] = refs.get(root_id)
     node["children"] = build(root_id, 1)
     node["child_count"] = len(by_parent.get(root_id, []))
     node["is_project"] = node["child_count"] > 0
@@ -942,6 +945,50 @@ def set_issue_ref(
     conn.commit()
     _touched(task_id)
     return get_task(conn, task_id)
+
+
+def list_issue_refs(conn: sqlite3.Connection, provider: str | None = None) -> list[dict[str, Any]]:
+    """Every ``issue_refs`` row (optionally one provider) with its task's title / status."""
+    sql = """
+        SELECT r.task_id, r.provider, r.repo, r.number, r.state, r.url, r.last_synced,
+               t.title AS task_title, t.status AS task_status
+        FROM issue_refs r JOIN tasks t ON t.id = r.task_id
+    """
+    params: tuple[Any, ...] = ()
+    if provider:
+        sql += " WHERE r.provider = ?"
+        params = (provider,)
+    return _rows(conn.execute(sql + " ORDER BY r.repo, r.number", params).fetchall())
+
+
+def touch_issue_ref(
+    conn: sqlite3.Connection,
+    task_id: int,
+    *,
+    state: str | None = None,
+    url: str | None = None,
+    actor: str | None = None,
+    ts: str | None = None,
+) -> dict[str, Any] | None:
+    """The sync's bookkeeping on an existing ref: ``last_synced`` always, ``state`` /
+    ``url`` when given. A state change (open ↔ closed) writes an ``issue_state``
+    activity row; nothing else is logged. Returns the row, ``None`` when absent."""
+    ref = conn.execute("SELECT * FROM issue_refs WHERE task_id = ?", (task_id,)).fetchone()
+    if ref is None:
+        return None
+    ts = ts or now_iso()
+    new_state = state if state is not None else ref["state"]
+    new_url = url if url is not None else ref["url"]
+    conn.execute(
+        "UPDATE issue_refs SET state = ?, url = ?, last_synced = ? WHERE task_id = ?",
+        (new_state, new_url, ts, task_id),
+    )
+    if new_state != ref["state"]:
+        _log(conn, task_id, actor, "issue_state", ref["state"], new_state, ts)
+    conn.commit()
+    if new_state != ref["state"]:
+        _touched(task_id)
+    return _row(conn.execute("SELECT * FROM issue_refs WHERE task_id = ?", (task_id,)).fetchone())
 
 
 def remove_issue_ref(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) -> dict[str, Any]:

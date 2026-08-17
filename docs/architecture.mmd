@@ -9,6 +9,7 @@ flowchart LR
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
+    forge["GitHub (via gh CLI)<br/>issues assigned to me"]
   end
 
   subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]
@@ -20,14 +21,17 @@ flowchart LR
     searchr["routers/search<br/>/api/search"]
     viewsr["routers/views<br/>/api/board · /api/today"]
     mirrorr["routers/mirror<br/>/api/status · /api/mirror/export|import<br/>/api/backup"]
+    issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
-    lifespan["lifespan → Mirror.start() · BackupScheduler.start()"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start()"]
   end
 
   subgraph domain["Domain · src/"]
     repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets)<br/>write listeners (touched ids)"]
     mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict → comment"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
+    issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>IssueSyncService: 10 s after start, every sync_minutes"]
+    issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>fake.py (tests, e2e) · get_provider(config)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v4 · migrate()"]
@@ -83,8 +87,15 @@ flowchart LR
   viewsr --> repo
   mirrorr --> mirror
   mirrorr --> backup
+  issuesr --> issync
+  issuesr -->|"create · get"| issues
   lifespan --> mirror
   lifespan --> backup
+  lifespan --> issync
+  issync -->|"list_open_assigned · get"| issues
+  issues -->|"gh subprocess"| forge
+  issync -->|"create_task · update_task(actor=sync)<br/>set_issue_ref · touch_issue_ref"| repo
+  cli -->|"issues sync · issue create (app down)"| issync
   repo -.->|"write listener → touch(ids)"| mirror
   mirror -->|"update_task(actor=md) · add_comment(origin=md)"| repo
   mirror -->|"export · re-export"| mdfiles

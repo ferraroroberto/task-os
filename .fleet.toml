@@ -5,6 +5,7 @@
 layer       = "working-web"
 icon        = "✅"
 port        = ":8448"
+tag         = ["→", "GitHub"]
 description = "<b>task-os</b> — one master task list: nested tasks that become projects, comments + activity log, folder links, GitHub/GitLab issues as tasks, federated search, a markdown mirror (edit tasks as .md files) + nightly backup. PC-first PWA, phone via Tailscale."
 
 # Vendored byte-for-byte from project-scaffolding (and the two fleet reference

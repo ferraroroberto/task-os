@@ -23,7 +23,10 @@ check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
 fixture (``tests/fixtures/seed.py``) for the stories that need data on
 screen (Step 4 on); ``webapp`` stays empty for story 01. ``mirrored_webapp``
 (story 06) is a seeded instance whose ``mirror.dir`` / ``backup_dir`` are
-temp folders the test can edit and list.
+temp folders the test can edit and list. ``issues_webapp`` (story 08) is a
+seeded instance whose issue provider is the file-backed fake
+(``TASKOS_ISSUE_PROVIDER=fake`` over a temp JSON "forge" the test edits —
+never ``gh``, never the network).
 
 Screenshots: ``shots`` yields ``docs/screenshots`` so a story test saves its
 numbered proof there directly (the public repo carries them; the fixture DB
@@ -102,14 +105,16 @@ def _terminate(proc: subprocess.Popen | None) -> None:
         pass
 
 
-def _boot(work: Path, db_path: Path, config_path: Path | None = None) -> tuple[subprocess.Popen, str, IO[str]]:
+def _boot(work: Path, db_path: Path, config_path: Path | None = None,
+          extra_env: dict[str, str] | None = None) -> tuple[subprocess.Popen, str, IO[str]]:
     """Start a disposable uvicorn on a free loopback port over ``db_path``.
 
     ``config_path`` defaults to a temp copy of the sample with the mirror and
     backup folders blanked, so the instance never touches a real synced folder
     (and no auth token → the instance is loopback-only, which is exactly what
     the browser is). Story 07 passes a temp config carrying a token to walk
-    the /login page.
+    the /login page. The issue provider is forced off unless ``extra_env``
+    picks one (story 08 picks the fake).
     """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
@@ -122,6 +127,8 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None) -> tuple[s
         "PYTHONUTF8": "1",
         "TASKOS_DB_PATH": str(db_path),
         "TASKOS_CONFIG_PATH": str(config_path),
+        "TASKOS_ISSUE_PROVIDER": "none",
+        **(extra_env or {}),
     }
     cmd = [
         sys.executable, "-m", "uvicorn", "app.webapp.server:app",
@@ -212,6 +219,64 @@ def mirrored_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Mirror
     proc, base, log = _boot(work, db, config)
     try:
         yield MirroredInstance(base, mirror_dir, backup_dir, db)
+    finally:
+        _terminate(proc)
+        log.close()
+
+
+FAKE_ISSUES = [
+    {"repo": "example/garden-bot", "number": 12, "title": "Fix watering schedule drift", "state": "open",
+     "url": "https://github.com/example/garden-bot/issues/12", "labels": ["bug"],
+     "updated_at": "2026-08-16T09:00:00Z", "body": "The cron uses local time; drift after DST."},
+    {"repo": "example/garden-bot", "number": 14, "title": "Add soil-moisture sensor to the loop", "state": "open",
+     "url": "https://github.com/example/garden-bot/issues/14", "labels": ["enhancement"],
+     "updated_at": "2026-08-17T07:00:00Z", "body": "Read the capacitive sensor every 10 min and skip watering when wet."},
+    {"repo": "example/home-dashboard", "number": 3, "title": "Dark theme contrast on the energy card", "state": "open",
+     "url": "https://github.com/example/home-dashboard/issues/3", "labels": ["bug", "design"],
+     "updated_at": "2026-08-15T18:30:00Z", "body": ""},
+]
+
+
+class IssuesInstance:
+    """What story 08 needs: the base URL plus the fake forge file the test edits."""
+
+    def __init__(self, base: str, forge: Path, db: Path) -> None:
+        self.base = base
+        self.forge = forge
+        self.db = db
+
+    def issues(self) -> list[dict]:
+        import json
+
+        return json.loads(self.forge.read_text(encoding="utf-8"))["issues"]
+
+    def set_issue(self, repo: str, number: int, **changes) -> None:
+        import json
+
+        data = json.loads(self.forge.read_text(encoding="utf-8"))
+        for row in data["issues"]:
+            if row["repo"] == repo and row["number"] == number:
+                row.update(changes)
+        self.forge.write_text(json.dumps(data, indent=1), encoding="utf-8")
+
+
+@pytest.fixture(scope="session")
+def issues_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IssuesInstance]:
+    """A seeded disposable instance whose issue provider is the file-backed fake."""
+    if os.environ.get(LIVE_ENV) == "1":
+        pytest.skip(f"{LIVE_ENV}=1: the issues fixture never runs against the live database")
+    import json
+
+    from tests.fixtures.seed import seed_db
+
+    work = tmp_path_factory.mktemp("taskos-e2e-issues")
+    db = work / "tasks.db"
+    seed_db(db)
+    forge = work / "forge.json"
+    forge.write_text(json.dumps({"issues": FAKE_ISSUES, "error": None}, indent=1), encoding="utf-8")
+    proc, base, log = _boot(work, db, extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)})
+    try:
+        yield IssuesInstance(base, forge, db)
     finally:
         _terminate(proc)
         log.close()
