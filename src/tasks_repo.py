@@ -19,7 +19,10 @@ Rules enforced here (plan §04):
 - ``coding`` ⇔ an ``issue_refs`` row exists: attaching one sets the type,
   detaching reverts it, and setting ``type='coding'`` by hand is rejected;
 - full-text search hits title / description / comment bodies via the two
-  FTS5 indexes and returns a snippet per hit.
+  FTS5 indexes and returns a snippet per hit;
+- an importer is idempotent on ``external_id`` (tasks, comments, people):
+  :func:`import_task` creates with the source's own timestamps and logs ONE
+  ``imported`` row, or updates the fields that changed on a re-run.
 
 Timestamps come from :func:`now_iso` (local time, second precision, offset
 kept) so a seed or a test can pin the clock with :func:`use_clock`.
@@ -442,6 +445,93 @@ def delete_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     return {"id": task_id, "deleted": 1 + len(subtree)}
 
 
+_EXTERNAL_ID_TABLES = ("tasks", "comments", "people")
+
+
+def find_by_external_id(
+    conn: sqlite3.Connection, table: str, external_id: str
+) -> dict[str, Any] | None:
+    """The row of ``tasks`` / ``comments`` / ``people`` carrying ``external_id``, or ``None``."""
+    if table not in _EXTERNAL_ID_TABLES:
+        raise ValueError(f"no external_id on {table!r}")
+    return _row(
+        conn.execute(f"SELECT * FROM {table} WHERE external_id = ?", (external_id,)).fetchone()
+    )
+
+
+def import_task(
+    conn: sqlite3.Connection,
+    *,
+    external_id: str,
+    title: str,
+    actor: str,
+    created_at: str,
+    updated_at: str,
+    done_at: str | None = None,
+    **fields: Any,
+) -> tuple[dict[str, Any], str]:
+    """Create-or-update a task keyed by ``external_id`` → ``(task, "created" | "updated" | "unchanged")``.
+
+    First import: the row is inserted with the *source's* ``created_at`` /
+    ``updated_at`` / ``done_at`` (not the import moment) and ONE activity row
+    ``imported`` (new_value = ``external_id``) — never one row per field.
+    Re-import: only the fields that differ go through :func:`update_task`
+    (a genuine change in the source is logged per field like any other
+    change); an identical page touches nothing.
+    """
+    existing = find_by_external_id(conn, "tasks", external_id)
+    if existing is None:
+        created = create_task(conn, title, actor=actor, **fields)
+        task_id = created["id"]
+        conn.execute(
+            "UPDATE tasks SET external_id = ?, created_at = ?, updated_at = ?, done_at = ? "
+            "WHERE id = ?",
+            (external_id, created_at, updated_at, done_at, task_id),
+        )
+        # create_task logged "created" at the import moment; the import is the
+        # one event worth recording, so that row becomes the single "imported".
+        conn.execute(
+            "UPDATE activity SET field = 'imported', new_value = ? "
+            "WHERE task_id = ? AND field = 'created'",
+            (external_id, task_id),
+        )
+        conn.commit()
+        return get_task(conn, task_id), "created"
+
+    task_id = existing["id"]
+    diff = import_diff(existing, title=title, done_at=done_at, **fields)
+    if not diff:
+        return get_task(conn, task_id), "unchanged"
+    new_done_at = diff.pop("done_at", existing.get("done_at"))
+    if diff:
+        update_task(conn, task_id, actor=actor, **diff)
+    # update_task stamps done_at with the import moment on a status flip; the
+    # source's own completion time wins (and a bare done_at drift is applied too).
+    conn.execute("UPDATE tasks SET done_at = ? WHERE id = ?", (new_done_at, task_id))
+    conn.commit()
+    return get_task(conn, task_id), "updated"
+
+
+def import_diff(existing: dict[str, Any], **incoming: Any) -> dict[str, Any]:
+    """The subset of ``incoming`` that differs from the stored row (empty ≡ default)."""
+    return {
+        k: v for k, v in incoming.items()
+        if _normalise(k, v) != _normalise(k, existing.get(k))
+    }
+
+
+def _normalise(field: str, value: Any) -> Any:
+    if field == "description":
+        return value or ""
+    if field == "status":
+        return value or "inbox"
+    if field == "priority":
+        return value or "none"
+    if field == "due":
+        return _validate_due(value)
+    return value if value not in ("", None) else None
+
+
 def get_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     """The full detail view: task + links, comments, activity, children, breadcrumb."""
     row = _require_task(conn, task_id)
@@ -619,19 +709,29 @@ def add_comment(
     *,
     author: str | None = None,
     origin: str = "ui",
+    ts: str | None = None,
+    external_id: str | None = None,
 ) -> dict[str, Any]:
+    """Append a comment (thread order = ``ts``).
+
+    ``ts`` / ``external_id`` are the import path: a historical comment keeps
+    its original timestamp and source id (dedupe key) and does **not** bump
+    the task's ``updated_at`` — only a fresh comment (no ``ts``) does.
+    """
     _require_task(conn, task_id)
     body = (body or "").strip()
     if not body:
         raise ValidationError("comment body is required")
     if origin not in COMMENT_ORIGINS:
         raise ValidationError(f"origin must be one of {', '.join(COMMENT_ORIGINS)} (got {origin!r})")
-    ts = now_iso()
+    historical = ts is not None
+    ts = ts or now_iso()
     cur = conn.execute(
-        "INSERT INTO comments(task_id, author, ts, body, origin) VALUES (?,?,?,?,?)",
-        (task_id, author or DEFAULT_ACTOR, ts, body, origin),
+        "INSERT INTO comments(task_id, author, ts, body, origin, external_id) VALUES (?,?,?,?,?,?)",
+        (task_id, author or DEFAULT_ACTOR, ts, body, origin, external_id),
     )
-    conn.execute("UPDATE tasks SET updated_at = ? WHERE id = ?", (ts, task_id))
+    if not historical:
+        conn.execute("UPDATE tasks SET updated_at = ? WHERE id = ?", (ts, task_id))
     conn.commit()
     return _row(conn.execute("SELECT * FROM comments WHERE id = ?", (cur.lastrowid,)).fetchone())  # type: ignore[return-value]
 

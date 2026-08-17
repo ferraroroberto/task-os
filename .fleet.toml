@@ -79,7 +79,7 @@ extensions = ["py"]
 [[e2e.rule]]
 tier       = "none"
 prefix     = "tests/"
-extensions = ["py"]
+extensions = ["py", "json"]
 [[e2e.rule]]
 tier   = "none"
 prefix = "scripts/"

@@ -6,6 +6,7 @@ flowchart LR
     pwa["PWA<br/>app/webapp/static/"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
+    notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
   end
 
   subgraph webapp["FastAPI webapp · :8448<br/>app/webapp/server.py"]
@@ -19,15 +20,15 @@ flowchart LR
   subgraph domain["Domain · src/"]
     repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity"]
     dates["dates.py<br/>parse_date · advance"]
-    schema["schema.py<br/>MIGRATIONS v1→v2 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v3 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json"]
   end
 
   subgraph storage["SQLite (WAL) · data/tasks.db"]
-    t["tasks ⟲ parent_id"]
+    t["tasks ⟲ parent_id<br/>external_id (v3)"]
     l["links"]
-    c["comments"]
+    c["comments<br/>external_id (v3)"]
     a["activity"]
     p["people"]
     i["issue_refs"]
@@ -45,6 +46,7 @@ flowchart LR
   llm --> tasksr
   cli -->|"app up: HTTP (X-Actor)"| tasksr
   cli -->|"app down: direct"| repo
+  notion -->|"import_task · add_comment(ts, external_id)"| repo
   cli --> dates
   tasksr --> repo
   peopler --> repo

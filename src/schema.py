@@ -13,6 +13,9 @@ Version history:
        + FTS5 external-content indexes over tasks(title, description) and
        comments(body) kept in sync by triggers, + indices on parent_id /
        status / due.
+    3  tasks.external_id + comments.external_id (partial unique indexes)  (Step 3)
+       — the source-system key an importer (Notion) is idempotent on:
+       a re-run finds the row by external_id and updates instead of duplicating.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -157,8 +160,15 @@ CREATE TRIGGER comments_au AFTER UPDATE OF body ON comments BEGIN
 END;
 """
 
+_V3 = """
+ALTER TABLE tasks ADD COLUMN external_id TEXT;
+CREATE UNIQUE INDEX idx_tasks_external_id ON tasks(external_id) WHERE external_id IS NOT NULL;
+ALTER TABLE comments ADD COLUMN external_id TEXT;
+CREATE UNIQUE INDEX idx_comments_external_id ON comments(external_id) WHERE external_id IS NOT NULL;
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

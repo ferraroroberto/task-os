@@ -1,0 +1,1320 @@
+{
+ "database_id": "fixture-database-id",
+ "fetched_at": "2026-08-17T10:00:00+02:00",
+ "notion_version": "2022-06-28",
+ "pages": [
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0001-0000-0000-0000-000000000001",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0001000000000000000000000001",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Renew the garden hose",
+         "link": null
+        },
+        "plain_text": "Renew the garden hose",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": {
+       "start": "2026-09-01",
+       "end": null,
+       "time_zone": null
+      }
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": {
+       "id": "x",
+       "name": "not started",
+       "color": "gray"
+      }
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "high",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": null
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": "https://example.com/hose"
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [
+       {
+        "id": "person-aaaa-0000-0000-0000-000000000001"
+       }
+      ],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [
+    {
+     "object": "comment",
+     "id": "c1-3",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0001-0000-0000-0000-000000000001"
+     },
+     "discussion_id": "disc-c1-3",
+     "created_time": "2026-06-03T10:00:00.000Z",
+     "last_edited_time": "2026-06-03T10:00:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "Ordered the 25 m one",
+        "link": null
+       },
+       "plain_text": "Ordered the 25 m one",
+       "href": null
+      }
+     ],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Sam Rivera"
+     }
+    },
+    {
+     "object": "comment",
+     "id": "c1-1",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0001-0000-0000-0000-000000000001"
+     },
+     "discussion_id": "disc-c1-1",
+     "created_time": "2026-06-01T09:00:00.000Z",
+     "last_edited_time": "2026-06-01T09:00:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "Measured the garden: 22 m",
+        "link": null
+       },
+       "plain_text": "Measured the garden: 22 m",
+       "href": null
+      }
+     ],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Sam Rivera"
+     }
+    },
+    {
+     "object": "comment",
+     "id": "c1-2",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0001-0000-0000-0000-000000000001"
+     },
+     "discussion_id": "disc-c1-2",
+     "created_time": "2026-06-02T09:30:00.000Z",
+     "last_edited_time": "2026-06-02T09:30:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "Compare prices at the two shops",
+        "link": null
+       },
+       "plain_text": "Compare prices at the two shops",
+       "href": null
+      }
+     ],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Alex Chen"
+     }
+    }
+   ],
+   "blocks": [
+    {
+     "object": "block",
+     "id": "blk-heading_2-4860",
+     "type": "heading_2",
+     "has_children": false,
+     "heading_2": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Why",
+         "link": null
+        },
+        "plain_text": "Why",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-paragraph-3484",
+     "type": "paragraph",
+     "has_children": false,
+     "paragraph": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "The old one leaks at the tap end.",
+         "link": null
+        },
+        "plain_text": "The old one leaks at the tap end.",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-bulleted_list_item-1212",
+     "type": "bulleted_list_item",
+     "has_children": false,
+     "bulleted_list_item": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "check the fittings",
+         "link": null
+        },
+        "plain_text": "check the fittings",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-bulleted_list_item-3369",
+     "type": "bulleted_list_item",
+     "has_children": false,
+     "bulleted_list_item": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "keep the receipt",
+         "link": null
+        },
+        "plain_text": "keep the receipt",
+        "href": null
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0002-0000-0000-0000-000000000002",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0002000000000000000000000002",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Weekly plant watering",
+         "link": null
+        },
+        "plain_text": "Weekly plant watering",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": null
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": null
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": {
+       "id": "z",
+       "name": "weekly",
+       "color": "blue"
+      }
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [],
+   "blocks": []
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0003-0000-0000-0000-000000000003",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0003000000000000000000000003",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Sort the holiday photos",
+         "link": null
+        },
+        "plain_text": "Sort the holiday photos",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": null
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "inbox",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": null
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [],
+   "blocks": []
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0004-0000-0000-0000-000000000004",
+    "created_time": "2026-05-02T07:00:00.000Z",
+    "last_edited_time": "2026-05-20T18:45:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0004000000000000000000000004",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Fix the squeaky door",
+         "link": null
+        },
+        "plain_text": "Fix the squeaky door",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": {
+       "id": "x",
+       "name": "Done",
+       "color": "gray"
+      }
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "low",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": null
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [
+    {
+     "object": "comment",
+     "id": "c4-1",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0004-0000-0000-0000-000000000004"
+     },
+     "discussion_id": "disc-c4-1",
+     "created_time": "2026-05-10T12:00:00.000Z",
+     "last_edited_time": "2026-05-10T12:00:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "WD-40 did not help",
+        "link": null
+       },
+       "plain_text": "WD-40 did not help",
+       "href": null
+      }
+     ],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Sam Rivera"
+     }
+    },
+    {
+     "object": "comment",
+     "id": "c4-2",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0004-0000-0000-0000-000000000004"
+     },
+     "discussion_id": "disc-c4-2",
+     "created_time": "2026-05-20T18:40:00.000Z",
+     "last_edited_time": "2026-05-20T18:40:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "New hinges fixed it",
+        "link": null
+       },
+       "plain_text": "New hinges fixed it",
+       "href": null
+      }
+     ],
+     "original_content_deleted": false
+    }
+   ],
+   "blocks": []
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0005-0000-0000-0000-000000000005",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0005000000000000000000000005",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Read the sailing book",
+         "link": null
+        },
+        "plain_text": "Read the sailing book",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": {
+       "id": "x",
+       "name": "In progress",
+       "color": "gray"
+      }
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "backlog",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": {
+       "id": "z",
+       "name": "three months",
+       "color": "blue"
+      }
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": "https://example.com/sailing"
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [],
+   "blocks": [
+    {
+     "object": "block",
+     "id": "blk-numbered_list_item-7759",
+     "type": "numbered_list_item",
+     "has_children": false,
+     "numbered_list_item": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "chapter one",
+         "link": null
+        },
+        "plain_text": "chapter one",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-numbered_list_item-7055",
+     "type": "numbered_list_item",
+     "has_children": false,
+     "numbered_list_item": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "chapter two",
+         "link": null
+        },
+        "plain_text": "chapter two",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-to_do-8734",
+     "type": "to_do",
+     "has_children": false,
+     "to_do": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "take notes",
+         "link": null
+        },
+        "plain_text": "take notes",
+        "href": null
+       }
+      ],
+      "checked": true
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-to_do-5472",
+     "type": "to_do",
+     "has_children": false,
+     "to_do": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "lend it on",
+         "link": null
+        },
+        "plain_text": "lend it on",
+        "href": null
+       }
+      ],
+      "checked": false
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-quote-702",
+     "type": "quote",
+     "has_children": true,
+     "quote": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "the sea is calm",
+         "link": null
+        },
+        "plain_text": "the sea is calm",
+        "href": null
+       }
+      ]
+     },
+     "children": [
+      {
+       "object": "block",
+       "id": "blk-nested-1",
+       "type": "paragraph",
+       "has_children": false,
+       "paragraph": {
+        "rich_text": [
+         {
+          "type": "text",
+          "text": {
+           "content": "said the skipper",
+           "link": null
+          },
+          "plain_text": "said the skipper",
+          "href": null
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "object": "block",
+     "id": "blk-code-803",
+     "type": "code",
+     "has_children": false,
+     "code": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "print('ahoy')",
+         "link": null
+        },
+        "plain_text": "print('ahoy')",
+        "href": null
+       }
+      ],
+      "language": "python"
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-image-0",
+     "type": "image",
+     "has_children": false,
+     "image": {
+      "type": "external",
+      "external": {
+       "url": "https://example.com/cover.png"
+      },
+      "caption": [
+       {
+        "type": "text",
+        "text": {
+         "content": "cover",
+         "link": null
+        },
+        "plain_text": "cover",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-image-0",
+     "type": "image",
+     "has_children": false,
+     "image": {
+      "type": "file",
+      "file": {
+       "url": "https://files.example.com/signed"
+      },
+      "caption": []
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-video-0",
+     "type": "video",
+     "has_children": false,
+     "video": {
+      "rich_text": []
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-divider-0",
+     "type": "divider",
+     "has_children": false,
+     "divider": {
+      "rich_text": []
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-callout-9565",
+     "type": "callout",
+     "has_children": false,
+     "callout": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "remember the tide tables",
+         "link": null
+        },
+        "plain_text": "remember the tide tables",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "object": "block",
+     "id": "blk-table-1",
+     "type": "table",
+     "has_children": true,
+     "table": {
+      "table_width": 2,
+      "has_column_header": true,
+      "has_row_header": false
+     },
+     "children": [
+      {
+       "object": "block",
+       "id": "blk-row-1",
+       "type": "table_row",
+       "has_children": false,
+       "table_row": {
+        "cells": [
+         [
+          {
+           "type": "text",
+           "text": {
+            "content": "chapter",
+            "link": null
+           },
+           "plain_text": "chapter",
+           "href": null
+          }
+         ],
+         [
+          {
+           "type": "text",
+           "text": {
+            "content": "pages",
+            "link": null
+           },
+           "plain_text": "pages",
+           "href": null
+          }
+         ]
+        ]
+       }
+      },
+      {
+       "object": "block",
+       "id": "blk-row-2",
+       "type": "table_row",
+       "has_children": false,
+       "table_row": {
+        "cells": [
+         [
+          {
+           "type": "text",
+           "text": {
+            "content": "one",
+            "link": null
+           },
+           "plain_text": "one",
+           "href": null
+          }
+         ],
+         [
+          {
+           "type": "text",
+           "text": {
+            "content": "12",
+            "link": null
+           },
+           "plain_text": "12",
+           "href": null
+          }
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0006-0000-0000-0000-000000000006",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0006000000000000000000000006",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Plan the birthday picnic",
+         "link": null
+        },
+        "plain_text": "Plan the birthday picnic",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": null
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "medium",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": {
+       "id": "z",
+       "name": "daily",
+       "color": "blue"
+      }
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [
+       {
+        "id": "person-aaaa-0000-0000-0000-000000000001"
+       },
+       {
+        "id": "person-bbbb-0000-0000-0000-000000000002"
+       },
+       {
+        "id": "person-cccc-0000-0000-0000-000000000003"
+       }
+      ],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [],
+   "blocks": [
+    {
+     "object": "block",
+     "id": "blk-paragraph-2014",
+     "type": "paragraph",
+     "has_children": false,
+     "paragraph": {
+      "rich_text": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Bring the big blanket.",
+         "link": null
+        },
+        "plain_text": "Bring the big blanket.",
+        "href": null
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0007-0000-0000-0000-000000000007",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0007000000000000000000000007",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": []
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": null
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": {
+       "id": "x",
+       "name": "Blocked",
+       "color": "gray"
+      }
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": {
+       "id": "y",
+       "name": "urgent",
+       "color": "red"
+      }
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": {
+       "id": "z",
+       "name": "fortnightly",
+       "color": "blue"
+      }
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [
+    {
+     "object": "comment",
+     "id": "c7-1",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0007-0000-0000-0000-000000000007"
+     },
+     "discussion_id": "disc-c7-1",
+     "created_time": "2026-06-05T08:00:00.000Z",
+     "last_edited_time": "2026-06-05T08:00:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Sam Rivera"
+     }
+    }
+   ],
+   "blocks": []
+  },
+  {
+   "page": {
+    "object": "page",
+    "id": "page-0008-0000-0000-0000-000000000008",
+    "created_time": "2026-06-01T08:00:00.000Z",
+    "last_edited_time": "2026-06-10T09:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/page0008000000000000000000000008",
+    "properties": {
+     "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+       {
+        "type": "text",
+        "text": {
+         "content": "Yearly insurance review",
+         "link": null
+        },
+        "plain_text": "Yearly insurance review",
+        "href": null
+       }
+      ]
+     },
+     "Date": {
+      "id": "d",
+      "type": "date",
+      "date": {
+       "start": "2026-12-01T09:00:00.000+01:00",
+       "end": "2026-12-02",
+       "time_zone": null
+      }
+     },
+     "status": {
+      "id": "s",
+      "type": "status",
+      "status": {
+       "id": "x",
+       "name": "not started",
+       "color": "gray"
+      }
+     },
+     "priority": {
+      "id": "p",
+      "type": "select",
+      "select": null
+     },
+     "recurrent": {
+      "id": "r",
+      "type": "select",
+      "select": {
+       "id": "z",
+       "name": "yearly",
+       "color": "blue"
+      }
+     },
+     "link": {
+      "id": "l",
+      "type": "url",
+      "url": null
+     },
+     "connection": {
+      "id": "c",
+      "type": "relation",
+      "relation": [
+       {
+        "id": "person-dddd-0000-0000-0000-000000000004"
+       }
+      ],
+      "has_more": false
+     },
+     "talk": {
+      "id": "t",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     },
+     "AI help": {
+      "id": "a",
+      "type": "rollup",
+      "rollup": {
+       "type": "array",
+       "array": [],
+       "function": "show_original"
+      }
+     }
+    }
+   },
+   "comments": [
+    {
+     "object": "comment",
+     "id": "c8-1",
+     "parent": {
+      "type": "page_id",
+      "page_id": "page-0008-0000-0000-0000-000000000008"
+     },
+     "discussion_id": "disc-c8-1",
+     "created_time": "2026-06-06T08:00:00.000Z",
+     "last_edited_time": "2026-06-06T08:00:00.000Z",
+     "created_by": {
+      "object": "user",
+      "id": "user-1"
+     },
+     "rich_text": [
+      {
+       "type": "text",
+       "text": {
+        "content": "See the comparison table",
+        "link": {
+         "url": "https://example.com/compare"
+        }
+       },
+       "plain_text": "See the comparison table",
+       "href": "https://example.com/compare"
+      }
+     ],
+     "original_content_deleted": false,
+     "display_name": {
+      "type": "user",
+      "resolved_name": "Sam Rivera"
+     }
+    }
+   ],
+   "blocks": []
+  }
+ ],
+ "people": {
+  "person-aaaa-0000-0000-0000-000000000001": {
+   "name": "Sam Rivera"
+  },
+  "person-bbbb-0000-0000-0000-000000000002": {
+   "name": "Alex Chen"
+  },
+  "person-cccc-0000-0000-0000-000000000003": {
+   "name": "Jordan Lee"
+  },
+  "person-dddd-0000-0000-0000-000000000004": {
+   "error": "GET /pages/… → 404: object_not_found"
+  }
+ }
+}
