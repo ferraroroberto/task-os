@@ -9,7 +9,7 @@
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
     tasks done N
     tasks move N --parent M     (--parent root → top level)
-    tasks search "q"
+    tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
     tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
     tasks backup                        copy the database to mirror.backup_dir now
@@ -144,8 +144,11 @@ class HttpBackend:
         body = {"parent_id": parent_id, "actor": self.actor}
         return self._call("POST", f"/api/tasks/{task_id}/move", body)
 
-    def search(self, q: str) -> list[dict[str, Any]]:
-        return self._call("GET", "/api/search?" + urllib.parse.urlencode({"q": q}))["items"]
+    def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": q}
+        if kinds:
+            params["kinds"] = ",".join(kinds)
+        return self._call("GET", "/api/search?" + urllib.parse.urlencode(params))
 
     def people(self) -> list[dict[str, Any]]:
         return self._call("GET", "/api/people")["items"]
@@ -263,8 +266,23 @@ class LocalBackend:
     def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
         return self._wrap(self._repo.move, task_id, parent_id, actor=self.actor)
 
-    def search(self, q: str) -> list[dict[str, Any]]:
-        return self._wrap(self._repo.search, q)
+    def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
+        # The same four adapters the webapp runs, built here over this
+        # process's config: the folder index loaded from its file (no scan),
+        # the issue service cold (local refs only — the sync's cache lives in
+        # the app), the email index read-only.
+        from src.folder_index import FolderIndexService
+        from src.issue_sync import IssueSyncService
+        from src.search import build_federated
+
+        config = load_config()
+        folders = FolderIndexService(config)
+        if folders.enabled:
+            try:
+                folders.load()
+            except OSError:
+                pass
+        return build_federated(config, folders=folders, issues=IssueSyncService(config)).search(q, kinds=kinds)
 
     def people(self) -> list[dict[str, Any]]:
         return self._wrap(self._repo.list_people)
@@ -476,15 +494,39 @@ def fmt_tree(nodes: list[dict[str, Any]], depth: int = 0) -> list[str]:
     return out
 
 
-def fmt_search(items: list[dict[str, Any]]) -> str:
-    if not items:
-        return "(no hits)"
-    out = []
-    for h in items:
-        crumb = _crumb(h)
-        where = f" in {crumb}" if crumb else ""
-        out.append(f"#{h['id']}  {h['title']}{where}\n    {h['matched_in']}: {h['snippet']}")
-    return "\n".join(out)
+def fmt_search(result: dict[str, Any]) -> str:
+    """The federated result as text — one block per kind; an unconfigured or
+    errored group says so on its header line (never a silent blank)."""
+    out: list[str] = []
+    for g in result.get("groups") or []:
+        kind = g["kind"]
+        if g.get("skipped"):
+            continue
+        if not g.get("configured"):
+            out.append(f"{kind}: not configured — {g.get('reason') or 'unknown'}")
+            continue
+        head = f"{kind} ({g.get('count', 0)} · {g.get('took_ms', 0)} ms)"
+        if g.get("error"):
+            head += f"  error: {g['error']}"
+        if g.get("note"):
+            head += f"  — {g['note']}"
+        out.append(head)
+        for h in g.get("hits") or []:
+            if kind == "tasks":
+                lead = f"#{h['task_id']}  {h['title']}"
+            elif kind == "issues":
+                lead = f"{h['ref']}  {h['title']}"
+            else:
+                lead = h["title"]
+            sub = f"  — {h['subtitle']}" if h.get("subtitle") else ""
+            out.append(f"  {lead}{sub}")
+            snippet = h.get("snippet") or ""
+            if snippet and snippet != h.get("title"):
+                where = f"{h['matched_in']}: " if h.get("matched_in") else ""
+                out.append(f"      {where}{snippet}")
+            if kind in ("folders", "emails"):
+                out.append(f"      {h['ref']}")
+    return "\n".join(out) if out else "(no hits)"
 
 
 def fmt_people(items: list[dict[str, Any]]) -> str:
@@ -642,8 +684,9 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         where = _crumb(t) or "top level"
         return t, f"#{t['id']} moved → {where}"
     if cmd == "search":
-        items = backend.search(args.query)
-        return items, fmt_search(items)
+        kinds = [args.kind] if getattr(args, "kind", None) else None
+        result = backend.search(args.query, kinds)
+        return result, fmt_search(result)
     if cmd == "people":
         items = backend.people()
         return items, fmt_people(items)
@@ -749,8 +792,10 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("id", type=int)
     m.add_argument("--parent", required=True, help="new parent id, or 'root'")
 
-    se = sub.add_parser("search", parents=[common], help="full-text search")
+    se = sub.add_parser("search", parents=[common], help="federated search: tasks · folders · emails · issues")
     se.add_argument("query")
+    se.add_argument("--kind", choices=("tasks", "folders", "emails", "issues"), default=None,
+                    help="one index only (default: all four)")
 
     sub.add_parser("people", parents=[common], help="list people")
 

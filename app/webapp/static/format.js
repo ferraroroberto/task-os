@@ -73,7 +73,7 @@ export function fmtTs(iso) {
 // issue refs (GitHub link — Step 8 makes them provider-aware).
 const TOKEN_RE = /(https?:\/\/[^\s<>"')\]]+|mailto:[^\s<>"']+|\{[a-z][a-z0-9:_-]*\}[^\s<>"']*|\b[\w.-]+\/[\w.-]+#\d+\b)/g;
 
-function chipEl(kind, label, href) {
+function chipEl(kind, label, href, iconName) {
   const el = document.createElement(href ? 'a' : 'span');
   el.className = 'chip chip-' + kind;
   if (href) {
@@ -83,7 +83,7 @@ function chipEl(kind, label, href) {
       el.rel = 'noopener';
     }
   }
-  el.innerHTML = icon(kind === 'folder' ? 'folder' : (kind === 'issue' ? 'git-branch' : (kind === 'email' ? 'mail' : 'link')));
+  el.innerHTML = icon(iconName || (kind === 'folder' ? 'folder' : (kind === 'issue' ? 'git-branch' : (kind === 'email' ? 'mail' : 'link'))));
   const t = document.createElement('span');
   t.className = 'chip-label';
   t.textContent = label;
@@ -221,12 +221,13 @@ export function showFolderPopover(anchor, info, mode) {
 /**
  * The folder chip: `<a class="chip chip-folder" href="taskos://open?ref=…" title="<resolved>">`.
  * @param {string} ref                    the unresolved ref ({onedrive}/…)
- * @param {{resolved?: string|null, url?: string|null, label?: string|null}} [opts]
+ * @param {{resolved?: string|null, url?: string|null, label?: string|null, icon?: string}} [opts]
+ *        `icon` swaps the glyph (an email link's .msg ref opens through the same opener — mail glyph)
  */
 export function folderChip(ref, opts) {
   const o = opts || {};
   const info = { ref: String(ref || ''), resolved: o.resolved || null, url: o.url || null };
-  const el = chipEl('folder', o.label || info.ref, openerHref(info.ref));
+  const el = chipEl('folder', o.label || info.ref, openerHref(info.ref), o.icon || null);
   el.title = info.resolved || info.ref;
   el.dataset.ref = info.ref;
   if (info.resolved) el.dataset.resolved = info.resolved;

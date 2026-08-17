@@ -47,6 +47,7 @@ PC-first and full-width; the phone gets the same views as an adaptive second ren
 - **Table** — one full-width grid over `/api/tasks`: code · title (breadcrumb `Parent › Child` under it) · due (relative, ISO on hover, overdue in the danger tone) · status (inline select) · priority · person · project (the top ancestor) · folder chip · last comment (links rendered as chips) · next action. The filter bar (status chips, project, person, due window, text, sort) **is the URL** — `?status=doing&project=12` is a shareable, bookmarkable view; the default is open tasks. Click the due cell to edit it inline: type a natural phrase (`tomorrow`, `fri`, `in 2 weeks`) or pick a date. Row click / Enter opens the drawer.
 - **Tree** — the whole hierarchy as an outliner: indent = nesting, collapse/expand persists, every node with children carries a **project** chip and a rollup (open descendants, nearest due). Drag a row onto another to re-parent it (`POST /api/tasks/{id}/move`; a cycle is refused with a toast); drop on the dashed zone at the bottom to move to the top level. Keyboard: ↑/↓ walk, →/← expand/collapse, Enter opens.
 - **Task drawer** — a right-hand side panel on desktop (≥ 1024 px, the list stays visible beside it), full-screen on the phone; deep-linkable as `#task/42`. Breadcrumb (clickable) → editable title → fields (status, priority, due, repeat, person, code) → description (markdown, edit/preview) → links (add/remove) → comments newest-first with URLs / `{folder}` refs / `repo#N` as clickable chips + a composer (Ctrl+Enter sends, `origin = ui`) → activity log (`field old → new · actor · time`) → children (click to navigate, add child) → **issue panel**: the linked issue (provider glyph, `repo#N` chip, state pill, labels, last synced, *Sync now*, *Unlink*) or, for a plain task, *Create issue* (repo from the last-seen list or typed) and *Link existing* (`owner/repo#N` or the URL). See [Issues as tasks](#issues-as-tasks).
+- **Search** — one box over four indexes (tasks · folders · emails · issues), results as one card per kind, full width; each row opens, attaches to the task in the drawer, or becomes a task. `Ctrl+K` / `⌘K` (or the ⌘ button in the header) opens the **command palette** from any tab: type to jump to a task, `>` for commands. See [Search everything](#search-everything).
 - **Quick-add** — the `+ Add task…` bar at the top of Board / Table / Tree. One line of natural language, parsed server-side by `POST /api/parse` (so the CLI and the UI agree) and previewed as chips before you press Enter:
 
   | You type | Result |
@@ -72,8 +73,10 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.cm
                           · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,
                           /api/backup) · folders (/api/resolve, /api/folders/search, /api/folders/reindex)
                           · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
+                          · search (/api/search — federated, /api/search/status)
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
-                          table.js, tree.js, today.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
+                          table.js, tree.js, today.js, drawer.js, quickadd.js, search.js (the Search tab), palette.js (Ctrl+K),
+                          format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
@@ -82,12 +85,14 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           issues/ (IssueProvider contract · github.py via gh · fake.py for tests) · issue_sync.py (sync pass + scheduler)
                           placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
                           (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
-                          logger.py · static_versioning.py
+                          search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·
+                          federated.py — concurrent, grouped, unconfigured = visible) · logger.py · static_versioning.py
 opener/                   the per-PC folder opener: opener.cmd (the taskos:// handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
                           gen_tailscale_cert.py (vendored from the scaffold), gen_token.py, set_password.py
-tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
+tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
+                          email-archiver index) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
@@ -104,7 +109,7 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | `issues` | `provider` (`github`; `gitlab` arrives with Step 11; blank = off), `owner` (whose repos are searched), `assignee` (`@me`), `sync_minutes` (default 10). See [Issues as tasks](#issues-as-tasks) |
 | `placeholders` | `onedrive`, `user`, and a `sharepoint` map (`{"docs": "E:/…"}` → `{sharepoint:docs}`) — what **this** server expands folder refs with for display; the opener on each PC expands the same tokens from its own environment. See [Folders that open on any PC](#folders-that-open-on-any-pc) |
 | `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. See [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
-| `search` | `folder_roots` — placeholder-aware roots the folder index scans (`["{onedrive}/Documentos"]`; empty = index off, visibly); `email_db` — the email index for federated search (Step 10) |
+| `search` | `folder_roots` — placeholder-aware roots the folder index scans (`["{onedrive}/Documentos"]`; empty = index off, visibly); `email_db` — the [email-archiver](https://github.com/ferraroroberto/email-archiver) `emails.db` the emails adapter reads **read-only** (`file:…?mode=ro`); blank / missing = that group says *not configured*. See [Search everything](#search-everything) |
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
@@ -141,7 +146,7 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `GET/POST /api/people` · `GET/PATCH/DELETE /api/people/{id}` | people CRUD (`open_tasks` count included) |
 | `GET /api/board?project=&person=&q=` | `{today, columns: {inbox, todo, doing, standby, done}}` — the Board's buckets, same enriched summaries as the list; `done` = completed on the current local day only |
 | `GET /api/today?person=` | `{today, due: [{root, items}], week: [{root, items}], counts: {overdue, today, week}}` — open tasks due ≤ today grouped by root project (recurring first inside a group), plus tomorrow … +7 days in the same shape |
-| `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
+| `GET /api/search?q=&kinds=&limit=` · `GET /api/search/status` | **federated search** → `{q, took_ms, groups: [{kind, configured, reason, note, hits, count, took_ms, error, skipped}]}` — always the four groups `tasks · folders · emails · issues` in that order; an index that is not configured on this install is `configured:false` + `reason` (never silently absent), a failing one carries `error`; `kinds=tasks,emails` narrows which adapters run (the rest come back `skipped:true`); `limit` is per group. Every hit: `kind, title, subtitle, snippet` (`[match]` marks), `ref` (what attach stores: task id · folder ref · `.msg` ref · `owner/repo#N`), `url` (what open follows: `#task/id` · `taskos://open?ref=…` · the issue URL), `score` + kind-specific fields (`task_id, status, matched_in, breadcrumb` · `path, name` · `sender, date, folder, path` · `provider, repo, number, state, labels, task_id`) · the per-adapter configured / reason list for Settings |
 | `GET /api/status` | `{https, auth: {enabled, password, client}, mirror: {enabled, dir, files, last_export, last_import, errors, error_files, watching, …}, backup: {enabled, dir, last_file, next_run, last_error, …}, folders: {enabled, roots, entries, last_indexed, indexing, stale, reason}, opener: {install, uninstall, env_template, installed_here}, placeholders}` — how this request came in (`client`: `loopback` · `token` · `public`) and what the install accepts; a disabled service carries its `reason` |
 | `POST /api/mirror/export` · `POST /api/mirror/import` · `POST /api/backup` | run a full export / one watcher pass / one backup now (409 `mirror_disabled` / `backup_disabled` when not configured) |
 | `GET /api/resolve?ref=` | a folder ref **or** an absolute path → `{ref, path, resolved, unresolved, href}`: `ref` folded onto the placeholders (`E:\onedrive\house` → `{onedrive}/house`), `path` this server's absolute path (display only), `href` the `taskos://open?ref=…` link. Task payloads carry `folder_resolved` + `folder_url` (a `links(kind=folder)` web URL, when one exists) so no client resolves a ref itself |
@@ -164,7 +169,7 @@ tasks comment N "text"     origin = cli
 tasks due N <date>         "none" clears
 tasks done N               recurring tasks roll forward and stay open
 tasks move N --parent M    M = root for top level; cycles are refused
-tasks search "q"           full text incl. comments, with the matched snippet
+tasks search "q" [--kind tasks|folders|emails|issues]   federated: one block per kind; unconfigured indexes say so
 tasks people
 tasks mirror [export|import|status]   markdown mirror: full export · one watcher pass · status (default)
 tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
@@ -275,6 +280,25 @@ A task's **folder** is stored as a portable ref — `{onedrive}/house/kitchen`, 
 **Phone / tablet:** no Explorer to open — tapping the chip shows the resolved path with a **Copy** button (and the web link when the task carries one).
 
 **Folder index** — `search.folder_roots` (placeholder-aware, `["{onedrive}/Documentos"]`) is scanned into `data/folder_index.txt` by the vendored `foldersearcher_core` (the GUI-free half of the fleet's folder searcher): at startup when the file is missing or older than 24 h (in the background), on **Reindex folders now** in Settings, `POST /api/folders/reindex` or `tasks folders reindex`. Search is substring-AND over every path (`kitchen plans`), each hit carrying the portable `ref` — the drawer's **Pick from folder index…** attaches one with Enter; `tasks folders search "q"` prints them. Not configured / no usable root is a visible state in `/api/status`, Settings and `tasks folders`, never an empty result.
+
+## Search everything
+
+One box, four indexes, results grouped by kind — full width on the PC, one column on the phone. `src/search/` holds one **adapter** per index behind one contract (`base.py`: `is_configured() → (ok, reason)`, `search(q, limit) → hits`); `federated.py` runs the configured ones **concurrently** (a thread pool, 2 s per adapter — a cold email index cannot hold the tasks answer hostage) and always answers with the four groups in order:
+
+| Kind | Index | Configured when | Hit → open · attach · new task |
+| --- | --- | --- | --- |
+| **Tasks** | `tasks_fts` + `comments_fts` (title · description · comment bodies), the FTS5 snippet with the match marked | always | open = the drawer |
+| **Folders** | the folder index (Step 9, `search.folder_roots`), substring AND, each hit with its portable ref + this PC's path | a root is configured and usable here | open = the `taskos://` opener chip · attach = the task's **folder** (or a folder link when it already has one) · new = a task titled like the folder, with the ref |
+| **Emails** | the [email-archiver](https://github.com/ferraroroberto/email-archiver) `emails.db` (`search.email_db`) — opened **read-only** (`file:…?mode=ro`, a fresh connection per query, never a write), FTS5 `MATCH` ranked with the archiver's own weights `bm25(subject 10 · sender 3 · recipients 3 · body 1)`; falls back to `LIKE` when the FTS table is missing (older archiver builds) | the file exists and has an `emails` table | the hit is subject · sender · date · folder; its `ref` is the `.msg` path folded onto the placeholders (`{onedrive}/…/mail.msg` when it lies under a configured root) — open = the same opener chip (Windows opens the file with its default app), attach = `links(kind=email, url=<ref>, label=subject)`, new = a task titled like the subject with *From email: sender · date* and the link |
+| **Issues** | `issue_refs` joined to their tasks + the sync's cached open list (Step 8) — title, `owner/repo#N`, labels; **never a forge call per keystroke** | the issue provider is | open = the issue URL (or the linked task) · attach = *link existing* (`PUT /api/tasks/{id}/issue`) · new = a coding task with the ref |
+
+**Not configured is a visible state**, never an empty result: the group renders a quiet *not configured — reason · Settings* row (Settings → **Search** lists the four with their reasons and `GET /api/search/status` returns the same); a broken index shows *error — …*; a folder index still building says so next to the count. Marked terms come back as `[match]` and render as `<mark>`.
+
+**Search tab** — autofocus box, 200 ms debounce, `?q=` in the URL while the tab is showing (`/?q=kitchen#search` is a deep link). Row actions: **Open** · **Attach** (enabled when a task is open in the drawer — the drawer stays open beside the results on the PC) · **New task** (opens the drawer on it). Keyboard: `↓` from the box focuses the first row; on rows `↑↓` move, `Enter` opens, `a` attaches, `n` creates, `Esc` / `/` back to the box.
+
+**Command palette** — `Ctrl+K` / `⌘K` anywhere, or the ⌘ button in the header (the vendored editor-modal shell; a full-width sheet on the phone). Type to **jump to a task** (the tasks adapter, top 8: title · breadcrumb · status; `Enter` opens it); `>` lists **commands** filtered as you type: *New task* (focuses the quick-add), *Go to Board / Table / Tree / Today / Search / Settings*, *Filter: status inbox|todo|doing|standby|done* / *Filter: clear* (the Table), *Sync issues*, *Reindex folders*, *Export mirror*, *Open folder of current task* (emits the drawer's `taskos://` chip click), *Toggle theme*, *Sign out*. `↑↓` move, `Enter` runs, `Esc` closes.
+
+**Terminal** — `tasks search "q" [--kind emails]` prints one block per kind (unconfigured indexes on their own line) and `--json` returns the API's shape; with the app down it builds the same adapters locally (the folder index loaded from its file, the issue cache cold — local refs only, the email index read-only).
 
 ## Importing from Notion
 

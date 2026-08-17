@@ -8,7 +8,8 @@ Route families (each in ``app/webapp/routers/``):
             GET /api/version     → build identity (git_sha, asset_hash, schema_version)
     tasks   /api/tasks…          → CRUD, tree, move, done, comments, links, issue; /api/activity
     people  /api/people…         → contacts / assignees CRUD
-    search  /api/search?q=       → full text over tasks + comments
+    search  /api/search?q=&kinds=&limit= → federated: tasks · folders · emails · issues,
+                                   grouped, unconfigured = visible; /api/search/status
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
                                    backup, folder index + opener (Step 9); POST
@@ -38,7 +39,9 @@ open issues → coding tasks, first pass 10 s after startup then every
 ``issues.sync_minutes``) and ``src.folder_index.FolderIndexService`` (startup
 reindex when the index file is missing / older than 24 h, hourly re-check).
 All stay disabled — with a logged, status-visible reason — when not
-configured. The lifespan also installs the repo's folder resolver
+configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
+over the last two so the search box reads the same folder index and issue
+cache the services keep warm. The lifespan also installs the repo's folder resolver
 (``src.placeholders``) so every task payload carries ``folder_resolved`` /
 ``folder_url``.
 
@@ -82,6 +85,7 @@ from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
 from src.mirror import Mirror
+from src.search import build_federated
 from src.tasks_repo import RepoError
 
 logger = logging.getLogger(__name__)
@@ -168,6 +172,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.backup = BackupScheduler(config)
     app.state.issues = IssueSyncService(config)
     app.state.folders = FolderIndexService(config)
+    app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
+    for a in app.state.search.status():
+        if not a["configured"]:
+            logger.warning("⚠️ search: %s adapter off — %s", a["kind"], a["reason"])
     repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
     app.state.mirror.start()
     app.state.backup.start()

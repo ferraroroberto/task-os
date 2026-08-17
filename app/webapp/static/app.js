@@ -5,7 +5,11 @@
  * the Board (five status columns, the project/person/text filters shared
  * with the Table) and Today (due ≤ today grouped by project — the phone's
  * landing tab); Step 8 adds the issue sync (↻ in the header + Settings card,
- * `syncIssues()` → POST /api/issues/sync → refreshAll). Every write funnels
+ * `syncIssues()` → POST /api/issues/sync → refreshAll); Step 10 the Search
+ * tab (search.js — one box over tasks · folders · emails · issues, `?q=` in
+ * the URL while that tab is active) and the command palette (palette.js —
+ * Ctrl+K / ⌘K anywhere, the header button; commands defined in
+ * `paletteCommands()` below). Every write funnels
  * through `patchTask` / `moveTask` / `doneTask` / the drawer, then
  * `refreshAll()` re-fetches and re-renders, so the views never drift.
  *
@@ -22,7 +26,9 @@ import { api, qs } from './api.js';
 import { mountBoard, renderBoardFilters } from './board.js';
 import { createDrawer } from './drawer.js';
 import { copyText, relDue } from './format.js';
+import { createPalette } from './palette.js';
 import { mountQuickAdd } from './quickadd.js';
+import { mountSearch } from './search.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, renderFilterBar,
   renderTable as renderTableGrid, sortItems,
@@ -60,6 +66,12 @@ const els = {
   statusIssues: document.getElementById('statusIssues'),
   statusIssuesSync: document.getElementById('statusIssuesSync'),
   issuesSyncNow: document.getElementById('issuesSyncNow'),
+  searchBox: document.getElementById('searchBox'),
+  searchHost: document.getElementById('searchHost'),
+  searchCard: document.getElementById('searchCard'),
+  searchCardMeta: document.getElementById('searchCardMeta'),
+  paletteBtn: document.getElementById('paletteBtn'),
+  palette: document.getElementById('palette'),
   boardFilters: document.getElementById('boardFilters'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
@@ -85,6 +97,8 @@ const state = {
 let nav = null;
 let drawer = null;
 let board = null;
+let search = null;
+let palette = null;
 const quickAdds = [];
 
 // ------------------------------------------------------------------ theme
@@ -113,16 +127,6 @@ function renderNoTasks() {
   });
   els.tableFilters.hidden = true;
   els.boardFilters.hidden = true;
-}
-
-function renderLaterSteps() {
-  // Panes whose views arrive with later steps show what they are, never a
-  // misleading "add your first task" once tasks exist.
-  const later = { paneSearch: ['search', 'Federated search arrives with a later step'] };
-  Object.keys(later).forEach(function (id) {
-    const host = document.querySelector('#' + id + ' [data-empty="tasks"]');
-    if (host) host.replaceChildren(emptyCard(later[id][0], later[id][1]));
-  });
 }
 
 // ------------------------------------------------------------------ data
@@ -200,7 +204,6 @@ async function refreshAll() {
     renderTable();
     renderTreePane();
     renderTodayPane();
-    renderLaterSteps();
     els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
   } catch (err) {
     els.homeHeadStatus.textContent = 'Server unreachable';
@@ -323,11 +326,19 @@ function closeTask() {
 }
 
 function onHashChange() {
-  if (location.hash === '#settings/opener') {
-    // The folder chip's one-time hint links here: Settings → the Folder opener card.
+  const settingsCard = { '#settings/opener': els.folderCard, '#settings/search': els.searchCard }[location.hash];
+  if (settingsCard !== undefined) {
+    // The folder chip's one-time hint / a "not configured" search row link
+    // here: Settings → that card.
     nav.setTab('settings');
     history.replaceState(null, '', location.pathname + location.search);
-    if (els.folderCard) els.folderCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (settingsCard) settingsCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return;
+  }
+  if (location.hash === '#search') {
+    // Deep link to the Search tab (?q= carries the query — see boot()).
+    nav.setTab('search');
+    history.replaceState(null, '', location.pathname + location.search);
     return;
   }
   const id = hashTaskId();
@@ -627,6 +638,112 @@ function wireIssueSync() {
   if (els.issuesSyncNow) els.issuesSyncNow.addEventListener('click', function () { syncIssues().catch(function () {}); });
 }
 
+// ---------------------------------------------------- search + palette
+const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
+
+/** Settings → Search card: which indexes this install can query (GET /api/search/status). */
+async function fetchSearchStatus() {
+  if (!els.searchCard) return;
+  let adapters = null;
+  try { adapters = (await api('/api/search/status')).adapters || []; } catch (err) { adapters = null; }
+  let on = 0;
+  Object.keys(SEARCH_KIND_ROWS).forEach(function (kind) {
+    const dd = document.getElementById(SEARCH_KIND_ROWS[kind]);
+    if (!dd) return;
+    dd.replaceChildren();
+    dd.classList.remove('muted');
+    const a = adapters && adapters.find(function (x) { return x.kind === kind; });
+    if (!adapters) { dd.append(statusPart('warn', 'unknown')); return; }
+    if (a && a.configured) {
+      on += 1;
+      dd.append(statusPart('ok', 'ready'));
+      if (a.note) dd.append(' · ' + a.note);
+    } else {
+      dd.append(statusPart('off', 'not configured'), ' — ' + ((a && a.reason) || 'unknown'));
+    }
+  });
+  els.searchCardMeta.textContent = adapters ? on + ' of 4 indexes' : 'unknown';
+  if (search) search.reloadStatus();
+}
+
+/** Write the Search tab's query into ?q= (only while that tab is showing — the
+ *  Table's filter bar owns ?q= on the other tabs). */
+function syncSearchUrl(q) {
+  if (!nav || nav.getTab() !== 'search') return;
+  const p = new URLSearchParams(location.search);
+  if (q) p.set('q', q); else p.delete('q');
+  const s = p.toString();
+  history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + location.hash);
+}
+
+/** Emit the taskos:// opener link of the task open in the drawer (a click on
+ *  the same chip the drawer carries, so the one-time opener hint applies). */
+function openFolderOfCurrentTask() {
+  const id = drawer.currentId();
+  if (id == null) { toast('Open a task first', 'error'); return; }
+  const chip = els.drawer.querySelector('.drawer-folder a.chip-folder');
+  if (!chip) { toast('The open task has no folder', 'error'); return; }
+  chip.click();
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+/** The palette's command list — built per open so hints reflect the moment. */
+function paletteCommands() {
+  const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
+  const cmds = [
+    { id: 'new-task', label: 'New task', hint: 'focus the quick-add bar', icon: 'plus', run: function () {
+      if (['board', 'table', 'tree', 'today'].indexOf(nav.getTab()) < 0) nav.setTab('board');
+      const hosts = Array.prototype.slice.call(document.querySelectorAll('.quick-add'));
+      const host = document.querySelector('#pane' + cap(nav.getTab()) + ' .quick-add');
+      const qa = quickAdds[hosts.indexOf(host)];
+      if (qa) qa.focus();
+    } },
+    { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
+    { id: 'go-table', label: 'Go to Table', icon: 'table', run: go('table') },
+    { id: 'go-tree', label: 'Go to Tree', icon: 'list-tree', run: go('tree') },
+    { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
+    { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
+    { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
+  ];
+  ['inbox', 'todo', 'doing', 'standby', 'done'].forEach(function (st) {
+    cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'Table view', icon: 'list-filter', run: function () {
+      nav.setTab('table');
+      onSharedFilterChange(Object.assign({}, state.filters, { status: [st] }));
+    } });
+  });
+  cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {
+    onSharedFilterChange(Object.assign({}, DEFAULT_FILTERS));
+  } });
+  cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
+  cmds.push({ id: 'reindex-folders', label: 'Reindex folders', hint: 'rescan search.folder_roots', icon: 'folder', run: async function () {
+    try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); fetchStatus(); }
+    catch (err) { toast(err.message || 'Reindex failed', 'error'); }
+  } });
+  cmds.push({ id: 'export-mirror', label: 'Export mirror', hint: 'every task to mirror.dir now', icon: 'copy', run: async function () {
+    try { const r = await api('/api/mirror/export', { method: 'POST', body: {} }); toast('Mirror: ' + r.written + ' written, ' + r.removed + ' removed', 'success'); }
+    catch (err) { toast(err.message || 'Export failed', 'error'); }
+  } });
+  cmds.push({ id: 'open-folder', label: 'Open folder of current task', hint: drawer.currentId() != null ? 'task #' + drawer.currentId() : 'no task open', icon: 'folder', run: openFolderOfCurrentTask });
+  cmds.push({ id: 'toggle-theme', label: 'Toggle theme', hint: document.documentElement.dataset.theme === 'dark' ? 'to light' : 'to dark', icon: 'sun', run: function () { els.themeToggle.click(); } });
+  cmds.push({ id: 'sign-out', label: 'Sign out', hint: 'this device (token cookie)', icon: 'x', run: async function () {
+    try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
+    location.assign('/login');
+  } });
+  return cmds;
+}
+
+function wirePalette() {
+  palette = createPalette(els.palette, { commands: paletteCommands, onOpenTask: openTask });
+  els.paletteBtn.addEventListener('click', function () { palette.toggle(); });
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === 'k' || ev.key === 'K')) {
+      ev.preventDefault();
+      palette.toggle();
+    }
+  });
+}
+
 // ---------------------------------------------------------------- boot
 async function boot() {
   wireTheme();
@@ -637,6 +754,7 @@ async function boot() {
     people: function () { return state.people; },
     issues: function () { return state.issues; },
     onSyncIssues: syncIssues,
+    onToggle: function () { if (search) search.refreshActions(); },
   });
   // A shared Table view (?status=doing…) lands on the Table, whatever tab was
   // last used; project / person / q are shared with the Board and don't move
@@ -644,17 +762,35 @@ async function boot() {
   const f = state.filters;
   const wantsTable = f.status.length > 0 || f.due !== '' || f.sort !== 'due';
   const coarse = window.matchMedia('(pointer: coarse)').matches;
+  // ?q= belongs to the Search tab when the page lands there (#search deep
+  // link, or the last tab was Search); otherwise it is the Table's text filter.
+  let storedTab = null;
+  try { storedTab = localStorage.getItem(TAB_KEY); } catch (_) { /* private mode */ }
+  const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search' && !wantsTable);
+  let searchQ = '';
+  if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
   nav = initNavTabs({
     storageKey: TAB_KEY,
     defaultTab: coarse ? 'today' : 'board',
     onChange: function (tab) {
       state.tab = tab;
       if (tab === 'board' && board) board.show();
-      if (tab === 'settings') { fetchStatus(); fetchIssuesStatus(); }
+      if (tab === 'settings') { fetchStatus(); fetchIssuesStatus(); fetchSearchStatus(); }
+      if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
     },
   });
   if (wantsTable) nav.setTab('table');
+  if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
   mountQuickAdds();
+  search = mountSearch(els.searchBox, els.searchHost, {
+    onOpenTask: openTask,
+    currentTaskId: function () { return drawer.currentId(); },
+    onTaskChanged: function (id) { refreshAll(); if (drawer.currentId() === id) drawer.refresh(); },
+    onCreated: function (task) { refreshAll().then(function () { openTask(task.id); }); },
+    onQuery: syncSearchUrl,
+  });
+  if (searchQ) search.setQuery(searchQ);
+  wirePalette();
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && drawer.currentId() != null && !ev.target.closest('input, textarea, select')) closeTask();
   });
