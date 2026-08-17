@@ -385,6 +385,7 @@ function wireSignOut() {
     try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
     location.assign('/login');
   });
+}
 
 // ------------------------------------------------- mirror + backup status
 function statusPart(state, text) {
