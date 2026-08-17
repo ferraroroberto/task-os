@@ -13,6 +13,8 @@
     tasks people
     tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
     tasks backup                        copy the database to mirror.backup_dir now
+    tasks issues sync|status            issue provider: one sync pass now · status (default)
+    tasks issue create N --repo owner/name   open an issue from task N and link it (→ coding)
 
 Every command takes ``--json`` for machine-readable output (the same shapes
 the REST API returns). Talks to the running server over HTTP when it answers
@@ -159,6 +161,15 @@ class HttpBackend:
     def backup(self) -> dict[str, Any]:
         return self._call("POST", "/api/backup")
 
+    def issues_status(self) -> dict[str, Any]:
+        return self._call("GET", "/api/issues/status")
+
+    def issues_sync(self) -> dict[str, Any]:
+        return self._call("POST", "/api/issues/sync")
+
+    def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
+        return self._call("POST", f"/api/tasks/{task_id}/issue", {"repo": repo, "actor": self.actor})
+
 
 class LocalBackend:
     """Opens the database directly — the app-down path."""
@@ -278,6 +289,50 @@ class LocalBackend:
         if target is None:
             raise CliError(scheduler.last_error or "backup failed", code="backup_failed")
         return {"file": target.name, "dir": str(target.parent), "path": str(target)}
+
+    def _issue_service(self) -> Any:
+        from src.issue_sync import IssueSyncService
+
+        return IssueSyncService(load_config())
+
+    def issues_status(self) -> dict[str, Any]:
+        service = self._issue_service()
+        body = service.status()
+        body["repos"] = sorted({r["repo"] for r in self._repo.list_issue_refs(self.conn)})
+        return body
+
+    def issues_sync(self) -> dict[str, Any]:
+        service = self._issue_service()
+        if not service.enabled:
+            raise CliError(service.reason, code="issues_disabled")
+        result = service.run_now(self.conn)
+        if result is None:
+            raise CliError(service.last_error or "sync failed", code="provider_error")
+        return result.to_dict()
+
+    def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
+        from src.issues import IssueProviderError, short_repo
+
+        service = self._issue_service()
+        if not service.enabled:
+            raise CliError(service.reason, code="issues_disabled")
+        task = self._wrap(self._repo.get_task, task_id)
+        if task.get("issue_ref"):
+            ref = task["issue_ref"]
+            raise CliError(f"task {task_id} is already linked to {ref['repo']}#{ref['number']}", code="already_linked")
+        if "/" not in repo:
+            raise CliError("--repo must be owner/name", code="usage")
+        try:
+            info = service.provider.create(repo, task["title"], task.get("description") or "")
+        except IssueProviderError as exc:
+            raise CliError(str(exc), code="provider_error") from exc
+        self._wrap(self._repo.add_link, task_id, info.url, label=info.ref, kind="issue")
+        updated = self._wrap(self._repo.set_issue_ref, task_id, provider=info.provider, repo=info.repo,
+                             number=info.number, url=info.url, state=info.state, actor=self.actor)
+        if not updated.get("code"):
+            updated = self._wrap(self._repo.update_task, task_id, actor=self.actor,
+                                 code=f"{short_repo(info.repo)}#{info.number}")
+        return updated
 
 
 def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
@@ -401,6 +456,24 @@ def fmt_people(items: list[dict[str, Any]]) -> str:
         return "(no people)"
     return "\n".join(f"#{p['id']}  {p['name']}" + (f"  <{p['email']}>" if p.get("email") else "")
                      + f"  ({p.get('open_tasks', 0)} open)" for p in items)
+
+
+def fmt_issues_status(st: dict[str, Any]) -> str:
+    provider = st.get("provider") or "none"
+    if not st.get("enabled"):
+        return f"issues   {provider}: not configured — {st.get('reason') or 'unknown'}"
+    r = st.get("last_result") or {}
+    lines = [f"issues   {provider} · every {st.get('sync_minutes')} min · last sync {st.get('last_sync') or '-'}"
+             + (f" · next {st.get('next_run')}" if st.get("next_run") else "")]
+    if st.get("last_error"):
+        lines.append(f"         last error ({st.get('last_error_code') or 'error'}): {st['last_error']}")
+    if r:
+        lines.append(f"         last result: {r.get('listed', 0)} open issue(s) · {r.get('created', 0)} new"
+                     f" · {r.get('retitled', 0)} retitled · {r.get('reopened', 0)} reopened · {r.get('closed', 0)} closed"
+                     + (f" · {len(r.get('errors') or [])} error(s)" if r.get("errors") else ""))
+    if st.get("repos"):
+        lines.append(f"         repos: {', '.join(st['repos'])}")
+    return "\n".join(lines)
 
 
 def fmt_status(status: dict[str, Any]) -> str:
@@ -539,6 +612,21 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "backup":
         r = backend.backup()
         return r, f"backup written: {r['path']}"
+    if cmd == "issues":
+        if args.action == "sync":
+            r = backend.issues_sync()
+            ids = "".join(f"\n  new: #{i}" for i in r.get("created_ids") or [])
+            ids += "".join(f"\n  done: #{i}" for i in r.get("closed_ids") or [])
+            errs = "".join(f"\n  error: {e}" for e in r.get("errors") or [])
+            return r, (f"issues: {r.get('listed', 0)} open issue(s) · {r.get('created', 0)} new"
+                       f" · {r.get('retitled', 0)} retitled · {r.get('reopened', 0)} reopened"
+                       f" · {r.get('closed', 0)} closed" + ids + errs)
+        r = backend.issues_status()
+        return r, fmt_issues_status(r)
+    if cmd == "issue":
+        t = backend.issue_create(args.id, args.repo)
+        ref = t.get("issue_ref") or {}
+        return t, f"#{t['id']} → {ref.get('repo')}#{ref.get('number')} {ref.get('url') or ''}".rstrip()
     raise CliError(f"unknown command {cmd!r}", code="usage")
 
 
@@ -605,6 +693,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("backup", parents=[common],
                    help="copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)")
+
+    iss = sub.add_parser("issues", parents=[common], help="issue provider: sync now · status")
+    iss.add_argument("action", choices=("sync", "status"), nargs="?", default="status",
+                     help="sync = one reconciliation pass now · status (default)")
+
+    ic = sub.add_parser("issue", parents=[common], help="issue actions on one task")
+    ic.add_argument("action", choices=("create",), help="create = open an issue from the task and link it")
+    ic.add_argument("id", type=int)
+    ic.add_argument("--repo", required=True, help="owner/name to open the issue in")
     return p
 
 
