@@ -8,5 +8,6 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | --- | --- | --- | --- | --- |
 | 01 | [Open the app](validation/story-01-open.md) | `tests/e2e/test_story_01_open.py` | verified | 2026-08-17 |
 | 02 | [Add and nest from the terminal](validation/story-02-terminal.md) | `tests/test_cli.py::test_story_02_add_nest_comment_tree_due_show` · `tests/test_api.py::test_story_02_over_http` | verified | 2026-08-17 |
+| 04 | [Monday triage](validation/story-04-triage.md) | `tests/e2e/test_story_04_triage.py` | verified | 2026-08-17 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.

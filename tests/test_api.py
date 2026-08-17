@@ -80,8 +80,11 @@ def test_error_envelope_is_consistent(client: TestClient) -> None:
     assert route.status_code == 404 and route.json()["error"]["code"] == "not_found"
     coding = client.post("/api/tasks", json={"title": "x", "type": "coding"})
     assert coding.status_code == 422 and "issue" in coding.json()["error"]["message"]
-    bad_date = client.post("/api/tasks", json={"title": "x", "due": "friday"})
-    assert bad_date.status_code == 422
+    # natural phrases resolve at the API (Step 4); an unknown one is still a 422
+    ok_date = client.post("/api/tasks", json={"title": "x", "due": "friday"})
+    assert ok_date.status_code == 201 and len(ok_date.json()["due"]) == 10
+    bad_date = client.post("/api/tasks", json={"title": "x", "due": "someday"})
+    assert bad_date.status_code == 422 and bad_date.json()["error"]["code"] == "validation_error"
 
 
 def test_move_cycle_done_and_delete(client: TestClient) -> None:
@@ -144,3 +147,53 @@ def test_links_issue_and_people(seeded: TestClient) -> None:
     assert seeded.get(f"/api/people/{pid}").json()["open_tasks"] == 0
     assert seeded.delete(f"/api/people/{pid}").json()["deleted"] == 1
     assert seeded.get(f"/api/people/{pid}").status_code == 404
+
+
+# ------------------------------------------------------------- step 4 additions
+
+
+def test_list_items_carry_breadcrumb_root_and_last_comment(seeded: TestClient) -> None:
+    items = seeded.get("/api/tasks?status=doing").json()["items"]
+    by_title = {t["title"]: t for t in items}
+    quotes = by_title["Get three quotes"]
+    assert [b["title"] for b in quotes["breadcrumb"]] == ["Home renovation", "Kitchen"]
+    assert quotes["root"] == {"id": quotes["breadcrumb"][0]["id"], "title": "Home renovation"}
+    assert quotes["last_comment"]["author"] == "Alex Chen"
+    assert "{onedrive}/house/kitchen/plans" in quotes["last_comment"]["body"]
+    home = by_title["Home renovation"]
+    assert home["breadcrumb"] == [] and home["root"] is None and home["last_comment"] is None
+
+
+def test_natural_due_on_create_and_update(client: TestClient) -> None:
+    r = client.post("/api/tasks", json={"title": "Renew passport", "due": "2026-08-21"})
+    tid = r.json()["id"]
+    p = client.patch(f"/api/tasks/{tid}", json={"due": "2026-09-01"})
+    assert p.status_code == 200 and p.json()["due"] == "2026-09-01"
+    # a natural phrase resolves through src.dates (relative to today, so only its shape is asserted)
+    p = client.patch(f"/api/tasks/{tid}", json={"due": "in 2 weeks"})
+    assert p.status_code == 200 and len(p.json()["due"]) == 10
+    bad = client.patch(f"/api/tasks/{tid}", json={"due": "someday"})
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
+    cleared = client.patch(f"/api/tasks/{tid}", json={"due": ""})
+    assert cleared.status_code == 200 and cleared.json()["due"] is None
+    log = [a for a in cleared.json()["activity"] if a["field"] == "due"]
+    assert log[0]["old_value"] and log[0]["new_value"] is None
+
+
+def test_parse_endpoint(seeded: TestClient) -> None:
+    r = seeded.post("/api/parse", json={"text": "renew passport next friday", "today": "2026-08-17"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["title"] == "renew passport" and body["due"] == "2026-08-28"
+    assert body["due_phrase"] == "next friday" and body["parent"] is None
+
+    r = seeded.post("/api/parse", json={"text": "order sensor › garden-bot", "today": "2026-08-17"})
+    body = r.json()
+    assert body["parent"]["title"] == "Side project: garden-bot"
+    assert body["parent_ref"] == {"title": "garden-bot"}
+
+    r = seeded.post("/api/parse", json={"text": "x › no such project"})
+    assert r.json()["parent"] is None and r.json()["parent_ref"] == {"title": "no such project"}
+
+    r = seeded.post("/api/parse", json={"text": "x", "today": "17/08/2026"})
+    assert r.status_code == 422

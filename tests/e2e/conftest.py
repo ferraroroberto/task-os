@@ -10,6 +10,10 @@ writes the live ``:8448`` app, its ``data/tasks.db``, or ``config/config.json``.
 (never a kill — reclaiming the port is ``tray.bat --restart``'s job). The
 check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
 
+``seeded_webapp`` boots a second disposable instance over the synthetic
+fixture (``tests/fixtures/seed.py``) for the stories that need data on
+screen (Step 4 on); ``webapp`` stays empty for story 01.
+
 Screenshots: ``shots`` yields ``docs/screenshots`` so a story test saves its
 numbered proof there directly (the public repo carries them; the fixture DB
 is synthetic/empty, never personal data).
@@ -86,26 +90,16 @@ def _terminate(proc: subprocess.Popen | None) -> None:
         pass
 
 
-@pytest.fixture(scope="session")
-def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
-    """Base URL of the instance under test — disposable by default."""
-    if os.environ.get(LIVE_ENV) == "1":
-        require_disposable_instance(LIVE_PORT, LIVE_ENV)
-        base = f"http://127.0.0.1:{LIVE_PORT}"
-        if not _wait_healthz(base, timeout=5):
-            pytest.exit(f"{LIVE_ENV}=1 but nothing answers {base}/healthz", returncode=2)
-        yield base
-        return
-
-    work = tmp_path_factory.mktemp("taskos-e2e")
+def _boot(work: Path, db_path: Path) -> tuple[subprocess.Popen, str, IO[str]]:
+    """Start a disposable uvicorn on a free loopback port over ``db_path``."""
     port = _free_tcp_port()
-    print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db + config in {work})")
+    print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
     log: IO[str] = (work / "webapp.log").open("w", encoding="utf-8")
     env = {
         **os.environ,
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUTF8": "1",
-        "TASKOS_DB_PATH": str(work / "tasks.db"),
+        "TASKOS_DB_PATH": str(db_path),
         "TASKOS_CONFIG_PATH": str(REPO_ROOT / "config" / "config.sample.json"),
     }
     cmd = [
@@ -118,12 +112,52 @@ def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     proc = subprocess.Popen(cmd, **kwargs)
     base = f"http://127.0.0.1:{port}"
+    if not _wait_healthz(base, timeout=20):
+        _terminate(proc)
+        log.close()
+        tail = (work / "webapp.log").read_text(encoding="utf-8", errors="replace")[-2000:]
+        pytest.fail(f"disposable webapp did not answer {base}/healthz within 20s\n{tail}")
+    return proc, base, log
+
+
+@pytest.fixture(scope="session")
+def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """Base URL of the instance under test — disposable, **empty** DB by default."""
+    if os.environ.get(LIVE_ENV) == "1":
+        require_disposable_instance(LIVE_PORT, LIVE_ENV)
+        base = f"http://127.0.0.1:{LIVE_PORT}"
+        if not _wait_healthz(base, timeout=5):
+            pytest.exit(f"{LIVE_ENV}=1 but nothing answers {base}/healthz", returncode=2)
+        yield base
+        return
+
+    work = tmp_path_factory.mktemp("taskos-e2e")
+    proc, base, log = _boot(work, work / "tasks.db")
     try:
-        if not _wait_healthz(base, timeout=20):
-            _terminate(proc)
-            log.close()
-            tail = (work / "webapp.log").read_text(encoding="utf-8", errors="replace")[-2000:]
-            pytest.fail(f"disposable webapp did not answer {base}/healthz within 20s\n{tail}")
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
+@pytest.fixture(scope="session")
+def seeded_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """A second disposable instance over the **synthetic seed** (tests/fixtures/seed.py).
+
+    Story tests from Step 4 on walk real data; story 01 keeps the empty
+    instance. Never available against the live app (``TASKOS_E2E_LIVE=1``):
+    the seed refuses a database that already has tasks, and the live DB is
+    the user's — those tests skip loudly instead.
+    """
+    if os.environ.get(LIVE_ENV) == "1":
+        pytest.skip(f"{LIVE_ENV}=1: the seeded fixture never runs against the live database")
+    from tests.fixtures.seed import seed_db
+
+    work = tmp_path_factory.mktemp("taskos-e2e-seeded")
+    db = work / "tasks.db"
+    seed_db(db)
+    proc, base, log = _boot(work, db)
+    try:
         yield base
     finally:
         _terminate(proc)

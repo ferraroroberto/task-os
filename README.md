@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -35,6 +35,25 @@ tasks show 2            # activity log shows due: ∅ → 2026-09-01
 
 Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwright install chromium webkit` (once).
 
+## Views
+
+PC-first and full-width; the phone gets the same views as an adaptive second rendering (bottom pill, table as cards, drawer as a full-screen sheet).
+
+- **Table** — one full-width grid over `/api/tasks`: code · title (breadcrumb `Parent › Child` under it) · due (relative, ISO on hover, overdue in the danger tone) · status (inline select) · priority · person · project (the top ancestor) · folder chip · last comment (links rendered as chips) · next action. The filter bar (status chips, project, person, due window, text, sort) **is the URL** — `?status=doing&project=12` is a shareable, bookmarkable view; the default is open tasks. Click the due cell to edit it inline: type a natural phrase (`tomorrow`, `fri`, `in 2 weeks`) or pick a date. Row click / Enter opens the drawer.
+- **Tree** — the whole hierarchy as an outliner: indent = nesting, collapse/expand persists, every node with children carries a **project** chip and a rollup (open descendants, nearest due). Drag a row onto another to re-parent it (`POST /api/tasks/{id}/move`; a cycle is refused with a toast); drop on the dashed zone at the bottom to move to the top level. Keyboard: ↑/↓ walk, →/← expand/collapse, Enter opens.
+- **Task drawer** — a right-hand side panel on desktop (≥ 1024 px, the list stays visible beside it), full-screen on the phone; deep-linkable as `#task/42`. Breadcrumb (clickable) → editable title → fields (status, priority, due, repeat, person, code) → description (markdown, edit/preview) → links (add/remove) → comments newest-first with URLs / `{folder}` refs / `repo#N` as clickable chips + a composer (Ctrl+Enter sends, `origin = ui`) → activity log (`field old → new · actor · time`) → children (click to navigate, add child) → issue panel (placeholder until Step 8).
+- **Quick-add** — the `+ Add task…` bar at the top of Board / Table / Tree. One line of natural language, parsed server-side by `POST /api/parse` (so the CLI and the UI agree) and previewed as chips before you press Enter:
+
+  | You type | Result |
+  | --- | --- |
+  | `renew passport next friday` | title `renew passport`, due = next Friday |
+  | `pay water bill by tomorrow` · `… on fri` · `… in 2 weeks` | trailing date phrase (optional `on` / `by` / `due` lead-in) — every phrase `src/dates.py` knows |
+  | `order sensor #12` | nested under task 12 |
+  | `order sensor › garden-bot` (or `> garden-bot`) | nested under the open task whose title matches (exact title wins, then a task that already has children) |
+  | `fix tap › Bathroom tomorrow` | parent **and** date |
+
+  A parent that matches nothing shows as a red chip and nothing is created. Enter creates the task and focuses its row.
+
 ## Layout
 
 ```
@@ -43,10 +62,12 @@ tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground 
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, JSON error envelope), event_loop.py, manager.py
 app/webapp/routers/       misc (shell, /healthz, /api/version) · tasks (/api/tasks…, /api/activity) · people · search
-app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js, manifest, icons/, _vendored/
+app/webapp/static/        the PWA: index.html, styles.css (fleet tokens), app.js (state + routing), table.js,
+                          tree.js, drawer.js, quickadd.js, format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules)
-                          dates.py (natural dates, recurrence) · cli.py · config.py · logger.py · static_versioning.py
+                          dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
+                          logger.py · static_versioning.py
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
@@ -84,16 +105,17 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | Method · path | What |
 | --- | --- |
 | `GET /api/version` | `{git_sha, built_at, asset_hash, schema_version}` — the build-identity contract the restart recipe checks |
-| `GET /api/tasks?status=&parent=&project=&due=&due_from=&due_to=&type=&person=&q=&include_closed=&limit=` | filtered flat list (summaries with `child_count`, `is_project`, `issue_ref`, `person`). `status` repeatable/comma (`open` = not done/cancelled — the default); `parent=root`; `project` = descendant-of; `due` = `today` · `week` · `overdue` · a date |
-| `POST /api/tasks` | create → 201 (`title` + any task field) |
+| `GET /api/tasks?status=&parent=&project=&due=&due_from=&due_to=&type=&person=&q=&include_closed=&limit=` | filtered flat list (summaries with `child_count`, `is_project`, `issue_ref`, `person`, `breadcrumb`, `root` = top ancestor, `last_comment`). `status` repeatable/comma (`open` = not done/cancelled — the default); `parent=root`; `project` = descendant-of; `due` = `today` · `week` · `overdue` · a date |
+| `POST /api/tasks` | create → 201 (`title` + any task field; `due` accepts the natural phrases below, `""` clears) |
 | `GET /api/tasks/tree?root=&include_closed=` | nested forest (`children`, `depth`); closed leaves pruned by default |
 | `GET /api/tasks/{id}` | detail: task + `breadcrumb`, `children`, `links`, `comments` (thread order), `activity` (newest first) |
-| `PATCH /api/tasks/{id}` · `DELETE /api/tasks/{id}` | partial update (fields present only; `parent_id` goes through the cycle guard) · delete subtree |
+| `PATCH /api/tasks/{id}` · `DELETE /api/tasks/{id}` | partial update (fields present only; `parent_id` goes through the cycle guard; `due` natural or ISO) · delete subtree |
 | `POST /api/tasks/{id}/move` `{parent_id\|null}` · `POST /api/tasks/{id}/done` | re-parent · complete (recurring → roll) |
 | `GET/POST /api/tasks/{id}/comments` `{body, origin?, author?}` | thread · add → 201 |
 | `GET/POST /api/tasks/{id}/links` `{url, label?, kind?}` · `DELETE …/links/{lid}` | links |
 | `PUT /api/tasks/{id}/issue` `{provider?, repo, number, url?, state?}` · `DELETE …/issue` | attach (→ `coding`) · detach (→ `task`) |
 | `GET /api/activity?task=&limit=` | activity log, newest first (all tasks when no `task`) |
+| `POST /api/parse` `{text, today?}` | quick-add split → `{title, due, due_phrase, parent_ref, parent}` (`parent` resolved to `{id, title}` or `null`) |
 | `GET/POST /api/people` · `GET/PATCH/DELETE /api/people/{id}` | people CRUD (`open_tasks` count included) |
 | `GET /api/search?q=&limit=` | full text over title / description / comment bodies → hits with `snippet` (`[match]`), `matched_in`, `breadcrumb` |
 
@@ -117,7 +139,7 @@ tasks search "q"           full text incl. comments, with the matched snippet
 tasks people
 ```
 
-Dates (`--due`, `due`) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
+Dates (`--due`, `due` — and the API's `due` field, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.
 
 ## Fixture data
 
