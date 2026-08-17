@@ -117,7 +117,7 @@ class TrayApp:
                 self._on_start_attempt_failed,
             )
             self.wd_log(f"webapp started at {self.manager.base_url}")
-            _notify("task-os ready", self.manager.base_url)
+            _notify("task-os ready", self.manager.public_url)
         except Exception as exc:  # noqa: BLE001 — exhausted: loud, never silent
             self.starter_exc = exc
             self.wd_log(f"webapp start FAILED permanently: {exc}")
@@ -165,7 +165,7 @@ class TrayApp:
                 _notify("task-os", "Restarting webapp…")
                 self.manager.restart(wait=True)
                 self.wd_log("webapp restarted from tray menu")
-                _notify("task-os webapp restarted", self.manager.base_url)
+                _notify("task-os webapp restarted", self.manager.public_url)
             except Exception as exc:  # noqa: BLE001
                 logger.error("❌ webapp restart failed: %s", exc)
                 _notify("Restart failed", str(exc))
