@@ -1,9 +1,12 @@
 /* task-os — app bootstrap and the one place state lives.
  *
- * Nav + theme (Step 1), then the Step 4 surfaces: Table (filters ↔ URL
- * query), Tree, the task drawer (↔ #task/<id>) and the quick-add bars.
- * Every write funnels through `patchTask` / `moveTask` / the drawer, then
- * `refreshAll()` re-fetches and re-renders, so the three views never drift.
+ * Nav + theme (Step 1), the Step 4 surfaces: Table (filters ↔ URL query),
+ * Tree, the task drawer (↔ #task/<id>) and the quick-add bars; Step 5 adds
+ * the Board (five status columns, the project/person/text filters shared
+ * with the Table) and Today (due ≤ today grouped by project — the phone's
+ * landing tab). Every write funnels through `patchTask` / `moveTask` /
+ * `doneTask` / the drawer, then `refreshAll()` re-fetches and re-renders, so
+ * the views never drift.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -15,13 +18,16 @@ import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
+import { mountBoard, renderBoardFilters } from './board.js';
 import { createDrawer } from './drawer.js';
+import { relDue } from './format.js';
 import { mountQuickAdd } from './quickadd.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, renderFilterBar,
   renderTable as renderTableGrid, sortItems,
 } from './table.js';
 import { toast } from './toast.js';
+import { renderToday } from './today.js';
 import { renderTree } from './tree.js';
 
 const THEME_KEY = 'task-os.theme';
@@ -35,9 +41,12 @@ const els = {
   mirrorCardMeta: document.getElementById('mirrorCardMeta'),
   statusMirror: document.getElementById('statusMirror'),
   statusBackup: document.getElementById('statusBackup'),
+  boardFilters: document.getElementById('boardFilters'),
+  boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
   tableHost: document.getElementById('tableHost'),
   treeHost: document.getElementById('treeHost'),
+  todayHost: document.getElementById('todayHost'),
   drawer: document.getElementById('taskDrawer'),
 };
 
@@ -47,12 +56,15 @@ const state = {
   projects: [],     // [{id, title, depth}] — every task with children, tree order
   tree: [],
   items: [],
+  board: null,      // /api/board → {today, columns}
+  today: null,      // /api/today → {today, due, week, counts}
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
 };
 
 let nav = null;
 let drawer = null;
+let board = null;
 const quickAdds = [];
 
 // ------------------------------------------------------------------ theme
@@ -80,14 +92,13 @@ function renderNoTasks() {
     }));
   });
   els.tableFilters.hidden = true;
+  els.boardFilters.hidden = true;
 }
 
 function renderLaterSteps() {
   // Panes whose views arrive with later steps show what they are, never a
   // misleading "add your first task" once tasks exist.
-  const later = { paneBoard: ['square-kanban', 'Board view arrives with the next step — use Table or Tree'],
-    paneToday: ['calendar-days', 'Today view arrives with the next step'],
-    paneSearch: ['search', 'Federated search arrives with a later step'] };
+  const later = { paneSearch: ['search', 'Federated search arrives with a later step'] };
   Object.keys(later).forEach(function (id) {
     const host = document.querySelector('#' + id + ' [data-empty="tasks"]');
     if (host) host.replaceChildren(emptyCard(later[id][0], later[id][1]));
@@ -131,6 +142,15 @@ async function loadTable() {
   state.items = res.items || [];
 }
 
+async function loadBoard() {
+  const f = state.filters;
+  state.board = await api('/api/board' + qs({ project: f.project || undefined, person: f.person || undefined, q: f.q || undefined }));
+}
+
+async function loadToday() {
+  state.today = await api('/api/today');
+}
+
 function countOpen(forest) {
   let n = 0;
   (function walk(nodes) {
@@ -144,8 +164,10 @@ function countOpen(forest) {
 
 async function refreshAll() {
   try {
-    const results = await Promise.all([loadTree(), loadTable(), api('/api/tasks?include_closed=true&limit=1')]);
-    state.total = results[2].count;
+    const results = await Promise.all([
+      loadTree(), loadTable(), loadBoard(), loadToday(), api('/api/tasks?include_closed=true&limit=1'),
+    ]);
+    state.total = results[4].count;
     if (state.total === 0) {
       state.items = [];
       state.tree = [];
@@ -154,8 +176,10 @@ async function refreshAll() {
       els.homeHeadStatus.textContent = 'No tasks yet';
       return;
     }
+    renderBoardPane();
     renderTable();
     renderTreePane();
+    renderTodayPane();
     renderLaterSteps();
     els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
   } catch (err) {
@@ -176,6 +200,20 @@ async function patchTask(id, changes) {
   if (drawer.currentId() === id) drawer.refresh();
 }
 
+async function doneTask(id) {
+  let t;
+  try {
+    t = await api('/api/tasks/' + id + '/done', { method: 'POST', body: {} });
+  } catch (err) {
+    toast(err.message || 'Could not complete the task', 'error');
+    throw err;
+  }
+  if (t.recurrence) toast('Done — next: ' + t.due + ' (' + relDue(t.due).text + ')', 'success');
+  else toast('Done: ' + t.title, 'success');
+  await refreshAll();
+  if (drawer.currentId() === id) drawer.refresh();
+}
+
 async function moveTask(id, parentId) {
   try {
     const t = await api('/api/tasks/' + id + '/move', { method: 'POST', body: { parent_id: parentId } });
@@ -189,14 +227,36 @@ async function moveTask(id, parentId) {
 }
 
 // --------------------------------------------------------------- render
+function onSharedFilterChange(next) {
+  // project · person · q are shared by the Board and the Table; a change on
+  // either tab re-fetches both so the URL, the cards and the rows agree.
+  state.filters = next;
+  syncUrl();
+  Promise.all([loadBoard(), loadTable()]).then(function () {
+    renderBoardPane();
+    renderTable();
+  }).catch(function (err) { toast(err.message, 'error'); });
+}
+
+function renderBoardPane() {
+  if (!board) board = mountBoard({ onOpen: openTask, onStatus: function (id, status) { return patchTask(id, { status: status }); } });
+  if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
+  const cols = (state.board && state.board.columns) || {};
+  const count = Object.keys(cols).reduce(function (n, k) { return n + cols[k].length; }, 0);
+  renderBoardFilters(els.boardFilters, state.filters, {
+    projects: state.projects, people: state.people, count: count,
+  }, onSharedFilterChange);
+  board.render(state.board);
+}
+
+function renderTodayPane() {
+  renderToday(els.todayHost, state.today || {}, { onOpen: openTask, onDone: doneTask });
+}
+
 function renderTable() {
   renderFilterBar(els.tableFilters, state.filters, {
     projects: state.projects, people: state.people, count: state.items.length,
-  }, function (next) {
-    state.filters = next;
-    syncUrl();
-    loadTable().then(renderTable).catch(function (err) { toast(err.message, 'error'); });
-  });
+  }, onSharedFilterChange);
   if (!state.items.length) {
     els.tableHost.replaceChildren(emptyCard('list-filter', 'No tasks match these filters', {
       actionLabel: isDefaultFilters(state.filters) ? undefined : 'Clear filters',
@@ -256,6 +316,7 @@ function focusRow(task) {
   let target = null;
   if (tab === 'table') target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]');
   else if (tab === 'tree') target = els.treeHost.querySelector('.tree-node[data-id="' + task.id + '"]');
+  else if (tab === 'board') target = els.boardHost.querySelector('.board-item[data-id="' + task.id + '"] .board-card');
   else { nav.setTab('table'); target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]'); }
   if (target) {
     target.tabIndex = 0;
@@ -366,12 +427,21 @@ async function boot() {
     onClose: closeTask,
     people: function () { return state.people; },
   });
-  // A shared Table view (?status=doing…) lands on the Table, whatever tab was last used.
-  const wantsTable = !isDefaultFilters(state.filters);
-  nav = initNavTabs({ storageKey: TAB_KEY, onChange: function (tab) {
-    state.tab = tab;
-    if (tab === 'settings') fetchStatus();
-  } });
+  // A shared Table view (?status=doing…) lands on the Table, whatever tab was
+  // last used; project / person / q are shared with the Board and don't move
+  // the tab. First visit: the phone lands on Today, the desktop on the Board.
+  const f = state.filters;
+  const wantsTable = f.status.length > 0 || f.due !== '' || f.sort !== 'due';
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  nav = initNavTabs({
+    storageKey: TAB_KEY,
+    defaultTab: coarse ? 'today' : 'board',
+    onChange: function (tab) {
+      state.tab = tab;
+      if (tab === 'board' && board) board.show();
+      if (tab === 'settings') fetchStatus();
+    },
+  });
   if (wantsTable) nav.setTab('table');
   mountQuickAdds();
   document.addEventListener('keydown', function (ev) {

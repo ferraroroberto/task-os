@@ -622,6 +622,7 @@ def list_tasks(
     q: str | None = None,
     include_closed: bool = False,
     limit: int | None = None,
+    done_on: str | None = None,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
 
@@ -629,7 +630,10 @@ def list_tasks(
     - ``parent_id``: an id, or ``"root"`` for top-level tasks only;
     - ``project``: descendant-of ``project`` (any depth);
     - ``due``: ``today`` · ``week`` · ``overdue`` · a date; or ``due_from``/``due_to``;
-    - ``q``: FTS over title/description/comments (see :func:`search`).
+    - ``q``: FTS over title/description/comments (see :func:`search`);
+    - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
+      on that day (the Board's *Done today* column; ``done_at`` is a local
+      timestamp, so the boundary is local midnight).
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
 
@@ -685,6 +689,10 @@ def list_tasks(
     if person_id is not None:
         where.append("t.person_id = ?")
         args.append(int(person_id))
+
+    if done_on:
+        where.append("substr(t.done_at, 1, 10) = ?")
+        args.append(_validate_due(done_on))
 
     if q:
         hit_ids = [h["id"] for h in search(conn, q, limit=500)]
@@ -1091,6 +1099,86 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
         item["breadcrumb"] = _ancestors(conn, tid)
         out.append(item)
     return out
+
+
+# ------------------------------------------------------------------ views
+
+BOARD_COLUMNS = ("inbox", "todo", "doing", "standby", "done")
+
+
+def board(
+    conn: sqlite3.Connection,
+    *,
+    project: int | None = None,
+    person_id: int | None = None,
+    q: str | None = None,
+) -> dict[str, Any]:
+    """The Board's five buckets: ``inbox · todo · doing · standby · done``.
+
+    The first four are the open statuses; ``done`` holds only tasks completed
+    **today** (``done_at`` on the current local calendar day — an older done
+    task never shows, and the boundary is local midnight, not UTC). Items are
+    the same enriched summaries :func:`list_tasks` returns, in its order
+    (due → priority → id). Two queries: one over the open statuses, one over
+    today's done.
+    """
+    day = today().isoformat()
+    columns: dict[str, list[dict[str, Any]]] = {key: [] for key in BOARD_COLUMNS}
+    for item in list_tasks(
+        conn, status=list(BOARD_COLUMNS[:-1]), project=project, person_id=person_id, q=q
+    ):
+        columns[item["status"]].append(item)
+    columns["done"] = list_tasks(
+        conn, status=["done"], project=project, person_id=person_id, q=q, done_on=day
+    )
+    return {"today": day, "columns": columns}
+
+
+def _group_by_root(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``[{root, items}]`` — grouped by top ancestor (``None`` = no project);
+    groups ordered by their earliest due, then root title; inside a group
+    recurring tasks come first, then due → priority → id (the list order)."""
+    groups: dict[int | None, dict[str, Any]] = {}
+    for it in items:
+        root = it.get("root")
+        key = root["id"] if root else None
+        g = groups.setdefault(key, {"root": root, "items": []})
+        g["items"].append(it)
+    for g in groups.values():
+        g["items"].sort(key=lambda t: 0 if t.get("recurrence") else 1)  # stable: keeps due order
+    return sorted(
+        groups.values(),
+        key=lambda g: (
+            min(t["due"] for t in g["items"]),
+            (g["root"] or {}).get("title", "").lower(),
+        ),
+    )
+
+
+def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dict[str, Any]:
+    """The Today tab: open tasks due ≤ today (overdue first, then today),
+    grouped by root project with recurring tasks first, plus a *later this
+    week* bucket (tomorrow … +7 days) in the same shape."""
+    t = today()
+    due = list_tasks(conn, status="open", due_to=t.isoformat(), person_id=person_id)
+    week = list_tasks(
+        conn,
+        status="open",
+        due_from=(t + timedelta(days=1)).isoformat(),
+        due_to=(t + timedelta(days=7)).isoformat(),
+        person_id=person_id,
+    )
+    iso = t.isoformat()
+    return {
+        "today": iso,
+        "due": _group_by_root(due),
+        "week": _group_by_root(week),
+        "counts": {
+            "overdue": sum(1 for it in due if it["due"] < iso),
+            "today": sum(1 for it in due if it["due"] == iso),
+            "week": len(week),
+        },
+    }
 
 
 def counts(conn: sqlite3.Connection) -> dict[str, int]:

@@ -9,6 +9,7 @@ Route families (each in ``app/webapp/routers/``):
     tasks   /api/tasks…          → CRUD, tree, move, done, comments, links, issue; /api/activity
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=       → full text over tasks + comments
+    views   /api/board · /api/today → the Board's five buckets · Today grouped by project
     mirror  /api/status          → markdown mirror + backup status; POST /api/mirror/export,
                                    /api/mirror/import, /api/backup run them on demand
 
@@ -46,7 +47,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import mirror, misc, people, search, tasks
+from app.webapp.routers import mirror, misc, people, search, tasks, views
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src.backup import BackupScheduler
 from src.config import load_config
@@ -156,6 +157,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(people.router)
     app.include_router(search.router)
+    app.include_router(views.router)
     app.include_router(mirror.router)
     return app
 

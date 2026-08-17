@@ -53,6 +53,23 @@ export function isDefaultFilters(f) {
 }
 
 // ------------------------------------------------------------- filter bar
+/** One filter `<select>` (select-native) — shared with the Board's filter row. */
+export function filterSelect(name, label, values, current, onChange) {
+  const sel = document.createElement('select');
+  sel.className = 'select-native filter-select';
+  sel.name = name;
+  sel.setAttribute('aria-label', label);
+  values.forEach(function (v) {
+    const o = document.createElement('option');
+    o.value = String(v[0]);
+    o.textContent = v[1];
+    if (String(v[0]) === String(current)) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', function () { onChange(sel.value); });
+  return sel;
+}
+
 /**
  * @param {HTMLElement} host
  * @param {object} filters   current state (not mutated)
@@ -96,23 +113,11 @@ export function renderFilterBar(host, filters, options, onChange) {
   bar.appendChild(stGroup);
 
   function select(name, label, values, current) {
-    const sel = document.createElement('select');
-    sel.className = 'select-native filter-select';
-    sel.name = name;
-    sel.setAttribute('aria-label', label);
-    values.forEach(function (v) {
-      const o = document.createElement('option');
-      o.value = String(v[0]);
-      o.textContent = v[1];
-      if (String(v[0]) === String(current)) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', function () {
+    return filterSelect(name, label, values, current, function (value) {
       const next = Object.assign({}, filters);
-      next[name] = sel.value;
+      next[name] = value;
       onChange(next);
     });
-    return sel;
   }
   const projectValues = [['', 'All projects']].concat((options.projects || []).map(function (p) {
     return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
