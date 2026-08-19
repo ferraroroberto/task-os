@@ -433,6 +433,18 @@ a.chip:hover { text-decoration: underline; }
 .filter-q { width: 180px; }
 .filter-count { color: var(--muted); font-size: var(--font-caption); margin-left: auto; white-space: nowrap; }
 .filter-clear { min-height: 28px; }
+/* Board variant (#32): no card wrapper — one compact flat row of small
+   controls that wraps naturally on the phone. The height pins win over the
+   coarse-pointer 44px block below (higher specificity, same tokens). */
+.filter-bar-flat { padding: 0; border: 0; background: transparent; }
+.filter-bar-flat .filter-select { max-width: 160px; }
+.filter-bar-flat .filter-q { width: 150px; flex: 1 1 120px; }
+.filter-bar-flat .filter-select,
+.filter-bar-flat .filter-q {
+  height: 32px;
+  min-height: 32px;
+  font-size: var(--font-caption);
+}
 
 /* ------------------------------------------------------------- table */
 .table-card { padding: 0; overflow: hidden; }
@@ -663,6 +675,8 @@ a.chip:hover { text-decoration: underline; }
 .crumb-sep { color: var(--muted); }
 .drawer-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
+/* A one-row textarea that grows with its content (fit via drawer.js): a long
+   title wraps to 2–3 lines, never an ellipsis and never a sideways clip (#32). */
 .drawer-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -670,10 +684,22 @@ a.chip:hover { text-decoration: underline; }
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg);
+  font-family: inherit;
   font-size: var(--font-heading-lg);
   font-weight: 700;
+  line-height: 1.25;
   padding: 2px 6px;
   margin-left: -6px;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* Phone: the code prefix sits on its own line ABOVE the title instead of
+   inline pushing it off-screen (#32). */
+@media (max-width: 1023px) {
+  .drawer-title-row { flex-wrap: wrap; gap: 2px 8px; }
+  .drawer-code { flex: 1 1 100%; }
+  .drawer-title { font-size: 1.35rem; }
 }
 .drawer-title:hover { border-color: var(--line); }
 .drawer-title:focus { border-color: var(--accent); background: var(--card-off); outline: none; }
@@ -934,67 +960,80 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    earns space in the desktop grid below. */
 .board-col-title { display: none; }
 .board-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-/* Cards = flat separator rows inside the column (the launcher look), the
-   priority accent on the row's left edge. */
+/* Cards = flat separator rows inside the column (the launcher look, #32): a
+   1px hairline between rows, no per-card box, the priority accent on the
+   row's left edge. */
 .board-item { position: relative; border-top: 1px solid var(--line-muted); }
 .board-item:first-child { border-top: 0; }
 .board-item.is-high > .board-card { border-left: 3px solid var(--danger); }
 .board-item.is-dragging { opacity: 0.5; }
+/* The row is a tight grid: text column + control column. The text block
+   (context line + one-line title) is grid area "main"; the touch status
+   select ("ctrl") centers on that block; the compact meta line ("meta")
+   spans the full width below — the row collapses to two lines without it. */
 .board-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: var(--row-lg);
-  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main ctrl"
+    "meta meta";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 9px 4px;
   color: var(--fg);
   cursor: pointer;
 }
 .board-card:hover { background: var(--card-2); }
 .board-card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .board-card.is-new { background: var(--accent-soft); }
+.board-card-main {
+  grid-area: main;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
 .board-card-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 1em;
+  min-width: 0;
   color: var(--muted);
   font-size: var(--font-caption);
+  line-height: 1.3;
 }
 .board-card-project {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .board-card-person { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-/* Title line: the title fills; on a coarse pointer the compact status select
-   sits right-aligned on the same line (centred beside a wrapped title). */
-.board-card-title-row { display: flex; align-items: center; gap: 8px; }
+/* One line, ellipsized — a board row never grows on the title (#32). */
 .board-card-title {
-  flex: 1 1 auto;
+  display: block;
   min-width: 0;
-  font-size: var(--font-label);
+  font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.3;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .board-card-meta {
+  grid-area: meta;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
   color: var(--muted);
   font-size: var(--font-caption);
+  line-height: 1.3;
 }
-.board-card-meta .icon, .board-card-comment .icon, .board-card-person .icon { width: 12px; height: 12px; }
+.board-card-meta .icon, .board-card-person .icon { width: 12px; height: 12px; }
 .board-card-due { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); }
 .board-card-prio { text-transform: capitalize; }
 .board-card-prio::before {
@@ -1007,31 +1046,23 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   background: currentColor;
   vertical-align: middle;
 }
-.board-card-recur, .board-card-kids { display: inline-flex; align-items: center; gap: 3px; }
+.board-card-recur, .board-card-kids, .board-card-comments { display: inline-flex; align-items: center; gap: 3px; }
 .board-card-meta .chip { max-width: 100%; }
-.board-card-comment {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--font-caption);
-}
-.board-card-comment .icon { flex: none; }
-.board-card-comment-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-card-comment .chip { max-width: 70%; vertical-align: bottom; }
 /* Drop target: the whole column lights up while a card hovers over it. */
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
-/* Touch fallback for the drag: a compact status select inline on the title
-   line, only shown where there is no pointer to drag with — small control
-   height, auto width, so the card stays dense (issue #27). */
+/* Touch fallback for the drag: a compact status select, only shown where
+   there is no pointer to drag with — right-aligned in the grid's control
+   column, vertically centered on the context+title block, ≤32px tall and
+   auto width so the row stays a tight two-liner (issues #27, #32). */
 .board-card-status { display: none; }
 @media (pointer: coarse) {
   .board-card-status {
     display: inline-block;
-    flex: none;
+    grid-area: ctrl;
+    justify-self: end;
+    align-self: center;
     width: auto;
-    height: var(--control-h);
+    height: 30px;
     padding: 0 8px;
     font-size: var(--font-caption);
   }
@@ -1043,22 +1074,26 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-empty .empty-state-message { font-size: var(--font-caption); }
 
 /* Desktop / wide: all five columns side by side using the full width, equal
-   widths, each scrolling on its own under a sticky header with the count. */
+   widths, each scrolling on its own under a sticky header with the count.
+   Flat regions, not cards (#32): a vertical 1px hairline between columns is
+   the only separation. */
 @media (min-width: 1024px) {
   .board-strip { display: none; }
   .board-columns {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: var(--gap);
+    gap: 0;
     overflow-x: visible;
     scroll-snap-type: none;
   }
   .board-col {
-    max-height: calc(100vh - 290px);
+    max-height: calc(100vh - 250px);
     min-height: 240px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding: 0 10px;
   }
+  .board-col + .board-col { border-left: 1px solid var(--line-muted); }
   .board-col-title {
     display: flex;
     align-items: center;
@@ -1067,16 +1102,16 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     top: 0;
     z-index: 1;
     margin: 0;
-    padding: 9px 12px;
-    background: var(--card-2);
-    border-bottom: 1px solid var(--line);
+    padding: 8px 4px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line-muted);
     color: var(--muted);
     font-size: var(--font-caption);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-  .board-col-count { background: var(--card); }
+  .board-col-count { background: var(--card-2); }
 }
 
 /* ------------------------------------------------------------- today */

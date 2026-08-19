@@ -9,9 +9,12 @@
  * (`mountBoard`) and every refresh only swaps the cards, so the carousel
  * position survives a re-render.
  *
- * Cards: project (root ancestor) · person → title → due (relative, overdue
- * tinted) · priority · recurrence · folder / issue chips · children count →
- * last comment. Click / Enter opens the drawer. Drag a card onto another
+ * Cards = flat two-line rows (the launcher's board look, issue #32): a muted
+ * context line (the task `code` for coding tasks, else the root project ·
+ * person), a one-line ellipsized title, then one compact meta line only when
+ * it has content — due (relative, overdue tinted) · priority · recurrence ·
+ * folder chip · children count · comment count (never the comment body — the
+ * drawer shows comments). Click / Enter opens the drawer. Drag a card onto another
  * column (HTML5 DnD) → the caller's `onStatus` → PATCH; on a touch device the
  * card carries a status select instead (no pointer to drag with).
  *
@@ -24,7 +27,7 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, chipFor, issueChip, linkify, relDue } from './format.js';
+import { STATUSES, chipFor, issueChip, relDue } from './format.js';
 import { filterSelect } from './table.js';
 
 export const BOARD_COLUMNS = [
@@ -34,7 +37,6 @@ export const BOARD_COLUMNS = [
   { key: 'standby', label: 'Standby', short: 'Standby', empty: 'Nothing on standby' },
   { key: 'done', label: 'Done today', short: 'Done', empty: 'Nothing done today yet' },
 ];
-const COMMENT_MAX = 70;
 const PHONE_MQ = '(max-width: 1023px)';
 
 // ------------------------------------------------------------- filter row
@@ -140,7 +142,7 @@ export function mountBoard(handlers) {
   const empties = {};
   BOARD_COLUMNS.forEach(function (col) {
     const section = document.createElement('section');
-    section.className = 'board-col card';
+    section.className = 'board-col';
     section.dataset.col = col.key;
     section.setAttribute('aria-label', col.label);
     const h = document.createElement('h3');
@@ -235,13 +237,19 @@ function buildCard(t, handlers) {
   card.tabIndex = 0;
   card.setAttribute('aria-label', t.title);
 
-  // top line: project (root ancestor) · person
+  // Text block (grid area "main"): context line + one-line title. The status
+  // select (grid area "ctrl") centers on THIS block, so the row stays a tight
+  // launcher-style two-liner with the control right-aligned beside it.
+  const main = document.createElement('span');
+  main.className = 'board-card-main';
+  // context line: the task code for coding tasks (the launcher's "repo #N"
+  // look), else the root project; the person appended when present.
   const top = document.createElement('span');
   top.className = 'board-card-top';
   const proj = document.createElement('span');
   proj.className = 'board-card-project';
-  proj.textContent = t.root ? t.root.title : (t.is_project ? 'project' : '');
-  if (t.root) proj.title = t.root.title;
+  proj.textContent = t.code || (t.root ? t.root.title : (t.is_project ? 'project' : ''));
+  proj.title = proj.textContent;
   top.appendChild(proj);
   if (t.person) {
     const who = document.createElement('span');
@@ -250,17 +258,16 @@ function buildCard(t, handlers) {
     who.appendChild(document.createTextNode(t.person.name));
     top.appendChild(who);
   }
-  card.appendChild(top);
-
-  // Title line: title + (coarse pointers only, via CSS) the inline status
-  // select — the touch fallback for the drag, compact and right-aligned so
-  // the card stays dense instead of the select eating a row of its own.
-  const titleRow = document.createElement('span');
-  titleRow.className = 'board-card-title-row';
+  main.appendChild(top);
   const title = document.createElement('span');
   title.className = 'board-card-title';
   title.textContent = t.title;
-  titleRow.appendChild(title);
+  title.title = t.title;
+  main.appendChild(title);
+  card.appendChild(main);
+
+  // Touch fallback for the drag (coarse pointers only, via CSS): a compact
+  // status select right-aligned and vertically centered on the text block.
   const sel = document.createElement('select');
   sel.className = 'select-native board-card-status';
   sel.setAttribute('aria-label', 'Status of ' + t.title);
@@ -273,10 +280,10 @@ function buildCard(t, handlers) {
     sel.disabled = true;
     handlers.onStatus(t.id, sel.value).catch(function () { sel.value = t.status; }).finally(function () { sel.disabled = false; });
   });
-  titleRow.appendChild(sel);
-  card.appendChild(titleRow);
+  card.appendChild(sel);
 
-  // meta line: due · priority · recurrence · chips · children
+  // meta line (grid area "meta", only appended when it has content):
+  // due · priority · recurrence · folder chip · children · comment count
   const meta = document.createElement('span');
   meta.className = 'board-card-meta';
   if (t.due) {
@@ -303,7 +310,8 @@ function buildCard(t, handlers) {
     meta.appendChild(r);
   }
   if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
-  if (t.issue_ref) meta.appendChild(issueChip(t.issue_ref));
+  // the code already names the issue on the context line — no duplicate chip
+  if (t.issue_ref && !t.code) meta.appendChild(issueChip(t.issue_ref));
   if (t.child_count) {
     const kids = document.createElement('span');
     kids.className = 'board-card-kids';
@@ -312,21 +320,18 @@ function buildCard(t, handlers) {
     kids.title = t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks');
     meta.appendChild(kids);
   }
-  if (meta.childNodes.length) card.appendChild(meta);
-
-  if (t.last_comment) {
-    const body = t.last_comment.body || '';
-    const short = body.length > COMMENT_MAX ? body.slice(0, COMMENT_MAX - 1) + '…' : body;
+  // comment COUNT only — the body bloated the cards; the drawer shows comments
+  if (t.comment_count) {
     const c = document.createElement('span');
-    c.className = 'board-card-comment';
+    c.className = 'board-card-comments';
     c.innerHTML = icon('message-square');
-    const text = document.createElement('span');
-    text.className = 'board-card-comment-text';
-    text.appendChild(linkify(short));
-    c.appendChild(text);
-    c.title = t.last_comment.author + ': ' + body;
-    card.appendChild(c);
+    c.appendChild(document.createTextNode(String(t.comment_count)));
+    c.title = t.last_comment
+      ? t.last_comment.author + ': ' + (t.last_comment.body || '')
+      : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments');
+    meta.appendChild(c);
   }
+  if (meta.childNodes.length) card.appendChild(meta);
   li.appendChild(card);
 
   card.addEventListener('click', function (ev) {

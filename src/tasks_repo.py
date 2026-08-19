@@ -754,8 +754,9 @@ def list_tasks(
 
 def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
     """Add what the Table needs per row — ``breadcrumb`` (root → parent),
-    ``root`` (the top ancestor, i.e. the project column) and ``last_comment``
-    — in three queries total instead of three per row."""
+    ``root`` (the top ancestor, i.e. the project column), ``last_comment``
+    and ``comment_count`` (the Board shows the count, never the body)
+    — in four queries total instead of four per row."""
     if not items:
         return
     titles: dict[int, tuple[int | None, str]] = {
@@ -763,6 +764,14 @@ def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
         for r in conn.execute("SELECT id, parent_id, title FROM tasks").fetchall()
     }
     ids = [it["id"] for it in items]
+    counts: dict[int, int] = {
+        r["task_id"]: int(r["n"])
+        for r in conn.execute(
+            f"SELECT task_id, COUNT(*) AS n FROM comments"
+            f" WHERE task_id IN ({', '.join('?' * len(ids))}) GROUP BY task_id",
+            ids,
+        ).fetchall()
+    }
     last: dict[int, dict[str, Any]] = {}
     for r in conn.execute(
         f"""
@@ -787,6 +796,7 @@ def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
         it["breadcrumb"] = chain
         it["root"] = chain[0] if chain else None
         it["last_comment"] = last.get(it["id"])
+        it["comment_count"] = counts.get(it["id"], 0)
 
 
 def tree(

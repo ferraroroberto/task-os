@@ -92,7 +92,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert counts == {k: len(api[k]) for k in COLUMNS}, counts
         assert counts["done"] == 0                                    # seed's done tasks are old
         expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_be_visible()
-        # a card carries project line · due · person · chips · children · last comment
+        # a card carries context line (project · person) · due · chips · children
+        # · comment COUNT — never the comment body (UX round 2, issue #32)
         # (story 04 may already have edited "Get three quotes" in this session's
         # seeded instance — the checks below use cards it leaves alone)
         quotes = _card(page, "Get three quotes")
@@ -101,9 +102,13 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(_card(page, "Kitchen").locator(".board-card-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
         watering = _card(page, "Fix watering schedule drift")
         expect(watering.locator(".board-card-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
-        expect(watering.locator(".board-card-comment a.chip-issue")).to_be_visible()
+        expect(watering.locator(".board-card-comments")).to_be_visible()
+        expect(page.locator(".board-card-comment")).to_have_count(0)   # the body bloated the cards
         expect(_card(page, "Repair fence").locator(".board-card-due")).to_have_class(re.compile("due-overdue"))
         expect(_card(page, "Renew passports").locator(".board-card-kids")).to_have_text("2")
+        # flat regions, not cards: no rounded box on a column (issue #32)
+        for k in COLUMNS:
+            assert _col(page, k).evaluate("el => getComputedStyle(el).borderRadius") == "0px", k
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-1-desktop.png"))
 
@@ -273,21 +278,26 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
             "() => Math.abs(document.querySelector(\".board-col[data-col='doing']\").getBoundingClientRect().left"
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
-        # touch fallback for the drag: a compact status select inline on the
-        # title line — right-aligned, small control, never a full-width row
-        # (UX round 1, issue #27)
+        # launcher-density rows (UX round 2, issue #32): every seeded row in
+        # the active column stays inside the ≤96px budget
+        heights = _col(page, "doing").locator(".board-item").evaluate_all(
+            "els => els.map(e => e.getBoundingClientRect().height)")
+        assert heights and all(h <= 96 for h in heights), heights
+        # touch fallback for the drag: a compact status select — right-aligned,
+        # ≤32px tall, auto width, its center inside the context+title block's
+        # vertical span (UX rounds 1+2, issues #27/#32)
         first_item = _col(page, "doing").locator(".board-item").first
         card_select = first_item.locator(".board-card-status")
         expect(card_select).to_be_visible()
         sel_box = card_select.bounding_box()
-        title_box = first_item.locator(".board-card-title").bounding_box()
+        main_box = first_item.locator(".board-card-main").bounding_box()
         item_box = first_item.bounding_box()
-        assert sel_box and title_box and item_box
-        assert sel_box["height"] <= 40, sel_box                      # compact, not a 44px row of its own
+        assert sel_box and main_box and item_box
+        assert sel_box["height"] <= 32, sel_box                      # compact, never a 44px row of its own
         assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
         assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
-        # on the title line: the select's box overlaps the title's vertical band
-        assert sel_box["y"] < title_box["y"] + title_box["height"] and sel_box["y"] + sel_box["height"] > title_box["y"], (sel_box, title_box)
+        sel_center = sel_box["y"] + sel_box["height"] / 2
+        assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
         context.close()

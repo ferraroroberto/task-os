@@ -185,6 +185,21 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
+        # UX round 2 (#32): on the phone the code line sits ABOVE the title
+        # (never inline pushing it off-screen) and a long title wraps to more
+        # lines instead of clipping sideways (textarea + fit, no ellipsis).
+        title_el = drawer.locator("#drawerTitle")
+        code_box = drawer.locator(".drawer-code").bounding_box()
+        t_box = title_el.bounding_box()
+        assert code_box and t_box and code_box["y"] + code_box["height"] <= t_box["y"] + 1, (code_box, t_box)
+        one_line_h = title_el.evaluate("el => el.clientHeight")
+        wrapped = title_el.evaluate(
+            "el => { const v = el.value;"
+            " el.value = 'a very long task title that would have clipped off the right edge before round two';"
+            " el.dispatchEvent(new Event('input'));"
+            " const grown = {h: el.clientHeight, fits: el.scrollWidth <= el.clientWidth + 1};"
+            " el.value = v; el.dispatchEvent(new Event('input')); return grown; }")
+        assert wrapped["h"] > one_line_h and wrapped["fits"], (one_line_h, wrapped)
         box = drawer.bounding_box()
         assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
         # Step 9: the chip is a taskos:// link (the per-PC opener); on a phone a

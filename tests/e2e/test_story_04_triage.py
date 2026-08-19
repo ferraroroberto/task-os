@@ -118,9 +118,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         page.screenshot(path=str(shots / "story-04-triage-3-desktop.png"))
 
         # 4. Add a comment containing a link → chip with href, newest first.
-        # UX round 1 (issue #27): plain placeholder, quiet ghost Send (the
-        # Description Edit tier) — Ctrl+Enter still sends.
-        expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment…")
+        # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
+        # hint, quiet ghost Send (the Description Edit tier).
+        expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment… (Ctrl+Enter to send)")
         expect(drawer.locator(".comment-send")).to_have_class(re.compile(r"\bbutton-ghost\b"))
         drawer.locator(".comment-input").fill(f"Office booked, details at {LINK} — bring photos")
         drawer.locator(".comment-input").press("Control+Enter")
@@ -264,6 +264,13 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         assert_min_target(drawer.locator(".drawer-close"))
         assert_min_target(drawer.locator(".field-control"))
         assert_min_target(drawer.locator(".comment-send"))
+        # UX round 2 (#32): the composer keeps the Ctrl+Enter hint; Send stays
+        # on the Description "Edit" tier (ghost, same rendered height).
+        expect(drawer.locator(".comment-input")).to_have_attribute(
+            "placeholder", "Add a comment… (Ctrl+Enter to send)")
+        send_box = drawer.locator(".comment-send").bounding_box()
+        edit_box = drawer.locator(".drawer-tools .button-ghost").first.bounding_box()
+        assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-04-triage-10-phone.png"))
         drawer.locator(".drawer-close").tap()
