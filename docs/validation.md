@@ -19,6 +19,14 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 
+## UX rounds
+
+Owner-feedback polish rounds after a phase closes — story-level validation (adjusted story assertions + a headed phone walk), recorded like a story but numbered per round.
+
+| Round | Scope | Record | Result | Date |
+| --- | --- | --- | --- | --- |
+| 1 | Board density + flat separators, comment composer, activity weight, tree clarity (order · guides · no idle drop zone · drawer "Move to"), one-line Today rows (#27) | [ux-round-1.md](validation/ux-round-1.md) | verified (browser walk + e2e) · real-phone re-check owner-only | 2026-08-19 |
+
 ## Phase gates
 
 | Phase | Stories | Gate run | Result |
