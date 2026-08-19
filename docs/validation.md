@@ -26,6 +26,7 @@ Owner-feedback polish rounds after a phase closes — story-level validation (ad
 | Round | Scope | Record | Result | Date |
 | --- | --- | --- | --- | --- |
 | 1 | Board density + flat separators, comment composer, activity weight, tree clarity (order · guides · no idle drop zone · drawer "Move to"), one-line Today rows (#27) | [ux-round-1.md](validation/ux-round-1.md) | verified (browser walk + e2e) · real-phone re-check owner-only | 2026-08-19 |
+| 2 | Board matched to the launcher's flat dense board against reference screenshots: row density (comment count, one-line titles), no card containers (flat columns + filter bar), compact select on the text block, drawer title wrap on phone, composer hint (#32, re-does part of #27) | [ux-round-2.md](validation/ux-round-2.md) | verified (pixel loop vs reference + e2e) · real-phone re-check owner-only | 2026-08-19 |
 
 ## Phase gates
 

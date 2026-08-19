@@ -199,12 +199,21 @@ export function createDrawer(el, opts) {
     const code = document.createElement('span');
     code.className = 'drawer-code';
     code.textContent = t.code || ('#' + t.id);
-    const title = document.createElement('input');
-    title.type = 'text';
+    // A textarea, not an input: a long title wraps to 2–3 lines instead of
+    // clipping off-screen on the phone (#32). Enter still commits (below),
+    // never a newline; the height follows the content.
+    const title = document.createElement('textarea');
+    title.rows = 1;
     title.id = 'drawerTitle';
     title.className = 'drawer-title';
     title.value = t.title;
     title.setAttribute('aria-label', 'Title');
+    const fitTitle = function () {
+      title.style.height = 'auto';
+      title.style.height = title.scrollHeight + 'px';
+    };
+    title.addEventListener('input', fitTitle);
+    requestAnimationFrame(fitTitle);
     title.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); title.blur(); }
       if (ev.key === 'Escape') { title.value = t.title; title.blur(); }
@@ -354,7 +363,7 @@ export function createDrawer(el, opts) {
     const ta = document.createElement('textarea');
     ta.className = 'input-native comment-input';
     ta.rows = 2;
-    ta.placeholder = 'Add a comment…';
+    ta.placeholder = 'Add a comment… (Ctrl+Enter to send)';
     ta.setAttribute('aria-label', 'New comment');
     ta.title = 'Ctrl+Enter to send; links become chips';
     const send = document.createElement('button');

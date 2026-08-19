@@ -162,8 +162,10 @@ def test_list_items_carry_breadcrumb_root_and_last_comment(seeded: TestClient) -
     assert quotes["root"] == {"id": quotes["breadcrumb"][0]["id"], "title": "Home renovation"}
     assert quotes["last_comment"]["author"] == "Alex Chen"
     assert "{onedrive}/house/kitchen/plans" in quotes["last_comment"]["body"]
+    assert quotes["comment_count"] >= 1                    # the Board renders the count, not the body (#32)
     home = by_title["Home renovation"]
     assert home["breadcrumb"] == [] and home["root"] is None and home["last_comment"] is None
+    assert home["comment_count"] == 0
 
 
 def test_natural_due_on_create_and_update(client: TestClient) -> None:

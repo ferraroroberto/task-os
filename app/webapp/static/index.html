@@ -327,8 +327,10 @@
       <div class="pane-body">
         <div class="quick-add" data-quick-add="board"></div>
         <!-- Project · person · text filters — the same shared state (and URL
-             query, ?project=12) as the Table's bar; status/due/sort stay Table-only. -->
-        <div class="card filter-bar" id="boardFilters" hidden></div>
+             query, ?project=12) as the Table's bar; status/due/sort stay
+             Table-only. Flat (no card wrapper) with compact controls: the
+             Board is a flat surface end to end (#32). -->
+        <div class="filter-bar filter-bar-flat" id="boardFilters" hidden></div>
         <!-- Five status columns (board.js): side by side on a wide screen,
              a one-column scroll-snap carousel on the phone. -->
         <div id="boardHost" data-empty="tasks"></div>

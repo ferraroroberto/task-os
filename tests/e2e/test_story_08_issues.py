@@ -26,6 +26,7 @@ The real-provider walk (``gh`` against the owner's account) is in
 from __future__ import annotations
 
 import json
+import re
 import urllib.request
 from pathlib import Path
 
@@ -71,7 +72,10 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         sync.click()
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
         inbox = page.locator(".board-col[data-col='inbox']")
-        expect(inbox.locator(".board-card .chip-issue-open")).to_have_count(2)
+        # UX round 2 (#32): a coding task's card names the issue on its muted
+        # context line (the launcher's "repo#N" look) — no chip on the card.
+        expect(inbox.locator(".board-card-project", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
+        expect(inbox.locator(".board-card-project", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
         expect(page.locator(".board-col-count[data-col='inbox']")).to_have_text(str(inbox_before + 2))
         api_inbox = _get(base, "/api/tasks?status=inbox")["items"]
         new = {t["code"]: t for t in api_inbox if t.get("issue_ref")}
@@ -172,10 +176,10 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
         page.screenshot(path=str(shots / "story-08-issues-6-desktop.png"))
-        # the chip is on the Board card too
+        # the code is on the Board card's context line too (#32)
         page.keyboard.press("Escape")
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(inbox.locator(f".board-item[data-id='{plain['id']}'] .chip-issue-open")).to_have_text("garden-bot#15")
+        expect(inbox.locator(f".board-item[data-id='{plain['id']}'] .board-card-project")).to_have_text("garden-bot#15")
 
         # 6. Settings (dark): provider enabled, the last sync's counts.
         page.evaluate("document.documentElement.dataset.theme = 'dark'")
