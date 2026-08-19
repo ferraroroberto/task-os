@@ -1,11 +1,12 @@
 /* task-os — the Today tab: what is due, over /api/today.
  *
  * Open tasks due ≤ today (overdue first, then today), grouped by root
- * project with recurring tasks first inside each group; each row is a
- * checkbox to mark done (a recurring task rolls its due forward instead of
- * closing — the caller toasts the next date), the title, the due badge and
- * the person. "Later this week" (tomorrow … +7 days) sits collapsed below
- * as a vendored disclosure. This is the phone's landing tab.
+ * project with recurring tasks first inside each group; each row is one
+ * line — a checkbox to mark done (a recurring task rolls its due forward
+ * instead of closing — the caller toasts the next date), the ellipsizing
+ * title and the due badge. The person shows in the drawer, not the row.
+ * "Later this week" (tomorrow … +7 days) sits collapsed below as a vendored
+ * disclosure. This is the phone's landing tab.
  */
 
 'use strict';
@@ -167,14 +168,6 @@ function buildRow(t, handlers) {
   due.title = t.due || '';
   due.textContent = rel.text;
   row.appendChild(due);
-
-  const who = document.createElement('span');
-  who.className = 'today-person';
-  if (t.person) {
-    who.innerHTML = icon('user');
-    who.appendChild(document.createTextNode(t.person.name));
-  }
-  row.appendChild(who);
 
   row.addEventListener('click', function (ev) {
     if (ev.target.closest('button, a')) return;

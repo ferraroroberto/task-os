@@ -182,7 +182,10 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         fam_titles = fam.locator(".today-title").evaluate_all("els => els.map(e => e.textContent)")
         assert fam_titles == ["Dentist check-up", "School enrolment forms"]
         expect(fam.locator(".today-row").first.locator(".today-recur")).to_be_visible()
-        expect(_today_row(page, "School enrolment forms").locator(".today-person")).to_contain_text("Jordan Lee")
+        # UX round 1 (issue #27): rows are one line — no person on the row
+        # (the drawer keeps the person field).
+        expect(_today_row(page, "School enrolment forms")).to_be_visible()
+        expect(page.locator(".today-card .today-person")).to_have_count(0)
         later = page.locator(".today-later")
         assert later.evaluate("el => el.open") is False              # collapsed by default
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
@@ -270,10 +273,21 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
             "() => Math.abs(document.querySelector(\".board-col[data-col='doing']\").getBoundingClientRect().left"
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
-        # touch fallback for the drag: a status select on each card, 44px
-        card_select = _col(page, "doing").locator(".board-item").first.locator(".board-card-status")
+        # touch fallback for the drag: a compact status select inline on the
+        # title line — right-aligned, small control, never a full-width row
+        # (UX round 1, issue #27)
+        first_item = _col(page, "doing").locator(".board-item").first
+        card_select = first_item.locator(".board-card-status")
         expect(card_select).to_be_visible()
-        assert_min_target(card_select)
+        sel_box = card_select.bounding_box()
+        title_box = first_item.locator(".board-card-title").bounding_box()
+        item_box = first_item.bounding_box()
+        assert sel_box and title_box and item_box
+        assert sel_box["height"] <= 40, sel_box                      # compact, not a 44px row of its own
+        assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
+        assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
+        # on the title line: the select's box overlaps the title's vertical band
+        assert sel_box["y"] < title_box["y"] + title_box["height"] and sel_box["y"] + sel_box["height"] > title_box["y"], (sel_box, title_box)
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
         context.close()

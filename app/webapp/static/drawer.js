@@ -3,7 +3,8 @@
  * A right-hand side panel on desktop (>= 1024px; the content shrinks so the
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
- * title → fields row (status, priority, due, recurrence, person, code) →
+ * title → fields row (status, priority, due, recurrence, person, code,
+ * move-to — re-parent without the tree drag, the phone's path) →
  * folder (the ref as an opener chip + resolved path, an editor that folds a
  * pasted absolute path onto the placeholders, a picker over the folder
  * index — Step 9) → description (markdown, edit/preview) → links (add/remove) → comments
@@ -32,6 +33,8 @@ import { toast } from './toast.js';
  * @param {HTMLElement} el     the <aside id="taskDrawer">
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
+ *          projects: () => Array<{id:number,title:string,depth?:number}>,
+ *          onMove: (id:number, parentId:number|null) => Promise<any>,
  *          issues: () => ({enabled:boolean, reason?:string, provider?:string, repos?:string[]}|null),
  *          onSyncIssues: () => Promise<any>,
  *          onToggle?: (id:number|null) => void}} opts   onToggle fires once a task is
@@ -121,6 +124,35 @@ export function createDrawer(el, opts) {
     return wrap;
   }
 
+  /** "Move to…" — re-parent from the drawer (the phone has no tree drag):
+   *  projects + top level; the server's cycle guard answers a bad target. */
+  function moveField(t) {
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    const l = document.createElement('span');
+    l.className = 'field-label';
+    l.textContent = 'Move to';
+    const sel = document.createElement('select');
+    sel.className = 'select-native field-control';
+    sel.dataset.field = 'parent';
+    const options = [{ id: '', title: 'top level', depth: 0 }]
+      .concat((opts.projects ? opts.projects() : []).filter(function (p) { return p.id !== t.id; }));
+    options.forEach(function (p) {
+      const o = document.createElement('option');
+      o.value = p.id === '' ? '' : String(p.id);
+      o.textContent = (p.depth ? ' '.repeat(p.depth) : '') + p.title;
+      if (String(p.id) === String(t.parent_id == null ? '' : t.parent_id)) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () {
+      const v = sel.value === '' ? null : Number(sel.value);
+      if (v === (t.parent_id == null ? null : t.parent_id)) return;
+      opts.onMove(t.id, v);   // toasts + refreshes; a cycle comes back as a toast
+    });
+    wrap.append(l, sel);
+    return wrap;
+  }
+
   function render() {
     const t = current;
     el.innerHTML = '';
@@ -205,6 +237,7 @@ export function createDrawer(el, opts) {
       return p ? p.name : '—';
     }));
     fields.appendChild(textField('Code', 'code', t.code, 'optional'));
+    fields.appendChild(moveField(t));
     el.appendChild(fields);
 
     // ---- folder (Step 9)
@@ -321,13 +354,16 @@ export function createDrawer(el, opts) {
     const ta = document.createElement('textarea');
     ta.className = 'input-native comment-input';
     ta.rows = 2;
-    ta.placeholder = 'Add a comment… (Ctrl+Enter to send; links become chips)';
+    ta.placeholder = 'Add a comment…';
     ta.setAttribute('aria-label', 'New comment');
+    ta.title = 'Ctrl+Enter to send; links become chips';
     const send = document.createElement('button');
     send.type = 'submit';
-    send.className = 'button-primary comment-send';
+    // Same tier and metrics as the Description "Edit" button — quiet, not a
+    // full-height primary block.
+    send.className = 'button-ghost comment-send';
     send.setAttribute('aria-label', 'Send comment');
-    send.innerHTML = icon('send-horizontal');
+    send.innerHTML = icon('send-horizontal') + ' Send';
     composer.append(ta, send);
     composer.addEventListener('submit', async function (ev) {
       ev.preventDefault();
@@ -390,7 +426,10 @@ export function createDrawer(el, opts) {
       row.dataset.field = a.field;
       const change = document.createElement('span');
       change.className = 'activity-change';
-      const f = document.createElement('strong');
+      // One weight for the whole line — the field name is set apart by color
+      // only (uniform-weight feedback, issue #27).
+      const f = document.createElement('span');
+      f.className = 'activity-field';
       f.textContent = a.field;
       change.appendChild(f);
       change.appendChild(document.createTextNode(' '));
