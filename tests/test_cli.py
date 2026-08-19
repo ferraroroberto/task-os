@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from src import cli
 from src import db as dbmod
-from tests.fixtures.seed import seed_db
+from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 
 Runner = Callable[..., tuple[int, str, str]]
 
@@ -144,7 +144,7 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
 def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
     path = tmp_path / "seed.db"
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    seed_db(path)
+    seed_db(path, PINNED_ANCHOR)
     backend = cli.LocalBackend(actor="tester")
     assert cli.main(["tree", "1"], backend=backend) == 0
     lines = capsys.readouterr().out.splitlines()

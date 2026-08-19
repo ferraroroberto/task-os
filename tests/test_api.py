@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from src import db as dbmod
 from src.schema import SCHEMA_VERSION
-from tests.fixtures.seed import seed_db
+from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     path = tmp_path / "seeded.db"
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    seed_db(path)
+    seed_db(path, PINNED_ANCHOR)   # absolute-date assertions below are written against the pin
     from app.webapp.server import create_app
 
     with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
