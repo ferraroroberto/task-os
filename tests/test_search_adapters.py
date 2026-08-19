@@ -30,7 +30,7 @@ from src.search.issues_adapter import IssuesAdapter
 from src.search.tasks_adapter import TasksAdapter
 from tests.conftest import write_test_config
 from tests.fixtures.emails_fixture import EMAILS, build_emails_db
-from tests.fixtures.seed import seed_db
+from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 
 # ------------------------------------------------------------------ fixtures
 
@@ -47,7 +47,7 @@ def od(tmp_path: Path) -> Path:
 def seeded_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "tasks.db"
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    seed_db(path)
+    seed_db(path, PINNED_ANCHOR)
     return path
 
 

@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 
 from src import db as dbmod
 from src import tasks_repo as repo
-from tests.fixtures.seed import DEFAULT_ANCHOR, seed
+from tests.fixtures.seed import PINNED_ANCHOR, seed
 
-ANCHOR = DEFAULT_ANCHOR  # 2026-08-17
+ANCHOR = PINNED_ANCHOR  # 2026-08-17
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def seeded(conn: sqlite3.Connection) -> dict:
-    return seed(conn)["ids"]
+    return seed(conn, ANCHOR)["ids"]
 
 
 def _at(y: int, mo: int, d: int, h: int = 9, mi: int = 0):

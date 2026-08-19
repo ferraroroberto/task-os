@@ -4,6 +4,10 @@ Deterministic: the repo clock is pinned (one minute per write, starting 30
 days before ``anchor``) and every id / timestamp / due date is a function of
 ``anchor`` alone, so a test can assert exact values and a screenshot taken
 today looks the same as one taken next month (relative dates stay relative).
+The runtime default anchor is **today** — that is what keeps relative dates
+relative for the today-bucketing assertions (issue #29: a pinned default
+drifted every seeded due one bucket per passing day); pass ``--anchor`` /
+``anchor=`` only to pin a reproduction to a known date.
 
 Shape: four projects nested to depth 3, ~40 tasks, three people, comments
 (some carrying web / folder / issue links), links, activity from real
@@ -34,7 +38,10 @@ from typing import Any
 from src import tasks_repo as repo
 from src.db import connect, init_db
 
-DEFAULT_ANCHOR = date(2026, 8, 17)
+# The frozen-clock unit suites (tests/test_repo.py, tests/test_views.py) pin
+# the repo clock to this date and must seed with the same anchor so the two
+# clocks agree; everything else seeds with the default (the real today).
+PINNED_ANCHOR = date(2026, 8, 17)
 
 PEOPLE = [
     ("Sam Rivera", "sam@example.com"),
@@ -63,7 +70,7 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
 
     Raises if tasks already exist (never mixes with real data).
     """
-    anchor = anchor or DEFAULT_ANCHOR
+    anchor = anchor or date.today()
     if conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]:
         raise RuntimeError("seed refuses to run on a database that already has tasks")
 
@@ -192,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="seed a task-os database with the synthetic fixture")
     p.add_argument("--db", required=True, help="database file to create/seed")
     p.add_argument("--reset", action="store_true", help="delete the file first")
-    p.add_argument("--anchor", default=None, help="'today' for the fixture (YYYY-MM-DD; default 2026-08-17)")
+    p.add_argument("--anchor", default=None, help="'today' for the fixture (YYYY-MM-DD; default: the real today)")
     args = p.parse_args(argv)
     anchor = date.fromisoformat(args.anchor) if args.anchor else None
     result = seed_db(Path(args.db), anchor, reset=args.reset)

@@ -17,7 +17,7 @@ from src import tasks_repo as repo
 from src.config import load_config
 from src.mirror import Mirror, MirrorParseError, file_name, parse_file, render, slugify
 from tests.conftest import write_test_config
-from tests.fixtures.seed import seed_db
+from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 
 T0 = datetime(2026, 8, 17, 9, 0, 0).astimezone()
 
@@ -35,7 +35,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     mirror_dir.mkdir()
     cfg = write_test_config(tmp_path / "config.json", dir=str(mirror_dir), backup_dir=str(tmp_path / "backup"))
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(cfg))
-    seed_db(db)
+    seed_db(db, PINNED_ANCHOR)
     conn = dbmod.connect()
     yield {"conn": conn, "dir": mirror_dir, "db": db, "config": cfg}
     conn.close()
