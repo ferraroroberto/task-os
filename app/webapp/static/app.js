@@ -752,6 +752,8 @@ async function boot() {
     onOpen: openTask,
     onClose: closeTask,
     people: function () { return state.people; },
+    projects: function () { return state.projects; },
+    onMove: moveTask,
     issues: function () { return state.issues; },
     onSyncIssues: syncIssues,
     onToggle: function () { if (search) search.refreshActions(); },

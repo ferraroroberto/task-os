@@ -118,6 +118,10 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         page.screenshot(path=str(shots / "story-04-triage-3-desktop.png"))
 
         # 4. Add a comment containing a link → chip with href, newest first.
+        # UX round 1 (issue #27): plain placeholder, quiet ghost Send (the
+        # Description Edit tier) — Ctrl+Enter still sends.
+        expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment…")
+        expect(drawer.locator(".comment-send")).to_have_class(re.compile(r"\bbutton-ghost\b"))
         drawer.locator(".comment-input").fill(f"Office booked, details at {LINK} — bring photos")
         drawer.locator(".comment-input").press("Control+Enter")
         newest = drawer.locator(".comment").first
@@ -184,6 +188,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         source = page.locator(f".tree-node[data-id='{new_id}']")
         expect(source).to_be_visible()
         expect(source).to_have_attribute("aria-level", "1")
+        # UX round 1 (issue #27): the top-level drop zone only shows during a drag
+        expect(page.locator(".tree-root-drop")).to_be_hidden()
         source.locator(":scope > .tree-row").drag_to(family.locator(":scope > .tree-row"))
         expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
         moved = _get(base, f"/api/tasks/{new_id}")

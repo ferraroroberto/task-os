@@ -252,10 +252,29 @@ function buildCard(t, handlers) {
   }
   card.appendChild(top);
 
+  // Title line: title + (coarse pointers only, via CSS) the inline status
+  // select — the touch fallback for the drag, compact and right-aligned so
+  // the card stays dense instead of the select eating a row of its own.
+  const titleRow = document.createElement('span');
+  titleRow.className = 'board-card-title-row';
   const title = document.createElement('span');
   title.className = 'board-card-title';
   title.textContent = t.title;
-  card.appendChild(title);
+  titleRow.appendChild(title);
+  const sel = document.createElement('select');
+  sel.className = 'select-native board-card-status';
+  sel.setAttribute('aria-label', 'Status of ' + t.title);
+  STATUSES.forEach(function (s) {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s; o.selected = s === t.status;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', function () {
+    sel.disabled = true;
+    handlers.onStatus(t.id, sel.value).catch(function () { sel.value = t.status; }).finally(function () { sel.disabled = false; });
+  });
+  titleRow.appendChild(sel);
+  card.appendChild(titleRow);
 
   // meta line: due · priority · recurrence · chips · children
   const meta = document.createElement('span');
@@ -309,22 +328,6 @@ function buildCard(t, handlers) {
     card.appendChild(c);
   }
   li.appendChild(card);
-
-  // Touch fallback for the drag: a status select on the card (CSS shows it
-  // only on a coarse pointer).
-  const sel = document.createElement('select');
-  sel.className = 'select-native board-card-status';
-  sel.setAttribute('aria-label', 'Status of ' + t.title);
-  STATUSES.forEach(function (s) {
-    const o = document.createElement('option');
-    o.value = s; o.textContent = s; o.selected = s === t.status;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function () {
-    sel.disabled = true;
-    handlers.onStatus(t.id, sel.value).catch(function () { sel.value = t.status; }).finally(function () { sel.disabled = false; });
-  });
-  li.appendChild(sel);
 
   card.addEventListener('click', function (ev) {
     if (ev.target.closest('a, select')) return;

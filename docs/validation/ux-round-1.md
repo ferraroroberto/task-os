@@ -1,0 +1,22 @@
+# UX round 1 — phone feedback: density, separators, composer, activity, tree, today (issue #27)
+
+Owner feedback from a real phone session (iPhone PWA, 390-wide), shipped as one round. Proof: the adjusted story tests (04/05) in the full e2e run, plus a **headed walk at 390×844** (Chromium device emulation, touch) against a disposable seeded instance — synthetic data only.
+
+| # | Feedback item | Change | Screenshot | Test |
+| --- | --- | --- | --- | --- |
+| 1 | Board (phone): the status select ate a full row | The touch-fallback select moved inline onto the card's title line — compact (`--control-h`, auto width), right-aligned (`board.js`, `styles.css`) | [ux-round-1-2-phone](../screenshots/ux-round-1-2-phone.png) | `test_story_05_board.py::test_phone_today_landing_and_board_carousel` (height ≤ 40, < half the card width, right-aligned, on the title line) |
+| 2 | Board items should be hairline-separated flat rows, not cards | Already the resting state (`.board-item` 1px `--line-muted` top rule, no per-item border/radius/background, hover tint kept — the launcher style); the "card" feel came from item 1's full-width select. Verified, no separate change | [ux-round-1-6-desktop](../screenshots/ux-round-1-6-desktop.png) · [ux-round-1-2-phone](../screenshots/ux-round-1-2-phone.png) | walk assertions: second item `border-top: 1px`, item background transparent, radius 0 |
+| 3 | Composer: plain placeholder, quiet send button | Placeholder `Add a comment…` (Ctrl+Enter kept, links still become chips); Send is the Description Edit button's ghost tier, icon + "Send" (`drawer.js`, `styles.css`) | [ux-round-1-4-phone](../screenshots/ux-round-1-4-phone.png) | `test_story_04_triage.py::test_desktop_triage` (placeholder + `button-ghost` class); phone leg keeps the 44px target check |
+| 4 | Activity list: uniform weight | Field name `<strong>` → muted-color span; `.activity-new` bold dropped — the whole line is regular weight, distinction by color only | [ux-round-1-4-phone](../screenshots/ux-round-1-4-phone.png) | walk assertion: every node in the first `.activity-row` computes `font-weight: 400` |
+| 5a | Tree: "Drop here…" zone always visible | Hidden except during an active drag (capture-phase dragstart/dragend toggle `.tree.is-dragging`); desktop too | [ux-round-1-5-phone](../screenshots/ux-round-1-5-phone.png) | `test_story_04_triage.py` (`.tree-root-drop` hidden before the drag) |
+| 5b | Tree ordering unexplainable | Deterministic at every level: open first, then due (none last), then title (`sortForest` in `tree.js`) | [ux-round-1-5-phone](../screenshots/ux-round-1-5-phone.png) | walk: root order printed and inspected; story 04 drag/rollup assertions stay green over the sorted tree |
+| 5c | Nesting unreadable without drag | Indent guides: one subtle vertical `--line-muted` hairline per depth level (background gradient clipped to `--depth`) | [ux-round-1-5-phone](../screenshots/ux-round-1-5-phone.png) | visual (walk) |
+| 5d | Tree rows too busy on the phone; DnD useless on touch | Coarse pointers: no grip, `draggable=false`, no drop zone built; chips hidden ≤767px — rows read like Today (title · due · status pill). Re-parenting moved to the drawer: a **Move to** select (projects + top level) in the fields row wired to the same `moveTask` | [ux-round-1-3-phone](../screenshots/ux-round-1-3-phone.png) | walk: no `.tree-grip`/`.tree-root-drop`, `draggable="false"`; a real move Family admin ⇄ top level via the select, breadcrumb + API verified both ways |
+| 6 | Today rows: one line | Person sub-line removed from rows (drawer keeps the person field); grid `auto · 1fr · auto`, title ellipsizes | [ux-round-1-1-phone](../screenshots/ux-round-1-1-phone.png) | `test_story_05_board.py::test_desktop_board_day` (`.today-person` count 0); walk: every row ≤ 60px tall |
+| 7 | Fleet tokens only | No new colors; only existing tokens (`--line-muted`, `--muted`, `--control-h`); the one removed weight was a bold | all | — |
+
+Result: **verified** — full e2e 14/14 green (`scripts/verify-before-ship.ps1`, tier `full`), headed 390×844 walk seen on screen, screenshots above from the synthetic seed. Date: 2026-08-19.
+
+Found along the way: the seed's pinned default anchor rotted the suite one day after 2026-08-17 — fixed first, separately (issue #29, PR #30), so this round's gate ran against a green `main`.
+
+Not verified: the same walk on the real iPhone over the tailnet (owner-only — the standing item in [validation.md](../validation.md)'s owner checklist).

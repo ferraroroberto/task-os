@@ -551,9 +551,17 @@ a.chip:hover { text-decoration: underline; }
   padding: 2px 12px 2px calc(8px + var(--depth, 0) * 22px);
   border-top: 1px solid var(--line-muted);
   cursor: pointer;
+  /* Indent guides: one subtle vertical hairline per depth level (a 22px
+     cycle matching the padding step, clipped to the row's own depth), so
+     nesting reads without dragging. Hover/drop tints below use
+     background-color so they never wipe the guide image. */
+  background-image: repeating-linear-gradient(to right, var(--line-muted) 0 1px, transparent 1px 22px);
+  background-repeat: no-repeat;
+  background-position: 18px 0;
+  background-size: calc(var(--depth, 0) * 22px) 100%;
 }
 .tree > .tree-node:first-child > .tree-row { border-top: 0; }
-.tree-row:hover { background: var(--card-2); }
+.tree-row:hover { background-color: var(--card-2); }
 .tree-toggle {
   width: 28px;
   height: 28px;
@@ -579,11 +587,14 @@ a.chip:hover { text-decoration: underline; }
 .tree-due .icon { width: 12px; height: 12px; }
 .tree-node.is-dragging > .tree-row { opacity: 0.5; }
 .tree-row.is-drop-target, .tree-root-drop.is-drop-target {
-  background: var(--accent-soft);
+  background-color: var(--accent-soft);
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
 }
-.tree-root-drop {
+/* Top-level drop zone: hidden until a drag is live (the .tree container
+   gains .is-dragging from the capture-phase dragstart in tree.js). */
+.tree-root-drop { display: none; }
+.tree.is-dragging .tree-root-drop {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -594,8 +605,11 @@ a.chip:hover { text-decoration: underline; }
   color: var(--muted);
   font-size: var(--font-caption);
 }
+/* Narrow: the compact one-line row Today uses — title + due + status pill;
+   rollups and chips wait for the drawer. */
 @media (max-width: 767px) {
   .tree-meta .tree-rollup { display: none; }
+  .tree-row .chip-project, .tree-row .chip-issue { display: none; }
 }
 
 /* ------------------------------------------------------------ drawer */
@@ -719,10 +733,10 @@ a.chip:hover { text-decoration: underline; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
 .link-form .input-native:nth-child(2) { width: 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
-.comment-composer { display: flex; align-items: stretch; gap: 6px; margin-bottom: 10px; }
+.comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
 .comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; }
-.comment-send { width: 48px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
-.comment-send .icon { width: var(--icon-title); height: var(--icon-title); }
+/* Send matches the Description "Edit" button (ghost tier, same metrics). */
+.comment-send { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
 .comment-list { display: flex; flex-direction: column; }
 /* Repeating entries = flat list rows on a hairline (design.md list-row). */
 .comment { padding: 8px 0; border-top: 1px solid var(--line-muted); }
@@ -742,10 +756,12 @@ a.chip:hover { text-decoration: underline; }
   font-size: var(--font-caption);
 }
 .activity-row:first-child { border-top: 0; }
+/* One weight for the whole line (no bold): the field name and arrows read
+   muted, old and new values in the regular foreground. */
 .activity-change { min-width: 0; overflow-wrap: anywhere; }
+.activity-field { color: var(--muted); }
 .activity-old { color: var(--muted); }
 .activity-arrow { color: var(--muted); }
-.activity-new { font-weight: 600; }
 .activity-meta { color: var(--muted); white-space: nowrap; }
 .children-list { display: flex; flex-direction: column; margin-bottom: 8px; }
 .child-row {
@@ -956,7 +972,12 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   text-transform: uppercase;
 }
 .board-card-person { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+/* Title line: the title fills; on a coarse pointer the compact status select
+   sits right-aligned on the same line (centred beside a wrapped title). */
+.board-card-title-row { display: flex; align-items: center; gap: 8px; }
 .board-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--font-label);
   font-weight: 600;
   line-height: 1.3;
@@ -1001,11 +1022,19 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-card-comment .chip { max-width: 70%; vertical-align: bottom; }
 /* Drop target: the whole column lights up while a card hovers over it. */
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
-/* Touch fallback for the drag: a status select under the card, only shown
-   where there is no pointer to drag with. */
+/* Touch fallback for the drag: a compact status select inline on the title
+   line, only shown where there is no pointer to drag with — small control
+   height, auto width, so the card stays dense (issue #27). */
 .board-card-status { display: none; }
 @media (pointer: coarse) {
-  .board-card-status { display: block; width: auto; margin: 0 12px 10px; height: var(--row-sm); }
+  .board-card-status {
+    display: inline-block;
+    flex: none;
+    width: auto;
+    height: var(--control-h);
+    padding: 0 8px;
+    font-size: var(--font-caption);
+  }
   .board-strip-btn { min-height: var(--row-sm); }
 }
 /* Small empty state per column — a peer of the cards, not a full-height card. */
@@ -1085,10 +1114,12 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-group-link:hover { background: var(--accent-soft); }
 .today-group-count { color: var(--muted); font-weight: 400; }
 .today-list { display: flex; flex-direction: column; }
-/* Repeating entries = flat list rows on a hairline (design.md list-row). */
+/* Repeating entries = flat list rows on a hairline (design.md list-row).
+   One line per row: checkbox · ellipsizing title (+glyphs) · due badge
+   right — the person lives in the drawer, not the row (issue #27). */
 .today-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 64px 150px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 10px;
   min-height: var(--row-sm);
@@ -1123,8 +1154,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-recur .icon { width: 12px; height: 12px; }
 .today-crumb { color: var(--muted); font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .today-due { font-size: var(--font-caption); white-space: nowrap; color: var(--fg); text-align: right; }
-.today-person { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; min-width: 0; overflow: hidden; }
-.today-person .icon { width: 12px; height: 12px; }
 .today-later .collapse-body { padding: 0 0 4px; }
 .today-later .today-group-title { padding-top: 10px; }
 @media (pointer: coarse) {
@@ -1132,9 +1161,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .today-row { min-height: var(--row-md); }
 }
 @media (max-width: 520px) {
-  .today-row { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .today-person { grid-column: 2; grid-row: 2; }
-  .today-person:empty { display: none; }
   .today-crumb { display: none; }
 }
 
