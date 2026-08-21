@@ -15,7 +15,7 @@ Prerequisites:
 Usage:
     # Provision or force-renew (auto-detects this machine's MagicDNS name):
     & .venv/Scripts/python.exe scripts/gen_tailscale_cert.py
-    & .venv/Scripts/python.exe scripts/gen_tailscale_cert.py tower.tail1121fd.ts.net
+    & .venv/Scripts/python.exe scripts/gen_tailscale_cert.py <host>.ts.net
 
     # Check and auto-renew if expiring within 30 days (wire into the webapp
     # launcher's startup, before uvicorn binds, so a stale cert self-heals):

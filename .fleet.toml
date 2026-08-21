@@ -30,7 +30,7 @@ geometry       = { src = "tests/e2e/_geometry.py",                    sha = "d15
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "tests/e2e/_browser_sweep.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "scripts/classify_e2e.py" }
 no_window      = { src = "src/no_window.py",                          sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "src/no_window.py" }
-tailscale_cert = { src = "scripts/gen_tailscale_cert.py",             sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "scripts/gen_tailscale_cert.py" }
+tailscale_cert = { src = "scripts/gen_tailscale_cert.py",             sha = "bf8ecf460678fb06eb8d302344ca32c982b7efee", dest = "scripts/gen_tailscale_cert.py" }
 # automation (ferraroroberto/automation, system/foldersearcher — the GUI-free half
 # of the fleet's folder searcher), verbatim; sha = that repo's commit.
 foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sha = "799d746dad501595ae5a6c2fd5b521413e032c5c", dest = "src/vendor/foldersearcher_core.py" }
