@@ -165,7 +165,14 @@ export function createDrawer(el, opts) {
     input.addEventListener('blur', function () { commit(input.value.trim()); });
     btn.addEventListener('click', function (ev) {
       ev.preventDefault();
-      try { if (typeof picker.showPicker === 'function') { picker.showPicker(); return; } } catch (_) { /* fall through */ }
+      // Touch/coarse-pointer WebKit reports showPicker() as a function and
+      // calling it never throws, but it opens nothing — the exception-based
+      // fallback below never runs (issue #50). Coarse pointers skip straight
+      // to the fallback, which does open the native picker there.
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      if (!coarse) {
+        try { if (typeof picker.showPicker === 'function') { picker.showPicker(); return; } } catch (_) { /* fall through */ }
+      }
       picker.classList.add('is-visible');
       picker.focus();
       picker.click();
