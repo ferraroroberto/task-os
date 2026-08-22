@@ -20,9 +20,9 @@
 
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
-· ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``,
-``q`` (full text), ``updated_since`` (date), ``done_on`` (date),
-``include_closed``, ``limit``.
+· ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``
+(repeatable / comma-separated ids), ``q`` (full text), ``updated_since``
+(date), ``done_on`` (date), ``include_closed``, ``limit``.
 
 ``due`` on create / update accepts the same natural phrases the CLI does
 (``tomorrow``, ``next friday``, ``in 2 weeks``, ISO) — resolved here through
@@ -150,7 +150,7 @@ def list_tasks(
     due_from: str | None = None,
     due_to: str | None = None,
     type: str | None = None,
-    person: int | None = None,
+    person: list[str] | None = Query(default=None),
     q: str | None = None,
     updated_since: str | None = None,
     done_on: str | None = None,
@@ -161,6 +161,14 @@ def list_tasks(
     statuses: list[str] = []
     for s in status or []:
         statuses.extend(p.strip() for p in s.split(",") if p.strip())
+    people: list[int] = []
+    for s in person or []:
+        for p in s.split(","):
+            if p.strip():
+                try:
+                    people.append(int(p))
+                except ValueError as exc:
+                    raise repo.ValidationError(f"person must be an id, got {p!r}") from exc
     parent_id: int | str | None = None
     if parent is not None:
         parent_id = "root" if parent in ("root", "none", "null", "") else int(parent)
@@ -173,7 +181,7 @@ def list_tasks(
         due_from=due_from,
         due_to=due_to,
         type=type,
-        person_id=person,
+        person_id=people or None,
         q=q,
         include_closed=include_closed,
         limit=limit,

@@ -85,7 +85,7 @@ def _open_filters(page: Page, host_id: str):
     card = page.locator(f"#{host_id} .filter-card")
     expect(card).to_be_visible()
     if not card.evaluate("el => el.open"):
-        card.locator("summary").click()
+        card.locator("summary.collapse-summary").click()
     expect(card).to_have_attribute("open", "")
     return card
 
@@ -248,7 +248,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         rolled = _get(base, f"/api/tasks/{vid}")
         assert rolled["due"] == next_due and rolled["status"] == "todo"
         assert rolled["activity"][0]["field"] == "due"
-        later.locator("summary").click()
+        later.locator("summary.collapse-summary").click()
         rolled_row = later.locator(f".trow[data-id='{vid}']")
         expect(rolled_row).to_be_visible()
         expect(rolled_row.locator(".trow-status")).to_have_value("todo")

@@ -74,7 +74,7 @@ def _open_filters(page: Page, host_id: str):
     card = page.locator(f"#{host_id} .filter-card")
     expect(card).to_be_visible()
     if not card.evaluate("el => el.open"):
-        card.locator("summary").click()
+        card.locator("summary.collapse-summary").click()
     expect(card).to_have_attribute("open", "")
     return card
 
@@ -95,10 +95,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
         expect(page).to_have_url(f"{base}/?status=doing")
         card = _open_filters(page, "tableFilters")
-        pill = card.locator(".filter-status .filter-pill[data-status='doing']")
-        expect(pill).to_have_class(re.compile(r"\bactive\b"))
-        expect(pill).to_have_attribute("aria-pressed", "true")
-        expect(card.locator(".filter-pill.active")).to_have_count(1)
+        # status is a multi-select (#48): the summary reads the one status picked
+        status_sel = card.locator(".msel[data-name='status']")
+        expect(status_sel.locator(".msel-text")).to_have_text("doing")
+        expect(status_sel.locator("input[name='status']:checked")).to_have_count(1)
+        expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
         expect(card.locator(".filter-desc")).to_contain_text("doing")
         rows = page.locator(".task-row")
         expect(rows).to_have_count(7)  # the seed's seven `doing` tasks
@@ -193,7 +194,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         # the doing filter hides an inbox task — clear to see it, as a user would
         _open_filters(page, "tableFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
-        expect(page.locator("#tableFilters .filter-pill.active")).to_have_count(0)
+        expect(page.locator("#tableFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
         new_row = _row(page, "renew passport")
         expect(new_row).to_be_visible()
         new_id = int(new_row.get_attribute("data-id"))
@@ -294,11 +295,21 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(watering.locator(".trow-status")).to_have_value("doing")
         assert_no_horizontal_overflow(page)
         assert_min_target(page.locator("#paneTable .quick-add-input"))
-        # the shared filter card: six status pills, the URL's one pressed
+        # the shared filter card: the status multi-select holds the six statuses,
+        # the URL's one checked; on the phone the controls sit two per line,
+        # equal widths (#48)
         card = _open_filters(page, "tableFilters")
-        pills = card.locator(".filter-status .filter-pill")
-        expect(pills).to_have_count(6)
-        expect(pills.filter(has_text=re.compile(r"^doing$"))).to_have_attribute("aria-pressed", "true")
+        status_sel = card.locator(".msel[data-name='status']")
+        status_sel.locator("summary.msel-summary").click()
+        expect(status_sel.locator("input[name='status']")).to_have_count(6)
+        expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
+        page.keyboard.press("Escape")
+        boxes = card.locator(".filter-row > .filter-select, .filter-row > .msel").evaluate_all(
+            "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.width)]; })")
+        assert len(boxes) == 6, boxes
+        lefts = sorted(set(b[0] for b in boxes))
+        assert len(lefts) == 2, boxes                                  # two columns
+        assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
         # rows are ≥44px tall; the status select is compact and centred on the title line
         assert_min_target(rows)
         assert_no_overlap(rows.locator(".trow-status"))

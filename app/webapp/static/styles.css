@@ -231,13 +231,14 @@ html, body {
 /* Every Settings card is a collapsible disclosure (index.html). The body
    breathes: the first paragraph sits under the summary with room; labels are
    plain label-size text (no caps); state words carry the color. */
-.settings-card .collapse-body { display: grid; gap: var(--space-sm); padding-top: var(--space-md); }
-.settings-card .card-meta { margin: 0; font-size: var(--font-label); line-height: 1.5; }
-.settings-card .collapse-count { font-size: var(--font-label); }
+.settings-card .collapse-body { display: grid; gap: var(--space-sm); padding-top: var(--space-md); font-size: var(--font-caption); }
+.settings-card .card-meta { margin: 0; font-size: var(--font-caption); line-height: 1.5; }
+.settings-card .collapse-count { font-size: var(--font-caption); }
+.settings-card .button-ghost, .settings-card .button-surface { font-size: var(--font-caption); }
 .status-rows { margin: 0; display: grid; gap: var(--space-xs); }
 .status-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
-.status-row dt { color: var(--muted); font-size: var(--font-label); }
-.status-row dd { margin: 0; font-size: var(--font-label); overflow-wrap: anywhere; }
+.status-row dt { color: var(--muted); font-size: var(--font-caption); }
+.status-row dd { margin: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 .status-row .status-ok { color: var(--success, var(--fg)); font-weight: 600; }
 .status-row .status-off { color: var(--muted); font-weight: 600; }
 .status-row .status-warn { color: var(--danger, var(--fg)); font-weight: 600; }
@@ -409,35 +410,76 @@ a.chip:hover { text-decoration: underline; }
 
 /* ======================================================== the filter card */
 /* One collapsible card (vendored disclosure) on every tab. The summary says
-   what is active; the body is the status pills (standard pill size, pressed
-   = the status tint) and one wrapping row of controls at the control height. */
+   what is active; the body is one row of controls at the control height —
+   text · project | person · due | modified · status | sort — which the phone
+   lays out two per line, equal widths (#48). */
 .filter-card .collapse-main { min-width: 0; flex: 1 1 auto; }
 .filter-card .filter-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filter-body { display: grid; gap: 10px; }
-.filter-status { display: flex; flex-wrap: wrap; gap: 6px; }
-.filter-pill { cursor: pointer; font: inherit; font-size: var(--font-caption); font-weight: 600; }
-.filter-pill:not(.active) { background: var(--card); color: var(--muted); border-color: var(--line); text-decoration: none; }
-.filter-pill.active { box-shadow: 0 0 0 1px currentColor inset; }
-.filter-pill.pill-inbox.active, .filter-pill.pill-todo.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 .filter-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
-.filter-select { max-width: 200px; }
+.filter-select, .filter-row .msel { max-width: 200px; }
 .filter-q { width: 180px; }
 .filter-clear { min-height: var(--control-h); }
 @media (max-width: 767px) {
-  .filter-select { max-width: none; flex: 1 1 44%; }
-  .filter-q { flex: 1 1 100%; width: auto; }
+  .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .filter-select, .filter-row .msel, .filter-q { width: 100%; max-width: none; }
+  .filter-q, .filter-clear { grid-column: 1 / -1; }
 }
-/* Touch: the pill stays pill-sized to the eye (28px), the invisible hit
-   area grows to the 44px floor; the row gap keeps neighbours' areas apart. */
+/* Multi-select: a select-looking summary that opens a checklist (filters.js).
+   Several picks allowed; the summary reads "Anyone" / the name / "2 people". */
+.msel { position: relative; min-width: 0; }
+.msel-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  list-style: none;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: calc(var(--control-h) - 2px);
+}
+.msel-summary::-webkit-details-marker { display: none; }
+.msel-summary::after { content: "\2304"; color: var(--muted); font-size: 0.9em; line-height: 1; transform: translateY(-2px); }
+.msel-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.msel.has-value .msel-summary { color: var(--accent); border-color: var(--accent-border-soft); }
+.msel-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 25;
+  min-width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+.msel-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.msel-opt:hover { background: var(--card-2); }
+.msel-opt input { margin: 0; accent-color: var(--accent); }
+.msel-none { margin: 0; padding: 6px 8px; font-size: var(--font-caption); }
 @media (pointer: coarse) {
-  .filter-status { gap: 16px 10px; }
-  .filter-pill { min-height: 28px; padding: 0 10px; }
-  .filter-pill::before { inset: -8px -2px; }
+  .msel-summary { line-height: calc(var(--row-sm) - 2px); }
+  .msel-opt { min-height: var(--row-sm); }
 }
 
 /* ============================================================ the task row */
@@ -539,8 +581,10 @@ a.chip:hover { text-decoration: underline; }
 /* ------------------------------------------------------------- table */
 /* Desktop: a flat grid (no card wrapper) that scrolls inside its own box
    (both axes) — the page never grows sideways; the sticky header sticks to
-   the scroller's top. Phone: the shared rows (`.table-rows`). */
-.table-wrap { border-top: 1px solid var(--line-muted); }
+   the scroller's top. Phone: the shared rows (`.table-rows`). No line of its
+   own under the filter card (#48): the header row / the first row's hairline
+   is the only separation. */
+.table-wrap { border-top: 0; }
 .table-scroll { overflow: auto; max-height: calc(100vh - 230px); }
 .task-table {
   width: 100%;
@@ -558,7 +602,7 @@ a.chip:hover { text-decoration: underline; }
   font-weight: 600;
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-muted);
   white-space: nowrap;
 }
 .task-table td {
@@ -1111,12 +1155,13 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .login-card .button-primary { min-height: var(--row-md); }
 .login-error { margin: 0; color: var(--danger); font-size: var(--font-label); }
 
-/* Settings → Phone access card: status rows from GET /api/status. */
-.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: var(--font-label); }
+/* Settings → Phone access card: status rows from GET /api/status. A coloured
+   state word is always bold — one rule for every Settings row (#48). */
+.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: var(--font-caption); }
 .access-rows dt { color: var(--muted); }
 .access-rows dd { margin: 0; }
-.access-rows .ok { color: var(--success); }
-.access-rows .warn { color: var(--danger); }
+.access-rows .ok { color: var(--success); font-weight: 600; }
+.access-rows .warn { color: var(--danger); font-weight: 600; }
 .access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }
 
 /* ====================================================== Step 10 surfaces */
@@ -1163,7 +1208,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-hit-icon { width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
 .search-hit-main { min-width: 0; display: grid; gap: 2px; }
 .search-hit-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.95rem; font-weight: 600; overflow-wrap: anywhere; }
-/* The title IS the link: plain accent text, no chip box, the opener glyph inline. */
+/* The title IS the link: plain text in the row's title style, no chip box, no glyph. */
+.search-hit-link .icon { display: none; }
 .search-hit-link, a.chip.search-hit-link {
   display: inline-flex;
   align-items: center;
@@ -1171,14 +1217,18 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--fg);
   font-size: inherit;
   font-weight: inherit;
   line-height: inherit;
   text-decoration: none;
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .search-hit-link:hover { text-decoration: underline; }
+.search-hit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; max-width: 100%; }
 .search-hit-sub { color: var(--muted); font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit-snippet { font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }

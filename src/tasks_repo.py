@@ -655,7 +655,7 @@ def list_tasks(
     due_from: str | None = None,
     due_to: str | None = None,
     type: str | None = None,
-    person_id: int | None = None,
+    person_id: int | list[int] | None = None,
     q: str | None = None,
     include_closed: bool = False,
     limit: int | None = None,
@@ -668,6 +668,7 @@ def list_tasks(
     - ``parent_id``: an id, or ``"root"`` for top-level tasks only;
     - ``project``: descendant-of ``project`` (any depth);
     - ``due``: ``today`` · ``week`` · ``overdue`` · a date; or ``due_from``/``due_to``;
+    - ``person_id``: one id or a list (the filter card's multi-select);
     - ``q``: FTS over title/description/comments (see :func:`search`);
     - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
       on that day (the Board's *Done today* column; ``done_at`` is a local
@@ -727,8 +728,10 @@ def list_tasks(
         args.append(type)
 
     if person_id is not None:
-        where.append("t.person_id = ?")
-        args.append(int(person_id))
+        people = [int(p) for p in (person_id if isinstance(person_id, (list, tuple)) else [person_id])]
+        if people:
+            where.append(f"t.person_id IN ({', '.join('?' * len(people))})")
+            args.extend(people)
 
     if done_on:
         where.append("substr(t.done_at, 1, 10) = ?")

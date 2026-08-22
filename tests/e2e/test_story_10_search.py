@@ -2,8 +2,8 @@
 
     Type a word in the Search tab → results grouped in four collapsible
     groups, Tasks · Folders · Emails · Issues (task hits are the ONE shared
-    row; the other hits' title is the link, then attach · new-task actions)
-    → with a task open in the drawer, attach an email hit → the link appears in
+    row; folder / email / issue hits are the same row shape, the title IS
+    the link, no buttons — #48) → open a task from its row → the drawer
     the drawer → create a task from a folder hit → it appears with the folder
     chip → Ctrl+K → type a word → Enter opens the task → `>` lists the
     commands → "Go to Board" switches the tab. On the phone the same box and
@@ -18,7 +18,7 @@ Chromium then a 390-wide touch context, saving the proof shots the
 validation record links to:
 
     docs/screenshots/story-10-search-1-desktop.png   "kitchen": four groups, full width
-    docs/screenshots/story-10-search-2-desktop.png   drawer open + email attached (link in the drawer)
+    docs/screenshots/story-10-search-2-desktop.png   drawer open beside the results
     docs/screenshots/story-10-search-3-desktop.png   task created from a folder hit (folder chip in the drawer)
     docs/screenshots/story-10-search-4-desktop.png   Ctrl+K: jump to a task
     docs/screenshots/story-10-search-5-desktop.png   Ctrl+K: > commands (dark)
@@ -116,7 +116,7 @@ def _open_group(page: Page, kind: str):
     g = page.locator(f".search-group[data-kind='{kind}']")
     expect(g).to_be_visible()
     if not g.evaluate("el => el.open"):
-        g.locator("summary").click()
+        g.locator("summary.collapse-summary").click()
     expect(g).to_have_attribute("open", "")
     return g
 
@@ -158,51 +158,36 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(kitchen_hit.locator(".trow-title")).to_contain_text("Kitchen")
     expect(kitchen_hit.locator(".trow-status")).to_have_value("doing")
     expect(kitchen_hit.locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
-    # folder / email / issue hits: the title IS the link, then Attach · New task
+    # folder / email / issue hits are the same row shape (#48): a title line and
+    # one muted meta line, no glyphs, no buttons — the title IS the link
     folder_hit = page.locator(".search-group[data-kind='folders'] .search-hit").first
-    expect(folder_hit.locator(".search-hit-sub")).to_have_text("{onedrive}/house/kitchen")
+    expect(folder_hit).to_have_class(re.compile(r"\btrow\b"))
+    expect(folder_hit.locator(".trow-meta .search-hit-meta").first).to_contain_text("/house/kitchen")
     expect(folder_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", re.compile(r"^taskos://open\?ref="))
-    expect(folder_hit.locator("[data-act='new']")).to_be_visible()
-    expect(page.locator(".search-group[data-kind='emails'] .search-hit-title").first).to_contain_text("Kitchen quotes from the installer")
+    expect(folder_hit.locator("[data-act='new'], [data-act='attach'], .search-hit-icon, .search-hit-actions")).to_have_count(0)
+    email_hit = page.locator(".search-group[data-kind='emails'] .search-hit").first
+    expect(email_hit.locator(".trow-title")).to_contain_text("Kitchen quotes from the installer")
+    expect(email_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", re.compile(r"^taskos://open\?ref="))
+    expect(email_hit.locator("[data-act='attach'], .search-hit-actions")).to_have_count(0)
     issue_hit = page.locator(".search-group[data-kind='issues'] .search-hit").first
-    expect(issue_hit.locator(".search-hit-title")).to_contain_text("Kitchen lights automation")
-    expect(issue_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", "https://github.com/example/home-dashboard/issues/7")
+    expect(issue_hit.locator(".trow-title")).to_contain_text("Kitchen lights automation")
+    # this issue is already on the list: its title opens the linked task (the
+    # issue chip inside the task is the forge link); the meta names repo#N + task
+    expect(issue_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", re.compile(r"^#task/\d+$"))
+    expect(issue_hit.locator(".trow-meta")).to_contain_text("example/home-dashboard#7")
+    expect(issue_hit.locator(".trow-meta")).to_contain_text("task #")
     expect(page.locator(".search-hit mark").first).to_be_visible()
     assert "q=kitchen" in page.url                                # ?q= keeps the query
-    # every hit that can attach is disabled until a task is open in the drawer
-    email_attach = page.locator(".search-group[data-kind='emails'] .search-hit").first.locator("[data-act='attach']")
-    expect(email_attach).to_be_disabled()
     page.screenshot(path=str(shots / "story-10-search-1-desktop.png"), full_page=True)
 
-    # 2. open a task (the Kitchen task) from its row → drawer; attach the email hit → link in the drawer
+    # 2. open a task (the Kitchen task) from its row → the drawer beside the results
     kitchen_hit.locator(".trow-main").click()
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
-    expect(email_attach).to_be_enabled()
-    email_attach.click()
-    expect(page.locator(".toast")).to_contain_text("Email attached to #")
-    link = drawer.locator(".drawer-links .chip", has_text="Kitchen quotes from the installer")
-    expect(link).to_be_visible()
-    assert link.get_attribute("href").startswith("taskos://open?ref=%7Bonedrive%7D%2Fmail%2Fhouse")
-    kitchen = _task_by_title(base, "Kitchen")
-    links = _get(base, f"/api/tasks/{kitchen['id']}")["links"]
-    email_link = next(x for x in links if x["kind"] == "email" and x["label"] == "Kitchen quotes from the installer")
-    assert email_link["url"] == "{onedrive}/mail/house/2026-08-10 Kitchen quotes.msg"
     page.screenshot(path=str(shots / "story-10-search-2-desktop.png"))
 
-    # 3. create a task from a folder hit → the drawer opens on it with the folder chip
-    plans = page.locator(".search-group[data-kind='folders'] .search-hit", has_text="{onedrive}/house/kitchen/plans")
-    plans.locator("[data-act='new']").click()
-    expect(page.locator(".toast").last).to_contain_text("created: plans")
-    expect(drawer.locator("#drawerTitle")).to_have_value("plans")
-    chip = drawer.locator(".drawer-folder a.chip-folder")
-    expect(chip).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen%2Fplans")
-    created = _task_by_title(base, "plans")
-    assert created["folder_ref"] == "{onedrive}/house/kitchen/plans"
-    assert created["folder_resolved"] == inst.od_fwd + "/house/kitchen/plans"
-    page.screenshot(path=str(shots / "story-10-search-3-desktop.png"))
-    # the folder hit's title link hands the ref to the opener (intercepted here)
+    # 3. the folder hit's title link hands the ref to the opener (intercepted here)
     page.locator(".search-group[data-kind='folders'] .search-hit").first.locator("a.search-hit-link[data-act='open']").click()
     assert page.evaluate("window.__taskosClicks")[-1] == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
     pop = page.locator("#folderPop")                                # the one-time "install the opener" hint (Step 9)
