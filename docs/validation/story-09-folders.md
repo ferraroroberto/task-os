@@ -30,7 +30,7 @@
 **Result — 2026-08-17: verified on PC #1 (browser → opener → Explorer); second PC not verified.**
 
 - [x] Automated: `verify-before-ship.ps1` green — byte-compile (incl. `opener/`), ruff, the unit suite (incl. `test_placeholders`, `test_folder_index`, `test_opener` — the last one drives `cmd.exe` on the real handler), the routed e2e (full tier: smoke + stories 01, 04, 05, 06, 07, 09).
-- [x] Opener installed for real on this PC: `python opener\install_opener.py --dry-run` printed the plan, then the real run wrote `%LOCALAPPDATA%\task-os\opener.cmd` + `opener.env` and `HKCU\Software\Classes\taskos` (`URL Protocol`, `DefaultIcon`, `shell\open\command = cmd.exe /c ""…\opener.cmd" "%1""`), all read back with `Get-ItemProperty`. `Start-Process taskos://open?ref=%7Bonedrive%7D%2Ftask-os` (the ShellExecute path) opened Explorer on `E:\onedrive\task-os` (`Shell.Application.Windows()` → `file:///E:/onedrive/task-os`).
+- [x] Opener installed for real on this PC: `python opener\install_opener.py --dry-run` printed the plan, then the real run wrote `%LOCALAPPDATA%\task-os\opener.cmd` + `opener.env` and `HKCU\Software\Classes\taskos` (`URL Protocol`, `DefaultIcon`, `shell\open\command = cmd.exe /c ""…\opener.cmd" "%1""`), all read back with `Get-ItemProperty`. `Start-Process taskos://open?ref=%7Bonedrive%7D%2Ftask-os` (the ShellExecute path) opened Explorer on `E:\onedrive\task-os` (`Shell.Application.Windows()` → `file:///E:/onedrive/task-os`). **Superseded 2026-08-20** — the registered command is now the launcher (`powershell.exe -NoProfile -ExecutionPolicy Bypass -File …\opener.ps1 -Url "%1"`); see the amendment at the end of this file.
 - [x] Browser → opener on PC #1: a disposable seeded instance of this build on `:8459` (`{onedrive}` = `E:/onedrive`, the *Kitchen* task's ref set to `{onedrive}/task-os` — an existing folder holding only the mirror/backup subfolders, nothing personal), opened in **real Google Chrome** (a fresh temporary profile whose Preferences pre-allowed the `taskos` scheme for that origin — the equivalent of ticking *always allow* on the first-time prompt) → click on the folder chip → **Explorer opened `E:\onedrive\task-os`** (shots 8–9), the hint popover appeared under the chip once. Nothing else on the page changed; the row did not open.
 - [x] Folder index on the real config: `tasks --local folders reindex` over `{onedrive}/Documentos` → **11979 folders in 2.0 s** → `data/folder_index.txt`; `tasks folders` reports the roots, the count and the timestamp. (Real content stays off screen; the e2e index is the temp tree.)
 - [x] `opener.cmd` edge cases by hand (dry-run) beyond the tests: `taskos://open/{onedrive}/…` path form, an already-absolute `E:\…` ref, `%25` last so `100%25` decodes once, `café` through the inline PowerShell fallback, the `not synced on this PC` console notice with `pause`.
@@ -42,3 +42,29 @@
   5. Phone: tap a chip → the copy popover (already verified in the browser at 390 wide; the real device is the same leg story 07 left open).
 - Not verified in this step, by design: the first-time *Open task-os opener?* prompt itself (a native browser dialog — Chrome's Preferences were pre-seeded to skip it; Edge showed the same prompt on the probe PC and handed the URL over after *always allow*); Windows-only handler (no macOS/Linux opener — the copy popover is the fallback there); a `!` inside a folder name (lost by cmd's delayed expansion — documented in `opener/README.md`).
 - Incidental: `tests/test_mirror.py::test_appended_comment_lines_become_md_comments` carried a fixed `2026-08-17T12:00:00+02:00` timestamp that started sorting *before* "now" at noon today; the line now uses now + 1 h (same intent, no date-bomb).
+
+---
+
+## Amendment — 2026-08-20: the URL scheme is registered to a launcher (#40)
+
+The story is unchanged (click a folder chip → Explorer opens **this** PC's synced copy); what changed is *what Windows runs* when the chip is clicked, and why.
+
+**Reproduction, run for real on this machine before any code changed.** A throwaway scheme (`taskosprobe`, `HKCU` only, deleted afterwards, real `taskos` key read back unchanged before and after) registered against a probe handler that records its arguments, fired through `Start-Process`, `[Diagnostics.Process]::Start` and `cmd /c start`, with a harmless payload (`echo` into a temp file):
+
+| Registered `shell\open\command` | URL with a raw `"` | URL with `%22` |
+| --- | --- | --- |
+| `cmd.exe /c ""probe.cmd" "%1""` (the shape story 09 shipped) | payload ran | inert, handler saw the URL still encoded |
+| `"probe.cmd" "%1"` | payload ran | inert |
+| both of the above `+ UseOriginalUrlEncoding=1` | payload ran | inert |
+| `cmd /s /c …` · unquoted `%1` · `^"%1^"` | payload ran (at some quote count) | — |
+| `powershell.exe -File probe.ps1 -Url "%1"` | **nothing ran**, handler got the URL | **nothing ran** |
+
+Two results, both measured, not reasoned: **percent-encoded input is inert in every shape** (so browsers, and every ref this app builds via `quote(ref, safe='')`, are safe), and **no `cmd`-based shape survives a raw quote** — each injects at some quote count and the caller picks the count, so five shapes were tried against three counts and all five broke. Only an executable taking the URL as an argument held at every count.
+
+**What shipped.** `opener/opener.ps1` is now the registered command; it refuses a URL containing a quote and passes the rest to `opener.cmd` in `TASKOS_OPENER_URL`, which `cmd`'s delayed expansion never re-tokenises. Where a machine policy blocks running a script file, both installers fall back to the old `.cmd` registration and **say so** — `mode: FALLBACK` from `install_opener.py`, `FALLBACK mode` at the end of the pasted one-liner, a `fallback mode` chip in Settings → *Folder opener*.
+
+- [x] Automated: `verify-before-ship.ps1` green — byte-compile, ruff, the unit suite (`test_opener` now drives `opener.ps1` through `powershell.exe` as well as `opener.cmd` through `cmd.exe`), routed e2e.
+- [x] The three new tests were run against the pre-fix tree (`git stash push -u`, tests restored on top) and **all three failed**; they pass on the fixed tree. Note honestly what each proves: they pin the fixed *design* (launcher registered, quote refused, fallback announced). The injection itself is reproduced by the probe above, not by the suite — the suite does not register schemes or ShellExecute.
+- [x] Handler behaviour unchanged through the new path, by hand and in dry-run: `{onedrive}/house/kitchen (2024)` → `open: …`, `{sharepoint:docs}/plans` → `open: …`, `café` through the inline-PowerShell branch → `missing: …`, and a link carrying a quote → the refusal notice with nothing opened, raw **and** as `%22` (the encoded one used to reach `[uri]::UnescapeDataString` and die on a raw `Test-Path` exception — an exception is not a state, so it refuses now too).
+- [x] Installed for real on this PC with the new installer: `mode: launcher`, `HKCU\Software\Classes\taskos\shell\open\command` read back as `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\<me>\AppData\Local\task-os\opener.ps1 -Url "%1"`, then `Start-Process taskos://open?ref=%7Bonedrive%7D%2Ftask-os` opened Explorer on the same folder as before.
+- [ ] **Not verified — needs the locked-down second PC.** That the fallback branch is the one taken where script files are blocked, and that it prints `FALLBACK mode` there. The probe on 2026-08-17 established that such a PC blocks `.ps1` **files** while allowing an inline pasted command, which is exactly the case the fallback exists for — but the branch itself has only been exercised here by forcing it, not by a real policy.

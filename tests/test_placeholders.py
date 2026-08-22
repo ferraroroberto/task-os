@@ -116,6 +116,9 @@ def test_status_carries_folders_opener_and_placeholders(client: TestClient) -> N
     assert "# onedrive=E:\\onedrive" in st["opener"]["env_template"]
     assert st["placeholders"] == {"onedrive": "E:/onedrive", "user": "rober"}
     assert st["opener"]["installed_here"] in (True, False, None)
+    # which registration shape is in use is its own state, never folded into
+    # installed_here — the fallback hands the URL to a command interpreter
+    assert st["opener"]["mode"] in ("launcher", "fallback", None)
 
 
 def test_opener_handler_is_served_publicly(client: TestClient) -> None:
@@ -125,6 +128,10 @@ def test_opener_handler_is_served_publicly(client: TestClient) -> None:
 
     body = client.get("/opener/opener.cmd")
     assert body.status_code == 200 and body.text.startswith("@echo off")
+    # the launcher is what actually gets registered, so it has to be downloadable too
+    launcher = client.get("/opener/opener.ps1")
+    assert launcher.status_code == 200 and "param(" in launcher.text
     with TC(create_app(), client=("100.64.0.9", 1)) as remote:
         assert remote.get("/opener/opener.cmd").status_code == 200
+        assert remote.get("/opener/opener.ps1").status_code == 200
         assert remote.get("/api/status").status_code == 401

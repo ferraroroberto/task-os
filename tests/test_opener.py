@@ -7,6 +7,7 @@ elsewhere); ``install_opener.py --dry-run`` and ``src/opener.py`` run anywhere."
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from src.placeholders import opener_url
 
 REPO = Path(__file__).resolve().parents[1]
 HANDLER = REPO / "opener" / "opener.cmd"
+LAUNCHER = REPO / "opener" / "opener.ps1"
 INSTALLER = REPO / "opener" / "install_opener.py"
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="the opener is a Windows cmd handler")
@@ -62,17 +64,39 @@ def pc(tmp_path: Path) -> dict[str, str]:
     return {"od": str(od), "sp": str(sp), "la": str(la), "root": str(tmp_path)}
 
 
-def run_opener(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_over: str) -> subprocess.CompletedProcess:
-    base = {k: v for k, v in os.environ.items() if k != "TASKOS_OPENER_ENV"}
+def _pc_env(pc: dict[str, str], dryrun: bool, env_over: dict[str, str]) -> dict[str, str]:
+    base = {k: v for k, v in os.environ.items()
+            if k not in ("TASKOS_OPENER_ENV", "TASKOS_OPENER_URL")}
     env = {**base, "OneDrive": pc["od"], "OneDriveCommercial": "", "USERNAME": "tester",
            "LOCALAPPDATA": pc["la"], "TASKOS_TEST_ROOT": pc["root"], **env_over}
     if dryrun:
         env["TASKOS_OPENER_DRYRUN"] = "1"
     else:
         env.pop("TASKOS_OPENER_DRYRUN", None)
-    # exactly what the registry runs: cmd.exe /c ""<handler>" "<url>""
+    return env
+
+
+def run_opener(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_over: str) -> subprocess.CompletedProcess:
+    """The handler on its own — the fallback registration's shape, and a direct call."""
+    env = _pc_env(pc, dryrun, env_over)
+    # exactly what the fallback registration runs: cmd.exe /c ""<handler>" "<url>""
     cmd = f'cmd.exe /c ""{HANDLER}" "{url}""'
     return subprocess.run(cmd, input=b"\r\n", capture_output=True, env=env, timeout=30)
+
+
+def run_launcher(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_over: str) -> subprocess.CompletedProcess:
+    """The preferred registration: ``powershell.exe -File opener.ps1 -Url "<url>"``.
+
+    ``subprocess`` with an argument **list** is what the shell does to an
+    executable's command line — the URL arrives as one argv element, which is
+    the whole point of the launcher.
+    """
+    env = _pc_env(pc, dryrun, env_over)
+    return subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-File", str(LAUNCHER), "-Url", url],
+        input=b"\r\n", capture_output=True, env=env, timeout=60,
+    )
 
 
 def _decode(raw: bytes) -> str:
@@ -155,6 +179,35 @@ def test_missing_path_shows_the_notice_for_real(pc: dict[str, str]) -> None:
 
 
 @windows_only
+def test_the_launcher_opens_a_folder_the_same_way_the_handler_does(pc: dict[str, str]) -> None:
+    """The registered shape must resolve refs identically — the launcher hands the
+    URL to opener.cmd through the environment, not on a command line."""
+    r = run_launcher(opener_url("{onedrive}/house/kitchen (2024)"), pc)
+    assert r.returncode == 0 and _out(r) == f"open: {pc['od']}\\house\\kitchen (2024)"
+    assert _out(run_launcher(opener_url("{sharepoint:docs}/plans"), pc)) == f"open: {pc['sp']}"
+    # the accented path (the inline-PowerShell branch inside opener.cmd) too
+    assert _out(run_launcher(opener_url("{onedrive}/café"), pc)) == f"missing: {pc['od']}\\café"
+
+
+@windows_only
+def test_a_link_carrying_a_quote_is_refused_and_nothing_else_runs(pc: dict[str, str], tmp_path: Path) -> None:
+    """A quote is the character that ends an argument and starts a second command
+    when a URL is re-parsed by a command interpreter (task-os#40). The app never
+    sends one — ``opener_url`` percent-encodes every ref — so one that arrives is
+    refused outright, and the command riding behind it must not run.
+
+    Both spellings: raw, and percent-encoded (which the inline-PowerShell branch
+    would otherwise decode back into a quote before touching the path)."""
+    marker = tmp_path / "SHOULD-NOT-EXIST.txt"
+    tail = f' & echo x>"{marker}" & rem '
+    for url in (f'taskos://open?ref=x"{tail}"', "taskos://open?ref=" + quote(f'x"{tail}"', safe="")):
+        r = run_launcher(url, pc)
+        assert r.returncode == 3, f"expected a refusal for {url!r}, got {r.returncode}: {_out(r)}"
+        assert "quote character" in _out(r)
+        assert not marker.exists(), f"a command rode in on {url!r}"
+
+
+@windows_only
 def test_no_url_is_usage_error(pc: dict[str, str]) -> None:
     r = subprocess.run(f'cmd.exe /c ""{HANDLER}""', capture_output=True, timeout=30)
     assert r.returncode == 2 and "no URL given" in _decode(r.stdout)
@@ -163,15 +216,16 @@ def test_no_url_is_usage_error(pc: dict[str, str]) -> None:
 def test_install_dry_run_prints_the_registry_plan(tmp_path: Path) -> None:
     dest = tmp_path / "la" / "task-os"
     r = subprocess.run([sys.executable, str(INSTALLER), "--dry-run", "--dest", str(dest)],
-                       capture_output=True, text=True, encoding="utf-8", timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", timeout=90)
     assert r.returncode == 0, r.stderr
     out = r.stdout
     assert "install plan (dry run):" in out
     assert r"HKCU\Software\Classes\taskos" in out and "URL Protocol" in out
-    assert f'cmd.exe /c ""{dest / "opener.cmd"}" "%1""' in out
+    assert "opener.cmd" in out and "opener.ps1" in out
+    assert "mode   " in out
     assert not dest.exists()                                     # touched nothing
     r = subprocess.run([sys.executable, str(INSTALLER), "--dry-run", "--uninstall", "--dest", str(dest)],
-                       capture_output=True, text=True, encoding="utf-8", timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", timeout=90)
     assert r.returncode == 0 and "uninstall plan (dry run):" in r.stdout and "opener.env" in r.stdout
 
 
@@ -180,9 +234,39 @@ def test_install_txt_is_one_install_and_one_uninstall_line() -> None:
     assert install.startswith("$d=") and "HKCU:\\Software\\Classes\\taskos" in install
     assert "Invoke-WebRequest" in install and opener_info.BASE_URL_TOKEN in install
     assert "New-Item" in install and "Set-ItemProperty" in install
-    assert ".ps1" not in install and "reg.exe" not in install and "reg add" not in install
+    assert "reg.exe" not in install and "reg add" not in install
     assert uninstall.startswith("Remove-Item") and "Classes\\taskos" in uninstall
     assert "\n" not in install and "\n" not in uninstall
+
+
+def test_both_installers_register_the_launcher_and_keep_the_fallback_visible() -> None:
+    """task-os#40 — the property the fix turns on, pinned in both install paths.
+
+    ``opener.cmd`` registered directly receives the URL as a command-interpreter
+    string that gets re-parsed; ``opener.ps1`` receives it as an argument. Both
+    installers must prefer the launcher, and both must *announce* the fallback
+    rather than degrade silently."""
+    spec = importlib.util.spec_from_file_location("install_opener", INSTALLER)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    dest = Path(r"C:\Users\me\AppData\Local\task-os")
+    preferred = mod.command_line(dest, launcher=True)
+    assert preferred.startswith("powershell.exe ") and "-File" in preferred
+    assert str(dest / "opener.ps1") in preferred and '-Url "%1"' in preferred
+    assert "cmd.exe" not in preferred                       # no interpreter re-parse
+    fallback = mod.command_line(dest, launcher=False)
+    assert fallback.startswith("cmd.exe /c ") and str(dest / "opener.cmd") in fallback
+    assert "FALLBACK" in "\n".join(mod.plan(dest, uninstall=False, launcher=False))
+    assert "FALLBACK" not in "\n".join(mod.plan(dest, uninstall=False, launcher=True))
+
+    # install.txt registers the same two shapes, chosen by the same probe
+    install, uninstall = opener_info.install_commands()
+    assert "opener.ps1" in install and mod.SELFTEST_OK in install
+    assert '-Url "%1"' in install and 'cmd.exe /c ""' in install   # preferred + fallback
+    assert "FALLBACK mode" in install
+    assert "opener.ps1" in uninstall and "opener.cmd" in uninstall
 
 
 def test_env_template_from_placeholders() -> None:

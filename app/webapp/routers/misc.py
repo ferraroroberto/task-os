@@ -8,13 +8,16 @@
                          verifies against (a stale process passes /healthz;
                          it cannot fake this)
     GET /opener/opener.cmd → the per-PC folder opener handler (Step 9), served
-                         as text so a second PC's install one-liner can
-                         Invoke-WebRequest it (public — see src/auth.py)
+    GET /opener/opener.ps1   as text so a second PC's install one-liner can
+                         Invoke-WebRequest them (public — see src/auth.py).
+                         Both: the launcher is what gets registered, the
+                         handler is what it calls.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR
 from src.db import get_db, schema_version
-from src.opener import HANDLER_PATH
+from src.opener import HANDLER_PATH, LAUNCHER_PATH
 
 router = APIRouter()
 
@@ -43,14 +46,23 @@ async def healthz() -> dict[str, Any]:
     return {"ok": True}
 
 
-@router.get("/opener/opener.cmd", include_in_schema=False)
-async def opener_handler() -> FileResponse:
-    if not HANDLER_PATH.exists():
-        raise HTTPException(status_code=404, detail="opener.cmd missing")
+def _opener_file(path: Path) -> FileResponse:
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"{path.name} missing")
     return FileResponse(
-        str(HANDLER_PATH), media_type="text/plain; charset=utf-8", filename="opener.cmd",
+        str(path), media_type="text/plain; charset=utf-8", filename=path.name,
         headers={"Cache-Control": "no-cache"},
     )
+
+
+@router.get("/opener/opener.cmd", include_in_schema=False)
+async def opener_handler() -> FileResponse:
+    return _opener_file(HANDLER_PATH)
+
+
+@router.get("/opener/opener.ps1", include_in_schema=False)
+async def opener_launcher() -> FileResponse:
+    return _opener_file(LAUNCHER_PATH)
 
 
 @router.get("/api/version")
