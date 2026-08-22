@@ -1,6 +1,7 @@
 """What the app knows about the per-PC folder opener (``opener/``) — Step 9.
 
-The handler itself is ``opener/opener.cmd`` and the install one-liner lives in
+The handler itself is ``opener/opener.cmd``, the launcher Windows actually
+registers is ``opener/opener.ps1``, and the install one-liner lives in
 ``opener/install.txt`` (single source: the first non-comment line is the
 install command, the second the uninstall command). This module reads them for
 ``GET /api/status`` → ``opener`` so the Settings *Folder opener* card can show
@@ -12,6 +13,8 @@ edits the paths).
 Whether the opener is installed on the machine that runs the server is a
 fact the server can establish (``HKCU\\Software\\Classes\\taskos``); for any
 other client it is unknown, and the API says so (``installed_here`` only).
+The same key also says *which* registration shape is in use (``mode``) —
+``launcher`` or the ``fallback`` a locked-down PC falls back to.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OPENER_DIR = PROJECT_ROOT / "opener"
 HANDLER_PATH = OPENER_DIR / "opener.cmd"
+LAUNCHER_PATH = OPENER_DIR / "opener.ps1"
 INSTALL_TXT = OPENER_DIR / "install.txt"
 BASE_URL_TOKEN = "<base-url>"
 
@@ -65,8 +69,8 @@ def env_template(placeholders: Mapping[str, str]) -> str:
     return "\n".join(out) + "\n"
 
 
-def installed_here() -> bool | None:
-    """``True`` / ``False`` on Windows, ``None`` (unknown) elsewhere."""
+def _registered_command() -> str | None:
+    """The registered ``taskos://`` command on **this** machine, or ``None``."""
     if sys.platform != "win32":
         return None
     try:
@@ -74,18 +78,44 @@ def installed_here() -> bool | None:
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\taskos\shell\open\command") as k:
             value, _ = winreg.QueryValueEx(k, None)
-        return "opener.cmd" in str(value).lower()
+        return str(value)
     except OSError:
-        return False
+        return None
+
+
+def installed_here() -> bool | None:
+    """``True`` / ``False`` on Windows, ``None`` (unknown) elsewhere."""
+    if sys.platform != "win32":
+        return None
+    command = (_registered_command() or "").lower()
+    return "opener.ps1" in command or "opener.cmd" in command
+
+
+def registration_mode() -> str | None:
+    """Which shape is registered here: ``"launcher"``, ``"fallback"``, or ``None``.
+
+    ``None`` covers both "not installed" and "not this OS" — the caller already
+    has :func:`installed_here` for that distinction. The mode matters because
+    the fallback hands the URL to a command interpreter as a string, which
+    re-parses it (see ``opener/opener.ps1``); it is reported so a degraded
+    install is visible rather than silent.
+    """
+    command = (_registered_command() or "").lower()
+    if "opener.ps1" in command:
+        return "launcher"
+    if "opener.cmd" in command:
+        return "fallback"
+    return None
 
 
 def status(placeholders: Mapping[str, str]) -> dict[str, Any]:
     install, uninstall = install_commands()
     return {
-        "handler_available": HANDLER_PATH.exists(),
+        "handler_available": HANDLER_PATH.exists() and LAUNCHER_PATH.exists(),
         "install": install,
         "uninstall": uninstall,
         "base_url_token": BASE_URL_TOKEN,
         "env_template": env_template(placeholders),
         "installed_here": installed_here(),
+        "mode": registration_mode(),
     }

@@ -23,13 +23,46 @@ rem   to ONE inline PowerShell command (same rules; still no script file).
 setlocal EnableExtensions EnableDelayedExpansion
 title task-os opener
 
-rem %* not %1: an unquoted "=" would split the URL into two arguments
-set "URL=%*"
-if defined URL set "URL=!URL:"=!"
+rem ---- 0. where the URL comes from ----------------------------------------
+rem opener.ps1 (the registered launcher) passes it in TASKOS_OPENER_URL, never on
+rem a command line: a URL on a command line is re-parsed by cmd, and a quote inside
+rem it starts a second command (task-os#40). !VAR! expansion is never re-tokenised,
+rem so this route cannot. %* stays for a direct call - the tests, a manual run, the
+rem fallback registration - where the quotes cmd wraps the argument in are stripped
+rem as before (%* not %1: an unquoted "=" would split the URL into two arguments).
+if defined TASKOS_OPENER_URL (
+  set "URL=!TASKOS_OPENER_URL!"
+  set "VIAPS=1"
+) else (
+  set "URL=%*"
+  set "VIAPS="
+)
+if not defined VIAPS if defined URL set "URL=!URL:"=!"
 if not defined URL (
   echo   task-os opener: no URL given. Usage: opener.cmd "taskos://open?ref=%%7Bonedrive%%7D%%2Ffolder"
   exit /b 2
 )
+
+rem Via the launcher the URL arrives bare, so a quote in it is not framing - it is
+rem a link the app never built (every ref it makes is percent-encoded). Refuse it
+rem visibly instead of stripping it and opening whatever is left. This is a second
+rem gate, not the mitigation: opener.ps1 has already refused, and on the fallback
+rem registration cmd has already re-parsed the string before this line runs.
+rem (!VAR! is substituted after the line is parsed, so a quote inside the value
+rem cannot unbalance this comparison the way a %VAR% one would)
+if not defined VIAPS goto :url_ready
+set "NOQ=!URL:"=!"
+if not "!NOQ!"=="!URL!" (
+  echo.
+  echo   task-os opener
+  echo.
+  echo   This link carries a quote character, which the app never sends.
+  echo   Nothing was opened.
+  echo.
+  pause
+  exit /b 3
+)
+:url_ready
 set "ENVFILE=%TASKOS_OPENER_ENV%"
 if not defined ENVFILE set "ENVFILE=%LOCALAPPDATA%\task-os\opener.env"
 
@@ -74,7 +107,7 @@ findstr /r /c:"%%[0-9A-Fa-f][0-9A-Fa-f]" "%PROBE%" >nul 2>&1
 set "STILL=%ERRORLEVEL%"
 del "%PROBE%" >nul 2>&1
 if "%STILL%"=="0" (
-  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; $r=[uri]::UnescapeDataString($env:RAW); $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; if($env:TASKOS_OPENER_DRYRUN){ if(Test-Path -LiteralPath $r){'open: '+$r}else{'missing: '+$r}; exit 0 }; if(Test-Path -LiteralPath $r -PathType Container){ Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ Start-Process -LiteralPath $r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); Read-Host 'Press Enter to close' | Out-Null; exit 1"
+  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; $r=[uri]::UnescapeDataString($env:RAW); if($r.Contains($q)){ Write-Host ($n+'  task-os opener'+$n+$n+'  This link carries a quote character, which the app never sends.'+$n+'  Nothing was opened.'+$n); if(-not $env:TASKOS_OPENER_DRYRUN){ Read-Host 'Press Enter to close' | Out-Null }; exit 3 }; $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; if($env:TASKOS_OPENER_DRYRUN){ if(Test-Path -LiteralPath $r){'open: '+$r}else{'missing: '+$r}; exit 0 }; if(Test-Path -LiteralPath $r -PathType Container){ Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ Start-Process -LiteralPath $r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); Read-Host 'Press Enter to close' | Out-Null; exit 1"
   exit /b !ERRORLEVEL!
 )
 
