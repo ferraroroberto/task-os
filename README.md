@@ -90,7 +90,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
 opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
-                          gen_tailscale_cert.py (vendored from the scaffold), gen_token.py, set_password.py
+                          gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
                           email-archiver index) + e2e/ (Playwright, one story test per step)
 docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
@@ -355,7 +355,7 @@ The phone reaches the same app over **Tailscale**, as an installed PWA. Three pi
 tray.bat --restart
 ```
 
-`gen_tailscale_cert.py` (vendored verbatim from `project-scaffolding`) detects this machine's MagicDNS name and asks `tailscale cert` for a Let's Encrypt leaf — trusted by every device on the tailnet, **zero per-device trust steps**. With the pair present the launcher (the tray's `manager.py`, `launcher.py webapp`, `webapp.bat` — all agree) serves **`https://<your-host>.ts.net:8448`**; without it the app serves plain HTTP and says so loudly in the log and in `GET /api/status` (`https: false`). The leaf lives ~90 days: every launcher runs `gen_tailscale_cert.py --check` **before uvicorn binds**, which renews a `.ts.net` cert expiring within ~30 days and never blocks a start. `localhost` is not in the cert — the tray's **Open task-os** / **Copy URL** use the `.ts.net` name (it resolves on the host too), the restart probe uses loopback and skips verification.
+`gen_tailscale_cert.py` (copied from `project-scaffolding` and adapted here — copy-to-adapt, not vendor-verbatim; project-scaffolding#232) detects this machine's MagicDNS name and asks `tailscale cert` for a Let's Encrypt leaf — trusted by every device on the tailnet, **zero per-device trust steps**. With the pair present the launcher (the tray's `manager.py`, `launcher.py webapp`, `webapp.bat` — all agree) serves **`https://<your-host>.ts.net:8448`**; without it the app serves plain HTTP and says so loudly in the log and in `GET /api/status` (`https: false`). The leaf lives ~90 days: every launcher runs `gen_tailscale_cert.py --check` **before uvicorn binds**, which renews a `.ts.net` cert expiring within ~30 days and never blocks a start. `localhost` is not in the cert — the tray's **Open task-os** / **Copy URL** use the `.ts.net` name (it resolves on the host too), the restart probe uses loopback and skips verification.
 
 **2. Who may call the API.** Loopback (this PC — the browser on it, the tray, the `tasks` CLI, the restart probe) is the owner and needs nothing. **Any other client must present the bearer token**, either as `Authorization: Bearer <token>` (scripts, an LLM on another machine) or as the `taskos_token` cookie the sign-in page sets. With no token configured — the committed sample — the gate is **closed**: non-loopback gets `401` on `/api/*` and is sent to `/login`, which explains what to run.
 
