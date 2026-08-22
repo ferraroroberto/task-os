@@ -1,21 +1,21 @@
 /* task-os — the Search tab: one box over four indexes (Step 10).
  *
  * `mountSearch(box, host, opts)` wires the box (`#searchInput` + `#searchMeta`)
- * and renders `GET /api/search?q=` into `host` as one card per kind — Tasks ·
- * Folders · Emails · Issues, in that order, always all four: a kind that is
- * not configured on this install renders a quiet "not configured — reason"
- * row with a link to Settings (never a silent blank), an errored one says so.
+ * and renders `GET /api/search?q=` into `host` as one collapsible group per
+ * kind — Tasks · Folders · Emails · Issues, in that order, always all four:
+ * a kind that is not configured on this install renders a quiet "not
+ * configured — reason" row with a link to Settings (never a silent blank),
+ * an errored one says so. Groups are the vendored disclosure, collapsed by
+ * default and remembered per kind (issue #46): the summary carries the
+ * count, so a closed group still tells you what it holds.
  *
- * Each hit row: kind glyph · title · subtitle · snippet with <mark> around the
- * matched terms (the server marks them `[like this]`) · actions:
- *   Open    task → the drawer · folder / email → a taskos:// opener chip
- *           (the per-PC opener opens the folder / the .msg) · issue → its URL
- *   Attach  to the task open in the drawer: folder → the task's folder_ref (or
- *           a folder link when it already has one) · email → links(kind=email,
- *           url=<file ref>, label=subject) · issue → link existing (PUT …/issue)
- *   New     a task from it: folder → title = folder name + folder_ref · email →
- *           title = subject, description "From email …", the email link · issue →
- *           title = issue title, code repo#N, the issue link + ref
+ * Task hits are the ONE task row (rows.js) — the same row the Board shows,
+ * plus the matched snippet as a third line — filtered and sorted by the
+ * shared filter card (`opts.filters()`; status · project · person · due ·
+ * modified · sort). Folder / email / issue hits: the title IS the link
+ * (a taskos:// opener link for folders and .msg files, the issue URL),
+ * then Attach (to the task open in the drawer) and New task. No separate
+ * "Open" button anywhere.
  * Keyboard: ↓ from the box focuses the first row; on rows ↑↓ move, Enter opens,
  * `a` attaches, `n` creates, Esc / `/` go back to the box.
  *
@@ -27,7 +27,9 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
-import { escapeHtml, folderChip, statusPill } from './format.js';
+import { escapeHtml, folderChip } from './format.js';
+import { matchesFilters } from './filters.js';
+import { sortItems, taskRow } from './rows.js';
 import { toast } from './toast.js';
 
 const KINDS = [
@@ -38,10 +40,18 @@ const KINDS = [
 ];
 const DEBOUNCE_MS = 200;
 const LIMIT = 20;
+const OPEN_KEY = 'task-os.search.open';
 
 /** `[match]` marks → <mark>, everything else escaped. */
 export function markHtml(text) {
   return escapeHtml(text).replace(/\[([^\[\]]+)\]/g, '<mark>$1</mark>');
+}
+
+function loadOpen() {
+  try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {}; } catch (_) { return {}; }
+}
+function saveOpen(map) {
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify(map)); } catch (_) { /* private mode */ }
 }
 
 /**
@@ -49,7 +59,8 @@ export function markHtml(text) {
  * @param {HTMLElement} host  where the result groups render
  * @param {{onOpenTask: (id:number) => void, currentTaskId: () => (number|null),
  *          onTaskChanged: (id:number) => void, onCreated: (task:any) => void,
- *          onQuery: (q:string) => void}} opts
+ *          onQuery: (q:string) => void, filters: () => object,
+ *          onStatus: (id:number, status:string) => Promise<any>}} opts
  */
 export function mountSearch(box, host, opts) {
   const input = box.querySelector('#searchInput');
@@ -58,6 +69,8 @@ export function mountSearch(box, host, opts) {
   let seq = 0;
   let last = null;        // the last rendered result
   let status = null;      // /api/search/status → adapters (idle view)
+  const openState = loadOpen();
+  const hitByIdx = new Map();
 
   // ------------------------------------------------------------ fetch
   function schedule() {
@@ -101,21 +114,11 @@ export function mountSearch(box, host, opts) {
     return c;
   }
 
-  function renderIdle() {
-    meta.textContent = '';
-    const wrap = document.createElement('div');
-    wrap.className = 'search-groups';
-    KINDS.forEach(function (k) {
-      const st = (status || []).find(function (a) { return a.kind === k.kind; });
-      const card = groupCard(k, null);
-      const body = document.createElement('p');
-      if (!status) { body.className = 'search-none muted'; body.textContent = 'Type to search.'; }
-      else if (st && st.configured) { body.className = 'search-none muted'; body.textContent = 'Type to search' + (st.note ? ' — ' + st.note : '') + '.'; }
-      else { body.className = 'search-off muted'; offRow(body, st ? st.reason : 'unknown'); }
-      card.appendChild(body);
-      wrap.appendChild(card);
-    });
-    host.replaceChildren(wrap);
+  function note(cls, text) {
+    const p = document.createElement('p');
+    p.className = cls;
+    p.textContent = text;
+    return p;
   }
 
   function offRow(p, reason) {
@@ -126,70 +129,142 @@ export function mountSearch(box, host, opts) {
     p.appendChild(a);
   }
 
-  function groupCard(k, group) {
-    const card = document.createElement('section');
-    card.className = 'card search-group';
+  /** One collapsible group (vendored disclosure), remembered open / closed per kind. */
+  function groupCard(k, countText) {
+    const card = document.createElement('details');
+    card.className = 'card card--collapsible search-group';
     card.dataset.kind = k.kind;
-    const head = document.createElement('h2');
-    head.className = 'search-group-head';
-    head.innerHTML = icon(k.icon);
-    const label = document.createElement('span');
-    label.textContent = k.label;
-    head.appendChild(label);
+    card.open = !!openState[k.kind];
+    card.addEventListener('toggle', function () { openState[k.kind] = card.open; saveOpen(openState); });
+    const summary = document.createElement('summary');
+    summary.className = 'collapse-summary';
+    const main = document.createElement('span');
+    main.className = 'collapse-main';
+    main.innerHTML = icon(k.icon);
+    const h = document.createElement('h3');
+    h.className = 'collapse-title';
+    h.textContent = k.label;
+    main.appendChild(h);
     const count = document.createElement('span');
-    count.className = 'search-group-count';
-    if (group && group.configured && !group.skipped) count.textContent = '(' + group.count + ')';
-    head.appendChild(count);
-    if (group && group.note) {
-      const note = document.createElement('span');
-      note.className = 'search-group-note muted';
-      note.textContent = group.note;
-      head.appendChild(note);
-    }
-    if (group && group.configured && group.took_ms != null) {
-      const took = document.createElement('span');
-      took.className = 'search-group-took';
-      took.textContent = group.took_ms + ' ms';
-      head.appendChild(took);
-    }
-    card.appendChild(head);
+    count.className = 'collapse-count search-group-count';
+    count.textContent = countText || '';
+    main.appendChild(count);
+    summary.appendChild(main);
+    const chev = document.createElement('span');
+    chev.className = 'collapse-chevron';
+    chev.setAttribute('aria-hidden', 'true');
+    chev.textContent = '›';
+    summary.appendChild(chev);
+    card.appendChild(summary);
+    const body = document.createElement('div');
+    body.className = 'collapse-body search-body';
+    card.appendChild(body);
     return card;
   }
 
+  function renderIdle() {
+    meta.textContent = '';
+    hitByIdx.clear();
+    const wrap = document.createElement('div');
+    wrap.className = 'search-groups';
+    KINDS.forEach(function (k) {
+      const st = (status || []).find(function (a) { return a.kind === k.kind; });
+      const card = groupCard(k, !status ? '' : (st && st.configured ? 'ready' : 'not configured'));
+      const body = card.querySelector('.search-body');
+      if (!status) body.appendChild(note('search-none muted', 'Type to search.'));
+      else if (st && st.configured) body.appendChild(note('search-none muted', 'Type to search' + (st.note ? ' — ' + st.note : '') + '.'));
+      else { const p = note('search-off muted', ''); offRow(p, st ? st.reason : 'unknown'); body.appendChild(p); }
+      wrap.appendChild(card);
+    });
+    host.replaceChildren(wrap);
+  }
+
+  function taskHits(g) {
+    const f = opts.filters ? opts.filters() : null;
+    const tasks = (g.hits || []).map(function (h) {
+      const t = Object.assign({}, h.task || {}, { id: h.task_id, _hit: h });
+      if (!t.title) t.title = h.title;
+      return t;
+    });
+    const kept = f ? tasks.filter(function (t) { return matchesFilters(t, f); }) : tasks;
+    return f ? sortItems(kept, f.sort) : kept;
+  }
+
   function render(res) {
-    const total = res.groups.reduce(function (n, g) { return n + (g.count || 0); }, 0);
-    meta.textContent = total + ' hit' + (total === 1 ? '' : 's') + ' · ' + res.took_ms + ' ms';
+    hitByIdx.clear();
+    let total = 0;
     const wrap = document.createElement('div');
     wrap.className = 'search-groups';
     let idx = 0;
     KINDS.forEach(function (k) {
       const g = res.groups.find(function (x) { return x.kind === k.kind; }) || { kind: k.kind, configured: false, reason: 'no answer', hits: [] };
-      const card = groupCard(k, g);
+      let countText = '';
+      let rows = null;
+      if (g.configured && !g.error) {
+        if (k.kind === 'tasks') {
+          rows = taskHits(g);
+          countText = rows.length === (g.hits || []).length ? rows.length + ' hit' + (rows.length === 1 ? '' : 's')
+            : rows.length + ' of ' + g.hits.length + ' hit' + (g.hits.length === 1 ? '' : 's');
+          total += rows.length;
+        } else {
+          countText = g.count + ' hit' + (g.count === 1 ? '' : 's');
+          total += g.count || 0;
+        }
+        if (g.note) countText += ' · ' + g.note;
+      } else if (!g.configured) countText = 'not configured';
+      else countText = 'error';
+      const card = groupCard(k, countText);
+      const body = card.querySelector('.search-body');
       if (!g.configured) {
-        const p = document.createElement('p');
-        p.className = 'search-off muted';
+        const p = note('search-off muted', '');
         offRow(p, g.reason);
-        card.appendChild(p);
+        body.appendChild(p);
       } else if (g.error) {
-        const p = document.createElement('p');
-        p.className = 'search-err';
-        p.textContent = 'error — ' + g.error;
-        card.appendChild(p);
+        body.appendChild(note('search-err', 'error — ' + g.error));
+      } else if (k.kind === 'tasks') {
+        if (!rows.length) body.appendChild(note('search-none muted', g.hits.length ? 'No task matches the filters.' : 'No tasks match.'));
+        else {
+          const ul = document.createElement('ul');
+          ul.className = 'trows search-hits';
+          ul.setAttribute('role', 'list');
+          rows.forEach(function (t) { ul.appendChild(taskHitRow(t, idx++)); });
+          body.appendChild(ul);
+        }
       } else if (!g.hits.length) {
-        const p = document.createElement('p');
-        p.className = 'search-none muted';
-        p.textContent = 'No ' + k.label.toLowerCase() + ' match.';
-        card.appendChild(p);
+        body.appendChild(note('search-none muted', 'No ' + k.label.toLowerCase() + ' match.'));
       } else {
         const ul = document.createElement('ul');
         ul.className = 'search-hits';
         ul.setAttribute('role', 'list');
         g.hits.forEach(function (h) { ul.appendChild(hitRow(h, k, idx++)); });
-        card.appendChild(ul);
+        body.appendChild(ul);
       }
       wrap.appendChild(card);
     });
+    meta.textContent = total + ' hit' + (total === 1 ? '' : 's');
     host.replaceChildren(wrap);
+  }
+
+  /** A task hit = the shared row + the matched snippet under it. */
+  function taskHitRow(t, idx) {
+    const h = t._hit;
+    let extra = null;
+    const snippet = h.snippet || '';
+    const snippetIsTitle = snippet && snippet.replace(/[\[\]]/g, '') === t.title;
+    if (snippet && !snippetIsTitle) {
+      extra = document.createElement('div');
+      extra.className = 'search-hit-snippet';
+      extra.innerHTML = (h.matched_in ? '<span class="muted">' + escapeHtml(h.matched_in) + ': </span>' : '') + markHtml(snippet);
+    }
+    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus }, extra ? { extra: extra } : undefined);
+    li.classList.add('search-hit');
+    li.dataset.kind = 'tasks';
+    li.dataset.idx = String(idx);
+    if (snippetIsTitle) li.querySelector('.trow-title').innerHTML = markHtml(snippet);
+    hitByIdx.set(idx, h);
+    li.addEventListener('focusin', function () { li.classList.add('is-active'); });
+    li.addEventListener('focusout', function () { li.classList.remove('is-active'); });
+    return li;
   }
 
   function hitRow(h, k, idx) {
@@ -198,20 +273,34 @@ export function mountSearch(box, host, opts) {
     li.dataset.kind = h.kind;
     li.dataset.idx = String(idx);
     li.tabIndex = -1;
+    hitByIdx.set(idx, h);
     li.innerHTML = icon(k.icon, 'search-hit-icon');
     const main = document.createElement('div');
     main.className = 'search-hit-main';
-    // The title carries the <mark>s when the snippet *is* the title (a subject
-    // / title hit); otherwise the snippet gets its own line under it.
+    // The title IS the link (a taskos:// opener link for folders / .msg files,
+    // the issue URL); it carries the <mark>s when the snippet *is* the title.
     const snippet = h.snippet || '';
     const snippetIsTitle = snippet && snippet.replace(/[\[\]]/g, '') === h.title;
     const title = document.createElement('div');
     title.className = 'search-hit-title';
-    const text = document.createElement('span');
-    text.className = 'search-hit-text';
-    if (snippetIsTitle) text.innerHTML = markHtml(snippet); else text.textContent = h.title;
-    title.appendChild(text);
-    if (h.kind === 'tasks' && h.status) title.appendChild(statusPill(h.status));
+    let link;
+    if (h.kind === 'folders' || h.kind === 'emails') {
+      link = folderChip(h.ref, { resolved: h.path || null, label: h.title, icon: h.kind === 'emails' ? 'mail' : 'folder' });
+      link.classList.add('search-hit-link');
+      link.title = (h.kind === 'emails' ? 'Open the .msg on this PC — ' : 'Open the folder on this PC — ') + (h.path || h.ref);
+      link.dataset.act = 'open';
+      if (snippetIsTitle) { const lbl = link.querySelector('.chip-label'); if (lbl) lbl.innerHTML = markHtml(snippet); }
+    } else {
+      link = document.createElement('a');
+      link.className = 'search-hit-link';
+      link.href = h.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.dataset.act = 'open';
+      if (snippetIsTitle) link.innerHTML = markHtml(snippet); else link.textContent = h.title;
+      link.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    }
+    title.appendChild(link);
     main.appendChild(title);
     if (h.subtitle) {
       const sub = document.createElement('div');
@@ -226,8 +315,7 @@ export function mountSearch(box, host, opts) {
       main.appendChild(sn);
     }
     li.appendChild(main);
-    li.appendChild(actions(h, li));
-    main.addEventListener('click', function () { primary(h, li); });
+    li.appendChild(actions(h));
     li.addEventListener('focus', function () { li.classList.add('is-active'); });
     li.addEventListener('blur', function () { li.classList.remove('is-active'); });
     return li;
@@ -242,41 +330,15 @@ export function mountSearch(box, host, opts) {
     return b;
   }
 
-  function actions(h, li) {
+  function actions(h) {
     const row = document.createElement('div');
     row.className = 'search-hit-actions';
-    if (h.kind === 'tasks') {
-      const open = ghost('Open', 'external-link', 'Open the task (Enter)');
-      open.dataset.act = 'open';
-      open.addEventListener('click', function (ev) { ev.stopPropagation(); opts.onOpenTask(h.task_id); });
-      row.appendChild(open);
-      return row;
-    }
-    if (h.kind === 'folders' || h.kind === 'emails') {
-      const chip = folderChip(h.ref, {
-        resolved: h.path || null, label: 'Open', icon: h.kind === 'emails' ? 'mail' : 'folder',
-      });
-      chip.classList.add('search-open');
-      chip.dataset.act = 'open';
-      chip.title = (h.kind === 'emails' ? 'Open the .msg on this PC — ' : 'Open the folder on this PC — ') + (h.path || h.ref);
-      row.appendChild(chip);
-    } else if (h.kind === 'issues') {
-      const a = document.createElement('a');
-      a.className = 'button-ghost search-act search-open';
-      a.href = h.url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.dataset.act = 'open';
-      a.innerHTML = icon('external-link') + ' Open';
-      a.addEventListener('click', function (ev) { ev.stopPropagation(); });
-      row.appendChild(a);
-      if (h.task_id != null) {
-        const t = ghost('Task #' + h.task_id, 'list-checks', 'Open the linked task');
-        t.dataset.act = 'task';
-        t.addEventListener('click', function (ev) { ev.stopPropagation(); opts.onOpenTask(h.task_id); });
-        row.appendChild(t);
-        return row;               // already a task: no attach / new
-      }
+    if (h.kind === 'issues' && h.task_id != null) {
+      const t = ghost('Task #' + h.task_id, 'list-checks', 'Open the linked task');
+      t.dataset.act = 'task';
+      t.addEventListener('click', function (ev) { ev.stopPropagation(); opts.onOpenTask(h.task_id); });
+      row.appendChild(t);
+      return row;               // already a task: no attach / new
     }
     const attach = ghost('Attach', 'link', 'Attach to the task open in the drawer (a)');
     attach.dataset.act = 'attach';
@@ -291,7 +353,9 @@ export function mountSearch(box, host, opts) {
   }
 
   // ------------------------------------------------------------ actions
-  function primary(h, li) {
+  function primary(li) {
+    const h = hitByIdx.get(Number(li.dataset.idx));
+    if (!h) return;
     if (h.kind === 'tasks') { opts.onOpenTask(h.task_id); return; }
     const open = li.querySelector('[data-act="open"]');
     if (open) open.click();
@@ -356,16 +420,21 @@ export function mountSearch(box, host, opts) {
 
   // ---------------------------------------------------------- keyboard
   function rows() { return Array.prototype.slice.call(host.querySelectorAll('.search-hit')); }
+  function focusRow(li) {
+    if (!li) return;
+    const main = li.querySelector('.trow-main');
+    if (main) main.focus(); else li.focus();
+  }
 
   input.addEventListener('input', schedule);
   input.addEventListener('keydown', function (ev) {
     if (ev.key === 'ArrowDown') {
       const r = rows();
-      if (r.length) { ev.preventDefault(); r[0].focus(); }
+      if (r.length) { ev.preventDefault(); focusRow(r[0]); }
     } else if (ev.key === 'Enter') {
       clearTimeout(timer);
       const r = rows();
-      if (input.value.trim() && last && r.length) { ev.preventDefault(); r[0].querySelector('.search-hit-main').click(); }
+      if (input.value.trim() && last && r.length) { ev.preventDefault(); primary(r[0]); }
       else run(input.value);
     } else if (ev.key === 'Escape') {
       if (input.value) { input.value = ''; run(''); }
@@ -373,17 +442,23 @@ export function mountSearch(box, host, opts) {
   });
   host.addEventListener('keydown', function (ev) {
     const li = ev.target.closest('.search-hit');
-    if (!li || ev.target.closest('input, textarea')) return;
+    if (!li || ev.target.closest('input, textarea, select')) return;
     const r = rows();
     const i = r.indexOf(li);
-    if (ev.key === 'ArrowDown') { ev.preventDefault(); (r[i + 1] || r[i]).focus(); }
-    else if (ev.key === 'ArrowUp') { ev.preventDefault(); if (i === 0) input.focus(); else r[i - 1].focus(); }
-    else if (ev.key === 'Home') { ev.preventDefault(); r[0].focus(); }
-    else if (ev.key === 'End') { ev.preventDefault(); r[r.length - 1].focus(); }
-    else if (ev.key === 'Enter') { ev.preventDefault(); li.querySelector('.search-hit-main').click(); }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); focusRow(r[i + 1] || r[i]); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); if (i === 0) input.focus(); else focusRow(r[i - 1]); }
+    else if (ev.key === 'Home') { ev.preventDefault(); focusRow(r[0]); }
+    else if (ev.key === 'End') { ev.preventDefault(); focusRow(r[r.length - 1]); }
+    else if (ev.key === 'Enter') { if (ev.target.closest('.trow-main')) return; ev.preventDefault(); primary(li); }
     else if (ev.key === 'a' || ev.key === 'A') { const b = li.querySelector('[data-act="attach"]'); if (b && !b.disabled) { ev.preventDefault(); b.click(); } }
     else if (ev.key === 'n' || ev.key === 'N') { const b = li.querySelector('[data-act="new"]'); if (b) { ev.preventDefault(); b.click(); } }
     else if (ev.key === 'Escape' || ev.key === '/') { ev.preventDefault(); input.focus(); input.select(); }
+  });
+  host.addEventListener('click', function (ev) {
+    // a plain hit row (folder / email / issue): the row body opens, like a task row
+    const li = ev.target.closest('.search-hit');
+    if (!li || li.classList.contains('trow') || ev.target.closest('a, button, select, summary')) return;
+    primary(li);
   });
 
   loadStatus();
@@ -399,6 +474,8 @@ export function mountSearch(box, host, opts) {
       const on = opts.currentTaskId() != null;
       host.querySelectorAll('[data-act="attach"]').forEach(function (b) { b.disabled = !on; });
     },
+    /** The shared filters changed: re-apply them to the task hits. */
+    refilter() { if (last) render(last); },
     reloadStatus: loadStatus,
   };
 }

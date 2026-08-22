@@ -135,7 +135,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
 
         # 1. Fresh phone → Today is the landing tab.
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        expect(page.locator(".today-card .today-row").first).to_be_visible()
+        expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-07-phone-1-phone.png"))
 
@@ -146,8 +146,9 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator("#paneToday .quick-add-chips .chip").first).to_be_visible()   # parsed preview
         qa.press("Enter")
         expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
-        added = page.locator(".today-card .today-row", has=page.locator(".today-title", has_text=re.compile(r"^Water the balcony plants$")))
+        added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
         expect(added).to_be_visible()
+        expect(added.locator(".trow-status")).to_have_value("inbox")   # the ONE row: status select on the line
         new_id = int(added.get_attribute("data-id"))
         detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
         assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
@@ -173,15 +174,15 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-07-phone-3-phone.png"))
 
-        # 4. Card → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
+        # 4. Row → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
         columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
         expect(page.locator(".board-strip-btn[data-col='todo']")).to_have_class(re.compile(r"\bactive\b"))
-        kitchen = page.locator(".board-item", has=page.locator(".board-card-title", has_text=re.compile(r"^Kitchen$"))).first
+        kitchen = page.locator("#paneBoard .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Kitchen$"))).first
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        expect(kitchen.locator(".board-card-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
-        kitchen.locator(".board-card").tap()
+        expect(kitchen.locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+        kitchen.locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
@@ -226,7 +227,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         page.reload()
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        expect(page.locator(".today-card .today-row").first).to_be_visible()
+        expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
         page.screenshot(path=str(shots / "story-07-phone-5-phone.png"))
         assert errors == [], errors
         context.close()
@@ -250,7 +251,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             context = _phone_context(wk, {"width": width, "height": 844})
             page = context.new_page()
             page.goto(f"{base}/")
-            expect(page.locator(".today-card .today-row").first).to_be_visible()
+            expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
             assert_no_horizontal_overflow(page)
             tabs = page.locator("nav.tabs .tab")
             # The vendored nav is the floating pill on the phone widths (fixed)

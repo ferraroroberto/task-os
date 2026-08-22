@@ -10,6 +10,10 @@
  * The one deliberate difference from the phone-first siblings: this app is
  * PC-first and full-width (plan §06/§07) — `.app` has no 772px column cap on
  * desktop; the phone gets the same views as an adaptive second rendering.
+ *
+ * Issue #46: Board, Table, Tree, Today and Search render the ONE task row
+ * (`.trow`, rows.js) on flat hairlines, edited through the ONE filter card
+ * (`.filter-card`, filters.js). Titles are never uppercase.
  */
 
 /* ============================================================ design tokens */
@@ -150,7 +154,8 @@ button, input, select, textarea { font: inherit; }
 .icon { pointer-events: none; }
 
 /* 44px hit-area expansion for an isolated compact control (the 34px theme
-   toggle): visual stays compact, the invisible ::before grows the target. */
+   toggle, a filter pill): visual stays compact, the invisible ::before grows
+   the target. */
 .hit-target { position: relative; }
 .hit-target::before { content: ""; position: absolute; inset: -5px; }
 
@@ -202,7 +207,7 @@ html, body {
    adds only the inter-card gutter. */
 .card { margin: 0 0 var(--gap); }
 .pane-body .card { margin: 0; }
-.card-meta code {
+.card-meta code, .status-row code, .markdown code {
   font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
   font-size: 0.92em;
   background: var(--card-off);
@@ -210,21 +215,32 @@ html, body {
   padding: 1px 5px;
 }
 
-/* Settings — the mirror/backup status rows (definition list, label + value). */
+/* A flat disclosure: the vendored details/summary without the card box —
+   a hairline above, no radius, no border (Today's "Later this week"). */
+.card.disclosure-flat {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  margin-top: var(--space-sm);
+}
+.card.disclosure-flat > .collapse-summary { padding-left: 4px; padding-right: 4px; }
+.card.disclosure-flat > .collapse-body { padding: 0 0 4px; }
+
+/* ------------------------------------------------------------ settings */
+/* Every Settings card is a collapsible disclosure (index.html). The body
+   breathes: the first paragraph sits under the summary with room; labels are
+   plain label-size text (no caps); state words carry the color. */
+.settings-card .collapse-body { display: grid; gap: var(--space-sm); padding-top: var(--space-md); }
+.settings-card .card-meta { margin: 0; font-size: var(--font-label); line-height: 1.5; }
+.settings-card .collapse-count { font-size: var(--font-label); }
 .status-rows { margin: 0; display: grid; gap: var(--space-xs); }
 .status-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
-.status-row dt { color: var(--muted); font-size: var(--font-caption); text-transform: uppercase; letter-spacing: 0.04em; }
+.status-row dt { color: var(--muted); font-size: var(--font-label); }
 .status-row dd { margin: 0; font-size: var(--font-label); overflow-wrap: anywhere; }
 .status-row .status-ok { color: var(--success, var(--fg)); font-weight: 600; }
 .status-row .status-off { color: var(--muted); font-weight: 600; }
 .status-row .status-warn { color: var(--danger, var(--fg)); font-weight: 600; }
-.status-row code {
-  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
-  font-size: 0.92em;
-  background: var(--card-off);
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
-}
 
 /* ============================================================ theme toggle */
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
@@ -242,11 +258,6 @@ html, body {
 @media (pointer: coarse) and (max-width: 520px) and (prefers-reduced-motion: reduce) {
   .tab { transition: none; }
 }
-
-/* ======================================================= Step 4 surfaces */
-/* Table · Tree · task drawer · quick-add. Everything below is markup + token
-   values on top of the vendored components (button tiers, select-native /
-   input-native, card, empty-state); no vendored file is re-authored. */
 
 .muted { color: var(--muted); }
 
@@ -276,13 +287,7 @@ a.chip { color: var(--accent); border-color: var(--accent-border-soft); backgrou
 a.chip:hover { text-decoration: underline; }
 .chip-date, .chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 .chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
-.chip-project {
-  color: var(--muted);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0 6px;
-}
+.chip-project { color: var(--muted); padding: 0 6px; }
 .chip-type { padding: 2px 5px; color: var(--muted); }
 
 /* Folder popover (format.js): the path to copy on a phone / no opener, or the
@@ -345,7 +350,7 @@ a.chip:hover { text-decoration: underline; }
 .opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
 .opener-more { display: grid; gap: 8px; }
 
-/* Status pills — status colors signal state (design.md). */
+/* Status pills — status colors signal state (design.md). One size everywhere. */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -402,54 +407,140 @@ a.chip:hover { text-decoration: underline; }
 .quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; padding: 0 4px; }
 .quick-add-chips:empty { display: none; }
 
-/* -------------------------------------------------------- filter bar */
-.filter-bar { padding: 8px 12px; }
+/* ======================================================== the filter card */
+/* One collapsible card (vendored disclosure) on every tab. The summary says
+   what is active; the body is the status pills (standard pill size, pressed
+   = the status tint) and one wrapping row of controls at the control height. */
+.filter-card .collapse-main { min-width: 0; flex: 1 1 auto; }
+.filter-card .filter-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-body { display: grid; gap: 10px; }
+.filter-status { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-pill { cursor: pointer; font: inherit; font-size: var(--font-caption); font-weight: 600; }
+.filter-pill:not(.active) { background: var(--card); color: var(--muted); border-color: var(--line); text-decoration: none; }
+.filter-pill.active { box-shadow: 0 0 0 1px currentColor inset; }
+.filter-pill.pill-inbox.active, .filter-pill.pill-todo.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 .filter-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
-.filter-glyph { color: var(--muted); display: inline-flex; }
-.filter-status { display: flex; flex-wrap: wrap; gap: 4px; }
-/* Toggle chips (a segmented multi-select, not a button tier): pill shape,
-   pressed = accent tint. */
-.chip-btn {
-  cursor: pointer;
-  min-height: 28px;
-  padding: 0 10px;
-  font: inherit;
-  font-size: var(--font-caption);
-  font-weight: 600;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--muted);
-}
-.chip-btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border-soft); }
-.chip-btn.pill-done.active { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 30%, transparent); }
-.chip-btn.pill-standby.active { color: var(--attention); background: color-mix(in srgb, var(--attention) 14%, transparent); border-color: color-mix(in srgb, var(--attention) 30%, transparent); }
 .filter-select { max-width: 200px; }
 .filter-q { width: 180px; }
-.filter-count { color: var(--muted); font-size: var(--font-caption); margin-left: auto; white-space: nowrap; }
-.filter-clear { min-height: 28px; }
-/* Board variant (#32): no card wrapper — one compact flat row of small
-   controls that wraps naturally on the phone. The height pins win over the
-   coarse-pointer 44px block below (higher specificity, same tokens). */
-.filter-bar-flat { padding: 0; border: 0; background: transparent; }
-.filter-bar-flat .filter-select { max-width: 160px; }
-.filter-bar-flat .filter-q { width: 150px; flex: 1 1 120px; }
-.filter-bar-flat .filter-select,
-.filter-bar-flat .filter-q {
-  height: 32px;
-  min-height: 32px;
+.filter-clear { min-height: var(--control-h); }
+@media (max-width: 767px) {
+  .filter-select { max-width: none; flex: 1 1 44%; }
+  .filter-q { flex: 1 1 100%; width: auto; }
+}
+/* Touch: the pill stays pill-sized to the eye (28px), the invisible hit
+   area grows to the 44px floor; the row gap keeps neighbours' areas apart. */
+@media (pointer: coarse) {
+  .filter-status { gap: 16px 10px; }
+  .filter-pill { min-height: 28px; padding: 0 10px; }
+  .filter-pill::before { inset: -8px -2px; }
+}
+
+/* ============================================================ the task row */
+/* `.trow` (rows.js): a tight grid — text column + control column. Line 1 is
+   the title ("main") with the status select ("ctrl") centered beside it;
+   line 2 ("meta") spans the width. Flat: a hairline between rows, no box.
+   A view that needs a prefix (the Tree's toggle) adds a third column. */
+.trows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.trow {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main ctrl"
+    "meta meta"
+    "extra extra";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 8px 4px;
+  border-top: 1px solid var(--line-muted);
+  color: var(--fg);
+}
+.trows > .trow:first-child { border-top: 0; }
+.trow.has-prefix {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "prefix main ctrl"
+    "prefix meta meta"
+    "prefix extra extra";
+}
+.trow-prefix { grid-area: prefix; align-self: center; }
+.trow:hover { background: var(--card-2); }
+.trow.is-high { border-left: 3px solid var(--danger); padding-left: 6px; }
+.trow.is-dragging { opacity: 0.5; }
+.trow.is-new { background: var(--accent-soft); }
+.trow-main { grid-area: main; min-width: 0; cursor: pointer; }
+.trow-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
+/* One line, ellipsized — a row never grows on the title (#32). */
+.trow-title {
+  display: block;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
+.tree-node.is-context > .trow .trow-title { color: var(--muted); font-weight: 500; }
+/* The status control: compact select, right-aligned, centered on the title. */
+.trow-status {
+  grid-area: ctrl;
+  justify-self: end;
+  align-self: center;
+  width: auto;
+  height: 30px;
+  padding: 0 8px;
   font-size: var(--font-caption);
+  font-weight: 600;
+}
+.trow-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-caption);
+  line-height: 1.3;
+  cursor: pointer;
+}
+.trow-meta .icon { width: 12px; height: 12px; }
+.trow-meta > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
+.trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; }
+.trow-due { color: var(--fg); }
+.trow-prio { text-transform: capitalize; }
+.trow-prio::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 1px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.trow-prio.prio-high { color: var(--danger); }
+/* chips on the meta line stay meta-sized: caption text, tight padding, ellipsized */
+.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; line-height: 1.4; }
+.trow-extra { grid-area: extra; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+@media (pointer: coarse) {
+  .trow { min-height: var(--row-md); }
+  .trow-status { height: 32px; }
 }
 
 /* ------------------------------------------------------------- table */
-.table-card { padding: 0; overflow: hidden; }
-/* Scrolls inside its own box (both axes) — the page never grows sideways;
-   the sticky header sticks to the scroller's top. */
+/* Desktop: a flat grid (no card wrapper) that scrolls inside its own box
+   (both axes) — the page never grows sideways; the sticky header sticks to
+   the scroller's top. Phone: the shared rows (`.table-rows`). */
+.table-wrap { border-top: 1px solid var(--line-muted); }
 .table-scroll { overflow: auto; max-height: calc(100vh - 230px); }
 .task-table {
   width: 100%;
@@ -461,7 +552,7 @@ a.chip:hover { text-decoration: underline; }
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--card-2);
+  background: var(--bg);
   color: var(--muted);
   font-size: var(--font-caption);
   font-weight: 600;
@@ -495,10 +586,7 @@ a.chip:hover { text-decoration: underline; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-comment-meta { color: var(--muted); font-size: var(--font-caption); }
 .c-next { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-select { height: 30px; padding: 0 6px; font-size: var(--font-caption); font-weight: 600; }
-.row-select.pill-doing { color: var(--accent); }
-.row-select.pill-done { color: var(--success); }
-.row-select.pill-standby { color: var(--attention); }
+.c-status .trow-status { height: 30px; }
 /* Due cell: a quiet inline button (icon + relative label) → text + date editor. */
 .due-btn {
   display: inline-flex;
@@ -522,58 +610,22 @@ a.chip:hover { text-decoration: underline; }
 .due-text { width: 140px; }
 .due-date { width: 150px; }
 
-/* Phone / narrow: the grid collapses to stacked cards — the title row, then
-   due · status · comment; secondary columns hide. */
-@media (max-width: 767px) {
-  .table-scroll { max-height: none; overflow: visible; }
-  .task-table, .task-table tbody { display: block; }
-  .task-table thead { display: none; }
-  .task-table tr {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 4px 8px;
-    padding: 10px 12px;
-    border-top: 1px solid var(--line-muted);
-    min-height: var(--row-lg);
-  }
-  .task-table tbody tr:first-child { border-top: 0; }
-  .task-table td { display: block; padding: 0; border: 0; }
-  .task-row:hover td { background: transparent; }
-  .task-row.is-new { background: var(--accent-soft); }
-  .c-code, .c-priority, .c-project, .c-next, .c-person, .c-folder { display: none !important; }
-  .c-title { grid-column: 1 / -1; max-width: none; }
-  .t-title-text { white-space: normal; }
-  .c-due { grid-column: 1; }
-  .c-status { grid-column: 2; grid-row: 2; justify-self: end; }
-  .c-comment { grid-column: 1 / -1; max-width: none; }
-  .due-editor { flex-wrap: wrap; }
-}
-
 /* -------------------------------------------------------------- tree */
-.tree-card { padding: 4px 0; }
-.tree { display: flex; flex-direction: column; }
+/* Flat outliner: the shared rows with an indent per depth and a subtle
+   vertical guide per level; the toggle is the row's prefix column. */
+.tree { display: flex; flex-direction: column; border-top: 1px solid var(--line-muted); }
 .tree-node { display: block; }
-.tree-node:focus-visible { outline: none; }
-.tree-node:focus-visible > .tree-row { outline: 2px solid var(--accent); outline-offset: -2px; }
-.tree-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--row-sm);
-  padding: 2px 12px 2px calc(8px + var(--depth, 0) * 22px);
-  border-top: 1px solid var(--line-muted);
-  cursor: pointer;
-  /* Indent guides: one subtle vertical hairline per depth level (a 22px
-     cycle matching the padding step, clipped to the row's own depth), so
-     nesting reads without dragging. Hover/drop tints below use
+.tree .trow {
+  padding-left: calc(4px + var(--depth, 0) * 22px);
+  /* Indent guides: one hairline per depth level (a 22px cycle matching the
+     padding step, clipped to the row's own depth). Hover/drop tints use
      background-color so they never wipe the guide image. */
   background-image: repeating-linear-gradient(to right, var(--line-muted) 0 1px, transparent 1px 22px);
   background-repeat: no-repeat;
-  background-position: 18px 0;
+  background-position: 14px 0;
   background-size: calc(var(--depth, 0) * 22px) 100%;
 }
-.tree > .tree-node:first-child > .tree-row { border-top: 0; }
-.tree-row:hover { background-color: var(--card-2); }
+.tree .trow.is-high { padding-left: calc(6px + var(--depth, 0) * 22px); }
 .tree-toggle {
   width: 28px;
   height: 28px;
@@ -589,16 +641,7 @@ a.chip:hover { text-decoration: underline; }
 }
 .tree-toggle.is-leaf { visibility: hidden; }
 .tree-toggle:hover { background: var(--card-off); color: var(--fg); }
-.tree-grip { color: var(--line); cursor: grab; display: inline-flex; }
-.tree-row:hover .tree-grip { color: var(--muted); }
-.tree-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-node.is-closed > .tree-row > .tree-title { color: var(--muted); text-decoration: line-through; }
-.tree-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
-.tree-rollup { color: var(--muted); }
-.tree-due { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); }
-.tree-due .icon { width: 12px; height: 12px; }
-.tree-node.is-dragging > .tree-row { opacity: 0.5; }
-.tree-row.is-drop-target, .tree-root-drop.is-drop-target {
+.trow.is-drop-target, .tree-root-drop.is-drop-target {
   background-color: var(--accent-soft);
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
@@ -610,18 +653,12 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 8px 12px 6px;
+  margin: 8px 4px 6px;
   padding: 10px 12px;
   border: 1px dashed var(--line);
   border-radius: var(--radius-md);
   color: var(--muted);
   font-size: var(--font-caption);
-}
-/* Narrow: the compact one-line row Today uses — title + due + status pill;
-   rollups and chips wait for the drawer. */
-@media (max-width: 767px) {
-  .tree-meta .tree-rollup { display: none; }
-  .tree-row .chip-project, .tree-row .chip-issue { display: none; }
 }
 
 /* ------------------------------------------------------------ drawer */
@@ -714,20 +751,29 @@ a.chip:hover { text-decoration: underline; }
 .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .field-label { color: var(--muted); font-size: var(--font-caption); font-weight: 600; }
 .field-control { width: 100%; min-width: 0; }
-.drawer-section { padding: 12px 0 4px; }
+/* Due: text input + a calendar button that opens the native date picker
+   (the picker input itself is visually hidden; it only supplies the dialog). */
+.field-due-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.field-due-row .field-control { flex: 1 1 auto; }
+.field-due-btn { width: var(--control-h); height: var(--control-h); border-radius: var(--radius-md); color: var(--muted); }
+.field-due-btn:hover { color: var(--accent); }
+.field-due-picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.field-due-picker.is-visible { position: static; width: auto; height: var(--control-h); opacity: 1; pointer-events: auto; }
+/* Section headings: the app's title font (vendored card-title metrics) with
+   the section glyph — never uppercase (#46). */
+.drawer-section { padding: 14px 0 6px; }
 .drawer-section + .drawer-section { border-top: 1px solid var(--line-muted); }
 .drawer-section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.4em;
   margin: 0 0 8px;
-  color: var(--muted);
-  font-size: var(--font-caption);
+  color: var(--fg);
+  font-size: var(--font-body);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-.drawer-tools { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.drawer-section-title > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+.drawer-tools { margin-left: auto; font-size: var(--font-caption); font-weight: 600; }
 .drawer-tools .button-ghost { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
 .drawer-none { margin: 0; font-size: var(--font-caption); }
 .drawer-desc-edit { width: 100%; height: auto; padding: 8px 10px; resize: vertical; font-family: inherit; }
@@ -735,7 +781,6 @@ a.chip:hover { text-decoration: underline; }
 .markdown { font-size: var(--font-label); line-height: 1.5; }
 .markdown p, .markdown ul, .markdown ol, .markdown pre { margin: 0 0 6px; }
 .markdown h3, .markdown h4, .markdown h5 { margin: 8px 0 4px; font-size: var(--font-body); }
-.markdown code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: 0.92em; background: var(--card-off); border-radius: var(--radius-sm); padding: 1px 5px; }
 .markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: 8px 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
@@ -754,10 +799,11 @@ a.chip:hover { text-decoration: underline; }
   color: var(--muted);
   cursor: pointer;
 }
-.icon-btn:hover { color: var(--danger); }
-.link-form, .child-add { display: flex; gap: 6px; }
+.link-row .icon-btn:hover { color: var(--danger); }
+/* Add-link: ONE line — url · label · Add — on every width (#46). */
+.link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
-.link-form .input-native:nth-child(2) { width: 30%; min-width: 0; }
+.link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
 .comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
 .comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; }
@@ -816,7 +862,6 @@ a.chip:hover { text-decoration: underline; }
    issue reads as any link chip, a closed one goes muted with a check. */
 .issue-panel { display: flex; flex-direction: column; gap: 8px; font-size: var(--font-label); }
 .issue-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.issue-state { text-transform: none; }
 .issue-labels { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .chip-label-tag { color: var(--muted); font-size: 0.7rem; padding: 0 6px; }
 .issue-meta { font-size: var(--font-caption); }
@@ -873,31 +918,29 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
-  .quick-add-input, .quick-add-submit, .chip-btn, .filter-select, .filter-q, .row-select, .due-btn,
+  .quick-add-input, .quick-add-submit, .filter-select, .filter-q, .due-btn,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
   .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb {
     min-height: var(--row-sm);
   }
-  .filter-select, .row-select, .drawer .select-native, .drawer .input-native { height: var(--row-sm); }
+  .filter-select, .drawer .select-native, .drawer .input-native { height: var(--row-sm); }
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
+  .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .link-form { flex-wrap: wrap; }
-  .link-form .input-native:nth-child(2) { width: auto; flex: 1 1 40%; }
 }
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .filter-count { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .is-busy .icon { animation: none; }
-  .task-row, .tree-row, .toast { transition: none; }
+  .task-row, .trow, .toast { transition: none; }
 }
 
 /* ======================================================= Step 5 surfaces */
-/* Board (five status columns — the launcher's board layout, ported) and
-   Today (due ≤ today grouped by project). Same rule as above: markup +
-   token values on top of the vendored components, no vendored file touched. */
+/* Board (status columns — the launcher's board layout, ported) and Today
+   (due ≤ today grouped by project). Same rule as above: markup + token
+   values on top of the vendored components, no vendored file touched. */
 
 /* ------------------------------------------------------------- board */
 .board { display: flex; flex-direction: column; gap: var(--gap); }
@@ -959,121 +1002,17 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 /* The strip is the column header on the carousel; the per-column title only
    earns space in the desktop grid below. */
 .board-col-title { display: none; }
-.board-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-/* Cards = flat separator rows inside the column (the launcher look, #32): a
-   1px hairline between rows, no per-card box, the priority accent on the
-   row's left edge. */
-.board-item { position: relative; border-top: 1px solid var(--line-muted); }
-.board-item:first-child { border-top: 0; }
-.board-item.is-high > .board-card { border-left: 3px solid var(--danger); }
-.board-item.is-dragging { opacity: 0.5; }
-/* The row is a tight grid: text column + control column. The text block
-   (context line + one-line title) is grid area "main"; the touch status
-   select ("ctrl") centers on that block; the compact meta line ("meta")
-   spans the full width below — the row collapses to two lines without it. */
-.board-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "main ctrl"
-    "meta meta";
-  align-items: center;
-  column-gap: 10px;
-  row-gap: 2px;
-  padding: 9px 4px;
-  color: var(--fg);
-  cursor: pointer;
-}
-.board-card:hover { background: var(--card-2); }
-.board-card:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.board-card.is-new { background: var(--accent-soft); }
-.board-card-main {
-  grid-area: main;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-}
-.board-card-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--font-caption);
-  line-height: 1.3;
-}
-.board-card-project {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.board-card-person { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-/* One line, ellipsized — a board row never grows on the title (#32). */
-.board-card-title {
-  display: block;
-  min-width: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.board-card-meta {
-  grid-area: meta;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  color: var(--muted);
-  font-size: var(--font-caption);
-  line-height: 1.3;
-}
-.board-card-meta .icon, .board-card-person .icon { width: 12px; height: 12px; }
-.board-card-due { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); }
-.board-card-prio { text-transform: capitalize; }
-.board-card-prio::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 4px;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: middle;
-}
-.board-card-recur, .board-card-kids, .board-card-comments { display: inline-flex; align-items: center; gap: 3px; }
-.board-card-meta .chip { max-width: 100%; }
-/* Drop target: the whole column lights up while a card hovers over it. */
+.board-list { border-top: 1px solid var(--line-muted); }
+.board-list > .trow:first-child { border-top: 0; }
+/* Drop target: the whole column lights up while a row hovers over it. */
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
-/* Touch fallback for the drag: a compact status select, only shown where
-   there is no pointer to drag with — right-aligned in the grid's control
-   column, vertically centered on the context+title block, ≤32px tall and
-   auto width so the row stays a tight two-liner (issues #27, #32). */
-.board-card-status { display: none; }
-@media (pointer: coarse) {
-  .board-card-status {
-    display: inline-block;
-    grid-area: ctrl;
-    justify-self: end;
-    align-self: center;
-    width: auto;
-    height: 30px;
-    padding: 0 8px;
-    font-size: var(--font-caption);
-  }
-  .board-strip-btn { min-height: var(--row-sm); }
-}
-/* Small empty state per column — a peer of the cards, not a full-height card. */
+@media (pointer: coarse) { .board-strip-btn { min-height: var(--row-sm); } }
+/* Small empty state per column — a peer of the rows, not a full-height card. */
 .board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: 4px; }
 .board-empty .empty-state-icon { width: 20px; height: 20px; }
 .board-empty .empty-state-message { font-size: var(--font-caption); }
 
-/* Desktop / wide: all five columns side by side using the full width, equal
+/* Desktop / wide: all columns side by side using the full width, equal
    widths, each scrolling on its own under a sticky header with the count.
    Flat regions, not cards (#32): a vertical 1px hairline between columns is
    the only separation. */
@@ -1081,7 +1020,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .board-strip { display: none; }
   .board-columns {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 0;
     overflow-x: visible;
     scroll-snap-type: none;
@@ -1105,34 +1045,35 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     padding: 8px 4px;
     background: var(--bg);
     border-bottom: 1px solid var(--line-muted);
-    color: var(--muted);
-    font-size: var(--font-caption);
+    color: var(--fg);
+    font-size: var(--font-label);
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
+  .board-list { border-top: 0; }
   .board-col-count { background: var(--card-2); }
 }
 
 /* ------------------------------------------------------------- today */
-.today-card { padding: 0; overflow: hidden; }
-.today-head { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+/* Flat: a heading line, project groups on hairlines, the shared rows,
+   "Later this week" as a flat disclosure below with breathing room. */
+.today { display: flex; flex-direction: column; }
+.today-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 4px 8px; }
+.today-title { display: inline-flex; align-items: center; gap: 0.4em; margin: 0; font-size: var(--font-body); font-weight: 700; }
+.today-title .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+.today-counts { color: var(--muted); font-size: var(--font-label); }
 .today-counts.has-overdue { color: var(--danger); }
-.today-group { padding: 0 0 4px; }
-.today-group + .today-group { border-top: 1px solid var(--line-muted); }
+.today-group { padding: 0; border-top: 1px solid var(--line); }
 .today-group-title {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 8px 14px 2px;
-  color: var(--muted);
-  font-size: var(--font-caption);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 10px 4px 2px;
+  color: var(--fg);
+  font-size: var(--font-label);
+  font-weight: 600;
 }
-.today-group-title.is-loose { font-weight: 600; }
+.today-group-title.is-loose { color: var(--muted); }
 .today-group-link {
   border: 0;
   padding: 2px 4px;
@@ -1141,63 +1082,14 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   background: transparent;
   color: var(--accent);
   font: inherit;
-  font-weight: 700;
-  letter-spacing: inherit;
-  text-transform: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
 .today-group-link:hover { background: var(--accent-soft); }
-.today-group-count { color: var(--muted); font-weight: 400; }
-.today-list { display: flex; flex-direction: column; }
-/* Repeating entries = flat list rows on a hairline (design.md list-row).
-   One line per row: checkbox · ellipsizing title (+glyphs) · due badge
-   right — the person lives in the drawer, not the row (issue #27). */
-.today-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  min-height: var(--row-sm);
-  padding: 4px 14px 4px 8px;
-  border-top: 1px solid var(--line-muted);
-  cursor: pointer;
-}
-.today-group .today-row:first-child { border-top: 0; }
-.today-row:hover { background: var(--card-2); }
-.today-check {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.today-check .icon { width: var(--icon-title); height: var(--icon-title); }
-.today-check .icon:last-child { display: none; }
-.today-check:hover { color: var(--success); }
-.today-check:hover .icon:first-child, .today-check[aria-checked="true"] .icon:first-child { display: none; }
-.today-check:hover .icon:last-child, .today-check[aria-checked="true"] .icon:last-child { display: inline-block; }
-.today-check[aria-checked="true"] { color: var(--success); }
-.today-check:disabled { cursor: progress; }
-.today-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.today-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); }
-.today-recur { display: inline-flex; color: var(--muted); }
-.today-recur .icon { width: 12px; height: 12px; }
-.today-crumb { color: var(--muted); font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.today-due { font-size: var(--font-caption); white-space: nowrap; color: var(--fg); text-align: right; }
-.today-later .collapse-body { padding: 0 0 4px; }
-.today-later .today-group-title { padding-top: 10px; }
-@media (pointer: coarse) {
-  .today-check { width: var(--row-sm); height: var(--row-sm); }
-  .today-row { min-height: var(--row-md); }
-}
-@media (max-width: 520px) {
-  .today-crumb { display: none; }
-}
+.today-group-count { color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
+.today-list > .trow:first-child { border-top: 0; }
+.today-later .today-group:first-child { border-top: 0; }
+.today .empty-state { padding: var(--space-lg) var(--space-md); }
 
 /* ------------------------------------------------- login page (Step 7) */
 /* /login: one vendored card centred on the canvas, one field, one button.
@@ -1228,17 +1120,18 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }
 
 /* ====================================================== Step 10 surfaces */
-/* Search tab (one box, four grouped result cards) and the command palette
-   (the vendored editor-modal shell + a list). Markup + token values only:
-   modal.css is untouched — the palette variation lives on its own class. */
+/* Search tab (one box, four collapsible result groups) and the command
+   palette (the vendored editor-modal shell + a list). Markup + token values
+   only: modal.css is untouched — the palette variation lives on its own class. */
 
 /* ------------------------------------------------------------ search */
-.search-box { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+/* The box is the header bar's height (52px, home-head) — one size of bar. */
+.search-box { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; }
 .search-box > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
 .search-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: var(--row-sm);
+  height: 100%;
   border: 0;
   background: transparent;
   color: var(--fg);
@@ -1250,46 +1143,49 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-input::-webkit-search-cancel-button { cursor: pointer; }
 .search-meta { font-size: var(--font-caption); white-space: nowrap; }
 .search-groups { display: grid; gap: var(--gap); }
-.search-group { padding: 0; overflow: hidden; }
-.search-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line-muted);
-  font-size: var(--font-label);
-  font-weight: 600;
-}
-.search-group-head .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
-.search-group-count { color: var(--muted); font-weight: 400; }
-.search-group-note { font-weight: 400; font-size: var(--font-caption); }
-.search-group-took { margin-left: auto; color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
+.search-group { margin: 0; }
+.search-body { padding: 0 14px 8px; }
+.search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
-.search-hit {
+.search-hit:not(.trow) {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 2px 10px;
   align-items: start;
-  padding: 8px 14px;
+  padding: 8px 0;
   border-top: 1px solid var(--line-muted);
   cursor: pointer;
   outline: none;
 }
 .search-hit:first-child { border-top: 0; }
 .search-hit:hover, .search-hit.is-active { background: var(--card-2); }
-.search-hit:focus-visible { box-shadow: inset 2px 0 0 var(--accent); }
+.search-hit:not(.trow):focus-visible { box-shadow: inset 2px 0 0 var(--accent); }
 .search-hit-icon { width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
 .search-hit-main { min-width: 0; display: grid; gap: 2px; }
-.search-hit-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--font-label); font-weight: 600; overflow-wrap: anywhere; }
+.search-hit-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.95rem; font-weight: 600; overflow-wrap: anywhere; }
+/* The title IS the link: plain accent text, no chip box, the opener glyph inline. */
+.search-hit-link, a.chip.search-hit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  white-space: normal;
+}
+.search-hit-link:hover { text-decoration: underline; }
 .search-hit-sub { color: var(--muted); font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit-snippet { font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-hit-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .search-hit-actions .button-ghost { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; font-size: var(--font-caption); white-space: nowrap; text-decoration: none; }
 .search-hit-actions .button-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
-.search-hit-actions .chip { min-height: 28px; }
-.search-off, .search-none, .search-err { margin: 0; padding: 10px 14px; font-size: var(--font-caption); }
+.search-off, .search-none, .search-err { margin: 0; padding: 10px 0; font-size: var(--font-caption); }
 .search-off a { color: var(--accent); }
 .search-err { color: var(--danger); }
 kbd {
@@ -1355,7 +1251,7 @@ kbd {
   }
   .palette-card { border-radius: 0 0 var(--radius) var(--radius); }
   .palette-list { max-height: 60vh; }
-  .search-hit { grid-template-columns: 20px minmax(0, 1fr); }
+  .search-hit:not(.trow) { grid-template-columns: 20px minmax(0, 1fr); }
   .search-hit-actions { grid-column: 2; justify-content: flex-start; }
-  .search-hit-actions .button-ghost, .search-hit-actions .chip { min-height: 36px; }
+  .search-hit-actions .button-ghost { min-height: 36px; }
 }

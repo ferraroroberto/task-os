@@ -1,34 +1,28 @@
-/* task-os — the Board tab: five status columns over /api/board.
+/* task-os — the Board tab: the status columns over the shared list.
  *
- * Inbox · Todo · Doing · Standby · Done today (done today = completed on the
- * current local day; older done tasks never show). Ported from the fleet
- * launcher's board: on a wide screen all five columns sit side by side and
- * each scrolls on its own; on the phone the columns container is a
- * scroll-snap carousel (one column per swipe) and the strip above it doubles
- * as column switcher + counts. The column skeleton is built once
- * (`mountBoard`) and every refresh only swaps the cards, so the carousel
- * position survives a re-render.
+ * Inbox · Todo · Doing · Standby · Done — the first four are the open
+ * statuses; Done shows the tasks completed on the current local day (older
+ * done tasks never show unless the filter card's "done" pill is pressed,
+ * which turns the column into plain Done). Ported from the fleet launcher's
+ * board: on a wide screen the columns sit side by side as flat regions split
+ * by a vertical hairline; on the phone the columns container is a scroll-
+ * snap carousel (one column per swipe) and the strip above it doubles as
+ * column switcher + counts. The column skeleton is built once (`mountBoard`)
+ * and every refresh only swaps the rows, so the carousel position survives.
  *
- * Cards = flat two-line rows (the launcher's board look, issue #32): a muted
- * context line (the task `code` for coding tasks, else the root project ·
- * person), a one-line ellipsized title, then one compact meta line only when
- * it has content — due (relative, overdue tinted) · priority · recurrence ·
- * folder chip · children count · comment count (never the comment body — the
- * drawer shows comments). Click / Enter opens the drawer. Drag a card onto another
- * column (HTML5 DnD) → the caller's `onStatus` → PATCH; on a touch device the
- * card carries a status select instead (no pointer to drag with).
+ * Rows are the ONE task row (rows.js, issue #46) — title + status select on
+ * line 1, the meta line under it — the same row the Table, Tree, Today and
+ * Search render. Drag a row onto another column (HTML5 DnD, fine pointers)
+ * or change its status select → the caller's `onStatus` → PATCH.
  *
- * The filter row above the columns (project · person · text) is the shared
- * `state.filters` the Table also reads, so `?project=12` is the same
- * shareable URL on both tabs.
+ * `render(items, filters)` takes the shared filtered list: the status pills
+ * pick which columns show (none pressed = all), `sort` orders every column.
  */
 
 'use strict';
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
-import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, chipFor, issueChip, relDue } from './format.js';
-import { filterSelect } from './table.js';
+import { sortItems, taskRow } from './rows.js';
 
 export const BOARD_COLUMNS = [
   { key: 'inbox', label: 'Inbox', short: 'Inbox', empty: 'Inbox is empty' },
@@ -39,72 +33,10 @@ export const BOARD_COLUMNS = [
 ];
 const PHONE_MQ = '(max-width: 1023px)';
 
-// ------------------------------------------------------------- filter row
 /**
- * @param {HTMLElement} host
- * @param {object} filters   the shared filter state (project · person · q read here)
- * @param {{projects: Array<{id:number,title:string,depth?:number}>, people: Array<{id:number,name:string}>, count: number}} options
- * @param {(next: object) => void} onChange
- */
-export function renderBoardFilters(host, filters, options, onChange) {
-  host.innerHTML = '';
-  host.hidden = false;
-  const bar = document.createElement('div');
-  bar.className = 'filter-row';
-
-  const glyph = document.createElement('span');
-  glyph.className = 'filter-glyph';
-  glyph.innerHTML = icon('list-filter');
-  glyph.title = 'Filters';
-  bar.appendChild(glyph);
-
-  const projectValues = [['', 'All projects']].concat((options.projects || []).map(function (p) {
-    return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
-  }));
-  bar.appendChild(filterSelect('project', 'Project', projectValues, filters.project, function (v) {
-    onChange(Object.assign({}, filters, { project: v }));
-  }));
-  const personValues = [['', 'Anyone']].concat((options.people || []).map(function (p) { return [p.id, p.name]; }));
-  bar.appendChild(filterSelect('person', 'Person', personValues, filters.person, function (v) {
-    onChange(Object.assign({}, filters, { person: v }));
-  }));
-
-  const q = document.createElement('input');
-  q.type = 'search';
-  q.className = 'input-native filter-q';
-  q.placeholder = 'Filter text…';
-  q.setAttribute('aria-label', 'Filter text');
-  q.value = filters.q;
-  let qt = 0;
-  q.addEventListener('input', function () {
-    window.clearTimeout(qt);
-    qt = window.setTimeout(function () { onChange(Object.assign({}, filters, { q: q.value.trim() })); }, 250);
-  });
-  bar.appendChild(q);
-
-  const count = document.createElement('span');
-  count.className = 'filter-count';
-  count.textContent = options.count + (options.count === 1 ? ' card' : ' cards');
-  bar.appendChild(count);
-
-  if (filters.project || filters.person || filters.q) {
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.className = 'button-ghost filter-clear';
-    clear.textContent = 'Clear';
-    clear.addEventListener('click', function () {
-      onChange(Object.assign({}, filters, { project: '', person: '', q: '' }));
-    });
-    bar.appendChild(clear);
-  }
-  host.appendChild(bar);
-}
-
-// ------------------------------------------------------------------ mount
-/**
- * Build the column skeleton once; `render(data)` swaps the cards.
+ * Build the column skeleton once; `render(items, filters)` swaps the rows.
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>}} handlers
- * @returns {{el: HTMLElement, render: (data: object) => void, show: () => void}}
+ * @returns {{el: HTMLElement, render: (items: Array<object>, filters: object) => void, show: () => void}}
  */
 export function mountBoard(handlers) {
   const el = document.createElement('div');
@@ -137,8 +69,10 @@ export function mountBoard(handlers) {
 
   const columns = document.createElement('div');
   columns.className = 'board-columns';
+  const sections = {};
   const lists = {};
   const counts = {};
+  const titles = {};
   const empties = {};
   BOARD_COLUMNS.forEach(function (col) {
     const section = document.createElement('section');
@@ -147,7 +81,9 @@ export function mountBoard(handlers) {
     section.setAttribute('aria-label', col.label);
     const h = document.createElement('h3');
     h.className = 'board-col-title';
-    h.textContent = col.label + ' ';
+    const label = document.createElement('span');
+    label.textContent = col.label;
+    h.appendChild(label);
     const n = document.createElement('span');
     n.className = 'board-col-count';
     n.dataset.col = col.key;
@@ -155,7 +91,8 @@ export function mountBoard(handlers) {
     h.appendChild(n);
     section.appendChild(h);
     const list = document.createElement('ul');
-    list.className = 'board-list';
+    list.className = 'trows board-list';
+    list.setAttribute('role', 'list');
     list.dataset.col = col.key;
     section.appendChild(list);
     const empty = document.createElement('div');
@@ -165,16 +102,21 @@ export function mountBoard(handlers) {
     section.appendChild(empty);
     wireDropTarget(section, col.key, handlers);
     columns.appendChild(section);
+    sections[col.key] = section;
     lists[col.key] = list;
     counts[col.key] = n;
+    titles[col.key] = label;
     empties[col.key] = empty;
   });
   el.appendChild(columns);
 
+  function visibleKeys() {
+    return BOARD_COLUMNS.map(function (c) { return c.key; }).filter(function (k) { return !sections[k].hidden; });
+  }
   function showColumn(key, smooth) {
     currentCol = key;
-    const col = columns.querySelector('.board-col[data-col="' + key + '"]');
-    if (col && window.matchMedia(PHONE_MQ).matches) {
+    const col = sections[key];
+    if (col && !col.hidden && window.matchMedia(PHONE_MQ).matches) {
       // Scroll only the carousel container — scrollIntoView would also yank
       // the page vertically (launcher phone-verify lesson).
       const left = col.getBoundingClientRect().left - columns.getBoundingClientRect().left + columns.scrollLeft;
@@ -190,10 +132,12 @@ export function mountBoard(handlers) {
     });
   }
   function nearestColumnKey() {
-    const cols = columns.querySelectorAll('.board-col');
-    const w = Math.max(1, cols[0].offsetWidth + parseFloat(getComputedStyle(columns).columnGap || getComputedStyle(columns).gap || '0'));
-    const index = Math.min(cols.length - 1, Math.max(0, Math.round(columns.scrollLeft / w)));
-    return cols[index].dataset.col;
+    const keys = visibleKeys();
+    if (!keys.length) return currentCol;
+    const first = sections[keys[0]];
+    const w = Math.max(1, first.offsetWidth + parseFloat(getComputedStyle(columns).columnGap || getComputedStyle(columns).gap || '0'));
+    const index = Math.min(keys.length - 1, Math.max(0, Math.round(columns.scrollLeft / w)));
+    return keys[index];
   }
   let scrollTimer = 0;
   columns.addEventListener('scroll', function () {
@@ -202,16 +146,34 @@ export function mountBoard(handlers) {
   }, { passive: true });
   syncStrip();
 
-  function render(data) {
-    const cols = (data && data.columns) || {};
+  /**
+   * @param {Array<object>} items   the shared filtered list (done = done today unless the done pill is pressed)
+   * @param {object} filters        {status: [...], sort}
+   */
+  function render(items, filters) {
+    const f = filters || { status: [], sort: 'due' };
+    const byStatus = {};
+    BOARD_COLUMNS.forEach(function (c) { byStatus[c.key] = []; });
+    (items || []).forEach(function (t) { if (byStatus[t.status]) byStatus[t.status].push(t); });
+    const wantsDone = f.status.indexOf('done') >= 0;
+    titles.done.textContent = wantsDone ? 'Done' : 'Done today';
+    stripBtns.done.title = wantsDone ? 'Done' : 'Done today';
     BOARD_COLUMNS.forEach(function (col) {
-      const cards = cols[col.key] || [];
-      counts[col.key].textContent = String(cards.length);
-      stripBtns[col.key].querySelector('.board-count').textContent = String(cards.length);
+      const hidden = f.status.length > 0 && f.status.indexOf(col.key) < 0;
+      sections[col.key].hidden = hidden;
+      stripBtns[col.key].hidden = hidden;
+      const rows = sortItems(byStatus[col.key], f.sort);
+      counts[col.key].textContent = String(rows.length);
+      stripBtns[col.key].querySelector('.board-count').textContent = String(rows.length);
       lists[col.key].replaceChildren();
-      cards.forEach(function (t) { lists[col.key].appendChild(buildCard(t, handlers)); });
-      empties[col.key].hidden = cards.length > 0;
+      rows.forEach(function (t) { lists[col.key].appendChild(buildRow(t, handlers)); });
+      empties[col.key].hidden = rows.length > 0;
     });
+    if (sections[currentCol].hidden) {
+      const keys = visibleKeys();
+      if (keys.length) currentCol = keys[0];
+    }
+    syncStrip();
   }
 
   return {
@@ -223,126 +185,9 @@ export function mountBoard(handlers) {
   };
 }
 
-// ------------------------------------------------------------------ cards
-function buildCard(t, handlers) {
-  const li = document.createElement('li');
-  li.className = 'board-item' + (t.priority === 'high' ? ' is-high' : '');
-  li.dataset.id = String(t.id);
-  li.dataset.status = t.status;
-  li.draggable = true;
-
-  const card = document.createElement('div');
-  card.className = 'board-card';
-  card.setAttribute('role', 'button');
-  card.tabIndex = 0;
-  card.setAttribute('aria-label', t.title);
-
-  // Text block (grid area "main"): context line + one-line title. The status
-  // select (grid area "ctrl") centers on THIS block, so the row stays a tight
-  // launcher-style two-liner with the control right-aligned beside it.
-  const main = document.createElement('span');
-  main.className = 'board-card-main';
-  // context line: the task code for coding tasks (the launcher's "repo #N"
-  // look), else the root project; the person appended when present.
-  const top = document.createElement('span');
-  top.className = 'board-card-top';
-  const proj = document.createElement('span');
-  proj.className = 'board-card-project';
-  proj.textContent = t.code || (t.root ? t.root.title : (t.is_project ? 'project' : ''));
-  proj.title = proj.textContent;
-  top.appendChild(proj);
-  if (t.person) {
-    const who = document.createElement('span');
-    who.className = 'board-card-person';
-    who.innerHTML = icon('user');
-    who.appendChild(document.createTextNode(t.person.name));
-    top.appendChild(who);
-  }
-  main.appendChild(top);
-  const title = document.createElement('span');
-  title.className = 'board-card-title';
-  title.textContent = t.title;
-  title.title = t.title;
-  main.appendChild(title);
-  card.appendChild(main);
-
-  // Touch fallback for the drag (coarse pointers only, via CSS): a compact
-  // status select right-aligned and vertically centered on the text block.
-  const sel = document.createElement('select');
-  sel.className = 'select-native board-card-status';
-  sel.setAttribute('aria-label', 'Status of ' + t.title);
-  STATUSES.forEach(function (s) {
-    const o = document.createElement('option');
-    o.value = s; o.textContent = s; o.selected = s === t.status;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function () {
-    sel.disabled = true;
-    handlers.onStatus(t.id, sel.value).catch(function () { sel.value = t.status; }).finally(function () { sel.disabled = false; });
-  });
-  card.appendChild(sel);
-
-  // meta line (grid area "meta", only appended when it has content):
-  // due · priority · recurrence · folder chip · children · comment count
-  const meta = document.createElement('span');
-  meta.className = 'board-card-meta';
-  if (t.due) {
-    const rel = relDue(t.due);
-    const due = document.createElement('span');
-    due.className = 'board-card-due' + (rel.tone ? ' due-' + rel.tone : '');
-    due.title = t.due;
-    due.innerHTML = icon('calendar-days');
-    due.appendChild(document.createTextNode(rel.text));
-    meta.appendChild(due);
-  }
-  if (t.priority && t.priority !== 'none') {
-    const prio = document.createElement('span');
-    prio.className = 'board-card-prio prio-' + t.priority;
-    prio.textContent = t.priority;
-    prio.title = 'priority ' + t.priority;
-    meta.appendChild(prio);
-  }
-  if (t.recurrence) {
-    const r = document.createElement('span');
-    r.className = 'board-card-recur';
-    r.innerHTML = icon('repeat');
-    r.title = t.recurrence;
-    meta.appendChild(r);
-  }
-  if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
-  // the code already names the issue on the context line — no duplicate chip
-  if (t.issue_ref && !t.code) meta.appendChild(issueChip(t.issue_ref));
-  if (t.child_count) {
-    const kids = document.createElement('span');
-    kids.className = 'board-card-kids';
-    kids.innerHTML = icon('list-tree');
-    kids.appendChild(document.createTextNode(String(t.child_count)));
-    kids.title = t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks');
-    meta.appendChild(kids);
-  }
-  // comment COUNT only — the body bloated the cards; the drawer shows comments
-  if (t.comment_count) {
-    const c = document.createElement('span');
-    c.className = 'board-card-comments';
-    c.innerHTML = icon('message-square');
-    c.appendChild(document.createTextNode(String(t.comment_count)));
-    c.title = t.last_comment
-      ? t.last_comment.author + ': ' + (t.last_comment.body || '')
-      : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments');
-    meta.appendChild(c);
-  }
-  if (meta.childNodes.length) card.appendChild(meta);
-  li.appendChild(card);
-
-  card.addEventListener('click', function (ev) {
-    if (ev.target.closest('a, select')) return;
-    handlers.onOpen(t.id);
-  });
-  card.addEventListener('keydown', function (ev) {
-    if (ev.target !== card) return;
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handlers.onOpen(t.id); }
-  });
-
+// ------------------------------------------------------------------ rows
+function buildRow(t, handlers) {
+  const li = taskRow(t, handlers, { draggable: true });
   li.addEventListener('dragstart', function (ev) {
     ev.dataTransfer.setData('text/plain', String(t.id));
     ev.dataTransfer.effectAllowed = 'move';
@@ -366,7 +211,7 @@ function wireDropTarget(section, status, handlers) {
     section.classList.remove('is-drop-target');
     const id = Number(ev.dataTransfer.getData('text/plain'));
     if (!id) return;
-    const from = section.parentElement.querySelector('.board-item[data-id="' + id + '"]');
+    const from = section.parentElement.querySelector('.trow[data-id="' + id + '"]');
     if (from && from.dataset.status === status) return;
     handlers.onStatus(id, status).catch(function () { /* toasted by the caller */ });
   });

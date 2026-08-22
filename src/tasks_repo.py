@@ -660,6 +660,7 @@ def list_tasks(
     include_closed: bool = False,
     limit: int | None = None,
     done_on: str | None = None,
+    updated_since: str | None = None,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
 
@@ -671,6 +672,8 @@ def list_tasks(
     - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
       on that day (the Board's *Done today* column; ``done_at`` is a local
       timestamp, so the boundary is local midnight).
+    - ``updated_since``: a local calendar date — only tasks whose ``updated_at``
+      falls on or after that day (the shared filter card's *modified* window).
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
 
@@ -730,6 +733,10 @@ def list_tasks(
     if done_on:
         where.append("substr(t.done_at, 1, 10) = ?")
         args.append(_validate_due(done_on))
+
+    if updated_since:
+        where.append("substr(t.updated_at, 1, 10) >= ?")
+        args.append(_validate_due(updated_since))
 
     if q:
         hit_ids = [h["id"] for h in search(conn, q, limit=500)]
@@ -1190,8 +1197,10 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
             continue
         item = _summary(conn, rows[tid])
         item.update(meta)
-        item["breadcrumb"] = _ancestors(conn, tid)
         out.append(item)
+    # breadcrumb · root · last_comment · comment_count — the same enriched
+    # summary every list view gets, so a search hit renders as the same row
+    _enrich_list(conn, out)
     return out
 
 

@@ -7,7 +7,9 @@ adapters run concurrently in a thread pool.
 Hit: title = the task title · subtitle = ``breadcrumb › … · status`` ·
 snippet = the FTS snippet with ``[match]`` marks · ref = the id · url =
 ``#task/<id>`` · extra = ``task_id, code, status, priority, due, matched_in,
-breadcrumb, folder_ref, issue_ref`` (what the row's chips need).
+breadcrumb, folder_ref, issue_ref`` (the CLI's one-line format) plus ``task``
+= the whole enriched summary, so the Search tab renders the hit as the same
+row every other view shows.
 """
 
 from __future__ import annotations
@@ -64,5 +66,6 @@ class TasksAdapter:
                 "breadcrumb": t.get("breadcrumb") or [],
                 "folder_ref": t.get("folder_ref"),
                 "issue_ref": t.get("issue_ref"),
+                "task": {k: v for k, v in t.items() if k not in ("snippet", "rank", "matched_in")},
             },
         )
