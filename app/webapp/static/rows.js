@@ -61,6 +61,24 @@ export function sortLabel(sort) {
 
 // --------------------------------------------------------- status select
 /**
+ * The status options for a task: the plain statuses, plus a `complete`
+ * pseudo-action spliced in right before `done` when the task recurs — never
+ * a persisted status (issue #54), just a trigger for the roll-forward
+ * `POST /tasks/{id}/done`. `done` itself always means closed for good, for
+ * a recurring task too.
+ * @param {object} t
+ * @returns {Array<[string,string]>} [value, label]
+ */
+export function statusOptions(t) {
+  const opts = [];
+  STATUSES.forEach(function (s) {
+    if (s === 'done' && t.recurrence) opts.push(['complete', 'complete']);
+    opts.push([s, s]);
+  });
+  return opts;
+}
+
+/**
  * The status control — the same compact select on every row.
  * @param {object} t
  * @param {(id:number, status:string) => Promise<any>} onStatus
@@ -69,9 +87,9 @@ export function statusSelect(t, onStatus) {
   const sel = document.createElement('select');
   sel.className = 'select-native trow-status';
   sel.setAttribute('aria-label', 'Status of ' + t.title);
-  STATUSES.forEach(function (s) {
+  statusOptions(t).forEach(function (v) {
     const o = document.createElement('option');
-    o.value = s; o.textContent = s; o.selected = s === t.status;
+    o.value = v[0]; o.textContent = v[1]; o.selected = v[0] === t.status;
     sel.appendChild(o);
   });
   sel.addEventListener('change', function () {

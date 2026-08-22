@@ -4,8 +4,9 @@
  * sticky header, issue #46) with columns code · title (+ breadcrumb) · due
  * (relative, ISO tooltip, overdue tinted) · status (the shared status select)
  * · priority · person · project (top ancestor) · folder chip · last comment
- * (links as chips) · next action. Inline edits (due as text or date, status)
- * go through the caller's `onPatch` so every write follows one path.
+ * (links as chips) · next action. Inline due edits go through the caller's
+ * `onPatch`; status goes through `onStatus` (the shared handler every view
+ * uses — issue #54's `complete` vs `done` split lives there, not per-view).
  *
  * Phone (< 768px): the grid has no room, so the same items render as the ONE
  * task row (rows.js) — identical to the Board's rows. The caller decides
@@ -33,14 +34,15 @@ const COLUMNS = [
 /**
  * @param {HTMLElement} host
  * @param {Array<object>} items      already filtered/sorted list items
- * @param {{onOpen: (id:number)=>void, onPatch: (id:number, changes:object)=>Promise<any>}} handlers
+ * @param {{onOpen: (id:number)=>void, onPatch: (id:number, changes:object)=>Promise<any>,
+ *          onStatus: (id:number, status:string)=>Promise<any>}} handlers
  * @param {{phone?: boolean}} [opts]  phone = render the shared rows instead of the grid
  */
 export function renderTable(host, items, handlers, opts) {
   host.innerHTML = '';
   const rowHandlers = {
     onOpen: handlers.onOpen,
-    onStatus: function (id, status) { return handlers.onPatch(id, { status: status }); },
+    onStatus: handlers.onStatus,
   };
   if (opts && opts.phone) {
     const list = rowList(items, rowHandlers);

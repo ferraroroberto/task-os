@@ -24,9 +24,10 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, STATUSES, chipFor, copyText, fmtTs, issueChip, linkify, providerIcon, relDue,
+  PRIORITIES, RECURRENCES, chipFor, copyText, fmtTs, issueChip, linkify, providerIcon, relDue,
   renderMarkdown, statusPill,
 } from './format.js';
+import { statusOptions } from './rows.js';
 import { toast } from './toast.js';
 
 /**
@@ -35,6 +36,7 @@ import { toast } from './toast.js';
  *          people: () => Array<{id:number,name:string}>,
  *          projects: () => Array<{id:number,title:string,depth?:number}>,
  *          onMove: (id:number, parentId:number|null) => Promise<any>,
+ *          onStatus: (id:number, status:string) => Promise<any>,
  *          issues: () => ({enabled:boolean, reason?:string, provider?:string, repos?:string[]}|null),
  *          onSyncIssues: () => Promise<any>,
  *          onToggle?: (id:number|null) => void}} opts   onToggle fires once a task is
@@ -91,6 +93,33 @@ export function createDrawer(el, opts) {
       const body = {};
       body[name] = v;
       patch(body);
+    });
+    wrap.append(l, sel);
+    return wrap;
+  }
+
+  /** Status: the shared options (a recurring task also gets `complete`,
+   *  the roll-forward action — issue #54) through `opts.onStatus`, same
+   *  handler every other view uses, instead of a plain field PATCH. */
+  function statusField(t) {
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    const l = document.createElement('span');
+    l.className = 'field-label';
+    l.textContent = 'Status';
+    const sel = document.createElement('select');
+    sel.className = 'select-native field-control';
+    sel.dataset.field = 'status';
+    statusOptions(t).forEach(function (v) {
+      const o = document.createElement('option');
+      o.value = v[0]; o.textContent = v[1]; o.selected = v[0] === t.status;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () {
+      sel.disabled = true;
+      Promise.resolve(opts.onStatus(t.id, sel.value))
+        .catch(function () { sel.value = t.status; })
+        .finally(function () { sel.disabled = false; });
     });
     wrap.append(l, sel);
     return wrap;
@@ -294,7 +323,7 @@ export function createDrawer(el, opts) {
     // ---- fields row
     const fields = document.createElement('div');
     fields.className = 'drawer-fields';
-    fields.appendChild(selectField('Status', 'status', STATUSES, t.status));
+    fields.appendChild(statusField(t));
     fields.appendChild(selectField('Priority', 'priority', PRIORITIES, t.priority));
     fields.appendChild(dueField(t));
     fields.appendChild(selectField('Repeat', 'recurrence', RECURRENCES, t.recurrence || '', function (v) { return v || 'never'; }));

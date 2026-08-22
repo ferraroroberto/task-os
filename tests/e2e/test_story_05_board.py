@@ -4,8 +4,9 @@
     filters to one project (shared with the Table, encoded in the URL) → drag
     a row doing → standby → the counts update and the activity log has the
     row → Today tab lists due / overdue grouped by project, recurring first →
-    mark a recurring task done → its due rolls a cadence forward and it leaves
-    Today's due list → mark a plain task done → it lands in the Board's Done
+    mark a recurring task complete → its due rolls a cadence forward and it
+    leaves Today's due list, then mark it done instead → it closes for good
+    (issue #54) → mark a plain task done → it lands in the Board's Done
     today.
 
 Walks the story against the **seeded** disposable instance (conftest
@@ -235,14 +236,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
         page.screenshot(path=str(shots / "story-05-board-5-desktop.png"))
 
-        # 6. Mark a recurring task done (the row's status select — README:
-        #    "a recurring task marked done rolls its due one cadence forward
-        #    instead of closing") → its due rolls, it leaves the due list and
-        #    shows up under "Later this week" with the new date.
+        # 6. Mark a recurring task complete (the row's status select gains a
+        #    `complete` option for a recurring task, issue #54) → its due
+        #    rolls a cadence forward, it leaves the due list and shows up
+        #    under "Later this week" with the new date.
         vocab = _today_row(page, "Vocabulary review")
         vid = int(vocab.get_attribute("data-id"))
         assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
-        vocab.locator(".trow-status").select_option("done")
+        expect(vocab.locator(".trow-status option[value='complete']")).to_have_count(1)
+        vocab.locator(".trow-status").select_option("complete")
         next_due = (date.today() + timedelta(days=7)).isoformat()
         expect(page.locator(f"#paneToday section.today .trow[data-id='{vid}']")).to_have_count(0)
         rolled = _get(base, f"/api/tasks/{vid}")
@@ -256,8 +258,18 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator(".today-counts")).to_contain_text(f"{today['counts']['today'] - 1} due today")
         page.screenshot(path=str(shots / "story-05-board-6-desktop.png"))
 
+        # 6b. The same recurring task, picked "done" instead of "complete":
+        #     closes for good — no further roll, off the recurring series
+        #     from here (issue #54's other half).
+        rolled_row.locator(".trow-status").select_option("done")
+        expect(later.locator(f".trow[data-id='{vid}']")).to_have_count(0)
+        closed = _get(base, f"/api/tasks/{vid}")
+        assert closed["status"] == "done" and closed["due"] == next_due
+        assert closed["done_at"] is not None
+
         # 7. Mark a plain overdue task done → done today: it leaves the Today
-        #    list (open tasks only) and the Board's Done today column gains it.
+        #    list (open tasks only) and the Board's Done today column gains
+        #    it, alongside 6b's now-closed recurring task (both done today).
         books = _today_row(page, "Return library books")
         bid = int(books.get_attribute("data-id"))
         books.locator(".trow-status").select_option("done")
@@ -266,7 +278,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert done["status"] == "done" and done["done_at"][:10] == date.today().isoformat()
         page.click("nav.tabs .tab[data-tab='board']")
         expect(_col(page, "done").locator(f".trow[data-id='{bid}']")).to_be_visible()
-        expect(page.locator(".board-col-count[data-col='done']")).to_have_text("1")
+        expect(page.locator(".board-col-count[data-col='done']")).to_have_text("2")
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-7-desktop.png"))
         assert errors == [], errors
