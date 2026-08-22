@@ -191,7 +191,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         # carries the state word, the body opens on demand
         expect(card.locator("#issuesCardMeta")).to_have_text("synced")
         assert card.evaluate("el => el.open") is False
-        card.locator("summary").click()
+        card.locator("summary.collapse-summary").click()
         expect(card).to_have_attribute("open", "")
         expect(card.locator("#statusIssues .status-ok")).to_have_text("enabled")
         expect(card.locator("#statusIssues")).to_contain_text("github")

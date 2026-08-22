@@ -1,19 +1,20 @@
-/* task-os — the ONE filter card every tab shares (issue #46).
+/* task-os — the ONE filter card every tab shares (issue #46, #48).
  *
  * Board, Table, Tree, Today and Search are renderings of the same list, so
  * they read one filter state — this module owns its shape, its URL encoding
- * (`?status=doing&project=12&sort=updated` is the same shareable view on
- * every tab) and the card that edits it:
+ * (`?status=doing&project=12&person=3,5&sort=updated` is the same shareable
+ * view on every tab) and the card that edits it:
  *
  *   <details class="card card--collapsible filter-card">   (vendored disclosure)
  *     summary   "Filters" · what is active, in words · "42 tasks"
- *     body      status pills (incl. done / cancelled, so finished items are
- *               findable) · project · person · due window · modified window ·
- *               text · sort (the Tree's order comes from here too) · Clear
+ *     body      text · project | person · due | modified · status | sort — one
+ *               control each, equal widths, two per line on the phone (#48);
+ *               person and status are multi-selects (one click each, several
+ *               allowed: "Anyone" / the name / "2 people")
  *
  * Collapsed by default: the summary line says what is applied, so the card
  * never has to be open to read the state. `mountFilters` keeps the open /
- * closed state and the text input's focus across re-renders.
+ * closed state, an open dropdown and the text input's focus across re-renders.
  */
 
 'use strict';
@@ -22,18 +23,22 @@ import { icon } from './_vendored/icons/icons.js';
 import { STATUSES, todayISO } from './format.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
-export const DEFAULT_FILTERS = { status: [], project: '', person: '', due: '', updated: '', q: '', sort: 'due' };
+export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due' };
 export const DUE_WINDOWS = [['', 'Any due date'], ['today', 'Due today'], ['week', 'Due this week'], ['overdue', 'Overdue']];
 export const UPDATED_WINDOWS = [['', 'Modified any time'], ['today', 'Modified today'], ['week', 'Modified in 7 days'], ['month', 'Modified in 30 days']];
 const TEXT_DEBOUNCE_MS = 250;
+
+function csv(value) {
+  return (value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+}
 
 // ------------------------------------------------------------ URL state
 export function filtersFromSearch(search) {
   const p = new URLSearchParams(search || '');
   const f = Object.assign({}, DEFAULT_FILTERS);
-  f.status = (p.get('status') || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return STATUSES.indexOf(s) >= 0; });
+  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0; });
   f.project = p.get('project') || '';
-  f.person = p.get('person') || '';
+  f.person = csv(p.get('person')).filter(function (s) { return /^\d+$/.test(s); });
   f.due = DUE_WINDOWS.some(function (w) { return w[0] === p.get('due'); }) ? p.get('due') : '';
   f.updated = UPDATED_WINDOWS.some(function (w) { return w[0] === p.get('updated'); }) ? p.get('updated') : '';
   f.q = p.get('q') || '';
@@ -45,7 +50,7 @@ export function filtersToSearch(f) {
   const p = new URLSearchParams();
   if (f.status.length) p.set('status', f.status.join(','));
   if (f.project) p.set('project', f.project);
-  if (f.person) p.set('person', f.person);
+  if (f.person.length) p.set('person', f.person.join(','));
   if (f.due) p.set('due', f.due);
   if (f.updated) p.set('updated', f.updated);
   if (f.q) p.set('q', f.q);
@@ -68,12 +73,12 @@ export function updatedSince(window, now) {
   return todayISO(d);
 }
 
-/** The /api/tasks query for a filter state (undefined = not sent). */
+/** The /api/tasks query for a filter state (undefined = not sent; arrays join with commas). */
 export function listParams(f) {
   return {
     status: f.status.length ? f.status : undefined,
     project: f.project || undefined,
-    person: f.person || undefined,
+    person: f.person.length ? f.person : undefined,
     due: f.due || undefined,
     q: f.q || undefined,
     updated_since: updatedSince(f.updated) || undefined,
@@ -97,9 +102,9 @@ export function matchesFilters(t, f, today) {
     const inCrumb = (t.breadcrumb || []).some(function (c) { return String(c.id) === pid; });
     if (!inCrumb && !(t.root && String(t.root.id) === pid)) return false;
   }
-  if (f.person) {
+  if (f.person.length) {
     const who = t.person_id != null ? t.person_id : (t.person ? t.person.id : null);
-    if (String(who) !== String(f.person)) return false;
+    if (f.person.indexOf(String(who)) < 0) return false;
   }
   if (f.due) {
     const tIso = today || todayISO();
@@ -129,9 +134,11 @@ export function describeFilters(f, options) {
     const p = (o.projects || []).find(function (x) { return String(x.id) === String(f.project); });
     bits.push(p ? p.title : 'project #' + f.project);
   }
-  if (f.person) {
-    const p = (o.people || []).find(function (x) { return String(x.id) === String(f.person); });
-    bits.push(p ? p.name : 'person #' + f.person);
+  if (f.person.length) {
+    bits.push(f.person.map(function (id) {
+      const p = (o.people || []).find(function (x) { return String(x.id) === String(id); });
+      return p ? p.name : 'person #' + id;
+    }).join(', '));
   }
   if (f.due) bits.push((DUE_WINDOWS.find(function (w) { return w[0] === f.due; }) || [])[1].toLowerCase());
   if (f.updated) bits.push((UPDATED_WINDOWS.find(function (w) { return w[0] === f.updated; }) || [])[1].toLowerCase());
@@ -140,7 +147,7 @@ export function describeFilters(f, options) {
   return bits;
 }
 
-// ---------------------------------------------------------------- card
+// ---------------------------------------------------------------- controls
 function selectEl(name, label, values, current, onChange) {
   const sel = document.createElement('select');
   sel.className = 'select-native filter-select';
@@ -157,6 +164,79 @@ function selectEl(name, label, values, current, onChange) {
   return sel;
 }
 
+// One document listener closes any open multi-select on an outside click / Escape.
+let outsideWired = false;
+function wireOutside() {
+  if (outsideWired) return;
+  outsideWired = true;
+  document.addEventListener('click', function (ev) {
+    document.querySelectorAll('.msel[open]').forEach(function (d) { if (!d.contains(ev.target)) d.open = false; });
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') document.querySelectorAll('.msel[open]').forEach(function (d) { d.open = false; });
+  });
+}
+
+/**
+ * A multi-select: a select-looking summary that opens a checklist. One click
+ * per option, several allowed; the summary reads `none` / the one label /
+ * `N <many>` (#48).
+ * @param {string} name
+ * @param {string} label      aria label
+ * @param {Array<[string,string]>} values   [value, label]
+ * @param {Array<string>} selected
+ * @param {(next: Array<string>) => void} onChange
+ * @param {{none: string, many: string, open?: boolean}} texts  many = the plural noun ("people", "statuses")
+ */
+export function multiSelect(name, label, values, selected, onChange, texts) {
+  wireOutside();
+  const d = document.createElement('details');
+  d.className = 'msel' + (selected.length ? ' has-value' : '');
+  d.dataset.name = name;
+  d.open = !!texts.open;
+  const summary = document.createElement('summary');
+  summary.className = 'select-native msel-summary';
+  summary.setAttribute('aria-label', label);
+  summary.setAttribute('role', 'button');
+  const txt = document.createElement('span');
+  txt.className = 'msel-text';
+  const picked = values.filter(function (v) { return selected.indexOf(String(v[0])) >= 0; });
+  txt.textContent = !picked.length ? texts.none : (picked.length === 1 ? picked[0][1] : picked.length + ' ' + texts.many);
+  summary.appendChild(txt);
+  d.appendChild(summary);
+  const menu = document.createElement('div');
+  menu.className = 'msel-menu';
+  menu.setAttribute('role', 'group');
+  menu.setAttribute('aria-label', label);
+  values.forEach(function (v) {
+    const opt = document.createElement('label');
+    opt.className = 'msel-opt';
+    opt.dataset.value = String(v[0]);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.name = name;
+    cb.value = String(v[0]);
+    cb.checked = selected.indexOf(String(v[0])) >= 0;
+    cb.addEventListener('change', function () {
+      const next = selected.filter(function (s) { return s !== String(v[0]); });
+      if (cb.checked) next.push(String(v[0]));
+      onChange(next);
+    });
+    opt.appendChild(cb);
+    opt.appendChild(document.createTextNode(v[1]));
+    menu.appendChild(opt);
+  });
+  if (!values.length) {
+    const none = document.createElement('p');
+    none.className = 'msel-none muted';
+    none.textContent = 'nothing to pick';
+    menu.appendChild(none);
+  }
+  d.appendChild(menu);
+  return d;
+}
+
+// ---------------------------------------------------------------- card
 /**
  * Mount the filter card into `host`; call `render(filters, options)` on every
  * state change. One instance per tab (each tab has its own host), all reading
@@ -169,6 +249,7 @@ function selectEl(name, label, values, current, onChange) {
  */
 export function mountFilters(host, opts) {
   let open = false;
+  let openMenu = null;     // the multi-select left open across a re-render
   let textTimer = 0;
 
   function render(filters, options) {
@@ -177,13 +258,15 @@ export function mountFilters(host, opts) {
     const active = document.activeElement;
     const typing = active && host.contains(active) && active.classList.contains('filter-q');
     const caret = typing ? active.selectionStart : null;
+    const wasOpen = host.querySelector('.msel[open]');
+    if (wasOpen) openMenu = wasOpen.dataset.name;
 
     host.replaceChildren();
     host.hidden = false;
     const card = document.createElement('details');
     card.className = 'card card--collapsible filter-card';
     card.open = open;
-    card.addEventListener('toggle', function () { open = card.open; });
+    card.addEventListener('toggle', function () { open = card.open; if (!open) openMenu = null; });
 
     const summary = document.createElement('summary');
     summary.className = 'collapse-summary';
@@ -210,43 +293,12 @@ export function mountFilters(host, opts) {
 
     const body = document.createElement('div');
     body.className = 'collapse-body filter-body';
-
-    // status pills — standard pill size, a toggle each; none pressed = open tasks
-    const st = document.createElement('div');
-    st.className = 'filter-status';
-    st.setAttribute('role', 'group');
-    st.setAttribute('aria-label', 'Status');
-    STATUSES.forEach(function (s) {
-      const on = filters.status.indexOf(s) >= 0;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pill pill-' + s + ' filter-pill hit-target' + (on ? ' active' : '');
-      b.dataset.status = s;
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      b.textContent = s;
-      b.addEventListener('click', function () {
-        const set = filters.status.slice();
-        const i = set.indexOf(s);
-        if (i >= 0) set.splice(i, 1); else set.push(s);
-        opts.onChange(Object.assign({}, filters, { status: set }));
-      });
-      st.appendChild(b);
-    });
-    body.appendChild(st);
-
     const row = document.createElement('div');
     row.className = 'filter-row';
     function change(name) {
       return function (value) { const next = Object.assign({}, filters); next[name] = value; opts.onChange(next); };
     }
-    const projectValues = [['', 'All projects']].concat((o.projects || []).map(function (p) {
-      return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
-    }));
-    row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
-    const personValues = [['', 'Anyone']].concat((o.people || []).map(function (p) { return [p.id, p.name]; }));
-    row.appendChild(selectEl('person', 'Person', personValues, filters.person, change('person')));
-    row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
-    row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
+    // 1. text (the Search tab's box owns it there)
     if (!opts.hideText) {
       const q = document.createElement('input');
       q.type = 'search';
@@ -260,6 +312,19 @@ export function mountFilters(host, opts) {
       });
       row.appendChild(q);
     }
+    // 2. project | person
+    const projectValues = [['', 'All projects']].concat((o.projects || []).map(function (p) {
+      return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
+    }));
+    row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
+    row.appendChild(multiSelect('person', 'Person', (o.people || []).map(function (p) { return [String(p.id), p.name]; }),
+      filters.person, change('person'), { none: 'Anyone', many: 'people', open: openMenu === 'person' }));
+    // 3. due | modified
+    row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
+    row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
+    // 4. status | sort
+    row.appendChild(multiSelect('status', 'Status', STATUSES.map(function (s) { return [s, s]; }),
+      filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
     row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
     if (!isDefaultFilters(Object.assign({}, filters, { q: opts.hideText ? '' : filters.q }))) {
       const clear = document.createElement('button');
