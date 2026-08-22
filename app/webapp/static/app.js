@@ -228,12 +228,13 @@ async function patchTask(id, changes) {
   if (drawer.currentId() === id) drawer.refresh();
 }
 
-/** The row's status select. "done" goes through POST /tasks/{id}/done so a
- *  recurring task rolls its due one cadence forward instead of closing (the
- *  server's rule — the old Today checkbox did the same); every other status
- *  is a plain PATCH. */
+/** The row's status select. "complete" (recurring tasks only — see
+ *  rows.js::statusOptions) goes through POST /tasks/{id}/done so the task
+ *  rolls its due one cadence forward instead of closing; "done" (and every
+ *  other status) is a plain PATCH — closed for good, recurring or not
+ *  (issue #54). */
 async function setStatus(id, status) {
-  if (status !== 'done') return patchTask(id, { status: status });
+  if (status !== 'complete') return patchTask(id, { status: status });
   let t;
   try {
     t = await api('/api/tasks/' + id + '/done', { method: 'POST', body: {} });
@@ -241,8 +242,7 @@ async function setStatus(id, status) {
     toast(err.message || 'Could not complete the task', 'error');
     throw err;
   }
-  if (t.recurrence) toast('Done — next: ' + t.due + ' (' + relDue(t.due).text + ')', 'success');
-  else toast('Done: ' + t.title, 'success');
+  toast('Done — next: ' + t.due + ' (' + relDue(t.due).text + ')', 'success');
   await refreshAll();
   if (drawer.currentId() === id) drawer.refresh();
   return t;
@@ -317,7 +317,7 @@ function renderTable() {
     return;
   }
   const phone = window.matchMedia(PHONE_TABLE_MQ).matches;
-  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort), { onOpen: openTask, onPatch: patchTask }, { phone: phone });
+  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort), { onOpen: openTask, onPatch: patchTask, onStatus: setStatus }, { phone: phone });
 }
 
 function renderTreePane() {
@@ -788,6 +788,7 @@ async function boot() {
     people: function () { return state.people; },
     projects: function () { return state.projects; },
     onMove: moveTask,
+    onStatus: setStatus,
     issues: function () { return state.issues; },
     onSyncIssues: syncIssues,
     onToggle: function () { if (search) search.refreshActions(); },
