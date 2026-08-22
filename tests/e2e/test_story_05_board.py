@@ -2,10 +2,11 @@
 
     Board tab: five columns visible at once on the laptop → project chip
     filters to one project (shared with the Table, encoded in the URL) → drag
-    a card doing → standby → the counts update and the activity log has the
+    a row doing → standby → the counts update and the activity log has the
     row → Today tab lists due / overdue grouped by project, recurring first →
-    tick a recurring task → its due rolls a cadence forward and it leaves
-    Today's due list → tick a plain task → it lands in the Board's Done today.
+    mark a recurring task done → its due rolls a cadence forward and it leaves
+    Today's due list → mark a plain task done → it lands in the Board's Done
+    today.
 
 Walks the story against the **seeded** disposable instance (conftest
 ``seeded_webapp`` over ``tests/fixtures/seed.py`` — synthetic data, the only
@@ -19,6 +20,14 @@ Board as a one-column scroll-snap carousel — with the geometry checks:
 
     docs/screenshots/story-05-board-8-phone.png   (Today, the landing tab)
     docs/screenshots/story-05-board-9-phone.png   (Board carousel, one column)
+
+UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
+title + status select on line 1, the meta line under it) and shares ONE
+filter card; the Today checkbox is gone — "ticking" is the row's status
+select, on every pointer. Today's done tasks ride in the shared list only
+for the Board's Done today column: Table, Tree and Today keep showing open
+tasks (as the filter card says), so a task finished today leaves the Today
+list and appears in the Board's Done today column.
 """
 
 from __future__ import annotations
@@ -49,12 +58,18 @@ def _get(base: str, path: str) -> dict:
         return json.loads(res.read().decode("utf-8"))
 
 
+def _trow(page: Page, scope: str, title: str):
+    """The ONE shared task row (rows.js) by exact title inside ``scope``."""
+    return page.locator(f"{scope} .trow", has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+
+
 def _card(page: Page, title: str):
-    return page.locator(".board-item", has=page.locator(".board-card-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+    return _trow(page, "#paneBoard", title)
 
 
 def _today_row(page: Page, title: str):
-    return page.locator(".today-row", has=page.locator(".today-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+    # the due list only — "Later this week" is the sibling disclosure
+    return _trow(page, "#paneToday section.today", title)
 
 
 def _col(page: Page, key: str):
@@ -63,6 +78,16 @@ def _col(page: Page, key: str):
 
 def _counts(page: Page) -> dict[str, int]:
     return {k: int(page.locator(f".board-col-count[data-col='{k}']").inner_text()) for k in COLUMNS}
+
+
+def _open_filters(page: Page, host_id: str):
+    """The shared filter card is collapsed by default — open it like a user would."""
+    card = page.locator(f"#{host_id} .filter-card")
+    expect(card).to_be_visible()
+    if not card.evaluate("el => el.open"):
+        card.locator("summary").click()
+    expect(card).to_have_attribute("open", "")
+    return card
 
 
 # ----------------------------------------------------------- desktop leg
@@ -91,55 +116,66 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         counts = _counts(page)
         assert counts == {k: len(api[k]) for k in COLUMNS}, counts
         assert counts["done"] == 0                                    # seed's done tasks are old
+        expect(_col(page, "done").locator(".board-col-title")).to_have_text(re.compile(r"^Done today"))
         expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_be_visible()
-        # a card carries context line (project · person) · due · chips · children
-        # · comment COUNT — never the comment body (UX round 2, issue #32)
+        # a row = title + status select on line 1, then the meta line: project ·
+        # due · priority · chips · children · comment COUNT · person — never the
+        # comment body (UX round 2, issue #32; the ONE row of round 3, #46)
         # (story 04 may already have edited "Get three quotes" in this session's
-        # seeded instance — the checks below use cards it leaves alone)
+        # seeded instance — the checks below use rows it leaves alone)
         quotes = _card(page, "Get three quotes")
-        expect(quotes.locator(".board-card-project")).to_have_text("Home renovation")
-        expect(quotes.locator(".board-card-person")).to_contain_text("Sam Rivera")
-        expect(_card(page, "Kitchen").locator(".board-card-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+        expect(quotes.locator(".trow-status")).to_have_value("doing")
+        expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
+        expect(quotes.locator(".trow-person")).to_contain_text("Sam Rivera")
+        expect(_card(page, "Kitchen").locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
         watering = _card(page, "Fix watering schedule drift")
-        expect(watering.locator(".board-card-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
-        expect(watering.locator(".board-card-comments")).to_be_visible()
-        expect(page.locator(".board-card-comment")).to_have_count(0)   # the body bloated the cards
-        expect(_card(page, "Repair fence").locator(".board-card-due")).to_have_class(re.compile("due-overdue"))
-        expect(_card(page, "Renew passports").locator(".board-card-kids")).to_have_text("2")
+        expect(watering.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
+        expect(watering.locator(".trow-comments")).to_have_text("1")
+        expect(page.locator("#paneBoard .trow-comments").first).to_have_text(re.compile(r"^\d+$"))
+        expect(page.locator("#paneBoard .t-comment")).to_have_count(0)   # the body bloated the cards
+        expect(_card(page, "Repair fence").locator(".trow-due")).to_have_class(re.compile("due-overdue"))
+        expect(_card(page, "Renew passports").locator(".trow-kids")).to_have_text("2")
         # flat regions, not cards: no rounded box on a column (issue #32)
         for k in COLUMNS:
             assert _col(page, k).evaluate("el => getComputedStyle(el).borderRadius") == "0px", k
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-1-desktop.png"))
 
-        # 2. Project chip → only that project's descendants; the URL carries it;
-        #    the Table's own filter bar shows the same selection (shared state).
+        # 2. Project filter → only that project's descendants; the URL carries it;
+        #    the Table's card shows the same selection (one shared state).
         home = next(t for t in api["doing"] if t["title"] == "Home renovation")
-        page.locator("#boardFilters select[name='project']").select_option(str(home["id"]))
+        card = _open_filters(page, "boardFilters")
+        card.locator("select[name='project']").select_option(str(home["id"]))
         expect(page).to_have_url(f"{base}/?project={home['id']}")
+        expect(card.locator(".filter-desc")).to_contain_text("Home renovation")
         filtered = _get(base, f"/api/board?project={home['id']}")["columns"]
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(filtered["todo"])))
         assert _counts(page) == {k: len(filtered[k]) for k in COLUMNS}
-        shown = page.locator(".board-item").evaluate_all("els => els.map(e => Number(e.dataset.id))")
+        shown = page.locator("#paneBoard .board-list .trow").evaluate_all("els => els.map(e => Number(e.dataset.id))")
         allowed = {t["id"] for col in filtered.values() for t in col}
         assert shown and set(shown) <= allowed
-        expect(page.locator("#boardFilters .filter-clear")).to_be_visible()
+        expect(card.locator(".filter-clear")).to_be_visible()
         page.screenshot(path=str(shots / "story-05-board-2-desktop.png"))
         page.click("nav.tabs .tab[data-tab='table']")
         expect(page.locator("#tableFilters select[name='project']")).to_have_value(str(home["id"]))
+        expect(page.locator("#tableFilters .filter-desc")).to_contain_text("Home renovation")
         expect(page.locator(".task-row").first).to_be_visible()
         page.click("nav.tabs .tab[data-tab='board']")
-        page.locator("#boardFilters .filter-clear").click()
+        _open_filters(page, "boardFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"])))
 
-        # 3. Drag a card doing → standby: PATCH status, counts update, activity row.
+        # 3. Drag a row doing → standby: PATCH status, counts update, activity row.
         quotes = _card(page, "Get three quotes")
         qid = int(quotes.get_attribute("data-id"))
         assert quotes.evaluate("el => el.closest('.board-col').dataset.col") == "doing"
+        # both ends in the viewport first (a page that scrolls under the
+        # pointer mid-drag would pick up whichever row slides under it)
+        _col(page, "standby").scroll_into_view_if_needed()
         quotes.drag_to(_col(page, "standby"))
-        moved = _col(page, "standby").locator(f".board-item[data-id='{qid}']")
+        moved = _col(page, "standby").locator(f".trow[data-id='{qid}']")
         expect(moved).to_be_visible()
+        expect(moved.locator(".trow-status")).to_have_value("standby")
         expect(page.locator(".board-col-count[data-col='doing']")).to_have_text(str(len(api["doing"]) - 1))
         expect(page.locator(".board-col-count[data-col='standby']")).to_have_text(str(len(api["standby"]) + 1))
         detail = _get(base, f"/api/tasks/{qid}")
@@ -150,8 +186,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert log["field"] == "status" and log["new_value"] == "standby"
         page.screenshot(path=str(shots / "story-05-board-3-desktop.png"))
 
-        # 4. Card click → the drawer, activity log shows the move.
-        moved.locator(".board-card").click()
+        # 4. Row click → the drawer, activity log shows the move.
+        moved.locator(".trow-main").click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         expect(page).to_have_url(f"{base}/#task/{qid}")
@@ -175,54 +211,61 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator(".today-counts")).to_have_text(
             f"{today['counts']['overdue']} overdue · {today['counts']['today']} due today"
         )
-        groups = page.locator(".today-card .today-group")
+        groups = page.locator("#paneToday section.today .today-group")
         expect(groups).to_have_count(len(today["due"]))
         titles = groups.locator(".today-group-title").evaluate_all(
             "els => els.map(e => e.firstChild.textContent.trim())"
         )
         assert titles[0] == "Home renovation" and "Family admin" in titles and "No project" in titles
         # first group holds only overdue rows; a group's recurring rows lead
-        expect(groups.first.locator(".today-row.is-overdue")).to_have_count(2)
+        expect(groups.first.locator(".trow.is-overdue")).to_have_count(2)
         fam = groups.filter(has=page.locator(".today-group-link", has_text="Family admin"))
-        fam_titles = fam.locator(".today-title").evaluate_all("els => els.map(e => e.textContent)")
+        fam_titles = fam.locator(".trow-title").evaluate_all("els => els.map(e => e.textContent)")
         assert fam_titles == ["Dentist check-up", "School enrolment forms"]
-        expect(fam.locator(".today-row").first.locator(".today-recur")).to_be_visible()
-        # UX round 1 (issue #27): rows are one line — no person on the row
-        # (the drawer keeps the person field).
-        expect(_today_row(page, "School enrolment forms")).to_be_visible()
-        expect(page.locator(".today-card .today-person")).to_have_count(0)
+        expect(fam.locator(".trow").first.locator(".trow-recur")).to_be_visible()
+        # the ONE row here too (#46): the status select on every row; the
+        # project is NOT repeated on the meta line — the group already names it
+        school = _today_row(page, "School enrolment forms")
+        expect(school).to_be_visible()
+        expect(school.locator(".trow-status")).to_have_value("todo")
+        expect(school.locator(".trow-person")).to_contain_text("Jordan Lee")
+        expect(page.locator("#paneToday .trow-project")).to_have_count(0)
         later = page.locator(".today-later")
         assert later.evaluate("el => el.open") is False              # collapsed by default
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
         page.screenshot(path=str(shots / "story-05-board-5-desktop.png"))
 
-        # 6. Tick a recurring task → its due rolls one cadence, it leaves the
-        #    due list and shows up under "Later this week".
+        # 6. Mark a recurring task done (the row's status select — README:
+        #    "a recurring task marked done rolls its due one cadence forward
+        #    instead of closing") → its due rolls, it leaves the due list and
+        #    shows up under "Later this week" with the new date.
         vocab = _today_row(page, "Vocabulary review")
         vid = int(vocab.get_attribute("data-id"))
         assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
-        vocab.locator(".today-check").click()
+        vocab.locator(".trow-status").select_option("done")
         next_due = (date.today() + timedelta(days=7)).isoformat()
-        expect(page.locator(".toast-success").last).to_contain_text(f"next: {next_due}")
+        expect(page.locator(f"#paneToday section.today .trow[data-id='{vid}']")).to_have_count(0)
         rolled = _get(base, f"/api/tasks/{vid}")
         assert rolled["due"] == next_due and rolled["status"] == "todo"
         assert rolled["activity"][0]["field"] == "due"
-        expect(page.locator(f".today-card .today-row[data-id='{vid}']")).to_have_count(0)
         later.locator("summary").click()
-        expect(later.locator(f".today-row[data-id='{vid}']")).to_be_visible()
+        rolled_row = later.locator(f".trow[data-id='{vid}']")
+        expect(rolled_row).to_be_visible()
+        expect(rolled_row.locator(".trow-status")).to_have_value("todo")
+        expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
         expect(page.locator(".today-counts")).to_contain_text(f"{today['counts']['today'] - 1} due today")
         page.screenshot(path=str(shots / "story-05-board-6-desktop.png"))
 
-        # 7. Tick a plain overdue task → done; the Board's Done today gains it.
+        # 7. Mark a plain overdue task done → done today: it leaves the Today
+        #    list (open tasks only) and the Board's Done today column gains it.
         books = _today_row(page, "Return library books")
         bid = int(books.get_attribute("data-id"))
-        books.locator(".today-check").click()
-        expect(page.locator(".toast-success").last).to_contain_text("Done: Return library books")
-        expect(page.locator(f".today-card .today-row[data-id='{bid}']")).to_have_count(0)
+        books.locator(".trow-status").select_option("done")
+        expect(page.locator(f"#paneToday section.today .trow[data-id='{bid}']")).to_have_count(0)
         done = _get(base, f"/api/tasks/{bid}")
         assert done["status"] == "done" and done["done_at"][:10] == date.today().isoformat()
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(_col(page, "done").locator(f".board-item[data-id='{bid}']")).to_be_visible()
+        expect(_col(page, "done").locator(f".trow[data-id='{bid}']")).to_be_visible()
         expect(page.locator(".board-col-count[data-col='done']")).to_have_text("1")
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-7-desktop.png"))
@@ -235,7 +278,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
 
 def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
-    one-column scroll-snap carousel with the count strip, 44px targets."""
+    one-column scroll-snap carousel with the count strip, 44px targets (the
+    row's status select is the deliberate compact exception)."""
     base = seeded_webapp
     try:
         wk = playwright.webkit.launch(headless=True)
@@ -250,9 +294,15 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         page.goto(f"{base}/")
         # 8. Fresh phone → Today (coarse pointer, nothing persisted yet).
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        expect(page.locator(".today-card .today-row").first).to_be_visible()
-        assert_min_target(page.locator(".today-card .today-check"))
-        assert_no_overlap(page.locator(".today-card .today-check"))
+        rows = page.locator("#paneToday section.today .trow")
+        expect(rows.first).to_be_visible()
+        # the ONE row on the phone: ≥44px tall, the status select compact
+        # (≤32px) and never overlapping its neighbours
+        assert_min_target(rows)
+        selects = rows.locator(".trow-status")
+        assert_no_overlap(selects)
+        heights = selects.evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
+        assert heights and all(h <= 32 for h in heights), heights
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-8-phone.png"))
 
@@ -280,17 +330,17 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         )
         # launcher-density rows (UX round 2, issue #32): every seeded row in
         # the active column stays inside the ≤96px budget
-        heights = _col(page, "doing").locator(".board-item").evaluate_all(
+        heights = _col(page, "doing").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 96 for h in heights), heights
-        # touch fallback for the drag: a compact status select — right-aligned,
-        # ≤32px tall, auto width, its center inside the context+title block's
-        # vertical span (UX rounds 1+2, issues #27/#32)
-        first_item = _col(page, "doing").locator(".board-item").first
-        card_select = first_item.locator(".board-card-status")
-        expect(card_select).to_be_visible()
-        sel_box = card_select.bounding_box()
-        main_box = first_item.locator(".board-card-main").bounding_box()
+        # touch fallback for the drag: the row's compact status select —
+        # right-aligned, ≤32px tall, auto width, its center inside the title
+        # line's vertical span (UX rounds 1–3, issues #27/#32/#46)
+        first_item = _col(page, "doing").locator(".trow").first
+        row_select = first_item.locator(".trow-status")
+        expect(row_select).to_be_visible()
+        sel_box = row_select.bounding_box()
+        main_box = first_item.locator(".trow-main").bounding_box()
         item_box = first_item.bounding_box()
         assert sel_box and main_box and item_box
         assert sel_box["height"] <= 32, sel_box                      # compact, never a 44px row of its own
@@ -298,6 +348,8 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
         sel_center = sel_box["y"] + sel_box["height"] / 2
         assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
+        # flat list, not a card: no rounded box on the column's list
+        assert _col(page, "doing").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
         context.close()

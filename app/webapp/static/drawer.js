@@ -124,6 +124,58 @@ export function createDrawer(el, opts) {
     return wrap;
   }
 
+  /** Due: a date picker by default (the calendar button opens the native one),
+   *  typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO (issue #46). */
+  function dueField(t) {
+    const rel = relDue(t.due);
+    const wrap = document.createElement('label');
+    wrap.className = 'field field-due';
+    const l = document.createElement('span');
+    l.className = 'field-label';
+    l.textContent = 'Due' + (t.due && rel.text ? ' · ' + rel.text : '');
+    const row = document.createElement('span');
+    row.className = 'field-due-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'input-native field-control';
+    input.dataset.field = 'due';
+    input.value = t.due || '';
+    input.placeholder = 'tomorrow · fri · 2026-09-01';
+    input.setAttribute('aria-label', 'Due date');
+    const picker = document.createElement('input');
+    picker.type = 'date';
+    picker.className = 'field-due-picker';
+    picker.tabIndex = -1;
+    picker.setAttribute('aria-hidden', 'true');
+    picker.value = t.due || '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn field-due-btn';
+    btn.title = 'Pick a date';
+    btn.setAttribute('aria-label', 'Pick a due date');
+    btn.innerHTML = icon('calendar-days');
+    function commit(v) {
+      if (v === (t.due || '')) return;
+      patch({ due: v === '' ? null : v });
+    }
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+      if (ev.key === 'Escape') { input.value = t.due || ''; input.blur(); }
+    });
+    input.addEventListener('blur', function () { commit(input.value.trim()); });
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      try { if (typeof picker.showPicker === 'function') { picker.showPicker(); return; } } catch (_) { /* fall through */ }
+      picker.classList.add('is-visible');
+      picker.focus();
+      picker.click();
+    });
+    picker.addEventListener('change', function () { commit(picker.value); });
+    row.append(input, btn, picker);
+    wrap.append(l, row);
+    return wrap;
+  }
+
   /** "Move to…" — re-parent from the drawer (the phone has no tree drag):
    *  projects + top level; the server's cycle guard answers a bad target. */
   function moveField(t) {
@@ -237,8 +289,7 @@ export function createDrawer(el, opts) {
     fields.className = 'drawer-fields';
     fields.appendChild(selectField('Status', 'status', STATUSES, t.status));
     fields.appendChild(selectField('Priority', 'priority', PRIORITIES, t.priority));
-    const dueRel = relDue(t.due);
-    fields.appendChild(textField('Due' + (t.due && dueRel.text ? ' · ' + dueRel.text : ''), 'due', t.due, 'tomorrow · fri · 2026-09-01'));
+    fields.appendChild(dueField(t));
     fields.appendChild(selectField('Repeat', 'recurrence', RECURRENCES, t.recurrence || '', function (v) { return v || 'never'; }));
     const people = [{ id: '', name: '—' }].concat(opts.people() || []);
     fields.appendChild(selectField('Person', 'person_id', people.map(function (p) { return p.id; }), t.person_id == null ? '' : t.person_id, function (v) {

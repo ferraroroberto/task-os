@@ -11,7 +11,7 @@ Walks the story against the **issues** disposable instance (conftest
 "forge" is a JSON file this test edits; never ``gh``, never the network) at
 1440×900 Chromium, saving the proof shots the validation record links to:
 
-    docs/screenshots/story-08-issues-1-desktop.png   Board after ↻: two new coding cards in Inbox, toast
+    docs/screenshots/story-08-issues-1-desktop.png   Board after ↻: two new coding rows in Inbox, toast
     docs/screenshots/story-08-issues-2-desktop.png   drawer: issue panel — chip, open, label, last synced
     docs/screenshots/story-08-issues-3-desktop.png   Tree: the issue task nested under the project
     docs/screenshots/story-08-issues-4-desktop.png   drawer after the close: done · activity by sync · closed chip
@@ -72,10 +72,12 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         sync.click()
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
         inbox = page.locator(".board-col[data-col='inbox']")
-        # UX round 2 (#32): a coding task's card names the issue on its muted
-        # context line (the launcher's "repo#N" look) — no chip on the card.
-        expect(inbox.locator(".board-card-project", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
-        expect(inbox.locator(".board-card-project", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
+        # UX rounds 2+3 (#32/#46): a coding task's row names the issue as the
+        # code on its meta line (the launcher's "repo#N" look) — no duplicate
+        # issue chip on the row.
+        expect(inbox.locator(".trow .trow-code", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
+        expect(inbox.locator(".trow .trow-code", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
+        expect(inbox.locator(".trow", has=page.locator(".trow-code", has_text="garden-bot#14")).locator(".chip-issue")).to_have_count(0)
         expect(page.locator(".board-col-count[data-col='inbox']")).to_have_text(str(inbox_before + 2))
         api_inbox = _get(base, "/api/tasks?status=inbox")["items"]
         new = {t["code"]: t for t in api_inbox if t.get("issue_ref")}
@@ -88,7 +90,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         page.screenshot(path=str(shots / "story-08-issues-1-desktop.png"))
 
         # 2. Open the new task → the drawer's issue panel.
-        card = inbox.locator(f".board-item[data-id='{sensor['id']}'] .board-card")
+        card = inbox.locator(f".trow[data-id='{sensor['id']}'] .trow-main")
         card.click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
@@ -110,13 +112,13 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         # 3. Tree: nest it under the garden-bot project (drag), the chip travels with it.
         page.click("nav.tabs .tab[data-tab='tree']")
         expect(page.locator("#paneTree")).to_be_visible()
-        bot = page.locator(".tree-node", has=page.locator(":scope > .tree-row .tree-title", has_text="Side project: garden-bot")).first
+        bot = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Side project: garden-bot")).first
         bot_id = int(bot.get_attribute("data-id"))
         for pid in page.locator(".tree-node[aria-level='1'][aria-expanded='true']").evaluate_all("els => els.map(e => e.dataset.id)"):
             page.locator(f".tree-node[data-id='{pid}'] > .tree-row > .tree-toggle").click()
         source = page.locator(f".tree-node[data-id='{sensor['id']}']")
         expect(source).to_be_visible()
-        expect(source.locator(":scope > .tree-row .chip-issue")).to_have_text("garden-bot#14")
+        expect(source.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
         source.locator(":scope > .tree-row").drag_to(bot.locator(":scope > .tree-row"))
         expect(page.locator(".toast-success").last).to_contain_text("under Side project: garden-bot")
         moved = _get(base, f"/api/tasks/{sensor['id']}")
@@ -125,7 +127,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         bot.locator(":scope > .tree-row > .tree-toggle").click()
         nested = bot.locator(f".tree-children .tree-node[data-id='{sensor['id']}']")
         expect(nested).to_be_visible()
-        expect(nested.locator(":scope > .tree-row .chip-issue")).to_be_visible()
+        expect(nested.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
         page.screenshot(path=str(shots / "story-08-issues-3-desktop.png"))
 
         # 4. The issue is closed on the forge → ↻ → the task is done, the log says sync.
@@ -176,15 +178,21 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
         page.screenshot(path=str(shots / "story-08-issues-6-desktop.png"))
-        # the code is on the Board card's context line too (#32)
+        # the code is on the Board row's meta line too (#32/#46)
         page.keyboard.press("Escape")
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(inbox.locator(f".board-item[data-id='{plain['id']}'] .board-card-project")).to_have_text("garden-bot#15")
+        expect(inbox.locator(f".trow[data-id='{plain['id']}'] .trow-code")).to_have_text("garden-bot#15")
 
         # 6. Settings (dark): provider enabled, the last sync's counts.
         page.evaluate("document.documentElement.dataset.theme = 'dark'")
         page.click("nav.tabs .tab[data-tab='settings']")
         card = page.locator("#issuesCard")
+        # every Settings card is a collapsed disclosure (#46): the summary
+        # carries the state word, the body opens on demand
+        expect(card.locator("#issuesCardMeta")).to_have_text("synced")
+        assert card.evaluate("el => el.open") is False
+        card.locator("summary").click()
+        expect(card).to_have_attribute("open", "")
         expect(card.locator("#statusIssues .status-ok")).to_have_text("enabled")
         expect(card.locator("#statusIssues")).to_contain_text("github")
         expect(card.locator("#statusIssuesSync")).to_contain_text("2 open issue(s) · 0 new · 0 retitled · 0 reopened · 1 closed")

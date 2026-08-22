@@ -1,60 +1,114 @@
-/* task-os — the Today tab: what is due, over /api/today.
+/* task-os — the Today tab: what is due, from the shared list.
  *
- * Open tasks due ≤ today (overdue first, then today), grouped by root
- * project with recurring tasks first inside each group; each row is one
- * line — a checkbox to mark done (a recurring task rolls its due forward
- * instead of closing — the caller toasts the next date), the ellipsizing
- * title and the due badge. The person shows in the drawer, not the row.
- * "Later this week" (tomorrow … +7 days) sits collapsed below as a vendored
- * disclosure. This is the phone's landing tab.
+ * Tasks due ≤ today (overdue first, then today), grouped by root project
+ * with recurring tasks first inside each group; "Later this week"
+ * (tomorrow … +7 days) sits collapsed below as a flat disclosure. Rows are
+ * the ONE task row (rows.js, issue #46) — title + status select (the Board
+ * control; the old checkbox is gone), the meta line (project hidden — the
+ * group already names it). Flat hairline rows, no card wrapper, group
+ * titles in the app's normal title font. This is the phone's landing tab.
+ *
+ * Everything is derived in the browser from the shared filtered list, so the
+ * filter card (status · project · person · sort …) applies here like on
+ * every other tab.
  */
 
 'use strict';
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
-import { relDue } from './format.js';
+import { relDue, todayISO } from './format.js';
+import { compareItems, rowList } from './rows.js';
+
+/** Split the list into {due, week, counts} — exported for tests. */
+export function bucketToday(items, today, sort) {
+  const t = today || todayISO();
+  const end = new Date(t + 'T00:00:00');
+  end.setDate(end.getDate() + 7);
+  const weekEnd = todayISO(end);
+  const due = [];
+  const week = [];
+  (items || []).forEach(function (it) {
+    if (!it.due) return;
+    if (it.due <= t) due.push(it);
+    else if (it.due <= weekEnd) week.push(it);
+  });
+  return {
+    today: t,
+    due: groupByRoot(due, sort),
+    week: groupByRoot(week, sort),
+    counts: {
+      overdue: due.filter(function (it) { return it.due < t; }).length,
+      today: due.filter(function (it) { return it.due === t; }).length,
+      week: week.length,
+    },
+  };
+}
+
+/** [{root, items}] — by top ancestor (null = no project); groups ordered by
+ *  earliest due then title; inside a group recurring tasks first, then the
+ *  shared sort. */
+function groupByRoot(items, sort) {
+  const cmp = compareItems(sort || 'due');
+  const groups = new Map();
+  items.forEach(function (it) {
+    const key = it.root ? it.root.id : null;
+    if (!groups.has(key)) groups.set(key, { root: it.root || null, items: [] });
+    groups.get(key).items.push(it);
+  });
+  const out = Array.from(groups.values());
+  out.forEach(function (g) {
+    g.items.sort(function (a, b) { return ((a.recurrence ? 0 : 1) - (b.recurrence ? 0 : 1)) || cmp(a, b); });
+  });
+  out.sort(function (a, b) {
+    const ad = a.items.reduce(function (m, it) { return m == null || it.due < m ? it.due : m; }, null) || '';
+    const bd = b.items.reduce(function (m, it) { return m == null || it.due < m ? it.due : m; }, null) || '';
+    return ad.localeCompare(bd) || ((a.root ? a.root.title : '').localeCompare(b.root ? b.root.title : ''));
+  });
+  return out;
+}
 
 /**
  * @param {HTMLElement} host
- * @param {object} data      {today, due: [{root, items}], week: [{root, items}], counts}
- * @param {{onOpen: (id:number)=>void, onDone: (id:number)=>Promise<any>}} handlers
+ * @param {Array<object>} items  the shared filtered list
+ * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>}} handlers
+ * @param {{sort?: string, today?: string}} [opts]
  */
-export function renderToday(host, data, handlers) {
+export function renderToday(host, items, handlers, opts) {
+  const o = opts || {};
+  const data = bucketToday(items, o.today, o.sort);
   host.innerHTML = '';
-  const counts = data.counts || {};
-  const dueGroups = data.due || [];
-  const weekGroups = data.week || [];
+  const counts = data.counts;
 
-  const card = document.createElement('div');
-  card.className = 'card today-card';
+  const section = document.createElement('section');
+  section.className = 'today';
   const head = document.createElement('div');
-  head.className = 'card-head today-head';
+  head.className = 'today-head';
   const h = document.createElement('h2');
-  h.className = 'card-title';
+  h.className = 'today-title';
   h.innerHTML = icon('calendar-days');
   h.appendChild(document.createTextNode('Today'));
   head.appendChild(h);
   const meta = document.createElement('span');
-  meta.className = 'card-head-meta today-counts';
+  meta.className = 'today-counts';
   const bits = [];
   if (counts.overdue) bits.push(counts.overdue + ' overdue');
   if (counts.today) bits.push(counts.today + ' due today');
   meta.textContent = bits.length ? bits.join(' · ') : 'nothing due';
   if (counts.overdue) meta.classList.add('has-overdue');
   head.appendChild(meta);
-  card.appendChild(head);
+  section.appendChild(head);
 
-  if (!dueGroups.length) {
-    card.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear'));
+  if (!data.due.length) {
+    section.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear'));
   } else {
-    dueGroups.forEach(function (g) { card.appendChild(buildGroup(g, handlers)); });
+    data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers)); });
   }
-  host.appendChild(card);
+  host.appendChild(section);
 
-  // Later this week — collapsed disclosure (vendored markup).
+  // Later this week — a flat disclosure (vendored markup, hairline instead of a card box).
   const later = document.createElement('details');
-  later.className = 'card card--collapsible today-later';
+  later.className = 'card card--collapsible disclosure-flat today-later';
   const summary = document.createElement('summary');
   summary.className = 'collapse-summary';
   const main = document.createElement('span');
@@ -66,7 +120,7 @@ export function renderToday(host, data, handlers) {
   main.appendChild(st);
   const sc = document.createElement('span');
   sc.className = 'collapse-count';
-  sc.textContent = (counts.week || 0) + (counts.week === 1 ? ' task' : ' tasks');
+  sc.textContent = counts.week + (counts.week === 1 ? ' task' : ' tasks');
   main.appendChild(sc);
   summary.appendChild(main);
   const chev = document.createElement('span');
@@ -77,10 +131,10 @@ export function renderToday(host, data, handlers) {
   later.appendChild(summary);
   const body = document.createElement('div');
   body.className = 'collapse-body';
-  if (!weekGroups.length) {
+  if (!data.week.length) {
     body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
   } else {
-    weekGroups.forEach(function (g) { body.appendChild(buildGroup(g, handlers)); });
+    data.week.forEach(function (g) { body.appendChild(buildGroup(g, handlers)); });
   }
   later.appendChild(body);
   host.appendChild(later);
@@ -109,69 +163,12 @@ function buildGroup(group, handlers) {
   n.textContent = String(group.items.length);
   title.appendChild(n);
   wrap.appendChild(title);
-  const list = document.createElement('div');
-  list.className = 'today-list';
-  group.items.forEach(function (t) { list.appendChild(buildRow(t, handlers)); });
+  const list = rowList(group.items, handlers, { hideProject: true });
+  list.classList.add('today-list');
+  list.querySelectorAll('.trow').forEach(function (row) {
+    const rel = relDue(row.querySelector('.trow-due') ? row.querySelector('.trow-due').title : '');
+    if (rel.tone) row.classList.add('is-' + rel.tone);
+  });
   wrap.appendChild(list);
   return wrap;
-}
-
-function buildRow(t, handlers) {
-  const row = document.createElement('div');
-  row.className = 'today-row';
-  row.dataset.id = String(t.id);
-  const rel = relDue(t.due);
-  if (rel.tone) row.classList.add('is-' + rel.tone);
-
-  const check = document.createElement('button');
-  check.type = 'button';
-  check.className = 'today-check';
-  check.setAttribute('role', 'checkbox');
-  check.setAttribute('aria-checked', 'false');
-  check.setAttribute('aria-label', (t.recurrence ? 'Done for now: ' : 'Mark done: ') + t.title);
-  check.title = t.recurrence ? 'Done — rolls to the next ' + t.recurrence + ' date' : 'Mark done';
-  check.innerHTML = icon('square') + icon('square-check');
-  check.addEventListener('click', function (ev) {
-    ev.stopPropagation();
-    check.disabled = true;
-    check.setAttribute('aria-checked', 'true');
-    handlers.onDone(t.id).catch(function () {
-      check.disabled = false;
-      check.setAttribute('aria-checked', 'false');
-    });
-  });
-  row.appendChild(check);
-
-  const main = document.createElement('span');
-  main.className = 'today-main';
-  const title = document.createElement('span');
-  title.className = 'today-title';
-  title.textContent = t.title;
-  main.appendChild(title);
-  if (t.recurrence) {
-    const r = document.createElement('span');
-    r.className = 'today-recur';
-    r.innerHTML = icon('repeat');
-    r.title = t.recurrence;
-    main.appendChild(r);
-  }
-  if (t.breadcrumb && t.breadcrumb.length > 1) {
-    const crumb = document.createElement('span');
-    crumb.className = 'today-crumb';
-    crumb.textContent = t.breadcrumb.slice(1).map(function (c) { return c.title; }).join(' › ');
-    main.appendChild(crumb);
-  }
-  row.appendChild(main);
-
-  const due = document.createElement('span');
-  due.className = 'today-due' + (rel.tone ? ' due-' + rel.tone : '');
-  due.title = t.due || '';
-  due.textContent = rel.text;
-  row.appendChild(due);
-
-  row.addEventListener('click', function (ev) {
-    if (ev.target.closest('button, a')) return;
-    handlers.onOpen(t.id);
-  });
-  return row;
 }

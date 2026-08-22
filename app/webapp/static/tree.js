@@ -1,25 +1,30 @@
-/* task-os — the Tree tab: an outliner over /api/tasks/tree.
+/* task-os — the Tree tab: the shared list as an outliner.
  *
- * Indent = nesting, with a subtle vertical guide per depth level; each node
- * carries a rollup (open descendants, nearest due); a node with children
- * shows the "project" chip — this is where "a task becomes a project" is
- * visible. Ordering is deterministic at every level: open before closed,
- * then by due (none last), then title. Collapse state persists per node in
+ * Indent = nesting, with a subtle vertical guide per depth level; a node with
+ * children carries an expand toggle — this is where "a task becomes a project"
+ * is visible. Rows are the ONE task row (rows.js, issue #46): title + status
+ * select, the meta line (project hidden — the nesting already says it).
+ *
+ * The forest comes from /api/tasks/tree (every task, closed ones included);
+ * the caller passes `keep` = the ids of the shared filtered list, and the
+ * tree is pruned to those nodes plus the ancestors they need — an ancestor
+ * that is itself filtered out renders muted as context. Every level is
+ * ordered by the shared `sort` (filters.js), so "sorted by due date" in the
+ * filter card is the Tree's order too. Collapse state persists per node in
  * localStorage. On a fine pointer, drag a node onto another to re-parent it
- * (HTML5 DnD → the caller's onMove → POST /api/tasks/{id}/move; a cycle
- * comes back as a toast) — the top-level drop zone only appears during an
- * active drag. Coarse pointers get no DnD affordances at all; re-parenting
- * lives in the drawer's "Move to…" field. Keyboard: ↑/↓ walk visible nodes,
- * →/← expand/collapse, Enter opens.
+ * (HTML5 DnD → the caller's onMove → POST /api/tasks/{id}/move; a cycle comes
+ * back as a toast) — the top-level drop zone only appears during an active
+ * drag. Coarse pointers get no DnD affordances; re-parenting lives in the
+ * drawer's "Move to…" field. Keyboard: ↑/↓ walk visible nodes, →/← expand /
+ * collapse, Enter opens.
  */
 
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { issueChip, relDue, statusPill } from './format.js';
+import { compareItems, taskRow } from './rows.js';
 
 const COLLAPSE_KEY = 'task-os.tree.collapsed';
-const CLOSED = { done: 1, cancelled: 1 };
 
 function loadCollapsed() {
   try {
@@ -32,60 +37,55 @@ function saveCollapsed(set) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(set))); } catch (_) { /* private mode */ }
 }
 
-/** Deterministic order at every level: open first, then due (none last),
- *  then title — the same rule for roots and children, so the tree reads the
- *  same on every load. */
-function sortForest(nodes) {
-  nodes.sort(function (a, b) {
-    const ac = CLOSED[a.status] ? 1 : 0;
-    const bc = CLOSED[b.status] ? 1 : 0;
-    if (ac !== bc) return ac - bc;
-    if ((a.due || '') !== (b.due || '')) {
-      if (!a.due) return 1;
-      if (!b.due) return -1;
-      return a.due < b.due ? -1 : 1;
-    }
-    return (a.title || '').localeCompare(b.title || '');
-  });
-  nodes.forEach(function (n) { if (n.children && n.children.length) sortForest(n.children); });
+/**
+ * Prune the forest to `keep` + the ancestors they need; nodes merge the
+ * enriched summary from `byId` (the shared list) when they have one.
+ * @returns {Array<object>} a new forest ({...node, children, _context})
+ */
+export function pruneForest(forest, keep, byId) {
+  function walk(nodes) {
+    const out = [];
+    nodes.forEach(function (n) {
+      const kids = walk(n.children || []);
+      const kept = !keep || keep.has(n.id);
+      if (!kept && !kids.length) return;
+      const merged = Object.assign({}, n, byId && byId[n.id] ? byId[n.id] : {}, { children: kids, depth: n.depth });
+      merged._context = !kept;
+      out.push(merged);
+    });
+    return out;
+  }
+  return walk(forest);
 }
 
-/** Open-descendant count + nearest open due, computed over the pruned forest. */
-function rollup(node) {
-  let open = 0;
-  let nearest = null;
-  (node.children || []).forEach(function (c) {
-    const r = rollup(c);
-    if (!CLOSED[c.status]) {
-      open += 1;
-      if (c.due && (!nearest || c.due < nearest)) nearest = c.due;
-    }
-    open += r.open;
-    if (r.nearest && (!nearest || r.nearest < nearest)) nearest = r.nearest;
-  });
-  node._rollup = { open: open, nearest: nearest };
-  return node._rollup;
+/** Sort every level with the shared comparator. */
+export function sortForest(nodes, sort) {
+  const cmp = compareItems(sort);
+  nodes.sort(cmp);
+  nodes.forEach(function (n) { if (n.children && n.children.length) sortForest(n.children, sort); });
+  return nodes;
 }
 
 /**
  * @param {HTMLElement} host
- * @param {Array<object>} forest
- * @param {{onOpen: (id:number)=>void, onMove: (id:number, parentId:number|null)=>Promise<any>}} handlers
+ * @param {Array<object>} forest      /api/tasks/tree items (full)
+ * @param {{onOpen: (id:number)=>void, onMove: (id:number, parentId:number|null)=>Promise<any>,
+ *          onStatus: (id:number, status:string)=>Promise<any>}} handlers
+ * @param {{keep?: Set<number>|null, byId?: object, sort?: string}} [opts]
  */
-export function renderTree(host, forest, handlers) {
+export function renderTree(host, forest, handlers, opts) {
+  const o = opts || {};
   host.innerHTML = '';
   const collapsed = loadCollapsed();
   // No pointer to drag with → no DnD affordances at all (re-parenting lives
   // in the drawer's "Move to…" field).
   const canDrag = !window.matchMedia('(pointer: coarse)').matches;
-  const card = document.createElement('div');
-  card.className = 'card tree-card';
   const tree = document.createElement('div');
   tree.className = 'tree';
   tree.setAttribute('role', 'tree');
   tree.setAttribute('aria-label', 'Task tree');
-  sortForest(forest);
-  forest.forEach(function (n) { rollup(n); tree.appendChild(buildNode(n, collapsed, handlers, canDrag)); });
+  const pruned = sortForest(pruneForest(forest, o.keep || null, o.byId || null), o.sort || 'due');
+  pruned.forEach(function (n) { tree.appendChild(buildNode(n, collapsed, handlers, canDrag)); });
 
   if (canDrag) {
     // Root drop zone: only visible during an active drag (CSS keys on the
@@ -105,32 +105,26 @@ export function renderTree(host, forest, handlers) {
   }
 
   tree.addEventListener('keydown', function (ev) { onTreeKey(ev, tree, collapsed, handlers); });
-  card.appendChild(tree);
-  host.appendChild(card);
+  host.appendChild(tree);
   // roving tabindex: first node reachable by Tab
-  const first = tree.querySelector('.tree-node');
+  const first = tree.querySelector('.tree-node > .trow > .trow-main');
   if (first) first.tabIndex = 0;
+  return pruned.length;
 }
 
 function buildNode(node, collapsed, handlers, canDrag) {
   const item = document.createElement('div');
-  item.className = 'tree-node' + (CLOSED[node.status] ? ' is-closed' : '');
+  item.className = 'tree-node' + (node._context ? ' is-context' : '');
   item.setAttribute('role', 'treeitem');
   item.dataset.id = String(node.id);
-  item.tabIndex = -1;
-  item.style.setProperty('--depth', String(node.depth || 0));
   const hasKids = (node.children || []).length > 0;
   const isCollapsed = hasKids && collapsed.has(node.id);
   if (hasKids) item.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
   item.setAttribute('aria-level', String((node.depth || 0) + 1));
-  item.draggable = !!canDrag;
-
-  const row = document.createElement('div');
-  row.className = 'tree-row';
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
-  toggle.className = 'tree-toggle hit-target' + (hasKids ? '' : ' is-leaf');
+  toggle.className = 'tree-toggle' + (hasKids ? '' : ' is-leaf');
   toggle.tabIndex = -1;
   toggle.setAttribute('aria-label', isCollapsed ? 'Expand' : 'Collapse');
   toggle.innerHTML = icon(isCollapsed ? 'chevron-right' : 'chevron-down');
@@ -139,63 +133,9 @@ function buildNode(node, collapsed, handlers, canDrag) {
     ev.stopPropagation();
     setCollapsed(item, node.id, !collapsed.has(node.id), collapsed);
   });
-  row.appendChild(toggle);
 
-  if (canDrag) {
-    const grip = document.createElement('span');
-    grip.className = 'tree-grip';
-    grip.innerHTML = icon('grip-vertical');
-    grip.title = 'Drag to move under another task';
-    row.appendChild(grip);
-  }
-
-  const title = document.createElement('span');
-  title.className = 'tree-title';
-  title.textContent = node.title;
-  row.appendChild(title);
-
-  if (node.is_project || hasKids) {
-    const chip = document.createElement('span');
-    chip.className = 'chip chip-project';
-    chip.textContent = 'project';
-    row.appendChild(chip);
-  }
-  if (node.issue_ref) {
-    const ic = issueChip(node.issue_ref);
-    ic.addEventListener('click', function (ev) { ev.stopPropagation(); });
-    row.appendChild(ic);
-  }
-
-  const meta = document.createElement('span');
-  meta.className = 'tree-meta';
-  const r = node._rollup || { open: 0, nearest: null };
-  if (hasKids) {
-    const open = document.createElement('span');
-    open.className = 'tree-rollup';
-    open.textContent = r.open + ' open';
-    meta.appendChild(open);
-    if (r.nearest) {
-      const nd = relDue(r.nearest);
-      const near = document.createElement('span');
-      near.className = 'tree-rollup' + (nd.tone ? ' due-' + nd.tone : '');
-      near.title = 'nearest due ' + r.nearest;
-      near.textContent = (nd.tone === 'overdue' ? 'due ' : 'next ') + nd.text;
-      meta.appendChild(near);
-    }
-  }
-  if (node.due) {
-    const d = relDue(node.due);
-    const due = document.createElement('span');
-    due.className = 'tree-due' + (d.tone ? ' due-' + d.tone : '');
-    due.title = node.due;
-    due.innerHTML = icon('calendar-days');
-    const l = document.createElement('span');
-    l.textContent = d.text;
-    due.appendChild(l);
-    meta.appendChild(due);
-  }
-  meta.appendChild(statusPill(node.status));
-  row.appendChild(meta);
+  const row = taskRow(node, handlers, { prefix: toggle, depth: node.depth || 0, hideProject: true, draggable: canDrag });
+  row.classList.add('tree-row');
   item.appendChild(row);
 
   if (hasKids) {
@@ -207,21 +147,16 @@ function buildNode(node, collapsed, handlers, canDrag) {
     item.appendChild(group);
   }
 
-  row.addEventListener('click', function (ev) {
-    if (ev.target.closest('button')) return;
-    handlers.onOpen(node.id);
-  });
-
   // ---- drag source (fine pointers only; dragstart/dragend bubble up to the
   // tree container, which shows the root drop zone while a drag is live)
   if (canDrag) {
-    item.addEventListener('dragstart', function (ev) {
+    row.addEventListener('dragstart', function (ev) {
       ev.stopPropagation();
       ev.dataTransfer.setData('text/plain', String(node.id));
       ev.dataTransfer.effectAllowed = 'move';
-      item.classList.add('is-dragging');
+      row.classList.add('is-dragging');
     });
-    item.addEventListener('dragend', function () { item.classList.remove('is-dragging'); });
+    row.addEventListener('dragend', function () { row.classList.remove('is-dragging'); });
     wireDropTarget(row, node.id, handlers);
   }
   return item;
@@ -252,7 +187,7 @@ function setCollapsed(item, id, collapse, collapsed) {
   saveCollapsed(collapsed);
   group.hidden = collapse;
   item.setAttribute('aria-expanded', collapse ? 'false' : 'true');
-  const toggle = item.querySelector(':scope > .tree-row > .tree-toggle');
+  const toggle = item.querySelector(':scope > .trow > .tree-toggle');
   toggle.innerHTML = icon(collapse ? 'chevron-right' : 'chevron-down');
   toggle.setAttribute('aria-label', collapse ? 'Expand' : 'Collapse');
 }
@@ -266,12 +201,17 @@ function visibleNodes(tree) {
 }
 
 function onTreeKey(ev, tree, collapsed, handlers) {
+  if (ev.target.closest('select, input, a')) return;
   const item = ev.target.closest('.tree-node');
   if (!item) return;
   const nodes = visibleNodes(tree);
   const idx = nodes.indexOf(item);
   const id = Number(item.dataset.id);
-  const focusAt = function (n) { if (n) { item.tabIndex = -1; n.tabIndex = 0; n.focus(); } };
+  const mainOf = function (n) { return n ? n.querySelector(':scope > .trow > .trow-main') : null; };
+  const focusAt = function (n) {
+    const m = mainOf(n);
+    if (m) { const cur = mainOf(item); if (cur) cur.tabIndex = -1; m.tabIndex = 0; m.focus(); }
+  };
   switch (ev.key) {
     case 'ArrowDown': ev.preventDefault(); focusAt(nodes[idx + 1]); break;
     case 'ArrowUp': ev.preventDefault(); focusAt(nodes[idx - 1]); break;
@@ -287,6 +227,7 @@ function onTreeKey(ev, tree, collapsed, handlers) {
       break;
     case 'Enter':
     case ' ':
+      if (ev.target.closest('.trow-main')) return;    // the row handles its own Enter
       ev.preventDefault();
       handlers.onOpen(id);
       break;

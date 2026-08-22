@@ -236,6 +236,13 @@
     <circle cx="12" cy="12" r="10" />
     <path d="m9 12 2 2 4-4" />
   </symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24" fill="none">
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    <path d="M10 9H8" />
+    <path d="M16 13H8" />
+    <path d="M16 17H8" />
+  </symbol>
   <!-- Step 7 glyph (Settings → Phone access) -->
   <symbol id="i-smartphone" viewBox="0 0 24 24" fill="none">
     <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
@@ -326,11 +333,10 @@
     <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board">
       <div class="pane-body">
         <div class="quick-add" data-quick-add="board"></div>
-        <!-- Project · person · text filters — the same shared state (and URL
-             query, ?project=12) as the Table's bar; status/due/sort stay
-             Table-only. Flat (no card wrapper) with compact controls: the
-             Board is a flat surface end to end (#32). -->
-        <div class="filter-bar filter-bar-flat" id="boardFilters" hidden></div>
+        <!-- The ONE filter card (filters.js): the same state and URL query on
+             every tab — status · project · person · due · modified · text ·
+             sort. Collapsed by default; the summary line says what is on. -->
+        <div class="filter-host" id="boardFilters" hidden></div>
         <!-- Five status columns (board.js): side by side on a wide screen,
              a one-column scroll-snap carousel on the phone. -->
         <div id="boardHost" data-empty="tasks"></div>
@@ -339,21 +345,21 @@
     <section id="paneTable" class="pane" role="tabpanel" aria-labelledby="tabTable" aria-label="Table" hidden>
       <div class="pane-body">
         <div class="quick-add" data-quick-add="table"></div>
-        <!-- Column filter bar: its state is the URL query (?status=doing&project=12)
-             so a view is shareable; app.js keeps both in sync. -->
-        <div class="card filter-bar" id="tableFilters" hidden></div>
+        <div class="filter-host" id="tableFilters" hidden></div>
         <div id="tableHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneTree" class="pane" role="tabpanel" aria-labelledby="tabTree" aria-label="Tree" hidden>
       <div class="pane-body">
         <div class="quick-add" data-quick-add="tree"></div>
+        <div class="filter-host" id="treeFilters" hidden></div>
         <div id="treeHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
       <div class="pane-body">
         <div class="quick-add" data-quick-add="today"></div>
+        <div class="filter-host" id="todayFilters" hidden></div>
         <!-- Due ≤ today grouped by project, recurring first; "Later this week"
              collapsed below (today.js). The phone's landing tab. -->
         <div id="todayHost" data-empty="tasks"></div>
@@ -370,109 +376,132 @@
                  placeholder="Search tasks, folders, emails, issues…" aria-label="Search everything">
           <span id="searchMeta" class="search-meta muted" aria-live="polite"></span>
         </div>
+        <!-- The same filter card as every other tab (no text field — the box
+             above owns the text); applies to the task hits. -->
+        <div class="filter-host" id="searchFilters" hidden></div>
         <div id="searchHost" class="search-host"></div>
       </div>
     </section>
     <section id="paneSettings" class="pane" role="tabpanel" aria-labelledby="tabSettings" aria-label="Settings" hidden>
       <div class="pane-body">
-        <div class="card">
-          <div class="card-head">
-            <h2 class="card-title">
+        <!-- Every Settings card is the vendored disclosure, collapsed by default
+             (#46): the summary carries the title + a state word (on · synced ·
+             indexed · off — never a count); the body has the detail. -->
+        <details class="card card--collapsible settings-card" id="installCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
-              This install
-            </h2>
-            <span class="card-head-meta" id="settingsSite"></span>
+              <h3 class="collapse-title">This install</h3>
+              <span class="collapse-count" id="settingsSite"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
           </div>
-          <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
-        </div>
+        </details>
         <!-- Phone access (Step 7): how this connection came in and what the
              install accepts — filled from GET /api/status by app.js. -->
-        <div class="card" id="accessCard">
-          <div class="card-head">
-            <h2 class="card-title">
+        <details class="card card--collapsible settings-card" id="accessCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
-              Phone access
-            </h2>
-            <span class="card-head-meta" id="accessClient"></span>
+              <h3 class="collapse-title">Phone access</h3>
+              <span class="collapse-count" id="accessClient"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <dl class="access-rows" id="accessRows"></dl>
+            <p class="card-meta">Install: iOS Safari → Share → Add to Home Screen · Android Chrome → Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
+            <div class="access-actions">
+              <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
+            </div>
           </div>
-          <dl class="access-rows" id="accessRows"></dl>
-          <p class="card-meta">Install: iOS Safari → Share → Add to Home Screen · Android Chrome → Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
-          <div class="access-actions">
-            <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
-          </div>
-        </div>
+        </details>
         <!-- Markdown mirror + backup: read-only status from GET /api/status
              (refreshed when this tab is shown). Vendored card; rows built by app.js. -->
-        <div class="card" id="mirrorCard">
-          <div class="card-head">
-            <h2 class="card-title">
+        <details class="card card--collapsible settings-card" id="mirrorCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
-              Markdown mirror &amp; backup
-            </h2>
-            <span class="card-head-meta" id="mirrorCardMeta"></span>
+              <h3 class="collapse-title">Markdown mirror and backup</h3>
+              <span class="collapse-count" id="mirrorCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
+            <dl class="status-rows" id="mirrorStatus" aria-live="polite">
+              <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
+            </dl>
           </div>
-          <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
-          <dl class="status-rows" id="mirrorStatus" aria-live="polite">
-            <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
-          </dl>
-        </div>
+        </details>
         <!-- Issue provider (Step 8): status from GET /api/issues/status,
              ↻ = POST /api/issues/sync. Vendored card; rows built by app.js. -->
-        <div class="card" id="issuesCard">
-          <div class="card-head">
-            <h2 class="card-title">
+        <details class="card card--collapsible settings-card" id="issuesCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg>
-              Issues as tasks
-            </h2>
-            <span class="card-head-meta" id="issuesCardMeta"></span>
+              <h3 class="collapse-title">Issues as tasks</h3>
+              <span class="collapse-count" id="issuesCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
+            <dl class="status-rows" id="issuesStatus" aria-live="polite">
+              <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Last sync</dt><dd id="statusIssuesSync" class="muted">–</dd></div>
+            </dl>
+            <div class="card-actions">
+              <button type="button" id="issuesSyncNow" class="button-surface" disabled>
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+                Sync now
+              </button>
+            </div>
           </div>
-          <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
-          <dl class="status-rows" id="issuesStatus" aria-live="polite">
-            <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Last sync</dt><dd id="statusIssuesSync" class="muted">–</dd></div>
-          </dl>
-          <div class="card-actions">
-            <button type="button" id="issuesSyncNow" class="button-surface" disabled>
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
-              Sync now
-            </button>
-          </div>
-        </div>
+        </details>
         <!-- Search (Step 10): which of the four indexes this install can query
              — from GET /api/search/status; a kind that is off says why. -->
-        <div class="card" id="searchCard">
-          <div class="card-head">
-            <h2 class="card-title">
+        <details class="card card--collapsible settings-card" id="searchCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-              Search
-            </h2>
-            <span class="card-head-meta" id="searchCardMeta"></span>
+              <h3 class="collapse-title">Search</h3>
+              <span class="collapse-count" id="searchCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">One box over four indexes: tasks (always), the folder index (<code>search.folder_roots</code>), the email archiver's <code>emails.db</code> (<code>search.email_db</code>, read-only) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
+            <dl class="status-rows" id="searchStatus" aria-live="polite">
+              <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Folders</dt><dd id="statusSearchFolders" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Emails</dt><dd id="statusSearchEmails" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
+            </dl>
           </div>
-          <p class="card-meta">One box over four indexes: tasks (always), the folder index (<code>search.folder_roots</code>), the email archiver's <code>emails.db</code> (<code>search.email_db</code>, read-only) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
-          <dl class="status-rows" id="searchStatus" aria-live="polite">
-            <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Folders</dt><dd id="statusSearchFolders" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Emails</dt><dd id="statusSearchEmails" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
-          </dl>
-        </div>
+        </details>
         <!-- Folder opener + folder index (Step 9): the one-line install command
              for the per-PC opener (opener/install.txt with this address filled
              in), the opener.env template built from this install's placeholders,
              and the folder-index status. Filled from GET /api/status by app.js. -->
-        <div class="card" id="folderCard">
-          <div class="card-head">
-            <h2 class="card-title">
+        <details class="card card--collapsible settings-card" id="folderCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
-              Folder opener &amp; folder index
-            </h2>
-            <span class="card-head-meta" id="folderCardMeta"></span>
-          </div>
+              <h3 class="collapse-title">Folder opener and index</h3>
+              <span class="collapse-count" id="folderCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
           <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Folder index</dt><dd id="statusIndex" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Index</dt><dd id="statusIndex" class="muted">Loading…</dd></div>
           </dl>
           <div class="opener-block">
             <div class="opener-block-head">
@@ -498,7 +527,8 @@
               </div>
             </details>
           </div>
-        </div>
+          </div>
+        </details>
       </div>
     </section>
 

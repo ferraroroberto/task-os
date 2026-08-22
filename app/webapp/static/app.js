@@ -1,17 +1,19 @@
 /* task-os — app bootstrap and the one place state lives.
  *
- * Nav + theme (Step 1), the Step 4 surfaces: Table (filters ↔ URL query),
- * Tree, the task drawer (↔ #task/<id>) and the quick-add bars; Step 5 adds
- * the Board (five status columns, the project/person/text filters shared
- * with the Table) and Today (due ≤ today grouped by project — the phone's
- * landing tab); Step 8 adds the issue sync (↻ in the header + Settings card,
- * `syncIssues()` → POST /api/issues/sync → refreshAll); Step 10 the Search
- * tab (search.js — one box over tasks · folders · emails · issues, `?q=` in
- * the URL while that tab is active) and the command palette (palette.js —
- * Ctrl+K / ⌘K anywhere, the header button; commands defined in
- * `paletteCommands()` below). Every write funnels
- * through `patchTask` / `moveTask` / `doneTask` / the drawer, then
- * `refreshAll()` re-fetches and re-renders, so the views never drift.
+ * Nav + theme (Step 1); the views — Board, Table, Tree, Today — are
+ * renderings of ONE shared list (`state.items`, /api/tasks under the shared
+ * filter state) drawn with the ONE task row (rows.js) and edited through the
+ * ONE filter card (filters.js) that every tab mounts (issue #46): status ·
+ * project · person · due · modified · text · sort, all in the URL query so a
+ * view is shareable and the same on every tab. The task drawer (↔ #task/<id>)
+ * and the quick-add bars; the issue sync (↻ in the header + Settings card,
+ * `syncIssues()` → POST /api/issues/sync → refreshAll); the Search tab
+ * (search.js — one box over tasks · folders · emails · issues, `?q=` in the
+ * URL while that tab is active, the shared filters applied to task hits) and
+ * the command palette (palette.js — Ctrl+K / ⌘K anywhere; commands in
+ * `paletteCommands()` below). Every write funnels through `patchTask` /
+ * `moveTask` / the drawer, then `refreshAll()` re-fetches and re-renders, so
+ * the views never drift.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -23,22 +25,24 @@ import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
-import { mountBoard, renderBoardFilters } from './board.js';
+import { mountBoard } from './board.js';
 import { createDrawer } from './drawer.js';
-import { copyText, relDue } from './format.js';
+import {
+  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams, mountFilters,
+} from './filters.js';
+import { copyText, relDue, todayISO } from './format.js';
 import { createPalette } from './palette.js';
 import { mountQuickAdd } from './quickadd.js';
+import { CLOSED, sortItems } from './rows.js';
 import { mountSearch } from './search.js';
-import {
-  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, renderFilterBar,
-  renderTable as renderTableGrid, sortItems,
-} from './table.js';
+import { renderTable as renderTableGrid } from './table.js';
 import { toast } from './toast.js';
 import { renderToday } from './today.js';
 import { renderTree } from './tree.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
+const PHONE_TABLE_MQ = '(max-width: 767px)';
 
 const els = {
   themeToggle: document.getElementById('themeToggle'),
@@ -76,8 +80,11 @@ const els = {
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
   tableHost: document.getElementById('tableHost'),
+  treeFilters: document.getElementById('treeFilters'),
   treeHost: document.getElementById('treeHost'),
+  todayFilters: document.getElementById('todayFilters'),
   todayHost: document.getElementById('todayHost'),
+  searchFilters: document.getElementById('searchFilters'),
   drawer: document.getElementById('taskDrawer'),
 };
 
@@ -85,10 +92,8 @@ const state = {
   filters: filtersFromSearch(location.search),
   people: [],
   projects: [],     // [{id, title, depth}] — every task with children, tree order
-  tree: [],
-  items: [],
-  board: null,      // /api/board → {today, columns}
-  today: null,      // /api/today → {today, due, week, counts}
+  tree: [],         // /api/tasks/tree?include_closed=true — the full forest
+  items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
@@ -100,6 +105,7 @@ let board = null;
 let search = null;
 let palette = null;
 const quickAdds = [];
+const filterCards = {};   // tab → mountFilters() handle
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -125,8 +131,14 @@ function renderNoTasks() {
       onAction: function () { if (quickAdds.length) quickAdds[0].focus(); },
     }));
   });
-  els.tableFilters.hidden = true;
-  els.boardFilters.hidden = true;
+  ['boardFilters', 'tableFilters', 'treeFilters', 'todayFilters'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+}
+
+function noMatchCard(iconName, message) {
+  return emptyCard(iconName, message, {
+    actionLabel: isDefaultFilters(state.filters) ? undefined : 'Clear filters',
+    onAction: function () { onFilterChange(Object.assign({}, DEFAULT_FILTERS)); },
+  });
 }
 
 // ------------------------------------------------------------------ data
@@ -148,31 +160,27 @@ function flattenProjects(forest) {
 }
 
 async function loadTree() {
-  const res = await api('/api/tasks/tree');
+  const res = await api('/api/tasks/tree?include_closed=true');
   state.tree = res.items || [];
   state.projects = flattenProjects(state.tree);
 }
 
-async function loadTable() {
+/** The shared list: the filters as sent to /api/tasks; when no status is
+ *  picked, today's done tasks ride along (the Board's Done-today column). */
+async function loadItems() {
   const f = state.filters;
-  const params = {
-    status: f.status.length ? f.status : undefined,
-    project: f.project || undefined,
-    person: f.person || undefined,
-    due: f.due || undefined,
-    q: f.q || undefined,
-  };
-  const res = await api('/api/tasks' + qs(params));
-  state.items = res.items || [];
-}
-
-async function loadBoard() {
-  const f = state.filters;
-  state.board = await api('/api/board' + qs({ project: f.project || undefined, person: f.person || undefined, q: f.q || undefined }));
-}
-
-async function loadToday() {
-  state.today = await api('/api/today');
+  const params = listParams(f);
+  const calls = [api('/api/tasks' + qs(params))];
+  if (!f.status.length) {
+    calls.push(api('/api/tasks' + qs(Object.assign({}, params, { status: ['done'], done_on: todayISO() }))));
+  }
+  const results = await Promise.all(calls);
+  const seen = new Set();
+  const items = [];
+  results.forEach(function (r) {
+    (r.items || []).forEach(function (t) { if (!seen.has(t.id)) { seen.add(t.id); items.push(t); } });
+  });
+  state.items = items;
 }
 
 function countOpen(forest) {
@@ -189,9 +197,9 @@ function countOpen(forest) {
 async function refreshAll() {
   try {
     const results = await Promise.all([
-      loadTree(), loadTable(), loadBoard(), loadToday(), api('/api/tasks?include_closed=true&limit=1'),
+      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1'),
     ]);
-    state.total = results[4].count;
+    state.total = results[2].count;
     if (state.total === 0) {
       state.items = [];
       state.tree = [];
@@ -200,10 +208,7 @@ async function refreshAll() {
       els.homeHeadStatus.textContent = 'No tasks yet';
       return;
     }
-    renderBoardPane();
-    renderTable();
-    renderTreePane();
-    renderTodayPane();
+    renderAll();
     els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
   } catch (err) {
     els.homeHeadStatus.textContent = 'Server unreachable';
@@ -223,7 +228,12 @@ async function patchTask(id, changes) {
   if (drawer.currentId() === id) drawer.refresh();
 }
 
-async function doneTask(id) {
+/** The row's status select. "done" goes through POST /tasks/{id}/done so a
+ *  recurring task rolls its due one cadence forward instead of closing (the
+ *  server's rule — the old Today checkbox did the same); every other status
+ *  is a plain PATCH. */
+async function setStatus(id, status) {
+  if (status !== 'done') return patchTask(id, { status: status });
   let t;
   try {
     t = await api('/api/tasks/' + id + '/done', { method: 'POST', body: {} });
@@ -235,6 +245,15 @@ async function doneTask(id) {
   else toast('Done: ' + t.title, 'success');
   await refreshAll();
   if (drawer.currentId() === id) drawer.refresh();
+  return t;
+}
+
+/** What the list views show: the filtered list — minus the closed tasks that
+ *  ride along for the Board's "Done today" column when no status pill is
+ *  pressed (Table / Tree / Today default to open tasks, as the filter card says). */
+function viewItems() {
+  if (state.filters.status.length) return state.items;
+  return state.items.filter(function (t) { return !CLOSED[t.status]; });
 }
 
 async function moveTask(id, parentId) {
@@ -250,60 +269,70 @@ async function moveTask(id, parentId) {
 }
 
 // --------------------------------------------------------------- render
-function onSharedFilterChange(next) {
-  // project · person · q are shared by the Board and the Table; a change on
-  // either tab re-fetches both so the URL, the cards and the rows agree.
+/** The one filter state changed (any tab's card, the palette, a "Clear"). */
+function onFilterChange(next) {
   state.filters = next;
   syncUrl();
-  Promise.all([loadBoard(), loadTable()]).then(function () {
-    renderBoardPane();
-    renderTable();
+  loadItems().then(function () {
+    renderAll();
   }).catch(function (err) { toast(err.message, 'error'); });
 }
 
+function renderFilters() {
+  const options = { projects: state.projects, people: state.people, count: viewItems().length };
+  [['board', els.boardFilters], ['table', els.tableFilters], ['tree', els.treeFilters], ['today', els.todayFilters], ['search', els.searchFilters]]
+    .forEach(function (pair) {
+      const host = pair[1];
+      if (!host) return;
+      if (!filterCards[pair[0]]) {
+        filterCards[pair[0]] = mountFilters(host, { onChange: onFilterChange, hideText: pair[0] === 'search' });
+      }
+      filterCards[pair[0]].render(state.filters, pair[0] === 'search' ? { projects: state.projects, people: state.people } : options);
+    });
+}
+
+function renderAll() {
+  renderFilters();
+  renderBoardPane();
+  renderTable();
+  renderTreePane();
+  renderTodayPane();
+  if (search) search.refilter();
+}
+
 function renderBoardPane() {
-  if (!board) board = mountBoard({ onOpen: openTask, onStatus: function (id, status) { return patchTask(id, { status: status }); } });
+  if (!board) board = mountBoard({ onOpen: openTask, onStatus: setStatus });
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
-  const cols = (state.board && state.board.columns) || {};
-  const count = Object.keys(cols).reduce(function (n, k) { return n + cols[k].length; }, 0);
-  renderBoardFilters(els.boardFilters, state.filters, {
-    projects: state.projects, people: state.people, count: count,
-  }, onSharedFilterChange);
-  board.render(state.board);
+  board.render(state.items, state.filters);
 }
 
 function renderTodayPane() {
-  renderToday(els.todayHost, state.today || {}, { onOpen: openTask, onDone: doneTask });
+  renderToday(els.todayHost, viewItems(), { onOpen: openTask, onStatus: setStatus }, { sort: state.filters.sort });
 }
 
 function renderTable() {
-  renderFilterBar(els.tableFilters, state.filters, {
-    projects: state.projects, people: state.people, count: state.items.length,
-  }, onSharedFilterChange);
-  if (!state.items.length) {
-    els.tableHost.replaceChildren(emptyCard('list-filter', 'No tasks match these filters', {
-      actionLabel: isDefaultFilters(state.filters) ? undefined : 'Clear filters',
-      onAction: function () {
-        state.filters = Object.assign({}, DEFAULT_FILTERS);
-        syncUrl();
-        loadTable().then(renderTable);
-      },
-    }));
+  const items = viewItems();
+  if (!items.length) {
+    els.tableHost.replaceChildren(noMatchCard('list-filter', 'No tasks match these filters'));
     return;
   }
-  renderTableGrid(els.tableHost, sortItems(state.items, state.filters.sort), { onOpen: openTask, onPatch: patchTask });
+  const phone = window.matchMedia(PHONE_TABLE_MQ).matches;
+  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort), { onOpen: openTask, onPatch: patchTask }, { phone: phone });
 }
 
 function renderTreePane() {
-  if (!state.tree.length) {
-    els.treeHost.replaceChildren(emptyCard('list-tree', 'No open tasks'));
-    return;
-  }
-  renderTree(els.treeHost, state.tree, { onOpen: openTask, onMove: moveTask });
+  const items = viewItems();
+  const keep = new Set(items.map(function (t) { return t.id; }));
+  const byId = {};
+  items.forEach(function (t) { byId[t.id] = t; });
+  const n = renderTree(els.treeHost, state.tree, { onOpen: openTask, onMove: moveTask, onStatus: setStatus },
+    { keep: keep, byId: byId, sort: state.filters.sort });
+  if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
 }
 
 // ---------------------------------------------------------- URL / drawer
 function syncUrl() {
+  if (nav && nav.getTab() === 'search') return;    // the Search box owns ?q= there
   const search = filtersToSearch(state.filters);
   history.replaceState(null, '', location.pathname + search + location.hash);
 }
@@ -329,10 +358,13 @@ function onHashChange() {
   const settingsCard = { '#settings/opener': els.folderCard, '#settings/search': els.searchCard }[location.hash];
   if (settingsCard !== undefined) {
     // The folder chip's one-time hint / a "not configured" search row link
-    // here: Settings → that card.
+    // here: Settings → that card, opened.
     nav.setTab('settings');
     history.replaceState(null, '', location.pathname + location.search);
-    if (settingsCard) settingsCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (settingsCard) {
+      if ('open' in settingsCard) settingsCard.open = true;
+      settingsCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
     return;
   }
   if (location.hash === '#search') {
@@ -351,16 +383,14 @@ function focusRow(task) {
   // The new row in whichever surface is showing; the drawer stays closed so
   // the eye lands on the row, not a panel.
   const tab = nav.getTab();
-  let target = null;
-  if (tab === 'table') target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]');
-  else if (tab === 'tree') target = els.treeHost.querySelector('.tree-node[data-id="' + task.id + '"]');
-  else if (tab === 'board') target = els.boardHost.querySelector('.board-item[data-id="' + task.id + '"] .board-card');
-  else if (tab === 'today') target = els.todayHost.querySelector('.today-row[data-id="' + task.id + '"]');  // only if due ≤ today; the toast already confirmed
-  else { nav.setTab('table'); target = els.tableHost.querySelector('.task-row[data-id="' + task.id + '"]'); }
+  const hosts = { table: els.tableHost, tree: els.treeHost, board: els.boardHost, today: els.todayHost };
+  let host = hosts[tab];
+  if (!host) { nav.setTab('table'); host = els.tableHost; }
+  const target = host.querySelector('.trow[data-id="' + task.id + '"] .trow-main, .task-row[data-id="' + task.id + '"]');
   if (target) {
     target.tabIndex = 0;
     target.focus({ preventScroll: false });
-    target.classList.add('is-new');
+    (target.closest('.trow') || target).classList.add('is-new');
     target.scrollIntoView({ block: 'nearest' });
   }
 }
@@ -504,7 +534,7 @@ function renderIndexRow(dd, f) {
   els.reindexBtn.hidden = false;
   const roots = (f.roots || []).map(function (r) { return r.ref + (r.exists ? '' : ' (missing)'); }).join(', ');
   dd.append(
-    statusPart(f.indexing ? 'warn' : (f.last_error ? 'warn' : 'ok'), f.indexing ? 'indexing…' : (f.last_error ? 'error' : 'ready')),
+    statusPart(f.indexing ? 'warn' : (f.last_error ? 'warn' : 'ok'), f.indexing ? 'indexing…' : (f.last_error ? 'error' : 'indexed')),
     ' · ', codeEl(roots), ' · ' + (f.entries == null ? '?' : f.entries) + ' folder(s)',
     ' · last indexed ' + (f.last_indexed ? fmtTsShort(f.last_indexed) : '–') + (f.stale && f.last_indexed ? ' (stale, >24 h)' : '')
   );
@@ -525,7 +555,8 @@ function wireReindex() {
 }
 
 // One GET /api/status feeds the Settings pane's Phone access card (https +
-// auth, Step 7) and the mirror / backup card (Step 6).
+// auth, Step 7), the mirror / backup card (Step 6) and the opener card (Step 9).
+// The card headers carry a state word (on · synced · indexed · off), never a count.
 async function fetchStatus() {
   if (!els.statusMirror) return;
   try {
@@ -538,8 +569,8 @@ async function fetchStatus() {
     if (els.folderCard) {
       renderOpener(body.opener);
       renderIndexRow(els.statusIndex, body.folders);
-      els.folderCardMeta.textContent = body.folders && body.folders.enabled
-        ? (body.folders.entries || 0) + ' folders indexed' : 'index off';
+      const f = body.folders;
+      els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
     }
   } catch (err) {
     // An unreachable status is its own visible state, never a stale "Loading…".
@@ -660,18 +691,18 @@ async function fetchSearchStatus() {
     if (!adapters) { dd.append(statusPart('warn', 'unknown')); return; }
     if (a && a.configured) {
       on += 1;
-      dd.append(statusPart('ok', 'ready'));
+      dd.append(statusPart('ok', 'indexed'));
       if (a.note) dd.append(' · ' + a.note);
     } else {
       dd.append(statusPart('off', 'not configured'), ' — ' + ((a && a.reason) || 'unknown'));
     }
   });
-  els.searchCardMeta.textContent = adapters ? on + ' of 4 indexes' : 'unknown';
+  els.searchCardMeta.textContent = adapters ? (on ? 'indexed' : 'off') : 'unknown';
   if (search) search.reloadStatus();
 }
 
 /** Write the Search tab's query into ?q= (only while that tab is showing — the
- *  Table's filter bar owns ?q= on the other tabs). */
+ *  filter card's text owns ?q= on the other tabs). */
 function syncSearchUrl(q) {
   if (!nav || nav.getTab() !== 'search') return;
   const p = new URLSearchParams(location.search);
@@ -710,14 +741,13 @@ function paletteCommands() {
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
   ];
-  ['inbox', 'todo', 'doing', 'standby', 'done'].forEach(function (st) {
-    cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'Table view', icon: 'list-filter', run: function () {
-      nav.setTab('table');
-      onSharedFilterChange(Object.assign({}, state.filters, { status: [st] }));
+  ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'].forEach(function (st) {
+    cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
+      onFilterChange(Object.assign({}, state.filters, { status: [st] }));
     } });
   });
   cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {
-    onSharedFilterChange(Object.assign({}, DEFAULT_FILTERS));
+    onFilterChange(Object.assign({}, DEFAULT_FILTERS));
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
   cmds.push({ id: 'reindex-folders', label: 'Reindex folders', hint: 'rescan search.folder_roots', icon: 'folder', run: async function () {
@@ -762,17 +792,15 @@ async function boot() {
     onSyncIssues: syncIssues,
     onToggle: function () { if (search) search.refreshActions(); },
   });
-  // A shared Table view (?status=doing…) lands on the Table, whatever tab was
-  // last used; project / person / q are shared with the Board and don't move
-  // the tab. First visit: the phone lands on Today, the desktop on the Board.
+  // The filters are shared by every tab, so a shared URL never moves the tab
+  // by itself. First visit: the phone lands on Today, the desktop on the Board.
   const f = state.filters;
-  const wantsTable = f.status.length > 0 || f.due !== '' || f.sort !== 'due';
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   // ?q= belongs to the Search tab when the page lands there (#search deep
-  // link, or the last tab was Search); otherwise it is the Table's text filter.
+  // link, or the last tab was Search); otherwise it is the filter card's text.
   let storedTab = null;
   try { storedTab = localStorage.getItem(TAB_KEY); } catch (_) { /* private mode */ }
-  const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search' && !wantsTable);
+  const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search');
   let searchQ = '';
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
   nav = initNavTabs({
@@ -783,9 +811,9 @@ async function boot() {
       if (tab === 'board' && board) board.show();
       if (tab === 'settings') { fetchStatus(); fetchIssuesStatus(); fetchSearchStatus(); }
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
+      else syncUrl();
     },
   });
-  if (wantsTable) nav.setTab('table');
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
   mountQuickAdds();
   search = mountSearch(els.searchBox, els.searchHost, {
@@ -794,6 +822,8 @@ async function boot() {
     onTaskChanged: function (id) { refreshAll(); if (drawer.currentId() === id) drawer.refresh(); },
     onCreated: function (task) { refreshAll().then(function () { openTask(task.id); }); },
     onQuery: syncSearchUrl,
+    filters: function () { return state.filters; },
+    onStatus: setStatus,
   });
   if (searchQ) search.setQuery(searchQ);
   wirePalette();
@@ -802,6 +832,9 @@ async function boot() {
   });
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
+  // The Table flips between the grid and the shared rows at the phone breakpoint.
+  const phoneMq = window.matchMedia(PHONE_TABLE_MQ);
+  if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTable(); });
   wireIssueSync();
   fetchVersion();
   fetchStatus();

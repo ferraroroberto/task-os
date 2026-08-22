@@ -15,8 +15,14 @@ shots the validation record links to:
 
 then the drawer at 390×844 (WebKit, touch) with the geometry checks:
 
-    docs/screenshots/story-04-triage-9-phone.png   (table as cards)
+    docs/screenshots/story-04-triage-9-phone.png   (table as the shared rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
+
+UX round 3 (issue #46): the filter state is ONE card shared by every tab and
+lives in the URL (``?status=doing`` is the same view on the Board, Table,
+Tree, Today), so a shared URL no longer moves the tab by itself — the story
+opens the Table explicitly. On the phone the Table renders the ONE shared
+task row (``.trow``) instead of a card-ified grid.
 """
 
 from __future__ import annotations
@@ -53,8 +59,24 @@ def _next_friday(today: date) -> date:
 
 
 def _row(page: Page, title: str):
-    # exact: the seed has both "Renew passports" and the story's "renew passport"
+    """A desktop Table grid row by exact title (the seed has both "Renew
+    passports" and the story's "renew passport")."""
     return page.locator(".task-row", has=page.locator(".t-title-text", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+
+
+def _trow(page: Page, title: str, scope: str = ""):
+    """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``."""
+    return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+
+
+def _open_filters(page: Page, host_id: str):
+    """The shared filter card is collapsed by default — open it like a user would."""
+    card = page.locator(f"#{host_id} .filter-card")
+    expect(card).to_be_visible()
+    if not card.evaluate("el => el.open"):
+        card.locator("summary").click()
+    expect(card).to_have_attribute("open", "")
+    return card
 
 
 # ----------------------------------------------------------- desktop leg
@@ -65,15 +87,23 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
     try:
         page = context.new_page()
 
-        # 1. Table filtered status:doing — via the URL, the shareable view.
+        # 1. Table filtered status:doing — via the URL, the shareable view. The
+        #    filter is shared by every tab (UX round 3), so the URL never moves
+        #    the tab by itself: open the Table, the query survives the switch.
         page.goto(f"{base}/?status=doing")
+        page.click("nav.tabs .tab[data-tab='table']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
-        expect(page.locator("#tableFilters .chip-btn[data-status='doing']")).to_have_class(
-            "chip-btn pill pill-doing active"
-        )
+        expect(page).to_have_url(f"{base}/?status=doing")
+        card = _open_filters(page, "tableFilters")
+        pill = card.locator(".filter-status .filter-pill[data-status='doing']")
+        expect(pill).to_have_class(re.compile(r"\bactive\b"))
+        expect(pill).to_have_attribute("aria-pressed", "true")
+        expect(card.locator(".filter-pill.active")).to_have_count(1)
+        expect(card.locator(".filter-desc")).to_contain_text("doing")
         rows = page.locator(".task-row")
         expect(rows).to_have_count(7)  # the seed's seven `doing` tasks
-        statuses = page.locator(".task-row .status-select").evaluate_all("els => els.map(e => e.value)")
+        expect(card.locator(".filter-desc")).to_contain_text("7 tasks")
+        statuses = page.locator(".task-row .trow-status").evaluate_all("els => els.map(e => e.value)")
         assert set(statuses) == {"doing"}
         # breadcrumb under a nested title, project = top ancestor
         quotes = _row(page, "Get three quotes")
@@ -111,7 +141,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(first_act.locator(".activity-new")).to_have_text(new_due)
         expect(first_act.locator(".activity-meta")).to_contain_text("Roberto")  # X-Actor default from the sample config
         # The list stays visible beside the drawer (side panel, not an overlay).
-        table_box = page.locator(".table-card").bounding_box()
+        table_box = page.locator(".table-wrap").bounding_box()
         drawer_box = drawer.bounding_box()
         assert table_box and drawer_box and table_box["x"] + table_box["width"] <= drawer_box["x"] + 1
         assert drawer_box["width"] >= 400
@@ -161,8 +191,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         qa.press("Enter")
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
         # the doing filter hides an inbox task — clear to see it, as a user would
-        page.locator("#tableFilters .filter-clear").click()
+        _open_filters(page, "tableFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
+        expect(page.locator("#tableFilters .filter-pill.active")).to_have_count(0)
         new_row = _row(page, "renew passport")
         expect(new_row).to_be_visible()
         new_id = int(new_row.get_attribute("data-id"))
@@ -174,8 +205,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         # 7. Tree: drag it under a project (Family admin) → moved, toast, rollup.
         page.click("nav.tabs .tab[data-tab='tree']")
         expect(page.locator("#paneTree")).to_be_visible()
-        family = page.locator(".tree-node", has=page.locator(":scope > .tree-row .tree-title", has_text="Family admin")).first
+        family = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Family admin")).first
         family_id = int(family.get_attribute("data-id"))
+        kids_before = int(family.locator(":scope > .tree-row .trow-kids").inner_text())
         # Collapse the four top-level projects so source and target share the
         # viewport (a real user does the same on a long tree); the state persists.
         project_ids = page.locator(".tree-node[aria-level='1'][aria-expanded='true']").evaluate_all(
@@ -203,9 +235,14 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         nested = family.locator(f".tree-children .tree-node[data-id='{new_id}']")
         expect(nested).to_be_visible()
         expect(nested).to_have_attribute("aria-level", "2")
-        expect(family.locator(":scope > .tree-row .tree-rollup").first).to_contain_text("open")
+        # the row's children count (the shared row's rollup) grew by one
+        expect(family.locator(":scope > .tree-row .trow-kids")).to_have_text(str(kids_before + 1))
         page.screenshot(path=str(shots / "story-04-triage-7-desktop.png"))
-        # a cycle is refused and surfaced as a toast, nothing changes
+        # a cycle is refused and surfaced as a toast, nothing changes (the
+        # two-line rows push the nested one below the fold — bring both into
+        # the viewport first, as a user scrolling would; a drag that starts
+        # while the page scrolls under the pointer would pick up another row)
+        nested.locator(":scope > .tree-row").evaluate("el => el.scrollIntoView({block: 'end'})")
         family.locator(":scope > .tree-row").drag_to(nested.locator(":scope > .tree-row"))
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{family_id}")["parent_id"] is None
@@ -229,7 +266,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 # ------------------------------------------------------------- phone leg
 
 def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
-    """390-wide WebKit (iOS-class): table as cards, drawer full-screen, 44px targets."""
+    """390-wide WebKit (iOS-class): the Table as the shared rows, drawer
+    full-screen, 44px targets (the row's status select is the deliberate
+    compact exception — ≤32px, centred on the title line, UX rounds 1–3)."""
     base = seeded_webapp
     try:
         wk = playwright.webkit.launch(headless=True)
@@ -242,20 +281,39 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         )
         page = context.new_page()
         page.goto(f"{base}/?status=doing")
-        expect(page.locator(".task-row")).to_have_count(7)
-        # cards: the header row is gone, secondary columns hidden, no sideways scroll
-        expect(page.locator(".task-table thead")).to_be_hidden()
-        expect(page.locator(".task-row .c-project").first).to_be_hidden()
+        page.locator("nav.tabs .tab[data-tab='table']").tap()
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
+        rows = page.locator("#paneTable .table-rows .trow")
+        expect(rows).to_have_count(7)
+        # phone: the grid is not rendered at all — the Table is the ONE shared
+        # row (title + status select, the meta line with the project under it)
+        expect(page.locator(".task-table")).to_have_count(0)
+        watering = _trow(page, "Fix watering schedule drift", "#paneTable")
+        expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
+        expect(watering.locator(".trow-due")).to_be_visible()
+        expect(watering.locator(".trow-status")).to_have_value("doing")
         assert_no_horizontal_overflow(page)
         assert_min_target(page.locator("#paneTable .quick-add-input"))
-        assert_min_target(page.locator("#tableFilters .chip-btn"))
-        assert_no_overlap(page.locator("#tableFilters .chip-btn"))
-        assert_min_target(page.locator(".task-row .status-select"))
-        assert_min_target(page.locator(".task-row .due-btn"))
+        # the shared filter card: six status pills, the URL's one pressed
+        card = _open_filters(page, "tableFilters")
+        pills = card.locator(".filter-status .filter-pill")
+        expect(pills).to_have_count(6)
+        expect(pills.filter(has_text=re.compile(r"^doing$"))).to_have_attribute("aria-pressed", "true")
+        # rows are ≥44px tall; the status select is compact and centred on the title line
+        assert_min_target(rows)
+        assert_no_overlap(rows.locator(".trow-status"))
+        heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
+        assert heights and all(h <= 32 for h in heights), heights
+        sel_box = watering.locator(".trow-status").bounding_box()
+        main_box = watering.locator(".trow-main").bounding_box()
+        assert sel_box and main_box
+        sel_center = sel_box["y"] + sel_box["height"] / 2
+        assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
+        assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         page.screenshot(path=str(shots / "story-04-triage-9-phone.png"))
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
-        _row(page, "Get three quotes").locator(".t-title-text").tap()
+        _trow(page, "Get three quotes", "#paneTable").locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         box = drawer.bounding_box()

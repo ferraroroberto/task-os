@@ -21,7 +21,8 @@
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
 · ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``,
-``q`` (full text), ``include_closed``, ``limit``.
+``q`` (full text), ``updated_since`` (date), ``done_on`` (date),
+``include_closed``, ``limit``.
 
 ``due`` on create / update accepts the same natural phrases the CLI does
 (``tomorrow``, ``next friday``, ``in 2 weeks``, ISO) — resolved here through
@@ -151,6 +152,8 @@ def list_tasks(
     type: str | None = None,
     person: int | None = None,
     q: str | None = None,
+    updated_since: str | None = None,
+    done_on: str | None = None,
     include_closed: bool = False,
     limit: int | None = Query(default=None, ge=1, le=1000),
     db: sqlite3.Connection = Depends(get_db),
@@ -174,6 +177,8 @@ def list_tasks(
         q=q,
         include_closed=include_closed,
         limit=limit,
+        done_on=done_on,
+        updated_since=updated_since,
     )
     return {"items": items, "count": len(items)}
 
