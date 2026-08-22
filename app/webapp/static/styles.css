@@ -964,10 +964,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 @media (pointer: coarse) {
   .quick-add-input, .quick-add-submit, .filter-select, .filter-q, .due-btn,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
-  .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb {
+  .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb, .msel-summary {
     min-height: var(--row-sm);
   }
-  .filter-select, .drawer .select-native, .drawer .input-native { height: var(--row-sm); }
+  .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary { height: var(--row-sm); }
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
