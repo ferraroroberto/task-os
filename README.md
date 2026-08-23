@@ -76,8 +76,9 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{c
                           · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
                           · search (/api/search — federated, /api/search/status)
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
-                          table.js, tree.js, today.js, drawer.js, quickadd.js, search.js (the Search tab), palette.js (Ctrl+K),
-                          format.js, api.js, toast.js, manifest, icons/, _vendored/
+                          table.js, tree.js, today.js, drawer.js, quickadd.js, search.js (the Search tab),
+                          settings.js (the Settings tab), palette.js (Ctrl+K), format.js, api.js, toast.js,
+                          manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py

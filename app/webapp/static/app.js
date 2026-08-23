@@ -15,6 +15,13 @@
  * `moveTask` / the drawer, then `refreshAll()` re-fetches and re-renders, so
  * the views never drift.
  *
+ * Every tab is its own module and this file is the wiring: board.js ·
+ * table.js · tree.js · today.js · search.js · settings.js (issue #37 — the
+ * Settings cards used to live here). What stays is what more than one tab
+ * needs: routing (nav, the URL, #task/<id> and the two #settings/… deep
+ * links), `state`, and the shared calls the drawer and the palette also make
+ * — `syncIssues()` and the header ↻ among them.
+ *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
  */
@@ -30,11 +37,12 @@ import { createDrawer } from './drawer.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams, mountFilters,
 } from './filters.js';
-import { copyText, relDue, todayISO } from './format.js';
+import { fmtTsShort, relDue, todayISO } from './format.js';
 import { createPalette } from './palette.js';
 import { mountQuickAdd } from './quickadd.js';
 import { CLOSED, sortItems } from './rows.js';
 import { mountSearch } from './search.js';
+import { mountSettings } from './settings.js';
 import { renderTable as renderTableGrid } from './table.js';
 import { toast } from './toast.js';
 import { renderToday } from './today.js';
@@ -43,37 +51,17 @@ import { renderTree } from './tree.js';
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
 const PHONE_TABLE_MQ = '(max-width: 767px)';
+// Deep links into the Settings pane: hash → the card settings.js opens.
+const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search' };
 
 const els = {
   themeToggle: document.getElementById('themeToggle'),
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
-  accessClient: document.getElementById('accessClient'),
-  accessRows: document.getElementById('accessRows'),
-  signOutBtn: document.getElementById('signOutBtn'),
-  mirrorCardMeta: document.getElementById('mirrorCardMeta'),
-  statusMirror: document.getElementById('statusMirror'),
-  statusBackup: document.getElementById('statusBackup'),
-  folderCard: document.getElementById('folderCard'),
-  folderCardMeta: document.getElementById('folderCardMeta'),
-  statusOpener: document.getElementById('statusOpener'),
-  statusIndex: document.getElementById('statusIndex'),
-  openerInstall: document.getElementById('openerInstall'),
-  openerCopy: document.getElementById('openerCopy'),
-  openerUninstall: document.getElementById('openerUninstall'),
-  openerEnv: document.getElementById('openerEnv'),
-  openerEnvCopy: document.getElementById('openerEnvCopy'),
-  reindexBtn: document.getElementById('reindexBtn'),
   issuesSync: document.getElementById('issuesSync'),
-  issuesCardMeta: document.getElementById('issuesCardMeta'),
-  statusIssues: document.getElementById('statusIssues'),
-  statusIssuesSync: document.getElementById('statusIssuesSync'),
-  issuesSyncNow: document.getElementById('issuesSyncNow'),
   searchBox: document.getElementById('searchBox'),
   searchHost: document.getElementById('searchHost'),
-  searchCard: document.getElementById('searchCard'),
-  searchCardMeta: document.getElementById('searchCardMeta'),
   paletteBtn: document.getElementById('paletteBtn'),
   palette: document.getElementById('palette'),
   boardFilters: document.getElementById('boardFilters'),
@@ -103,6 +91,7 @@ let nav = null;
 let drawer = null;
 let board = null;
 let search = null;
+let settings = null;
 let palette = null;
 const quickAdds = [];
 const filterCards = {};   // tab → mountFilters() handle
@@ -355,16 +344,13 @@ function closeTask() {
 }
 
 function onHashChange() {
-  const settingsCard = { '#settings/opener': els.folderCard, '#settings/search': els.searchCard }[location.hash];
-  if (settingsCard !== undefined) {
+  const settingsCard = SETTINGS_HASH_CARDS[location.hash];
+  if (settingsCard) {
     // The folder chip's one-time hint / a "not configured" search row link
-    // here: Settings → that card, opened.
+    // here: Settings → that card, opened (settings.js owns the pane's DOM).
     nav.setTab('settings');
     history.replaceState(null, '', location.pathname + location.search);
-    if (settingsCard) {
-      if ('open' in settingsCard) settingsCard.open = true;
-      settingsCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }
+    settings.revealCard(settingsCard);
     return;
   }
   if (location.hash === '#search') {
@@ -420,170 +406,10 @@ async function fetchVersion() {
   }
 }
 
-// ------------------------------------------------------ phone access card
-function accessRow(label, ok, text) {
-  const dt = document.createElement('dt');
-  dt.textContent = label;
-  const dd = document.createElement('dd');
-  dd.className = ok === null ? '' : (ok ? 'ok' : 'warn');
-  dd.textContent = text;
-  return [dt, dd];
-}
-
-function renderAccessCard(st) {
-  const client = { loopback: 'this PC', token: 'signed in', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
-  els.accessClient.textContent = client;
-  els.accessRows.replaceChildren(
-    ...accessRow('HTTPS', st.https, st.https ? 'on — Tailscale certificate' : 'off — plain HTTP (run scripts/gen_tailscale_cert.py)'),
-    ...accessRow('Access token', st.auth.enabled, st.auth.enabled ? 'configured — other devices sign in at /login' : 'not set — only this PC can use the app (scripts/gen_token.py)'),
-    ...accessRow('Password', null, st.auth.password ? 'set — accepted at /login' : 'not set (optional; scripts/set_password.py)'),
-  );
-  els.signOutBtn.hidden = st.auth.client !== 'token';
-}
-
-function renderAccessUnknown(message) {
-  els.accessRows.replaceChildren(...accessRow('Status', false, 'unknown — ' + message));
-}
-
-function wireSignOut() {
-  els.signOutBtn.addEventListener('click', async function () {
-    try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
-    location.assign('/login');
-  });
-}
-
-// ------------------------------------------------- mirror + backup status
-function statusPart(state, text) {
-  const s = document.createElement('span');
-  s.className = 'status-' + state;
-  s.textContent = text;
-  return s;
-}
-
-function codeEl(text) {
-  const c = document.createElement('code');
-  c.textContent = text;
-  return c;
-}
-
-function renderMirrorRow(dd, m) {
-  dd.replaceChildren();
-  dd.classList.remove('muted');
-  if (!m || !m.enabled) {
-    dd.append(statusPart('off', 'not configured'), ' — ' + ((m && m.reason) || 'unknown'));
-    return;
-  }
-  dd.append(
-    statusPart(m.errors ? 'warn' : 'ok', m.errors ? 'enabled · ' + m.errors + ' file(s) skipped' : 'enabled'),
-    ' · ', codeEl(m.dir), ' · ' + (m.files == null ? '?' : m.files) + ' file(s)',
-    ' · last export ' + (m.last_export ? fmtTsShort(m.last_export) : '–'),
-    ' · last import ' + (m.last_import ? fmtTsShort(m.last_import) : '–')
-  );
-  if (m.error_files && m.error_files.length) dd.append(' · skipped: ' + m.error_files.join(', '));
-}
-
-function renderBackupRow(dd, b) {
-  dd.replaceChildren();
-  dd.classList.remove('muted');
-  if (!b || !b.enabled) {
-    dd.append(statusPart('off', 'not configured'), ' — ' + ((b && b.reason) || 'unknown'));
-    return;
-  }
-  dd.append(
-    statusPart(b.last_error ? 'warn' : 'ok', b.last_error ? 'error' : 'enabled'),
-    ' · ', codeEl(b.dir), ' · last ' + (b.last_file || '–'), ' · next ' + (b.next_run ? fmtTsShort(b.next_run) : '–')
-  );
-  if (b.last_error) dd.append(' · ' + b.last_error);
-}
-
-function fmtTsShort(iso) {
-  const d = new Date(iso);
-  return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-}
-
-// ---------------------------------------------- folder opener + index card
-function renderOpener(op) {
-  const dd = els.statusOpener;
-  dd.replaceChildren();
-  dd.classList.remove('muted');
-  if (!op) { dd.append(statusPart('warn', 'unknown')); return; }
-  if (op.installed_here === true) dd.append(statusPart('ok', 'installed on the server PC'));
-  else if (op.installed_here === false) dd.append(statusPart('off', 'not installed on the server PC'));
-  else dd.append(statusPart('warn', 'unknown on this OS'));
-  // Which registration shape is in use is its own state: the fallback hands the
-  // URL to a command interpreter as a string, so it must not read as "installed".
-  if (op.mode === 'launcher') dd.append(' · ', statusPart('ok', 'launcher mode'));
-  else if (op.mode === 'fallback') dd.append(' · ', statusPart('warn', 'fallback mode — re-run the command below; see opener/README.md'));
-  dd.append(' · other PCs: paste the command below once (this browser asks "Open task-os opener?" the first time)');
-  const cmd = (op.install || '').split(op.base_url_token || '<base-url>').join(location.origin);
-  els.openerInstall.textContent = cmd || 'install.txt missing';
-  els.openerUninstall.textContent = op.uninstall || '';
-  els.openerEnv.textContent = op.env_template || '';
-  els.openerCopy.onclick = function () { copyText(cmd, els.openerCopy); };
-  els.openerEnvCopy.onclick = function () { copyText(op.env_template || '', els.openerEnvCopy); };
-}
-
-function renderIndexRow(dd, f) {
-  dd.replaceChildren();
-  dd.classList.remove('muted');
-  if (!f || !f.enabled) {
-    dd.append(statusPart('off', 'not configured'), ' — ' + ((f && f.reason) || 'unknown'));
-    els.reindexBtn.hidden = true;
-    return;
-  }
-  els.reindexBtn.hidden = false;
-  const roots = (f.roots || []).map(function (r) { return r.ref + (r.exists ? '' : ' (missing)'); }).join(', ');
-  dd.append(
-    statusPart(f.indexing ? 'warn' : (f.last_error ? 'warn' : 'ok'), f.indexing ? 'indexing…' : (f.last_error ? 'error' : 'indexed')),
-    ' · ', codeEl(roots), ' · ' + (f.entries == null ? '?' : f.entries) + ' folder(s)',
-    ' · last indexed ' + (f.last_indexed ? fmtTsShort(f.last_indexed) : '–') + (f.stale && f.last_indexed ? ' (stale, >24 h)' : '')
-  );
-  if (f.last_error) dd.append(' · ' + f.last_error);
-}
-
-function wireReindex() {
-  if (!els.reindexBtn) return;
-  els.reindexBtn.addEventListener('click', async function () {
-    els.reindexBtn.disabled = true;
-    try {
-      const r = await api('/api/folders/reindex', { method: 'POST', body: {} });
-      toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success');
-    } catch (err) { toast(err.message || 'Reindex failed', 'error'); }
-    els.reindexBtn.disabled = false;
-    fetchStatus();
-  });
-}
-
-// One GET /api/status feeds the Settings pane's Phone access card (https +
-// auth, Step 7), the mirror / backup card (Step 6) and the opener card (Step 9).
-// The card headers carry a state word (on · synced · indexed · off), never a count.
-async function fetchStatus() {
-  if (!els.statusMirror) return;
-  try {
-    const body = await api('/api/status');
-    renderAccessCard(body);
-    renderMirrorRow(els.statusMirror, body.mirror);
-    renderBackupRow(els.statusBackup, body.backup);
-    const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
-    els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
-    if (els.folderCard) {
-      renderOpener(body.opener);
-      renderIndexRow(els.statusIndex, body.folders);
-      const f = body.folders;
-      els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
-    }
-  } catch (err) {
-    // An unreachable status is its own visible state, never a stale "Loading…".
-    renderAccessUnknown(err.message);
-    els.statusMirror.textContent = 'unknown — ' + err.message;
-    els.statusBackup.textContent = 'unknown — ' + err.message;
-    els.mirrorCardMeta.textContent = 'unknown';
-    if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
-  }
-}
-
 // ------------------------------------------------------------ issue sync
-function renderIssuesStatus() {
+// The provider status is shared state: the header ↻ lives here, the Settings
+// card renders it (settings.js), the drawer and the palette read `state.issues`.
+function renderIssuesSync() {
   const st = state.issues;
   const configured = !!(st && st.enabled);
   if (els.issuesSync) {
@@ -592,41 +418,6 @@ function renderIssuesStatus() {
       ? 'Sync issues now (' + st.provider + (st.last_sync ? ' · last ' + fmtTsShort(st.last_sync) : '') + ')'
       : 'Issue provider not configured';
   }
-  if (els.issuesSyncNow) els.issuesSyncNow.disabled = !configured;
-  if (!els.statusIssues) return;
-  els.statusIssues.replaceChildren();
-  els.statusIssuesSync.replaceChildren();
-  els.statusIssues.classList.remove('muted');
-  els.statusIssuesSync.classList.remove('muted');
-  if (!st) {
-    els.statusIssues.textContent = 'unknown';
-    els.statusIssuesSync.textContent = '–';
-    els.issuesCardMeta.textContent = 'unknown';
-    return;
-  }
-  if (!configured) {
-    els.statusIssues.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
-    els.statusIssuesSync.textContent = '–';
-    els.issuesCardMeta.textContent = 'off';
-    return;
-  }
-  els.statusIssues.append(
-    statusPart(st.last_error ? 'warn' : 'ok', st.last_error ? 'error' : 'enabled'),
-    ' · ', codeEl(st.provider), ' · every ' + st.sync_minutes + ' min',
-    st.next_run ? ' · next ' + fmtTsShort(st.next_run) : ''
-  );
-  if (st.last_error) els.statusIssues.append(' · ' + (st.last_error_code ? st.last_error_code + ': ' : '') + st.last_error);
-  const r = st.last_result;
-  if (!st.last_sync) {
-    els.statusIssuesSync.textContent = 'not yet';
-  } else {
-    els.statusIssuesSync.append(fmtTsShort(st.last_sync));
-    if (r) {
-      els.statusIssuesSync.append(' · ' + r.listed + ' open issue(s) · ' + r.created + ' new · ' + r.retitled + ' retitled · ' + r.reopened + ' reopened · ' + r.closed + ' closed' + (r.errors && r.errors.length ? ' · ' + r.errors.length + ' error(s)' : ''));
-    }
-  }
-  if (st.repos && st.repos.length) els.statusIssuesSync.append(' · repos: ' + st.repos.join(', '));
-  els.issuesCardMeta.textContent = st.last_error ? 'error' : (st.last_sync ? 'synced' : 'on');
 }
 
 async function fetchIssuesStatus() {
@@ -635,7 +426,8 @@ async function fetchIssuesStatus() {
   } catch (err) {
     state.issues = null;
   }
-  renderIssuesStatus();
+  renderIssuesSync();
+  settings.renderIssues(state.issues);
 }
 
 let syncing = null;
@@ -670,37 +462,9 @@ async function syncIssues() {
 
 function wireIssueSync() {
   if (els.issuesSync) els.issuesSync.addEventListener('click', function () { syncIssues().catch(function () {}); });
-  if (els.issuesSyncNow) els.issuesSyncNow.addEventListener('click', function () { syncIssues().catch(function () {}); });
 }
 
 // ---------------------------------------------------- search + palette
-const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
-
-/** Settings → Search card: which indexes this install can query (GET /api/search/status). */
-async function fetchSearchStatus() {
-  if (!els.searchCard) return;
-  let adapters = null;
-  try { adapters = (await api('/api/search/status')).adapters || []; } catch (err) { adapters = null; }
-  let on = 0;
-  Object.keys(SEARCH_KIND_ROWS).forEach(function (kind) {
-    const dd = document.getElementById(SEARCH_KIND_ROWS[kind]);
-    if (!dd) return;
-    dd.replaceChildren();
-    dd.classList.remove('muted');
-    const a = adapters && adapters.find(function (x) { return x.kind === kind; });
-    if (!adapters) { dd.append(statusPart('warn', 'unknown')); return; }
-    if (a && a.configured) {
-      on += 1;
-      dd.append(statusPart('ok', 'indexed'));
-      if (a.note) dd.append(' · ' + a.note);
-    } else {
-      dd.append(statusPart('off', 'not configured'), ' — ' + ((a && a.reason) || 'unknown'));
-    }
-  });
-  els.searchCardMeta.textContent = adapters ? (on ? 'indexed' : 'off') : 'unknown';
-  if (search) search.reloadStatus();
-}
-
 /** Write the Search tab's query into ?q= (only while that tab is showing — the
  *  filter card's text owns ?q= on the other tabs). */
 function syncSearchUrl(q) {
@@ -751,7 +515,7 @@ function paletteCommands() {
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
   cmds.push({ id: 'reindex-folders', label: 'Reindex folders', hint: 'rescan search.folder_roots', icon: 'folder', run: async function () {
-    try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); fetchStatus(); }
+    try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); settings.refreshStatus(); }
     catch (err) { toast(err.message || 'Reindex failed', 'error'); }
   } });
   cmds.push({ id: 'export-mirror', label: 'Export mirror', hint: 'every task to mirror.dir now', icon: 'copy', run: async function () {
@@ -793,6 +557,12 @@ async function boot() {
     onSyncIssues: syncIssues,
     onToggle: function () { if (search) search.refreshActions(); },
   });
+  // The Settings pane owns its own cards (settings.js); mounted before the nav
+  // because restoring the stored tab can fire onChange straight into it.
+  settings = mountSettings({
+    onSyncIssues: syncIssues,
+    onSearchStatus: function () { if (search) search.reloadStatus(); },
+  });
   // The filters are shared by every tab, so a shared URL never moves the tab
   // by itself. First visit: the phone lands on Today, the desktop on the Board.
   const f = state.filters;
@@ -810,7 +580,7 @@ async function boot() {
     onChange: function (tab) {
       state.tab = tab;
       if (tab === 'board' && board) board.show();
-      if (tab === 'settings') { fetchStatus(); fetchIssuesStatus(); fetchSearchStatus(); }
+      if (tab === 'settings') { settings.refreshStatus(); fetchIssuesStatus(); settings.refreshSearchStatus(); }
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
     },
@@ -838,9 +608,7 @@ async function boot() {
   if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTable(); });
   wireIssueSync();
   fetchVersion();
-  fetchStatus();
-  wireSignOut();
-  wireReindex();
+  settings.refreshStatus();
   await loadPeople();
   await Promise.all([refreshAll(), fetchIssuesStatus()]);
   onHashChange();
