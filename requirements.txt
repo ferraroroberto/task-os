@@ -14,7 +14,7 @@ cryptography>=42
 
 # --- dev / verification gate ----------------------------------------------
 pytest>=8.0
-# starlette's TestClient dependency (fastapi.testclient) — test-only.
+# starlette's TestClient dependency (fastapi.testclient) - test-only.
 httpx2>=0.1
 pytest-playwright>=0.5
 playwright>=1.45
