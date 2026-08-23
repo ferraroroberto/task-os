@@ -169,7 +169,12 @@ function wireDropTarget(el, targetId, handlers) {
     ev.dataTransfer.dropEffect = 'move';
     el.classList.add('is-drop-target');
   });
-  el.addEventListener('dragleave', function () { el.classList.remove('is-drop-target'); });
+  // Only clear when the pointer actually left the row — crossing into a nested
+  // child (title, chip, select) fires dragleave too and would flicker the
+  // highlight. Same containment guard board.js's wireDropTarget already has.
+  el.addEventListener('dragleave', function (ev) {
+    if (!el.contains(ev.relatedTarget)) el.classList.remove('is-drop-target');
+  });
   el.addEventListener('drop', function (ev) {
     ev.preventDefault();
     ev.stopPropagation();

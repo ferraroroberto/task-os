@@ -155,9 +155,13 @@ button, input, select, textarea { font: inherit; }
 
 /* 44px hit-area expansion for an isolated compact control (the 34px theme
    toggle, a filter pill): visual stays compact, the invisible ::before grows
-   the target. */
-.hit-target { position: relative; }
-.hit-target::before { content: ""; position: absolute; inset: -5px; }
+   the target. The app's own compact controls (drawer icon button, toast close,
+   tree toggle) opt in on this one rule rather than re-inlining the expansion —
+   design.md "Touch targets" ships the utility once. Insets are per-control
+   because the authored squares differ: 34 + 2x5 = 44, 28 + 2x8 = 44. */
+.hit-target, .icon-btn, .toast-close, .tree-toggle { position: relative; }
+.hit-target::before, .icon-btn::before, .toast-close::before, .tree-toggle::before { content: ""; position: absolute; inset: -5px; }
+.tree-toggle::before { inset: -8px; }        /* 28x28 authored */
 
 html, body {
   margin: 0;
@@ -282,7 +286,7 @@ html, body {
   vertical-align: middle;
   white-space: nowrap;
 }
-.chip .icon { width: 12px; height: 12px; }
+.chip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; }
 a.chip { color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
@@ -554,7 +558,7 @@ a.chip:hover { text-decoration: underline; }
   line-height: 1.3;
   cursor: pointer;
 }
-.trow-meta .icon { width: 12px; height: 12px; }
+.trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .trow-meta > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; }
@@ -649,7 +653,7 @@ a.chip:hover { text-decoration: underline; }
 .due-btn:hover { border-color: var(--line); background: var(--card-off); }
 .due-btn.due-none { color: var(--muted); }
 .due-recur { color: var(--muted); display: inline-flex; }
-.due-recur .icon { width: 12px; height: 12px; }
+.due-recur .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .due-editor { display: inline-flex; gap: 4px; }
 .due-text { width: 140px; }
 .due-date { width: 150px; }
@@ -797,7 +801,9 @@ a.chip:hover { text-decoration: underline; }
 .field-control { width: 100%; min-width: 0; }
 /* Due: text input + a calendar button that opens the native date picker
    (the picker input itself is visually hidden; it only supplies the dialog). */
-.field-due-row { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
+/* gap 6px, not 4: the due button's 44px hit rect grows 5px past its 34px box,
+   so a tighter gap would put it over the text input (design.md "Touch targets"). */
+.field-due-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .field-due-row .field-control { flex: 1 1 auto; }
 .field-due-btn { width: var(--control-h); height: var(--control-h); border-radius: var(--radius-md); color: var(--muted); }
 .field-due-btn:hover { color: var(--accent); }
@@ -828,7 +834,9 @@ a.chip:hover { text-decoration: underline; }
 .markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: 8px 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
-.drawer-links { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+/* gap 10px, not 4: the remove button is 34px tall with a 44px hit rect, so a
+   tighter gap would overlap the next row's rect (design.md "Touch targets"). */
+.drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
 .link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .icon-btn {
   width: 34px;
@@ -916,7 +924,7 @@ a.chip:hover { text-decoration: underline; }
 .issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
 a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); border-color: var(--line); }
 .chip-issue-closed .chip-label { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
-.chip-issue .chip-state { width: 12px; height: 12px; color: var(--success); }
+.chip-issue .chip-state { width: var(--icon-inline); height: var(--icon-inline); color: var(--success); }
 .chip-issue-unknown { border-style: dashed; }
 .card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
 .card-actions .button-surface { display: inline-flex; align-items: center; gap: 4px; }
@@ -971,6 +979,11 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
+  /* These already carry real 44px geometry here, so the invisible expansion
+     would push the effective rect past its neighbour — design.md forbids
+     overlapping tap rectangles. The 34px tree toggle still needs its 5px. */
+  .icon-btn::before, .toast-close::before { inset: 0; }
+  .tree-toggle::before { inset: -5px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {

@@ -394,7 +394,7 @@ export function createDrawer(el, opts) {
       row.appendChild(chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'icon-btn hit-target';
+      rm.className = 'icon-btn';   // .icon-btn carries the 44px expansion itself
       rm.setAttribute('aria-label', 'Remove link ' + (l.label || l.url));
       rm.innerHTML = icon('trash-2');
       rm.addEventListener('click', async function () {
