@@ -17,6 +17,7 @@ from urllib.parse import quote
 import pytest
 
 from src import opener as opener_info
+from src.no_window import NO_WINDOW
 from src.placeholders import opener_url
 
 REPO = Path(__file__).resolve().parents[1]
@@ -81,7 +82,8 @@ def run_opener(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_over:
     env = _pc_env(pc, dryrun, env_over)
     # exactly what the fallback registration runs: cmd.exe /c ""<handler>" "<url>""
     cmd = f'cmd.exe /c ""{HANDLER}" "{url}""'
-    return subprocess.run(cmd, input=b"\r\n", capture_output=True, env=env, timeout=30)
+    return subprocess.run(cmd, input=b"\r\n", capture_output=True, env=env, timeout=30,
+                          creationflags=NO_WINDOW)
 
 
 def run_launcher(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_over: str) -> subprocess.CompletedProcess:
@@ -96,6 +98,7 @@ def run_launcher(url: str, pc: dict[str, str], *, dryrun: bool = True, **env_ove
         ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
          "-File", str(LAUNCHER), "-Url", url],
         input=b"\r\n", capture_output=True, env=env, timeout=60,
+        creationflags=NO_WINDOW,
     )
 
 
@@ -209,14 +212,16 @@ def test_a_link_carrying_a_quote_is_refused_and_nothing_else_runs(pc: dict[str, 
 
 @windows_only
 def test_no_url_is_usage_error(pc: dict[str, str]) -> None:
-    r = subprocess.run(f'cmd.exe /c ""{HANDLER}""', capture_output=True, timeout=30)
+    r = subprocess.run(f'cmd.exe /c ""{HANDLER}""', capture_output=True, timeout=30,
+                       creationflags=NO_WINDOW)
     assert r.returncode == 2 and "no URL given" in _decode(r.stdout)
 
 
 def test_install_dry_run_prints_the_registry_plan(tmp_path: Path) -> None:
     dest = tmp_path / "la" / "task-os"
     r = subprocess.run([sys.executable, str(INSTALLER), "--dry-run", "--dest", str(dest)],
-                       capture_output=True, text=True, encoding="utf-8", timeout=90)
+                       capture_output=True, text=True, encoding="utf-8", timeout=90,
+                       creationflags=NO_WINDOW)
     assert r.returncode == 0, r.stderr
     out = r.stdout
     assert "install plan (dry run):" in out
@@ -225,7 +230,8 @@ def test_install_dry_run_prints_the_registry_plan(tmp_path: Path) -> None:
     assert "mode   " in out
     assert not dest.exists()                                     # touched nothing
     r = subprocess.run([sys.executable, str(INSTALLER), "--dry-run", "--uninstall", "--dest", str(dest)],
-                       capture_output=True, text=True, encoding="utf-8", timeout=90)
+                       capture_output=True, text=True, encoding="utf-8", timeout=90,
+                       creationflags=NO_WINDOW)
     assert r.returncode == 0 and "uninstall plan (dry run):" in r.stdout and "opener.env" in r.stdout
 
 

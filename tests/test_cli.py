@@ -160,6 +160,41 @@ def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
     assert json.loads(capsys.readouterr().out)["person"]["name"] == "Sam Rivera"
 
 
+#: The one shape ``tasks mirror status --json`` emits, whatever the transport.
+STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "opener", "placeholders"}
+
+
+def test_status_json_shape_is_identical_on_both_backends(run: Runner) -> None:
+    """CLAUDE.md: "both backends return the API's shapes so ``--json`` is identical
+    either way" — this runs under both fixture params, so a key the local path
+    drops (or the HTTP path grows) fails on one of the two."""
+    code, out, _ = run("mirror", "status", "--json")
+    assert code == 0
+    st = _json(out)
+    assert set(st) == STATUS_KEYS
+    assert set(st["auth"]) == {"enabled", "password", "client"}
+    assert set(st["opener"]) >= {"install", "uninstall", "env_template", "installed_here", "mode"}
+
+
+def test_local_status_reports_request_only_facts_as_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Offline, ``https`` / ``auth.client`` describe a request that does not exist.
+    They must say so explicitly — not be omitted, and not be folded into ``False``
+    (which would assert plain HTTP, a fact this process never established)."""
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "t.db"))
+    dbmod.init_db()
+    st = cli.LocalBackend(actor="tester").status()
+
+    assert set(st) == STATUS_KEYS
+    assert st["https"] == cli.UNKNOWN and st["https"] is not False
+    assert st["auth"]["client"] == cli.UNKNOWN
+    # everything else is a property of the install, so it is answered for real
+    assert st["auth"]["enabled"] is False and st["auth"]["password"] is False
+    assert isinstance(st["placeholders"], dict)
+    assert st["opener"]["install"] and st["opener"]["base_url_token"] == "<base-url>"
+
+
 def test_no_command_prints_help(capsys: pytest.CaptureFixture) -> None:
     assert cli.main([]) == 2
     assert "usage: tasks" in capsys.readouterr().out

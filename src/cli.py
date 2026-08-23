@@ -18,7 +18,10 @@
     tasks folders reindex|status|search "q"   the folder index (search.folder_roots)
 
 Every command takes ``--json`` for machine-readable output (the same shapes
-the REST API returns). Talks to the running server over HTTP when it answers
+the REST API returns — a fact only a live request can settle, such as
+``mirror status``'s ``https``, comes back as the string ``"unknown"`` on the
+app-down path rather than being omitted or guessed). Talks to the running
+server over HTTP when it answers
 (``http://127.0.0.1:<config port>``, override with ``--server URL`` /
 ``TASKOS_URL``); otherwise — app down — it opens the database directly, so
 the CLI works either way. ``--local`` forces the direct path. ``--actor``
@@ -52,6 +55,12 @@ logger = logging.getLogger(__name__)
 SERVER_ENV = "TASKOS_URL"
 PROBE_TIMEOUT_S = 0.8
 
+#: What either backend reports for a status fact it could not establish.
+#: ``GET /api/status`` already ships this literal for ``auth.client`` when the
+#: middleware cannot classify a request, so it is this repo's existing word for
+#: "not confirmed" rather than a new one — see :meth:`LocalBackend.status`.
+UNKNOWN = "unknown"
+
 
 class CliError(Exception):
     """A user-facing failure: message + optional structured detail."""
@@ -65,7 +74,9 @@ class CliError(Exception):
 # ------------------------------------------------------------------ backends
 #
 # Both backends expose the same method set and return the same dict shapes,
-# so every command formats one way regardless of the transport.
+# so every command formats one way regardless of the transport. Where the
+# offline backend genuinely cannot establish a value the key is still present,
+# carrying ``UNKNOWN`` — the shape never varies, only the confidence does.
 
 Transport = Callable[[str, str, dict[str, Any] | None], tuple[int, Any]]
 
@@ -300,6 +311,23 @@ class LocalBackend:
         return mirror.import_tick(self.conn)
 
     def status(self) -> dict[str, Any]:
+        """The full ``GET /api/status`` key set, assembled offline.
+
+        Two of those keys describe the **request** rather than the install:
+        ``https`` is the scheme the caller's connection arrived on, and
+        ``auth.client`` is how ``AuthMiddleware`` classified that connection.
+        With the app down there is no connection, so both are reported as
+        :data:`UNKNOWN` — never omitted (a missing key reads to a consumer as
+        "plain HTTP", which is an answer this process did not establish) and
+        never inferred from the config (``src/certs.py`` knows what the *next*
+        webapp spawn would bind; that is not what a client actually got).
+
+        Everything else the API returns is a property of the install, not of
+        the request, so it is answered for real here: the auth config, the
+        three services, and — from this PC's filesystem and registry — the
+        opener registration and the placeholder map.
+        """
+        from src import opener
         from src.backup import BackupScheduler
         from src.folder_index import FolderIndexService
 
@@ -310,10 +338,19 @@ class LocalBackend:
                 folders.load()
             except OSError:
                 pass
+        placeholders = dict(config.placeholders)
         return {
+            "https": UNKNOWN,
+            "auth": {
+                "enabled": config.auth.enabled,
+                "password": bool(config.auth.password_hash),
+                "client": UNKNOWN,
+            },
             "mirror": self._mirror_service().status(),
             "backup": BackupScheduler(config).status(),
             "folders": folders.status(),
+            "opener": opener.status(placeholders),
+            "placeholders": placeholders,
         }
 
     def backup(self) -> dict[str, Any]:
