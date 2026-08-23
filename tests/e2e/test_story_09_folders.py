@@ -31,8 +31,6 @@ be routed by Playwright); the real hand-off to Explorer is the headed walk.
 
 from __future__ import annotations
 
-import json
-import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -40,16 +38,10 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import _boot, _terminate
+from tests.e2e.conftest import INTERCEPT, _boot, _get, _post, _terminate
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
-INTERCEPT = (
-    "document.addEventListener('click', function (e) {"
-    "  const a = e.target.closest && e.target.closest('a[href^=\"taskos:\"]');"
-    "  if (a) { window.__taskosClicks = (window.__taskosClicks || []).concat(a.getAttribute('href')); e.preventDefault(); }"
-    "}, true);"
-)
 
 
 class FolderInstance:
@@ -57,18 +49,6 @@ class FolderInstance:
         self.base = base
         self.od = od
         self.od_fwd = str(od).replace("\\", "/")
-
-
-def _get(base: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        return json.loads(res.read().decode("utf-8"))
-
-
-def _post(base: str, path: str) -> dict:
-    req = urllib.request.Request(f"{base}{path}", data=b"{}", method="POST")
-    req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(res.read().decode("utf-8"))
 
 
 @pytest.fixture(scope="module")

@@ -25,12 +25,12 @@ The real-provider walk (``gh`` against the owner's account) is in
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import Browser, expect
+
+from tests.e2e.conftest import _get
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -43,12 +43,6 @@ def _dismiss_toasts(page) -> None:
         except Exception:  # noqa: BLE001 — a toast that expired mid-loop is fine
             pass
     expect(page.locator(".toast")).to_have_count(0)
-
-
-def _get(base: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        assert res.status == 200
-        return json.loads(res.read().decode("utf-8"))
 
 
 def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -> None:

@@ -32,7 +32,7 @@ flowchart LR
     repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets)<br/>write listeners (touched ids)"]
     mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict → comment"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
-    issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>IssueSyncService: 10 s after start, every sync_minutes"]
+    issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>issue_from_task: task → new issue (route + CLI)<br/>IssueSyncService: 10 s after start, every sync_minutes"]
     issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>fake.py (tests, e2e) · get_provider(config)"]
     placeholders["placeholders.py<br/>resolve(ref) · to_ref(path) · opener_url"]
     folderidx["folder_index.py<br/>FolderIndexService: roots · reindex (24 h) · search<br/>vendor/foldersearcher_core.py (verbatim)"]

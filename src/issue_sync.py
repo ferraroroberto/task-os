@@ -108,6 +108,60 @@ def task_from_issue(conn: Any, info: IssueInfo, *, actor: str = SYNC_ACTOR) -> d
     )
 
 
+class AlreadyLinked(repo.ValidationError):
+    """The task already carries an ``issue_ref`` — opening a second one is refused."""
+
+    code = "already_linked"
+    http_status = 409
+
+
+class IssuesDisabled(repo.RepoError):
+    """No usable issue provider — not configured, or the service never started."""
+
+    code = "issues_disabled"
+    http_status = 409
+
+
+def issue_from_task(conn: Any, task_id: int, target_repo: str, *,
+                    service: Any, actor: str) -> dict[str, Any]:
+    """The other direction of :func:`task_from_issue`: open a forge issue **from**
+    an existing task and link it back, so the task becomes ``coding``.
+
+    The one implementation behind ``POST /api/tasks/{id}/issue`` and
+    ``tasks issue create`` — the guards, the create, the link row, the
+    ``issue_refs`` row and the ``code`` fallback are one workflow, and having
+    it twice is what let the two drift (fleet issue #35). Raises the repo's own
+    error family (:class:`AlreadyLinked` 409 · :class:`IssuesDisabled` 409 ·
+    ``ValidationError`` 422 · ``NotFound`` 404) so the router's app-level
+    handler and the CLI's ``_wrap`` each translate it in their own dialect;
+    :class:`~src.issues.IssueProviderError` propagates untouched (both callers
+    already map it to ``provider_error``).
+
+    ``service`` is the :class:`IssueSyncService` (or ``None`` when the webapp
+    never started one); its ``cache`` is warmed with the new issue so the
+    drawer panel has it before the next sync pass.
+    """
+    task = repo.get_task(conn, task_id)
+    if task.get("issue_ref"):
+        ref = task["issue_ref"]
+        raise AlreadyLinked(f"task {task_id} is already linked to {ref['repo']}#{ref['number']}")
+    if service is None or not service.enabled:
+        raise IssuesDisabled(service.reason if service is not None else "issue service not started")
+    target = (target_repo or "").strip().strip("/")
+    if "/" not in target:
+        raise repo.ValidationError("repo must be owner/name")
+    info = service.provider.create(target, task["title"], task.get("description") or "")
+    service.cache[info.key] = info
+    repo.add_link(conn, task_id, info.url, label=info.ref, kind="issue")
+    updated = repo.set_issue_ref(
+        conn, task_id, provider=info.provider, repo=info.repo, number=info.number,
+        url=info.url, state=info.state, actor=actor,
+    )
+    if not updated.get("code"):
+        updated = repo.update_task(conn, task_id, actor=actor, code=f"{short_repo(info.repo)}#{info.number}")
+    return updated
+
+
 def sync_once(conn: Any, provider: IssueProvider, *, actor: str = SYNC_ACTOR,
               cache: dict[tuple[str, str, int], IssueInfo] | None = None) -> SyncResult:
     """One reconciliation pass (see the module doc). Raises :class:`IssueProviderError`
@@ -270,4 +324,5 @@ class IssueSyncService:
                 return
 
 
-__all__ = ["CLOSED_STATES", "INITIAL_DELAY_S", "SYNC_ACTOR", "IssueSyncService", "SyncResult", "sync_once", "task_from_issue"]
+__all__ = ["CLOSED_STATES", "INITIAL_DELAY_S", "SYNC_ACTOR", "AlreadyLinked", "IssueSyncService", "IssuesDisabled",
+           "SyncResult", "issue_from_task", "sync_once", "task_from_issue"]

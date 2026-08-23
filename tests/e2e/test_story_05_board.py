@@ -33,9 +33,7 @@ list and appears in the Board's Done today column.
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -47,16 +45,11 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e.conftest import _get
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 COLUMNS = ["inbox", "todo", "doing", "standby", "done"]
-
-
-def _get(base: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        assert res.status == 200
-        return json.loads(res.read().decode("utf-8"))
 
 
 def _trow(page: Page, scope: str, title: str):
