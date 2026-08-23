@@ -785,11 +785,16 @@ def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
     last: dict[int, dict[str, Any]] = {}
     for r in conn.execute(
         f"""
-        SELECT c.task_id, c.ts, c.author, c.body, c.origin
-          FROM comments c
-          JOIN (SELECT task_id, MAX(ts) AS ts, MAX(id) AS id FROM comments
-                 WHERE task_id IN ({', '.join('?' * len(ids))}) GROUP BY task_id) m
-            ON m.task_id = c.task_id AND m.id = c.id
+        SELECT task_id, ts, author, body, origin
+          FROM (
+              SELECT task_id, ts, author, body, origin,
+                     ROW_NUMBER() OVER (
+                         PARTITION BY task_id ORDER BY ts DESC, id DESC
+                     ) AS rn
+                FROM comments
+               WHERE task_id IN ({', '.join('?' * len(ids))})
+          )
+         WHERE rn = 1
         """,
         ids,
     ).fetchall():

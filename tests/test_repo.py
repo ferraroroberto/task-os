@@ -219,6 +219,36 @@ def test_comments_thread_order_and_origin(conn: sqlite3.Connection) -> None:
         repo.add_comment(conn, 999, "x")
 
 
+def test_last_comment_follows_thread_order_not_max_id(conn: sqlite3.Connection) -> None:
+    """A historical import (``add_comment(..., ts=...)`` — the path the Notion
+    importer and ``Mirror._apply_comments`` use) can land a newer id with an
+    older ts. ``list_tasks``' ``last_comment`` (via ``_enrich_list``) must
+    follow thread order (``ts, id``, the same ordering ``list_comments``
+    uses) — not a bare ``MAX(id)``."""
+
+    def _ts_at(dt: datetime) -> str:
+        with repo.use_clock(lambda: dt.astimezone()):
+            return repo.now_iso()
+
+    t_early = _ts_at(datetime(2026, 8, 17, 9, 0, 0))
+    t_mid = _ts_at(datetime(2026, 8, 17, 9, 30, 0))
+
+    t = repo.create_task(conn, "Talk")
+    repo.add_comment(conn, t["id"], "early", ts=t_early)  # id=1, ts=t_early
+    with repo.use_clock(lambda: datetime(2026, 8, 17, 10, 0, 0).astimezone()):
+        repo.add_comment(conn, t["id"], "latest by time", author="b")  # id=2, ts=t_late
+    # Historical import lands after "latest by time" in id order, but its ts
+    # sits between the other two — this is the newer-id/older-ts case.
+    repo.add_comment(conn, t["id"], "historical mid", ts=t_mid)  # id=3, ts=t_mid
+
+    thread = repo.list_comments(conn, t["id"])
+    assert [c["body"] for c in thread] == ["early", "historical mid", "latest by time"]
+
+    items = repo.list_tasks(conn)
+    item = next(i for i in items if i["id"] == t["id"])
+    assert item["last_comment"]["body"] == "latest by time"
+
+
 # ---------------------------------------------------------------- links
 
 def test_links_add_list_remove(conn: sqlite3.Connection) -> None:
