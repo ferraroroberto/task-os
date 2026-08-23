@@ -14,6 +14,10 @@
 Attach an existing issue (``PUT /api/tasks/{id}/issue``) and detach
 (``DELETE``) live in the tasks router — they are plain repo-layer writes.
 The service lives on ``app.state.issues`` (started by the lifespan).
+
+The create-from-task workflow itself is ``src.issue_sync.issue_from_task``
+— the CLI's local backend runs the same one (issue #35); this route only
+resolves the actor and translates the provider error into the 502 envelope.
 """
 
 from __future__ import annotations
@@ -27,7 +31,8 @@ from pydantic import BaseModel
 from app.webapp.routers._helpers import error_response, resolve_actor
 from src import tasks_repo as repo
 from src.db import get_db
-from src.issues import IssueProviderError, short_repo
+from src.issue_sync import issue_from_task
+from src.issues import IssueProviderError
 
 router = APIRouter(prefix="/api", tags=["issues"])
 
@@ -99,28 +104,8 @@ def task_issue(task_id: int, request: Request, live: bool = False, db: sqlite3.C
 def create_issue_from_task(
     task_id: int, body: CreateIssueBody, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> Any:
-    task = repo.get_task(db, task_id)
-    if task.get("issue_ref"):
-        ref = task["issue_ref"]
-        return error_response(409, "already_linked", f"task {task_id} is already linked to {ref['repo']}#{ref['number']}")
-    service = _service(request)
-    if service is None or not service.enabled:
-        reason = service.reason if service else "issue service not started"
-        return error_response(409, "issues_disabled", reason)
-    target = (body.repo or "").strip().strip("/")
-    if "/" not in target:
-        return error_response(422, "validation_error", "repo must be owner/name")
     actor = resolve_actor(request, body.actor)
     try:
-        info = service.provider.create(target, task["title"], task.get("description") or "")
+        return issue_from_task(db, task_id, body.repo, service=_service(request), actor=actor)
     except IssueProviderError as exc:
         return error_response(502, "provider_error", str(exc), {"code": exc.code})
-    service.cache[info.key] = info
-    repo.add_link(db, task_id, info.url, label=info.ref, kind="issue")
-    updated = repo.set_issue_ref(
-        db, task_id, provider=info.provider, repo=info.repo, number=info.number,
-        url=info.url, state=info.state, actor=actor,
-    )
-    if not updated.get("code"):
-        updated = repo.update_task(db, task_id, actor=actor, code=f"{short_repo(info.repo)}#{info.number}")
-    return updated

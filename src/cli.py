@@ -385,28 +385,18 @@ class LocalBackend:
         return result.to_dict()
 
     def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
-        from src.issues import IssueProviderError, short_repo
+        """The same workflow the route runs — ``src.issue_sync.issue_from_task``
+        (issue #35). ``_wrap`` turns its repo-family errors (already_linked,
+        issues_disabled, validation, not_found) into the CLI's dialect; the
+        provider error is mapped here, as the route maps it to its 502."""
+        from src.issue_sync import issue_from_task
+        from src.issues import IssueProviderError
 
-        service = self._issue_service()
-        if not service.enabled:
-            raise CliError(service.reason, code="issues_disabled")
-        task = self._wrap(self._repo.get_task, task_id)
-        if task.get("issue_ref"):
-            ref = task["issue_ref"]
-            raise CliError(f"task {task_id} is already linked to {ref['repo']}#{ref['number']}", code="already_linked")
-        if "/" not in repo:
-            raise CliError("--repo must be owner/name", code="usage")
         try:
-            info = service.provider.create(repo, task["title"], task.get("description") or "")
+            return self._wrap(issue_from_task, task_id, repo,
+                              service=self._issue_service(), actor=self.actor)
         except IssueProviderError as exc:
             raise CliError(str(exc), code="provider_error") from exc
-        self._wrap(self._repo.add_link, task_id, info.url, label=info.ref, kind="issue")
-        updated = self._wrap(self._repo.set_issue_ref, task_id, provider=info.provider, repo=info.repo,
-                             number=info.number, url=info.url, state=info.state, actor=self.actor)
-        if not updated.get("code"):
-            updated = self._wrap(self._repo.update_task, task_id, actor=self.actor,
-                                 code=f"{short_repo(info.repo)}#{info.number}")
-        return updated
 
     def _folders(self) -> Any:
         from src.folder_index import FolderIndexService

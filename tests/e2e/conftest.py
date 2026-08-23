@@ -38,6 +38,7 @@ every fixture — pytest-playwright's ``browser`` included — has torn down.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import signal
@@ -146,6 +147,46 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         tail = (work / "webapp.log").read_text(encoding="utf-8", errors="replace")[-2000:]
         pytest.fail(f"disposable webapp did not answer {base}/healthz within 20s\n{tail}")
     return proc, base, log
+
+
+# ------------------------------------------------------- HTTP from a story
+# Every story reads the instance's own API to set up or confirm what the
+# browser then shows. One `_get` / `_post` here, not one per story file: six
+# copies had already drifted apart (two of them silently dropped the status
+# assertion — issue #35).
+
+
+def _get(base: str, path: str) -> dict:
+    """GET a JSON endpoint on the instance under test.
+
+    ``urlopen`` already raises on 4xx/5xx; the assertion is what catches a 2xx
+    that is not the ``200`` every story here expects (a 201/204 answer would
+    otherwise be parsed as if it were the body asked for).
+    """
+    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
+        assert res.status == 200
+        return json.loads(res.read().decode("utf-8"))
+
+
+def _post(base: str, path: str) -> dict:
+    """POST an empty JSON body — the reindex / sync triggers a story fires so it
+    is deterministic instead of racing the startup thread. The long timeout is
+    for a cold folder reindex."""
+    req = urllib.request.Request(f"{base}{path}", data=b"{}", method="POST")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=60) as res:
+        return json.loads(res.read().decode("utf-8"))
+
+
+# The stories that walk a `taskos://` folder link (09, 10) cannot let the OS
+# handler fire: this init script swallows the click and records the href on
+# `window.__taskosClicks` instead.
+INTERCEPT = (
+    "document.addEventListener('click', function (e) {"
+    "  const a = e.target.closest && e.target.closest('a[href^=\"taskos:\"]');"
+    "  if (a) { window.__taskosClicks = (window.__taskosClicks || []).concat(a.getAttribute('href')); e.preventDefault(); }"
+    "}, true);"
+)
 
 
 @pytest.fixture(scope="session")

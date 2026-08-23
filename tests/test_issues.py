@@ -21,7 +21,14 @@ from src import cli
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.config import load_config
-from src.issue_sync import SYNC_ACTOR, IssueSyncService, sync_once
+from src.issue_sync import (
+    SYNC_ACTOR,
+    AlreadyLinked,
+    IssuesDisabled,
+    IssueSyncService,
+    issue_from_task,
+    sync_once,
+)
 from src.issues import FAKE_PATH_ENV, PROVIDER_ENV, IssueProviderError, NullProvider, get_provider
 from src.issues.fake import FakeProvider
 from src.issues.github import GitHubProvider
@@ -192,6 +199,36 @@ def test_manually_linked_ref_without_state_is_confirmed_and_filled(conn, fake: F
     ref = repo.get_task(conn, t["id"])["issue_ref"]
     assert ref["state"] == "open" and ref["url"] == ISSUE_A["url"] and ref["last_synced"]
     assert repo.get_task(conn, t["id"])["title"] == "Add soil-moisture sensor"   # the issue title is canonical
+
+
+def test_issue_from_task_is_the_one_create_workflow(conn, fake: FakeProvider) -> None:
+    """``POST /api/tasks/{id}/issue`` and ``tasks issue create`` run this one
+    function (issue #35) — so the CLI path gained the two steps only the route
+    used to take: the repo is normalized before it reaches the provider, and
+    the sync cache is warmed with the new issue (the drawer panel reads it
+    before the next pass). The guards raise the repo's own error family, which
+    is what lets each front end keep its own dialect."""
+    service = IssueSyncService(load_config(), provider=fake)
+    assert service.enabled and service.cache == {}
+    t = repo.create_task(conn, "Wire the rain sensor", description="Needs a pull-up.")
+
+    updated = issue_from_task(conn, t["id"], "  example/garden-bot/  ", service=service, actor="tester")
+    assert updated["type"] == "coding" and updated["code"] == "garden-bot#15"
+    ref = updated["issue_ref"]
+    assert ref["repo"] == "example/garden-bot"                       # normalized, not "  example/garden-bot/  "
+    assert ref["number"] == 15 and ref["url"] == "https://github.com/example/garden-bot/issues/15"
+    assert [link["kind"] for link in updated["links"]] == ["issue"]
+    assert service.cache[("github", "example/garden-bot", 15)].title == "Wire the rain sensor"
+
+    with pytest.raises(AlreadyLinked):
+        issue_from_task(conn, t["id"], "example/garden-bot", service=service, actor="tester")
+    other = repo.create_task(conn, "Something else")
+    with pytest.raises(repo.ValidationError):
+        issue_from_task(conn, other["id"], "nope", service=service, actor="tester")
+    with pytest.raises(IssuesDisabled):
+        issue_from_task(conn, other["id"], "example/garden-bot", service=None, actor="tester")
+    with pytest.raises(repo.NotFound):
+        issue_from_task(conn, other["id"] + 1000, "example/garden-bot", service=service, actor="tester")
 
 
 # --------------------------------------------------------- service + provider
@@ -446,6 +483,11 @@ def test_cli_issues_sync_status_and_issue_create(tmp_path: Path, monkeypatch: py
     assert code == 1 and "already linked" in err
     code, out, err = run("issue", "create", "3", "--repo", "nope")
     assert code == 1
+    # the CLI runs the route's workflow (issue #35) → it normalizes the repo too
+    code, out, _ = run("add", "Sensor housing")
+    assert code == 0
+    code, out, _ = run("issue", "create", "4", "--repo", "  example/garden-bot/  ")
+    assert code == 0 and out.strip() == "#4 → example/garden-bot#16 https://github.com/example/garden-bot/issues/16"
     monkeypatch.setenv(PROVIDER_ENV, "none")
     code, out, err = run("issues", "sync")
     assert code == 1 and "TASKOS_ISSUE_PROVIDER=none" in err

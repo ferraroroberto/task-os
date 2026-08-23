@@ -32,13 +32,9 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
+from tests.e2e.conftest import _get
+
 DESKTOP = {"width": 1440, "height": 900}
-
-
-def _get(base: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        assert res.status == 200
-        return json.loads(res.read().decode("utf-8"))
 
 
 def _send(base: str, method: str, path: str, body: dict | None = None, actor: str = "ui") -> dict:

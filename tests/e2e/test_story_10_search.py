@@ -38,16 +38,10 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import FAKE_ISSUES, _boot, _terminate
+from tests.e2e.conftest import FAKE_ISSUES, INTERCEPT, _boot, _get, _post, _terminate
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
-INTERCEPT = (
-    "document.addEventListener('click', function (e) {"
-    "  const a = e.target.closest && e.target.closest('a[href^=\"taskos:\"]');"
-    "  if (a) { window.__taskosClicks = (window.__taskosClicks || []).concat(a.getAttribute('href')); e.preventDefault(); }"
-    "}, true);"
-)
 KITCHEN_ISSUE = {
     "repo": "example/home-dashboard", "number": 7, "title": "Kitchen lights automation", "state": "open",
     "url": "https://github.com/example/home-dashboard/issues/7", "labels": ["enhancement", "kitchen"],
@@ -61,18 +55,6 @@ class SearchInstance:
         self.od = od
         self.od_fwd = od.as_posix()
         self.db = db
-
-
-def _get(base: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        return json.loads(res.read().decode("utf-8"))
-
-
-def _post(base: str, path: str) -> dict:
-    req = urllib.request.Request(f"{base}{path}", data=b"{}", method="POST")
-    req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(res.read().decode("utf-8"))
 
 
 @pytest.fixture(scope="module")
