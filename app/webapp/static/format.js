@@ -66,6 +66,13 @@ export function fmtTs(iso) {
   return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + hh + ':' + mm;
 }
 
+/** The locale's short date + time from an ISO timestamp — the status-line
+ *  stamp the Settings cards and the header ↻ tooltip use. */
+export function fmtTsShort(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
 // ------------------------------------------------------------------ chips
 // Anything that looks like a target inside free text becomes a chip: URLs
 // (clickable, new tab), folder placeholders like {onedrive}/house (a
