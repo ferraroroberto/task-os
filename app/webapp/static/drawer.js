@@ -758,6 +758,13 @@ export function createDrawer(el, opts) {
       const cur = document.createElement('div');
       cur.className = 'folder-current';
       cur.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'icon-btn';
+      remove.setAttribute('aria-label', 'Remove folder link');
+      remove.innerHTML = icon('trash-2');
+      remove.addEventListener('click', function () { commitFolder(''); });
+      cur.appendChild(remove);
       const path = document.createElement('code');
       path.className = 'folder-resolved' + (t.folder_resolved ? '' : ' muted');
       path.textContent = t.folder_resolved || 'placeholder not configured on this server';
