@@ -815,13 +815,15 @@ export function createDrawer(el, opts) {
   }
 
   /** Empty / a ref / an absolute path → the ref the task stores (absolute paths
-   *  fold onto the placeholders via GET /api/resolve — never resolved client-side). */
+   *  fold onto the placeholders via POST /api/resolve — never resolved
+   *  client-side; a body, not `?ref=`, because URL-cleaning extensions strip
+   *  that parameter name off every http(s) URL — #66). */
   async function commitFolder(value) {
     if (!value) { await patch({ folder_ref: null }); return; }
     let ref = value;
     if (!/^\{/.test(value)) {
       try {
-        const r = await api('/api/resolve?ref=' + encodeURIComponent(value));
+        const r = await api('/api/resolve', { method: 'POST', body: { ref: value } });
         ref = r.ref;
         if (ref !== value) toast('Stored as ' + ref, 'info');
       } catch (err) { toast(err.message || 'Could not resolve the path', 'error'); return; }

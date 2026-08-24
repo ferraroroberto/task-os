@@ -1,6 +1,6 @@
 """Folders route family — placeholder resolution + the folder index (Step 9).
 
-    GET  /api/resolve?ref=<ref or absolute path>
+    POST /api/resolve  {"ref": "<ref or absolute path>"}
         → {ref, path, resolved, unresolved, href}
           ``ref`` is the value folded back onto the placeholders (an absolute
           path pasted in the drawer becomes ``{onedrive}/…`` — the portable
@@ -13,6 +13,14 @@
     POST /api/folders/reindex
         → {entries, roots, seconds, index_file} — rescan now, foreground.
 
+``/api/resolve`` is a POST although it only reads: ``ref`` is a *query
+parameter name on every tracking-parameter blocklist*, so a URL-cleaning
+browser extension (uBlock Origin's "Remove tracking parameters", AdGuard,
+ClearURLs, Brave shields) strips it by redirecting to the query-less URL —
+the drawer's "paste an absolute path" then 422s on a server that never saw
+the value (#66). A body carries no query string, so no cleaner can touch it,
+and the folder path stays out of the URL, the history and any access log.
+
 The service lives on ``app.state.folders`` (started by the lifespan; the
 startup reindex runs in its own daemon thread). The ``tasks folders …`` CLI
 calls these when the app is up.
@@ -23,6 +31,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel, Field
 
 from app.webapp.routers._helpers import error_response
 from src import placeholders
@@ -30,14 +39,18 @@ from src import placeholders
 router = APIRouter(prefix="/api", tags=["folders"])
 
 
+class ResolveBody(BaseModel):
+    ref: str = Field(min_length=1)
+
+
 def _service(request: Request) -> Any:
     return getattr(request.app.state, "folders", None)
 
 
-@router.get("/resolve")
-def resolve(request: Request, ref: str = Query(min_length=1)) -> dict[str, Any]:
+@router.post("/resolve")
+def resolve(request: Request, body: ResolveBody) -> dict[str, Any]:
     ph = request.app.state.config.placeholders
-    folded = placeholders.to_ref(ref, ph)
+    folded = placeholders.to_ref(body.ref, ph)
     r = placeholders.resolve(folded, ph)
     return r.as_dict()
 

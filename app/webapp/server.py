@@ -15,7 +15,7 @@ Route families (each in ``app/webapp/routers/``):
                                    backup, folder index + opener (Step 9); POST
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
-    folders /api/resolve         → folder ref ↔ absolute path (placeholders, Step 9)
+    folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
             /api/folders/search  → the folder index; POST /api/folders/reindex
             /opener/opener.cmd   → the per-PC handler a second PC downloads (public)
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
