@@ -326,6 +326,10 @@ a.chip:hover { text-decoration: underline; }
 /* Drawer: Folder section — chip + resolved path + editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
 .folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* A folder ref can be long — the drawer has room to wrap it, unlike the
+   compact table/tree/board rows that keep the base .chip's nowrap ellipsis. */
+.folder-current .chip { white-space: normal; overflow-wrap: anywhere; }
+.folder-current .chip-label { overflow: visible; text-overflow: clip; }
 .folder-resolved { font-size: var(--font-caption); word-break: break-all; }
 .folder-copy { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); }
 .folder-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
