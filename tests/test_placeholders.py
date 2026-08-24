@@ -81,15 +81,28 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_api_resolve_ref_and_path(client: TestClient) -> None:
-    r = client.get("/api/resolve", params={"ref": "{onedrive}/house"}).json()
+    r = client.post("/api/resolve", json={"ref": "{onedrive}/house"}).json()
     assert r == {"ref": "{onedrive}/house", "path": "E:/onedrive/house", "resolved": True, "unresolved": [],
                  "href": "taskos://open?ref=%7Bonedrive%7D%2Fhouse"}
     # an absolute path folds back onto the placeholder — the portable form the drawer stores
-    r = client.get("/api/resolve", params={"ref": "E:\\onedrive\\house\\kitchen"}).json()
+    r = client.post("/api/resolve", json={"ref": "E:\\onedrive\\house\\kitchen"}).json()
     assert r["ref"] == "{onedrive}/house/kitchen" and r["path"] == "E:/onedrive/house/kitchen"
-    r = client.get("/api/resolve", params={"ref": "{sharepoint:nope}/x"}).json()
+    r = client.post("/api/resolve", json={"ref": "{sharepoint:nope}/x"}).json()
     assert r["resolved"] is False and r["unresolved"] == ["sharepoint:nope"]
-    assert client.get("/api/resolve").status_code == 422
+    assert client.post("/api/resolve", json={}).status_code == 422
+    assert client.post("/api/resolve", json={"ref": ""}).status_code == 422
+
+
+def test_api_resolve_carries_the_ref_in_the_body_not_the_query(client: TestClient) -> None:
+    """#66 — ``ref`` is on every tracking-parameter blocklist, so a URL-cleaning
+    browser extension strips it and the request arrives with no query at all.
+    The value must ride a body: the old ``GET ?ref=`` shape is gone, and a
+    query-only call can never be mistaken for a successful resolve."""
+    path = "E:\\onedrive\\house\\kitchen"
+    assert client.get("/api/resolve", params={"ref": path}).status_code == 405
+    # what the stripper actually delivers: the same call minus its query string
+    assert client.post("/api/resolve", params={"ref": path}).status_code == 422
+    assert client.post("/api/resolve", json={"ref": path}).json()["ref"] == "{onedrive}/house/kitchen"
 
 
 def test_task_payloads_carry_folder_resolved_and_url(client: TestClient) -> None:

@@ -23,7 +23,7 @@ flowchart LR
     viewsr["routers/views<br/>/api/board · /api/today"]
     mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
-    foldersr["routers/folders<br/>/api/resolve · /api/folders/search<br/>/api/folders/reindex"]
+    foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
     lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver()"]
   end
