@@ -658,9 +658,14 @@ a.chip:hover { text-decoration: underline; }
 .due-btn.due-none { color: var(--muted); }
 .due-recur { color: var(--muted); display: inline-flex; }
 .due-recur .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.due-editor { display: inline-flex; gap: 4px; }
-.due-text { width: 140px; }
-.due-date { width: 150px; }
+.due-editor { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.due-text { width: 170px; }
+.due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
+.due-pick-btn:hover { color: var(--accent); }
+/* hidden by default — the calendar button opens it (showPicker() or the
+   coarse-pointer fallback in table.js), same pattern as .field-due-picker. */
+.due-date { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.due-date.is-visible { position: static; width: auto; height: 30px; opacity: 1; pointer-events: auto; }
 
 /* -------------------------------------------------------------- tree */
 /* Flat outliner: the shared rows with an indent per depth and a subtle

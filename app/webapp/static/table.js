@@ -226,13 +226,22 @@ function buildDueCell(t, handlers) {
     text.className = 'input-native due-text';
     text.value = t.due || '';
     text.placeholder = 'tomorrow · fri · in 2 weeks';
-    text.setAttribute('aria-label', 'Due date (natural text)');
+    text.setAttribute('aria-label', 'Due date');
+    const pickBtn = document.createElement('button');
+    pickBtn.type = 'button';
+    pickBtn.className = 'icon-btn due-pick-btn';
+    pickBtn.title = 'Pick a date';
+    pickBtn.setAttribute('aria-label', 'Pick a due date');
+    pickBtn.innerHTML = icon('calendar-days');
+    // hidden — opened via pickBtn (showPicker(), or the coarse-pointer fallback
+    // below); same single-control pattern as the drawer's dueField (issue #50).
     const date = document.createElement('input');
     date.type = 'date';
-    date.className = 'input-native due-date';
+    date.className = 'due-date';
+    date.tabIndex = -1;
+    date.setAttribute('aria-hidden', 'true');
     date.value = t.due || '';
-    date.setAttribute('aria-label', 'Due date (picker)');
-    editor.append(text, date);
+    editor.append(text, pickBtn, date);
     box.replaceChildren(editor);
     text.focus();
     text.select();
@@ -246,6 +255,20 @@ function buildDueCell(t, handlers) {
     text.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); commit(text.value.trim()); }
       if (ev.key === 'Escape') { ev.preventDefault(); done = true; restore(); }
+    });
+    pickBtn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      // Touch/coarse-pointer WebKit reports showPicker() as callable but opens
+      // nothing — the exception-based fallback below never runs (issue #50).
+      // Coarse pointers skip straight to the fallback, which does open the
+      // native picker there.
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      if (!coarse) {
+        try { if (typeof date.showPicker === 'function') { date.showPicker(); return; } } catch (_) { /* fall through */ }
+      }
+      date.classList.add('is-visible');
+      date.focus();
+      date.click();
     });
     date.addEventListener('change', function () { commit(date.value); });
     editor.addEventListener('focusout', function (ev) {
