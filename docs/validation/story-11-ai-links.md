@@ -20,7 +20,8 @@ Unit legs: `tests/test_schema.py::test_v5_rebuild_keeps_links_and_accepts_ai_kin
 
 - Opener resume against the **real transcript store** (`%USERPROFILE%\.claude\projects`, dry-run): `opener.ps1 -Url "taskos://resume?session=<a real session id>"` printed `resume: <that session's local uuid> in <the repo it ran in>` — the mapping holds on real data, not just the fixture. This walk caught a real bug the fixture missed: a newer transcript that merely *mentioned* the id (a grep result quoted in another conversation) shadowed the owner — fixed by matching the transcript's own session-url marker first, bare id only as fallback, with a shadow-decoy unit test pinned.
 - A claude.ai/code session URL of a **finished** session renders the full transcript read-only ("This session is archived") — verified in Chrome; the link stays useful after the CLI session ends.
-- Live instance walk + real phone tap: **owner's checklist** (validated on the issue before merge).
-- The actual terminal spawn (`wt` → `claude --resume`) — **not verified** in this record; it is the owner's one-click desktop step after the opener is reinstalled from this build (Settings → Folder opener).
+- Live instance walk (Chrome, real data on a **copy** of the live DB, this build serving): the bot chip on the Board card and in the drawer, the open/resume popover, *Open conversation* → the real session transcript on claude.ai/code. A comment containing an AI URL renders the bot chip through `linkify` too.
+- **Real terminal spawn**: the opener was reinstalled from this build (`install_opener.py`, launcher mode) and a non-dry `taskos://resume?session=<real id>` opened `wt -d <that session's repo>` running `claude --resume <its local uuid>` — process chain observed (`WindowsTerminal.exe` → `powershell.exe` → `claude.exe --resume …`), then the test terminal was closed.
+- Real phone tap: **owner's checklist** (validated on the issue before merge).
 
-Result: **verified** (e2e + unit + real-data dry-run) · terminal spawn + real phone = owner's checklist. Date: 2026-08-26.
+Result: **verified** (e2e + unit + real-data dry-run + live-instance walk + real terminal spawn) · real phone = owner's checklist. Date: 2026-08-26.
