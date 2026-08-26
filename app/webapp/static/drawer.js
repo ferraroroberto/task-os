@@ -24,7 +24,7 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, chipFor, copyText, fmtTs, issueChip, linkify, providerIcon, relDue,
+  PRIORITIES, RECURRENCES, chipFor, fmtTs, issueChip, linkify, providerIcon, relDue,
   renderMarkdown, statusPill,
 } from './format.js';
 import { statusOptions } from './rows.js';
@@ -749,7 +749,11 @@ export function createDrawer(el, opts) {
     return issue;
   }
 
-  // ---- folder section: chip + resolved path + editor + folder-index picker
+  // ---- folder section: two lines — [chip + delete] / [ref + Change + Pick]
+  // The resolved path is NOT repeated as a third line: it is already the chip's
+  // own `title` (format.js), and the phone reaches it through the chip's copy
+  // popover (#74). An unresolvable ref keeps its warning ON the chip — a
+  // placeholder this server does not know is a config fault, not a silent one.
   function folderSection(t) {
     const sec = section('folder', 'Folder', 'folder');
     const body = document.createElement('div');
@@ -757,7 +761,15 @@ export function createDrawer(el, opts) {
     if (t.folder_ref) {
       const cur = document.createElement('div');
       cur.className = 'folder-current';
-      cur.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+      const chip = chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url });
+      if (t.folder_resolved) {
+        chip.title = t.folder_resolved + ' — the path this server resolves the ref to';
+      } else {
+        chip.classList.add('chip-missing');
+        chip.title = t.folder_ref + ' — placeholder not configured on this server; add it to config.placeholders';
+        chip.insertAdjacentHTML('beforeend', icon('triangle-alert'));
+      }
+      cur.appendChild(chip);
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'icon-btn';
@@ -765,16 +777,6 @@ export function createDrawer(el, opts) {
       remove.innerHTML = icon('trash-2');
       remove.addEventListener('click', function () { commitFolder(''); });
       cur.appendChild(remove);
-      const path = document.createElement('code');
-      path.className = 'folder-resolved' + (t.folder_resolved ? '' : ' muted');
-      path.textContent = t.folder_resolved || 'placeholder not configured on this server';
-      path.title = t.folder_resolved ? 'this server resolves the ref to this path' : 'add the placeholder to config.placeholders';
-      const copy = document.createElement('button');
-      copy.type = 'button';
-      copy.className = 'button-ghost folder-copy';
-      copy.innerHTML = icon('copy') + ' Copy path';
-      copy.addEventListener('click', function () { copyText(t.folder_resolved || t.folder_ref, copy); });
-      cur.append(path, copy);
       body.appendChild(cur);
     }
     const form = document.createElement('form');
@@ -793,7 +795,11 @@ export function createDrawer(el, opts) {
     const pick = document.createElement('button');
     pick.type = 'button';
     pick.className = 'button-ghost folder-pick';
-    pick.innerHTML = icon('search') + ' Pick from folder index…';
+    // label span, not a bare text node: the phone drops it to keep line 2 on
+    // one line (styles.css) - the accessible name lives on aria-label either way
+    pick.innerHTML = icon('search') + '<span class="folder-pick-label">Pick from index</span>';
+    pick.setAttribute('aria-label', 'Pick from folder index');
+    pick.title = 'Pick from folder index';
     pick.setAttribute('aria-expanded', String(pickerOpen));
     form.append(input, save, pick);
     form.addEventListener('submit', async function (ev) {

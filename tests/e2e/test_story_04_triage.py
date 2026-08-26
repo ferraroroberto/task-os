@@ -303,16 +303,30 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         lefts = sorted(set(b[0] for b in boxes))
         assert len(lefts) == 2, boxes                                  # two columns
         assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
-        # rows are ≥44px tall; the status select is compact and centred on the title line
+        # rows are >=44px tall; the status select is compact and, since #74,
+        # centred against the WHOLE card (title + meta) rather than the title line
         assert_min_target(rows)
         assert_no_overlap(rows.locator(".trow-status"))
         heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 32 for h in heights), heights
+        # #74 round 2: a folder never makes a card taller. It is an inline glyph
+        # like every other meta item now, so a row that has one is exactly as tall
+        # as a plain one. (Rows above that height are metas that wrapped to a
+        # second line - a different thing, and not what the folder caused.)
+        by_folder = rows.evaluate_all(
+            "els => els.map(e => [!!e.querySelector('.chip-folder'),"
+            " Math.round(e.getBoundingClientRect().height)])")
+        assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
+        base = min(h for _, h in by_folder)
+        assert {h for f, h in by_folder if f} == {base}, by_folder
+        assert base in {h for f, h in by_folder if not f}, by_folder
         sel_box = watering.locator(".trow-status").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
-        assert sel_box and main_box
+        meta_box = watering.locator(".trow-meta").bounding_box()
+        assert sel_box and main_box and meta_box
         sel_center = sel_box["y"] + sel_box["height"] / 2
-        assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
+        rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
+        assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
         assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         page.screenshot(path=str(shots / "story-04-triage-9-phone.png"))
 

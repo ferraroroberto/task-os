@@ -291,7 +291,9 @@ html, body {
 a.chip { color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
 .chip-date, .chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
-.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
+/* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
+   link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
+.chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
 .chip-project { color: var(--muted); padding: 0 6px; }
 .chip-type { padding: 2px 5px; color: var(--muted); }
 
@@ -323,18 +325,32 @@ a.chip:hover { text-decoration: underline; }
 .folder-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .folder-pop-actions .button-ghost, .folder-pop-actions .button-surface { min-height: 32px; padding: 0 10px; font-size: var(--font-caption); text-decoration: none; }
 
-/* Drawer: Folder section — chip + resolved path + editor + folder-index picker */
+/* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
-.folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-/* A folder ref can be long — the drawer has room to wrap it, unlike the
-   compact table/tree/board rows that keep the base .chip's nowrap ellipsis. */
-.folder-current .chip { white-space: normal; overflow-wrap: anywhere; }
-.folder-current .chip-label { overflow: visible; text-overflow: clip; }
-.folder-resolved { font-size: var(--font-caption); word-break: break-all; }
-.folder-copy { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); }
-.folder-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+/* Two lines, never more (#74): [chip + delete] then [ref + Change + Pick].
+   Line 1 mirrors line 2's grid — same gutter, same trailing auto column — so
+   the delete button's right edge lands on the picker's and the chip's left
+   edge on the input's. The resolved path is not repeated here: it is the
+   chip's own title, and the phone reads it from the chip's copy popover. */
+.folder-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+/* The chip wears the shared control recipe (_vendored/modal.css .input-native:
+   --control-h, radius-md, 10px side padding) so line 1 sits at exactly the same
+   height as line 2 and reads as its pair — the accent fill is the only
+   difference. A long ref therefore ellipsizes on one line like the input below
+   it rather than wrapping the chip taller than its own row: the full ref is on
+   the chip's title, in the input, and in the copy popover. (Fixed height, not a
+   floor — the point of #74 round 2 is that it never grows past a control.) */
+.folder-current .chip {
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-label);
+}
+.folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
-.folder-pick { grid-column: 1 / -1; justify-self: start; white-space: nowrap; }
+.folder-form .button-surface, .folder-pick { white-space: nowrap; }
+.folder-pick { display: inline-flex; align-items: center; gap: 4px; }
 .folder-picker { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
 .folder-picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
 .folder-picker-btn {
@@ -582,8 +598,49 @@ a.chip:hover { text-decoration: underline; }
 .trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; line-height: 1.4; }
 .trow-extra { grid-area: extra; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
-  .trow { min-height: var(--row-md); }
+  /* Air between the title and the meta line, and ONE card height whether or
+     not the row carries a folder: the folder is an inline glyph like every
+     other meta item, and the min-height covers a row with no meta line. */
+  .trow { min-height: 64px; padding: 10px 4px; row-gap: 6px; }
+  .trow-meta { min-height: 22px; }
   .trow-status { height: 32px; }
+  /* The status control centers against the WHOLE row (title + meta), not the
+     title line alone (#74): it is the row's control, not the title's, and with
+     the folder chip down to its glyph there is finally room for it. */
+  .trow {
+    grid-template-areas:
+      "main ctrl"
+      "meta ctrl"
+      "extra extra";
+  }
+  .trow.has-prefix {
+    grid-template-areas:
+      "prefix main ctrl"
+      "prefix meta ctrl"
+      "prefix extra extra";
+  }
+  /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
+     says nothing and ate the meta line. No pill, no fill: the accent colour
+     already says "tappable", and a marked box read as heavier than the
+     calendar and repeat glyphs beside it, which are the same 16px.
+     The tap surface is widened INVISIBLY instead, and the inset is kept
+     inside the row's own box so it never reaches into the next card — the
+     row, the folder and the status select are the only targets here, and
+     nothing else on the meta line competes for the tap.
+     The name is on aria-label (rows.js); the tap behaviour (web twin, else
+     the path popover) is unchanged. */
+  .trow-meta .trow-folder {
+    position: relative;
+    max-width: none;
+    padding: 0;
+    background: none;
+    border-color: transparent;
+  }
+  .trow-meta .trow-folder .chip-label { display: none; }
+  /* 44x44 measured on the live rows: the glyph is 18px, so -13px each way.
+     That leaves ~5px above the row's bottom edge - the widened target must
+     stay inside this card, never reach into the next one. */
+  .trow-meta .trow-folder::before { content: ""; position: absolute; inset: -13px; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -985,6 +1042,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     min-height: var(--row-sm);
   }
   .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary { height: var(--row-sm); }
+  .folder-current .chip { height: var(--row-sm); }   /* pairs with line 2's 44px controls */
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
@@ -997,6 +1055,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Folder line 2 stays ONE line at 390px (#74): the picker drops to its
+     glyph. aria-label + title still say "Pick from folder index". */
+  .folder-pick-label { display: none; }
+  .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .is-busy .icon { animation: none; }
