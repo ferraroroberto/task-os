@@ -309,6 +309,17 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         assert_no_overlap(rows.locator(".trow-status"))
         heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 32 for h in heights), heights
+        # #74 round 2: a folder never makes a card taller. It is an inline glyph
+        # like every other meta item now, so a row that has one is exactly as tall
+        # as a plain one. (Rows above that height are metas that wrapped to a
+        # second line - a different thing, and not what the folder caused.)
+        by_folder = rows.evaluate_all(
+            "els => els.map(e => [!!e.querySelector('.chip-folder'),"
+            " Math.round(e.getBoundingClientRect().height)])")
+        assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
+        base = min(h for _, h in by_folder)
+        assert {h for f, h in by_folder if f} == {base}, by_folder
+        assert base in {h for f, h in by_folder if not f}, by_folder
         sel_box = watering.locator(".trow-status").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
         meta_box = watering.locator(".trow-meta").bounding_box()

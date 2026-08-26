@@ -328,16 +328,26 @@ a.chip:hover { text-decoration: underline; }
 /* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
 /* Two lines, never more (#74): [chip + delete] then [ref + Change + Pick].
-   nowrap so the delete button stays on the chip's line, vertically centered
-   against it however many lines the ref wraps to; the chip is the only item
-   allowed to shrink. The resolved path is not repeated here — it is the
+   Line 1 mirrors line 2's grid — same gutter, same trailing auto column — so
+   the delete button's right edge lands on the picker's and the chip's left
+   edge on the input's. The resolved path is not repeated here: it is the
    chip's own title, and the phone reads it from the chip's copy popover. */
-.folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-/* A folder ref can be long — the drawer has room to wrap it, unlike the
-   compact table/tree/board rows that keep the base .chip's nowrap ellipsis. */
-.folder-current .chip { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.folder-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+/* The chip wears the shared control recipe (_vendored/modal.css .input-native:
+   --control-h, radius-md, 10px side padding) so line 1 sits at the same height
+   as line 2 and reads as its pair — the accent fill is the only difference.
+   A folder ref can be long: the drawer has room to wrap it, unlike the compact
+   table/tree/board rows that keep the base .chip's nowrap ellipsis. */
+.folder-current .chip {
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-label);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .folder-current .chip-label { overflow: visible; text-overflow: clip; }
-.folder-current .icon-btn { flex: none; }
 .folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
 .folder-form .button-surface, .folder-pick { white-space: nowrap; }
@@ -589,7 +599,11 @@ a.chip:hover { text-decoration: underline; }
 .trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; line-height: 1.4; }
 .trow-extra { grid-area: extra; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
-  .trow { min-height: var(--row-md); }
+  /* Air between the title and the meta line, and ONE card height whether or
+     not the row carries a folder: the folder is an inline glyph like every
+     other meta item, and the min-height covers a row with no meta line. */
+  .trow { min-height: 64px; padding: 10px 4px; row-gap: 6px; }
+  .trow-meta { min-height: 22px; }
   .trow-status { height: 32px; }
   /* The status control centers against the WHOLE row (title + meta), not the
      title line alone (#74): it is the row's control, not the title's, and with
@@ -606,20 +620,28 @@ a.chip:hover { text-decoration: underline; }
       "prefix meta ctrl"
       "prefix extra extra";
   }
-  /* The folder chip is icon-only on touch: a ref ellipsized at 180px says
-     nothing, eats the meta line, and offers a ~20px tap target. 44px square,
-     the same surface .icon-btn gets here. The name is on aria-label (rows.js);
-     the tap behaviour (web twin, else the path popover) is unchanged. */
+  /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
+     says nothing and ate the meta line. No pill, no fill: the accent colour
+     already says "tappable", and a marked box read as heavier than the
+     calendar and repeat glyphs beside it, which are the same 16px.
+     The tap surface is widened INVISIBLY instead, and the inset is kept
+     inside the row's own box so it never reaches into the next card — the
+     row, the folder and the status select are the only targets here, and
+     nothing else on the meta line competes for the tap.
+     The name is on aria-label (rows.js); the tap behaviour (web twin, else
+     the path popover) is unchanged. */
   .trow-meta .trow-folder {
-    width: var(--row-sm);
-    height: var(--row-sm);
+    position: relative;
     max-width: none;
     padding: 0;
-    justify-content: center;
-    border-radius: var(--radius-md);
+    background: none;
+    border-color: transparent;
   }
   .trow-meta .trow-folder .chip-label { display: none; }
-  .trow-meta .trow-folder .icon { width: 18px; height: 18px; }
+  /* 44x44 measured on the live rows: the glyph is 18px, so -13px each way.
+     That leaves ~5px above the row's bottom edge - the widened target must
+     stay inside this card, never reach into the next one. */
+  .trow-meta .trow-folder::before { content: ""; position: absolute; inset: -13px; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -1021,6 +1043,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     min-height: var(--row-sm);
   }
   .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary { height: var(--row-sm); }
+  .folder-current .chip { min-height: var(--row-sm); }   /* pairs with line 2's 44px controls */
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }

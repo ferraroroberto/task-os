@@ -181,15 +181,36 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #74: on the phone the row's folder chip is icon-only with a full 44px
-        # tap surface - the ref ellipsized at 180px said nothing and its pill was
-        # a ~20px target - and the status select centres against the WHOLE row
+        # #74: on the phone the row's folder chip is its bare glyph with a full
+        # 44px tap surface - the ref ellipsized at 180px said nothing and its pill
+        # was a ~20px target - and the status select centres against the WHOLE row
         # (title + meta), not the title line alone.
         fchip = kitchen.locator(".trow-meta .chip-folder")
         expect(fchip).to_be_visible()
         expect(fchip.locator(".chip-label")).to_be_hidden()
         assert "{onedrive}/house/kitchen" in (fchip.get_attribute("aria-label") or "")
         assert_min_target(fchip)
+        # One glyph size on the meta line: the folder reads no heavier than the
+        # calendar or the repeat arrows beside it (round 2 of #74).
+        sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
+            "els => els.map(e => { const r = e.getBoundingClientRect();"
+            " return [Math.round(r.width), Math.round(r.height)]; })")
+        assert sizes and all(sz == [16, 16] for sz in sizes), sizes
+        # The 44px surface is INVISIBLE (no fill, no border - the accent glyph is
+        # the whole affordance) and stays inside this card: a widened target that
+        # reached into the next row would steal that row's taps.
+        hit = kitchen.evaluate(
+            "el => { const c = el.querySelector('.trow-folder');"
+            " const b = getComputedStyle(c, '::before'), cs = getComputedStyle(c);"
+            " const cb = c.getBoundingClientRect(), r = el.getBoundingClientRect();"
+            " const n = s => parseFloat(s) || 0;"
+            " return { top: cb.top + n(b.top), bottom: cb.bottom - n(b.bottom),"
+            "  rowTop: r.top, rowBottom: r.bottom, bg: cs.backgroundColor,"
+            "  border: cs.borderTopColor }; }")
+        assert hit["top"] >= hit["rowTop"] - 0.5, hit
+        assert hit["bottom"] <= hit["rowBottom"] + 0.5, hit
+        assert hit["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
+        assert hit["border"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
         sel = kitchen.locator(".trow-status")
         # ONE locator, so both rects are measured in a single evaluate_all:
         # the Board is a scroll-snapping carousel and two separate

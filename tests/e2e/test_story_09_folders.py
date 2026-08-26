@@ -167,6 +167,17 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         drawer.locator(".folder-form .button-surface"),
         drawer.locator("button.folder-pick"),
     )
+    # Round 2: line 1 wears line 2's control geometry - the chip's left edge on the
+    # input's, the delete button's right edge on the picker's, and the chip at least
+    # as tall as a control (it was a short pill floating above full-height fields).
+    align = drawer.locator("div.drawer-folder").evaluate(
+        "el => { const q = s => { const r = el.querySelector(s).getBoundingClientRect();"
+        " return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; };"
+        " return { chip: q('a.chip-folder'), trash: q('.folder-current .icon-btn'),"
+        "  input: q('#drawerFolder'), pick: q('button.folder-pick') }; }")
+    assert align["chip"][0] == align["input"][0], align
+    assert align["trash"][1] == align["pick"][1], align
+    assert align["chip"][2] >= align["input"][2], align
     assert_no_horizontal_overflow(page)
     field = drawer.locator("#drawerFolder")
     field.fill(str(inst.od / "admin" / "car"))                              # backslashes, absolute
