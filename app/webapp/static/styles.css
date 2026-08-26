@@ -516,10 +516,14 @@ a.chip:hover { text-decoration: underline; }
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  /* Two explicit rows only. The optional third line (a Search snippet) flows
+     into an IMPLICIT row via .trow-extra's grid-column — declaring it here as
+     an "extra extra" area gave every row without one an empty track AND a
+     trailing row-gap, which pushed the card's centre 3px below the status
+     select's on touch, where the gap is 6px (#74). */
   grid-template-areas:
     "main ctrl"
-    "meta meta"
-    "extra extra";
+    "meta meta";
   align-items: center;
   column-gap: 10px;
   row-gap: 2px;
@@ -532,8 +536,7 @@ a.chip:hover { text-decoration: underline; }
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "prefix main ctrl"
-    "prefix meta meta"
-    "prefix extra extra";
+    "prefix meta meta";
 }
 .trow-prefix { grid-area: prefix; align-self: center; }
 .trow:hover { background: var(--card-2); }
@@ -596,13 +599,28 @@ a.chip:hover { text-decoration: underline; }
 .trow-prio.prio-high { color: var(--danger); }
 /* chips on the meta line stay meta-sized: caption text, tight padding, ellipsized */
 .trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; line-height: 1.4; }
-.trow-extra { grid-area: extra; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.trow-extra { grid-column: 1 / -1; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.trow.has-prefix .trow-extra { grid-column: 2 / -1; }
 @media (pointer: coarse) {
   /* Air between the title and the meta line, and ONE card height whether or
      not the row carries a folder: the folder is an inline glyph like every
      other meta item, and the min-height covers a row with no meta line. */
-  .trow { min-height: 64px; padding: 10px 4px; row-gap: 6px; }
-  .trow-meta { min-height: 22px; }
+  /* Two numbers with reasons, don't "tidy" them:
+     - 13px bottom is NOT decoration. It is >= the folder target's 13px ::before
+       inset, which is what keeps that target inside this card even in the worst
+       case — a meta line that wrapped, putting the glyph flush with the meta's
+       bottom edge. Shrink this and the target reaches into the next row.
+     - 12px top, one less, because the 1px hairline lives INSIDE the border box
+       at the top with nothing balancing it at the bottom; a symmetric padding
+       leaves the content — and with it the centred status select — half a pixel
+       low. A row with no hairline above it gets the full 13px back. */
+  .trow { min-height: 64px; padding: 12px 4px 13px; row-gap: 6px; }
+  .trows > .trow:first-child,
+  .board-list > .trow:first-child,
+  .today-list > .trow:first-child { padding-top: 13px; }
+  /* 24px, not the glyph's 18: the folder's 44px tap surface is centred on
+     this line and has to fit inside the card (see .trow-folder::before). */
+  .trow-meta { min-height: 24px; }
   .trow-status { height: 32px; }
   /* The status control centers against the WHOLE row (title + meta), not the
      title line alone (#74): it is the row's control, not the title's, and with
@@ -610,14 +628,12 @@ a.chip:hover { text-decoration: underline; }
   .trow {
     grid-template-areas:
       "main ctrl"
-      "meta ctrl"
-      "extra extra";
+      "meta ctrl";
   }
   .trow.has-prefix {
     grid-template-areas:
       "prefix main ctrl"
-      "prefix meta ctrl"
-      "prefix extra extra";
+      "prefix meta ctrl";
   }
   /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
      says nothing and ate the meta line. No pill, no fill: the accent colour

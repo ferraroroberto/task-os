@@ -209,6 +209,14 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             "  border: cs.borderTopColor }; }")
         assert hit["top"] >= hit["rowTop"] - 0.5, hit
         assert hit["bottom"] <= hit["rowBottom"] + 0.5, hit
+        # What actually bounds it: the row's bottom padding is >= the ::before
+        # inset, so even a wrapped meta line (glyph flush with the meta's bottom)
+        # keeps the target inside this card. Assert the invariant, not the number.
+        pad_vs_inset = kitchen.evaluate(
+            "el => { const c = el.querySelector('.trow-folder');"
+            " return [parseFloat(getComputedStyle(el).paddingBottom),"
+            "  -parseFloat(getComputedStyle(c, '::before').bottom)]; }")
+        assert pad_vs_inset[0] >= pad_vs_inset[1], pad_vs_inset
         assert hit["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
         assert hit["border"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
         sel = kitchen.locator(".trow-status")
@@ -225,6 +233,11 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         sel_centre = sel_box["y"] + sel_box["height"] / 2
         assert abs(sel_centre - rows_centre) <= 2, (sel_box, main_box, meta_box)
         assert sel_centre > title_box["y"] + title_box["height"] / 2 + 2, (sel_box, title_box)
+        # ... and centred on the CARD, not just on title+meta: an empty third grid
+        # track used to add a trailing row-gap that put the card's centre 3px
+        # below the select's, and the 1px hairline another half (#74).
+        row_box = kitchen.bounding_box()
+        assert row_box and abs(sel_centre - (row_box["y"] + row_box["height"] / 2)) <= 0.5, (sel_box, row_box)
         kitchen.locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
