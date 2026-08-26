@@ -168,8 +168,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         drawer.locator("button.folder-pick"),
     )
     # Round 2: line 1 wears line 2's control geometry - the chip's left edge on the
-    # input's, the delete button's right edge on the picker's, and the chip at least
-    # as tall as a control (it was a short pill floating above full-height fields).
+    # input's, the delete button's right edge on the picker's, and EXACTLY the
+    # control height (it was a short pill first, then a wrapping one taller than
+    # its own row; a long ref ellipsizes on one line now, like the input does).
     align = drawer.locator("div.drawer-folder").evaluate(
         "el => { const q = s => { const r = el.querySelector(s).getBoundingClientRect();"
         " return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; };"
@@ -177,7 +178,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         "  input: q('#drawerFolder'), pick: q('button.folder-pick') }; }")
     assert align["chip"][0] == align["input"][0], align
     assert align["trash"][1] == align["pick"][1], align
-    assert align["chip"][2] >= align["input"][2], align
+    assert align["chip"][2] == align["input"][2], align
+    # ... which means a ref far too long for the chip does not grow it
+    assert drawer.locator(".folder-current a.chip-folder .chip-label").evaluate(
+        "el => el.scrollWidth > el.clientWidth || getComputedStyle(el).textOverflow === 'ellipsis'")
     assert_no_horizontal_overflow(page)
     field = drawer.locator("#drawerFolder")
     field.fill(str(inst.od / "admin" / "car"))                              # backslashes, absolute
