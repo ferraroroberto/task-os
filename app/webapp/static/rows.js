@@ -131,7 +131,16 @@ export function metaLine(t, opts) {
   }
   if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
   if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', t.recurrence));
-  if (t.folder_ref) meta.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+  if (t.folder_ref) {
+    // The phone renders this one icon-only with a 44px tap surface (#74) — the
+    // truncated ref reads as noise there — so the name lives on aria-label, not
+    // on the (hidden) chip text. Desktop keeps the label; the name still
+    // contains it, so WCAG 2.5.3 holds either way.
+    const fc = chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url });
+    fc.classList.add('trow-folder');
+    fc.setAttribute('aria-label', 'Folder ' + t.folder_ref);
+    meta.appendChild(fc);
+  }
   // the code already names the issue — no duplicate chip
   if (t.issue_ref && !t.code) meta.appendChild(issueChip(t.issue_ref));
   if (t.child_count) meta.appendChild(metaPart('kids', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));

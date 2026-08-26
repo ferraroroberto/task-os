@@ -303,16 +303,19 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         lefts = sorted(set(b[0] for b in boxes))
         assert len(lefts) == 2, boxes                                  # two columns
         assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
-        # rows are ≥44px tall; the status select is compact and centred on the title line
+        # rows are >=44px tall; the status select is compact and, since #74,
+        # centred against the WHOLE card (title + meta) rather than the title line
         assert_min_target(rows)
         assert_no_overlap(rows.locator(".trow-status"))
         heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 32 for h in heights), heights
         sel_box = watering.locator(".trow-status").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
-        assert sel_box and main_box
+        meta_box = watering.locator(".trow-meta").bounding_box()
+        assert sel_box and main_box and meta_box
         sel_center = sel_box["y"] + sel_box["height"] / 2
-        assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
+        rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
+        assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
         assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         page.screenshot(path=str(shots / "story-04-triage-9-phone.png"))
 

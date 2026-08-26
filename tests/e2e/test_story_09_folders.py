@@ -38,6 +38,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
+from tests.e2e._geometry import assert_no_horizontal_overflow
 from tests.e2e.conftest import INTERCEPT, _boot, _get, _post, _terminate
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -73,6 +74,14 @@ def folder_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[FolderIn
     finally:
         _terminate(proc)
         log.close()
+
+
+def _centers_align(*locators, tol: float = 2.0) -> None:
+    """Every element sits on ONE line: same vertical centre within `tol` px."""
+    boxes = [loc.bounding_box() for loc in locators]
+    assert all(boxes), boxes
+    centres = [b["y"] + b["height"] / 2 for b in boxes]
+    assert max(centres) - min(centres) <= tol, boxes
 
 
 def _kitchen(base: str) -> dict:
@@ -141,7 +150,24 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen")
-    expect(drawer.locator(".folder-resolved")).to_have_text(inst.od_fwd + "/house/kitchen")
+    # #74: the section is exactly TWO lines - [chip + delete] then
+    # [ref + Change + Pick]. The resolved path is the chip's own tooltip, not a
+    # third line, and the drawer's "Copy path" is gone (the phone still reaches
+    # the path through the chip's popover, asserted in step 7).
+    fchip = drawer.locator(".drawer-folder a.chip-folder")
+    assert (fchip.get_attribute("title") or "").startswith(inst.od_fwd + "/house/kitchen")
+    expect(drawer.locator(".folder-resolved")).to_have_count(0)
+    expect(drawer.locator(".folder-copy")).to_have_count(0)
+    expect(drawer.locator("div.drawer-folder > *:not([hidden])")).to_have_count(2)
+    trash = drawer.locator(".folder-current .icon-btn")
+    expect(trash).to_be_visible()
+    _centers_align(fchip, trash)                      # delete is ON the chip's line, centred on it
+    _centers_align(
+        drawer.locator("#drawerFolder"),
+        drawer.locator(".folder-form .button-surface"),
+        drawer.locator("button.folder-pick"),
+    )
+    assert_no_horizontal_overflow(page)
     field = drawer.locator("#drawerFolder")
     field.fill(str(inst.od / "admin" / "car"))                              # backslashes, absolute
     field.press("Enter")
@@ -149,6 +175,23 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(page.locator(".toast")).to_contain_text("Stored as {onedrive}/admin/car")
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/admin/car"
     page.screenshot(path=str(shots / "story-09-folders-4-desktop.png"))
+
+    # #74 removed the resolved-path line, so a placeholder this server does not
+    # know has to warn ON the chip instead - deficit tint (which has to beat
+    # `a.chip`'s accent) plus the reason in the tooltip. Never a silent chip.
+    good_color = drawer.locator(".drawer-folder a.chip-folder").evaluate("el => getComputedStyle(el).color")
+    field.fill("{nowhere}/lost")
+    field.press("Enter")
+    bad = drawer.locator(".drawer-folder a.chip-folder")
+    expect(bad).to_have_attribute("data-ref", "{nowhere}/lost")      # the re-render landed
+    assert "chip-missing" in (bad.get_attribute("class") or "")
+    assert "placeholder not configured" in (bad.get_attribute("title") or "")
+    assert bad.evaluate("el => getComputedStyle(el).color") != good_color
+    field.fill(str(inst.od / "admin" / "car"))
+    field.press("Enter")
+    back = drawer.locator(".drawer-folder a.chip-folder")
+    expect(back).to_have_attribute("data-ref", "{onedrive}/admin/car")
+    assert "chip-missing" not in (back.get_attribute("class") or "")
 
     # 5. the folder-index picker: search-as-you-type, Enter attaches the first hit
     drawer.locator("button.folder-pick").click()
@@ -185,6 +228,11 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(pop).to_have_attribute("data-mode", "copy")
     expect(pop.locator(".folder-pop-path")).to_have_text(inst.od_fwd + "/house/kitchen/plans")
     expect(pop.locator("button.folder-pop-copy")).to_be_visible()
+    # #74: still exactly two lines at 390 - the picker button drops to its
+    # glyph so [ref + Change + Pick] stays on one line without side-scroll.
+    expect(d.locator("div.drawer-folder > *:not([hidden])")).to_have_count(2)
+    expect(d.locator(".folder-pick-label")).to_be_hidden()
+    assert_no_horizontal_overflow(p)
     assert p.evaluate("document.querySelector('#taskDrawer a.chip-folder').getAttribute('href')").startswith("taskos://open?ref=")
     p.screenshot(path=str(shots / "story-09-folders-7-phone.png"))
     phone.close()

@@ -181,7 +181,29 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        expect(kitchen.locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+        # #74: on the phone the row's folder chip is icon-only with a full 44px
+        # tap surface - the ref ellipsized at 180px said nothing and its pill was
+        # a ~20px target - and the status select centres against the WHOLE row
+        # (title + meta), not the title line alone.
+        fchip = kitchen.locator(".trow-meta .chip-folder")
+        expect(fchip).to_be_visible()
+        expect(fchip.locator(".chip-label")).to_be_hidden()
+        assert "{onedrive}/house/kitchen" in (fchip.get_attribute("aria-label") or "")
+        assert_min_target(fchip)
+        sel = kitchen.locator(".trow-status")
+        # ONE locator, so both rects are measured in a single evaluate_all:
+        # the Board is a scroll-snapping carousel and two separate
+        # measurements can land at different scroll offsets.
+        assert_no_overlap(kitchen.locator(".trow-meta .chip-folder, .trow-status"))
+        main_box = kitchen.locator(".trow-main").bounding_box()
+        meta_box = kitchen.locator(".trow-meta").bounding_box()
+        sel_box = sel.bounding_box()
+        title_box = kitchen.locator(".trow-title").bounding_box()
+        assert main_box and meta_box and sel_box and title_box
+        rows_centre = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
+        sel_centre = sel_box["y"] + sel_box["height"] / 2
+        assert abs(sel_centre - rows_centre) <= 2, (sel_box, main_box, meta_box)
+        assert sel_centre > title_box["y"] + title_box["height"] / 2 + 2, (sel_box, title_box)
         kitchen.locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()

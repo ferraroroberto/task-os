@@ -291,7 +291,9 @@ html, body {
 a.chip { color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
 .chip-date, .chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
-.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
+/* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
+   link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
+.chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
 .chip-project { color: var(--muted); padding: 0 6px; }
 .chip-type { padding: 2px 5px; color: var(--muted); }
 
@@ -323,18 +325,23 @@ a.chip:hover { text-decoration: underline; }
 .folder-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .folder-pop-actions .button-ghost, .folder-pop-actions .button-surface { min-height: 32px; padding: 0 10px; font-size: var(--font-caption); text-decoration: none; }
 
-/* Drawer: Folder section — chip + resolved path + editor + folder-index picker */
+/* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
-.folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Two lines, never more (#74): [chip + delete] then [ref + Change + Pick].
+   nowrap so the delete button stays on the chip's line, vertically centered
+   against it however many lines the ref wraps to; the chip is the only item
+   allowed to shrink. The resolved path is not repeated here — it is the
+   chip's own title, and the phone reads it from the chip's copy popover. */
+.folder-current { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 /* A folder ref can be long — the drawer has room to wrap it, unlike the
    compact table/tree/board rows that keep the base .chip's nowrap ellipsis. */
-.folder-current .chip { white-space: normal; overflow-wrap: anywhere; }
+.folder-current .chip { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .folder-current .chip-label { overflow: visible; text-overflow: clip; }
-.folder-resolved { font-size: var(--font-caption); word-break: break-all; }
-.folder-copy { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); }
-.folder-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.folder-current .icon-btn { flex: none; }
+.folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
-.folder-pick { grid-column: 1 / -1; justify-self: start; white-space: nowrap; }
+.folder-form .button-surface, .folder-pick { white-space: nowrap; }
+.folder-pick { display: inline-flex; align-items: center; gap: 4px; }
 .folder-picker { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
 .folder-picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
 .folder-picker-btn {
@@ -584,6 +591,35 @@ a.chip:hover { text-decoration: underline; }
 @media (pointer: coarse) {
   .trow { min-height: var(--row-md); }
   .trow-status { height: 32px; }
+  /* The status control centers against the WHOLE row (title + meta), not the
+     title line alone (#74): it is the row's control, not the title's, and with
+     the folder chip down to its glyph there is finally room for it. */
+  .trow {
+    grid-template-areas:
+      "main ctrl"
+      "meta ctrl"
+      "extra extra";
+  }
+  .trow.has-prefix {
+    grid-template-areas:
+      "prefix main ctrl"
+      "prefix meta ctrl"
+      "prefix extra extra";
+  }
+  /* The folder chip is icon-only on touch: a ref ellipsized at 180px says
+     nothing, eats the meta line, and offers a ~20px tap target. 44px square,
+     the same surface .icon-btn gets here. The name is on aria-label (rows.js);
+     the tap behaviour (web twin, else the path popover) is unchanged. */
+  .trow-meta .trow-folder {
+    width: var(--row-sm);
+    height: var(--row-sm);
+    max-width: none;
+    padding: 0;
+    justify-content: center;
+    border-radius: var(--radius-md);
+  }
+  .trow-meta .trow-folder .chip-label { display: none; }
+  .trow-meta .trow-folder .icon { width: 18px; height: 18px; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -997,6 +1033,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Folder line 2 stays ONE line at 390px (#74): the picker drops to its
+     glyph. aria-label + title still say "Pick from folder index". */
+  .folder-pick-label { display: none; }
+  .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .is-busy .icon { animation: none; }

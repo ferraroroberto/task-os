@@ -339,8 +339,8 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 96 for h in heights), heights
         # touch fallback for the drag: the row's compact status select —
-        # right-aligned, ≤32px tall, auto width, its center inside the title
-        # line's vertical span (UX rounds 1–3, issues #27/#32/#46)
+        # right-aligned, ≤32px tall, auto width, its centre on the card's own
+        # centre (title + meta) since #74 (UX rounds 1–3, issues #27/#32/#46)
         first_item = _col(page, "doing").locator(".trow").first
         row_select = first_item.locator(".trow-status")
         expect(row_select).to_be_visible()
@@ -351,8 +351,11 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert sel_box["height"] <= 32, sel_box                      # compact, never a 44px row of its own
         assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
         assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
+        meta_box = first_item.locator(".trow-meta").bounding_box()
+        assert meta_box
         sel_center = sel_box["y"] + sel_box["height"] / 2
-        assert main_box["y"] <= sel_center <= main_box["y"] + main_box["height"], (sel_box, main_box)
+        rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
+        assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
         # flat list, not a card: no rounded box on the column's list
         assert _col(page, "doing").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
