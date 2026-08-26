@@ -285,7 +285,7 @@ export function mountSearch(box, host, opts) {
     let link;
     if (h.kind === 'folders' || h.kind === 'emails') {
       // the title IS the opener link (a PC opens Explorer / the .msg; the
-      // phone gets the path-to-copy popover — folderChip's own rule)
+      // phone opens the web twin, else the path-to-copy popover — folderChip's own rule)
       link = folderChip(h.ref, { resolved: h.path || null, label: h.kind === 'folders' ? (h.name || h.title) : h.title });
       link.classList.add('search-hit-link');
       link.title = (h.kind === 'emails' ? 'Open the .msg on this PC — ' : 'Open the folder on this PC — ') + (h.path || h.ref);

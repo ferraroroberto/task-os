@@ -8,6 +8,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
+import { api } from './api.js';
 
 export const STATUSES = ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'];
 export const PRIORITIES = ['high', 'medium', 'low', 'none'];
@@ -115,15 +116,32 @@ function shortUrl(u) {
 // (taskos://open?ref=…, opener/README.md). The page never resolves a ref
 // itself: `resolved` is the server's absolute path (this install's
 // placeholders) and is only ever shown — as the tooltip, in the copy popover.
-// Coarse pointer (phone): no Explorer to open, so the click shows the path
-// to copy (+ the web URL when the task carries one). Fine pointer: the link
-// goes to the opener, and once — the first click ever on this browser — a
-// hint appears under the chip: "Nothing opened? Install the opener".
+// Coarse pointer (phone): no Explorer to open, so the tap opens the chip's
+// web twin directly — the carried `url`, else one resolved on demand from
+// POST /api/resolve (web_roots, #28/#72); only a ref with no web twin at all
+// falls back to the path-to-copy popover. Fine pointer: the link goes to the
+// opener, and once — the first click ever on this browser — a hint appears
+// under the chip: "Nothing opened? Install the opener".
 const HINT_KEY = 'task-os.opener-hint';
 export const OPENER_SCHEME = 'taskos://open?ref=';
 
 export function openerHref(ref) {
   return OPENER_SCHEME + encodeURIComponent(String(ref || ''));
+}
+
+/** The chip's web twin, established once per chip: the `url` it carries, else
+ *  what POST /api/resolve derives from config.web_roots (#28) — null when
+ *  neither. Link chips (a .msg email ref, an attached file) never carry a
+ *  url, so the on-demand resolve is what gives them a one-tap open (#72). */
+async function chipWebUrl(info) {
+  if (info.url) return info.url;
+  if (info.webChecked) return null;
+  info.webChecked = true;
+  try {
+    const r = await api('/api/resolve', { method: 'POST', body: { ref: info.ref } });
+    info.url = r.web_url || null;
+  } catch (_) { info.url = null; }
+  return info.url;
 }
 
 let pop = null;
@@ -242,7 +260,15 @@ export function folderChip(ref, opts) {
     ev.stopPropagation();          // never also opens the row's drawer
     if (window.matchMedia('(pointer: coarse)').matches) {
       ev.preventDefault();
-      showFolderPopover(el, info, 'copy');
+      if (info.url) { window.open(info.url, '_blank', 'noopener'); return; }
+      chipWebUrl(info).then(function (url) {
+        if (url) {
+          // an async window.open can be popup-blocked — fall back to navigating
+          if (!window.open(url, '_blank', 'noopener')) location.assign(url);
+        } else {
+          showFolderPopover(el, info, 'copy');
+        }
+      });
       return;
     }
     let seen = false;
