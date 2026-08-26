@@ -1,11 +1,12 @@
 """Folders route family — placeholder resolution + the folder index (Step 9).
 
     POST /api/resolve  {"ref": "<ref or absolute path>"}
-        → {ref, path, resolved, unresolved, href}
+        → {ref, path, resolved, unresolved, href, web_url}
           ``ref`` is the value folded back onto the placeholders (an absolute
           path pasted in the drawer becomes ``{onedrive}/…`` — the portable
           form the task stores); ``path`` is this server's resolved absolute
-          path (display only); ``href`` the ``taskos://open?ref=…`` link.
+          path (display only); ``href`` the ``taskos://open?ref=…`` link;
+          ``web_url`` the cloud twin from ``config.web_roots`` (#28), or null.
     GET  /api/folders/search?q=<terms>&limit=30
         → {q, items: [{path, ref, name, depth}], count, indexing, reason?}
           substring AND search over the folder index (see src/folder_index.py);
@@ -49,9 +50,9 @@ def _service(request: Request) -> Any:
 
 @router.post("/resolve")
 def resolve(request: Request, body: ResolveBody) -> dict[str, Any]:
-    ph = request.app.state.config.placeholders
-    folded = placeholders.to_ref(body.ref, ph)
-    r = placeholders.resolve(folded, ph)
+    cfg = request.app.state.config
+    folded = placeholders.to_ref(body.ref, cfg.placeholders)
+    r = placeholders.resolve(folded, cfg.placeholders, cfg.web_roots)
     return r.as_dict()
 
 

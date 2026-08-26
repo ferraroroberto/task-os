@@ -11,10 +11,11 @@ from fastapi.testclient import TestClient
 
 from src import db as dbmod
 from src.config import load_config
-from src.placeholders import is_ref, normalize_path, opener_url, resolve, to_ref
+from src.placeholders import is_ref, normalize_path, opener_url, resolve, to_ref, web_url
 from tests.conftest import write_test_config
 
 PH = {"onedrive": "E:/onedrive", "user": "rober", "sharepoint:docs": "E:/onedrive/Tenant/docs - Documents"}
+WR = {"onedrive": "https://cloud.example/od/", "sharepoint:docs": "https://tenant.example/sites/docs"}
 
 
 def test_resolve_known_tokens() -> None:
@@ -56,14 +57,45 @@ def test_normalize_and_is_ref_and_url() -> None:
     assert opener_url("{onedrive}/a b/c#d") == "taskos://open?ref=%7Bonedrive%7D%2Fa%20b%2Fc%23d"
 
 
+def test_web_url_derives_the_cloud_twin() -> None:
+    # trailing slash on the root is tolerated; segments are percent-encoded
+    assert web_url("{onedrive}/house/kitchen", WR) == "https://cloud.example/od/house/kitchen"
+    assert web_url("{onedrive}/a b/c#d", WR) == "https://cloud.example/od/a%20b/c%23d"
+    assert web_url("{sharepoint:docs}/plans", WR) == "https://tenant.example/sites/docs/plans"
+    assert web_url("{onedrive}", WR) == "https://cloud.example/od"  # the root itself
+    assert web_url("{onedrive}\\back\\slashes", WR) == "https://cloud.example/od/back/slashes"
+
+
+def test_web_url_never_guesses() -> None:
+    assert web_url("{user}/code", WR) is None                  # token without a web root
+    assert web_url("E:/onedrive/house", WR) is None            # absolute path, no leading token
+    assert web_url("{onedrive}/x/{user}/y", WR) is None        # token left in the remainder
+    assert web_url("", WR) is None
+    assert web_url("{onedrive}/house", {}) is None
+    assert web_url("{onedrive}/house", {"onedrive": "  "}) is None
+
+
+def test_resolve_carries_web_url_only_when_roots_given() -> None:
+    assert resolve("{onedrive}/house", PH).web_url is None
+    r = resolve("{onedrive}/house", PH, WR)
+    assert r.web_url == "https://cloud.example/od/house"
+    assert r.as_dict()["web_url"] == "https://cloud.example/od/house"
+    assert resolve("{user}/code", PH, WR).web_url is None
+
+
 def test_config_flattens_nested_sharepoint_map(tmp_path: Path) -> None:
     cfg = write_test_config(tmp_path / "c.json")
     raw = json.loads(cfg.read_text(encoding="utf-8"))
     raw["placeholders"] = {"onedrive": "E:/od", "user": "me", "sharepoint": {"docs": "E:/od/T/docs", "hr": "E:/od/T/hr"}}
+    raw["web_roots"] = {"onedrive": "https://c.example/od", "sharepoint": {"hr": "https://t.example/hr"}}
     cfg.write_text(json.dumps(raw), encoding="utf-8")
-    ph = load_config(cfg).placeholders
+    loaded = load_config(cfg)
+    ph = loaded.placeholders
     assert ph == {"onedrive": "E:/od", "user": "me", "sharepoint:docs": "E:/od/T/docs", "sharepoint:hr": "E:/od/T/hr"}
     assert resolve("{sharepoint:hr}/x", ph).path == "E:/od/T/hr/x"
+    # web_roots flattens the same way, and a missing key is just the empty map
+    assert loaded.web_roots == {"onedrive": "https://c.example/od", "sharepoint:hr": "https://t.example/hr"}
+    assert web_url("{sharepoint:hr}/x", loaded.web_roots) == "https://t.example/hr/x"
 
 
 # ------------------------------------------------------------------ API
@@ -72,7 +104,11 @@ def test_config_flattens_nested_sharepoint_map(tmp_path: Path) -> None:
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
-    cfg = write_test_config(tmp_path / "config.json", placeholders={"onedrive": "E:/onedrive", "user": "rober"})
+    cfg = write_test_config(
+        tmp_path / "config.json",
+        placeholders={"onedrive": "E:/onedrive", "user": "rober"},
+        web_roots={"onedrive": "https://cloud.example/od"},
+    )
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(cfg))
     from app.webapp.server import create_app
 
@@ -83,7 +119,10 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def test_api_resolve_ref_and_path(client: TestClient) -> None:
     r = client.post("/api/resolve", json={"ref": "{onedrive}/house"}).json()
     assert r == {"ref": "{onedrive}/house", "path": "E:/onedrive/house", "resolved": True, "unresolved": [],
-                 "href": "taskos://open?ref=%7Bonedrive%7D%2Fhouse"}
+                 "href": "taskos://open?ref=%7Bonedrive%7D%2Fhouse",
+                 "web_url": "https://cloud.example/od/house"}
+    # {user} has no web root → web_url is null, never a guess
+    assert client.post("/api/resolve", json={"ref": "{user}/code"}).json()["web_url"] is None
     # an absolute path folds back onto the placeholder — the portable form the drawer stores
     r = client.post("/api/resolve", json={"ref": "E:\\onedrive\\house\\kitchen"}).json()
     assert r["ref"] == "{onedrive}/house/kitchen" and r["path"] == "E:/onedrive/house/kitchen"
@@ -107,16 +146,19 @@ def test_api_resolve_carries_the_ref_in_the_body_not_the_query(client: TestClien
 
 def test_task_payloads_carry_folder_resolved_and_url(client: TestClient) -> None:
     t = client.post("/api/tasks", json={"title": "Kitchen", "folder_ref": "{onedrive}/house/kitchen"}).json()
-    assert t["folder_resolved"] == "E:/onedrive/house/kitchen" and t["folder_url"] is None
+    # no explicit link yet → the web_roots-derived cloud twin (#28)
+    assert t["folder_resolved"] == "E:/onedrive/house/kitchen"
+    assert t["folder_url"] == "https://cloud.example/od/house/kitchen"
     client.post(f"/api/tasks/{t['id']}/links", json={"url": "{onedrive}/house/kitchen", "kind": "folder"})
     client.post(f"/api/tasks/{t['id']}/links", json={"url": "https://example.com/sites/house/kitchen", "kind": "folder"})
     d = client.get(f"/api/tasks/{t['id']}").json()
+    # an explicit links(kind=folder) web link always beats the derivation
     assert d["folder_url"] == "https://example.com/sites/house/kitchen"
     row = [x for x in client.get("/api/tasks").json()["items"] if x["id"] == t["id"]][0]
-    assert row["folder_resolved"] == "E:/onedrive/house/kitchen" and row["folder_url"].startswith("https://")
-    # unknown placeholder → unknown, never a half path
+    assert row["folder_resolved"] == "E:/onedrive/house/kitchen" and row["folder_url"].startswith("https://example.com/")
+    # unknown placeholder → unknown, never a half path — and no web root → no derived URL
     u = client.post("/api/tasks", json={"title": "Elsewhere", "folder_ref": "{sharepoint:x}/y"}).json()
-    assert u["folder_resolved"] is None
+    assert u["folder_resolved"] is None and u["folder_url"] is None
     n = client.post("/api/tasks", json={"title": "No folder"}).json()
     assert n["folder_resolved"] is None and n["folder_url"] is None
 
