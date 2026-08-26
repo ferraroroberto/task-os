@@ -41,9 +41,9 @@ reindex when the index file is missing / older than 24 h, hourly re-check).
 All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
 over the last two so the search box reads the same folder index and issue
-cache the services keep warm. The lifespan also installs the repo's folder resolver
-(``src.placeholders``) so every task payload carries ``folder_resolved`` /
-``folder_url``.
+cache the services keep warm. The lifespan also installs the repo's folder
+resolvers (``src.placeholders``: path + ``config.web_roots`` cloud twin, #28)
+so every task payload carries ``folder_resolved`` / ``folder_url``.
 
 Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
 "detail"?}}`` — for domain errors (``src.tasks_repo.RepoError`` → its
@@ -177,6 +177,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         if not a["configured"]:
             logger.warning("⚠️ search: %s adapter off — %s", a["kind"], a["reason"])
     repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
+    repo.set_folder_web_resolver(lambda ref: placeholders.web_url(ref, config.web_roots))
     app.state.mirror.start()
     app.state.backup.start()
     app.state.issues.start()
@@ -189,6 +190,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.issues.stop()
         app.state.folders.stop()
         repo.set_folder_resolver(None)
+        repo.set_folder_web_resolver(None)
 
 
 def _install_error_handlers(app: FastAPI) -> None:

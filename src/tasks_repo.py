@@ -33,12 +33,13 @@ mirror's debounced exporter (``src/mirror.py``) hangs off this so a change
 made through the API, the CLI's local backend or an importer all reach the
 mirror through the one layer that owns the rules.
 
-Folder refs stay unresolved in the row (``{onedrive}/house`` — plan §04); the
-one presentation hook, :func:`set_folder_resolver`, lets the app plug the
-placeholder resolution in so every summary carries ``folder_resolved`` (this
-server's absolute path, for display) and ``folder_url`` (the web link from a
-``links(kind=folder)`` row, when one exists) — the UI never resolves a ref
-client-side (Step 9).
+Folder refs stay unresolved in the row (``{onedrive}/house`` — plan §04); two
+presentation hooks, :func:`set_folder_resolver` and
+:func:`set_folder_web_resolver`, let the app plug the placeholder resolution
+in so every summary carries ``folder_resolved`` (this server's absolute path,
+for display) and ``folder_url`` (the web link from a ``links(kind=folder)``
+row when one exists, else the cloud twin derived from ``config.web_roots`` —
+#28) — the UI never resolves a ref client-side (Step 9).
 """
 
 from __future__ import annotations
@@ -143,6 +144,18 @@ def set_folder_resolver(fn: FolderResolver | None) -> None:
     — unknown, never a guessed path."""
     global _folder_resolver
     _folder_resolver = fn
+
+
+_folder_web_resolver: FolderResolver | None = None
+
+
+def set_folder_web_resolver(fn: FolderResolver | None) -> None:
+    """Install (or clear) the ``ref → cloud web URL`` hook (#28). Only the
+    fallback: an explicit ``links(kind=folder)`` web link on the task always
+    wins. The app sets it from ``config.web_roots``
+    (``src.placeholders.web_url``); with none installed, no derivation."""
+    global _folder_web_resolver
+    _folder_web_resolver = fn
 
 
 # ----------------------------------------------------------- write hooks
@@ -296,6 +309,11 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
             (row["id"],),
         ).fetchone()
         out["folder_url"] = link["url"] if link else None
+        if out["folder_url"] is None and _folder_web_resolver is not None:
+            try:
+                out["folder_url"] = _folder_web_resolver(str(ref))
+            except Exception:  # noqa: BLE001 — a resolver bug never breaks a list
+                logger.exception("⚠️ folder web resolver failed for %r", ref)
     return out
 
 

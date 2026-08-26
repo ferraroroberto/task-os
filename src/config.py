@@ -97,6 +97,7 @@ class AppConfig:
     port: int = DEFAULT_PORT
     issues: IssuesConfig = field(default_factory=IssuesConfig)
     placeholders: dict[str, str] = field(default_factory=dict)
+    web_roots: dict[str, str] = field(default_factory=dict)
     mirror: MirrorConfig = field(default_factory=MirrorConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
@@ -166,6 +167,8 @@ def load_config(path: Path | None = None) -> AppConfig:
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
+    # same nested-map flattening as placeholders: web_roots.sharepoint.docs → "sharepoint:docs"
+    web_roots = _flatten_placeholders(_as_dict(raw.get("web_roots")))
 
     try:
         port = int(raw.get("port", DEFAULT_PORT))
@@ -183,6 +186,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             sync_minutes=int(issues.get("sync_minutes", 10) or 10),
         ),
         placeholders=placeholders,
+        web_roots=web_roots,
         mirror=MirrorConfig(
             dir=str(mirror.get("dir", MirrorConfig.dir)),
             backup_dir=str(mirror.get("backup_dir", MirrorConfig.backup_dir)),

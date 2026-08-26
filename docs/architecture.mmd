@@ -25,7 +25,7 @@ flowchart LR
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
-    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver()"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver() · set_folder_web_resolver()"]
   end
 
   subgraph domain["Domain · src/"]
@@ -115,7 +115,7 @@ flowchart LR
   pwa -.->|"folder chip → taskos://open?ref=…"| opener
   opener -.->|"start explorer"| roots
   cli -->|"folders (app down)"| folderidx
-  repo -->|"folder_resolved via set_folder_resolver"| placeholders
+  repo -->|"folder_resolved · folder_url (web_roots) via the two resolver hooks"| placeholders
   folderidx --> placeholders
   folderidx -->|"scan"| roots
   folderidx <-->|"save / load"| idxfile

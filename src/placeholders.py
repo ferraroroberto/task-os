@@ -21,10 +21,17 @@ opener flips them for Explorer).
 
 Unknown tokens are left verbatim and reported in ``unresolved`` — an
 unestablished fact is its own visible state, never a silently wrong path.
+
+:func:`web_url` is the phone's third road (#28): a ref whose **leading** token
+has a ``config.web_roots`` entry gets the provider's *web* URL derived —
+``web_roots.onedrive + "/house/kitchen"``, each segment percent-encoded — so a
+device with no opener can still open the folder in the cloud UI. No web root,
+no leading token, or a token left in the remainder → ``None``, never a guess.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from urllib.parse import quote
@@ -33,6 +40,7 @@ from src.config import resolve_placeholders, unresolved_placeholders
 
 OPENER_SCHEME = "taskos"
 _TOKEN_START = "{"
+_LEADING_TOKEN_RE = re.compile(r"^\{([A-Za-z0-9_:.-]+)\}(?:/(.*))?$")
 
 
 def normalize_path(path: str) -> str:
@@ -57,6 +65,27 @@ def opener_url(ref: str) -> str:
     return f"{OPENER_SCHEME}://open?ref={quote(ref or '', safe='')}"
 
 
+def web_url(ref: str, web_roots: Mapping[str, str]) -> str | None:
+    """The cloud web twin of a ref, or ``None`` when there is none to derive (#28).
+
+    ``{onedrive}/house/kitchen`` with ``web_roots = {"onedrive": "https://…"}``
+    → ``https://…/house/kitchen``, each remaining segment percent-encoded (the
+    join is a plain path append — the root decides everything before it).
+    ``None`` when the ref doesn't *start* with a token, the token has no
+    non-empty web root, or the remainder still carries a ``{token}`` — a URL
+    with an unexpanded token in it would be a guess, not a twin.
+    """
+    m = _LEADING_TOKEN_RE.match(normalize_path(ref or ""))
+    if not m:
+        return None
+    root = str(web_roots.get(m.group(1)) or "").strip().rstrip("/")
+    rest = m.group(2) or ""
+    if not root or _TOKEN_START in rest:
+        return None
+    encoded = "/".join(quote(seg, safe="") for seg in rest.split("/") if seg)
+    return f"{root}/{encoded}" if encoded else root
+
+
 @dataclass(frozen=True)
 class Resolved:
     """What the API hands the UI for one ref."""
@@ -65,6 +94,7 @@ class Resolved:
     path: str
     resolved: bool
     unresolved: list[str] = field(default_factory=list)
+    web_url: str | None = None
 
     @property
     def href(self) -> str:
@@ -76,11 +106,12 @@ class Resolved:
         return d
 
 
-def resolve(ref: str, placeholders: Mapping[str, str]) -> Resolved:
+def resolve(ref: str, placeholders: Mapping[str, str], web_roots: Mapping[str, str] | None = None) -> Resolved:
     """Expand every known ``{token}`` in ``ref``; unknown ones stay and are listed.
 
     A value with no token at all (an absolute path pasted as-is) resolves to
-    itself. The result path uses forward slashes.
+    itself. The result path uses forward slashes. ``web_roots`` (when given)
+    adds the derived cloud twin as ``web_url`` — see :func:`web_url`.
     """
     ref = (ref or "").strip()
     expanded = resolve_placeholders(ref, placeholders)
@@ -90,6 +121,7 @@ def resolve(ref: str, placeholders: Mapping[str, str]) -> Resolved:
         path=normalize_path(expanded) if expanded else "",
         resolved=not missing and bool(expanded),
         unresolved=missing,
+        web_url=web_url(ref, web_roots) if web_roots else None,
     )
 
 
