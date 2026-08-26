@@ -13,6 +13,7 @@ from src import db as dbmod
 from src import tasks_repo as repo
 from src.backup import KEEP, BackupScheduler, backup_name, list_backups, next_run_after, run_backup
 from src.config import load_config
+from src.db import SCHEMA_VERSION
 from tests.conftest import write_test_config
 
 
@@ -36,7 +37,7 @@ def test_run_backup_writes_a_consistent_dated_copy(db: Path, tmp_path: Path) -> 
     copy = sqlite3.connect(target)
     try:
         assert copy.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 5
-        assert copy.execute("SELECT value FROM settings WHERE key='schema_version'").fetchone()[0] == "4"
+        assert copy.execute("SELECT value FROM settings WHERE key='schema_version'").fetchone()[0] == str(SCHEMA_VERSION)
     finally:
         copy.close()
     # a second run the same day refreshes the same file (no duplicates)

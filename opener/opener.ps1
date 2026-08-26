@@ -56,6 +56,59 @@ if ($Url.Contains('"')) {
     exit 3
 }
 
+# taskos://resume?session=<session_01…> — reopen a Claude Code session in a
+# terminal on THIS PC (#77). The web session id is embedded in the local
+# transcript (.jsonl) Claude Code wrote, so one recursive search maps it to the
+# local session uuid and the project folder it ran in. Unknown here (another
+# PC's session, pruned transcripts) -> open the conversation on the web instead.
+# Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>" /
+# "resume-web: <url>" instead of launching; TASKOS_OPENER_PROJECTS overrides
+# the transcript root (default %USERPROFILE%\.claude\projects).
+if ($Url -match '^taskos://resume\?session=(session_[A-Za-z0-9]+)$') {
+    $id = $Matches[1]
+    $projects = if ($env:TASKOS_OPENER_PROJECTS) { $env:TASKOS_OPENER_PROJECTS }
+                else { Join-Path $env:USERPROFILE '.claude\projects' }
+    $hit = $null
+    if (Test-Path -LiteralPath $projects) {
+        $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue
+        # A transcript that merely MENTIONS another session's id (a grep result,
+        # a handoff note) must not shadow the owner: the owner carries the id in
+        # its own session-url field. Only when no transcript carries that marker
+        # fall back to a bare-id match (older transcript shapes).
+        $marker = '"url":"https://claude.ai/code/' + $id + '"'
+        $hit = $files |
+            Where-Object { Select-String -LiteralPath $_.FullName -Pattern $marker -SimpleMatch -Quiet } |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($null -eq $hit) {
+            $hit = $files |
+                Where-Object { Select-String -LiteralPath $_.FullName -Pattern $id -SimpleMatch -Quiet } |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        }
+    }
+    if ($null -eq $hit) {
+        $web = "https://claude.ai/code/$id"
+        if ($env:TASKOS_OPENER_DRYRUN) { "resume-web: $web"; exit 0 }
+        Start-Process $web
+        Show-Notice @("This PC has no local transcript for $id.", 'Opened the conversation on the web instead.')
+        exit 0
+    }
+    $uuid = $hit.BaseName
+    # the transcript records the repo it ran in ("cwd") - resume from there
+    $dir = $env:USERPROFILE
+    $line = Select-String -LiteralPath $hit.FullName -Pattern '"cwd":"((?:[^"\\]|\\.)*)"' | Select-Object -First 1
+    if ($line -and $line.Matches[0].Groups[1].Value) {
+        $raw = $line.Matches[0].Groups[1].Value -replace '\\\\', '\'
+        if (Test-Path -LiteralPath $raw) { $dir = $raw }
+    }
+    if ($env:TASKOS_OPENER_DRYRUN) { "resume: $uuid in $dir"; exit 0 }
+    if (Get-Command wt -ErrorAction SilentlyContinue) {
+        Start-Process wt -ArgumentList '-d', $dir, 'powershell', '-NoProfile', '-NoExit', '-Command', "claude --resume $uuid"
+    } else {
+        Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoProfile', '-NoExit', '-Command', "claude --resume $uuid"
+    }
+    exit 0
+}
+
 $handler = Join-Path $PSScriptRoot 'opener.cmd'
 if (-not (Test-Path -LiteralPath $handler)) {
     Show-Notice @("The handler is missing: $handler", 'Re-run the install command from Settings -> Folder opener.')

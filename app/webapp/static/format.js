@@ -155,7 +155,7 @@ function popEl() {
   pop.hidden = true;
   document.body.appendChild(pop);
   document.addEventListener('click', function (ev) {
-    if (!pop.hidden && !pop.contains(ev.target) && !ev.target.closest('.chip-folder')) hideFolderPopover();
+    if (!pop.hidden && !pop.contains(ev.target) && !ev.target.closest('.chip-folder, .chip-ai')) hideFolderPopover();
   });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') hideFolderPopover(); });
   window.addEventListener('scroll', hideFolderPopover, true);
@@ -281,6 +281,72 @@ export function folderChip(ref, opts) {
   return el;
 }
 
+// --------------------------------------------------------- AI conversation chips
+// One kind for every provider (#77) — a Claude Code / claude.ai / ChatGPT /
+// Gemini / Copilot conversation URL gets the same bot chip, no per-provider
+// split. Coarse pointer: the tap opens the conversation (new tab) — on a phone
+// there is no CLI to resume into. Fine pointer: a popover offers "Open
+// conversation" (the usual choice) and, for a Claude Code session, "Resume in
+// CLI on this PC" through the same per-PC opener the folder chips use
+// (taskos://resume?session=…): the opener finds the local transcript and
+// reopens the session in a terminal, falling back to the web page when this PC
+// never saw that session.
+export const AI_URL_RE = /^https?:\/\/(?:www\.)?(?:claude\.ai\/|chatgpt\.com\/|chat\.openai\.com\/|gemini\.google\.com\/|copilot\.microsoft\.com\/|github\.com\/copilot(?:\/|$))/i;
+const CLAUDE_SESSION_RE = /claude\.ai\/code\/(session_[A-Za-z0-9]+)/;
+export const RESUME_SCHEME = 'taskos://resume?session=';
+
+function showAiPopover(anchor, url) {
+  const el = popEl();
+  el.innerHTML = '';
+  el.dataset.mode = 'ai';
+  const t = document.createElement('p');
+  t.className = 'folder-pop-title';
+  t.textContent = 'AI conversation';
+  el.appendChild(t);
+  const row = document.createElement('div');
+  row.className = 'folder-pop-actions';
+  const web = document.createElement('a');
+  web.className = 'button-surface ai-pop-open';
+  web.href = url;
+  web.target = '_blank';
+  web.rel = 'noopener';
+  web.innerHTML = icon('external-link') + ' Open conversation';
+  web.addEventListener('click', hideFolderPopover);
+  row.appendChild(web);
+  const session = CLAUDE_SESSION_RE.exec(url);
+  if (session) {
+    const cli = document.createElement('a');
+    cli.className = 'button-ghost ai-pop-resume';
+    cli.href = RESUME_SCHEME + encodeURIComponent(session[1]);
+    cli.innerHTML = icon('terminal') + ' Resume in CLI on this PC';
+    cli.title = 'Reopens the session in a terminal via the task-os opener; falls back to the web page if this PC never saw it';
+    cli.addEventListener('click', hideFolderPopover);
+    row.appendChild(cli);
+  }
+  el.appendChild(row);
+  el.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth || 320;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  let top = r.bottom + 6;
+  if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
+/** The AI-conversation chip: bot glyph, opens on tap (phone) or via the
+ *  open/resume popover (desktop). */
+export function aiChip(url, label) {
+  const el = chipEl('ai', label || 'AI chat', url, 'bot');
+  el.addEventListener('click', function (ev) {
+    ev.stopPropagation();          // never also opens the row's drawer
+    if (window.matchMedia('(pointer: coarse)').matches) return;   // plain link → new tab
+    ev.preventDefault();
+    showAiPopover(el, url);
+  });
+  return el;
+}
+
 /** Build a chip for one target string, kind inferred from its shape.
  *  `opts` (folder refs only): {resolved, url} from the task payload. */
 export function chipFor(target, label, opts) {
@@ -288,6 +354,7 @@ export function chipFor(target, label, opts) {
   if (/^https?:\/\//i.test(t)) {
     const issue = /github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/.exec(t);
     if (issue) return chipEl('issue', label || (issue[1] + '#' + issue[2]), t);
+    if (AI_URL_RE.test(t)) return aiChip(t, label);
     return chipEl('web', label || shortUrl(t), t);
   }
   if (/^mailto:/i.test(t)) return chipEl('email', label || t.slice(7), t);

@@ -34,7 +34,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 4
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 5
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -133,6 +133,19 @@ def test_links_issue_and_people(seeded: TestClient) -> None:
     assert seeded.get(f"/api/tasks/{t}/links").json()["items"][0]["url"] == "https://example.com"
     assert seeded.delete(f"/api/tasks/{t}/links/{lk.json()['id']}").json()["deleted"] == 1
     assert seeded.delete(f"/api/tasks/{t}/links/{lk.json()['id']}").status_code == 404
+
+    # ai kind (#77): accepted, and the FIRST ai link surfaces on every list
+    # summary as ai_url/ai_label — the row's bot chip reads it from there.
+    assert seeded.post(f"/api/tasks/{t}/links", json={"url": "x", "kind": "bogus"}).status_code == 422
+    ai = seeded.post(
+        f"/api/tasks/{t}/links",
+        json={"url": "https://claude.ai/code/session_01TestOnly", "label": "drift chat", "kind": "ai"},
+    )
+    assert ai.status_code == 201 and ai.json()["kind"] == "ai"
+    seeded.post(f"/api/tasks/{t}/links", json={"url": "https://chatgpt.com/c/2", "kind": "ai"})
+    linky = next(i for i in seeded.get("/api/tasks?q=Linky").json()["items"] if i["id"] == t)
+    assert linky["ai_url"] == "https://claude.ai/code/session_01TestOnly"
+    assert linky["ai_label"] == "drift chat"
 
     iss = seeded.put(f"/api/tasks/{t}/issue", json={"repo": "example/repo", "number": 3})
     assert iss.status_code == 200 and iss.json()["type"] == "coding"

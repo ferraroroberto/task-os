@@ -385,14 +385,14 @@ def test_migration_v4_adds_mirror_state_and_is_idempotent(tmp_path: Path, monkey
         + "INSERT INTO settings VALUES ('schema_version', '3'); COMMIT;"
     )
     conn.close()
-    assert dbmod.init_db(db) == 4
+    assert dbmod.init_db(db) == schema.SCHEMA_VERSION
     conn = dbmod.connect(db)
     try:
         assert "mirror_state" in schema.table_names(conn)
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(mirror_state)")]
         assert cols == ["task_id", "path", "exported_at", "file_mtime_ns", "content_hash"]
         n = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 4
+        assert schema.migrate(conn) == schema.SCHEMA_VERSION
         assert conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == n
     finally:
         conn.close()

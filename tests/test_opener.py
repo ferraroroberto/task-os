@@ -11,6 +11,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -190,6 +191,57 @@ def test_the_launcher_opens_a_folder_the_same_way_the_handler_does(pc: dict[str,
     assert _out(run_launcher(opener_url("{sharepoint:docs}/plans"), pc)) == f"open: {pc['sp']}"
     # the accented path (the inline-PowerShell branch inside opener.cmd) too
     assert _out(run_launcher(opener_url("{onedrive}/café"), pc)) == f"missing: {pc['od']}\\café"
+
+
+@windows_only
+def test_resume_finds_the_transcript_and_targets_its_repo(pc: dict[str, str], tmp_path: Path) -> None:
+    """taskos://resume?session=… (#77): the launcher maps the web session id to
+    the local transcript's uuid + the repo it ran in ("cwd"), dry-run printing
+    what it would reopen instead of launching a terminal."""
+    projects = tmp_path / "projects"
+    proj = projects / "E--automation-demo"
+    proj.mkdir(parents=True)
+    repo_dir = tmp_path / "demo-repo"
+    repo_dir.mkdir()
+    cwd_json = str(repo_dir).replace("\\", "\\\\")
+    (proj / "11111111-2222-3333-4444-555555555555.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01ResumeMe"}}\n',
+        encoding="utf-8",
+    )
+    (proj / "aaaaaaaa-0000-0000-0000-000000000000.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse"}}\n',
+        encoding="utf-8",
+    )
+    # a NEWER transcript that merely mentions the id (a grep result quoted in a
+    # conversation) must not shadow the owner — only the session-url marker wins
+    time.sleep(0.05)
+    (proj / "bbbbbbbb-0000-0000-0000-000000000000.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse",'
+        '"text":"we grepped and saw session_01ResumeMe in the logs"}\n',
+        encoding="utf-8",
+    )
+    r = run_launcher("taskos://resume?session=session_01ResumeMe", pc,
+                     TASKOS_OPENER_PROJECTS=str(projects))
+    assert r.returncode == 0, _decode(r.stdout) + _decode(r.stderr)
+    assert _out(r) == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
+
+
+@windows_only
+def test_resume_unknown_session_falls_back_to_the_web(pc: dict[str, str], tmp_path: Path) -> None:
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    r = run_launcher("taskos://resume?session=session_01NotHere", pc,
+                     TASKOS_OPENER_PROJECTS=str(projects))
+    assert r.returncode == 0
+    assert _out(r) == "resume-web: https://claude.ai/code/session_01NotHere"
+
+
+@windows_only
+def test_resume_via_the_cmd_fallback_says_so(pc: dict[str, str]) -> None:
+    """The pure-cmd fallback registration cannot search transcripts or launch a
+    terminal — it must say so visibly, never degrade silently."""
+    r = run_opener("taskos://resume?session=session_01X", pc)
+    assert r.returncode == 5 and "resume-unsupported" in _out(r)
 
 
 @windows_only

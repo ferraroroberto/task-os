@@ -24,8 +24,8 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, chipFor, fmtTs, issueChip, linkify, providerIcon, relDue,
-  renderMarkdown, statusPill,
+  AI_URL_RE, PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, issueChip, linkify,
+  providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
 import { statusOptions } from './rows.js';
 import { toast } from './toast.js';
@@ -390,11 +390,14 @@ export function createDrawer(el, opts) {
     (t.links || []).forEach(function (l) {
       const row = document.createElement('div');
       row.className = 'link-row';
-      // an email link is a .msg ref the opener opens as a file — same chip, mail glyph
-      row.appendChild(chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
+      // an email link is a .msg ref the opener opens as a file — same chip, mail glyph;
+      // an ai link keeps the bot chip + open/resume popover regardless of URL shape
+      row.appendChild(l.kind === 'ai'
+        ? aiChip(l.url, l.label || null)
+        : chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'icon-btn';   // .icon-btn carries the 44px expansion itself
+      rm.className = 'link-rm';   // borderless, chip-height; ::before carries the 44px hit rect
       rm.setAttribute('aria-label', 'Remove link ' + (l.label || l.url));
       rm.innerHTML = icon('trash-2');
       rm.addEventListener('click', async function () {
@@ -434,7 +437,10 @@ export function createDrawer(el, opts) {
       ev.preventDefault();
       const u = url.value.trim();
       if (!u) return;
-      const kind = /^\{/.test(u) ? 'folder' : (/^mail(to:|:\/\/)/i.test(u) ? 'email' : (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(u) ? 'issue' : 'web'));
+      const kind = /^\{/.test(u) ? 'folder'
+        : (/^mail(to:|:\/\/)/i.test(u) ? 'email'
+          : (AI_URL_RE.test(u) ? 'ai'
+            : (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(u) ? 'issue' : 'web')));
       try {
         await api('/api/tasks/' + t.id + '/links', { method: 'POST', body: { url: u, label: label.value.trim() || null, kind: kind } });
         await refresh();

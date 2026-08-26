@@ -314,6 +314,14 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
                 out["folder_url"] = _folder_web_resolver(str(ref))
             except Exception:  # noqa: BLE001 — a resolver bug never breaks a list
                 logger.exception("⚠️ folder web resolver failed for %r", ref)
+    # The AI-conversation chip on the row (#77): first links(kind=ai), same
+    # shape as folder_url — the UI never scans a task's links list-side.
+    ai = conn.execute(
+        "SELECT url, label FROM links WHERE task_id = ? AND kind = 'ai' ORDER BY id LIMIT 1",
+        (row["id"],),
+    ).fetchone()
+    out["ai_url"] = ai["url"] if ai else None
+    out["ai_label"] = (ai["label"] if ai else None) or None
     return out
 
 

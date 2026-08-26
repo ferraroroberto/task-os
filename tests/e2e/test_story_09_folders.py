@@ -25,6 +25,18 @@ record links to:
     docs/screenshots/story-09-folders-6-desktop.png   drawer after the pick (dark)
     docs/screenshots/story-09-folders-7-phone.png     phone: copy popover with the resolved path
 
+Issue #77 rides this walk (same surface: a chip that opens things through the
+per-PC opener, kept inside the <15-test budget): the AI-conversation chip —
+bot glyph on the row, desktop popover with "Open conversation" +
+"Resume in CLI on this PC" (taskos://resume?session=…), kind inferred when an
+AI URL is pasted, the borderless chip-height delete button, and the phone tap
+that opens the conversation directly:
+
+    docs/screenshots/story-11-ai-links-1-desktop.png  Table: the bot chip on the row
+    docs/screenshots/story-11-ai-links-2-desktop.png  the open / resume popover
+    docs/screenshots/story-11-ai-links-3-desktop.png  drawer: ai link rows + inferred kind
+    docs/screenshots/story-11-ai-links-4-phone.png    phone drawer: the tap opens the web page
+
 The taskos:// navigation itself is intercepted here (a custom scheme cannot
 be routed by Playwright); the real hand-off to Explorer is the headed walk.
 """
@@ -223,6 +235,67 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     activity = _get(base, f"/api/tasks/{kitchen['id']}")["activity"]
     assert activity[0]["field"] == "folder_ref" and activity[0]["new_value"] == "{onedrive}/house/kitchen/plans"
 
+    # 8. (issue #77) the AI-conversation chip — one kind for every provider,
+    #    bot glyph, open-on-web by default, resume through the opener.
+    ai_url = "https://claude.ai/code/session_01SeedExampleDriftFix000"
+    watering = next(
+        t for t in _get(base, "/api/tasks?q=watering")["items"]
+        if t["title"] == "Fix watering schedule drift"
+    )
+    assert watering["ai_url"] == ai_url                       # the summary carries it
+    assert watering["ai_label"] == "drift-fix session"
+    page.goto(base + "/?status=doing")
+    page.get_by_role("tab", name="Table").click()
+    wrow = page.locator(f".task-row[data-id='{watering['id']}']")
+    ai_chip = wrow.locator("a.chip-ai")
+    expect(ai_chip).to_be_visible()
+    assert ai_chip.get_attribute("href") == ai_url
+    assert ai_chip.locator("svg use").first.get_attribute("href") == "#i-bot"
+    page.screenshot(path=str(shots / "story-11-ai-links-1-desktop.png"))
+    clicks_before = len(page.evaluate("window.__taskosClicks || []"))
+    ai_chip.click()                                            # fine pointer → popover, no navigation
+    pop = page.locator("#folderPop")
+    expect(pop).to_be_visible()
+    expect(pop).to_have_attribute("data-mode", "ai")
+    expect(page.locator("#taskDrawer")).to_be_hidden()         # the chip never opens the row
+    web_btn = pop.locator("a.ai-pop-open")
+    assert web_btn.get_attribute("href") == ai_url
+    assert web_btn.get_attribute("target") == "_blank"
+    resume_btn = pop.locator("a.ai-pop-resume")
+    assert resume_btn.get_attribute("href") == "taskos://resume?session=session_01SeedExampleDriftFix000"
+    page.screenshot(path=str(shots / "story-11-ai-links-2-desktop.png"))
+    resume_btn.click()                                         # handed to the opener (intercepted here)
+    assert page.evaluate("window.__taskosClicks")[-1] == "taskos://resume?session=session_01SeedExampleDriftFix000"
+    assert len(page.evaluate("window.__taskosClicks")) == clicks_before + 1
+    expect(pop).to_be_hidden()
+    # the drawer: the ai link row wears the bot chip, and the delete button is
+    # borderless at the chip's own height (#77 — the bordered 34px square
+    # dwarfed the pill) while its hit rect stays 44px via ::before.
+    page.goto(base + "/#task/" + str(watering["id"]))
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    ai_row = drawer.locator(".link-row", has=page.locator("a.chip-ai"))
+    expect(ai_row).to_have_count(1)
+    geom = ai_row.evaluate(
+        "el => { const chip = el.querySelector('a.chip-ai').getBoundingClientRect();"
+        " const rm = el.querySelector('button.link-rm'); const r = rm.getBoundingClientRect();"
+        " const cs = getComputedStyle(rm), ps = getComputedStyle(rm, '::before');"
+        " return { chip: chip.height, rm: r.height, border: cs.borderStyle,"
+        "  bg: cs.backgroundColor, hit: r.height - 2 * parseFloat(ps.top) }; }")
+    assert geom["rm"] <= geom["chip"] + 2, geom               # same height as the pill
+    assert geom["border"] == "none" and geom["bg"] == "rgba(0, 0, 0, 0)", geom
+    assert geom["hit"] >= 44, geom                            # ::before restores the target
+    # pasting an AI conversation URL infers kind=ai — no manual kind anywhere
+    drawer.locator(".link-form .input-native").first.fill("https://chatgpt.com/c/synthetic-e2e")
+    drawer.locator(".link-form .button-surface").click()
+    expect(drawer.locator(".link-row a.chip-ai")).to_have_count(2)
+    links = _get(base, f"/api/tasks/{watering['id']}/links")["items"]
+    assert next(x for x in links if x["url"].startswith("https://chatgpt.com/"))["kind"] == "ai"
+    page.screenshot(path=str(shots / "story-11-ai-links-3-desktop.png"))
+    # back on the kitchen drawer so the dark shot below still shows the pick
+    page.goto(base + "/#task/" + str(kitchen["id"]))
+    expect(page.locator("#taskDrawer")).to_be_visible()
+
     # 6. dark, for the record
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
@@ -250,4 +323,19 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert_no_horizontal_overflow(p)
     assert p.evaluate("document.querySelector('#taskDrawer a.chip-folder').getAttribute('href')").startswith("taskos://open?ref=")
     p.screenshot(path=str(shots / "story-09-folders-7-phone.png"))
+
+    # (issue #77) coarse pointer: the AI chip opens the conversation directly —
+    # no popover, there is no CLI to resume into on a phone. Target stubbed.
+    p.keyboard.press("Escape")
+    p.goto(base + "/#task/" + str(watering["id"]))
+    expect(d).to_be_visible()
+    phone.route(ai_url, lambda route: route.fulfill(status=200, content_type="text/html", body="<title>stub</title>ok"))
+    with phone.expect_page() as popup_info:
+        d.locator("a.chip-ai").first.tap()
+    popup = popup_info.value
+    popup.wait_for_load_state()
+    assert popup.url == ai_url, popup.url
+    popup.close()
+    expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
+    p.screenshot(path=str(shots / "story-11-ai-links-4-phone.png"))
     phone.close()
