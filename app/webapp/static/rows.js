@@ -20,7 +20,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, chipFor, issueChip, relDue } from './format.js';
+import { STATUSES, aiChip, chipFor, issueChip, relDue } from './format.js';
 
 export const SORTS = [
   ['due', 'due date'], ['priority', 'priority'], ['updated', 'last modified'], ['created', 'created'], ['title', 'title'],
@@ -140,6 +140,13 @@ export function metaLine(t, opts) {
     fc.classList.add('trow-folder');
     fc.setAttribute('aria-label', 'Folder ' + t.folder_ref);
     meta.appendChild(fc);
+  }
+  if (t.ai_url) {
+    // Same phone treatment as the folder chip: icon-only, the name on aria-label.
+    const ac = aiChip(t.ai_url, t.ai_label);
+    ac.classList.add('trow-ai');
+    ac.setAttribute('aria-label', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : ''));
+    meta.appendChild(ac);
   }
   // the code already names the issue — no duplicate chip
   if (t.issue_ref && !t.code) meta.appendChild(issueChip(t.issue_ref));

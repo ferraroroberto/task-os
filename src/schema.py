@@ -23,6 +23,10 @@ Version history:
        file was written?"), ``content_hash`` skips no-op rewrites. No FK
        cascade on purpose: the exporter needs the old ``path`` after a task is
        deleted so it can remove the file, then drops the row itself.
+    5  links.kind gains 'ai' — an AI-conversation link (Claude, ChatGPT,
+       Gemini, Copilot — one kind, no per-provider split; issue #77). SQLite
+       cannot widen a CHECK in place, so the step rebuilds ``links`` and
+       recreates its index; v2's DDL stays frozen on the shipped kind list.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -41,7 +45,7 @@ TASK_TYPES = ("task", "coding", "note")
 TASK_STATUSES = ("inbox", "todo", "doing", "standby", "done", "cancelled")
 TASK_PRIORITIES = ("high", "medium", "low", "none")
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
-LINK_KINDS = ("web", "folder", "email", "issue")
+LINK_KINDS = ("web", "folder", "email", "issue", "ai")
 COMMENT_ORIGINS = ("ui", "cli", "md", "notion", "import", "sync")
 ISSUE_PROVIDERS = ("github", "gitlab")
 
@@ -95,7 +99,7 @@ CREATE TABLE links (
     task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     url     TEXT NOT NULL,
     label   TEXT,
-    kind    TEXT NOT NULL DEFAULT 'web' CHECK (kind IN ({_in(LINK_KINDS)}))
+    kind    TEXT NOT NULL DEFAULT 'web' CHECK (kind IN ('web', 'folder', 'email', 'issue'))
 );
 CREATE INDEX idx_links_task ON links(task_id);
 
@@ -184,8 +188,26 @@ CREATE TABLE mirror_state (
 );
 """
 
+# links.kind gains 'ai' (#77). A CHECK cannot be altered in place: rebuild the
+# table (dropping a child table trips nothing — only tasks is referenced) and
+# recreate its one index. v2 above keeps the shipped kind list verbatim.
+_V5 = f"""
+CREATE TABLE links_new (
+    id      INTEGER PRIMARY KEY,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    url     TEXT NOT NULL,
+    label   TEXT,
+    kind    TEXT NOT NULL DEFAULT 'web' CHECK (kind IN ({_in(LINK_KINDS)}))
+);
+INSERT INTO links_new(id, task_id, url, label, kind)
+    SELECT id, task_id, url, label, kind FROM links;
+DROP TABLE links;
+ALTER TABLE links_new RENAME TO links;
+CREATE INDEX idx_links_task ON links(task_id);
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

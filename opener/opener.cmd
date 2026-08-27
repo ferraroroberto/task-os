@@ -63,6 +63,11 @@ if not "!NOQ!"=="!URL!" (
   exit /b 3
 )
 :url_ready
+rem taskos://resume needs PowerShell (transcript search + terminal launch, #77);
+rem reaching it here means the machine runs the fallback .cmd registration.
+rem (goto + top-level exits: an `exit /b N` inside an if-block does not
+rem propagate its code through the registration's `cmd.exe /c` wrapper)
+if /i "!URL:~0,15!"=="taskos://resume" goto :resume_fallback
 set "ENVFILE=%TASKOS_OPENER_ENV%"
 if not defined ENVFILE set "ENVFILE=%LOCALAPPDATA%\task-os\opener.env"
 
@@ -155,3 +160,15 @@ echo   (one "name=path" line per placeholder, e.g. docs=C:\Users\me\Tenant\docs)
 echo.
 pause
 exit /b 1
+
+:resume_fallback
+if defined TASKOS_OPENER_DRYRUN echo resume-unsupported
+if defined TASKOS_OPENER_DRYRUN exit /b 5
+echo.
+echo   task-os opener
+echo.
+echo   Resuming a session needs the PowerShell opener, which this PC's
+echo   policy blocked at install time. Open the conversation link instead.
+echo.
+pause
+exit /b 5

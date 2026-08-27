@@ -10,7 +10,7 @@ drifted every seeded due one bucket per passing day); pass ``--anchor`` /
 ``anchor=`` only to pin a reproduction to a known date.
 
 Shape: four projects nested to depth 3, ~40 tasks, three people, comments
-(some carrying web / folder / issue links), links, activity from real
+(some carrying web / folder / issue / ai links), links, activity from real
 status / priority / due changes, a handful of recurring tasks, a few done or
 cancelled, one ``coding`` task with an issue_ref, and one ``note``.
 
@@ -165,6 +165,9 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         repo.add_link(conn, ids["kitchen"], "{onedrive}/house/kitchen", label="Kitchen folder", kind="folder")
         repo.add_link(conn, ids["passports"], "mail://renewal-instructions", label="Renewal instructions", kind="email")
         repo.add_link(conn, ids["watering"], "https://github.com/example/garden-bot/issues/12", label="garden-bot#12", kind="issue")
+        # the AI-conversation link (#77) — a synthetic Claude Code session id
+        repo.add_link(conn, ids["watering"], "https://claude.ai/code/session_01SeedExampleDriftFix000",
+                      label="drift-fix session", kind="ai")
         repo.add_link(conn, ids["book"], "https://example.com/reading", label="Where to buy", kind="web")
 
         # ---- activity beyond creation: real edits ------------------------

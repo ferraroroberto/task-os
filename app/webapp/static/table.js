@@ -20,7 +20,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, breadcrumbText, chipFor, issueChip, linkify, priorityLabel, relDue, statusPill,
+  PRIORITIES, aiChip, breadcrumbText, chipFor, issueChip, linkify, priorityLabel, relDue, statusPill,
 } from './format.js';
 import { rowList, statusSelect } from './rows.js';
 
@@ -156,6 +156,12 @@ function buildRow(t, handlers, rowHandlers) {
   // folder chip → taskos://open?ref=… (the per-PC opener); tooltip = the resolved path
   const folder = td('folder', 'Folder');
   if (t.folder_ref) folder.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+  if (t.ai_url) {
+    // the AI-conversation chip (#77) shares the chips cell with the folder
+    const ac = aiChip(t.ai_url, t.ai_label);
+    ac.setAttribute('aria-label', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : ''));
+    folder.appendChild(ac);
+  }
   tr.appendChild(folder);
 
   // last comment

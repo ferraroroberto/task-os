@@ -323,7 +323,16 @@ a.chip:hover { text-decoration: underline; }
   user-select: all;
 }
 .folder-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.folder-pop-actions .button-ghost, .folder-pop-actions .button-surface { min-height: 32px; padding: 0 10px; font-size: var(--font-caption); text-decoration: none; }
+/* anchors styled as buttons: flex so the glyph + label centre vertically */
+.folder-pop-actions .button-ghost, .folder-pop-actions .button-surface {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: var(--font-caption);
+  text-decoration: none;
+}
 
 /* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
@@ -645,18 +654,21 @@ a.chip:hover { text-decoration: underline; }
      nothing else on the meta line competes for the tap.
      The name is on aria-label (rows.js); the tap behaviour (web twin, else
      the path popover) is unchanged. */
-  .trow-meta .trow-folder {
+  .trow-meta .trow-folder,
+  .trow-meta .trow-ai {
     position: relative;
     max-width: none;
     padding: 0;
     background: none;
     border-color: transparent;
   }
-  .trow-meta .trow-folder .chip-label { display: none; }
+  .trow-meta .trow-folder .chip-label,
+  .trow-meta .trow-ai .chip-label { display: none; }
   /* 44x44 measured on the live rows: the glyph is 18px, so -13px each way.
      That leaves ~5px above the row's bottom edge - the widened target must
      stay inside this card, never reach into the next one. */
-  .trow-meta .trow-folder::before { content: ""; position: absolute; inset: -13px; }
+  .trow-meta .trow-folder::before,
+  .trow-meta .trow-ai::before { content: ""; position: absolute; inset: -13px; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -916,10 +928,28 @@ a.chip:hover { text-decoration: underline; }
 .markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: 8px 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
-/* gap 10px, not 4: the remove button is 34px tall with a 44px hit rect, so a
-   tighter gap would overlap the next row's rect (design.md "Touch targets"). */
+/* The remove button is borderless and chip-height (#77 — the 34px bordered
+   square dwarfed the link pill); its ::before restores the 44px hit rect, so
+   the ROW keeps a 34px floor: 34 + the 10px gap = 44px pitch and the expanded
+   rects of stacked rows never overlap (design.md "Touch targets"). */
 .drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.link-rm {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+}
+.link-rm::before { content: ""; position: absolute; inset: -9px; }   /* 26 + 2x9 = 44 */
+.link-rm:hover { color: var(--danger); }
 .icon-btn {
   width: 34px;
   height: 34px;
@@ -933,7 +963,6 @@ a.chip:hover { text-decoration: underline; }
   color: var(--muted);
   cursor: pointer;
 }
-.link-row .icon-btn:hover { color: var(--danger); }
 /* Add-link: ONE line — url · label · Add — on every width (#46). */
 .link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }

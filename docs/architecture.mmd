@@ -10,7 +10,7 @@ flowchart LR
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI)<br/>issues assigned to me"]
-    opener["per-PC opener · opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer"]
+    opener["per-PC opener · opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
   end
 
   subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]
@@ -40,7 +40,7 @@ flowchart LR
     fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
-    schema["schema.py<br/>MIGRATIONS v1→v4 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v5 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
