@@ -103,10 +103,17 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
         if (Test-Path -LiteralPath $raw) { $dir = $raw }
     }
     if ($env:TASKOS_OPENER_DRYRUN) { "resume: $uuid in $dir"; exit 0 }
+    # Never let the resumed session inherit a nested-run marker: launched from
+    # inside another Claude session (an agent, a launcher-hosted shell), the
+    # marker would silently turn transcript saving OFF in the resumed session.
+    Remove-Item Env:CLAUDE_CODE_CHILD_SESSION -ErrorAction SilentlyContinue
+    # Echo before claude starts: a long transcript takes a while to first
+    # paint, and a silent black window reads as a failure.
+    $inner = "Write-Host 'task-os opener - resuming $uuid' -ForegroundColor Cyan; Write-Host 'in $dir - the first paint of a long session can take a minute...'; claude --resume $uuid"
     if (Get-Command wt -ErrorAction SilentlyContinue) {
-        Start-Process wt -ArgumentList '-d', $dir, 'powershell', '-NoProfile', '-NoExit', '-Command', "claude --resume $uuid"
+        Start-Process wt -ArgumentList '-d', $dir, 'powershell', '-NoProfile', '-NoExit', '-Command', $inner
     } else {
-        Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoProfile', '-NoExit', '-Command', "claude --resume $uuid"
+        Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoProfile', '-NoExit', '-Command', $inner
     }
     exit 0
 }
