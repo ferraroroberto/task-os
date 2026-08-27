@@ -224,6 +224,11 @@ def test_resume_finds_the_transcript_and_targets_its_repo(pc: dict[str, str], tm
                      TASKOS_OPENER_PROJECTS=str(projects))
     assert r.returncode == 0, _decode(r.stdout) + _decode(r.stderr)
     assert _out(r) == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
+    # the shape a browser actually sends: the scheme normalised with a slash
+    # before the query (like open/?ref=) — same result
+    r = run_launcher("taskos://resume/?session=session_01ResumeMe", pc,
+                     TASKOS_OPENER_PROJECTS=str(projects))
+    assert _out(r) == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
 
 
 @windows_only

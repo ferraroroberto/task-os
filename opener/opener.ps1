@@ -64,7 +64,9 @@ if ($Url.Contains('"')) {
 # Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>" /
 # "resume-web: <url>" instead of launching; TASKOS_OPENER_PROJECTS overrides
 # the transcript root (default %USERPROFILE%\.claude\projects).
-if ($Url -match '^taskos://resume\?session=(session_[A-Za-z0-9]+)$') {
+# Browsers normalise the custom scheme to taskos://resume/?session=… (slash
+# before the query) — accept both, like opener.cmd does for open/?ref=.
+if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
     $id = $Matches[1]
     $projects = if ($env:TASKOS_OPENER_PROJECTS) { $env:TASKOS_OPENER_PROJECTS }
                 else { Join-Path $env:USERPROFILE '.claude\projects' }

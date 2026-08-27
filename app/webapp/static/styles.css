@@ -323,7 +323,16 @@ a.chip:hover { text-decoration: underline; }
   user-select: all;
 }
 .folder-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.folder-pop-actions .button-ghost, .folder-pop-actions .button-surface { min-height: 32px; padding: 0 10px; font-size: var(--font-caption); text-decoration: none; }
+/* anchors styled as buttons: flex so the glyph + label centre vertically */
+.folder-pop-actions .button-ghost, .folder-pop-actions .button-surface {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: var(--font-caption);
+  text-decoration: none;
+}
 
 /* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: 8px; }
