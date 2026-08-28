@@ -162,6 +162,7 @@ button, input, select, textarea { font: inherit; }
 .hit-target, .icon-btn, .toast-close, .tree-toggle { position: relative; }
 .hit-target::before, .icon-btn::before, .toast-close::before, .tree-toggle::before { content: ""; position: absolute; inset: -5px; }
 .tree-toggle::before { inset: -8px; }        /* 28x28 authored */
+.due-pick-btn::before { inset: -7px; }       /* 30x30 authored, overrides .icon-btn's 34px inset */
 
 html, body {
   margin: 0;
