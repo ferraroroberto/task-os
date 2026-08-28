@@ -3,7 +3,7 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>drawer.js · quickadd.js · format.js · api.js · toast.js<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>login.html (token / password → cookie)"]
+    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>drawer.js · quickadd.js (the add dialog) · folderpick.js (the shared folder-index picker)<br/>format.js · api.js · toast.js<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>login.html (token / password → cookie)"]
     phone["Phone · https://‹host›.ts.net:8448<br/>installed PWA (manifest · icons · iOS meta)"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]

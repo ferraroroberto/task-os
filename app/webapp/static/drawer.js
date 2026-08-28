@@ -24,9 +24,10 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  AI_URL_RE, PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, issueChip, linkify,
+  PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, issueChip, linkKind, linkify,
   providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
+import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { statusOptions } from './rows.js';
 import { toast } from './toast.js';
 
@@ -437,10 +438,7 @@ export function createDrawer(el, opts) {
       ev.preventDefault();
       const u = url.value.trim();
       if (!u) return;
-      const kind = /^\{/.test(u) ? 'folder'
-        : (/^mail(to:|:\/\/)/i.test(u) ? 'email'
-          : (AI_URL_RE.test(u) ? 'ai'
-            : (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(u) ? 'issue' : 'web')));
+      const kind = linkKind(u);
       try {
         await api('/api/tasks/' + t.id + '/links', { method: 'POST', body: { url: u, label: label.value.trim() || null, kind: kind } });
         await refresh();
@@ -821,103 +819,28 @@ export function createDrawer(el, opts) {
     const picker = document.createElement('div');
     picker.className = 'folder-picker';
     picker.hidden = !pickerOpen;
-    if (pickerOpen) mountPicker(picker);
+    const mount = function () {
+      mountFolderPicker(picker, { onPick: commitFolder, onClose: function () { pickerOpen = false; } });
+    };
+    if (pickerOpen) mount();
     pick.addEventListener('click', function () {
       pickerOpen = !pickerOpen;
       picker.hidden = !pickerOpen;
       pick.setAttribute('aria-expanded', String(pickerOpen));
-      if (pickerOpen) { mountPicker(picker); picker.querySelector('input').focus(); }
+      if (pickerOpen) { mount(); picker.querySelector('input').focus(); }
     });
     body.appendChild(picker);
     sec.appendChild(body);
     return sec;
   }
 
-  /** Empty / a ref / an absolute path → the ref the task stores (absolute paths
-   *  fold onto the placeholders via POST /api/resolve — never resolved
-   *  client-side; a body, not `?ref=`, because URL-cleaning extensions strip
-   *  that parameter name off every http(s) URL — #66). */
+  /** The ref the task stores (folderpick.js folds an absolute path onto the
+   *  placeholders; `undefined` means the fold failed and already said so). */
   async function commitFolder(value) {
-    if (!value) { await patch({ folder_ref: null }); return; }
-    let ref = value;
-    if (!/^\{/.test(value)) {
-      try {
-        const r = await api('/api/resolve', { method: 'POST', body: { ref: value } });
-        ref = r.ref;
-        if (ref !== value) toast('Stored as ' + ref, 'info');
-      } catch (err) { toast(err.message || 'Could not resolve the path', 'error'); return; }
-    }
+    const ref = await resolveFolderRef(value);
+    if (ref === undefined) return;
     pickerOpen = false;
     await patch({ folder_ref: ref });
-  }
-
-  function mountPicker(host) {
-    if (host.dataset.mounted) return;
-    host.dataset.mounted = '1';
-    const q = document.createElement('input');
-    q.type = 'search';
-    q.className = 'input-native folder-picker-q';
-    q.placeholder = 'Search folders… (Enter attaches the first hit)';
-    q.setAttribute('aria-label', 'Search the folder index');
-    const list = document.createElement('ul');
-    list.className = 'folder-picker-list';
-    list.setAttribute('role', 'listbox');
-    const note = document.createElement('p');
-    note.className = 'muted folder-picker-note';
-    note.textContent = 'Type to search the folder index.';
-    host.append(q, list, note);
-    let timer = null;
-    let items = [];
-    let active = -1;
-    function paint() {
-      list.innerHTML = '';
-      items.forEach(function (it, i) {
-        const li = document.createElement('li');
-        li.setAttribute('role', 'option');
-        li.className = 'folder-picker-item' + (i === active ? ' is-active' : '');
-        li.dataset.ref = it.ref;
-        li.title = it.path;
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'folder-picker-btn';
-        b.innerHTML = icon('folder');
-        const name = document.createElement('span');
-        name.className = 'folder-picker-name';
-        name.textContent = it.name;
-        const ref = document.createElement('span');
-        ref.className = 'folder-picker-ref';
-        ref.textContent = it.ref;
-        b.append(name, ref);
-        b.addEventListener('click', function () { commitFolder(it.ref); });
-        li.appendChild(b);
-        list.appendChild(li);
-      });
-    }
-    async function search() {
-      const text = q.value.trim();
-      if (!text) { items = []; active = -1; paint(); note.textContent = 'Type to search the folder index.'; return; }
-      try {
-        const r = await api('/api/folders/search?q=' + encodeURIComponent(text) + '&limit=15');
-        items = r.items || [];
-        active = items.length ? 0 : -1;
-        paint();
-        note.textContent = items.length
-          ? r.count + ' hit(s)' + (r.indexing ? ' · index still building' : '')
-          : (r.indexing ? 'No hits yet — the index is still building.' : 'No folder matches.');
-      } catch (err) {
-        items = []; active = -1; paint();
-        note.textContent = err.code === 'folders_disabled'
-          ? 'Folder index not configured — set search.folder_roots in config.json (' + err.message + ').'
-          : ('Search failed: ' + err.message);
-      }
-    }
-    q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(search, 220); });
-    q.addEventListener('keydown', function (ev) {
-      if (ev.key === 'ArrowDown' && items.length) { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
-      else if (ev.key === 'ArrowUp' && items.length) { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
-      else if (ev.key === 'Enter') { ev.preventDefault(); if (active >= 0 && items[active]) commitFolder(items[active].ref); }
-      else if (ev.key === 'Escape') { pickerOpen = false; host.hidden = true; }
-    });
   }
 
   async function refresh() {

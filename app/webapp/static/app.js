@@ -39,7 +39,7 @@ import {
 } from './filters.js';
 import { fmtTsShort, relDue, todayISO } from './format.js';
 import { createPalette } from './palette.js';
-import { mountQuickAdd } from './quickadd.js';
+import { createQuickAdd } from './quickadd.js';
 import { CLOSED, sortItems } from './rows.js';
 import { mountSearch } from './search.js';
 import { mountSettings } from './settings.js';
@@ -64,13 +64,18 @@ const els = {
   searchHost: document.getElementById('searchHost'),
   paletteBtn: document.getElementById('paletteBtn'),
   palette: document.getElementById('palette'),
+  quickAdd: document.getElementById('quickAdd'),
   boardFilters: document.getElementById('boardFilters'),
+  boardFilterText: document.getElementById('boardFilterText'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
+  tableFilterText: document.getElementById('tableFilterText'),
   tableHost: document.getElementById('tableHost'),
   treeFilters: document.getElementById('treeFilters'),
+  treeFilterText: document.getElementById('treeFilterText'),
   treeHost: document.getElementById('treeHost'),
   todayFilters: document.getElementById('todayFilters'),
+  todayFilterText: document.getElementById('todayFilterText'),
   todayHost: document.getElementById('todayHost'),
   searchFilters: document.getElementById('searchFilters'),
   drawer: document.getElementById('taskDrawer'),
@@ -93,7 +98,7 @@ let board = null;
 let search = null;
 let settings = null;
 let palette = null;
-const quickAdds = [];
+let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
 
 // ------------------------------------------------------------------ theme
@@ -117,10 +122,11 @@ function renderNoTasks() {
   document.querySelectorAll('[data-empty="tasks"]').forEach(function (host) {
     host.replaceChildren(emptyCard('list-checks', 'Add your first task', {
       actionLabel: 'Add a task',
-      onAction: function () { if (quickAdds.length) quickAdds[0].focus(); },
+      onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilters', 'tableFilters', 'treeFilters', 'todayFilters'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText', 'treeFilters', 'treeFilterText',
+    'todayFilters', 'todayFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
 }
 
 function noMatchCard(iconName, message) {
@@ -269,12 +275,16 @@ function onFilterChange(next) {
 
 function renderFilters() {
   const options = { projects: state.projects, people: state.people, count: viewItems().length };
-  [['board', els.boardFilters], ['table', els.tableFilters], ['tree', els.treeFilters], ['today', els.todayFilters], ['search', els.searchFilters]]
+  // [tab, the card's host, the top strip that holds the text input (#80) —
+  // Search has none: its own box owns the text]
+  [['board', els.boardFilters, els.boardFilterText], ['table', els.tableFilters, els.tableFilterText],
+    ['tree', els.treeFilters, els.treeFilterText], ['today', els.todayFilters, els.todayFilterText],
+    ['search', els.searchFilters, null]]
     .forEach(function (pair) {
       const host = pair[1];
       if (!host) return;
       if (!filterCards[pair[0]]) {
-        filterCards[pair[0]] = mountFilters(host, { onChange: onFilterChange, hideText: pair[0] === 'search' });
+        filterCards[pair[0]] = mountFilters(host, { onChange: onFilterChange, textHost: pair[2] });
       }
       filterCards[pair[0]].render(state.filters, pair[0] === 'search' ? { projects: state.projects, people: state.people } : options);
     });
@@ -381,11 +391,12 @@ function focusRow(task) {
   }
 }
 
-function mountQuickAdds() {
-  document.querySelectorAll('.quick-add').forEach(function (host) {
-    quickAdds.push(mountQuickAdd(host, {
-      onCreated: function (task) { refreshAll().then(function () { focusRow(task); }); },
-    }));
+function wireQuickAdd() {
+  quickAdd = createQuickAdd(els.quickAdd, {
+    onCreated: function (task) { refreshAll().then(function () { focusRow(task); }); },
+  });
+  document.querySelectorAll('[data-quick-add]').forEach(function (btn) {
+    btn.addEventListener('click', function () { quickAdd.open(); });
   });
 }
 
@@ -485,18 +496,12 @@ function openFolderOfCurrentTask() {
   chip.click();
 }
 
-function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
 /** The palette's command list — built per open so hints reflect the moment. */
 function paletteCommands() {
   const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
   const cmds = [
-    { id: 'new-task', label: 'New task', hint: 'focus the quick-add bar', icon: 'plus', run: function () {
-      if (['board', 'table', 'tree', 'today'].indexOf(nav.getTab()) < 0) nav.setTab('board');
-      const hosts = Array.prototype.slice.call(document.querySelectorAll('.quick-add'));
-      const host = document.querySelector('#pane' + cap(nav.getTab()) + ' .quick-add');
-      const qa = quickAdds[hosts.indexOf(host)];
-      if (qa) qa.focus();
+    { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
+      if (quickAdd) quickAdd.open();
     } },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-table', label: 'Go to Table', icon: 'table', run: go('table') },
@@ -586,7 +591,7 @@ async function boot() {
     },
   });
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
-  mountQuickAdds();
+  wireQuickAdd();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
     currentTaskId: function () { return drawer.currentId(); },

@@ -344,10 +344,20 @@
          a stack container pinned to minmax(0, 1fr) (design.md Layout). -->
     <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board">
       <div class="pane-body">
-        <div class="quick-add" data-quick-add="board"></div>
+        <!-- Top strip (#80): the live text filter, always visible, and the +
+             that opens the quick-add dialog. The rest of the filters stay in
+             the collapsed card below. -->
+        <div class="pane-top">
+          <div class="filter-text" id="boardFilterText" hidden></div>
+          <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
+                  title="Add task" aria-label="Add task" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
         <!-- The ONE filter card (filters.js): the same state and URL query on
-             every tab — status · project · person · due · modified · text ·
-             sort. Collapsed by default; the summary line says what is on. -->
+             every tab — status · project · person · due · modified · sort
+             (the text is the strip above). Collapsed by default; the summary
+             line says what is on. -->
         <div class="filter-host" id="boardFilters" hidden></div>
         <!-- Five status columns (board.js): side by side on a wide screen,
              a one-column scroll-snap carousel on the phone. -->
@@ -356,21 +366,48 @@
     </section>
     <section id="paneTable" class="pane" role="tabpanel" aria-labelledby="tabTable" aria-label="Table" hidden>
       <div class="pane-body">
-        <div class="quick-add" data-quick-add="table"></div>
+        <!-- Top strip (#80): the live text filter, always visible, and the +
+             that opens the quick-add dialog. The rest of the filters stay in
+             the collapsed card below. -->
+        <div class="pane-top">
+          <div class="filter-text" id="tableFilterText" hidden></div>
+          <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
+                  title="Add task" aria-label="Add task" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
         <div class="filter-host" id="tableFilters" hidden></div>
         <div id="tableHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneTree" class="pane" role="tabpanel" aria-labelledby="tabTree" aria-label="Tree" hidden>
       <div class="pane-body">
-        <div class="quick-add" data-quick-add="tree"></div>
+        <!-- Top strip (#80): the live text filter, always visible, and the +
+             that opens the quick-add dialog. The rest of the filters stay in
+             the collapsed card below. -->
+        <div class="pane-top">
+          <div class="filter-text" id="treeFilterText" hidden></div>
+          <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
+                  title="Add task" aria-label="Add task" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
         <div class="filter-host" id="treeFilters" hidden></div>
         <div id="treeHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
       <div class="pane-body">
-        <div class="quick-add" data-quick-add="today"></div>
+        <!-- Top strip (#80): the live text filter, always visible, and the +
+             that opens the quick-add dialog. The rest of the filters stay in
+             the collapsed card below. -->
+        <div class="pane-top">
+          <div class="filter-text" id="todayFilterText" hidden></div>
+          <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
+                  title="Add task" aria-label="Add task" aria-haspopup="dialog">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
+          </button>
+        </div>
         <div class="filter-host" id="todayFilters" hidden></div>
         <!-- Due ≤ today grouped by project, recurring first; "Later this week"
              collapsed below (today.js). The phone's landing tab. -->
@@ -574,6 +611,74 @@
       <ul id="paletteList" class="palette-list" role="listbox"></ul>
       <p class="palette-foot muted"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> run · <kbd>&gt;</kbd> commands · <kbd>Esc</kbd> close</p>
     </div>
+  </dialog>
+
+  <!-- Quick-add (#80): the same vendored editor-modal shell as the palette
+       (native <dialog>, showModal / close, Esc), as a real editor — the fields
+       worth setting while the task is still in your head, so the drawer is not
+       the next stop. Line 1 is still the natural-language line parsed by
+       POST /api/parse (its due lands in the Due field, its parent stays a
+       chip); the rest are plain controls on the modal's own label/value rows.
+       Everything but the title is optional and empty by default: no date,
+       status inbox. Behaviour in quickadd.js. -->
+  <dialog class="detail-dialog quickadd-dialog" id="quickAdd" aria-labelledby="quickAddTitle">
+    <form class="detail-card quickadd-card" autocomplete="off">
+      <div class="detail-header">
+        <h2 id="quickAddTitle">Add task</h2>
+        <button type="button" class="detail-close" aria-label="Close">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <div class="quick-add-row">
+        <span class="quick-add-glyph">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
+        </span>
+        <input class="quick-add-input" type="text" enterkeyhint="done" aria-label="Task title"
+               placeholder='e.g. "renew passport next friday",  "order sensor &rsaquo; garden-bot",  "#12" to nest'>
+      </div>
+      <div class="quick-add-chips" aria-live="polite"></div>
+
+      <div class="row row--stack">
+        <span><label for="quickAddDesc">Description</label></span>
+        <textarea id="quickAddDesc" class="input-native quick-add-desc" rows="2"
+                  placeholder="Optional — markdown welcome"></textarea>
+      </div>
+      <div class="row">
+        <span><label for="quickAddDue">Due</label></span>
+        <input id="quickAddDue" class="input-native quick-add-due" type="date">
+      </div>
+      <div class="row">
+        <span><label for="quickAddStatus">Status</label></span>
+        <select id="quickAddStatus" class="select-native quick-add-status"></select>
+      </div>
+      <div class="row row--stack">
+        <span>
+          <label for="quickAddFolder">Folder</label>
+          <button type="button" class="button-ghost folder-pick quick-add-pick"
+                  aria-label="Pick from folder index" title="Pick from folder index"
+                  aria-expanded="false" aria-controls="quickAddPicker">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+            <span class="folder-pick-label">Pick from index</span>
+          </button>
+        </span>
+        <input id="quickAddFolder" class="input-native quick-add-folder" type="text"
+               placeholder="{onedrive}/folder  — or paste an absolute path">
+        <div class="folder-picker quick-add-picker" id="quickAddPicker" hidden></div>
+      </div>
+      <div class="row row--stack">
+        <span><label for="quickAddLink">Link</label></span>
+        <div class="quick-add-link">
+          <input id="quickAddLink" class="input-native quick-add-link-url" type="text"
+                 placeholder="https://…  — a conversation, a doc, an issue">
+          <input class="input-native quick-add-link-label" type="text"
+                 aria-label="Link label" placeholder="label (optional)">
+        </div>
+      </div>
+
+      <div class="detail-actions">
+        <button type="submit" class="detail-save-btn quick-add-submit" disabled>Add</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- Toasts: user-initiated command results / errors (design.md "Async data

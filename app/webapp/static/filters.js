@@ -5,16 +5,21 @@
  * (`?status=doing&project=12&person=3,5&sort=updated` is the same shareable
  * view on every tab) and the card that edits it:
  *
+ *   <input class="filter-q">          the live text filter, always visible in
+ *                                     the pane's own top strip (#80)
+ *
  *   <details class="card card--collapsible filter-card">   (vendored disclosure)
  *     summary   "Filters" · what is active, in words · "42 tasks"
- *     body      text · project | person · due | modified · status | sort — one
+ *     body      project | person · due | modified · status | sort — one
  *               control each, equal widths, two per line on the phone (#48);
  *               person and status are multi-selects (one click each, several
  *               allowed: "Anyone" / the name / "2 people")
  *
- * Collapsed by default: the summary line says what is applied, so the card
- * never has to be open to read the state. `mountFilters` keeps the open /
- * closed state, an open dropdown and the text input's focus across re-renders.
+ * The card is collapsed by default: the summary line says what is applied, so
+ * it never has to be open to read the state. The text input lives outside it
+ * (#80) — the filter reached for most is one keystroke away — and is built
+ * once, so a re-render never moves the caret. `mountFilters` keeps the open /
+ * closed state and an open dropdown across re-renders.
  */
 
 'use strict';
@@ -125,7 +130,9 @@ export function matchesFilters(t, f, today) {
 }
 
 // ------------------------------------------------------------ summary
-/** What is active, in words — the collapsed card's one line. */
+/** What is active, in words — the collapsed card's one line. The text is not
+ * in it: whichever box owns the text is always on screen (the top strip, or
+ * the Search tab's own box), so repeating it under that box is noise (#80). */
 export function describeFilters(f, options) {
   const o = options || {};
   const bits = [];
@@ -142,7 +149,6 @@ export function describeFilters(f, options) {
   }
   if (f.due) bits.push((DUE_WINDOWS.find(function (w) { return w[0] === f.due; }) || [])[1].toLowerCase());
   if (f.updated) bits.push((UPDATED_WINDOWS.find(function (w) { return w[0] === f.updated; }) || [])[1].toLowerCase());
-  if (f.q && !o.hideText) bits.push('"' + f.q + '"');
   bits.push('sorted by ' + sortLabel(f.sort));
   return bits;
 }
@@ -242,22 +248,46 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
  * state change. One instance per tab (each tab has its own host), all reading
  * the same state.
  * @param {HTMLElement} host
- * @param {{onChange: (next: object) => void, hideText?: boolean, countLabel?: string}} opts
- *        hideText — the Search tab's box owns the text, so the card has no text field there
+ * @param {{onChange: (next: object) => void, textHost?: HTMLElement, countLabel?: string}} opts
+ *        textHost — where the always-visible text input goes (the pane's top
+ *        strip, #80). Omitted on the Search tab: its own box owns the text,
+ *        so there is no second text field and `Clear` leaves the query alone.
  * @returns {{render: (filters: object, options: {projects: Array, people: Array, count: number}) => void,
  *            setOpen: (open: boolean) => void}}
  */
 export function mountFilters(host, opts) {
   let open = false;
-  let openMenu = null;     // the multi-select left open across a re-render
+  let openMenu = null;       // the multi-select left open across a re-render
   let textTimer = 0;
+  let textEl = null;         // the strip's input — built once, never re-rendered
+  let current = DEFAULT_FILTERS;   // the state the controls were last drawn from
+
+  /** The live text filter, in the pane's top strip (#80). */
+  function renderText(filters) {
+    if (!opts.textHost) return;
+    if (!textEl) {
+      textEl = document.createElement('input');
+      textEl.type = 'search';
+      textEl.className = 'input-native filter-q';
+      textEl.placeholder = 'Filter text…';
+      textEl.setAttribute('aria-label', 'Filter text');
+      textEl.addEventListener('input', function () {
+        window.clearTimeout(textTimer);
+        const value = textEl.value.trim();
+        textTimer = window.setTimeout(function () { opts.onChange(Object.assign({}, current, { q: value })); }, TEXT_DEBOUNCE_MS);
+      });
+      opts.textHost.replaceChildren(textEl);
+    }
+    opts.textHost.hidden = false;
+    // Never yank the value out from under the typist: their keystrokes are
+    // already in the box and the debounce means `filters.q` trails them.
+    if (document.activeElement !== textEl && textEl.value !== filters.q) textEl.value = filters.q;
+  }
 
   function render(filters, options) {
     const o = options || {};
-    // keep the typist's place: a keystroke re-renders the card around them
-    const active = document.activeElement;
-    const typing = active && host.contains(active) && active.classList.contains('filter-q');
-    const caret = typing ? active.selectionStart : null;
+    current = filters;
+    renderText(filters);
     const wasOpen = host.querySelector('.msel[open]');
     if (wasOpen) openMenu = wasOpen.dataset.name;
 
@@ -279,7 +309,7 @@ export function mountFilters(host, opts) {
     main.appendChild(h);
     const desc = document.createElement('span');
     desc.className = 'collapse-count filter-desc';
-    const bits = describeFilters(filters, { projects: o.projects, people: o.people, hideText: opts.hideText });
+    const bits = describeFilters(filters, { projects: o.projects, people: o.people });
     if (o.count != null) bits.push(o.count + ' ' + (opts.countLabel || (o.count === 1 ? 'task' : 'tasks')));
     desc.textContent = bits.join(' · ');
     main.appendChild(desc);
@@ -298,52 +328,33 @@ export function mountFilters(host, opts) {
     function change(name) {
       return function (value) { const next = Object.assign({}, filters); next[name] = value; opts.onChange(next); };
     }
-    // 1. text (the Search tab's box owns it there)
-    if (!opts.hideText) {
-      const q = document.createElement('input');
-      q.type = 'search';
-      q.className = 'input-native filter-q';
-      q.placeholder = 'Filter text…';
-      q.setAttribute('aria-label', 'Filter text');
-      q.value = filters.q;
-      q.addEventListener('input', function () {
-        window.clearTimeout(textTimer);
-        textTimer = window.setTimeout(function () { opts.onChange(Object.assign({}, filters, { q: q.value.trim() })); }, TEXT_DEBOUNCE_MS);
-      });
-      row.appendChild(q);
-    }
-    // 2. project | person
+    // 1. project | person  (the text is the strip's, #80)
     const projectValues = [['', 'All projects']].concat((o.projects || []).map(function (p) {
       return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
     }));
     row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
     row.appendChild(multiSelect('person', 'Person', (o.people || []).map(function (p) { return [String(p.id), p.name]; }),
       filters.person, change('person'), { none: 'Anyone', many: 'people', open: openMenu === 'person' }));
-    // 3. due | modified
+    // 2. due | modified
     row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
     row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
-    // 4. status | sort
+    // 3. status | sort
     row.appendChild(multiSelect('status', 'Status', STATUSES.map(function (s) { return [s, s]; }),
       filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
     row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
-    if (!isDefaultFilters(Object.assign({}, filters, { q: opts.hideText ? '' : filters.q }))) {
+    if (!isDefaultFilters(Object.assign({}, filters, { q: opts.textHost ? filters.q : '' }))) {
       const clear = document.createElement('button');
       clear.type = 'button';
       clear.className = 'button-ghost filter-clear';
       clear.textContent = 'Clear';
       clear.addEventListener('click', function () {
-        opts.onChange(Object.assign({}, DEFAULT_FILTERS, { q: opts.hideText ? filters.q : '' }));
+        opts.onChange(Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : filters.q }));
       });
       row.appendChild(clear);
     }
     body.appendChild(row);
     card.appendChild(body);
     host.appendChild(card);
-
-    if (typing) {
-      const q = host.querySelector('.filter-q');
-      if (q) { q.focus(); try { q.setSelectionRange(caret, caret); } catch (_) { /* not a text control */ } }
-    }
   }
 
   return { render: render, setOpen: function (v) { open = !!v; } };

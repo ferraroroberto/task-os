@@ -1,6 +1,8 @@
 """Story 05 — Board day (Step 5/13, issue #6).
 
-    Board tab: five columns visible at once on the laptop → project chip
+    Board tab: five columns visible at once on the laptop → the top strip's
+    text filter narrows the board without opening any disclosure and the +
+    opens the quick-add dialog (#80) → project chip
     filters to one project (shared with the Table, encoded in the URL) → drag
     a row doing → standby → the counts update and the activity log has the
     row → Today tab lists due / overdue grouped by project, recurring first →
@@ -135,7 +137,32 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-1-desktop.png"))
 
-        # 2. Project filter → only that project's descendants; the URL carries it;
+        # 2. The top strip (#80): the text filter is on screen without opening
+        #    anything — typing filters the board live — and the + opens the one
+        #    quick-add dialog, whose Escape discards the draft.
+        q = page.locator("#boardFilterText .filter-q")
+        expect(q).to_be_visible()
+        filter_card = page.locator("#boardFilters .filter-card")
+        assert not filter_card.evaluate("el => el.open")        # still collapsed
+        q.fill("passport")
+        expect(page).to_have_url(f"{base}/?q=passport")
+        expect(_card(page, "Renew passports")).to_be_visible()
+        expect(_card(page, "Repair fence")).to_have_count(0)
+        assert not filter_card.evaluate("el => el.open")        # never had to open
+        q.fill("")
+        expect(page).to_have_url(f"{base}/")
+        page.locator("#paneBoard .quick-add-btn").click()
+        quick_add = page.locator("#quickAdd")
+        expect(quick_add).to_be_visible()
+        quick_add.locator(".quick-add-input").fill("Order fence paint tomorrow")
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        expect(quick_add.locator(".quick-add-due")).to_have_value(tomorrow)
+        page.keyboard.press("Escape")                            # discards the draft
+        expect(quick_add).to_be_hidden()
+        assert not any(t["title"].startswith("Order fence paint")
+                       for col in _get(base, "/api/board")["columns"].values() for t in col)
+
+        # 3. Project filter → only that project's descendants; the URL carries it;
         #    the Table's card shows the same selection (one shared state).
         home = next(t for t in api["doing"] if t["title"] == "Home renovation")
         card = _open_filters(page, "boardFilters")
@@ -159,7 +186,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page).to_have_url(f"{base}/")
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"])))
 
-        # 3. Drag a row doing → standby: PATCH status, counts update, activity row.
+        # 4. Drag a row doing → standby: PATCH status, counts update, activity row.
         quotes = _card(page, "Get three quotes")
         qid = int(quotes.get_attribute("data-id"))
         assert quotes.evaluate("el => el.closest('.board-col').dataset.col") == "doing"
@@ -180,7 +207,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert log["field"] == "status" and log["new_value"] == "standby"
         page.screenshot(path=str(shots / "story-05-board-3-desktop.png"))
 
-        # 4. Row click → the drawer, activity log shows the move.
+        # 5. Row click → the drawer, activity log shows the move.
         moved.locator(".trow-main").click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
@@ -198,7 +225,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         drawer.locator(".drawer-close").click()
         expect(drawer).to_be_hidden()
 
-        # 5. Today: due ≤ today grouped by root project, overdue first, recurring first.
+        # 6. Today: due ≤ today grouped by root project, overdue first, recurring first.
         page.click("nav.tabs .tab[data-tab='today']")
         expect(page.locator("#paneToday")).to_be_visible()
         today = _get(base, "/api/today")
@@ -229,7 +256,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
         page.screenshot(path=str(shots / "story-05-board-5-desktop.png"))
 
-        # 6. Mark a recurring task complete (the row's status select gains a
+        # 7. Mark a recurring task complete (the row's status select gains a
         #    `complete` option for a recurring task, issue #54) → its due
         #    rolls a cadence forward, it leaves the due list and shows up
         #    under "Later this week" with the new date.
@@ -251,7 +278,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator(".today-counts")).to_contain_text(f"{today['counts']['today'] - 1} due today")
         page.screenshot(path=str(shots / "story-05-board-6-desktop.png"))
 
-        # 6b. The same recurring task, picked "done" instead of "complete":
+        # 7b. The same recurring task, picked "done" instead of "complete":
         #     closes for good — no further roll, off the recurring series
         #     from here (issue #54's other half).
         rolled_row.locator(".trow-status").select_option("done")
@@ -260,7 +287,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert closed["status"] == "done" and closed["due"] == next_due
         assert closed["done_at"] is not None
 
-        # 7. Mark a plain overdue task done → done today: it leaves the Today
+        # 8. Mark a plain overdue task done → done today: it leaves the Today
         #    list (open tasks only) and the Board's Done today column gains
         #    it, alongside 6b's now-closed recurring task (both done today).
         books = _today_row(page, "Return library books")
@@ -297,7 +324,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         )
         page = context.new_page()
         page.goto(f"{base}/")
-        # 8. Fresh phone → Today (coarse pointer, nothing persisted yet).
+        # 9. Fresh phone → Today (coarse pointer, nothing persisted yet).
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         rows = page.locator("#paneToday section.today .trow")
         expect(rows.first).to_be_visible()
@@ -311,7 +338,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-8-phone.png"))
 
-        # 9. Board: strip of five counts + one column per screen (scroll-snap).
+        # 10. Board: strip of five counts + one column per screen (scroll-snap).
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("#paneBoard")).to_be_visible()
         strip = page.locator(".board-strip-btn")

@@ -2,9 +2,10 @@
 
     Table filtered status:doing → change a due date inline → the activity log
     shows old → new with time → open a drawer → add a comment containing a
-    link → the link is a clickable chip → quick-add "renew passport next
-    friday" → the parsed date shows as a chip → create → drag it under a
-    project in the Tree → the breadcrumb appears in the Table.
+    link → the link is a clickable chip → the + opens the quick-add dialog
+    (#80) → "renew passport next friday" → the parsed date shows as a chip →
+    create → drag it under a project in the Tree → the breadcrumb appears in
+    the Table.
 
 Walks the story against the **seeded** disposable instance (conftest
 ``seeded_webapp`` over ``tests/fixtures/seed.py`` — synthetic data, the only
@@ -172,17 +173,30 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         drawer.locator(".drawer-close").click()
         expect(drawer).to_be_hidden()
 
-        # 5. Quick-add "renew passport next friday" → parsed date chip.
-        qa = page.locator("#paneTable .quick-add-input")
+        # 5. Quick-add (#80): the + in the top strip opens the one dialog;
+        #    "renew passport next friday" parses into the editable Due field,
+        #    and the rest of the first-moment fields are right there — no second
+        #    trip through the drawer to set a description, a status, a folder
+        #    or a link.
+        page.locator("#paneTable .quick-add-btn").click()
+        quick_add = page.locator("#quickAdd")
+        expect(quick_add).to_be_visible()
+        qa = quick_add.locator(".quick-add-input")
         qa.fill("renew passport next friday")
         friday = _next_friday(date.today()).isoformat()
-        date_chip = page.locator("#paneTable .quick-add-chips .chip-date")
-        expect(date_chip).to_have_attribute("data-due", friday)
-        expect(date_chip).to_contain_text("next friday")
+        expect(quick_add.locator(".quick-add-due")).to_have_value(friday)
+        expect(quick_add.locator(".quick-add-status")).to_have_value("inbox")   # the default
+        quick_add.locator(".quick-add-desc").fill("both passports, town hall appointment")
+        quick_add.locator(".quick-add-status").select_option("todo")
+        quick_add.locator(".quick-add-folder").fill("{onedrive}/house")
+        quick_add.locator(".quick-add-link-url").fill("https://example.com/passport-form")
+        quick_add.locator(".quick-add-link-label").fill("application form")
         page.screenshot(path=str(shots / "story-04-triage-5-desktop.png"))
 
-        # 6. Enter creates it; the new row is focused (default filter = open).
+        # 6. Enter creates it with everything set and closes the dialog; the new
+        #    row is focused (default filter = open).
         qa.press("Enter")
+        expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
         # the doing filter hides an inbox task — clear to see it, as a user would
         _open_filters(page, "tableFilters").locator(".filter-clear").click()
@@ -193,6 +207,13 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         new_id = int(new_row.get_attribute("data-id"))
         created = _get(base, f"/api/tasks/{new_id}")
         assert created["due"] == friday and created["parent_id"] is None
+        # every field the dialog offered landed on the task in one go (#80)
+        assert created["status"] == "todo"
+        assert created["description"] == "both passports, town hall appointment"
+        assert created["folder_ref"] == "{onedrive}/house"
+        assert [(link_["url"], link_["label"]) for link_ in created["links"]] == [
+            ("https://example.com/passport-form", "application form")
+        ]
         expect(new_row.locator(".due-btn")).to_have_attribute("title", f"{friday} — click to change")
         page.screenshot(path=str(shots / "story-04-triage-6-desktop.png"))
 
@@ -287,7 +308,16 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(watering.locator(".trow-due")).to_be_visible()
         expect(watering.locator(".trow-status")).to_have_value("doing")
         assert_no_horizontal_overflow(page)
-        assert_min_target(page.locator("#paneTable .quick-add-input"))
+        # the top strip (#80): the text filter and the + sit side by side, both
+        # at the touch floor, with effective rectangles that never overlap
+        strip = page.locator("#paneTable .filter-q, #paneTable .quick-add-btn")
+        assert_min_target(strip)
+        assert_no_overlap(strip)
+        page.locator("#paneTable .quick-add-btn").tap()
+        expect(page.locator("#quickAdd")).to_be_visible()
+        assert_min_target(page.locator("#quickAdd .quick-add-input"))
+        page.keyboard.press("Escape")
+        expect(page.locator("#quickAdd")).to_be_hidden()
         # the shared filter card: the status multi-select holds the six statuses,
         # the URL's one checked; on the phone the controls sit two per line,
         # equal widths (#48)
