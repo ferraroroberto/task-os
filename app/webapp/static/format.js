@@ -295,6 +295,16 @@ export const AI_URL_RE = /^https?:\/\/(?:www\.)?(?:claude\.ai\/|chatgpt\.com\/|c
 const CLAUDE_SESSION_RE = /claude\.ai\/code\/(session_[A-Za-z0-9]+)/;
 export const RESUME_SCHEME = 'taskos://resume?session=';
 
+/** The `kind` a pasted link is stored under — one rule, wherever a link is
+ *  added (the drawer's Links section and the quick-add dialog, #80 round 2). */
+export function linkKind(url) {
+  if (/^\{/.test(url)) return 'folder';
+  if (/^mail(to:|:\/\/)/i.test(url)) return 'email';
+  if (AI_URL_RE.test(url)) return 'ai';
+  if (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(url)) return 'issue';
+  return 'web';
+}
+
 function showAiPopover(anchor, url) {
   const el = popEl();
   el.innerHTML = '';

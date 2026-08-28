@@ -409,11 +409,58 @@ a.chip:hover { text-decoration: underline; }
 .due-overdue { color: var(--danger) !important; }
 .due-today { color: var(--attention) !important; }
 
+/* ------------------------------------------- the pane's top strip (#80) */
+/* Board / Table / Tree / Today open with the filter reached for most — the
+   live text box — plus the + that opens the quick-add dialog. Everything else
+   stays in the collapsed filter card below. */
+/* justify-end so the + keeps its right-hand seat in the true-empty state,
+   where there is nothing to filter and the text box is hidden with the card. */
+.pane-top { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
+.filter-text { flex: 1 1 auto; min-width: 0; }
+.quick-add-btn {
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+}
+.quick-add-btn .icon { width: var(--icon-title); height: var(--icon-title); }
+
 /* --------------------------------------------------------- quick-add */
-.quick-add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* The dialog is the vendored editor-modal shell (index.html), like the
+   palette: markup + token values only, modal.css untouched — the variation
+   is this class. The phone keeps the shell's own top-anchored geometry.
+   Body = the natural-language line, then the modal's own label/value rows
+   (`.row`, 12px 0 on a border-muted top divider). Description / folder / link
+   take `.row--stack`: same rhythm and dividers, label on its own line, control
+   full width — a textarea and a folder picker have no business at 55% of a
+   phone row. */
+.detail-dialog.quickadd-dialog { width: min(560px, 94vw); margin-top: 10vh; }
+.quickadd-card .row { gap: 8px; }
+.quickadd-card .row--stack { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
+.quickadd-card .row--stack > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.quickadd-card .row label { cursor: pointer; }
+.quickadd-card .quick-add-due, .quickadd-card .quick-add-status { min-width: 55%; }
+.quick-add-desc {
+  min-height: calc(var(--control-h) * 2);
+  padding: 8px 10px;
+  line-height: 1.4;
+  font-size: var(--font-label);
+  resize: vertical;
+}
+/* The picker's own toggle sits on the label line, so the ref input keeps the
+   full width; the hit list drops under both. */
+.quick-add-pick { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); display: inline-flex; align-items: center; gap: 4px; }
+.quick-add-pick .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* modal.css styles every span inside a .row as a label (ink, 600); the
+   picker toggle's own label must keep the ghost button's muted tone. */
+.quick-add-pick .folder-pick-label { color: inherit; }
+.quick-add-picker { margin-top: 6px; }
+.quick-add-link { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+@media (min-width: 520px) {
+  .quick-add-link { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
 .quick-add-row {
   display: flex;
@@ -422,7 +469,7 @@ a.chip:hover { text-decoration: underline; }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 4px 4px 4px 12px;
+  padding: 4px 12px;
 }
 .quick-add-row:focus-within { border-color: var(--accent); }
 .quick-add-glyph { color: var(--muted); display: inline-flex; }
@@ -438,15 +485,15 @@ a.chip:hover { text-decoration: underline; }
   outline: none;
 }
 .quick-add-input::placeholder { color: var(--muted); }
-.quick-add-submit { min-height: var(--control-h); padding: 0 14px; font-size: var(--font-label); }
-.quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; padding: 0 4px; }
+.quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 0 4px; }
 .quick-add-chips:empty { display: none; }
 
 /* ======================================================== the filter card */
 /* One collapsible card (vendored disclosure) on every tab. The summary says
    what is active; the body is one row of controls at the control height —
-   text · project | person · due | modified · status | sort — which the phone
-   lays out two per line, equal widths (#48). */
+   project | person · due | modified · status | sort — which the phone lays
+   out two per line, equal widths (#48). The text filter is not in it: it
+   lives in the always-visible top strip above (#80). */
 .filter-card .collapse-main { min-width: 0; flex: 1 1 auto; }
 .filter-card .filter-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filter-body { display: grid; gap: 10px; }
@@ -457,12 +504,12 @@ a.chip:hover { text-decoration: underline; }
   gap: 8px;
 }
 .filter-select, .filter-row .msel { max-width: 200px; }
-.filter-q { width: 180px; }
+.filter-q { width: 100%; }      /* the strip's own width (#80) */
 .filter-clear { min-height: var(--control-h); }
 @media (max-width: 767px) {
   .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .filter-select, .filter-row .msel, .filter-q { width: 100%; max-width: none; }
-  .filter-q, .filter-clear { grid-column: 1 / -1; }
+  .filter-select, .filter-row .msel { width: 100%; max-width: none; }
+  .filter-clear { grid-column: 1 / -1; }
 }
 /* Multi-select: a select-looking summary that opens a checklist (filters.js).
    Several picks allowed; the summary reads "Anyone" / the name / "2 people". */
@@ -1082,7 +1129,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
-  .quick-add-input, .quick-add-submit, .filter-select, .filter-q, .due-btn,
+  .quick-add-input, .quick-add-btn, .filter-select, .filter-q, .due-btn,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
   .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb, .msel-summary {
     min-height: var(--row-sm);
@@ -1090,12 +1137,13 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary { height: var(--row-sm); }
   .folder-current .chip { height: var(--row-sm); }   /* pairs with line 2's 44px controls */
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
+  .quick-add-btn { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
   /* These already carry real 44px geometry here, so the invisible expansion
      would push the effective rect past its neighbour — design.md forbids
      overlapping tap rectangles. The 34px tree toggle still needs its 5px. */
-  .icon-btn::before, .toast-close::before { inset: 0; }
+  .icon-btn::before, .toast-close::before, .quick-add-btn::before { inset: 0; }
   .tree-toggle::before { inset: -5px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -11,7 +11,8 @@ allowed on screen). What a browser can prove of the story:
 - the install metadata a phone reads before "Add to Home Screen": the
   manifest is reachable and well-formed (``standalone``, 192/512 + maskable
   icons all 200), the iOS meta tags and touch icon are in the shell;
-- 390×844: Today is the landing tab → quick-add a task from Today → the
+- 390×844: Today is the landing tab → the + opens the quick-add dialog and
+  adds a task from Today (#80) → the
   Board is a one-column scroll-snap carousel and a swipe (scroll) moves the
   active column → a card opens the drawer full-screen → the folder chip
   carries the ref as a taskos:// opener link (a tap shows the path to copy —
@@ -46,6 +47,7 @@ import json
 import os
 import re
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -139,12 +141,17 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-07-phone-1-phone.png"))
 
-        # 2. Quick-add from Today: a task due today lands in the due list.
-        qa = page.locator("#paneToday .quick-add-input")
-        expect(qa).to_be_visible()
+        # 2. Quick-add from Today: the + opens the one dialog (#80) and a task
+        #    due today lands in the due list.
+        page.locator("#paneToday .quick-add-btn").tap()
+        quick_add = page.locator("#quickAdd")
+        expect(quick_add).to_be_visible()
+        qa = quick_add.locator(".quick-add-input")
         qa.fill("Water the balcony plants today")
-        expect(page.locator("#paneToday .quick-add-chips .chip").first).to_be_visible()   # parsed preview
+        # the parse lands in the Due field, where it can still be corrected (#80)
+        expect(quick_add.locator(".quick-add-due")).to_have_value(date.today().isoformat())
         qa.press("Enter")
+        expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
         added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
         expect(added).to_be_visible()
