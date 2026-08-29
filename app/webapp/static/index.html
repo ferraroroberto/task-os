@@ -484,7 +484,11 @@
             <dl class="status-rows" id="mirrorStatus" aria-live="polite">
               <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
               <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Import conflicts</dt><dd id="statusMirrorEvents" class="muted">Loading…</dd></div>
             </dl>
+            <div class="card-actions">
+              <button type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
+            </div>
           </div>
         </details>
         <!-- Issue provider (Step 8): status from GET /api/issues/status,

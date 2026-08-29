@@ -21,7 +21,7 @@ flowchart LR
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
     viewsr["routers/views<br/>/api/board · /api/today"]
-    mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · /api/backup"]
+    mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · GET/DELETE /api/mirror/events · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
@@ -30,7 +30,7 @@ flowchart LR
 
   subgraph domain["Domain · src/"]
     repo["tasks_repo.py<br/>create/update/move/done<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets)<br/>write listeners (touched ids)"]
-    mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict → comment"]
+    mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict/rejected → mirror_events (#84)"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>issue_from_task: task → new issue (route + CLI)<br/>IssueSyncService: 10 s after start, every sync_minutes"]
     issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>fake.py (tests, e2e) · get_provider(config)"]
@@ -40,7 +40,7 @@ flowchart LR
     fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
-    schema["schema.py<br/>MIGRATIONS v1→v5 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v6 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
@@ -54,6 +54,7 @@ flowchart LR
     p["people"]
     i["issue_refs"]
     ms["mirror_state (v4)<br/>path · exported_at · mtime · hash"]
+    me["mirror_events (v6)<br/>kind · field · file_value · kept_value<br/>deduped on (task_id, field, file_value)"]
     s["settings.schema_version"]
     fts["tasks_fts · comments_fts<br/>(FTS5, trigger-synced)"]
   end
@@ -128,11 +129,12 @@ flowchart LR
   issync -->|"create_task · update_task(actor=sync)<br/>set_issue_ref · touch_issue_ref"| repo
   cli -->|"issues sync · issue create (app down)"| issync
   repo -.->|"write listener → touch(ids)"| mirror
-  mirror -->|"update_task(actor=md) · add_comment(origin=md)"| repo
+  mirror -->|"update_task(actor=md) · record_mirror_event/resolve_mirror_field"| repo
   mirror -->|"export · re-export"| mdfiles
   mdfiles -->|"mtime moved → import"| mirror
   editor -.-> mdfiles
   mirror --> ms
+  mirror --> me
   backup -->|"daily / on demand"| bakfiles
   cli -->|"mirror · backup (app down)"| mirror
   tasksr -.-> errors

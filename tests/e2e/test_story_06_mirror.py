@@ -3,8 +3,10 @@
     The mirror folder fills with one .md per task → open a task's file in an
     editor, change ``due:`` and append a comment line → within seconds the
     app shows both, log actor ``md`` → make a conflicting edit → the conflict
-    appears as a comment, nothing lost → the backup folder holds a dated
-    ``.db`` copy → a malformed file is skipped and reported, never fatal.
+    is recorded as a mirror event (issue #84) — visible on the Settings
+    card, nothing added to the task's own comment thread — the backup folder
+    holds a dated ``.db`` copy → a malformed file is skipped and reported,
+    never fatal.
 
 Walks the story against the **mirrored** disposable instance (conftest
 ``mirrored_webapp``: the synthetic seed, ``mirror.dir`` / ``backup_dir`` under
@@ -14,7 +16,7 @@ proof shots the validation record links to:
     docs/screenshots/story-06-mirror-1-desktop.png   Settings card: mirror + backup on
     docs/screenshots/story-06-mirror-2-desktop.png   drawer: the comment typed in the file, origin md
     docs/screenshots/story-06-mirror-3-desktop.png   drawer: activity due old → new by md
-    docs/screenshots/story-06-mirror-4-desktop.png   drawer: the conflict comment
+    docs/screenshots/story-06-mirror-4-desktop.png   Settings card: the import conflict, inspect + clear
     docs/screenshots/story-06-mirror-5-desktop.png   Settings card: backup file + a skipped file (dark)
 
 The "editor" is the test writing the file — the headed walk in
@@ -129,30 +131,50 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         page.screenshot(path=str(shots / "story-06-mirror-3-desktop.png"))
 
         # 4. A conflicting edit: the app moves the due (a UI edit) and the file — still
-        #    carrying the older export — is saved with another value right after.
+        #    carrying the older export — is saved with another value right after. The DB
+        #    wins and the rejected file value is recorded as a mirror event (issue #84),
+        #    never as a comment on the task.
+        n_comments_before_conflict = len(detail["comments"])
         time.sleep(1.2)  # a distinct second from the last export (the baseline is second-precise)
         _send(base, "PATCH", f"/api/tasks/{task_id}", {"due": "2026-11-11"}, actor="ui")
         text = path.read_text(encoding="utf-8").replace("\ndue: 2026-12-24\n", "\ndue: 2026-10-10\n", 1)
         _edit(path, text)
 
         def _conflict() -> bool:
-            t = _get(base, f"/api/tasks/{task_id}")
-            return any(c["body"].startswith("import conflict on due") for c in t["comments"])
+            return _get(base, "/api/mirror/events")["events"] != []
 
-        _wait(_conflict, what="the conflict comment")
+        _wait(_conflict, what="the conflict event")
         detail = _get(base, f"/api/tasks/{task_id}")
         assert detail["due"] == "2026-11-11"  # the DB won
-        conflict = [c for c in detail["comments"] if c["body"].startswith("import conflict")][-1]
-        assert conflict["body"] == "import conflict on due: file said 2026-10-10, kept 2026-11-11"
-        assert conflict["origin"] == "md"
+        assert len(detail["comments"]) == n_comments_before_conflict  # untouched — no diagnostic comment
+        events = _get(base, "/api/mirror/events")["events"]
+        assert len(events) == 1
+        conflict = events[0]
+        assert conflict["task_id"] == task_id and conflict["kind"] == "conflict" and conflict["field"] == "due"
+        assert conflict["file_value"] == "2026-10-10" and conflict["kept_value"] == "2026-11-11"
         _wait(lambda: "\ndue: 2026-11-11\n" in path.read_text(encoding="utf-8"), what="the file to converge")
         page.reload()  # same #task/<id> URL: a reload re-fetches the drawer
         expect(drawer).to_be_visible()
-        expect(drawer.locator(".comment").first.locator(".comment-body")).to_have_text(
-            "import conflict on due: file said 2026-10-10, kept 2026-11-11"
-        )
-        expect(drawer.locator(".comment").first.locator(".comment-origin")).to_have_text("md")
+        # the drawer's newest comment is still the one typed in step 3 — the conflict added no comment
+        expect(drawer.locator(".comment").first.locator(".comment-body")).to_contain_text("checked the tiles supplier")
+
+        # The diagnostic surfaces on the Settings card instead — inspect, then clear it.
+        page.keyboard.press("Escape")  # close the drawer first — it overlays the tab panel
+        expect(drawer).to_be_hidden()
+        page.click("nav.tabs .tab[data-tab='settings']")
+        card.locator("summary.collapse-summary").click()  # the disclosure starts collapsed
+        expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
+        expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
         page.screenshot(path=str(shots / "story-06-mirror-4-desktop.png"))
+        clear_btn = card.locator("#mirrorEventsClear")
+        clear_btn.scroll_into_view_if_needed()
+        clear_btn.click()
+
+        def _cleared() -> bool:
+            return _get(base, "/api/mirror/events")["events"] == []
+
+        _wait(_cleared, what="the events to clear")
+        expect(card.locator("#statusMirrorEvents .status-ok")).to_have_text("none since the last review")
 
         # 5. The backup folder holds a dated .db copy (the startup pass) — and a
         #    malformed file is skipped and reported, never fatal.

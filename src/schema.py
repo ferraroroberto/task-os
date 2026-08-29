@@ -27,6 +27,12 @@ Version history:
        Gemini, Copilot — one kind, no per-provider split; issue #77). SQLite
        cannot widen a CHECK in place, so the step rebuilds ``links`` and
        recreates its index; v2's DDL stays frozen on the shipped kind list.
+    6  mirror_events(id, task_id, kind, field, file_value, kept_value, ts)  (issue #84)
+       — a conflicting or rejected mirror import value, recorded here instead
+       of as a comment on the task. Deduped on (task_id, field, file_value)
+       so a permanently unresolvable value produces one standing row, not one
+       per import pass; ``src/mirror.py`` clears a task's row for a field once
+       that field imports cleanly. No existing comment is touched or removed.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -206,8 +212,22 @@ ALTER TABLE links_new RENAME TO links;
 CREATE INDEX idx_links_task ON links(task_id);
 """
 
+_V6 = """
+CREATE TABLE mirror_events (
+    id         INTEGER PRIMARY KEY,
+    task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('conflict', 'rejected')),
+    field      TEXT NOT NULL,
+    file_value TEXT NOT NULL,
+    kept_value TEXT NOT NULL,
+    ts         TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_mirror_events_dedupe ON mirror_events(task_id, field, file_value);
+CREATE INDEX idx_mirror_events_ts ON mirror_events(ts);
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)
