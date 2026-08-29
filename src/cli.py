@@ -346,7 +346,7 @@ class LocalBackend:
                 "password": bool(config.auth.password_hash),
                 "client": UNKNOWN,
             },
-            "mirror": self._mirror_service().status(),
+            "mirror": self._mirror_service().status(self.conn),
             "backup": BackupScheduler(config).status(),
             "folders": folders.status(),
             "opener": opener.status(placeholders),

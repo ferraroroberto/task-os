@@ -42,13 +42,16 @@ differs from the recorded one, parses them and applies:
 
 **Conflict rule** — per field: if the DB changed that field *after* the file
 was written (latest ``activity.ts`` for the field > the recorded
-``exported_at``), the DB wins and the rejected file value is kept as a comment
-``origin=md`` — ``import conflict on <field>: file said <x>, kept <y>`` —
-nothing is silently lost. A value the repo refuses (bad status, unknown
-person, a cycle) is recorded the same way (``import rejected on …``). After
-every import the file is re-exported so it converges to canonical form.
-Malformed YAML → the file is skipped (warning once per change, counted in
-:meth:`Mirror.status` ``errors``), never a crash.
+``exported_at``), the DB wins and the rejected file value is kept as a
+``mirror_events`` row (schema v6; issue #84) — ``import conflict on <field>:
+file said <x>, kept <y>`` — nothing is silently lost, but it never becomes a
+comment on the task. A value the repo refuses (bad status, unknown person, a
+cycle) is recorded the same way (``import rejected on …``). Deduped on
+(task_id, field, file_value) and cleared once that field imports cleanly;
+:meth:`Mirror.status` ``events`` is the count the Settings mirror card reads.
+After every import the file is re-exported so it converges to canonical
+form. Malformed YAML → the file is skipped (warning once per change, counted
+in :meth:`Mirror.status` ``errors``), never a crash.
 
 Enabled only when ``mirror.dir`` resolves (``config.placeholders``) to a path
 whose parent exists — the leaf is created; otherwise :attr:`Mirror.enabled`
@@ -455,7 +458,7 @@ class Mirror:
 
     # ------------------------------------------------------------ status
 
-    def status(self) -> dict[str, Any]:
+    def status(self, conn: sqlite3.Connection) -> dict[str, Any]:
         files: int | None = None
         if self.dir is not None:
             try:
@@ -476,6 +479,7 @@ class Mirror:
             "error_files": sorted(self._bad_files),
             "pending": len(self._pending),
             "watching": self._thread is not None and self._thread.is_alive(),
+            "events": repo.count_mirror_events(conn),
         }
 
     # ------------------------------------------------------------ export
@@ -713,22 +717,33 @@ class Mirror:
             try:
                 value = self._file_value(conn, key, raw)
             except repo.RepoError as exc:
-                self._note(conn, task_id, result.rejected, f"import rejected on {key}: file said {raw!r} ({exc}), kept {self._show(task, key)}")
+                self._note(
+                    conn, task_id, result.rejected, kind="rejected", field=key,
+                    file_value=repr(raw), kept_value=self._show(task, key), detail=str(exc),
+                )
                 continue
             if key == "description":
                 value = value or ""
             if value == current:
+                repo.resolve_mirror_field(conn, task_id, key)
                 continue
             last = self._last_change(conn, task_id, key)
             if baseline and last and _after(last, baseline):
-                self._note(conn, task_id, result.conflicts, f"import conflict on {key}: file said {self._fmt(raw)}, kept {self._show(task, key)}")
+                self._note(
+                    conn, task_id, result.conflicts, kind="conflict", field=key,
+                    file_value=self._fmt(raw), kept_value=self._show(task, key),
+                )
                 continue
             try:
                 repo.update_task(conn, task_id, actor=MD_ACTOR, **{column: value})
                 result.applied[key] = value
                 task = repo.get_task(conn, task_id)
+                repo.resolve_mirror_field(conn, task_id, key)
             except repo.RepoError as exc:
-                self._note(conn, task_id, result.rejected, f"import rejected on {key}: file said {self._fmt(raw)} ({exc}), kept {self._show(task, key)}")
+                self._note(
+                    conn, task_id, result.rejected, kind="rejected", field=key,
+                    file_value=self._fmt(raw), kept_value=self._show(task, key), detail=str(exc),
+                )
 
     @staticmethod
     def _fmt(value: Any) -> str:
@@ -743,9 +758,24 @@ class Mirror:
             return "∅" if not d else (d[:60] + "…" if len(d) > 60 else d)
         return Mirror._fmt(task.get(_TASK_FIELD.get(key, key)))
 
-    def _note(self, conn: sqlite3.Connection, task_id: int, bucket: list[str], message: str) -> None:
+    def _note(
+        self,
+        conn: sqlite3.Connection,
+        task_id: int,
+        bucket: list[str],
+        *,
+        kind: str,
+        field: str,
+        file_value: str,
+        kept_value: str,
+        detail: str | None = None,
+    ) -> None:
+        message = f"import {kind} on {field}: file said {file_value}"
+        if detail:
+            message += f" ({detail})"
+        message += f", kept {kept_value}"
         bucket.append(message)
-        repo.add_comment(conn, task_id, message, author=self.owner, origin=MD_ACTOR)
+        repo.record_mirror_event(conn, task_id, kind=kind, field=field, file_value=file_value, kept_value=kept_value)
         logger.info("ℹ️ mirror: task %d — %s", task_id, message)
 
     def _apply_comments(

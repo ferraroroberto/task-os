@@ -2,7 +2,7 @@
 
     GET  /api/status          {https, auth: {enabled, password, client},
                                mirror: {enabled, dir, files, last_export, last_import,
-                               errors, …}, backup: {enabled, dir, last_file, next_run, …},
+                               errors, events, …}, backup: {enabled, dir, last_file, next_run, …},
                                folders: {enabled, roots, entries, last_indexed, indexing, …},
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
@@ -11,6 +11,9 @@
                               folder index + opener parts are Step 9)
     POST /api/mirror/export   full export now → {tasks, written, removed}
     POST /api/mirror/import   one watcher pass now → {checked, imported, errors}
+    GET  /api/mirror/events   every standing import conflict/rejection, most recent first
+                               (issue #84 — the Settings mirror card's "inspect")
+    DELETE /api/mirror/events clear every standing event → {cleared}
     POST /api/backup          one backup now → {file, dir} (409 when disabled)
 
 The services live on ``app.state.mirror`` / ``app.state.backup`` (started by
@@ -29,7 +32,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.webapp.routers._helpers import error_response
 from app.webapp.routers.auth import access_status
-from src import opener
+from src import opener, tasks_repo
 from src.db import get_db
 
 router = APIRouter(prefix="/api", tags=["mirror"])
@@ -40,13 +43,13 @@ def _services(request: Request) -> tuple[Any, Any]:
 
 
 @router.get("/status")
-def status(request: Request) -> dict[str, Any]:
+def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     mirror, backup = _services(request)
     folders = getattr(request.app.state, "folders", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
-        "mirror": mirror.status() if mirror else {"enabled": False, "reason": "mirror service not started"},
+        "mirror": mirror.status(db) if mirror else {"enabled": False, "reason": "mirror service not started"},
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
         "folders": folders.status() if folders else {"enabled": False, "reason": "folder index service not started"},
         "opener": opener.status(ph),
@@ -70,6 +73,16 @@ def mirror_import(request: Request, db: sqlite3.Connection = Depends(get_db)) ->
         reason = mirror.reason if mirror else "mirror service not started"
         return error_response(409, "mirror_disabled", reason)
     return mirror.import_tick(db)
+
+
+@router.get("/mirror/events")
+def mirror_events(db: sqlite3.Connection = Depends(get_db)) -> Any:
+    return {"events": tasks_repo.list_mirror_events(db)}
+
+
+@router.delete("/mirror/events")
+def mirror_events_clear(db: sqlite3.Connection = Depends(get_db)) -> Any:
+    return {"cleared": tasks_repo.clear_mirror_events(db)}
 
 
 @router.post("/backup")

@@ -940,6 +940,72 @@ def delete_comment(conn: sqlite3.Connection, comment_id: int) -> None:
     _touched(row["task_id"])
 
 
+# ----------------------------------------------------------- mirror events
+
+#: A permanently-unresolvable field caps out here so one noisy install can't
+#: grow the table unbounded; the oldest rows fall off first.
+MIRROR_EVENT_KINDS = ("conflict", "rejected")
+MIRROR_EVENTS_CAP = 500
+
+
+def record_mirror_event(
+    conn: sqlite3.Connection,
+    task_id: int,
+    *,
+    kind: str,
+    field: str,
+    file_value: str,
+    kept_value: str,
+) -> None:
+    """Record a mirror import conflict/rejection, deduped on (task_id, field, file_value).
+
+    A repeat of the same unresolvable value refreshes ``ts`` in place rather
+    than adding a new row (a permanently-broken field produces one standing
+    event, not one per import pass).
+    """
+    _require_task(conn, task_id)
+    if kind not in MIRROR_EVENT_KINDS:
+        raise ValidationError(f"kind must be one of {', '.join(MIRROR_EVENT_KINDS)} (got {kind!r})")
+    ts = now_iso()
+    conn.execute(
+        "INSERT INTO mirror_events(task_id, kind, field, file_value, kept_value, ts) VALUES (?,?,?,?,?,?) "
+        "ON CONFLICT(task_id, field, file_value) DO UPDATE SET "
+        "kind = excluded.kind, kept_value = excluded.kept_value, ts = excluded.ts",
+        (task_id, kind, field, file_value, kept_value, ts),
+    )
+    conn.execute(
+        "DELETE FROM mirror_events WHERE id NOT IN "
+        "(SELECT id FROM mirror_events ORDER BY ts DESC, id DESC LIMIT ?)",
+        (MIRROR_EVENTS_CAP,),
+    )
+    conn.commit()
+
+
+def resolve_mirror_field(conn: sqlite3.Connection, task_id: int, field: str) -> None:
+    """Clear any standing event(s) for this task's field — it imported cleanly this pass."""
+    conn.execute("DELETE FROM mirror_events WHERE task_id = ? AND field = ?", (task_id, field))
+    conn.commit()
+
+
+def list_mirror_events(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Most recent first — for the Settings mirror card's "inspect" view."""
+    return _rows(conn.execute("SELECT * FROM mirror_events ORDER BY ts DESC, id DESC").fetchall())
+
+
+def count_mirror_events(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) AS n FROM mirror_events").fetchone()
+    return int(row["n"])
+
+
+def clear_mirror_events(conn: sqlite3.Connection) -> int:
+    """Delete every standing event; returns how many were cleared."""
+    n = count_mirror_events(conn)
+    if n:
+        conn.execute("DELETE FROM mirror_events")
+        conn.commit()
+    return n
+
+
 # ------------------------------------------------------------------ links
 
 

@@ -48,6 +48,8 @@ export function mountSettings(opts) {
     mirrorCardMeta: document.getElementById('mirrorCardMeta'),
     statusMirror: document.getElementById('statusMirror'),
     statusBackup: document.getElementById('statusBackup'),
+    statusMirrorEvents: document.getElementById('statusMirrorEvents'),
+    mirrorEventsClear: document.getElementById('mirrorEventsClear'),
     folderCard: document.getElementById('folderCard'),
     folderCardMeta: document.getElementById('folderCardMeta'),
     statusOpener: document.getElementById('statusOpener'),
@@ -115,6 +117,49 @@ export function mountSettings(opts) {
       ' · last import ' + (m.last_import ? fmtTsShort(m.last_import) : '–')
     );
     if (m.error_files && m.error_files.length) dd.append(' · skipped: ' + m.error_files.join(', '));
+  }
+
+  // Mirror import diagnostics (issue #84) — recorded as `mirror_events` rows,
+  // never as a comment on the task; this row is the "visible at app level"
+  // half of the fix, with an inline preview (inspect) and a Clear action.
+  async function renderMirrorEventsRow(m) {
+    const dd = els.statusMirrorEvents;
+    if (!dd) return;
+    dd.replaceChildren();
+    dd.classList.remove('muted');
+    if (!m || !m.enabled) {
+      dd.append(statusPart('off', 'not configured'));
+      els.mirrorEventsClear.hidden = true;
+      return;
+    }
+    const n = m.events || 0;
+    if (!n) {
+      dd.append(statusPart('ok', 'none since the last review'));
+      els.mirrorEventsClear.hidden = true;
+      return;
+    }
+    dd.append(statusPart('warn', n + ' since the last review'));
+    els.mirrorEventsClear.hidden = false;
+    try {
+      const r = await api('/api/mirror/events');
+      const items = (r.events || []).slice(0, 3).map(function (e) {
+        return e.field + ': file said ' + e.file_value + ', kept ' + e.kept_value;
+      });
+      if (items.length) dd.append(' — ' + items.join('; ') + (n > items.length ? '; +' + (n - items.length) + ' more' : ''));
+    } catch (_) { /* the count above still stands */ }
+  }
+
+  function wireMirrorEventsClear() {
+    if (!els.mirrorEventsClear) return;
+    els.mirrorEventsClear.addEventListener('click', async function () {
+      els.mirrorEventsClear.disabled = true;
+      try {
+        const r = await api('/api/mirror/events', { method: 'DELETE' });
+        toast('Cleared ' + r.cleared + ' import conflict(s)', 'success');
+      } catch (err) { toast(err.message || 'Clear failed', 'error'); }
+      els.mirrorEventsClear.disabled = false;
+      refreshStatus();
+    });
   }
 
   function renderBackupRow(dd, b) {
@@ -194,6 +239,7 @@ export function mountSettings(opts) {
       renderAccessCard(body);
       renderMirrorRow(els.statusMirror, body.mirror);
       renderBackupRow(els.statusBackup, body.backup);
+      renderMirrorEventsRow(body.mirror).catch(function () {});
       const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
       els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
       if (els.folderCard) {
@@ -207,6 +253,7 @@ export function mountSettings(opts) {
       renderAccessUnknown(err.message);
       els.statusMirror.textContent = 'unknown — ' + err.message;
       els.statusBackup.textContent = 'unknown — ' + err.message;
+      els.statusMirrorEvents.textContent = 'unknown — ' + err.message;
       els.mirrorCardMeta.textContent = 'unknown';
       if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
     }
@@ -296,6 +343,7 @@ export function mountSettings(opts) {
 
   wireSignOut();
   wireReindex();
+  wireMirrorEventsClear();
   wireIssueSyncNow();
 
   return {

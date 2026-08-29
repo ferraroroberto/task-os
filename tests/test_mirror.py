@@ -164,7 +164,7 @@ def test_touch_queue_flush_exports_only_touched(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)
     mirror.touch([tid])
-    assert mirror.status()["pending"] == 1
+    assert mirror.status(conn)["pending"] == 1
     assert mirror.flush(conn) == 1
     assert path.exists() and len(list(env["dir"].glob("*.md"))) == 1
 
@@ -269,11 +269,12 @@ def test_deleted_comment_lines_are_not_deletions(env, mirror: Mirror) -> None:
     assert "keep me" in path.read_text(encoding="utf-8")  # restored by the re-export
 
 
-def test_conflict_db_wins_and_is_recorded_as_comment(env, mirror: Mirror) -> None:
+def test_conflict_db_wins_and_is_recorded_as_event(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)
     with repo.use_clock(_clock(T0)):
         mirror.export_task(conn, tid)
+    n_comments_before = len(repo.get_task(conn, tid)["comments"])
     # the DB moves the due AFTER the file was written…
     with repo.use_clock(_clock(T0.replace(hour=10))):
         repo.update_task(conn, tid, due="2026-11-11", actor="ui")
@@ -285,16 +286,21 @@ def test_conflict_db_wins_and_is_recorded_as_comment(env, mirror: Mirror) -> Non
     assert res["applied"] == {} and res["conflicts"] == ["import conflict on due: file said 2026-10-10, kept 2026-11-11"]
     task = repo.get_task(conn, tid)
     assert task["due"] == "2026-11-11"
-    last = task["comments"][-1]
-    assert last["origin"] == "md" and last["body"] == "import conflict on due: file said 2026-10-10, kept 2026-11-11"
+    # the task's own comment thread is untouched — the diagnostic is not a comment
+    assert len(task["comments"]) == n_comments_before
+    events = repo.list_mirror_events(conn)
+    assert len(events) == 1
+    assert events[0]["task_id"] == tid and events[0]["kind"] == "conflict" and events[0]["field"] == "due"
+    assert events[0]["file_value"] == "2026-10-10" and events[0]["kept_value"] == "2026-11-11"
     # nothing lost, and the file converged to the DB's value
     assert "due: 2026-11-11" in path.read_text(encoding="utf-8")
 
 
-def test_rejected_value_recorded_as_comment(env, mirror: Mirror) -> None:
+def test_rejected_value_recorded_as_event_no_comment(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)
     mirror.export_task(conn, tid)
+    n_comments_before = len(repo.get_task(conn, tid)["comments"])
     text = path.read_text(encoding="utf-8").replace("\nstatus: todo\n", "\nstatus: later\n")
     text = text.replace("\nperson: null\n", "\nperson: Nobody Known\n")
     _touch(path, text)
@@ -302,9 +308,18 @@ def test_rejected_value_recorded_as_comment(env, mirror: Mirror) -> None:
     assert len(res["rejected"]) == 2
     task = repo.get_task(conn, tid)
     assert task["status"] == "todo" and task["person_id"] is None
-    bodies = [c["body"] for c in task["comments"] if c["origin"] == "md"]
-    assert any(b.startswith("import rejected on status: file said later") for b in bodies)
-    assert any(b.startswith("import rejected on person: file said 'Nobody Known'") or b.startswith("import rejected on person: file said Nobody Known") for b in bodies)
+    assert len(task["comments"]) == n_comments_before
+    events = {e["field"]: e for e in repo.list_mirror_events(conn)}
+    assert set(events) == {"status", "person"}
+    assert events["status"]["kind"] == "rejected" and events["status"]["file_value"] == "later"
+    assert events["person"]["kind"] == "rejected" and events["person"]["file_value"] == "'Nobody Known'"
+    # the mirror re-exported the file to canonical form after the rejection; an external
+    # sync reintroducing the same unresolvable values (the real-world case, fleet-config#713)
+    # is a second pass over an *unchanged* bad value — it must refresh, not duplicate, the event
+    _touch(path, text)
+    res2 = mirror.import_tick(conn)["imported"][0]
+    assert len(res2["rejected"]) == 2
+    assert len(repo.list_mirror_events(conn)) == 2
 
 
 def test_malformed_file_is_skipped_not_fatal(env, mirror: Mirror, caplog: pytest.LogCaptureFixture) -> None:
@@ -318,7 +333,7 @@ def test_malformed_file_is_skipped_not_fatal(env, mirror: Mirror, caplog: pytest
     assert r1["errors"][0]["path"] == path.name and "unterminated" in r1["errors"][0]["error"]
     assert r2 == {"checked": 1, "imported": [], "errors": []}
     assert sum("skipped" in rec.message for rec in caplog.records) == 1
-    st = mirror.status()
+    st = mirror.status(conn)
     assert st["errors"] == 1 and st["error_files"] == [path.name] and st["errors_total"] == 1
     assert repo.get_task(conn, tid)["title"] == "Bathroom"  # untouched
     # fixing the file clears the error on the next tick
@@ -326,13 +341,13 @@ def test_malformed_file_is_skipped_not_fatal(env, mirror: Mirror, caplog: pytest
     _touch(path, render(task, exported_at="").replace("\ndue: null\n", "\ndue: 2026-12-01\n"))
     r3 = mirror.import_tick(conn)
     assert r3["imported"][0]["applied"] == {"due": "2026-12-01"}
-    assert mirror.status()["errors"] == 0
+    assert mirror.status(conn)["errors"] == 0
 
 
 def test_watcher_tick_picks_only_changed_files_and_ignores_strangers(env, mirror: Mirror) -> None:
     conn = env["conn"]
     mirror.export_all(conn)
-    n = mirror.status()["files"]
+    n = mirror.status(conn)["files"]
     assert mirror.import_tick(conn) == {"checked": n, "imported": [], "errors": []}
     tid, path = _bathroom(env)
     _touch(path, path.read_text(encoding="utf-8").replace("\ncode: null\n", "\ncode: BATH\n"))
@@ -369,7 +384,7 @@ def test_disabled_when_dir_not_configured_or_parent_missing(tmp_path: Path, monk
     # a missing leaf under an existing parent is created
     m4 = Mirror(load_config(write_test_config(tmp_path / "c4.json", dir=str(tmp_path / "fresh-leaf"))))
     assert m4.enabled and (tmp_path / "fresh-leaf").is_dir()
-    assert m4.status()["enabled"] and m4.status()["files"] == 0
+    assert m4.status(conn)["enabled"] and m4.status(conn)["files"] == 0
 
 
 # ------------------------------------------------------------- schema v4

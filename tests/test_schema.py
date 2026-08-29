@@ -12,7 +12,7 @@ from src import schema
 
 EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
-    "tasks_fts", "comments_fts", "mirror_state",
+    "tasks_fts", "comments_fts", "mirror_state", "mirror_events",
 }
 
 
@@ -30,10 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 5
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 6
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 5
+        assert schema.current_version(conn) == 6
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -47,13 +47,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 5
-        assert schema.migrate(conn) == 5
+        assert schema.migrate(conn) == 6
+        assert schema.migrate(conn) == 6
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 5
+    assert dbmod.init_db() == 6
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -67,10 +67,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 5
+    assert dbmod.init_db() == 6
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 5
+        assert schema.current_version(conn) == 6
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -79,12 +79,13 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
 
 def test_failed_migration_leaves_previous_version(_temp_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     dbmod.init_db()
-    monkeypatch.setitem(schema.MIGRATIONS, 6, "CREATE TABLE ok(x); CREATE TABLE ok(x);")  # second stmt fails
+    next_version = schema.SCHEMA_VERSION + 1
+    monkeypatch.setitem(schema.MIGRATIONS, next_version, "CREATE TABLE ok(x); CREATE TABLE ok(x);")  # second stmt fails
     conn = dbmod.connect()
     try:
         with pytest.raises(sqlite3.OperationalError):
             schema.migrate(conn)
-        assert schema.current_version(conn) == 5
+        assert schema.current_version(conn) == schema.SCHEMA_VERSION
         assert "ok" not in schema.table_names(conn)
         assert not conn.in_transaction
     finally:
@@ -110,7 +111,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 5
+    assert dbmod.init_db() == 6
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
