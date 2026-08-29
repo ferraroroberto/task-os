@@ -33,6 +33,7 @@ import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
 import { mountBoard } from './board.js';
+import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams, mountFilters,
@@ -42,6 +43,7 @@ import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { CLOSED, sortItems } from './rows.js';
 import { mountSearch } from './search.js';
+import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
 import { renderTable as renderTableGrid } from './table.js';
 import { toast } from './toast.js';
@@ -67,9 +69,11 @@ const els = {
   quickAdd: document.getElementById('quickAdd'),
   boardFilters: document.getElementById('boardFilters'),
   boardFilterText: document.getElementById('boardFilterText'),
+  boardBulk: document.getElementById('boardBulk'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
   tableFilterText: document.getElementById('tableFilterText'),
+  tableBulk: document.getElementById('tableBulk'),
   tableHost: document.getElementById('tableHost'),
   treeFilters: document.getElementById('treeFilters'),
   treeFilterText: document.getElementById('treeFilterText'),
@@ -100,6 +104,7 @@ let settings = null;
 let palette = null;
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
+const bulkBars = [];      // the Board's and the Table's, both over one selection (#81)
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -127,6 +132,9 @@ function renderNoTasks() {
   });
   ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText', 'treeFilters', 'treeFilterText',
     'todayFilters', 'todayFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  // nothing to select either — the toggle would open an empty Select mode
+  selection.setActive(false);
+  document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
 }
 
 function noMatchCard(iconName, message) {
@@ -189,12 +197,20 @@ function countOpen(forest) {
   return n;
 }
 
+/** Drop ticked ids the list no longer holds — deleted elsewhere, or filtered
+ *  out — so a bulk POST never carries an id the user cannot see (#81). */
+function pruneSelection() {
+  if (!selection.isActive()) return;
+  selection.keepOnly(new Set(state.items.map(function (t) { return t.id; })));
+}
+
 async function refreshAll() {
   try {
     const results = await Promise.all([
       loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1'),
     ]);
     state.total = results[2].count;
+    pruneSelection();
     if (state.total === 0) {
       state.items = [];
       state.tree = [];
@@ -241,6 +257,40 @@ async function setStatus(id, status) {
   await refreshAll();
   if (drawer.currentId() === id) drawer.refresh();
   return t;
+}
+
+/** Apply one change to every ticked task (#81) — POST /api/tasks/bulk.
+ *
+ *  The response is per id, because a batch is not all-or-nothing: an id
+ *  deleted in another tab 404s while the rest apply. What failed is named in
+ *  the toast and stays ticked, so a retry is one click — unless the task is
+ *  genuinely gone, which the refresh's prune then drops (there is nothing to
+ *  retry). A clean batch clears the selection but stays in Select mode, ready
+ *  for the next pick.
+ *  `status: 'complete'` carries the recurring-task roll, exactly as the row
+ *  select's option does (issue #54) — the server owns what it means per task. */
+async function bulkApply(changes) {
+  const ids = selection.selectedIds();
+  if (!ids.length) return;
+  let res;
+  try {
+    res = await api('/api/tasks/bulk', { method: 'POST', body: Object.assign({ ids: ids }, changes) });
+  } catch (err) {
+    toast(err.message || 'Bulk change failed', 'error');
+    throw err;
+  }
+  const failed = (res.results || []).filter(function (r) { return !r.ok; });
+  if (!failed.length) {
+    toast(res.updated + ' task' + (res.updated === 1 ? '' : 's') + ' updated', 'success');
+    selection.clear();
+  } else {
+    const first = failed[0];
+    toast(res.updated + ' updated · ' + failed.length + ' failed (#' + first.id + ': ' + first.error.message + ')', 'error');
+    selection.keepOnly(new Set(failed.map(function (r) { return r.id; })));
+  }
+  await refreshAll();
+  if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) drawer.refresh();
+  return res;
 }
 
 /** What the list views show: the filtered list — minus the closed tasks that
@@ -292,6 +342,7 @@ function renderFilters() {
 
 function renderAll() {
   renderFilters();
+  renderSelectMode();
   renderBoardPane();
   renderTable();
   renderTreePane();
@@ -299,10 +350,57 @@ function renderAll() {
   if (search) search.refilter();
 }
 
+// ------------------------------------------------------------- selection
+/** Select mode's chrome (#81): the toggles' pressed state, the bulk bars, and
+ *  which half of the top strip is showing — the strip's filter text and `+`
+ *  step aside for the bar rather than stacking a third row above the board. */
+function renderSelectMode() {
+  const active = selection.isActive();
+  const busy = active && selection.size() > 0;
+  document.querySelectorAll('[data-select-toggle]').forEach(function (btn) {
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.classList.toggle('is-on', active);
+    btn.hidden = busy;
+  });
+  document.querySelectorAll('[data-quick-add]').forEach(function (btn) { btn.hidden = busy; });
+  [els.boardFilterText, els.tableFilterText].forEach(function (host) {
+    if (host) host.classList.toggle('is-superseded', busy);
+  });
+  bulkBars.forEach(function (bar) { bar.render(); });
+}
+
+/** Reflect a membership change on the rows already on screen, in place.
+ *
+ *  Ticking a row must not rebuild four views: a full re-render would also
+ *  destroy the checkbox the keyboard is on, so Space-Space-Space down a column
+ *  would lose focus after the first tick. Mode changes still rebuild — there
+ *  the rows genuinely change shape. */
+function syncSelectionMarks() {
+  [els.boardHost, els.tableHost].forEach(function (host) {
+    if (!host) return;
+    host.querySelectorAll('.trow[data-id], .task-row[data-id]').forEach(function (row) {
+      const on = selection.has(row.dataset.id);
+      row.classList.toggle('is-selected', on);
+      const box = row.querySelector('.trow-check, .row-check');
+      if (box) box.checked = on;
+    });
+  });
+}
+
+const selectHandlers = {
+  onToggleSelect: function (id) { selection.toggle(id); },
+};
+
+function selectOpts() {
+  return { selectable: selection.isActive(), isSelected: selection.has };
+}
+
 function renderBoardPane() {
-  if (!board) board = mountBoard({ onOpen: openTask, onStatus: setStatus });
+  if (!board) {
+    board = mountBoard({ onOpen: openTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect });
+  }
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
-  board.render(state.items, state.filters);
+  board.render(state.items, state.filters, selectOpts());
 }
 
 function renderTodayPane() {
@@ -316,7 +414,9 @@ function renderTable() {
     return;
   }
   const phone = window.matchMedia(PHONE_TABLE_MQ).matches;
-  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort), { onOpen: openTask, onPatch: patchTask, onStatus: setStatus }, { phone: phone });
+  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort),
+    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
+    Object.assign({ phone: phone }, selectOpts()));
 }
 
 function renderTreePane() {
@@ -389,6 +489,29 @@ function focusRow(task) {
     (target.closest('.trow') || target).classList.add('is-new');
     target.scrollIntoView({ block: 'nearest' });
   }
+}
+
+// ------------------------------------------------------------ select mode
+function wireSelectMode() {
+  document.querySelectorAll('[data-select-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () { selection.setActive(!selection.isActive()); });
+  });
+  [els.boardBulk, els.tableBulk].forEach(function (host) {
+    if (!host) return;
+    bulkBars.push(mountBulkBar(host, {
+      onApply: bulkApply,
+      onExit: function () { selection.setActive(false); },
+    }));
+  });
+  // One store, two views. Entering/leaving Select mode changes the rows'
+  // shape, so it rebuilds; a tick only changes which rows are marked, so it
+  // is reflected in place (and the Table, rebuilt on its next render, reads
+  // the same store — which is what carries a Board selection across the tab).
+  selection.subscribe(function (kind) {
+    if (kind === 'mode' && state.total) renderAll();
+    else syncSelectionMarks();
+    renderSelectMode();
+  });
 }
 
 function wireQuickAdd() {
@@ -592,6 +715,7 @@ async function boot() {
   });
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
   wireQuickAdd();
+  wireSelectMode();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
     currentTaskId: function () { return drawer.currentId(); },
@@ -604,7 +728,14 @@ async function boot() {
   if (searchQ) search.setQuery(searchQ);
   wirePalette();
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape' && drawer.currentId() != null && !ev.target.closest('input, textarea, select')) closeTask();
+    if (ev.key !== 'Escape') return;
+    // A field where you are typing owns Escape (revert / clear its own value).
+    // A checkbox does not: after ticking a row the focus sits on one, and
+    // Escape there has to leave Select mode or the key looks broken (#81).
+    if (ev.target.closest('textarea, select, input:not([type="checkbox"])')) return;
+    // the drawer first (it is the thing on top), then Select mode
+    if (drawer.currentId() != null) closeTask();
+    else if (selection.isActive()) selection.setActive(false);
   });
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);

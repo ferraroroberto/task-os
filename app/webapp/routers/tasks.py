@@ -2,6 +2,7 @@
 
     GET    /api/tasks                    filtered flat list (summaries)
     POST   /api/tasks                    create → 201
+    POST   /api/tasks/bulk               {ids, status?, due?} → per-id results
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree)
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
@@ -84,6 +85,21 @@ class TaskUpdate(BaseModel):
     folder_ref: str | None = None
     next_action: str | None = None
     person_id: int | None = None
+    actor: str | None = None
+
+
+class BulkBody(BaseModel):
+    """One change applied to many tasks — the Board/Table selection (issue #81).
+
+    ``status`` takes the same vocabulary as the row select, ``complete``
+    included; ``due`` takes the same natural phrases as a single-task update
+    (``null`` / ``""`` clears it). Both may travel together, except
+    ``complete`` (which rolls the due itself) with an explicit ``due``.
+    """
+
+    ids: list[int] = Field(min_length=1, max_length=500)
+    status: str | None = None
+    due: str | None = None
     actor: str | None = None
 
 
@@ -197,6 +213,35 @@ def create_task(
 ) -> dict[str, Any]:
     fields = _resolve_due(body.model_dump(exclude={"title", "actor"}, exclude_none=True))
     return repo.create_task(db, body.title, actor=resolve_actor(request, body.actor), **fields)
+
+
+@router.post("/tasks/bulk")
+def bulk_tasks(
+    body: BulkBody, request: Request, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    """Apply one status / due change to a selection of tasks (issue #81).
+
+    Declared before ``/tasks/{task_id}`` so the literal path always wins.
+    ``due`` is resolved **once** here: an unparseable phrase is one 422 for
+    the request, not the same error repeated per id. Per-*task* failures (an
+    id deleted in another tab, a status the task refuses) are data, not an
+    error — they come back as ``ok: false`` rows on a 200 so the caller can
+    say which ids failed and keep them selected for a retry.
+    """
+    changes = body.model_dump(exclude={"ids", "actor", "status"}, exclude_unset=True)
+    complete = body.status == "complete"
+    if body.status is None and "due" not in changes:
+        raise repo.ValidationError("a bulk change needs a status, a due date, or both")
+    if complete and "due" in changes:
+        raise repo.ValidationError("'complete' rolls the due date itself — don't set one too")
+    if body.status is not None and not complete:
+        changes["status"] = body.status
+    _resolve_due(changes)
+    results = repo.bulk_update(
+        db, body.ids, actor=resolve_actor(request, body.actor), complete=complete, **changes
+    )
+    updated = sum(1 for r in results if r["ok"])
+    return {"results": results, "updated": updated, "failed": len(results) - updated}
 
 
 @router.get("/tasks/tree")

@@ -17,6 +17,7 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 09 | [Open a folder](validation/story-09-folders.md) | `tests/e2e/test_story_09_folders.py` · `tests/test_opener.py` · `tests/test_placeholders.py` · `tests/test_folder_index.py` | verified on PC #1 (browser → opener → Explorer) · **second PC not verified** (steps in the write-up) | 2026-08-17 |
 | 10 | [Find anything](validation/story-10-search.md) | `tests/e2e/test_story_10_search.py` · `tests/test_search_adapters.py` | verified (fixture indexes on screen · real email index via CLI, counts only) · **opening a `.msg` through the opener not verified** | 2026-08-17 |
 | 11 | [The AI conversation on the task (#77)](validation/story-11-ai-links.md) | inside `tests/e2e/test_story_09_folders.py` (§ #77) · `tests/test_schema.py` · `tests/test_opener.py::test_resume_*` | verified (e2e + real-transcript dry-run + live walk + real terminal spawn) · **real phone = owner's checklist** | 2026-08-26 |
+| 12 | [Act on several tasks at once (#81)](validation/story-12-bulk-select.md) | inside `tests/e2e/test_story_05_board.py` (§ #81) · `tests/test_repo.py::test_bulk_*` · `tests/test_api.py::test_bulk_*` | verified (e2e desktop + phone · unit · headed desktop walk both themes, partial failure included) · **phone walked by the e2e leg only, real phone = owner's checklist** | 2026-08-29 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 

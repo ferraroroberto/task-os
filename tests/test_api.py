@@ -214,3 +214,60 @@ def test_parse_endpoint(seeded: TestClient) -> None:
 
     r = seeded.post("/api/parse", json={"text": "x", "today": "17/08/2026"})
     assert r.status_code == 422
+
+
+# ------------------------------------------------- bulk (issue #81)
+
+def _mk(client: TestClient, title: str, **fields: object) -> int:
+    return client.post("/api/tasks", json={"title": title, **fields}).json()["id"]
+
+
+def test_bulk_status_and_due_across_a_selection(client: TestClient) -> None:
+    ids = [_mk(client, f"T{n}") for n in range(3)]
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "status": "doing"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated"] == 3 and body["failed"] == 0
+    assert {x["task"]["status"] for x in body["results"]} == {"doing"}
+    # a natural phrase is resolved once, for the whole selection
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "due": "2026-09-01"})
+    assert {x["task"]["due"] for x in r.json()["results"]} == {"2026-09-01"}
+    # status + due together, and "" clears the date
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "status": "todo", "due": ""})
+    assert [(x["task"]["status"], x["task"]["due"]) for x in r.json()["results"]] == [("todo", None)] * 3
+
+
+def test_bulk_partial_failure_is_a_200_that_names_the_id(client: TestClient) -> None:
+    ids = [_mk(client, f"T{n}") for n in range(2)]
+    r = client.post("/api/tasks/bulk", json={"ids": [ids[0], 4242, ids[1]], "status": "todo"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated"] == 2 and body["failed"] == 1
+    bad = [x for x in body["results"] if not x["ok"]]
+    assert bad[0]["id"] == 4242 and bad[0]["error"]["code"] == "not_found"
+    assert [client.get(f"/api/tasks/{i}").json()["status"] for i in ids] == ["todo", "todo"]
+
+
+def test_bulk_complete_rolls_a_recurring_task(client: TestClient) -> None:
+    rolling = _mk(client, "Weekly", recurrence="weekly", due="2026-08-31", status="todo")
+    oneoff = _mk(client, "One-off", due="2026-08-31", status="todo")
+    r = client.post("/api/tasks/bulk", json={"ids": [rolling, oneoff], "status": "complete"})
+    assert r.status_code == 200 and r.json()["failed"] == 0
+    results = {x["id"]: x["task"] for x in r.json()["results"]}
+    assert results[rolling]["due"] == "2026-09-07" and results[rolling]["status"] == "todo"
+    assert results[oneoff]["status"] == "done"
+
+
+@pytest.mark.parametrize(
+    ("body", "status"),
+    [
+        ({"ids": [], "status": "todo"}, 422),                    # nothing selected
+        ({"ids": [1]}, 422),                                     # nothing to change
+        ({"ids": [1], "status": "complete", "due": "friday"}, 422),  # complete owns the due
+        ({"ids": [1], "due": "someday"}, 422),                   # one request-level date error
+    ],
+)
+def test_bulk_refuses_a_malformed_request(client: TestClient, body: dict, status: int) -> None:
+    _mk(client, "Present")
+    r = client.post("/api/tasks/bulk", json=body)
+    assert r.status_code == status and "error" in r.json()

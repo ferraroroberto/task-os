@@ -373,3 +373,50 @@ def test_dates_stay_iso_and_clock_pinned(conn: sqlite3.Connection, frozen: None)
     t = repo.create_task(conn, "Clock", due=date(2026, 9, 1))
     assert t["due"] == "2026-09-01"
     assert t["created_at"].startswith("2026-08-17T09:00:00")
+
+
+# ----------------------------------------------------------------- bulk
+
+def test_bulk_update_applies_to_every_id(conn: sqlite3.Connection) -> None:
+    ids = [repo.create_task(conn, f"T{n}")["id"] for n in range(3)]
+    results = repo.bulk_update(conn, ids, actor="me", status="doing")
+    assert [r["id"] for r in results] == ids
+    assert all(r["ok"] for r in results)
+    assert {r["task"]["status"] for r in results} == {"doing"}
+    # the same activity trail a one-by-one edit would leave
+    assert _fields(repo.get_task(conn, ids[0])["activity"])[0] == ("status", "inbox", "doing")
+
+
+def test_bulk_update_reports_the_failed_id_and_applies_the_rest(conn: sqlite3.Connection) -> None:
+    good = [repo.create_task(conn, f"T{n}")["id"] for n in range(2)]
+    results = repo.bulk_update(conn, [good[0], 4242, good[1]], status="todo")
+    assert [(r["id"], r["ok"]) for r in results] == [(good[0], True), (4242, False), (good[1], True)]
+    assert results[1]["error"]["code"] == "not_found"
+    # the bad id in the middle does NOT stop the batch
+    assert [repo.get_task(conn, i)["status"] for i in good] == ["todo", "todo"]
+
+
+def test_bulk_update_surfaces_a_validation_error_per_id(conn: sqlite3.Connection) -> None:
+    ids = [repo.create_task(conn, f"T{n}")["id"] for n in range(2)]
+    results = repo.bulk_update(conn, ids, due="not-a-date")
+    assert [r["ok"] for r in results] == [False, False]
+    assert {r["error"]["code"] for r in results} == {"validation_error"}
+
+
+def test_bulk_complete_rolls_recurring_and_closes_the_rest(conn: sqlite3.Connection) -> None:
+    rolling = repo.create_task(conn, "Weekly", recurrence="weekly", due="2026-08-31", status="todo")["id"]
+    oneoff = repo.create_task(conn, "One-off", due="2026-08-31", status="todo")["id"]
+    results = repo.bulk_update(conn, [rolling, oneoff], actor="me", complete=True)
+    assert all(r["ok"] for r in results)
+    # the recurring task rolls and stays open; the plain one closes — exactly
+    # what the row select's `complete` does per task (#54)
+    assert results[0]["task"]["due"] == "2026-09-07"
+    assert results[0]["task"]["status"] == "todo"
+    assert results[1]["task"]["status"] == "done" and results[1]["task"]["done_at"]
+
+
+def test_bulk_update_collapses_duplicate_ids(conn: sqlite3.Connection) -> None:
+    rolling = repo.create_task(conn, "Weekly", recurrence="weekly", due="2026-08-31")["id"]
+    results = repo.bulk_update(conn, [rolling, rolling, rolling], complete=True)
+    assert [r["id"] for r in results] == [rolling]
+    assert repo.get_task(conn, rolling)["due"] == "2026-09-07"    # rolled once, not three times
