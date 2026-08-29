@@ -472,7 +472,9 @@ a.chip:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 .bulk-count .icon { width: var(--icon-title); height: var(--icon-title); }
-.bulk-status { flex: 1 1 auto; min-width: 0; height: var(--control-h); }
+/* Grows to fill a phone strip, but capped so it never reads as a banner
+   across a 1440px board — it is a control, and the ✕ keeps the right edge. */
+.bulk-status { flex: 1 1 auto; min-width: 0; max-width: 220px; height: var(--control-h); }
 .bulk-due, .bulk-exit { color: var(--muted); }
 .bulk-due:hover { color: var(--accent); }
 .bulk-exit { margin-left: auto; }

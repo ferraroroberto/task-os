@@ -31,10 +31,11 @@ export function duePicker(opts) {
   const o = opts || {};
   const button = document.createElement('button');
   button.type = 'button';
-  // `className` REPLACES the default modifier rather than stacking on it: the
-  // Table's cell button is 30px, the strip's is a full square, and letting
-  // both classes land on one element makes the two size rules fight.
-  button.className = 'icon-btn ' + (o.className || 'due-pick-btn');
+  // `className` is the WHOLE class list, not a modifier stacked on a default:
+  // the Table's cell button is a 30px `.icon-btn`, the strip's is a 36/44px
+  // `.button-surface .strip-square`, and letting both stacks land on one
+  // element just makes their size rules fight (34px vs 36px, silently).
+  button.className = o.className || 'icon-btn due-pick-btn';
   button.title = o.title || 'Pick a date';
   button.setAttribute('aria-label', o.ariaLabel || 'Pick a due date');
   button.innerHTML = icon('calendar-days');

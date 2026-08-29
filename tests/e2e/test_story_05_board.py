@@ -328,6 +328,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(bar.locator(".bulk-n")).to_have_text("3")
         # the bar takes the strip over rather than stacking a third row on it
         expect(page.locator("#paneBoard [data-quick-add]")).to_be_hidden()
+        # one line, one height — asserted on the desktop leg too, because the
+        # mismatch that shipped here was fine-pointer only: the squares took
+        # .icon-btn's 34px against the select's 36px
+        boxes = bar.locator("select, button").evaluate_all(
+            "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
+        assert len(boxes) == 3, boxes                        # status select · date · ✕
+        assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
+        assert len({round(b["h"]) for b in boxes}) == 1, boxes
+        assert all(round(s["w"]) == round(s["h"]) for s in boxes[1:]), boxes
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-10-desktop.png"))
 

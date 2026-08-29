@@ -78,7 +78,7 @@ export function mountBulkBar(host, handlers) {
   // API still takes the natural phrases — the Table's inline cell, the drawer
   // and the CLI are where you type them.
   const due = duePicker({
-    className: 'strip-square bulk-due',
+    className: 'button-surface strip-square bulk-due',
     title: 'Set the due date of the selected tasks',
     ariaLabel: 'Set the due date of the selected tasks',
     onPick: function (value) { apply({ due: value }, function () { due.picker.value = ''; }); },
@@ -86,7 +86,9 @@ export function mountBulkBar(host, handlers) {
 
   const exit = document.createElement('button');
   exit.type = 'button';
-  exit.className = 'icon-btn strip-square bulk-exit';
+  // the same class stack the strip's + and Select toggle wear, so all four
+  // squares are one control by construction, not by two rules agreeing
+  exit.className = 'button-surface strip-square bulk-exit';
   exit.title = 'Leave select mode';
   exit.setAttribute('aria-label', 'Leave select mode');
   exit.innerHTML = icon('x');
