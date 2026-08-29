@@ -149,8 +149,10 @@ export function mountBoard(handlers) {
   /**
    * @param {Array<object>} items   the shared filtered list (done = done today unless the done pill is pressed)
    * @param {object} filters        {status: [...], sort}
+   * @param {{selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]  Select mode (#81)
    */
-  function render(items, filters) {
+  function render(items, filters, opts) {
+    const o = opts || {};
     const f = filters || { status: [], sort: 'due' };
     const byStatus = {};
     BOARD_COLUMNS.forEach(function (c) { byStatus[c.key] = []; });
@@ -166,7 +168,12 @@ export function mountBoard(handlers) {
       counts[col.key].textContent = String(rows.length);
       stripBtns[col.key].querySelector('.board-count').textContent = String(rows.length);
       lists[col.key].replaceChildren();
-      rows.forEach(function (t) { lists[col.key].appendChild(buildRow(t, handlers)); });
+      rows.forEach(function (t) {
+        lists[col.key].appendChild(buildRow(t, handlers, {
+          selectable: !!o.selectable,
+          selected: o.isSelected ? o.isSelected(t.id) : false,
+        }));
+      });
       empties[col.key].hidden = rows.length > 0;
     });
     if (sections[currentCol].hidden) {
@@ -186,8 +193,14 @@ export function mountBoard(handlers) {
 }
 
 // ------------------------------------------------------------------ rows
-function buildRow(t, handlers) {
-  const li = taskRow(t, handlers, { draggable: true });
+function buildRow(t, handlers, opts) {
+  const o = opts || {};
+  // Drag is off in Select mode: a card that both drags to another column and
+  // ticks on tap turns every slightly-moved tap into a status change (#81).
+  const li = taskRow(t, handlers, {
+    draggable: !o.selectable, selectable: o.selectable, selected: o.selected,
+  });
+  if (o.selectable) return li;
   li.addEventListener('dragstart', function (ev) {
     ev.dataTransfer.setData('text/plain', String(t.id));
     ev.dataTransfer.effectAllowed = 'move';

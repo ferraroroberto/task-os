@@ -17,12 +17,19 @@ dataset allowed on screen) at 1440×900 desktop, saving the numbered proof
 shots the validation record links to:
 
     docs/screenshots/story-05-board-{1..7}-desktop.png
+    docs/screenshots/story-05-board-{10..12}-desktop.png   (§ #81, below)
 
 then the phone at 390×844 (WebKit, touch) — Today as the landing tab, the
 Board as a one-column scroll-snap carousel — with the geometry checks:
 
     docs/screenshots/story-05-board-8-phone.png   (Today, the landing tab)
     docs/screenshots/story-05-board-9-phone.png   (Board carousel, one column)
+    docs/screenshots/story-05-board-10-phone.png  (§ #81 Select mode + bulk bar)
+
+§ #81 (multi-select, folded into this story rather than a 15th e2e test, the
+way #77 rides inside story 09): Select mode across Board and Table over ONE
+selection store, the bulk status / due actions, and the partial-failure
+report. Story 12 in ``docs/validation.md`` points here.
 
 UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
 title + status select on line 1, the meta line under it) and shares ONE
@@ -301,6 +308,77 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator(".board-col-count[data-col='done']")).to_have_text("2")
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-7-desktop.png"))
+
+        # ---------------------------------------------- § #81 bulk select
+        # 9. Select mode: tick three cards across three columns, bulk-change
+        #    their status, and prove the selection is ONE store — it survives
+        #    the trip to the Table, where the same three rows are ticked.
+        page.click("#paneBoard [data-select-toggle]")
+        expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+        picks = ["Compare phone plans", "Choose worktop material", "Get three quotes"]
+        for title in picks:
+            _card(page, title).locator(".trow-check").check()
+        ids = [int(_card(page, t).get_attribute("data-id")) for t in picks]
+        assert len({_get(base, f"/api/tasks/{i}")["status"] for i in ids}) == 3   # three columns
+        bar = page.locator("#boardBulk")
+        expect(bar).to_be_visible()
+        # the label carries the whole phrase — the visible text may drop the
+        # word "selected" on a narrow phone, never the number
+        expect(bar.locator(".bulk-count")).to_have_attribute("aria-label", "3 selected")
+        expect(bar.locator(".bulk-n")).to_have_text("3")
+        # the bar takes the strip over rather than stacking a third row on it
+        expect(page.locator("#paneBoard [data-quick-add]")).to_be_hidden()
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-05-board-10-desktop.png"))
+
+        # 10. The selection carries to the Table, checkbox column and all.
+        page.click("nav.tabs .tab[data-tab='table']")
+        expect(page.locator("#tableHost th.c-sel")).to_be_visible()
+        expect(page.locator("#tableBulk .bulk-count")).to_have_attribute("aria-label", "3 selected")
+        for i in ids:
+            expect(page.locator(f"#tableHost .task-row[data-id='{i}'] .row-check")).to_be_checked()
+        page.screenshot(path=str(shots / "story-05-board-11-desktop.png"))
+
+        # 11. Bulk-change the status → all three move, each with its own
+        #     activity row, exactly as three single-task edits would have.
+        page.locator("#tableBulk .bulk-status").select_option("standby")
+        expect(page.locator("#tableBulk")).to_be_hidden()          # applied, selection cleared
+        for i in ids:
+            detail = _get(base, f"/api/tasks/{i}")
+            assert detail["status"] == "standby", detail
+            log = next(a for a in detail["activity"] if a["field"] == "status")
+            assert log["new_value"] == "standby", log
+        # Select mode is still on — the next pick needs no second trip to the toggle
+        expect(page.locator("#paneTable [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+
+        # 12. A bulk due date. The bar carries the native picker alone (no
+        #     phrase box — that lives on the Table's own cell), and the picker
+        #     dialog is OS chrome Playwright cannot open, so the walk sets the
+        #     date input and fires the change the picker itself would.
+        page.locator(f"#tableHost .task-row[data-id='{ids[0]}'] .row-check").check()
+        page.locator(f"#tableHost .task-row[data-id='{ids[1]}'] .row-check").check()
+        expect(page.locator("#tableBulk .bulk-due")).to_be_visible()
+        expect(page.locator("#tableBulk .due-text")).to_have_count(0)
+        target = (date.today() + timedelta(days=14)).isoformat()
+        page.locator("#tableBulk input.due-date").evaluate(
+            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", target)
+        expect(page.locator("#tableBulk")).to_be_hidden()
+        assert [_get(base, f"/api/tasks/{i}")["due"] for i in ids[:2]] == [target, target]
+
+        # 13. A batch that partially fails names the id rather than dropping
+        #     it silently — the task deleted in another tab (#81).
+        page.locator(f"#tableHost .task-row[data-id='{ids[0]}'] .row-check").check()
+        page.locator(f"#tableHost .task-row[data-id='{ids[1]}'] .row-check").check()
+        page.evaluate(f"fetch('/api/tasks/{ids[1]}', {{method: 'DELETE'}})")
+        page.locator("#tableBulk .bulk-status").select_option("todo")
+        expect(page.locator(".toasts")).to_have_text(re.compile(rf"1 updated .* 1 failed .*#{ids[1]}"))
+        assert _get(base, f"/api/tasks/{ids[0]}")["status"] == "todo"
+        page.screenshot(path=str(shots / "story-05-board-12-desktop.png"))
+
+        # 14. Leaving Select mode puts the pane back exactly as it was.
+        page.click("#paneTable [data-select-toggle]")
+        expect(page.locator("#tableHost th.c-sel")).to_have_count(0)
+        expect(page.locator("#paneTable [data-quick-add]")).to_be_visible()
         assert errors == [], errors
     finally:
         context.close()
@@ -387,6 +465,50 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert _col(page, "doing").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
+
+        # 11. § #81 on the phone: the same Select toggle, tap-to-select (no
+        #     gesture — the horizontal swipe still belongs to the carousel),
+        #     and the bulk bar sized for the strip, clear of the nav pill.
+        # the strip's two icon buttons are one pair: same square, both 44px on
+        # touch (the toggle used to keep the 36px control height here)
+        tog_box = page.locator("#paneBoard [data-select-toggle]").bounding_box()
+        add_box = page.locator("#paneBoard [data-quick-add]").bounding_box()
+        assert tog_box and add_box
+        assert (tog_box["width"], tog_box["height"]) == (add_box["width"], add_box["height"]), (tog_box, add_box)
+        assert tog_box["width"] == tog_box["height"] >= 44, tog_box
+        assert_no_overlap(page.locator("#paneBoard .pane-top button"))
+
+        page.locator("#paneBoard [data-select-toggle]").tap()
+        checks = _col(page, "doing").locator(".trow-check")
+        expect(checks.first).to_be_visible()
+        assert_min_target(_col(page, "doing").locator(".trow"))
+        assert_no_overlap(checks)
+        # a tap on the card body ticks it instead of opening the drawer
+        _col(page, "doing").locator(".trow").first.locator(".trow-main").tap()
+        expect(_col(page, "doing").locator(".trow.is-selected")).to_have_count(1)
+        expect(page.locator("#taskDrawer")).to_be_hidden()
+        bar = page.locator("#boardBulk")
+        expect(bar).to_be_visible()
+        bar_box = bar.bounding_box()
+        nav_box = page.locator("nav.tabs").bounding_box()
+        assert bar_box and nav_box
+        # the bar lives in the top strip — it never reaches the floating pill
+        assert bar_box["y"] + bar_box["height"] < nav_box["y"], (bar_box, nav_box)
+        assert_min_target(bar.locator("button"))
+        assert_no_overlap(bar.locator("button"))
+        # ONE line, and one height: every control shares the row's centre and
+        # the two square buttons match the strip's own (they wrapped to a
+        # second line, and the date was a phrase box, before the owner's call)
+        boxes = bar.locator("select, button").evaluate_all(
+            "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
+        assert len(boxes) == 3, boxes                       # status select · date · ✕
+        assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
+        assert len({round(b["h"]) for b in boxes}) == 1, boxes
+        squares = boxes[1:]
+        assert all(round(s["w"]) == round(s["h"]) >= 44 for s in squares), squares
+        assert bar_box["height"] < 2 * boxes[0]["h"], bar_box   # never wrapped
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-05-board-10-phone.png"))
         context.close()
     finally:
         wk.close()

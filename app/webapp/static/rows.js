@@ -162,21 +162,42 @@ export function metaLine(t, opts) {
 /**
  * One task row.
  * @param {object} t                    a list summary (/api/tasks item, board/today item, search hit)
- * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>}} handlers
+ * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
+ *          onToggleSelect?: (id:number)=>void}} handlers
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
- *          draggable?: boolean, tag?: string}} [opts]
- *          prefix = an element before the title (the Tree's toggle);
- *          extra  = a third line under the meta (a Search snippet);
- *          tag    = the element name ('li' default, 'div' for a non-list host)
+ *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean}} [opts]
+ *          prefix     = an element before the title (the Tree's toggle);
+ *          extra      = a third line under the meta (a Search snippet);
+ *          tag        = the element name ('li' default, 'div' for a non-list host);
+ *          selectable = Select mode is on (#81): the row grows a leading
+ *                       checkbox and the row gesture ticks instead of opening
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
   const li = document.createElement(o.tag || 'li');
-  li.className = 'trow' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '') + (o.prefix ? ' has-prefix' : '');
+  li.className = 'trow' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
+    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
   li.dataset.id = String(t.id);
   li.dataset.status = t.status;
   if (o.depth != null) li.style.setProperty('--depth', String(o.depth));
   if (o.draggable) li.draggable = true;
+
+  // In Select mode the whole row is a tick target — the same gesture that
+  // opens the task otherwise. One affordance for the Board's cards AND the
+  // Table's phone rows, because both render this row.
+  const activate = function () {
+    if (o.selectable) handlers.onToggleSelect(t.id); else handlers.onOpen(t.id);
+  };
+
+  if (o.selectable) {
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'trow-check';
+    box.checked = !!o.selected;
+    box.setAttribute('aria-label', 'Select ' + t.title);
+    box.addEventListener('change', function () { handlers.onToggleSelect(t.id); });
+    li.appendChild(box);
+  }
 
   if (o.prefix) {
     o.prefix.classList.add('trow-prefix');
@@ -187,7 +208,7 @@ export function taskRow(t, handlers, opts) {
   main.className = 'trow-main';
   main.setAttribute('role', 'button');
   main.tabIndex = 0;
-  main.setAttribute('aria-label', t.title);
+  main.setAttribute('aria-label', (o.selectable ? 'Select ' : '') + t.title);
   const title = document.createElement('span');
   title.className = 'trow-title';
   title.textContent = t.title;
@@ -205,17 +226,17 @@ export function taskRow(t, handlers, opts) {
   }
 
   main.addEventListener('click', function (ev) {
-    if (ev.target.closest('a, select, button')) return;
-    handlers.onOpen(t.id);
+    if (ev.target.closest('a, select, button, input')) return;
+    activate();
   });
   main.addEventListener('keydown', function (ev) {
     if (ev.target !== main) return;
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handlers.onOpen(t.id); }
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); }
   });
   // a click on the meta line (not on a chip) opens too — the whole row is the target
   meta.addEventListener('click', function (ev) {
-    if (ev.target.closest('a, select, button')) return;
-    handlers.onOpen(t.id);
+    if (ev.target.closest('a, select, button, input')) return;
+    activate();
   });
   return li;
 }
@@ -223,13 +244,18 @@ export function taskRow(t, handlers, opts) {
 /**
  * A flat list of rows.
  * @param {Array<object>} items
- * @param {{onOpen: Function, onStatus: Function}} handlers
- * @param {object} [opts]  forwarded to every row
+ * @param {{onOpen: Function, onStatus: Function, onToggleSelect?: Function}} handlers
+ * @param {object} [opts]  forwarded to every row; `isSelected(id)` resolves
+ *                         each row's `selected` flag (#81)
  */
 export function rowList(items, handlers, opts) {
+  const o = opts || {};
   const ul = document.createElement('ul');
   ul.className = 'trows';
   ul.setAttribute('role', 'list');
-  items.forEach(function (t) { ul.appendChild(taskRow(t, handlers, opts)); });
+  items.forEach(function (t) {
+    const rowOpts = o.isSelected ? Object.assign({}, o, { selected: o.isSelected(t.id) }) : o;
+    ul.appendChild(taskRow(t, handlers, rowOpts));
+  });
   return ul;
 }

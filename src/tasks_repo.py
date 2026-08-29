@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -481,6 +481,55 @@ def set_status(conn: sqlite3.Connection, task_id: int, status: str, *, actor: st
 
 def set_priority(conn: sqlite3.Connection, task_id: int, priority: str, *, actor: str | None = None) -> dict[str, Any]:
     return update_task(conn, task_id, actor=actor, priority=priority)
+
+
+def bulk_update(
+    conn: sqlite3.Connection,
+    task_ids: Iterable[int],
+    *,
+    actor: str | None = None,
+    complete: bool = False,
+    **changes: Any,
+) -> list[dict[str, Any]]:
+    """Apply the same change to many tasks — one result row per id, in order.
+
+    The bulk twin of the single-task path, and deliberately nothing more: each
+    id goes through :func:`update_task` (or :func:`done` when ``complete``),
+    so the activity rows, the ``done_at`` stamp, the recurrence roll and the
+    mirror hooks are identical to editing the tasks one by one. ``complete``
+    is the bulk form of the row status select's ``complete`` pseudo-status
+    (issue #54) — it rolls a recurring task's due instead of closing it;
+    ``status='done'`` stays a plain field update, closed for good.
+
+    **Every id is attempted.** A :class:`RepoError` on one id becomes that
+    id's failure row and the loop goes on — a batch is not a transaction, and
+    a caller that dropped the rest of the selection because id 3 was deleted
+    in another tab would be worse than one that reports which id failed.
+    Duplicate ids collapse to the first occurrence so a double-click cannot
+    roll a recurring task's due twice.
+
+    :returns: ``[{"id", "ok": True, "task": …} | {"id", "ok": False, "error": {"code", "message"}}]``
+    """
+    seen: set[int] = set()
+    results: list[dict[str, Any]] = []
+    for raw in task_ids:
+        task_id = int(raw)
+        if task_id in seen:
+            continue
+        seen.add(task_id)
+        try:
+            task = (
+                done(conn, task_id, actor=actor)
+                if complete
+                else update_task(conn, task_id, actor=actor, **changes)
+            )
+        except RepoError as exc:
+            results.append(
+                {"id": task_id, "ok": False, "error": {"code": exc.code, "message": str(exc)}}
+            )
+        else:
+            results.append({"id": task_id, "ok": True, "task": task})
+    return results
 
 
 def move(

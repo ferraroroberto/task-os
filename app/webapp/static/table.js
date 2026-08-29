@@ -19,6 +19,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
+import { dueInput } from './dueinput.js';
 import {
   PRIORITIES, aiChip, breadcrumbText, chipFor, issueChip, linkify, priorityLabel, relDue, statusPill,
 } from './format.js';
@@ -35,17 +36,26 @@ const COLUMNS = [
  * @param {HTMLElement} host
  * @param {Array<object>} items      already filtered/sorted list items
  * @param {{onOpen: (id:number)=>void, onPatch: (id:number, changes:object)=>Promise<any>,
- *          onStatus: (id:number, status:string)=>Promise<any>}} handlers
- * @param {{phone?: boolean}} [opts]  phone = render the shared rows instead of the grid
+ *          onStatus: (id:number, status:string)=>Promise<any>,
+ *          onToggleSelect?: (id:number)=>void}} handlers
+ * @param {{phone?: boolean, selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
+ *        phone = render the shared rows instead of the grid;
+ *        selectable = Select mode is on (#81), so rows tick instead of opening
  */
 export function renderTable(host, items, handlers, opts) {
   host.innerHTML = '';
+  const o = opts || {};
+  const selectable = !!o.selectable;
+  const isSelected = o.isSelected || function () { return false; };
   const rowHandlers = {
     onOpen: handlers.onOpen,
     onStatus: handlers.onStatus,
+    onToggleSelect: handlers.onToggleSelect,
   };
-  if (opts && opts.phone) {
-    const list = rowList(items, rowHandlers);
+  if (o.phone) {
+    // the phone renders the ONE task row, so the checkbox comes from rows.js —
+    // the same affordance the Board shows, built once (#81)
+    const list = rowList(items, rowHandlers, { selectable: selectable, isSelected: isSelected });
     list.classList.add('table-rows');
     host.appendChild(list);
     return;
@@ -55,9 +65,19 @@ export function renderTable(host, items, handlers, opts) {
   const scroller = document.createElement('div');
   scroller.className = 'table-scroll';
   const table = document.createElement('table');
-  table.className = 'task-table';
+  table.className = 'task-table' + (selectable ? ' is-selectable' : '');
   const thead = document.createElement('thead');
   const hr = document.createElement('tr');
+  if (selectable) {
+    // The desktop grid is a real <table>, so its checkbox is its own leading
+    // column — not the rows.js one. No select-all here: selection is per row,
+    // identical on Board and Table.
+    const th = document.createElement('th');
+    th.className = 'c-sel';
+    th.scope = 'col';
+    th.setAttribute('aria-label', 'Select');
+    hr.appendChild(th);
+  }
   COLUMNS.forEach(function (c) {
     const th = document.createElement('th');
     th.className = 'c-' + c[0];
@@ -68,7 +88,9 @@ export function renderTable(host, items, handlers, opts) {
   thead.appendChild(hr);
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
-  items.forEach(function (t) { tbody.appendChild(buildRow(t, handlers, rowHandlers)); });
+  items.forEach(function (t) {
+    tbody.appendChild(buildRow(t, handlers, rowHandlers, selectable, isSelected(t.id)));
+  });
   table.appendChild(tbody);
   scroller.appendChild(table);
   wrap.appendChild(scroller);
@@ -82,12 +104,24 @@ function td(cls, label) {
   return el;
 }
 
-function buildRow(t, handlers, rowHandlers) {
+function buildRow(t, handlers, rowHandlers, selectable, selected) {
   const tr = document.createElement('tr');
-  tr.className = 'task-row';
+  tr.className = 'task-row' + (selected ? ' is-selected' : '');
   tr.dataset.id = String(t.id);
   tr.tabIndex = 0;
-  tr.setAttribute('aria-label', t.title);
+  tr.setAttribute('aria-label', selectable ? 'Select ' + t.title : t.title);
+
+  if (selectable) {
+    const sel = td('sel', 'Select');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'row-check';
+    box.checked = !!selected;
+    box.setAttribute('aria-label', 'Select ' + t.title);
+    box.addEventListener('change', function () { rowHandlers.onToggleSelect(t.id); });
+    sel.appendChild(box);
+    tr.appendChild(sel);
+  }
 
   // code
   const code = td('code', 'Code');
@@ -186,14 +220,18 @@ function buildRow(t, handlers, rowHandlers) {
   next.textContent = t.next_action || '';
   tr.appendChild(next);
 
-  // open on click / Enter, unless the click landed on a control
+  // open on click / Enter, unless the click landed on a control — in Select
+  // mode the same gesture ticks the row instead (#81)
+  const activate = function () {
+    if (selectable) rowHandlers.onToggleSelect(t.id); else handlers.onOpen(t.id);
+  };
   tr.addEventListener('click', function (ev) {
     if (ev.target.closest('select, input, button, a')) return;
-    handlers.onOpen(t.id);
+    activate();
   });
   tr.addEventListener('keydown', function (ev) {
     if (ev.target !== tr) return;
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handlers.onOpen(t.id); }
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); }
     if (ev.key === 'ArrowDown' && tr.nextElementSibling) { ev.preventDefault(); tr.nextElementSibling.focus(); }
     if (ev.key === 'ArrowUp' && tr.previousElementSibling) { ev.preventDefault(); tr.previousElementSibling.focus(); }
   });
@@ -225,32 +263,6 @@ function buildDueCell(t, handlers) {
   box.appendChild(btn);
 
   btn.addEventListener('click', function () {
-    const editor = document.createElement('span');
-    editor.className = 'due-editor';
-    const text = document.createElement('input');
-    text.type = 'text';
-    text.className = 'input-native due-text';
-    text.value = t.due || '';
-    text.placeholder = 'tomorrow · fri · in 2 weeks';
-    text.setAttribute('aria-label', 'Due date');
-    const pickBtn = document.createElement('button');
-    pickBtn.type = 'button';
-    pickBtn.className = 'icon-btn due-pick-btn';
-    pickBtn.title = 'Pick a date';
-    pickBtn.setAttribute('aria-label', 'Pick a due date');
-    pickBtn.innerHTML = icon('calendar-days');
-    // hidden — opened via pickBtn (showPicker(), or the coarse-pointer fallback
-    // below); same single-control pattern as the drawer's dueField (issue #50).
-    const date = document.createElement('input');
-    date.type = 'date';
-    date.className = 'due-date';
-    date.tabIndex = -1;
-    date.setAttribute('aria-hidden', 'true');
-    date.value = t.due || '';
-    editor.append(text, pickBtn, date);
-    box.replaceChildren(editor);
-    text.focus();
-    text.select();
     let done = false;
     function commit(value) {
       if (done) return;
@@ -258,25 +270,18 @@ function buildDueCell(t, handlers) {
       handlers.onPatch(t.id, { due: value }).catch(function () { restore(); });
     }
     function restore() { box.replaceChildren(btn); }
-    text.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter') { ev.preventDefault(); commit(text.value.trim()); }
-      if (ev.key === 'Escape') { ev.preventDefault(); done = true; restore(); }
+    // the shared trio (dueinput.js) — text + calendar button + hidden date
+    // input, with the coarse-pointer showPicker fallback (#50) living there
+    const edit = dueInput({
+      value: t.due || '',
+      onCommit: commit,
+      onCancel: function () { done = true; restore(); },
     });
-    pickBtn.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      // Touch/coarse-pointer WebKit reports showPicker() as callable but opens
-      // nothing — the exception-based fallback below never runs (issue #50).
-      // Coarse pointers skip straight to the fallback, which does open the
-      // native picker there.
-      const coarse = window.matchMedia('(pointer: coarse)').matches;
-      if (!coarse) {
-        try { if (typeof date.showPicker === 'function') { date.showPicker(); return; } } catch (_) { /* fall through */ }
-      }
-      date.classList.add('is-visible');
-      date.focus();
-      date.click();
-    });
-    date.addEventListener('change', function () { commit(date.value); });
+    const editor = edit.row;
+    editor.classList.add('due-editor');
+    box.replaceChildren(editor);
+    edit.input.focus();
+    edit.input.select();
     editor.addEventListener('focusout', function (ev) {
       if (editor.contains(ev.relatedTarget)) return;
       // leaving the editor without committing keeps the old value

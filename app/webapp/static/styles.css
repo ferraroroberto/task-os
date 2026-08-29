@@ -417,7 +417,12 @@ a.chip:hover { text-decoration: underline; }
    where there is nothing to filter and the text box is hidden with the card. */
 .pane-top { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
 .filter-text { flex: 1 1 auto; min-width: 0; }
-.quick-add-btn {
+/* Every square icon button that sits on the top strip — the quick-add +, the
+   Select toggle, and the bulk bar's date and ✕ — is ONE geometry, declared
+   once. They stand side by side, so a per-button size is immediately visible
+   as a mismatch (and was: the toggle kept the 36px control height on touch
+   while the + went to 44px). */
+.quick-add-btn, .strip-square {
   flex: none;
   width: var(--control-h);
   height: var(--control-h);
@@ -426,7 +431,58 @@ a.chip:hover { text-decoration: underline; }
   justify-content: center;
   border-radius: var(--radius-md);
 }
-.quick-add-btn .icon { width: var(--icon-title); height: var(--icon-title); }
+.quick-add-btn .icon, .strip-square .icon { width: var(--icon-title); height: var(--icon-title); }
+/* Real geometry, no invisible expansion: these stand shoulder to shoulder with
+   an 8px gap, so a ::before inset would make neighbouring hit rects overlap —
+   design.md's "adjacent cluster" rule. (.due-pick-btn's own -7px inset is for
+   the Table's 30px cell button, which has no neighbour.) */
+.strip-square::before { inset: 0; }
+
+/* ------------------------------------------------- select mode (#81) */
+/* The Select toggle sits beside the +, same geometry. Once tasks are ticked
+   the bulk bar takes the whole strip over — the toggle, the + and the text
+   filter step aside rather than stacking a third row above the board, so the
+   pane keeps its height and nothing lands near the phone's nav pill. */
+.select-toggle.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-border-soft);
+  color: var(--accent);
+}
+.filter-text.is-superseded { display: none; }
+/* ONE line, never wrapped: the bar stands in for the strip it replaced, and a
+   second row would push the board down exactly as the stacked strip we
+   rejected. The status select is the only elastic part — everything else is a
+   fixed square — so narrowing the phone shrinks the select, not the layout. */
+.bulk-bar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.bulk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--accent);
+  font-size: var(--font-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bulk-count .icon { width: var(--icon-title); height: var(--icon-title); }
+.bulk-status { flex: 1 1 auto; min-width: 0; height: var(--control-h); }
+.bulk-due, .bulk-exit { color: var(--muted); }
+.bulk-due:hover { color: var(--accent); }
+.bulk-exit { margin-left: auto; }
+.bulk-exit:hover { color: var(--fg); }
+@media (max-width: 360px) {
+  /* the narrowest phones: drop the WORD so the select keeps a readable width
+     and the row still never wraps — the count itself always stays, it is what
+     says how much the next click changes */
+  .bulk-word { display: none; }
+}
 
 /* --------------------------------------------------------- quick-add */
 /* The dialog is the vendored editor-modal shell (index.html), like the
@@ -596,10 +652,33 @@ a.chip:hover { text-decoration: underline; }
     "prefix meta meta";
 }
 .trow-prefix { grid-area: prefix; align-self: center; }
+/* Select mode (#81): a leading checkbox column, on the Board's cards and the
+   Table's phone rows alike — the same row, so the same affordance. Only the
+   selectable views set it, so the Tree's prefix column never meets it. */
+.trow.has-select {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "sel main ctrl"
+    "sel meta meta";
+  /* tighter than the row's 10px: a Board column is ~140px wide and the title
+     is already ellipsized — the checkbox should not cost it three characters */
+  column-gap: 6px;
+}
+.trow-check {
+  grid-area: sel;
+  align-self: center;
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 .trow:hover { background: var(--card-2); }
 .trow.is-high { border-left: 3px solid var(--danger); padding-left: 6px; }
 .trow.is-dragging { opacity: 0.5; }
 .trow.is-new { background: var(--accent-soft); }
+/* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
+.trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
 .trow-main { grid-area: main; min-width: 0; cursor: pointer; }
 .trow-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
 /* One line, ellipsized — a row never grows on the title (#32). */
@@ -692,6 +771,14 @@ a.chip:hover { text-decoration: underline; }
       "prefix main ctrl"
       "prefix meta ctrl";
   }
+  .trow.has-select {
+    grid-template-areas:
+      "sel main ctrl"
+      "sel meta ctrl";
+  }
+  /* a 20px box inside the 64px card clears the 44px floor on its own row
+     track without an expansion rectangle that could overlap the status select */
+  .trow-check { width: 20px; height: 20px; margin: 0 4px; }
   /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
      says nothing and ate the meta line. No pill, no fill: the accent colour
      already says "tappable", and a marked box read as heavier than the
@@ -756,6 +843,12 @@ a.chip:hover { text-decoration: underline; }
 .task-row:hover td { background: var(--card-2); }
 .task-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .task-row.is-new td { background: var(--accent-soft); }
+/* Select mode (#81): the desktop grid is a real <table>, so its checkbox is
+   its own leading column — the rows.js one belongs to the phone rendering.
+   After :hover so a ticked row stays visibly ticked under the cursor. */
+.c-sel { width: 1%; white-space: nowrap; }
+.row-check { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.task-row.is-selected td, .task-row.is-selected:hover td { background: var(--accent-soft); }
 .c-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
 .c-title { min-width: 220px; max-width: 420px; }
 .t-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
@@ -791,7 +884,9 @@ a.chip:hover { text-decoration: underline; }
 .due-btn.due-none { color: var(--muted); }
 .due-recur { color: var(--muted); display: inline-flex; }
 .due-recur .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.due-editor { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+/* the shared trio (dueinput.js): text box + calendar button + hidden date
+   input — the Table's inline cell (.due-editor) and the bulk bar both wear it */
+.due-input { position: relative; display: inline-flex; align-items: center; gap: 4px; }
 .due-text { width: 170px; }
 .due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
 .due-pick-btn:hover { color: var(--accent); }
@@ -1129,15 +1224,17 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
-  .quick-add-input, .quick-add-btn, .filter-select, .filter-q, .due-btn,
+  .quick-add-input, .quick-add-btn, .strip-square, .bulk-status, .filter-select, .filter-q, .due-btn,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
   .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb, .msel-summary {
     min-height: var(--row-sm);
   }
-  .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary { height: var(--row-sm); }
+  .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary,
+  .bulk-status { height: var(--row-sm); }
   .folder-current .chip { height: var(--row-sm); }   /* pairs with line 2's 44px controls */
   .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
-  .quick-add-btn { width: var(--row-sm); height: var(--row-sm); }
+  /* the strip's square buttons are one family — same square, always (#81) */
+  .quick-add-btn, .strip-square { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
   .tree-toggle { width: 34px; height: 34px; }
   /* These already carry real 44px geometry here, so the invisible expansion
