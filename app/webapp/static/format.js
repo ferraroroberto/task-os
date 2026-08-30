@@ -16,6 +16,7 @@ export const RECURRENCES = ['', 'daily', 'weekly', 'monthly', 'quarterly', 'year
 
 const DAY_MS = 86400000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -55,6 +56,30 @@ export function relDue(iso, now) {
   if (diff < 14) return { text: 'in ' + diff + 'd', tone: '' };
   if (diff < 60) return { text: 'in ' + Math.round(diff / 7) + 'w', tone: '' };
   return { text: d.getDate() + ' ' + MONTHS[d.getMonth()], tone: '' };
+}
+
+/**
+ * Is this task still asleep? — a `starts` date the current local day has not
+ * reached yet (#87). The ONE place the browser answers that question, so the
+ * row marker, the drawer label and the client-side filter agree.
+ * @param {object} t     a task summary or detail
+ * @param {string} [now] ISO date (tests)
+ */
+export function isDeferred(t, now) {
+  return !!(t && t.starts) && t.starts > todayISO(now ? new Date(now + 'T00:00:00') : undefined);
+}
+
+/** "starts 5 Sep" — the quiet marker a sleeping task wears (#87). */
+export function startsLabel(iso) {
+  const d = parseISO(iso);
+  return d ? 'starts ' + d.getDate() + ' ' + MONTHS[d.getMonth()] : '';
+}
+
+/** "Sat 5 Sep" — a date named the way a confirmation should name it (#87):
+ *  the weekday is what makes "this weekend" checkable at a glance. */
+export function fmtDay(iso) {
+  const d = parseISO(iso);
+  return d ? DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] : '';
 }
 
 /** "17 Aug 10:15" from an ISO timestamp (local zone). */

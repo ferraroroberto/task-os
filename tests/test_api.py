@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 6
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 7
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -124,6 +125,54 @@ def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     assert [g["kind"] for g in s["groups"]] == ["tasks", "folders", "emails", "issues"]
     assert seeded.get("/api/search?q=").status_code == 422
     assert seeded.get("/api/tasks?q=balcony").json()["items"][0]["title"] == "Side project: garden-bot"
+
+
+def test_starts_accepts_phrases_and_the_deferred_filter(client: TestClient) -> None:
+    """#87 over HTTP: `starts` takes the same natural phrases `due` does, and
+    `status=deferred` is the one URL spelling of "show me the sleeping ones"."""
+    # Phrases resolve against the real clock here (the route has no `today`
+    # pin), so the expected values are computed, never hardcoded — a literal
+    # would start failing the day it went past.
+    soon = date.today() + timedelta(days=30)
+    later = date.today() + timedelta(days=60)
+    created = client.post("/api/tasks", json={
+        "title": "Renew insurance", "due": "in 60 days", "starts": "in 30 days", "status": "todo",
+    })
+    assert created.status_code == 201
+    t = created.json()
+    assert (t["due"], t["starts"]) == (later.isoformat(), soon.isoformat())
+
+    # sleeping: out of the default list, out of the Board and Today, in the
+    # Tree, and back under the Deferred filter
+    assert client.get("/api/tasks").json()["count"] == 0
+    board = client.get("/api/board").json()["columns"]
+    assert all(not col for col in board.values())
+    assert client.get("/api/today").json()["counts"] == {"overdue": 0, "today": 0, "week": 0}
+    assert client.get("/api/tasks/tree").json()["items"][0]["id"] == t["id"]
+    only = client.get("/api/tasks?status=deferred").json()
+    assert only["count"] == 1 and only["items"][0]["starts"] == soon.isoformat()
+    # it intersects with a real status rather than replacing it
+    assert client.get("/api/tasks?status=deferred,todo").json()["count"] == 1
+    assert client.get("/api/tasks?status=deferred,doing").json()["count"] == 0
+
+    # clearing wakes it, and every change is in the log
+    assert client.patch(f"/api/tasks/{t['id']}", json={"starts": ""}).json()["starts"] is None
+    assert client.get("/api/tasks").json()["count"] == 1
+    assert client.get("/api/tasks?status=deferred").json()["count"] == 0
+    fields = [a["field"] for a in client.get(f"/api/tasks/{t['id']}").json()["activity"]]
+    assert "starts" in fields
+
+    # an unparseable phrase is a 422, never a silently unset date
+    assert client.patch(f"/api/tasks/{t['id']}", json={"starts": "someday"}).status_code == 422
+
+
+def test_parse_splits_both_dates(client: TestClient) -> None:
+    r = client.post("/api/parse", json={
+        "text": "renew insurance due oct 15 starts oct 1", "today": "2026-08-30",
+    }).json()
+    assert r["title"] == "renew insurance"
+    assert (r["due"], r["due_phrase"]) == ("2026-10-15", "due oct 15")
+    assert (r["starts"], r["starts_phrase"]) == ("2026-10-01", "starts oct 1")
 
 
 def test_links_issue_and_people(seeded: TestClient) -> None:

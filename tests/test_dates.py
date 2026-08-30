@@ -35,10 +35,30 @@ FRI = date(2026, 8, 21)
         ("in 1 month", date(2026, 9, 17)),
         ("in 1 year", date(2027, 8, 17)),
         ("2026-09-01", date(2026, 9, 1)),
+        # the snooze menu's middle option (#87) — the coming Saturday
+        ("this weekend", date(2026, 8, 22)),
+        ("weekend", date(2026, 8, 22)),
+        # month-name dates (#87): the coming occurrence, this year or next
+        ("oct 15", date(2026, 10, 15)),
+        ("Oct 15", date(2026, 10, 15)),
+        ("october 15", date(2026, 10, 15)),
+        ("15 oct", date(2026, 10, 15)),
+        ("15th october", date(2026, 10, 15)),
+        ("oct 15, 2028", date(2028, 10, 15)),
+        ("aug 17", MON),                    # today itself is not "next year"
+        ("aug 16", date(2027, 8, 16)),      # yesterday already passed → next year
+        ("jan 5", date(2027, 1, 5)),
     ],
 )
 def test_parse_natural(text: str, expected: date) -> None:
     assert parse_date(text, today=MON) == expected
+
+
+def test_this_weekend_on_a_saturday_stays_that_day() -> None:
+    """`_coming_weekday`'s rule, stated for the phrase the snooze menu sends:
+    Saturday means today, Sunday means the Saturday six days out."""
+    assert parse_date("this weekend", today=date(2026, 8, 22)) == date(2026, 8, 22)
+    assert parse_date("this weekend", today=date(2026, 8, 23)) == date(2026, 8, 29)
 
 
 @pytest.mark.parametrize("text", ["none", "clear", "-", "", "  "])
@@ -47,7 +67,13 @@ def test_parse_no_date(text: str) -> None:
     assert parse_date(None) is None
 
 
-@pytest.mark.parametrize("text", ["nonsense", "2026-13-01", "in two weeks", "32/01/2026", "next"])
+@pytest.mark.parametrize(
+    "text",
+    ["nonsense", "2026-13-01", "in two weeks", "32/01/2026", "next",
+     # a month name alone is not a date, and an impossible day is an error,
+     # never a silently clamped one (#87)
+     "october", "oct", "feb 30", "oct 32"],
+)
 def test_parse_rejects_unknown(text: str) -> None:
     with pytest.raises(DateParseError):
         parse_date(text, today=MON)

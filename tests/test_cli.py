@@ -95,6 +95,38 @@ def test_natural_dates_and_clear(run: Runner) -> None:
     assert code == 1 and _json(out)["error"]["code"] == "bad_date"
 
 
+def test_starts_and_deferred_over_both_backends(run: Runner) -> None:
+    """#87 CLI parity: `--starts`, `tasks starts N`, `tasks ls --deferred` —
+    identical `--json` whether the app answers or the DB is opened directly."""
+    today = date.today()
+    soon = (today + timedelta(days=20)).isoformat()
+    code, out, _ = run("add", "Book boiler service", "--due", "in 40 days",
+                       "--starts", "in 20 days", "--json")
+    assert code == 0 and _json(out)["starts"] == soon
+    run("add", "Awake")
+
+    # sleeping tasks are out of `ls` and are exactly what `--deferred` lists
+    code, out, _ = run("ls", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["Awake"]
+    code, out, _ = run("ls", "--deferred", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["Book boiler service"]
+    code, out, _ = run("ls", "--status", "all", "--json")     # "all" means all
+    assert code == 0 and len(_json(out)) == 2
+    # …but `show` always finds it, and says when it starts
+    code, out, _ = run("show", "1")
+    assert code == 0 and f"starts {soon}" in out
+
+    # `tasks starts` sets and clears, same vocabulary as `tasks due`
+    code, out, _ = run("starts", "1", "tomorrow", "--json")
+    assert code == 0 and _json(out)["starts"] == (today + timedelta(days=1)).isoformat()
+    code, out, _ = run("starts", "1", "none")
+    assert code == 0 and out.strip() == "#1 starts → none"
+    code, out, _ = run("ls", "--json")
+    assert {t["title"] for t in _json(out)} == {"Awake", "Book boiler service"}
+    code, out, err = run("starts", "1", "someday", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "bad_date"
+
+
 def test_ls_filters_done_move_search_people(run: Runner) -> None:
     run("add", "Project")
     run("add", "Child A", "--parent", "1", "--due", "today", "--priority", "high")

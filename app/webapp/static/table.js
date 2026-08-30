@@ -21,7 +21,8 @@
 import { icon } from './_vendored/icons/icons.js';
 import { dueInput } from './dueinput.js';
 import {
-  PRIORITIES, aiChip, breadcrumbText, chipFor, issueChip, linkify, priorityLabel, relDue, statusPill,
+  PRIORITIES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, linkify, priorityLabel,
+  relDue, startsLabel, statusPill,
 } from './format.js';
 import { rowList, statusSelect } from './rows.js';
 
@@ -158,6 +159,18 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
     bc.textContent = breadcrumbText(t.breadcrumb);
     bc.title = bc.textContent;
     title.appendChild(bc);
+  }
+  // A sleeping task says when it wakes here too (#87). The desktop grid has
+  // its own cells rather than the shared row, so the marker the shared row
+  // puts on its meta line has to be placed explicitly — and the Deferred
+  // filter's own list is exactly where the date matters most.
+  if (isDeferred(t)) {
+    const st = document.createElement('div');
+    st.className = 't-starts';
+    st.innerHTML = icon('clock');
+    st.appendChild(document.createTextNode(startsLabel(t.starts)));
+    st.title = 'starts ' + t.starts;
+    title.appendChild(st);
   }
   tr.appendChild(title);
 

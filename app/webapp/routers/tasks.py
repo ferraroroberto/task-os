@@ -25,10 +25,16 @@ Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (repeatable / comma-separated ids), ``q`` (full text), ``updated_since``
 (date), ``done_on`` (date), ``include_closed``, ``limit``.
 
-``due`` on create / update accepts the same natural phrases the CLI does
-(``tomorrow``, ``next friday``, ``in 2 weeks``, ISO) — resolved here through
-``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
-unknown phrase is a 422, never a silently unset date.
+``status`` also takes the pseudo-value ``deferred`` (#87) — not a status but
+a modifier: it flips the list from awake tasks to the sleeping ones (``starts``
+still in the future), intersected with any real statuses alongside it. The
+split happens here, in the one presentational place that knows the URL
+vocabulary; the rule itself is ``list_tasks(deferred=…)``.
+
+``due`` and ``starts`` on create / update accept the same natural phrases the
+CLI does (``tomorrow``, ``next friday``, ``this weekend``, ``in 2 weeks``,
+ISO) — resolved here through ``src.dates.parse_date`` so the repo layer only
+ever sees ISO dates; an unknown phrase is a 422, never a silently unset date.
 
 The actor written to ``activity`` / ``comments`` is the body's ``actor`` /
 ``author`` field, else the ``X-Actor`` header, else the configured default
@@ -62,6 +68,7 @@ class TaskCreate(BaseModel):
     status: str | None = None
     priority: str | None = None
     due: str | None = None
+    starts: str | None = None
     recurrence: str | None = None
     description: str | None = None
     folder_ref: str | None = None
@@ -80,6 +87,7 @@ class TaskUpdate(BaseModel):
     status: str | None = None
     priority: str | None = None
     due: str | None = None
+    starts: str | None = None
     recurrence: str | None = None
     description: str | None = None
     folder_ref: str | None = None
@@ -129,20 +137,37 @@ class ParseBody(BaseModel):
     today: str | None = None
 
 
-def _resolve_due(fields: dict[str, Any]) -> dict[str, Any]:
-    """Natural ``due`` phrase → ISO (in place); ``None`` / ``""`` clear it."""
-    if "due" not in fields:
-        return fields
-    value = fields["due"]
-    if value is None or str(value).strip() == "":
-        fields["due"] = None
-        return fields
-    try:
-        d = parse_date(str(value))
-    except DateParseError as exc:
-        raise repo.ValidationError(str(exc)) from exc
-    fields["due"] = d.isoformat() if d else None
+#: The pseudo-value the status multi-select adds (#87) — see the module docstring.
+DEFERRED = "deferred"
+
+
+def _resolve_dates(fields: dict[str, Any]) -> dict[str, Any]:
+    """Natural date phrases → ISO (in place); ``None`` / ``""`` clear them.
+
+    Covers every date field a client may set (``due``, ``starts``), so the two
+    can never drift into accepting different vocabularies.
+    """
+    for field in repo.DATE_FIELDS:
+        if field not in fields:
+            continue
+        value = fields[field]
+        if value is None or str(value).strip() == "":
+            fields[field] = None
+            continue
+        try:
+            d = parse_date(str(value))
+        except DateParseError as exc:
+            raise repo.ValidationError(str(exc)) from exc
+        fields[field] = d.isoformat() if d else None
     return fields
+
+
+def _split_deferred(statuses: list[str]) -> tuple[list[str], str | None]:
+    """``[…, "deferred"] → (the real statuses, "only")``; otherwise ``None``,
+    which lets ``list_tasks`` follow ``include_closed``."""
+    if DEFERRED not in statuses:
+        return statuses, None
+    return [s for s in statuses if s != DEFERRED], "only"
 
 
 class IssueBody(BaseModel):
@@ -177,6 +202,7 @@ def list_tasks(
     statuses: list[str] = []
     for s in status or []:
         statuses.extend(p.strip() for p in s.split(",") if p.strip())
+    statuses, deferred = _split_deferred(statuses)
     people: list[int] = []
     for s in person or []:
         for p in s.split(","):
@@ -203,6 +229,7 @@ def list_tasks(
         limit=limit,
         done_on=done_on,
         updated_since=updated_since,
+        deferred=deferred,
     )
     return {"items": items, "count": len(items)}
 
@@ -211,7 +238,7 @@ def list_tasks(
 def create_task(
     body: TaskCreate, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    fields = _resolve_due(body.model_dump(exclude={"title", "actor"}, exclude_none=True))
+    fields = _resolve_dates(body.model_dump(exclude={"title", "actor"}, exclude_none=True))
     return repo.create_task(db, body.title, actor=resolve_actor(request, body.actor), **fields)
 
 
@@ -236,7 +263,7 @@ def bulk_tasks(
         raise repo.ValidationError("'complete' rolls the due date itself — don't set one too")
     if body.status is not None and not complete:
         changes["status"] = body.status
-    _resolve_due(changes)
+    _resolve_dates(changes)
     results = repo.bulk_update(
         db, body.ids, actor=resolve_actor(request, body.actor), complete=complete, **changes
     )
@@ -265,7 +292,7 @@ def get_task(task_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict[str
 def update_task(
     task_id: int, body: TaskUpdate, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    changes = _resolve_due(body.model_dump(exclude={"actor"}, exclude_unset=True))
+    changes = _resolve_dates(body.model_dump(exclude={"actor"}, exclude_unset=True))
     return repo.update_task(db, task_id, actor=resolve_actor(request, body.actor), **changes)
 
 
@@ -375,7 +402,8 @@ def activity(
 
 @router.post("/parse")
 def parse_quick_add(body: ParseBody, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
-    """Split a quick-add line: ``{title, due, due_phrase, parent, parent_ref}``.
+    """Split a quick-add line: ``{title, due, due_phrase, starts, starts_phrase,
+    parent, parent_ref}``.
 
     ``parent`` is the resolved ``{id, title}`` (or ``None`` when the reference
     names nothing — the UI shows that rather than guessing); ``today`` pins

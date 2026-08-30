@@ -24,6 +24,16 @@ lives in the URL (``?status=doing`` is the same view on the Board, Table,
 Tree, Today), so a shared URL no longer moves the tab by itself — the story
 opens the Table explicitly. On the phone the Table renders the ONE shared
 task row (``.trow``) instead of a card-ified grid.
+
+**Story 13 — start date + snooze (#87)** rides in this file too, as
+``_walk_starts_and_snooze`` at the end of the desktop leg plus the phone
+assertions in the phone leg. It is a story of its own in
+``docs/validation.md``, not a new test: the e2e suite is capped at 15 tests
+(CLAUDE.md) and already held 14, and this story walks the same surface —
+the filter card, the quick-add dialog, a Today row, the drawer. Its shots:
+
+    docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
+    docs/screenshots/story-13-starts-snooze-{6,7}-phone.png
 """
 
 from __future__ import annotations
@@ -274,8 +284,140 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         page.goto(f"{base}/#task/{new_id}")
         expect(page.locator("#taskDrawer")).to_be_visible()
         expect(page.locator("#taskDrawer .drawer-crumbs .crumb")).to_have_text(["Family admin"])
+
+        # ---------------------------------------------- story 13 (#87) ----
+        _walk_starts_and_snooze(page, base, shots)
     finally:
         context.close()
+
+    # the same walk in dark, for the paired proof shots
+    dark_ctx = browser.new_context(viewport=DESKTOP, color_scheme="dark")
+    try:
+        dark_page = dark_ctx.new_page()
+        dark_page.goto(f"{base}/?status=deferred")
+        expect(dark_page.locator("#paneBoard, #paneTable, #paneToday").first).to_be_visible()
+        dark_page.screenshot(path=str(shots / "story-13-starts-snooze-5-desktop.png"))
+    finally:
+        dark_ctx.close()
+
+
+# ---------------------------------------------- story 13 — starts + snooze
+#
+# Rides inside this file rather than becoming a 15th test: the e2e suite is
+# capped at 15 (CLAUDE.md) and sat at 14, and this story is a continuation of
+# the same triage surface — the filter card, a Today row, the quick-add dialog.
+
+
+def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
+    """A task created asleep stays out of the working views until its day, is
+    findable under *Deferred*, and a Today row can be pushed away and undone.
+
+    Screenshots: docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
+    """
+    today = date.today()
+    starts = (today + timedelta(days=30)).isoformat()
+    due = (today + timedelta(days=60)).isoformat()
+
+    # 1. Quick-add both dates off one line — the parser fills two correctable
+    #    fields, so nothing about the task is a mystery before it exists.
+    page.goto(f"{base}/")
+    page.click("nav.tabs .tab[data-tab='today']")
+    page.locator("#paneToday .quick-add-btn").click()
+    quick_add = page.locator("#quickAdd")
+    expect(quick_add).to_be_visible()
+    quick_add.locator(".quick-add-input").fill("renew insurance due in 60 days starts in 30 days")
+    expect(quick_add.locator(".quick-add-due")).to_have_value(due)
+    expect(quick_add.locator(".quick-add-starts")).to_have_value(starts)
+    quick_add.locator(".quick-add-status").select_option("todo")
+    page.screenshot(path=str(shots / "story-13-starts-snooze-1-desktop.png"))
+    quick_add.locator(".quick-add-input").press("Enter")
+    expect(quick_add).to_be_hidden()
+    expect(page.locator(".toast-success").last).to_contain_text("renew insurance")
+
+    created = next(t for t in _get(base, "/api/tasks?status=deferred")["items"]
+                   if t["title"] == "renew insurance")
+    assert (created["due"], created["starts"]) == (due, starts)
+
+    # 2. It is nowhere in the working views — Today, the Board, the Table.
+    expect(_trow(page, "renew insurance", "#paneToday")).to_have_count(0)
+    for tab, pane in (("board", "#paneBoard"), ("table", "#paneTable")):
+        page.click(f"nav.tabs .tab[data-tab='{tab}']")
+        expect(page.locator(pane)).to_be_visible()
+        expect(page.locator(pane).get_by_text("renew insurance", exact=True)).to_have_count(0)
+    # …but the Tree still has it, wearing the marker that says why it is quiet
+    page.click("nav.tabs .tab[data-tab='tree']")
+    sleeping = _trow(page, "renew insurance", "#paneTree")
+    expect(sleeping).to_be_visible()
+    expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
+    page.screenshot(path=str(shots / "story-13-starts-snooze-2-desktop.png"))
+
+    # 3. Deferred is a visible state, not an absence: the status multi-select's
+    #    pseudo-value lists exactly the sleeping tasks, and the state is the URL.
+    page.click("nav.tabs .tab[data-tab='table']")
+    card = _open_filters(page, "tableFilters")
+    status_sel = card.locator(".msel[data-name='status']")
+    status_sel.locator("summary.msel-summary").click()
+    status_sel.locator("input[name='status'][value='deferred']").check()
+    expect(page).to_have_url(f"{base}/?status=deferred")
+    expect(status_sel.locator(".msel-text")).to_have_text("deferred")
+    rows = page.locator("#paneTable .task-row")
+    titles = rows.locator(".t-title-text").all_inner_texts()
+    # the seed's own deferred task plus the one just created — and nothing else
+    assert sorted(titles) == ["Book boiler service", "renew insurance"], titles
+    # the desktop grid has its own cells, so it carries the marker explicitly —
+    # the list of sleeping tasks is exactly where the start day matters
+    expect(rows.locator(".t-starts")).to_have_count(2)
+    expect(rows.locator(".t-starts").first).to_have_text(re.compile(r"^starts \d"))
+    page.screenshot(path=str(shots / "story-13-starts-snooze-3-desktop.png"))
+    card.locator(".filter-clear").click()
+    expect(page).to_have_url(f"{base}/")
+
+    # 4. Snooze from a Today row: pick an option, the task leaves, the toast
+    #    names the day it went to — and Undo puts it straight back.
+    page.click("nav.tabs .tab[data-tab='today']")
+    row = _trow(page, "School enrolment forms", "#paneToday")
+    expect(row).to_be_visible()
+    task_id = int(row.get_attribute("data-id"))
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    row.locator(".snooze-summary").click()
+    menu = row.locator(".snooze-menu")
+    expect(menu).to_be_visible()
+    expect(menu.locator(".snooze-opt")).to_have_count(4)   # 3 phrases + pick a date
+    page.screenshot(path=str(shots / "story-13-starts-snooze-4-desktop.png"))
+    menu.get_by_text("Next week", exact=True).click()
+
+    next_week = (today + timedelta(days=7)).isoformat()
+    toast = page.locator(".toast-success").last
+    expect(toast).to_contain_text("Snoozed to")
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] == next_week
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_have_count(0)
+    # the change is in the log like any other field change
+    assert "starts" in [a["field"] for a in _get(base, f"/api/tasks/{task_id}")["activity"]]
+
+    toast.locator(".toast-action").click()
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+
+    # 5. The drawer edits Starts beside Due — the same control, one behaviour.
+    page.goto(f"{base}/#task/{task_id}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    starts_input = drawer.locator(".field-starts input[data-field='starts']")
+    expect(starts_input).to_be_visible()
+    expect(drawer.locator(".field-due input[data-field='due']")).to_be_visible()
+    starts_input.fill("in 3 days")
+    starts_input.blur()
+    expect(starts_input).to_have_value((today + timedelta(days=3)).isoformat())
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] == (today + timedelta(days=3)).isoformat()
+    assert_no_horizontal_overflow(page)
+
+    # Put the seeded task back the way this walk found it: `seeded_webapp` is
+    # session-scoped, so a task left asleep here would vanish from Today for
+    # every later story (it did — story 05 caught it).
+    starts_input.fill("")
+    starts_input.blur()
+    expect(starts_input).to_have_value("")
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
 
 
 # ------------------------------------------------------------- phone leg
@@ -324,7 +466,10 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         card = _open_filters(page, "tableFilters")
         status_sel = card.locator(".msel[data-name='status']")
         status_sel.locator("summary.msel-summary").click()
-        expect(status_sel.locator("input[name='status']")).to_have_count(6)
+        # six statuses + `deferred`, the pseudo-value that shows the sleeping
+        # tasks the working views leave out (#87)
+        expect(status_sel.locator("input[name='status']")).to_have_count(7)
+        expect(status_sel.locator("input[name='status'][value='deferred']")).to_have_count(1)
         expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
         page.keyboard.press("Escape")
         boxes = card.locator(".filter-row > .filter-select, .filter-row > .msel").evaluate_all(
@@ -347,9 +492,10 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
             "els => els.map(e => [!!e.querySelector('.chip-folder'),"
             " Math.round(e.getBoundingClientRect().height)])")
         assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
-        base = min(h for _, h in by_folder)
-        assert {h for f, h in by_folder if f} == {base}, by_folder
-        assert base in {h for f, h in by_folder if not f}, by_folder
+        # `base_h`, not `base` — that name is the instance URL in this function
+        base_h = min(h for _, h in by_folder)
+        assert {h for f, h in by_folder if f} == {base_h}, by_folder
+        assert base_h in {h for f, h in by_folder if not f}, by_folder
         sel_box = watering.locator(".trow-status").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
         meta_box = watering.locator(".trow-meta").bounding_box()
@@ -382,6 +528,37 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         drawer.locator(".drawer-close").tap()
         expect(drawer).to_be_hidden()
         assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
+
+        # --------------------------------------------- story 13 (#87) ----
+        # The snooze control is a real touch target on the phone — this is the
+        # device where "not today" is most often decided — and its popover
+        # never pushes the page sideways.
+        page.goto(f"{base}/")          # drop the story's ?status=doing first
+        page.locator("nav.tabs .tab[data-tab='today']").tap()
+        expect(page.locator("#paneToday")).to_be_visible()
+        today_row = page.locator("#paneToday .today-group .trow.has-snooze").first
+        expect(today_row).to_be_visible()
+        snooze = today_row.locator(".snooze-summary")
+        assert_min_target(snooze)
+        assert_no_overlap(page.locator("#paneToday .trow.has-snooze .snooze-summary, "
+                                       "#paneToday .trow.has-snooze .trow-status"))
+        snooze.tap()
+        menu = today_row.locator(".snooze-menu")
+        expect(menu).to_be_visible()
+        assert_min_target(menu.locator(".snooze-opt"))
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-13-starts-snooze-6-phone.png"))
+        page.keyboard.press("Escape")
+        expect(menu).to_be_hidden()
+
+        # the sleeping seed task wears its marker wherever it still shows
+        page.goto(f"{base}/?status=deferred")
+        page.locator("nav.tabs .tab[data-tab='table']").tap()
+        sleeping = _trow(page, "Book boiler service", "#paneTable")
+        expect(sleeping).to_be_visible()
+        expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-13-starts-snooze-7-phone.png"))
         context.close()
     finally:
         wk.close()

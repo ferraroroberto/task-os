@@ -33,11 +33,21 @@ Version history:
        so a permanently unresolvable value produces one standing row, not one
        per import pass; ``src/mirror.py`` clears a task's row for a field once
        that field imports cleanly. No existing comment is touched or removed.
+    7  tasks.starts (TEXT date, nullable) + its index                (issue #87)
+       — the day a task starts mattering. Until it arrives the task is
+       *deferred*: ``src/tasks_repo.py``'s ``list_tasks`` hides it from the
+       working views (Board · Today · Table · ``tasks ls``) while the Tree and
+       search still show it. Snooze is this column worn as a row control, not
+       a second mechanism. The recurrence roll never touches it — see the
+       contract note below.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
 status / parent / priority change writes ``activity``; recurrence rolls the
-same task's due forward on done.
+same task's due forward on done — and leaves ``starts`` alone (issue #87): a
+start date is an absolute one-time gate that always eventually arrives, so a
+snoozed recurring task wakes on its start day and rolls normally from then on
+rather than being hidden forever by a gate that moves with it.
 """
 
 from __future__ import annotations
@@ -226,8 +236,16 @@ CREATE UNIQUE INDEX idx_mirror_events_dedupe ON mirror_events(task_id, field, fi
 CREATE INDEX idx_mirror_events_ts ON mirror_events(ts);
 """
 
+# tasks.starts (#87) — a plain nullable column, so an existing database gains
+# it with every task awake (NULL = no gate). The index carries the deferral
+# clause every list query now adds.
+_V7 = """
+ALTER TABLE tasks ADD COLUMN starts TEXT;
+CREATE INDEX idx_tasks_starts ON tasks(starts);
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

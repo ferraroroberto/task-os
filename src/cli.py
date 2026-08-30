@@ -1,12 +1,14 @@
 """``tasks`` — the terminal / scripting / LLM surface of task-os.
 
-    tasks add "Renew passport" --due fri [--parent N] [--priority high]
+    tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
               [--recurrence weekly] [--person "Sam"] [--desc "..."]
     tasks ls [--status todo,doing|open|all] [--project N] [--due today|week|overdue]
+             [--deferred]
     tasks show N
     tasks tree [N]
     tasks comment N "text"
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
+    tasks starts N <date>       the day it starts mattering; same vocabulary, "none" clears
     tasks done N
     tasks move N --parent M     (--parent root → top level)
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
@@ -27,6 +29,12 @@ server over HTTP when it answers
 the CLI works either way. ``--local`` forces the direct path. ``--actor``
 names who is acting (activity / comment author); default = the configured
 first team member.
+
+A task whose ``--starts`` day has not arrived is *deferred*: ``tasks ls``
+leaves it out (as do the web app's Board, Today and Table), ``tasks ls
+--deferred`` is the list of exactly those, ``tasks ls --status all`` shows
+everything including them, and ``tasks show`` / ``tasks tree`` / ``tasks
+search`` always find it.
 
 Exit codes: 0 ok · 1 error (message on stderr, or the JSON error envelope
 with ``--json``) · 2 usage.
@@ -131,6 +139,12 @@ class HttpBackend:
 
     def ls(self, **filters: Any) -> list[dict[str, Any]]:
         params = {k: v for k, v in filters.items() if v is not None}
+        if params.pop("deferred", False):
+            # `deferred` rides the `status` list on the wire — the same URL
+            # vocabulary the web app's filter card shares (#87), so there is
+            # one spelling of "show me the sleeping ones", not two.
+            picked = [s for s in str(params.get("status") or "").split(",") if s]
+            params["status"] = ",".join([*picked, "deferred"])
         query = urllib.parse.urlencode(params)
         return self._call("GET", "/api/tasks" + (f"?{query}" if query else ""))["items"]
 
@@ -147,6 +161,9 @@ class HttpBackend:
 
     def due(self, task_id: int, due: str | None) -> dict[str, Any]:
         return self._call("PATCH", f"/api/tasks/{task_id}", {"due": due, "actor": self.actor})
+
+    def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
+        return self._call("PATCH", f"/api/tasks/{task_id}", {"starts": starts, "actor": self.actor})
 
     def done(self, task_id: int) -> dict[str, Any]:
         return self._call("POST", f"/api/tasks/{task_id}/done", {"actor": self.actor})
@@ -257,6 +274,8 @@ class LocalBackend:
             person_id=filters.get("person"),
             q=filters.get("q"),
             include_closed=bool(filters.get("include_closed")),
+            # None = follow include_closed, so `ls --status all` means all
+            deferred="only" if filters.get("deferred") else None,
         )
 
     def show(self, task_id: int) -> dict[str, Any]:
@@ -270,6 +289,9 @@ class LocalBackend:
 
     def due(self, task_id: int, due: str | None) -> dict[str, Any]:
         return self._wrap(self._repo.set_due, task_id, due, actor=self.actor)
+
+    def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
+        return self._wrap(self._repo.set_starts, task_id, starts, actor=self.actor)
 
     def done(self, task_id: int) -> dict[str, Any]:
         return self._wrap(self._repo.done, task_id, actor=self.actor)
@@ -450,6 +472,8 @@ def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
         tail.append(f"prio {t['priority']}")
     if t.get("due"):
         tail.append(f"due {t['due']}")
+    if t.get("starts"):
+        tail.append(f"starts {t['starts']}")
     if t.get("recurrence"):
         tail.append(f"every {t['recurrence']}")
     if t.get("type") == "coding" and t.get("issue_ref"):
@@ -488,6 +512,7 @@ def fmt_show(t: dict[str, Any]) -> str:
     if crumb:
         lines.append(f"  in: {crumb}")
     lines.append(f"  type {t['type']} · status {t['status']} · priority {t['priority']} · due {t.get('due') or '-'}"
+                 + (f" · starts {t['starts']}" if t.get("starts") else "")
                  + (f" · every {t['recurrence']}" if t.get("recurrence") else ""))
     if t.get("description"):
         lines.append(f"  {t['description']}")
@@ -625,7 +650,7 @@ def fmt_folders_search(r: dict[str, Any]) -> str:
 # ------------------------------------------------------------------ commands
 
 
-def _parse_due(text: str | None) -> str | None:
+def _parse_date_arg(text: str | None) -> str | None:
     if text is None:
         return None
     try:
@@ -663,7 +688,9 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         if args.parent is not None:
             fields["parent_id"] = _parent_arg(args.parent)
         if args.due is not None:
-            fields["due"] = _parse_due(args.due)
+            fields["due"] = _parse_date_arg(args.due)
+        if args.starts is not None:
+            fields["starts"] = _parse_date_arg(args.starts)
         if args.priority:
             fields["priority"] = args.priority
         if args.recurrence:
@@ -687,6 +714,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             filters["due"] = args.due
         if args.person:
             filters["person"] = _resolve_person(backend, args.person)
+        if args.deferred:
+            filters["deferred"] = True
         items = backend.ls(**filters)
         return items, fmt_ls(items)
     if cmd == "show":
@@ -699,8 +728,11 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         c = backend.comment(args.id, args.text)
         return c, f"commented on #{args.id}: {c['body']}"
     if cmd == "due":
-        t = backend.due(args.id, _parse_due(args.date))
+        t = backend.due(args.id, _parse_date_arg(args.date))
         return t, f"#{t['id']} due → {t.get('due') or 'none'}"
+    if cmd == "starts":
+        t = backend.starts(args.id, _parse_date_arg(args.date))
+        return t, f"#{t['id']} starts → {t.get('starts') or 'none'}"
     if cmd == "done":
         t = backend.done(args.id)
         if t.get("recurrence"):
@@ -787,6 +819,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("title")
     a.add_argument("--parent", help="parent task id (nesting)")
     a.add_argument("--due", help="today · tomorrow · fri · next friday · in 2 weeks · YYYY-MM-DD")
+    a.add_argument("--starts", help="the day it starts mattering — hidden from the working views until then")
     a.add_argument("--priority", choices=TASK_PRIORITIES)
     a.add_argument("--recurrence", choices=RECURRENCES)
     a.add_argument("--person", help="person id or name")
@@ -797,6 +830,8 @@ def build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--project", type=int, help="only descendants of this task")
     ls.add_argument("--due", help="today · week · overdue · YYYY-MM-DD")
     ls.add_argument("--person", help="person id or name")
+    ls.add_argument("--deferred", action="store_true",
+                    help="only tasks still sleeping (a start date in the future)")
 
     s = sub.add_parser("show", parents=[common], help="task detail with comments + activity")
     s.add_argument("id", type=int)
@@ -811,6 +846,11 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("due", parents=[common], help="set the due date")
     d.add_argument("id", type=int)
     d.add_argument("date", help="natural or ISO; 'none' clears")
+
+    st = sub.add_parser("starts", parents=[common],
+                        help="set the start date (snooze — hidden until then)")
+    st.add_argument("id", type=int)
+    st.add_argument("date", help="natural or ISO; 'none' clears")
 
     dn = sub.add_parser("done", parents=[common], help="complete (recurring tasks roll forward)")
     dn.add_argument("id", type=int)

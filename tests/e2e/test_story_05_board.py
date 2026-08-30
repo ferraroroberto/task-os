@@ -475,6 +475,24 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
 
+        # Landing straight on the Board (the tab is remembered now): the nav
+        # positions the carousel before the first list has loaded, so an
+        # unguarded placement clamps to column one while the strip still reads
+        # "Todo". The strip and the column in view must name the same thing.
+        page.reload()
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        expect(page.locator("#paneBoard .board-strip-btn.active")).to_have_attribute("data-col", "todo")
+        page.wait_for_function(
+            "() => { const a = document.querySelector('.board-strip-btn.active');"
+            "        const w = document.querySelector('.board-columns');"
+            "        if (!a || !w) return false;"
+            "        const c = document.querySelector(\".board-col[data-col='\" + a.dataset.col + \"']\");"
+            "        return c && Math.abs(c.getBoundingClientRect().left - w.getBoundingClientRect().left) < 2; }"
+        )
+        # and the column on screen really is the one the strip names
+        in_view = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        assert in_view == ["todo"], in_view
+
         # 11. § #81 on the phone: the same Select toggle, tap-to-select (no
         #     gesture — the horizontal swipe still belongs to the carousel),
         #     and the bulk bar sized for the strip, clear of the nav pill.

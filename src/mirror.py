@@ -7,7 +7,7 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
 
     ---                       YAML frontmatter (flat scalars + a links list)
     id: 42 · external_id · parent · title · code · type · status · priority
-    due · recurrence · person (name) · folder_ref · next_action
+    due · starts · recurrence · person (name) · folder_ref · next_action
     links: [{url, label, kind}] · created_at · updated_at · done_at · exported_at
     ---
     ## Description            markdown, free
@@ -30,9 +30,9 @@ differs from the recorded one, parses them and applies:
 
 - changed **scalar frontmatter fields** through the repo with ``actor="md"``
   (so activity rows are written like any other change) — ``title``, ``code``,
-  ``status``, ``priority``, ``due`` (natural phrases welcome), ``recurrence``,
-  ``person`` (by name), ``folder_ref``, ``next_action``, ``parent``; and the
-  ``## Description`` body;
+  ``status``, ``priority``, ``due`` and ``starts`` (natural phrases welcome),
+  ``recurrence``, ``person`` (by name), ``folder_ref``, ``next_action``,
+  ``parent``; and the ``## Description`` body;
 - **new lines under ``## Comments``** — anything not matching a known comment
   by (ts, author, origin, body) — as comments ``origin=md`` (author from the
   line, else the configured owner);
@@ -99,12 +99,12 @@ _PLAIN_SAFE_RE = re.compile(r"^[A-Za-z0-9_./ ,+():@%\u00c0-\uffff-]*$")
 #: Frontmatter keys, in the order they are written.
 FRONTMATTER_KEYS = (
     "id", "external_id", "parent", "title", "code", "type", "status", "priority", "due",
-    "recurrence", "person", "folder_ref", "next_action", "links",
+    "starts", "recurrence", "person", "folder_ref", "next_action", "links",
     "created_at", "updated_at", "done_at", "exported_at",
 )
 #: Keys the import applies (everything else in the frontmatter is read-only).
 IMPORTABLE_KEYS = (
-    "title", "code", "status", "priority", "due", "recurrence", "person",
+    "title", "code", "status", "priority", "due", "starts", "recurrence", "person",
     "folder_ref", "next_action", "parent",
 )
 #: file key → activity field name (the conflict baseline lookup).
@@ -188,6 +188,7 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
         "status": task.get("status"),
         "priority": task.get("priority"),
         "due": task.get("due"),
+        "starts": task.get("starts"),
         "recurrence": task.get("recurrence"),
         "person": (task.get("person") or {}).get("name"),
         "folder_ref": task.get("folder_ref"),
@@ -622,7 +623,7 @@ class Mirror:
         """Normalise a frontmatter value into what the repo stores for ``key``."""
         if raw is None or (isinstance(raw, str) and raw.strip() == ""):
             return None
-        if key == "due":
+        if key in ("due", "starts"):
             try:
                 d = parse_date(str(raw))
             except DateParseError as exc:

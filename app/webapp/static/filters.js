@@ -29,6 +29,14 @@ import { STATUSES, todayISO } from './format.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due' };
+/**
+ * The status multi-select's pseudo-value (#87). Not a status: it flips the
+ * list from the awake tasks to the sleeping ones (a `starts` date still in the
+ * future), intersected with any real statuses ticked alongside it. The server
+ * splits it back out in `app/webapp/routers/tasks.py`; `matchesFilters` below
+ * applies the same rule to rows that never went through /api/tasks.
+ */
+export const DEFERRED = 'deferred';
 export const DUE_WINDOWS = [['', 'Any due date'], ['today', 'Due today'], ['week', 'Due this week'], ['overdue', 'Overdue']];
 export const UPDATED_WINDOWS = [['', 'Modified any time'], ['today', 'Modified today'], ['week', 'Modified in 7 days'], ['month', 'Modified in 30 days']];
 const TEXT_DEBOUNCE_MS = 250;
@@ -41,7 +49,7 @@ function csv(value) {
 export function filtersFromSearch(search) {
   const p = new URLSearchParams(search || '');
   const f = Object.assign({}, DEFAULT_FILTERS);
-  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0; });
+  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED; });
   f.project = p.get('project') || '';
   f.person = csv(p.get('person')).filter(function (s) { return /^\d+$/.test(s); });
   f.due = DUE_WINDOWS.some(function (w) { return w[0] === p.get('due'); }) ? p.get('due') : '';
@@ -100,7 +108,14 @@ export function listParams(f) {
  * @param {string} [today]  ISO date (tests)
  */
 export function matchesFilters(t, f, today) {
-  if (f.status.length) { if (f.status.indexOf(t.status) < 0) return false; }
+  // Deferral is a modifier, not a status, so it is resolved before the status
+  // branch and intersects with whatever real statuses are ticked. Note the
+  // asymmetry with the server's default (#87): ticking `deferred` narrows to
+  // the sleeping tasks here too, but NOT ticking it hides nothing — the only
+  // caller is the Search tab, and a deferred task is meant to stay findable.
+  if (f.status.indexOf(DEFERRED) >= 0 && !(t.starts && t.starts > (today || todayISO()))) return false;
+  const statuses = f.status.filter(function (s) { return s !== DEFERRED; });
+  if (statuses.length) { if (statuses.indexOf(t.status) < 0) return false; }
   else if (CLOSED[t.status]) return false;
   if (f.project) {
     const pid = String(f.project);
@@ -339,7 +354,10 @@ export function mountFilters(host, opts) {
     row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
     row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
     // 3. status | sort
-    row.appendChild(multiSelect('status', 'Status', STATUSES.map(function (s) { return [s, s]; }),
+    // `deferred` rides the end of the status list — the one visible way to see
+    // the sleeping tasks the working views leave out (#87).
+    const statusValues = STATUSES.map(function (s) { return [s, s]; }).concat([[DEFERRED, DEFERRED]]);
+    row.appendChild(multiSelect('status', 'Status', statusValues,
       filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
     row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
     if (!isDefaultFilters(Object.assign({}, filters, { q: opts.textHost ? filters.q : '' }))) {
