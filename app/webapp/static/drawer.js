@@ -3,7 +3,7 @@
  * A right-hand side panel on desktop (>= 1024px; the content shrinks so the
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
- * title → fields row (status, priority, due, recurrence, person, code,
+ * title → fields row (status, priority, due, starts, recurrence, person, code,
  * move-to — re-parent without the tree drag, the phone's path) →
  * folder (the ref as an opener chip + resolved path, an editor that folds a
  * pasted absolute path onto the placeholders, a picker over the folder
@@ -24,7 +24,7 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, issueChip, linkKind, linkify,
+  PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, isDeferred, issueChip, linkKind, linkify,
   providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
@@ -154,43 +154,51 @@ export function createDrawer(el, opts) {
     return wrap;
   }
 
-  /** Due: a date picker by default (the calendar button opens the native one),
-   *  typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO (issue #46). */
-  function dueField(t) {
-    const rel = relDue(t.due);
+  /** A date field: a picker by default (the calendar button opens the native
+   *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO
+   *  (issue #46). Both dates the drawer edits go through this one builder —
+   *  **Due** and, beside it, **Starts** (#87) — so they cannot drift into
+   *  behaving differently, and the coarse-pointer branch below lives once.
+   * @param {object} t
+   * @param {string} field   the task field this edits ('due' | 'starts')
+   * @param {string} label   the field label
+   * @param {string} caption optional suffix on the label ("· in 3d")
+   */
+  function dateField(t, field, label, caption) {
+    const value = t[field] || '';
     const wrap = document.createElement('label');
-    wrap.className = 'field field-due';
+    wrap.className = 'field field-date field-' + field;
     const l = document.createElement('span');
     l.className = 'field-label';
-    l.textContent = 'Due' + (t.due && rel.text ? ' · ' + rel.text : '');
+    l.textContent = label + (value && caption ? ' · ' + caption : '');
     const row = document.createElement('span');
     row.className = 'field-due-row';
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'input-native field-control';
-    input.dataset.field = 'due';
-    input.value = t.due || '';
+    input.dataset.field = field;
+    input.value = value;
     input.placeholder = 'tomorrow · fri · 2026-09-01';
-    input.setAttribute('aria-label', 'Due date');
+    input.setAttribute('aria-label', label);
     const picker = document.createElement('input');
     picker.type = 'date';
     picker.className = 'field-due-picker';
     picker.tabIndex = -1;
     picker.setAttribute('aria-hidden', 'true');
-    picker.value = t.due || '';
+    picker.value = value;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'icon-btn field-due-btn';
     btn.title = 'Pick a date';
-    btn.setAttribute('aria-label', 'Pick a due date');
+    btn.setAttribute('aria-label', 'Pick a ' + label.toLowerCase() + ' date');
     btn.innerHTML = icon('calendar-days');
     function commit(v) {
-      if (v === (t.due || '')) return;
-      patch({ due: v === '' ? null : v });
+      if (v === value) return;
+      patch(Object.fromEntries([[field, v === '' ? null : v]]));
     }
     input.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
-      if (ev.key === 'Escape') { input.value = t.due || ''; input.blur(); }
+      if (ev.key === 'Escape') { input.value = value; input.blur(); }
     });
     input.addEventListener('blur', function () { commit(input.value.trim()); });
     btn.addEventListener('click', function (ev) {
@@ -326,7 +334,10 @@ export function createDrawer(el, opts) {
     fields.className = 'drawer-fields';
     fields.appendChild(statusField(t));
     fields.appendChild(selectField('Priority', 'priority', PRIORITIES, t.priority));
-    fields.appendChild(dueField(t));
+    fields.appendChild(dateField(t, 'due', 'Due', relDue(t.due).text));
+    // Starts sits right after Due — the two dates of a task, read together.
+    fields.appendChild(dateField(t, 'starts', 'Starts',
+      isDeferred(t) ? relDue(t.starts).text : 'passed'));
     fields.appendChild(selectField('Repeat', 'recurrence', RECURRENCES, t.recurrence || '', function (v) { return v || 'never'; }));
     const people = [{ id: '', name: '—' }].concat(opts.people() || []);
     fields.appendChild(selectField('Person', 'person_id', people.map(function (p) { return p.id; }), t.person_id == null ? '' : t.person_id, function (v) {

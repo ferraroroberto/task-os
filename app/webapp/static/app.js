@@ -36,9 +36,10 @@ import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
-  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams, mountFilters,
+  DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams,
+  mountFilters,
 } from './filters.js';
-import { fmtTsShort, relDue, todayISO } from './format.js';
+import { fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { CLOSED, sortItems } from './rows.js';
@@ -91,6 +92,7 @@ const state = {
   projects: [],     // [{id, title, depth}] — every task with children, tree order
   tree: [],         // /api/tasks/tree?include_closed=true — the full forest
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
+  deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
@@ -169,21 +171,32 @@ async function loadTree() {
 }
 
 /** The shared list: the filters as sent to /api/tasks; when no status is
- *  picked, today's done tasks ride along (the Board's Done-today column). */
+ *  picked, today's done tasks ride along (the Board's Done-today column).
+ *
+ *  Deferred tasks (#87) are fetched **separately**, never merged into
+ *  `state.items`: the working views are supposed to be rid of them, and the
+ *  one view that must still show them — the Tree, which prunes to the ids in
+ *  the filtered list — reads `state.deferred` on top. Merging them here would
+ *  put a sleeping task back on the Board the moment anyone forgot to filter. */
 async function loadItems() {
   const f = state.filters;
   const params = listParams(f);
+  const showsDeferred = f.status.indexOf(DEFERRED) >= 0;
   const calls = [api('/api/tasks' + qs(params))];
   if (!f.status.length) {
     calls.push(api('/api/tasks' + qs(Object.assign({}, params, { status: ['done'], done_on: todayISO() }))));
   }
-  const results = await Promise.all(calls);
+  const deferredCall = showsDeferred
+    ? Promise.resolve({ items: [] })   // already the whole list — no second call
+    : api('/api/tasks' + qs(Object.assign({}, params, { status: [DEFERRED] })));
+  const [results, sleeping] = await Promise.all([Promise.all(calls), deferredCall]);
   const seen = new Set();
   const items = [];
   results.forEach(function (r) {
     (r.items || []).forEach(function (t) { if (!seen.has(t.id)) { seen.add(t.id); items.push(t); } });
   });
   state.items = items;
+  state.deferred = showsDeferred ? items.slice() : (sleeping.items || []);
 }
 
 function countOpen(forest) {
@@ -256,6 +269,29 @@ async function setStatus(id, status) {
   toast('Done — next: ' + t.due + ' (' + relDue(t.due).text + ')', 'success');
   await refreshAll();
   if (drawer.currentId() === id) drawer.refresh();
+  return t;
+}
+
+/** Snooze one task from a Today row (#87): set `starts` to the phrase the menu
+ *  sent — the server resolves it, so the CLI, quick-add and this control share
+ *  one date vocabulary — then say where it went, with the undo that puts the
+ *  previous value back. The undo is the inverse PATCH, not a stored command
+ *  stack: the old value is the only state it needs. */
+async function snoozeTask(id, phrase) {
+  const before = (state.items.find(function (x) { return x.id === id; }) || {}).starts || null;
+  let t;
+  try {
+    t = await api('/api/tasks/' + id, { method: 'PATCH', body: { starts: phrase } });
+  } catch (err) {
+    toast(err.message || 'Could not snooze the task', 'error');
+    throw err;
+  }
+  await refreshAll();
+  if (drawer.currentId() === id) drawer.refresh();
+  toast('Snoozed to ' + fmtDay(t.starts), 'success', {
+    label: 'Undo',
+    onClick: function () { return patchTask(id, { starts: before }); },
+  });
   return t;
 }
 
@@ -404,7 +440,8 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  renderToday(els.todayHost, viewItems(), { onOpen: openTask, onStatus: setStatus }, { sort: state.filters.sort });
+  renderToday(els.todayHost, viewItems(), { onOpen: openTask, onStatus: setStatus, onSnooze: snoozeTask },
+    { sort: state.filters.sort });
 }
 
 function renderTable() {
@@ -420,7 +457,9 @@ function renderTable() {
 }
 
 function renderTreePane() {
-  const items = viewItems();
+  // The Tree is the map of everything, so a deferred task stays on it — with
+  // its `starts` marker saying why the working views are quiet about it (#87).
+  const items = viewItems().concat(state.deferred);
   const keep = new Set(items.map(function (t) { return t.id; }));
   const byId = {};
   items.forEach(function (t) { byId[t.id] = t; });

@@ -6,8 +6,13 @@ user types map to one deterministic rule set:
     today · tomorrow · yesterday
     fri · friday               → the coming Friday (today if today is Friday)
     next fri · next friday     → the Friday after that (+7 days)
+    this weekend · weekend     → the coming Saturday (today if today is Saturday)
     next week / next month / next year
     in 3 days · in 2 weeks · in 1 month · in 1 year   (also "3d", "2w", "+2w")
+    oct 15 · 15 oct · october 15  → that day this year, or next year once it
+                                    has passed (the same "coming" rule the
+                                    weekday phrases use); add a year to pin it
+                                    ("oct 15 2028")
     2026-09-01                  → ISO date, passed through
     none · clear · -            → explicit "no date" (returns ``None``)
 
@@ -37,8 +42,19 @@ _UNIT_DAYS = {"d": 1, "day": 1, "days": 1, "w": 7, "week": 7, "weeks": 7}
 _UNIT_MONTHS = {"m": 1, "month": 1, "months": 1, "y": 12, "year": 12, "years": 12}
 _NO_DATE = {"none", "clear", "-", "null", ""}
 
+_MONTHS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
+    "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+
 _ISO_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _REL_RE = re.compile(r"^(?:in\s+|\+)?(\d+)\s*([a-z]+)$")
+# "oct 15", "oct 15 2028", "15 oct", "15 october 2028" — an ordinal suffix
+# ("15th") and a trailing comma are tolerated because people type them.
+_MONTH_DAY_RE = re.compile(r"^([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?,?(?: (\d{4}))?$")
+_DAY_MONTH_RE = re.compile(r"^(\d{1,2})(?:st|nd|rd|th)? ([a-z]+)\.?,?(?: (\d{4}))?$")
 
 
 class DateParseError(ValueError):
@@ -73,6 +89,38 @@ def _coming_weekday(today: date, weekday: int) -> date:
     return today + timedelta(days=(weekday - today.weekday()) % 7)
 
 
+def _month_day(text: str, today: date) -> date | None:
+    """``oct 15`` / ``15 oct`` / ``october 15 2028`` → a date, else ``None``.
+
+    Without an explicit year the *coming* occurrence wins: this year while the
+    day is still ahead, next year once it has passed — the same rule the bare
+    weekday phrases follow, so "due oct 15" typed in November means next
+    October rather than a date ten months overdue.
+    """
+    for pattern, month_group, day_group in (
+        (_MONTH_DAY_RE, 1, 2), (_DAY_MONTH_RE, 2, 1),
+    ):
+        m = pattern.match(text)
+        if not m:
+            continue
+        month = _MONTHS.get(m.group(month_group))
+        if month is None:
+            continue
+        day = int(m.group(day_group))
+        year = int(m.group(3)) if m.group(3) else today.year
+        try:
+            d = date(year, month, day)
+        except ValueError as exc:
+            raise DateParseError(f"invalid date {text!r}: {exc}") from exc
+        if not m.group(3) and d < today:
+            try:
+                d = date(year + 1, month, day)
+            except ValueError as exc:  # 29 Feb into a common year
+                raise DateParseError(f"invalid date {text!r}: {exc}") from exc
+        return d
+    return None
+
+
 def parse_date(text: str | None, today: date | None = None) -> date | None:
     """Turn a natural or ISO phrase into a :class:`date`; ``None`` for "no date".
 
@@ -100,6 +148,11 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
         return today + timedelta(days=1)
     if s == "yesterday":
         return today - timedelta(days=1)
+    if s in ("this weekend", "weekend"):
+        # The coming Saturday — the snooze menu's middle option (#87). Saturday
+        # itself stays Saturday; Sunday means the Saturday six days out, which
+        # is what "push this to the weekend" asks for on a Sunday.
+        return _coming_weekday(today, 5)
     if s == "next week":
         return today + timedelta(days=7)
     if s == "next month":
@@ -120,6 +173,11 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
         if unit in _UNIT_MONTHS:
             return add_months(today, n * _UNIT_MONTHS[unit])
 
+    named = _month_day(s, today)
+    if named is not None:
+        return named
+
     raise DateParseError(
-        f"cannot parse date {text!r} — try today, tomorrow, fri, next friday, in 2 weeks, or YYYY-MM-DD"
+        f"cannot parse date {text!r} — try today, tomorrow, fri, next friday, "
+        f"this weekend, in 2 weeks, oct 15, or YYYY-MM-DD"
     )

@@ -5,8 +5,10 @@
  * (tomorrow … +7 days) sits collapsed below as a flat disclosure. Rows are
  * the ONE task row (rows.js, issue #46) — title + status select (the Board
  * control; the old checkbox is gone), the meta line (project hidden — the
- * group already names it). Flat hairline rows, no card wrapper, group
- * titles in the app's normal title font. This is the phone's landing tab.
+ * group already names it) and the snooze control (#87) — the one view that
+ * carries it, because this is where "not today" gets decided. Flat hairline
+ * rows, no card wrapper, group titles in the app's normal title font. This is
+ * the phone's landing tab.
  *
  * Everything is derived in the browser from the shared filtered list, so the
  * filter card (status · project · person · sort …) applies here like on
@@ -71,7 +73,8 @@ function groupByRoot(items, sort) {
 /**
  * @param {HTMLElement} host
  * @param {Array<object>} items  the shared filtered list
- * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>}} handlers
+ * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
+ *          onSnooze?: (id:number, phrase:string)=>Promise<any>}} handlers
  * @param {{sort?: string, today?: string}} [opts]
  */
 export function renderToday(host, items, handlers, opts) {
@@ -163,7 +166,7 @@ function buildGroup(group, handlers) {
   n.textContent = String(group.items.length);
   title.appendChild(n);
   wrap.appendChild(title);
-  const list = rowList(group.items, handlers, { hideProject: true });
+  const list = rowList(group.items, handlers, { hideProject: true, snooze: true });
   list.classList.add('today-list');
   list.querySelectorAll('.trow').forEach(function (row) {
     const rel = relDue(row.querySelector('.trow-due') ? row.querySelector('.trow-due').title : '');

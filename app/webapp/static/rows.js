@@ -6,9 +6,11 @@
  *
  *   line 1  the title (one line, ellipsized) + the status select, right-aligned
  *           on the same line (the Board control, issue #27/#32 — now everywhere,
- *           fine and coarse pointers alike; a view with drag-and-drop keeps it too)
+ *           fine and coarse pointers alike; a view with drag-and-drop keeps it too),
+ *           preceded on Today by the snooze control (#87)
  *   line 2  the meta line: code (coding tasks) · project (root title) · due ·
- *           priority · recurrence · folder chip · issue chip · children ·
+ *           starts (only while the task is still asleep) · priority ·
+ *           recurrence · folder chip · issue chip · children ·
  *           comments · person — only the parts that have content
  *
  * Flat hairline separators between rows, no per-row box, the priority accent
@@ -20,7 +22,8 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, aiChip, chipFor, issueChip, relDue } from './format.js';
+import { STATUSES, aiChip, chipFor, isDeferred, issueChip, relDue, startsLabel } from './format.js';
+import { snoozeButton } from './snooze.js';
 
 export const SORTS = [
   ['due', 'due date'], ['priority', 'priority'], ['updated', 'last modified'], ['created', 'created'], ['title', 'title'],
@@ -129,6 +132,9 @@ export function metaLine(t, opts) {
     const due = metaPart('due' + (rel.tone ? ' due-' + rel.tone : ''), 'calendar-days', rel.text, t.due);
     meta.appendChild(due);
   }
+  // A sleeping task says so wherever it still shows (the Tree, a search hit,
+  // the Deferred filter) — the working views drop it, they never lie about it.
+  if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
   if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
   if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', t.recurrence));
   if (t.folder_ref) {
@@ -163,20 +169,25 @@ export function metaLine(t, opts) {
  * One task row.
  * @param {object} t                    a list summary (/api/tasks item, board/today item, search hit)
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
- *          onToggleSelect?: (id:number)=>void}} handlers
+ *          onToggleSelect?: (id:number)=>void, onSnooze?: (id:number, phrase:string)=>Promise<any>}} handlers
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
- *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean}} [opts]
+ *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean,
+ *          snooze?: boolean}} [opts]
  *          prefix     = an element before the title (the Tree's toggle);
  *          extra      = a third line under the meta (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on (#81): the row grows a leading
- *                       checkbox and the row gesture ticks instead of opening
+ *                       checkbox and the row gesture ticks instead of opening;
+ *          snooze     = show the snooze control (#87) — Today passes it, so
+ *                       "push this away" lives where the day's list is read
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
+  const withSnooze = !!(o.snooze && handlers.onSnooze && !o.selectable);
   const li = document.createElement(o.tag || 'li');
   li.className = 'trow' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
-    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
+    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '')
+    + (withSnooze ? ' has-snooze' : '');
   li.dataset.id = String(t.id);
   li.dataset.status = t.status;
   if (o.depth != null) li.style.setProperty('--depth', String(o.depth));
@@ -216,6 +227,9 @@ export function taskRow(t, handlers, opts) {
   main.appendChild(title);
   li.appendChild(main);
 
+  // Snooze sits before the status select, so the two row controls read
+  // left-to-right as "later" then "where is it now".
+  if (withSnooze) li.appendChild(snoozeButton(t, handlers.onSnooze));
   li.appendChild(statusSelect(t, handlers.onStatus));
 
   const meta = metaLine(t, o);

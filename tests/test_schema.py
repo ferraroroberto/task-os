@@ -30,10 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 6
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 7
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 6
+        assert schema.current_version(conn) == 7
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -47,13 +47,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 6
-        assert schema.migrate(conn) == 6
+        assert schema.migrate(conn) == 7
+        assert schema.migrate(conn) == 7
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 6
+    assert dbmod.init_db() == 7
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -67,10 +67,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 6
+    assert dbmod.init_db() == 7
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 6
+        assert schema.current_version(conn) == 7
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -111,7 +111,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 6
+    assert dbmod.init_db() == 7
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()

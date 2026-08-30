@@ -7,10 +7,11 @@
  *
  * Line 1 stays the natural-language line: POST /api/parse splits it
  * server-side (so the CLI and the UI agree on what "next friday" means) and
- * the result lands where it can still be changed — the due date fills the
- * **Due** field, the parent shows as a chip. Under it, the fields that used to
- * force a second trip through the drawer (#80 round 2): description, due,
- * status, folder (with the shared folder-index picker) and one link.
+ * the result lands where it can still be changed — the dates it finds fill the
+ * **Due** and **Starts** fields, the parent shows as a chip. Under it, the
+ * fields that used to force a second trip through the drawer (#80 round 2):
+ * description, due, starts (#87), status, folder (with the shared
+ * folder-index picker) and one link.
  * Everything but the title is optional and empty by default — no date, status
  * inbox — so `type · Enter` is still the whole fast path.
  *
@@ -43,6 +44,7 @@ export function createQuickAdd(dialog, opts) {
   const chips = dialog.querySelector('.quick-add-chips');
   const desc = dialog.querySelector('.quick-add-desc');
   const due = dialog.querySelector('.quick-add-due');
+  const starts = dialog.querySelector('.quick-add-starts');
   const status = dialog.querySelector('.quick-add-status');
   const folder = dialog.querySelector('.quick-add-folder');
   const pick = dialog.querySelector('.quick-add-pick');
@@ -61,7 +63,9 @@ export function createQuickAdd(dialog, opts) {
   let parsed = null;
   let timer = 0;
   let seq = 0;
-  let dueTouched = false;   // once the date is set by hand the parser stops writing it
+  // Once a date is set by hand the parser stops writing it ??? one flag per
+  // field, so correcting the due never freezes the start date too (#87).
+  const touched = { due: false, starts: false };
 
   /** The parse preview: the parent only — the due is in the Due field, where
    *  it can be corrected, so a chip repeating it would be a second truth. */
@@ -84,11 +88,13 @@ export function createQuickAdd(dialog, opts) {
     chips.appendChild(c);
   }
 
-  /** The phrase the parser understood, next to the date it produced. */
-  function showDue(iso, phrase) {
-    due.value = iso || '';
+  /** The phrase the parser understood, next to the date it produced. Both date
+   *  fields fill this way, so `due oct 15 starts oct 1` previews as two
+   *  correctable dates rather than one date and a mystery (#87). */
+  function showDate(el, iso, phrase) {
+    el.value = iso || '';
     const rel = iso ? relDue(iso) : { text: '' };
-    due.title = iso
+    el.title = iso
       ? (phrase ? '"' + phrase + '"' : '') + (rel.text ? (phrase ? ' · ' : '') + rel.text : '')
       : '';
   }
@@ -99,7 +105,8 @@ export function createQuickAdd(dialog, opts) {
     if (!text) {
       parsed = null;
       renderChips();
-      if (!dueTouched) showDue('', '');
+      if (!touched.due) showDate(due, '', '');
+      if (!touched.starts) showDate(starts, '', '');
       return;
     }
     try {
@@ -108,7 +115,8 @@ export function createQuickAdd(dialog, opts) {
       parsed = res;
       parsed._for = text;
       renderChips();
-      if (!dueTouched) showDue(parsed.due, parsed.due_phrase);
+      if (!touched.due) showDate(due, parsed.due, parsed.due_phrase);
+      if (!touched.starts) showDate(starts, parsed.starts, parsed.starts_phrase);
     } catch (_) {
       // Parsing is a convenience: a failed parse just means no preview.
       if (my === seq) { parsed = null; renderChips(); }
@@ -120,7 +128,8 @@ export function createQuickAdd(dialog, opts) {
     window.clearTimeout(timer);
     timer = window.setTimeout(parseNow, PARSE_DEBOUNCE_MS);
   });
-  due.addEventListener('input', function () { dueTouched = true; due.title = ''; });
+  due.addEventListener('input', function () { touched.due = true; due.title = ''; });
+  starts.addEventListener('input', function () { touched.starts = true; starts.title = ''; });
 
   // Folder: type a ref / an absolute path, or search the index (folderpick.js,
   // the same picker the drawer's Folder section uses).
@@ -139,14 +148,16 @@ export function createQuickAdd(dialog, opts) {
   function reset() {
     input.value = '';
     desc.value = '';
-    showDue('', '');
+    showDate(due, '', '');
+    showDate(starts, '', '');
     status.value = DEFAULT_STATUS;
     folder.value = '';
     link.value = '';
     linkLabel.value = '';
     setPicker(false);
     parsed = null;
-    dueTouched = false;
+    touched.due = false;
+    touched.starts = false;
     submit.disabled = true;
     renderChips();
   }
@@ -165,6 +176,7 @@ export function createQuickAdd(dialog, opts) {
     }
     const body = { title: (parsed && parsed.title) || text, status: status.value };
     if (due.value) body.due = due.value;
+    if (starts.value) body.starts = starts.value;
     if (desc.value.trim()) body.description = desc.value.trim();
     if (parsed && parsed.parent_ref) {
       if (!parsed.parent) {

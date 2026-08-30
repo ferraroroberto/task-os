@@ -15,7 +15,11 @@ Rules enforced here (plan §04):
   field, old → new;
 - ``done()`` on a recurring task rolls the *same* task's due forward from the
   due date (``src.dates.advance``) and logs the completion; a non-recurring
-  task becomes ``done`` with ``done_at``;
+  task becomes ``done`` with ``done_at``; the roll never touches ``starts``;
+- a task whose ``starts`` has not arrived is *deferred*: :func:`list_tasks`
+  hides it by default, so every working view (Board, Today, Table, the CLI)
+  inherits one rule from one clause — :func:`tree` and :func:`search` read
+  the table directly and keep showing it (#87);
 - ``coding`` ⇔ an ``issue_refs`` row exists: attaching one sets the type,
   detaching reverts it, and setting ``type='coding'`` by hand is rejected;
 - full-text search hits title / description / comment bodies via the two
@@ -68,9 +72,11 @@ DEFAULT_ACTOR = "me"
 
 # Columns a client may set on create / update (everything else is derived).
 _TASK_FIELDS = (
-    "parent_id", "code", "title", "type", "status", "priority", "due", "recurrence",
+    "parent_id", "code", "title", "type", "status", "priority", "due", "starts", "recurrence",
     "description", "folder_ref", "next_action", "person_id",
 )
+#: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
+DATE_FIELDS = ("due", "starts")
 _TASK_COLUMNS = ("id", *_TASK_FIELDS, "created_by", "created_at", "updated_at", "done_at")
 _ENUMS: dict[str, tuple[str, ...]] = {
     "type": TASK_TYPES,
@@ -209,7 +215,13 @@ def _validate_enum(field: str, value: Any, nullable: bool = False) -> None:
         raise ValidationError(f"{field} must be one of {', '.join(allowed)} (got {value!r})")
 
 
-def _validate_due(value: Any) -> str | None:
+def _validate_date(value: Any, field: str = "due") -> str | None:
+    """An ISO date column's value, or ``None`` for "no date".
+
+    The repo layer only ever sees ISO: the natural phrases (`tomorrow`, `fri`,
+    `this weekend`) are resolved at the edges — ``app/webapp/routers/tasks.py``
+    for HTTP, ``src/cli.py`` for the terminal — through ``src/dates.py``.
+    """
     if value is None or value == "":
         return None
     if isinstance(value, date):
@@ -217,7 +229,7 @@ def _validate_due(value: Any) -> str | None:
     try:
         return date.fromisoformat(str(value)).isoformat()
     except ValueError as exc:
-        raise ValidationError(f"due must be an ISO date YYYY-MM-DD (got {value!r})") from exc
+        raise ValidationError(f"{field} must be an ISO date YYYY-MM-DD (got {value!r})") from exc
 
 
 def _require_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
@@ -345,7 +357,7 @@ def create_task(
 
     values: dict[str, Any] = {
         "parent_id": None, "code": None, "type": "task", "status": "inbox",
-        "priority": "none", "due": None, "recurrence": None, "description": "",
+        "priority": "none", "due": None, "starts": None, "recurrence": None, "description": "",
         "folder_ref": None, "next_action": None, "person_id": None,
     }
     values.update({k: v for k, v in fields.items() if k != "title"})
@@ -359,7 +371,8 @@ def create_task(
     _validate_enum("status", values["status"])
     _validate_enum("priority", values["priority"])
     _validate_enum("recurrence", values["recurrence"], nullable=True)
-    values["due"] = _validate_due(values["due"])
+    for f in DATE_FIELDS:
+        values[f] = _validate_date(values[f], f)
     if values["type"] == "coding":
         raise ValidationError(
             "type 'coding' is derived — attach an issue (PUT /api/tasks/{id}/issue) instead"
@@ -373,10 +386,10 @@ def create_task(
     actor = actor or DEFAULT_ACTOR
     cur = conn.execute(
         """
-        INSERT INTO tasks(parent_id, code, title, type, status, priority, due, recurrence,
+        INSERT INTO tasks(parent_id, code, title, type, status, priority, due, starts, recurrence,
                           description, folder_ref, next_action, person_id,
                           created_by, created_at, updated_at, done_at)
-        VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :recurrence,
+        VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :starts, :recurrence,
                 :description, :folder_ref, :next_action, :person_id,
                 :created_by, :ts, :ts, :done_at)
         """,
@@ -430,8 +443,8 @@ def update_task(
             if field == "recurrence":
                 value = value or None
             _validate_enum(field, value, nullable=(field == "recurrence"))
-        elif field == "due":
-            value = _validate_due(value)
+        elif field in DATE_FIELDS:
+            value = _validate_date(value, field)
         elif field == "description":
             value = value or ""
         elif field == "person_id":
@@ -473,6 +486,12 @@ def update_task(
 
 def set_due(conn: sqlite3.Connection, task_id: int, due: str | date | None, *, actor: str | None = None) -> dict[str, Any]:
     return update_task(conn, task_id, actor=actor, due=due)
+
+
+def set_starts(conn: sqlite3.Connection, task_id: int, starts: str | date | None, *, actor: str | None = None) -> dict[str, Any]:
+    """Set (or clear, with ``None``) the day the task starts mattering — what
+    the Today row's snooze control and ``tasks starts`` both do (#87)."""
+    return update_task(conn, task_id, actor=actor, starts=starts)
 
 
 def set_status(conn: sqlite3.Connection, task_id: int, status: str, *, actor: str | None = None) -> dict[str, Any]:
@@ -573,6 +592,11 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
     current due (from today when it had none), status is untouched, and the
     log gets ``done`` (old = the due that was completed) plus ``due`` old→new.
     Non-recurring → ``status='done'``, ``done_at`` stamped, ``status`` logged.
+
+    The roll deliberately leaves ``starts`` alone (#87). A start date is an
+    absolute one-time gate, not a cadence: it always eventually arrives, so a
+    snoozed recurring task wakes on its start day and rolls normally from then
+    on. Advancing it with the due would make the gate chase the task forever.
     """
     current = _require_task(conn, task_id)
     actor = actor or DEFAULT_ACTOR
@@ -684,7 +708,7 @@ def _normalise(field: str, value: Any) -> Any:
     if field == "priority":
         return value or "none"
     if field == "due":
-        return _validate_due(value)
+        return _validate_date(value)
     return value if value not in ("", None) else None
 
 
@@ -716,7 +740,7 @@ def _due_window(due: str | None) -> tuple[str | None, str | None, bool]:
         return t.isoformat(), (t + timedelta(days=7)).isoformat(), False
     if due == "overdue":
         return None, (t - timedelta(days=1)).isoformat(), True
-    d = _validate_due(due)
+    d = _validate_date(due)
     return d, d, False
 
 
@@ -736,6 +760,7 @@ def list_tasks(
     limit: int | None = None,
     done_on: str | None = None,
     updated_since: str | None = None,
+    deferred: str | None = None,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
 
@@ -752,12 +777,33 @@ def list_tasks(
       falls on or after that day (the shared filter card's *modified* window).
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
+    - ``deferred``: what to do with a task whose ``starts`` has not arrived
+      (#87) — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
+      the filter card's *Deferred*, ``tasks ls --deferred``) or ``"all"``.
+      Unset follows ``include_closed``: that flag means "hide nothing", so it
+      lifts this gate too — otherwise a count taken with it (the app's "any
+      tasks at all?", the mirror's file total) would quietly omit the
+      sleeping ones and report a number nobody could reconcile.
+      This is the ONE place the working views' deferral rule lives: Board,
+      Today, Table and the CLI are all projections of this function, so they
+      inherit it. :func:`tree` and :func:`search` do not go through here on
+      purpose — a deferred task stays findable.
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
     top ancestor — the Table's project column) and ``last_comment``.
     """
     where: list[str] = []
     args: list[Any] = []
+
+    if deferred is None:
+        deferred = "all" if include_closed else "hide"
+    if deferred not in ("hide", "only", "all"):
+        raise ValidationError(f"deferred must be hide, only or all (got {deferred!r})")
+    if deferred != "all":
+        where.append(
+            "(t.starts IS NULL OR t.starts <= ?)" if deferred == "hide" else "t.starts > ?"
+        )
+        args.append(today().isoformat())
 
     if status:
         values = [status] if isinstance(status, str) else list(status)
@@ -786,8 +832,8 @@ def list_tasks(
         args.extend(ids)
 
     d_from, d_to, overdue = _due_window(due)
-    d_from = _validate_due(due_from) or d_from
-    d_to = _validate_due(due_to) or d_to
+    d_from = _validate_date(due_from) or d_from
+    d_to = _validate_date(due_to) or d_to
     if d_from:
         where.append("t.due >= ?")
         args.append(d_from)
@@ -810,11 +856,11 @@ def list_tasks(
 
     if done_on:
         where.append("substr(t.done_at, 1, 10) = ?")
-        args.append(_validate_due(done_on))
+        args.append(_validate_date(done_on))
 
     if updated_since:
         where.append("substr(t.updated_at, 1, 10) >= ?")
-        args.append(_validate_due(updated_since))
+        args.append(_validate_date(updated_since))
 
     if q:
         hit_ids = [h["id"] for h in search(conn, q, limit=500)]

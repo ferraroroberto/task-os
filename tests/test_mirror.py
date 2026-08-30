@@ -218,6 +218,51 @@ def test_import_natural_due_phrase_and_person_by_name(env, mirror: Mirror) -> No
     assert {a["actor"] for a in task["activity"][:4]} == {"md"}
 
 
+def test_starts_round_trips_and_conflicts_like_any_field(env, mirror: Mirror) -> None:
+    """#87: `starts:` exports, imports through the repo layer (natural phrases
+    welcome) and loses to a newer DB value exactly as `due:` does — the policy
+    is generic because the field goes through the same one layer."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    text = path.read_text(encoding="utf-8")
+    assert "\nstarts: null\n" in text                      # exported, empty
+
+    _touch(path, text.replace("\nstarts: null\n", "\nstarts: 2026-12-01\n"))
+    with repo.use_clock(_clock(T0.replace(hour=11))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"starts": "2026-12-01"}
+    task = repo.get_task(conn, tid)
+    assert task["starts"] == "2026-12-01"
+    assert (task["activity"][0]["field"], task["activity"][0]["actor"]) == ("starts", "md")
+    assert "starts: 2026-12-01" in path.read_text(encoding="utf-8")
+
+    # a natural phrase in the file resolves through src/dates.py, like due
+    text = path.read_text(encoding="utf-8").replace("\nstarts: 2026-12-01\n", "\nstarts: 2027-01-15\n")
+    _touch(path, text)
+    with repo.use_clock(_clock(T0.replace(hour=12))):
+        mirror.import_tick(conn)
+    assert repo.get_task(conn, tid)["starts"] == "2027-01-15"
+
+    # conflict: the DB moved after the file was written, so the DB wins and
+    # the rejection is an event, not a comment on the task
+    with repo.use_clock(_clock(T0.replace(hour=13))):
+        mirror.export_task(conn, tid)
+    with repo.use_clock(_clock(T0.replace(hour=14))):
+        repo.update_task(conn, tid, starts="2027-02-02", actor="ui")
+    text = path.read_text(encoding="utf-8").replace("\nstarts: 2027-01-15\n", "\nstarts: 2027-03-03\n")
+    _touch(path, text)
+    with repo.use_clock(_clock(T0.replace(hour=15))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {}
+    assert repo.get_task(conn, tid)["starts"] == "2027-02-02"
+    event = [e for e in repo.list_mirror_events(conn) if e["field"] == "starts"]
+    assert len(event) == 1 and event[0]["kind"] == "conflict"
+    assert (event[0]["file_value"], event[0]["kept_value"]) == ("2027-03-03", "2027-02-02")
+    assert "starts: 2027-02-02" in path.read_text(encoding="utf-8")
+
+
 def test_import_description_section(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)

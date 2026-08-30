@@ -34,7 +34,36 @@ MONDAY = date(2026, 8, 17)
 )
 def test_parse(text: str, title: str, due: str | None, phrase: str | None, parent_ref: dict | None) -> None:
     got = parse(text, MONDAY)
-    assert got == {"title": title, "due": due, "due_phrase": phrase, "parent_ref": parent_ref}
+    assert got == {
+        "title": title, "due": due, "due_phrase": phrase,
+        "starts": None, "starts_phrase": None, "parent_ref": parent_ref,
+    }
+
+
+@pytest.mark.parametrize(
+    ("text", "title", "due", "due_phrase", "starts", "starts_phrase"),
+    [
+        # the issue's own example (#87) — both dates off one line
+        ("renew insurance due oct 15 starts oct 1", "renew insurance",
+         "2026-10-15", "due oct 15", "2026-10-01", "starts oct 1"),
+        # a start date on its own leaves the due unset
+        ("buy tickets starts this weekend", "buy tickets", None, None, "2026-08-22", "starts this weekend"),
+        # `start` / `starting` are the same keyword
+        ("call the vet start tomorrow", "call the vet", None, None, "2026-08-18", "start tomorrow"),
+        ("call the vet starting in 2 weeks", "call the vet", None, None, "2026-08-31", "starting in 2 weeks"),
+        # `starts` without a parseable date is just words in the title
+        ("the project starts soon", "the project starts soon", None, None, None, None),
+        # a bare trailing date is still the DUE date — starts must say so
+        ("renew passport next friday", "renew passport", "2026-08-28", "next friday", None, None),
+    ],
+)
+def test_parse_starts(text: str, title: str, due: str | None, due_phrase: str | None,
+                      starts: str | None, starts_phrase: str | None) -> None:
+    got = parse(text, MONDAY)
+    assert got == {
+        "title": title, "due": due, "due_phrase": due_phrase,
+        "starts": starts, "starts_phrase": starts_phrase, "parent_ref": None,
+    }
 
 
 def test_resolve_parent(tmp_path: Path) -> None:

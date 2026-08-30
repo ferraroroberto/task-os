@@ -621,6 +621,70 @@ a.chip:hover { text-decoration: underline; }
   .msel-opt { min-height: var(--row-sm); }
 }
 
+/* -------------------------------------------------- snooze (issue #87)
+   The Today row's "not today" control: the same <details> popover idiom as
+   the filter card's multi-select above (summary opens a menu, Escape and an
+   outside click close it), so the app has ONE popover, not one per feature.
+   The trigger is a compact square icon button reaching the 44px floor through
+   the shared .hit-target expansion rather than its own geometry. */
+.snooze { grid-area: snooze; position: relative; align-self: center; }
+.snooze-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+}
+.snooze-summary::-webkit-details-marker { display: none; }
+.snooze-summary .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.snooze-summary:hover { color: var(--fg); }
+.snooze[open] > .snooze-summary { color: var(--accent); border-color: var(--accent-border-soft); }
+.snooze-summary[aria-busy="true"] { opacity: 0.6; pointer-events: none; }
+.snooze-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 25;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+.snooze-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-label);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.snooze-opt:hover { background: var(--card-2); }
+/* The divider is what sets "Pick a date…" apart from the three phrases — not a
+   muted text colour, which read as disabled on the walk. Only its glyph is
+   quiet, like every other leading icon on a row. */
+.snooze-pick { border-top: 1px solid var(--line-muted); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+.snooze-pick .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
+@media (pointer: coarse) {
+  .snooze-summary { width: var(--row-sm); height: var(--row-sm); }
+  .snooze-opt { min-height: var(--row-sm); }
+}
+
 /* ============================================================ the task row */
 /* `.trow` (rows.js): a tight grid — text column + control column. Line 1 is
    the title ("main") with the status select ("ctrl") centered beside it;
@@ -665,6 +729,16 @@ a.chip:hover { text-decoration: underline; }
   /* tighter than the row's 10px: a Board column is ~140px wide and the title
      is already ellipsized — the checkbox should not cost it three characters */
   column-gap: 6px;
+}
+/* Snooze (#87): its own column between the title and the status select, so the
+   two row controls sit side by side instead of fighting for the `ctrl` area.
+   Today is the only view that asks for it, and never together with Select
+   mode — a ticked row's gesture belongs to the selection. */
+.trow.has-snooze {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "main snooze ctrl"
+    "meta meta   meta";
 }
 .trow-check {
   grid-area: sel;
@@ -724,6 +798,9 @@ a.chip:hover { text-decoration: underline; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; }
 .trow-due { color: var(--fg); }
+/* The sleeping marker (#87) — muted like the rest of the meta line: it is a
+   statement of fact, not a state to warn about, so it takes no status colour. */
+.trow-starts { color: var(--muted); }
 .trow-prio { text-transform: capitalize; }
 .trow-prio::before {
   content: "";
@@ -856,6 +933,10 @@ a.chip:hover { text-decoration: underline; }
 .t-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .t-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-crumb { color: var(--muted); font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The sleeping marker in the desktop grid's title cell — the shared row's
+   `.trow-starts` twin (#87), same muted weight, no status colour. */
+.t-starts { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
+.t-starts .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .c-due { white-space: nowrap; }
 .c-priority { text-transform: capitalize; }
 .prio-high { color: var(--danger); font-weight: 600; }
@@ -1219,6 +1300,17 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .toast-error { border-color: var(--deficit-border-soft); color: var(--danger); }
 .toast-success { color: var(--success); }
 .toast span { flex: 1 1 auto; color: var(--fg); }
+/* The optional inline action (#87's snooze undo) — a ghost button: transparent
+   on a hairline, never a tinted fill competing with the toast's own surface. */
+.toast-action {
+  flex: none;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: var(--font-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+@media (pointer: coarse) { .toast-action { min-height: var(--row-sm); } }
 .toast-close { width: 34px; height: 34px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); }
 @media (pointer: coarse) and (max-width: 520px) {
   .toasts { left: var(--gap); right: var(--gap); bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); max-width: none; }

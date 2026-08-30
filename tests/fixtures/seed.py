@@ -12,7 +12,9 @@ drifted every seeded due one bucket per passing day); pass ``--anchor`` /
 Shape: four projects nested to depth 3, ~40 tasks, three people, comments
 (some carrying web / folder / issue / ai links), links, activity from real
 status / priority / due changes, a handful of recurring tasks, a few done or
-cancelled, one ``coding`` task with an issue_ref, and one ``note``.
+cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
+**deferred** task (a ``starts`` date 20 days out — #87) so the sleeping state
+is on screen without anyone having to create it.
 
 Use it:
 
@@ -148,6 +150,16 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         task("inbox3", "Compare phone plans", status="inbox", due=d(12))
         task("reading", "Reading list", type="note",
              description="- a book on focus\n- a book on gardening\n- the garden-bot docs")
+
+        # ---- deferred (#87) -----------------------------------------------
+        # Nothing to do before it starts, so the working views leave it out
+        # while the Tree, search and the Deferred filter still show it — the
+        # sleeping state, on screen, without anyone having to create it.
+        # Created LAST on purpose: every seeded id is a position in this
+        # sequence, and inserting mid-list would renumber everything after it
+        # (tests and validation records name ids).
+        task("boiler", "Book boiler service", parent_id=ids["family"],
+             status="todo", due=d(40), starts=d(20))
 
         # ---- comments (some with links) ---------------------------------
         repo.add_comment(conn, ids["quotes"], "First quote in: https://example.com/quotes/1 — a bit high.", author="Sam Rivera", origin="ui")

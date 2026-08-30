@@ -196,6 +196,92 @@ def test_done_non_recurring_closes(conn: sqlite3.Connection) -> None:
     assert d["id"] in {x["id"] for x in repo.list_tasks(conn, include_closed=True)}
 
 
+# ------------------------------------------- start date / deferral (#87)
+
+def test_starts_is_a_field_like_due(conn: sqlite3.Connection) -> None:
+    """Set, change and clear, each writing its own activity row."""
+    t = repo.create_task(conn, "Renew car insurance", due="2026-10-15", starts="2026-10-01")
+    assert t["starts"] == "2026-10-01"
+    changed = repo.set_starts(conn, t["id"], "2026-09-20", actor="me")
+    assert changed["starts"] == "2026-09-20"
+    assert ("starts", "2026-10-01", "2026-09-20") in _fields(changed["activity"])
+    cleared = repo.set_starts(conn, t["id"], None, actor="me")
+    assert cleared["starts"] is None
+    assert ("starts", "2026-09-20", None) in _fields(cleared["activity"])
+    # "" clears it too — the same contract due has
+    assert repo.update_task(conn, t["id"], starts="2026-11-01")["starts"] == "2026-11-01"
+    assert repo.update_task(conn, t["id"], starts="")["starts"] is None
+    # and the repo layer takes ISO only; phrases are resolved at the edges
+    with pytest.raises(repo.ValidationError, match="starts must be an ISO date"):
+        repo.create_task(conn, "Bad", starts="next friday")
+
+
+def test_deferred_hidden_from_lists_but_never_from_tree_or_search(
+    conn: sqlite3.Connection, frozen: None
+) -> None:
+    awake = repo.create_task(conn, "Awake task", status="todo", due="2026-08-18")
+    past = repo.create_task(conn, "Started already", status="todo", starts="2026-08-16")
+    today_ = repo.create_task(conn, "Starts today", status="todo", starts="2026-08-17")
+    asleep = repo.create_task(conn, "Book boiler service", status="todo",
+                              due="2026-09-26", starts="2026-09-06")
+
+    def titles(**kw) -> set[str]:
+        return {t["title"] for t in repo.list_tasks(conn, **kw)}
+
+    # default: everything whose start day has arrived (today counts), nothing else
+    assert titles() == {"Awake task", "Started already", "Starts today"}
+    assert titles(deferred="only") == {"Book boiler service"}
+    assert titles(deferred="all") == {
+        "Awake task", "Started already", "Starts today", "Book boiler service",
+    }
+    # the Board and Today are projections of the same function, so they inherit it
+    board = repo.board(conn)
+    assert asleep["id"] not in {t["id"] for c in board["columns"].values() for t in c}
+    assert asleep["id"] not in {
+        t["id"] for g in repo.today_view(conn)["due"] for t in g["items"]
+    }
+    # …but the Tree and search read the table directly and keep showing it
+    assert asleep["id"] in {n["id"] for n in repo.tree(conn)}
+    assert asleep["id"] in {h["id"] for h in repo.search(conn, "boiler")}
+    assert repo.get_task(conn, asleep["id"])["starts"] == "2026-09-06"
+    assert awake["id"] and past["id"] and today_["id"]  # created, ids handed back
+
+    # `include_closed` means "hide nothing", so it lifts this gate too — a
+    # total taken with it must not quietly omit the sleeping tasks
+    assert titles(include_closed=True) == {
+        "Awake task", "Started already", "Starts today", "Book boiler service",
+    }
+    # …unless the caller was explicit, which still wins
+    assert titles(include_closed=True, deferred="hide") == {
+        "Awake task", "Started already", "Starts today",
+    }
+
+    with pytest.raises(repo.ValidationError, match="deferred must be"):
+        repo.list_tasks(conn, deferred="sometimes")
+
+
+def test_deferred_intersects_with_a_status_filter(conn: sqlite3.Connection, frozen: None) -> None:
+    repo.create_task(conn, "Sleeping todo", status="todo", starts="2026-09-06")
+    repo.create_task(conn, "Sleeping doing", status="doing", starts="2026-09-06")
+    repo.create_task(conn, "Awake doing", status="doing")
+    got = repo.list_tasks(conn, status=["doing"], deferred="only")
+    assert [t["title"] for t in got] == ["Sleeping doing"]
+
+
+def test_recurrence_roll_leaves_starts_alone(conn: sqlite3.Connection, frozen: None) -> None:
+    """A snoozed recurring task wakes on its start day and rolls normally after
+    — the gate never chases the due date (see ``repo.done``)."""
+    t = repo.create_task(conn, "Pay water bill", status="todo",
+                         due="2026-08-20", recurrence="monthly", starts="2026-08-19")
+    rolled = repo.done(conn, t["id"], actor="me")
+    assert rolled["due"] == "2026-09-20"
+    assert rolled["starts"] == "2026-08-19"          # untouched by the roll
+    assert "starts" not in {a["field"] for a in rolled["activity"]}
+    # once that day arrives the task is back in the working views for good
+    with repo.use_clock(lambda: datetime(2026, 8, 19, 9, 0, 0).astimezone()):
+        assert t["id"] in {x["id"] for x in repo.list_tasks(conn)}
+
+
 # ------------------------------------------------------------ comments
 
 def test_comments_thread_order_and_origin(conn: sqlite3.Connection) -> None:

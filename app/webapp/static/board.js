@@ -42,6 +42,13 @@ export function mountBoard(handlers) {
   const el = document.createElement('div');
   el.className = 'board';
   let currentCol = 'todo';
+  // Has the carousel actually been placed on `currentCol`, with real layout?
+  // The nav fires its onChange (→ `show()`) during boot, before the first list
+  // has loaded, so the first attempt can run against a pane that has no layout
+  // and no rows: every rect is 0, the scroll clamps to the first column, and
+  // the strip is left saying "Todo" over an Inbox carousel. `render()`
+  // re-asserts the position until one attempt sticks.
+  let positioned = false;
 
   // Phone strip: one count button per column, doubles as the carousel switcher.
   const strip = document.createElement('div');
@@ -116,11 +123,17 @@ export function mountBoard(handlers) {
   function showColumn(key, smooth) {
     currentCol = key;
     const col = sections[key];
-    if (col && !col.hidden && window.matchMedia(PHONE_MQ).matches) {
+    if (!window.matchMedia(PHONE_MQ).matches) {
+      positioned = true;      // desktop grid: every column is on screen at once
+    } else if (col && !col.hidden) {
       // Scroll only the carousel container — scrollIntoView would also yank
       // the page vertically (launcher phone-verify lesson).
-      const left = col.getBoundingClientRect().left - columns.getBoundingClientRect().left + columns.scrollLeft;
+      const box = columns.getBoundingClientRect();
+      const left = col.getBoundingClientRect().left - box.left + columns.scrollLeft;
       columns.scrollTo({ left: left, behavior: smooth ? 'smooth' : 'auto' });
+      // Only count it as placed when the container could actually scroll —
+      // an empty or unlaid-out carousel silently clamps to column one.
+      positioned = box.width > 0 && columns.scrollWidth > columns.clientWidth;
     }
     syncStrip();
   }
@@ -180,7 +193,12 @@ export function mountBoard(handlers) {
       const keys = visibleKeys();
       if (keys.length) currentCol = keys[0];
     }
-    syncStrip();
+    // Close the boot race: the rows are in now, so if the carousel was never
+    // really placed, place it — the strip and the visible column must name the
+    // same thing. Once one attempt sticks this never runs again, so a refresh
+    // can never yank a carousel the reader has swiped.
+    if (!positioned) showColumn(currentCol, false);
+    else syncStrip();
   }
 
   return {
