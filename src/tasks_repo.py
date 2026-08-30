@@ -760,6 +760,7 @@ def list_tasks(
     limit: int | None = None,
     done_on: str | None = None,
     updated_since: str | None = None,
+    updated_before: str | None = None,
     deferred: str | None = None,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
@@ -775,6 +776,10 @@ def list_tasks(
       timestamp, so the boundary is local midnight).
     - ``updated_since``: a local calendar date — only tasks whose ``updated_at``
       falls on or after that day (the shared filter card's *modified* window).
+    - ``updated_before``: the inverse twin — only tasks whose ``updated_at``
+      falls strictly before that day (the filter card's *untouched > N days*
+      stale windows, #101). Any write moves ``updated_at`` — sync and mirror
+      included — so a GitHub-synced task never looks stale.
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
     - ``deferred``: what to do with a task whose ``starts`` has not arrived
@@ -856,11 +861,15 @@ def list_tasks(
 
     if done_on:
         where.append("substr(t.done_at, 1, 10) = ?")
-        args.append(_validate_date(done_on))
+        args.append(_validate_date(done_on, "done_on"))
 
     if updated_since:
         where.append("substr(t.updated_at, 1, 10) >= ?")
-        args.append(_validate_date(updated_since))
+        args.append(_validate_date(updated_since, "updated_since"))
+
+    if updated_before:
+        where.append("substr(t.updated_at, 1, 10) < ?")
+        args.append(_validate_date(updated_before, "updated_before"))
 
     if q:
         hit_ids = [h["id"] for h in search(conn, q, limit=500)]

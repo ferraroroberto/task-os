@@ -13,6 +13,7 @@ dataset allowed on screen) at 1440×900 desktop, saving the numbered proof
 shots the validation record links to:
 
     docs/screenshots/story-04-triage-{1..8}-desktop.png
+    docs/screenshots/story-04-triage-11-desktop.png   (stale window, #101)
 
 then the drawer at 390×844 (WebKit, touch) with the geometry checks:
 
@@ -287,6 +288,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 
         # ---------------------------------------------- story 13 (#87) ----
         _walk_starts_and_snooze(page, base, shots)
+
+        # ------------------------------------------- stale window (#101) ----
+        _walk_stale_window(page, base, shots)
     finally:
         context.close()
 
@@ -299,6 +303,37 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         dark_page.screenshot(path=str(shots / "story-13-starts-snooze-5-desktop.png"))
     finally:
         dark_ctx.close()
+
+
+# ------------------------------------------------- stale window (#101)
+
+
+def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
+    """#101 — the modified select's inverse windows: *untouched > N days*.
+    The seed's dormant task (last touched 45 days back) is the one hit at 30
+    days and gone at 60; the URL keeps the window token while the API only
+    ever sees the plain date the client computed.
+
+    Screenshot: docs/screenshots/story-04-triage-11-desktop.png
+    """
+    page.goto(f"{base}/")
+    page.click("nav.tabs .tab[data-tab='table']")
+    card = _open_filters(page, "tableFilters")
+    card.locator("select[name='updated']").select_option("stale30")
+    expect(page).to_have_url(f"{base}/?updated=stale30")
+    rows = page.locator(".task-row")
+    expect(rows).to_have_count(1)
+    expect(rows.locator(".t-title-text")).to_have_text("Sort the garage shelves")
+    expect(card.locator(".filter-desc")).to_contain_text("untouched > 30 days")
+    expect(card.locator(".filter-desc")).to_contain_text("1 task")
+    page.screenshot(path=str(shots / "story-04-triage-11-desktop.png"))
+    # the token round-trips: a fresh load of the shared URL is the same view
+    page.goto(f"{base}/?updated=stale30")
+    page.click("nav.tabs .tab[data-tab='table']")
+    expect(page.locator(".task-row")).to_have_count(1)
+    # 60 days back nothing is that old — an honest empty list, not an error
+    _open_filters(page, "tableFilters").locator("select[name='updated']").select_option("stale60")
+    expect(page.locator(".task-row")).to_have_count(0)
 
 
 # ---------------------------------------------- story 13 — starts + snooze

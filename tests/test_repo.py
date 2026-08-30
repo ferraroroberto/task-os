@@ -61,8 +61,8 @@ def test_nesting_tree_and_breadcrumb(conn: sqlite3.Connection, seeded: dict) -> 
     quotes = repo.get_task(conn, seeded["quotes"])
     assert [c["title"] for c in quotes["breadcrumb"]] == ["Home renovation", "Kitchen"]
     home = repo.get_task(conn, seeded["home"])
-    assert home["is_project"] and home["child_count"] == 3
-    assert [c["title"] for c in home["children"]] == ["Kitchen", "Bathroom", "Garden"]
+    assert home["is_project"] and home["child_count"] == 4    # 3 rooms + the dormant task (#101)
+    assert [c["title"] for c in home["children"]] == ["Kitchen", "Bathroom", "Garden", "Sort the garage shelves"]
 
     forest = repo.tree(conn)
     roots = [n["title"] for n in forest]
@@ -266,6 +266,33 @@ def test_deferred_intersects_with_a_status_filter(conn: sqlite3.Connection, froz
     repo.create_task(conn, "Awake doing", status="doing")
     got = repo.list_tasks(conn, status=["doing"], deferred="only")
     assert [t["title"] for t in got] == ["Sleeping doing"]
+
+
+def test_updated_before_is_a_strict_stale_boundary(conn: sqlite3.Connection) -> None:
+    """#101: ``updated_before`` lists tasks last touched strictly before the
+    boundary day — touched ON the boundary (or today) never appears — and any
+    later write moves a task out of the window."""
+    with repo.use_clock(lambda: datetime(2026, 7, 1, 9, 0, 0).astimezone()):
+        old = repo.create_task(conn, "Dormant", status="todo")
+    with repo.use_clock(lambda: datetime(2026, 7, 18, 9, 0, 0).astimezone()):
+        repo.create_task(conn, "Touched on the boundary", status="todo")
+    with repo.use_clock(lambda: datetime(2026, 8, 17, 9, 0, 0).astimezone()):
+        repo.create_task(conn, "Touched today", status="todo")
+
+        def titles(**kw) -> set[str]:
+            return {t["title"] for t in repo.list_tasks(conn, **kw)}
+
+        # boundary 2026-07-18 = "untouched > 30 days" seen from the anchor
+        assert titles(updated_before="2026-07-18") == {"Dormant"}
+        assert titles(updated_before="2026-07-01") == set()   # touched ON the boundary: not yet stale
+        # composes with the other filters like any WHERE clause
+        assert titles(updated_before="2026-07-18", status=["todo"]) == {"Dormant"}
+        assert titles(updated_before="2026-07-18", status=["doing"]) == set()
+        # ANY write is a touch — the task leaves the window the moment it moves
+        repo.set_priority(conn, old["id"], "high", actor="x")
+        assert titles(updated_before="2026-07-18") == set()
+    with pytest.raises(repo.ValidationError):
+        repo.list_tasks(conn, updated_before="someday")
 
 
 def test_recurrence_roll_leaves_starts_alone(conn: sqlite3.Connection, frozen: None) -> None:
