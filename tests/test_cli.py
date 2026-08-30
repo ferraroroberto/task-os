@@ -127,6 +127,18 @@ def test_starts_and_deferred_over_both_backends(run: Runner) -> None:
     assert code == 1 and _json(out)["error"]["code"] == "bad_date"
 
 
+def test_ls_updated_before_over_both_backends(run: Runner) -> None:
+    """#101 CLI parity: `--updated-before` takes a date or `Nd` (= N days ago,
+    resolved CLI-side so the wire only ever sees a plain date)."""
+    run("add", "Fresh")
+    code, out, _ = run("ls", "--updated-before", "30d", "--json")
+    assert code == 0 and _json(out) == []                  # touched today: never stale
+    code, out, _ = run("ls", "--updated-before", "tomorrow", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["Fresh"]
+    code, _, err = run("ls", "--updated-before", "someday")
+    assert code == 1 and "cannot parse date" in err
+
+
 def test_ls_filters_done_move_search_people(run: Runner) -> None:
     run("add", "Project")
     run("add", "Child A", "--parent", "1", "--due", "today", "--priority", "high")

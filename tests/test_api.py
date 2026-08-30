@@ -127,6 +127,19 @@ def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     assert seeded.get("/api/tasks?q=balcony").json()["items"][0]["title"] == "Side project: garden-bot"
 
 
+def test_updated_before_lists_the_dormant_task(seeded: TestClient) -> None:
+    """#101 over HTTP: the stale windows' `updated_before` is a plain date the
+    client computed — the seed's dormant task (last touched anchor−45) is the
+    one hit at the 30-day boundary and gone at 60."""
+    items = seeded.get("/api/tasks?updated_before=2026-07-18").json()["items"]  # anchor−30
+    assert [t["title"] for t in items] == ["Sort the garage shelves"]
+    assert seeded.get("/api/tasks?updated_before=2026-06-18").json()["count"] == 0  # anchor−60
+    # composes with the rest of the filter card
+    assert seeded.get("/api/tasks?updated_before=2026-07-18&project=1").json()["count"] == 1
+    assert seeded.get("/api/tasks?updated_before=2026-07-18&person=1").json()["count"] == 0
+    assert seeded.get("/api/tasks?updated_before=someday").status_code == 422
+
+
 def test_starts_accepts_phrases_and_the_deferred_filter(client: TestClient) -> None:
     """#87 over HTTP: `starts` takes the same natural phrases `due` does, and
     `status=deferred` is the one URL spelling of "show me the sleeping ones"."""

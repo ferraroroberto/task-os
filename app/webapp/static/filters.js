@@ -38,7 +38,10 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  */
 export const DEFERRED = 'deferred';
 export const DUE_WINDOWS = [['', 'Any due date'], ['today', 'Due today'], ['week', 'Due this week'], ['overdue', 'Overdue']];
-export const UPDATED_WINDOWS = [['', 'Modified any time'], ['today', 'Modified today'], ['week', 'Modified in 7 days'], ['month', 'Modified in 30 days']];
+// The `stale*` windows are the inverse (#101): untouched for MORE than N days.
+// The boundary date is computed client-side — the API only ever sees a plain
+// `updated_before=YYYY-MM-DD`, no relative magic server-side.
+export const UPDATED_WINDOWS = [['', 'Modified any time'], ['today', 'Modified today'], ['week', 'Modified in 7 days'], ['month', 'Modified in 30 days'], ['stale30', 'Untouched > 30 days'], ['stale60', 'Untouched > 60 days'], ['stale90', 'Untouched > 90 days']];
 const TEXT_DEBOUNCE_MS = 250;
 
 function csv(value) {
@@ -79,10 +82,20 @@ export function isDefaultFilters(f) {
 // ------------------------------------------------------- server params
 /** `updated` window → the ISO date the list API's `updated_since` takes. */
 export function updatedSince(window, now) {
-  if (!window) return '';
+  if (!window || window.indexOf('stale') === 0) return '';
   const d = now ? new Date(now) : new Date();
   const days = window === 'today' ? 0 : (window === 'week' ? 7 : 30);
   d.setDate(d.getDate() - days);
+  return todayISO(d);
+}
+
+/** `stale*` window → the ISO boundary `updated_before` takes: untouched > N
+ * days = last touched strictly before today − N (a task touched exactly N
+ * days ago is not YET stale). */
+export function updatedBefore(window, now) {
+  if (!window || window.indexOf('stale') !== 0) return '';
+  const d = now ? new Date(now) : new Date();
+  d.setDate(d.getDate() - Number(window.slice(5)));
   return todayISO(d);
 }
 
@@ -95,6 +108,7 @@ export function listParams(f) {
     due: f.due || undefined,
     q: f.q || undefined,
     updated_since: updatedSince(f.updated) || undefined,
+    updated_before: updatedBefore(f.updated) || undefined,
   };
 }
 
@@ -138,8 +152,11 @@ export function matchesFilters(t, f, today) {
     }
   }
   if (f.updated) {
-    const since = updatedSince(f.updated, today ? today + 'T00:00:00' : undefined);
-    if (!t.updated_at || String(t.updated_at).slice(0, 10) < since) return false;
+    const ref = today ? today + 'T00:00:00' : undefined;
+    const day = t.updated_at ? String(t.updated_at).slice(0, 10) : '';
+    const before = updatedBefore(f.updated, ref);
+    if (before) { if (!day || day >= before) return false; }
+    else if (!day || day < updatedSince(f.updated, ref)) return false;
   }
   return true;
 }

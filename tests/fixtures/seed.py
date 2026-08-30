@@ -14,7 +14,8 @@ Shape: four projects nested to depth 3, ~40 tasks, three people, comments
 status / priority / due changes, a handful of recurring tasks, a few done or
 cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
 **deferred** task (a ``starts`` date 20 days out — #87) so the sleeping state
-is on screen without anyone having to create it.
+is on screen without anyone having to create it, and one **dormant** task
+last touched 45 days back (#101) so the stale filter has something to show.
 
 Use it:
 
@@ -160,6 +161,16 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         # (tests and validation records name ids).
         task("boiler", "Book boiler service", parent_id=ids["family"],
              status="todo", due=d(40), starts=d(20))
+
+        # ---- dormant (#101) -----------------------------------------------
+        # The seed clock runs from anchor−30, so nothing above is ever
+        # "untouched > 30 days". This one is written on its own clock 45 days
+        # back — the one task the stale-30 window lists (and stale-60 does
+        # not), so the honesty filter has something deterministic to show.
+        # Appended last for the same id-position reason as the deferred task.
+        with repo.use_clock(_Clock(datetime.combine(anchor - timedelta(days=45), datetime.min.time()).astimezone())):
+            task("dormant", "Sort the garage shelves", parent_id=ids["home"],
+                 status="todo", priority="low")
 
         # ---- comments (some with links) ---------------------------------
         repo.add_comment(conn, ids["quotes"], "First quote in: https://example.com/quotes/1 — a bit high.", author="Sam Rivera", origin="ui")

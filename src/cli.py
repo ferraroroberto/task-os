@@ -3,7 +3,7 @@
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
               [--recurrence weekly] [--person "Sam"] [--desc "..."]
     tasks ls [--status todo,doing|open|all] [--project N] [--due today|week|overdue]
-             [--deferred]
+             [--deferred] [--updated-before <date|30d>]
     tasks show N
     tasks tree [N]
     tasks comment N "text"
@@ -52,6 +52,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from datetime import date, timedelta
 from typing import Any
 
 from src.config import load_config
@@ -274,6 +275,7 @@ class LocalBackend:
             person_id=filters.get("person"),
             q=filters.get("q"),
             include_closed=bool(filters.get("include_closed")),
+            updated_before=filters.get("updated_before"),
             # None = follow include_closed, so `ls --status all` means all
             deferred="only" if filters.get("deferred") else None,
         )
@@ -660,6 +662,20 @@ def _parse_date_arg(text: str | None) -> str | None:
     return d.isoformat() if d else None
 
 
+def _parse_before_arg(text: str) -> str:
+    """``--updated-before`` vocabulary: ``Nd`` = N days ago, else a date.
+
+    The relative form is resolved here, CLI-side — the wire (and the repo
+    layer) only ever see a plain date, same as the web filter card (#101).
+    """
+    if text.endswith("d") and text[:-1].isdigit():
+        return (date.today() - timedelta(days=int(text[:-1]))).isoformat()
+    parsed = _parse_date_arg(text)
+    if parsed is None:
+        raise CliError(f"cannot parse date {text!r}", code="bad_date")
+    return parsed
+
+
 def _parent_arg(text: str | None) -> int | None:
     if text is None or text.lower() in ("root", "none", "null", "-"):
         return None
@@ -716,6 +732,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             filters["person"] = _resolve_person(backend, args.person)
         if args.deferred:
             filters["deferred"] = True
+        if args.updated_before:
+            filters["updated_before"] = _parse_before_arg(args.updated_before)
         items = backend.ls(**filters)
         return items, fmt_ls(items)
     if cmd == "show":
@@ -830,6 +848,8 @@ def build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--project", type=int, help="only descendants of this task")
     ls.add_argument("--due", help="today · week · overdue · YYYY-MM-DD")
     ls.add_argument("--person", help="person id or name")
+    ls.add_argument("--updated-before",
+                    help="only tasks last touched strictly before this day (a date, or Nd = N days ago)")
     ls.add_argument("--deferred", action="store_true",
                     help="only tasks still sleeping (a start date in the future)")
 
