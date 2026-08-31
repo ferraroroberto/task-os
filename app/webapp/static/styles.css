@@ -625,15 +625,20 @@ a.chip:hover { text-decoration: underline; }
    The Today row's "not today" control: the same <details> popover idiom as
    the filter card's multi-select above (summary opens a menu, Escape and an
    outside click close it), so the app has ONE popover, not one per feature.
-   The trigger is a compact square icon button reaching the 44px floor through
-   the shared .hit-target expansion rather than its own geometry. */
+   The trigger is a QUIET inline icon — no button box (the meta folder-glyph
+   pattern): boxed 30/44px squares beside the status select made every row
+   read taller and heavier than its text. The visible footprint stays
+   icon-sized; the shared .hit-target ::before expansion supplies the real
+   click area (34px effective on desktop, 44px on touch via the coarse
+   override below). Plan mode's Later target re-adds `button-surface` — there
+   a large boxed target is the point. */
 .snooze { grid-area: snooze; position: relative; align-self: center; }
 .snooze-summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   list-style: none;
   cursor: pointer;
@@ -643,7 +648,7 @@ a.chip:hover { text-decoration: underline; }
 .snooze-summary::-webkit-details-marker { display: none; }
 .snooze-summary .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .snooze-summary:hover { color: var(--fg); }
-.snooze[open] > .snooze-summary { color: var(--accent); border-color: var(--accent-border-soft); }
+.snooze[open] > .snooze-summary { color: var(--accent); }
 .snooze-summary[aria-busy="true"] { opacity: 0.6; pointer-events: none; }
 .snooze-menu {
   position: absolute;
@@ -681,7 +686,10 @@ a.chip:hover { text-decoration: underline; }
 .snooze-pick { border-top: 1px solid var(--line-muted); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 .snooze-pick .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
 @media (pointer: coarse) {
-  .snooze-summary { width: var(--row-sm); height: var(--row-sm); }
+  /* still 44px effective on touch — via a wider invisible expansion (28px
+     visual + 8px per side), never by growing the visible square back */
+  .snooze-summary { width: 28px; height: 28px; }
+  .snooze-summary:not(.plan-target)::before { inset: -8px; }
   .snooze-opt { min-height: var(--row-sm); }
 }
 
@@ -1511,15 +1519,21 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    declare template areas and a row can't wear both. */
 .today-plan { margin-bottom: var(--space-md); }
 .today-plan .today-head { align-items: center; }
+/* Quiet inline icons like the snooze trigger (no button box — the boxed
+   squares made the plan rows read heavier than their text): icon-sized
+   visible footprint, .hit-target ::before for the real click area. */
 .plan-more {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: var(--radius-sm);
   color: var(--muted);
+  cursor: pointer;
 }
 .plan-more .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .plan-more:hover { color: var(--fg); }
@@ -1537,12 +1551,15 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: var(--radius-sm);
   color: var(--muted);
   align-self: center;
+  cursor: pointer;
 }
 .plan-unplan .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .plan-unplan:hover { color: var(--danger); }
@@ -1592,7 +1609,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .plan-later .snooze-summary.plan-target { width: auto; height: auto; }
 .plan-note { color: var(--attention); font-size: var(--font-caption); font-weight: 600; }
 @media (pointer: coarse) {
-  .plan-more, .plan-unplan { width: var(--row-sm); height: var(--row-sm); }
+  /* 44px effective on touch through the invisible expansion, like the snooze
+     trigger — the visible icon never grows back into a box */
+  .plan-more, .plan-unplan { width: 28px; height: 28px; }
+  .plan-more::before, .plan-unplan::before { inset: -8px; }
   .plan-target { min-height: var(--row-sm); }
 }
 

@@ -208,7 +208,7 @@ function buildPlanSection(plan, cands, handlers, o) {
   if (!o.planMode && cands.length && handlers.onPlanMode) {
     const more = document.createElement('button');
     more.type = 'button';
-    more.className = 'button-surface plan-more hit-target';
+    more.className = 'plan-more hit-target';
     more.title = 'Plan more';
     more.setAttribute('aria-label', 'Plan more tasks');
     more.innerHTML = icon('plus');
@@ -250,7 +250,7 @@ function buildPlanSection(plan, cands, handlers, o) {
     if (handlers.onUnplan) {
       const un = document.createElement('button');
       un.type = 'button';
-      un.className = 'button-surface plan-unplan hit-target';
+      un.className = 'plan-unplan hit-target';
       un.title = 'Remove from plan';
       un.setAttribute('aria-label', 'Remove ' + t.title + ' from the plan');
       un.innerHTML = icon('x');
@@ -360,7 +360,9 @@ function buildPicker(cands, t, handlers) {
       const later = snoozeButton(c, handlers.onSnooze);
       later.classList.add('plan-later');
       const sum = later.querySelector('.snooze-summary');
-      sum.classList.add('plan-target');
+      // in plan mode Later IS a large boxed target (deliberately, next to
+      // Today) — re-add the surface the row control just dropped
+      sum.classList.add('plan-target', 'button-surface');
       sum.appendChild(document.createTextNode('Later'));
       extra.appendChild(later);
     }
