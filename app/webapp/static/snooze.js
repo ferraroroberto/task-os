@@ -56,8 +56,11 @@ export function snoozeButton(t, onSnooze) {
   d.className = 'snooze';
   d.dataset.id = String(t.id);
 
+  // A quiet inline icon, not a boxed button (the folder-glyph pattern): the
+  // visible footprint stays icon-sized so rows keep their height, while the
+  // .hit-target ::before expansion supplies the real click/touch area.
   const summary = document.createElement('summary');
-  summary.className = 'button-surface snooze-summary hit-target';
+  summary.className = 'snooze-summary hit-target';
   summary.setAttribute('role', 'button');
   summary.setAttribute('aria-label', 'Snooze ' + t.title);
   summary.title = 'Snooze';

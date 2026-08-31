@@ -71,6 +71,8 @@ const els = {
   boardFilters: document.getElementById('boardFilters'),
   boardFilterText: document.getElementById('boardFilterText'),
   boardBulk: document.getElementById('boardBulk'),
+  treeBulk: document.getElementById('treeBulk'),
+  todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
   tableFilterText: document.getElementById('tableFilterText'),
@@ -108,7 +110,7 @@ let settings = null;
 let palette = null;
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
-const bulkBars = [];      // the Board's and the Table's, both over one selection (#81)
+const bulkBars = [];      // one per pane strip (Board · Table · Tree · Today), all over one selection (#81)
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -216,7 +218,10 @@ function countOpen(forest) {
  *  out — so a bulk POST never carries an id the user cannot see (#81). */
 function pruneSelection() {
   if (!selection.isActive()) return;
-  selection.keepOnly(new Set(state.items.map(function (t) { return t.id; })));
+  // deferred ids included: the Tree's rows are tickable too (#81 parity)
+  selection.keepOnly(new Set(
+    state.items.concat(state.deferred).map(function (t) { return t.id; })
+  ));
 }
 
 async function refreshAll() {
@@ -444,7 +449,7 @@ function renderSelectMode() {
     btn.hidden = busy;
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) { btn.hidden = busy; });
-  [els.boardFilterText, els.tableFilterText].forEach(function (host) {
+  [els.boardFilterText, els.tableFilterText, els.treeFilterText, els.todayFilterText].forEach(function (host) {
     if (host) host.classList.toggle('is-superseded', busy);
   });
   bulkBars.forEach(function (bar) { bar.render(); });
@@ -457,7 +462,7 @@ function renderSelectMode() {
  *  would lose focus after the first tick. Mode changes still rebuild — there
  *  the rows genuinely change shape. */
 function syncSelectionMarks() {
-  [els.boardHost, els.tableHost].forEach(function (host) {
+  [els.boardHost, els.tableHost, els.treeHost, els.todayHost].forEach(function (host) {
     if (!host) return;
     host.querySelectorAll('.trow[data-id], .task-row[data-id]').forEach(function (row) {
       const on = selection.has(row.dataset.id);
@@ -488,7 +493,8 @@ function renderTodayPane() {
   renderToday(els.todayHost, viewItems(), {
     onOpen: openTask, onStatus: setStatus, onSnooze: snoozeTask,
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
-  }, { sort: state.filters.sort, plan: state.plan, planMode: state.planMode });
+    onToggleSelect: selectHandlers.onToggleSelect,
+  }, Object.assign({ sort: state.filters.sort, plan: state.plan, planMode: state.planMode }, selectOpts()));
 }
 
 function renderTable() {
@@ -510,8 +516,9 @@ function renderTreePane() {
   const keep = new Set(items.map(function (t) { return t.id; }));
   const byId = {};
   items.forEach(function (t) { byId[t.id] = t; });
-  const n = renderTree(els.treeHost, state.tree, { onOpen: openTask, onMove: moveTask, onStatus: setStatus },
-    { keep: keep, byId: byId, sort: state.filters.sort });
+  const n = renderTree(els.treeHost, state.tree,
+    { onOpen: openTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
+    Object.assign({ keep: keep, byId: byId, sort: state.filters.sort }, selectOpts()));
   if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
 }
 
@@ -582,7 +589,7 @@ function wireSelectMode() {
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () { selection.setActive(!selection.isActive()); });
   });
-  [els.boardBulk, els.tableBulk].forEach(function (host) {
+  [els.boardBulk, els.tableBulk, els.treeBulk, els.todayBulk].forEach(function (host) {
     if (!host) return;
     bulkBars.push(mountBulkBar(host, {
       onApply: bulkApply,
