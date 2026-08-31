@@ -852,7 +852,8 @@ a.chip:hover { text-decoration: underline; }
   .trow { min-height: 64px; padding: 12px 4px 13px; row-gap: 6px; }
   .trows > .trow:first-child,
   .board-list > .trow:first-child,
-  .today-list > .trow:first-child { padding-top: 13px; }
+  .today-list > .trow:first-child,
+  .tree > .tree-node:first-child > .trow { padding-top: 13px; }
   /* 24px, not the glyph's 18: the folder's 44px tap surface is centred on
      this line and has to fit inside the card (see .trow-folder::before). */
   .trow-meta { min-height: 24px; }
@@ -874,6 +875,19 @@ a.chip:hover { text-decoration: underline; }
     grid-template-areas:
       "sel main ctrl"
       "sel meta ctrl";
+  }
+  /* …and the Today grids: the snooze trigger spans both rows exactly like
+     the select, or its 28px box stretches the title track and the row lands
+     at 88px where every other tab's sits at 76 (the same #74 rule). */
+  .trow.has-snooze {
+    grid-template-areas:
+      "main snooze ctrl"
+      "meta snooze ctrl";
+  }
+  .trow.has-prefix.has-select {
+    grid-template-areas:
+      "sel prefix main ctrl"
+      "sel prefix meta ctrl";
   }
   /* a 20px box inside the 64px card clears the 44px floor on its own row
      track without an expansion rectangle that could overlap the status select */
@@ -1637,6 +1651,14 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .plan-more, .plan-unplan { width: 28px; height: 28px; }
   .plan-more::before, .plan-unplan::before { inset: -8px; }
   .plan-target { min-height: var(--row-sm); }
+  /* The remove control spans both rows like the status select (#74's rule,
+     same as the coarse has-snooze grid) — declared here because the base
+     .trow.is-plan template above would otherwise win the cascade. */
+  .trow.is-plan {
+    grid-template-areas:
+      "prefix main unplan ctrl"
+      "prefix meta unplan ctrl";
+  }
 }
 
 /* ------------------------------------------------- login page (Step 7) */
