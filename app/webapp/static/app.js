@@ -93,6 +93,8 @@ const state = {
   tree: [],         // /api/tasks/tree?include_closed=true — the full forest
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
+  plan: { items: [], done: 0, total: 0 },  // /api/today's plan group (#89) — unfiltered on purpose
+  planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
@@ -220,9 +222,10 @@ function pruneSelection() {
 async function refreshAll() {
   try {
     const results = await Promise.all([
-      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1'),
+      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1'), api('/api/today'),
     ]);
     state.total = results[2].count;
+    state.plan = results[3].plan || { items: [], done: 0, total: 0 };
     pruneSelection();
     if (state.total === 0) {
       state.items = [];
@@ -293,6 +296,48 @@ async function snoozeTask(id, phrase) {
     onClick: function () { return patchTask(id, { starts: before }); },
   });
   return t;
+}
+
+/** Plan-my-day (#89). Planning PATCHes `planned_on` (the phrase, like snooze —
+ *  the server owns the vocabulary and the plan rules: order append, waking a
+ *  deferred pick); the row visibly moves up into My plan, so no toast. */
+async function planTask(id) {
+  try {
+    await api('/api/tasks/' + id, { method: 'PATCH', body: { planned_on: 'today' } });
+  } catch (err) {
+    toast(err.message || 'Could not plan the task', 'error');
+    return;
+  }
+  await refreshAll();
+  if (drawer.currentId() === id) drawer.refresh();
+}
+
+async function unplanTask(id) {
+  try {
+    await api('/api/tasks/' + id, { method: 'PATCH', body: { planned_on: null } });
+  } catch (err) {
+    toast(err.message || 'Could not update the plan', 'error');
+    return;
+  }
+  await refreshAll();
+  toast('Removed from today’s plan', 'success', {
+    label: 'Undo',
+    onClick: function () { return planTask(id); },
+  });
+}
+
+async function reorderPlan(ids) {
+  try {
+    await api('/api/plan/reorder', { method: 'POST', body: { ids: ids } });
+  } catch (err) {
+    toast(err.message || 'Could not reorder the plan', 'error');
+  }
+  await refreshAll();
+}
+
+function setPlanMode(on) {
+  state.planMode = !!on;
+  renderTodayPane();
 }
 
 /** Apply one change to every ticked task (#81) — POST /api/tasks/bulk.
@@ -440,8 +485,10 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  renderToday(els.todayHost, viewItems(), { onOpen: openTask, onStatus: setStatus, onSnooze: snoozeTask },
-    { sort: state.filters.sort });
+  renderToday(els.todayHost, viewItems(), {
+    onOpen: openTask, onStatus: setStatus, onSnooze: snoozeTask,
+    onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
+  }, { sort: state.filters.sort, plan: state.plan, planMode: state.planMode });
 }
 
 function renderTable() {

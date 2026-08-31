@@ -162,5 +162,6 @@ def test_routes_shape(client: TestClient) -> None:
     filtered = client.get(f"/api/board?project={home['id']}").json()
     assert all(t["root"]["id"] == home["id"] for col in filtered["columns"].values() for t in col)
     t = client.get("/api/today").json()
-    assert set(t) == {"today", "due", "week", "counts"}
+    assert set(t) == {"today", "plan", "due", "week", "counts"}
     assert t["due"] and "root" in t["due"][0] and "items" in t["due"][0]
+    assert set(t["plan"]) == {"items", "done", "total"}

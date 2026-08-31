@@ -10,6 +10,8 @@
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
     tasks starts N <date>       the day it starts mattering; same vocabulary, "none" clears
     tasks done N
+    tasks plan                  plan the day: y/n/s over the candidates (#89)
+    tasks plan ls               today's plan, ordered, with the n-of-m progress line
     tasks move N --parent M     (--parent root → top level)
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
@@ -166,6 +168,17 @@ class HttpBackend:
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._call("PATCH", f"/api/tasks/{task_id}", {"starts": starts, "actor": self.actor})
 
+    def plan(self, task_id: int, on: str | None) -> dict[str, Any]:
+        return self._call(
+            "PATCH", f"/api/tasks/{task_id}", {"planned_on": on, "actor": self.actor}
+        )
+
+    def today_view(self) -> dict[str, Any]:
+        return self._call("GET", "/api/today")
+
+    def plan_candidates(self) -> list[dict[str, Any]]:
+        return self._call("GET", "/api/plan/candidates")["items"]
+
     def done(self, task_id: int) -> dict[str, Any]:
         return self._call("POST", f"/api/tasks/{task_id}/done", {"actor": self.actor})
 
@@ -294,6 +307,15 @@ class LocalBackend:
 
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._wrap(self._repo.set_starts, task_id, starts, actor=self.actor)
+
+    def plan(self, task_id: int, on: str | None) -> dict[str, Any]:
+        return self._wrap(self._repo.plan_task, task_id, on, actor=self.actor)
+
+    def today_view(self) -> dict[str, Any]:
+        return self._wrap(self._repo.today_view)
+
+    def plan_candidates(self) -> list[dict[str, Any]]:
+        return self._wrap(self._repo.plan_candidates)
 
     def done(self, task_id: int) -> dict[str, Any]:
         return self._wrap(self._repo.done, task_id, actor=self.actor)
@@ -506,6 +528,17 @@ def fmt_ls(items: list[dict[str, Any]]) -> str:
     for r in rows:
         out.append("  ".join(r[i].ljust(widths[i]) for i in range(4)) + "  " + r[4])
     return "\n".join(out)
+
+
+def fmt_plan(plan: dict[str, Any]) -> str:
+    items = plan.get("items") or []
+    if not items:
+        return "(nothing planned today — `tasks plan` to pick)"
+    lines = [f"My plan — {plan.get('done', 0)} of {plan.get('total', len(items))} done"]
+    for n, t in enumerate(items, start=1):
+        mark = "x" if t.get("status") in ("done", "cancelled") else " "
+        lines.append(f"  {n}. [{mark}] {_fmt_task_line(t)}")
+    return "\n".join(lines)
 
 
 def fmt_show(t: dict[str, Any]) -> str:
@@ -756,6 +789,59 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         if t.get("recurrence"):
             return t, f"#{t['id']} done — recurring {t['recurrence']}, next due {t['due']}"
         return t, f"#{t['id']} done"
+    if cmd == "plan":
+        if args.action == "ls":
+            plan = backend.today_view()["plan"]
+            return plan, fmt_plan(plan)
+        # Interactive plan-my-day pass (#89). The dialogue goes to stderr so
+        # stdout stays clean for --json (and for piping the final plan).
+        say = lambda text: print(text, file=sys.stderr)  # noqa: E731
+        today_iso = date.today().isoformat()
+        cands = backend.plan_candidates()
+        planned: list[int] = []
+        snoozed: list[int] = []
+        skipped: list[int] = []
+        if cands:
+            say(f"{len(cands)} candidate(s) — [y] plan today · [n] skip · [s] snooze · [q] quit")
+        else:
+            say("no candidates — nothing overdue, due today or in the inbox")
+        for t in cands:
+            note = ""
+            if t.get("planned_on") and t["planned_on"] < today_iso:
+                note = f"   <- planned {t['planned_on']}, not finished"
+            say(_fmt_task_line(t) + note)
+            say("  plan today? [y/n/s/q] ")
+            try:
+                answer = input().strip().lower()
+            except EOFError:
+                answer = "q"
+            if answer == "q":
+                break
+            if answer == "y":
+                backend.plan(t["id"], today_iso)
+                planned.append(t["id"])
+            elif answer == "s":
+                say("  until (tomorrow · this weekend · next week · a date): ")
+                try:
+                    phrase = input().strip()
+                except EOFError:
+                    phrase = ""
+                iso = None
+                if phrase:
+                    try:
+                        iso = _parse_date_arg(phrase)
+                    except CliError as exc:
+                        say(f"  {exc} — skipped")
+                if iso:
+                    backend.starts(t["id"], iso)
+                    snoozed.append(t["id"])
+                else:
+                    skipped.append(t["id"])
+            else:
+                skipped.append(t["id"])
+        plan = backend.today_view()["plan"]
+        payload = {"planned": planned, "snoozed": snoozed, "skipped": skipped, "plan": plan}
+        return payload, fmt_plan(plan)
     if cmd == "move":
         t = backend.move(args.id, _parent_arg(args.parent))
         where = _crumb(t) or "top level"
@@ -874,6 +960,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     dn = sub.add_parser("done", parents=[common], help="complete (recurring tasks roll forward)")
     dn.add_argument("id", type=int)
+
+    pl = sub.add_parser("plan", parents=[common],
+                        help="plan the day: y/n/s over the candidates · ls = today's plan")
+    pl.add_argument("action", choices=("ls",), nargs="?", default=None,
+                    help="ls = today's plan, ordered, with the n-of-m progress line "
+                         "(default: the interactive plan-my-day pass)")
 
     m = sub.add_parser("move", parents=[common], help="re-parent")
     m.add_argument("id", type=int)

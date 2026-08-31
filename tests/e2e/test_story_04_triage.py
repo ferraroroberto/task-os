@@ -35,6 +35,14 @@ the filter card, the quick-add dialog, a Today row, the drawer. Its shots:
 
     docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
     docs/screenshots/story-13-starts-snooze-{6,7}-phone.png
+
+**Story 15 — plan my day (#89)** rides here the same way, as
+``_walk_plan_my_day`` after the stale-window walk plus a phone assertion.
+Its shots:
+
+    docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
+    docs/screenshots/story-15-plan-my-day-6-desktop.png   (dark)
+    docs/screenshots/story-15-plan-my-day-7-phone.png
 """
 
 from __future__ import annotations
@@ -291,6 +299,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 
         # ------------------------------------------- stale window (#101) ----
         _walk_stale_window(page, base, shots)
+
+        # ------------------------------------------- plan my day (#89) ----
+        _walk_plan_my_day(page, base, shots)
     finally:
         context.close()
 
@@ -301,6 +312,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         dark_page.goto(f"{base}/?status=deferred")
         expect(dark_page.locator("#paneBoard, #paneTable, #paneToday").first).to_be_visible()
         dark_page.screenshot(path=str(shots / "story-13-starts-snooze-5-desktop.png"))
+        # Today in dark: My plan on top with the restored seeded plan (#89)
+        dark_page.goto(f"{base}/")
+        dark_page.click("nav.tabs .tab[data-tab='today']")
+        expect(dark_page.locator("#paneToday .today-plan")).to_be_visible()
+        dark_page.screenshot(path=str(shots / "story-15-plan-my-day-6-desktop.png"))
     finally:
         dark_ctx.close()
 
@@ -334,6 +350,125 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     # 60 days back nothing is that old — an honest empty list, not an error
     _open_filters(page, "tableFilters").locator("select[name='updated']").select_option("stale60")
     expect(page.locator(".task-row")).to_have_count(0)
+
+
+# ------------------------------------------------- story 15 — plan my day
+#
+# #89, riding here like stories 13 and 14: the suite is capped at 15 tests
+# and this story walks the same Today surface. The seeded instance is
+# session-scoped, so the walk restores what it changed (statuses, starts,
+# the seeded plan) before returning — later stories assert over the same DB.
+
+
+def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
+    """The morning ritual: My plan sits on top of Today with a progress line;
+    emptied, the banner offers plan mode, where every candidate takes two
+    large targets — Today (commits it) and Later (the #87 snooze popover) —
+    and a task planned the day before wears its "planned yesterday" note.
+    Committed tasks reorder by drag; completing one moves the progress line.
+
+    Screenshots: docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
+    (6 = dark, in the dark context; 7 = phone, in the phone leg).
+    """
+    today = date.today().isoformat()
+
+    # 1. The seed's plan renders ordered on top of Today, with the progress line.
+    page.goto(f"{base}/")
+    page.click("nav.tabs .tab[data-tab='today']")
+    plan = page.locator("#paneToday .today-plan")
+    expect(plan).to_be_visible()
+    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
+    expect(plan.locator(".plan-list .trow .trow-title")).to_have_text(
+        ["Look into a standing desk", "Try the new bakery"])
+    page.screenshot(path=str(shots / "story-15-plan-my-day-1-desktop.png"))
+
+    # 2. Unplan both (a conscious act, activity-logged, undoable) — the plan
+    #    empties and the banner appears with the candidate counts.
+    for title in ("Look into a standing desk", "Try the new bakery"):
+        row = _trow(page, title, "#paneToday .plan-list")
+        rid = int(row.get_attribute("data-id"))
+        row.locator(".plan-unplan").click()
+        expect(page.locator(".toast-success").last).to_contain_text("Removed from today")
+        assert _get(base, f"/api/tasks/{rid}")["planned_on"] is None
+        assert "planned_on" in [a["field"] for a in _get(base, f"/api/tasks/{rid}")["activity"]]
+    banner = page.locator("#paneToday .plan-banner")
+    expect(banner).to_be_visible()
+    # 4 in Inbox: the seed's three plus the "renew passport" this story's own
+    # quick-add walk created a few steps back
+    expect(banner.locator(".plan-banner-text")).to_have_text(
+        "Plan your day — 3 overdue · 5 due today · 4 new in Inbox")
+    page.screenshot(path=str(shots / "story-15-plan-my-day-2-desktop.png"))
+
+    # 3. Plan mode: every candidate carries the two targets; the task planned
+    #    yesterday and not finished says so — never silently re-planned.
+    banner.locator(".plan-banner-btn").click()
+    picker = page.locator("#paneToday .plan-picker")
+    expect(picker).to_be_visible()
+    expect(picker.locator(".today-counts")).to_have_text("12 candidates")
+    tap_row = _trow(page, "Fix leaking tap", "#paneToday .plan-cands")
+    expect(tap_row.locator(".plan-note")).to_have_text("planned yesterday — not finished")
+    tap_id = int(tap_row.get_attribute("data-id"))
+    assert _get(base, f"/api/tasks/{tap_id}")["planned_on"] < today
+    page.screenshot(path=str(shots / "story-15-plan-my-day-3-desktop.png"))
+
+    # 4. Commit two (the standing desk, then the tap — re-committing the
+    #    carry-over is the conscious act) and push one away with Later, the
+    #    same #87 snooze popover, then leave plan mode.
+    _trow(page, "Look into a standing desk", "#paneToday .plan-cands").locator("button.plan-target").click()
+    expect(_trow(page, "Look into a standing desk", "#paneToday .plan-cands")).to_have_count(0)
+    expect(_trow(page, "Look into a standing desk", "#paneToday .plan-list")).to_be_visible()
+    _trow(page, "Fix leaking tap", "#paneToday .plan-cands").locator("button.plan-target").click()
+    expect(_trow(page, "Fix leaking tap", "#paneToday .plan-list")).to_be_visible()
+    assert _get(base, f"/api/tasks/{tap_id}")["planned_on"] == today
+    lib_row = _trow(page, "Return library books", "#paneToday .plan-cands")
+    lib_id = int(lib_row.get_attribute("data-id"))
+    lib_row.locator(".snooze-summary").click()
+    lib_row.locator(".snooze-menu").get_by_text("Next week", exact=True).click()
+    expect(page.locator(".toast-success").last).to_contain_text("Snoozed to")
+    expect(_trow(page, "Return library books", "#paneToday .plan-cands")).to_have_count(0)
+    page.locator("#paneToday .plan-done-btn").click()
+    expect(page.locator("#paneToday .plan-picker")).to_have_count(0)
+
+    # 5. Drag to reorder — the tap first — and complete it: the progress line
+    #    moves, the done item stays on the list, struck through.
+    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
+    tap_planned = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
+    desk_planned = _trow(page, "Look into a standing desk", "#paneToday .plan-list")
+    tap_planned.drag_to(desk_planned)
+    expect(page.locator("#paneToday .plan-list .trow .trow-title").first).to_have_text("Fix leaking tap")
+    api_plan = _get(base, "/api/today")["plan"]
+    assert [t["title"] for t in api_plan["items"]] == ["Fix leaking tap", "Look into a standing desk"]
+    page.screenshot(path=str(shots / "story-15-plan-my-day-4-desktop.png"))
+    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".trow-status").select_option("done")
+    expect(plan.locator(".today-counts")).to_have_text("1 of 2 done")
+    done_row = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
+    expect(done_row).to_have_class(re.compile(r"\bis-closed\b"))
+    api_plan = _get(base, "/api/today")["plan"]
+    assert (api_plan["done"], api_plan["total"]) == (1, 2)
+    page.screenshot(path=str(shots / "story-15-plan-my-day-5-desktop.png"))
+
+    # ---- restore: the session-scoped seed serves the later stories --------
+    # tap back to todo and out of the plan; the bakery back in (the seeded
+    # plan's shape); the library awake again via the drawer (story-13 idiom).
+    done_row.locator(".trow-status").select_option("todo")
+    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
+    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".plan-unplan").click()
+    expect(_trow(page, "Fix leaking tap", "#paneToday .plan-list")).to_have_count(0)
+    page.locator("#paneToday .plan-more").click()
+    _trow(page, "Try the new bakery", "#paneToday .plan-cands").locator("button.plan-target").click()
+    expect(_trow(page, "Try the new bakery", "#paneToday .plan-list")).to_be_visible()
+    page.locator("#paneToday .plan-done-btn").click()
+    expect(page.locator("#paneToday .plan-list .trow .trow-title")).to_have_text(
+        ["Look into a standing desk", "Try the new bakery"])
+    page.goto(f"{base}/#task/{lib_id}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    starts_input = drawer.locator(".field-starts input[data-field='starts']")
+    starts_input.fill("")
+    starts_input.blur()
+    expect(starts_input).to_have_value("")
+    assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
+    assert _get(base, f"/api/tasks/{tap_id}")["status"] == "todo"
 
 
 # ---------------------------------------------- story 13 — starts + snooze
@@ -594,6 +729,18 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-13-starts-snooze-7-phone.png"))
+
+        # --------------------------------------------- story 15 (#89) ----
+        # Today is the phone's landing tab — My plan sits on top with real
+        # touch targets on its controls, and nothing pushes the page sideways.
+        page.goto(f"{base}/")
+        page.locator("nav.tabs .tab[data-tab='today']").tap()
+        plan = page.locator("#paneToday .today-plan")
+        expect(plan).to_be_visible()
+        expect(plan.locator(".plan-list .trow")).to_have_count(2)
+        assert_min_target(plan.locator(".plan-unplan"))
+        assert_no_horizontal_overflow(page)
+        page.screenshot(path=str(shots / "story-15-plan-my-day-7-phone.png"))
         context.close()
     finally:
         wk.close()

@@ -7,6 +7,7 @@ same temp database.
 
 from __future__ import annotations
 
+import io
 import json
 from collections.abc import Callable
 from datetime import date, timedelta
@@ -137,6 +138,36 @@ def test_ls_updated_before_over_both_backends(run: Runner) -> None:
     assert code == 0 and [t["title"] for t in _json(out)] == ["Fresh"]
     code, _, err = run("ls", "--updated-before", "someday")
     assert code == 1 and "cannot parse date" in err
+
+
+def test_plan_over_both_backends(run: Runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#89 CLI parity: the interactive pass plans / snoozes / skips through
+    either backend (dialogue on stderr, stdout clean for --json), and
+    `plan ls` shows the ordered plan with the n-of-m progress line."""
+    run("add", "Pay invoices", "--due", "today")     # id 1 — candidate (due today)
+    run("add", "Overdue thing", "--due", "2020-01-01")  # id 2 — candidate (overdue, listed first)
+    run("add", "Inbox idea")                         # id 3 — candidate (inbox, no due, listed last)
+    monkeypatch.setattr("sys.stdin", io.StringIO("y\ns\ntomorrow\nn\n"))
+    code, out, err = run("plan", "--json")
+    assert code == 0
+    payload = _json(out)
+    assert (payload["planned"], payload["snoozed"], payload["skipped"]) == ([2], [1], [3])
+    assert [t["title"] for t in payload["plan"]["items"]] == ["Overdue thing"]
+    assert "3 candidate(s)" in err and "plan today?" in err
+
+    code, out, _ = run("plan", "ls", "--json")
+    plan = _json(out)
+    assert [t["title"] for t in plan["items"]] == ["Overdue thing"]
+    assert (plan["done"], plan["total"]) == (0, 1)
+
+    # the snoozed task is deferred (#87) — out of the working list
+    code, out, _ = run("ls", "--json")
+    assert "Pay invoices" not in [t["title"] for t in _json(out)]
+
+    # completing a planned task moves the progress line, the item stays listed
+    run("done", "2")
+    code, out, _ = run("plan", "ls")
+    assert code == 0 and "1 of 1 done" in out and "[x]" in out and "Overdue thing" in out
 
 
 def test_ls_filters_done_move_search_people(run: Runner) -> None:

@@ -263,6 +263,30 @@ def test_starts_round_trips_and_conflicts_like_any_field(env, mirror: Mirror) ->
     assert "starts: 2027-02-02" in path.read_text(encoding="utf-8")
 
 
+def test_planned_on_round_trips_plan_order_stays_home(env, mirror: Mirror) -> None:
+    """#89: `planned_on:` exports and imports like `starts` — same one layer,
+    same conflict policy — while `plan_order` never appears in the file:
+    presentation-level ordering, and mirroring it would churn every synced
+    file on every drag."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    text = path.read_text(encoding="utf-8")
+    assert "\nplanned_on: null\n" in text                  # exported, empty
+    assert "plan_order" not in text
+
+    _touch(path, text.replace("\nplanned_on: null\n", "\nplanned_on: 2026-12-01\n"))
+    with repo.use_clock(_clock(T0.replace(hour=11))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"planned_on": "2026-12-01"}
+    task = repo.get_task(conn, tid)
+    assert task["planned_on"] == "2026-12-01"
+    assert task["plan_order"] == 1                         # appended by the repo's plan rules
+    assert (task["activity"][0]["field"], task["activity"][0]["actor"]) == ("planned_on", "md")
+    assert "planned_on: 2026-12-01" in path.read_text(encoding="utf-8")
+
+
 def test_import_description_section(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)

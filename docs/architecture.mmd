@@ -20,7 +20,7 @@ flowchart LR
     tasksr["routers/tasks<br/>/api/tasks… · POST /api/tasks/bulk (#81)<br/>/api/activity · /api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
-    viewsr["routers/views<br/>/api/board · /api/today"]
+    viewsr["routers/views<br/>/api/board · /api/today (+ plan group, #89)<br/>/api/plan/candidates · POST /api/plan/reorder"]
     mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · GET/DELETE /api/mirror/events · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
@@ -29,7 +29,7 @@ flowchart LR
   end
 
   subgraph domain["Domain · src/"]
-    repo["tasks_repo.py<br/>create/update/move/done · bulk_update (#81)<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets)<br/>write listeners (touched ids)"]
+    repo["tasks_repo.py<br/>create/update/move/done · bulk_update (#81)<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets + plan)<br/>plan_task · plan_candidates · plan_reorder (#89)<br/>write listeners (touched ids)"]
     mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict/rejected → mirror_events (#84)"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>issue_from_task: task → new issue (route + CLI)<br/>IssueSyncService: 10 s after start, every sync_minutes"]
@@ -40,14 +40,14 @@ flowchart LR
     fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
     dates["dates.py<br/>parse_date · advance"]
     qa["quick_add.py<br/>parse · resolve_parent"]
-    schema["schema.py<br/>MIGRATIONS v1→v7 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v8 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
   end
 
   subgraph storage["SQLite (WAL) · data/tasks.db"]
-    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)"]
+    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)<br/>planned_on · plan_order (v8)"]
     l["links"]
     c["comments<br/>external_id (v3)"]
     a["activity"]
