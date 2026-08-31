@@ -1653,12 +1653,16 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .plan-target { min-height: var(--row-sm); }
   /* The remove control spans both rows like the status select (#74's rule,
      same as the coarse has-snooze grid) — declared here because the base
-     .trow.is-plan template above would otherwise win the cascade. */
+     .trow.is-plan template above would otherwise win the cascade. The grip
+     goes entirely: HTML5 drag never fires on touch (the phone plans in tap
+     order), and its dead column was what wrapped a crowded meta line. */
   .trow.is-plan {
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "prefix main unplan ctrl"
-      "prefix meta unplan ctrl";
+      "main unplan ctrl"
+      "meta unplan ctrl";
   }
+  .trow.is-plan .plan-grip { display: none; }
 }
 
 /* ------------------------------------------------- login page (Step 7) */
