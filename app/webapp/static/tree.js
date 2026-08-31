@@ -70,22 +70,26 @@ export function sortForest(nodes, sort) {
  * @param {HTMLElement} host
  * @param {Array<object>} forest      /api/tasks/tree items (full)
  * @param {{onOpen: (id:number)=>void, onMove: (id:number, parentId:number|null)=>Promise<any>,
- *          onStatus: (id:number, status:string)=>Promise<any>}} handlers
- * @param {{keep?: Set<number>|null, byId?: object, sort?: string}} [opts]
+ *          onStatus: (id:number, status:string)=>Promise<any>,
+ *          onToggleSelect?: (id:number)=>void}} handlers
+ * @param {{keep?: Set<number>|null, byId?: object, sort?: string,
+ *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
  */
 export function renderTree(host, forest, handlers, opts) {
   const o = opts || {};
   host.innerHTML = '';
   const collapsed = loadCollapsed();
   // No pointer to drag with → no DnD affordances at all (re-parenting lives
-  // in the drawer's "Move to…" field).
-  const canDrag = !window.matchMedia('(pointer: coarse)').matches;
+  // in the drawer's "Move to…" field). Select mode also parks the drag —
+  // a row that both drags and ticks turns every slightly-moved tap into a
+  // move (#81, the Board's rule).
+  const canDrag = !window.matchMedia('(pointer: coarse)').matches && !o.selectable;
   const tree = document.createElement('div');
   tree.className = 'tree';
   tree.setAttribute('role', 'tree');
   tree.setAttribute('aria-label', 'Task tree');
   const pruned = sortForest(pruneForest(forest, o.keep || null, o.byId || null), o.sort || 'due');
-  pruned.forEach(function (n) { tree.appendChild(buildNode(n, collapsed, handlers, canDrag)); });
+  pruned.forEach(function (n) { tree.appendChild(buildNode(n, collapsed, handlers, canDrag, o)); });
 
   if (canDrag) {
     // Root drop zone: only visible during an active drag (CSS keys on the
@@ -112,7 +116,7 @@ export function renderTree(host, forest, handlers, opts) {
   return pruned.length;
 }
 
-function buildNode(node, collapsed, handlers, canDrag) {
+function buildNode(node, collapsed, handlers, canDrag, sel) {
   const item = document.createElement('div');
   item.className = 'tree-node' + (node._context ? ' is-context' : '');
   item.setAttribute('role', 'treeitem');
@@ -134,7 +138,11 @@ function buildNode(node, collapsed, handlers, canDrag) {
     setCollapsed(item, node.id, !collapsed.has(node.id), collapsed);
   });
 
-  const row = taskRow(node, handlers, { prefix: toggle, depth: node.depth || 0, hideProject: true, draggable: canDrag });
+  const row = taskRow(node, handlers, {
+    prefix: toggle, depth: node.depth || 0, hideProject: true, draggable: canDrag,
+    selectable: !!(sel && sel.selectable),
+    selected: !!(sel && sel.selectable && sel.isSelected && sel.isSelected(node.id)),
+  });
   row.classList.add('tree-row');
   item.appendChild(row);
 
@@ -143,7 +151,7 @@ function buildNode(node, collapsed, handlers, canDrag) {
     group.className = 'tree-children';
     group.setAttribute('role', 'group');
     group.hidden = isCollapsed;
-    node.children.forEach(function (c) { group.appendChild(buildNode(c, collapsed, handlers, canDrag)); });
+    node.children.forEach(function (c) { group.appendChild(buildNode(c, collapsed, handlers, canDrag, sel)); });
     item.appendChild(group);
   }
 

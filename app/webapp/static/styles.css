@@ -748,6 +748,14 @@ a.chip:hover { text-decoration: underline; }
     "main snooze ctrl"
     "meta meta   meta";
 }
+/* Select mode on the Tree (#81 parity): the checkbox column joins the
+   prefix (chevron) column — declared after both singles so it wins. */
+.trow.has-prefix.has-select {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "sel prefix main ctrl"
+    "sel prefix meta meta";
+}
 .trow-check {
   grid-area: sel;
   align-self: center;
@@ -820,8 +828,12 @@ a.chip:hover { text-decoration: underline; }
   background: currentColor;
 }
 .trow-prio.prio-high { color: var(--danger); }
-/* chips on the meta line stay meta-sized: caption text, tight padding, ellipsized */
-.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; line-height: 1.4; }
+/* chips on the meta line stay meta-sized: caption text, tight padding,
+   ellipsized — and capped to the meta line's own height, so a row with a
+   folder chip is exactly as tall as one without (the #74 rule, applied to
+   the shared row's meta line: a chip never changes a card's height). */
+.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; height: 16px; line-height: 1; }
+.trow-meta .chip .icon { width: 12px; height: 12px; }
 .trow-extra { grid-column: 1 / -1; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 .trow.has-prefix .trow-extra { grid-column: 2 / -1; }
 @media (pointer: coarse) {
@@ -891,6 +903,12 @@ a.chip:hover { text-decoration: underline; }
      stay inside this card, never reach into the next one. */
   .trow-meta .trow-folder::before,
   .trow-meta .trow-ai::before { content: ""; position: absolute; inset: -13px; }
+  /* …which is why these two are exempt from the desktop chip-height cap: the
+     -13px inset needs the full 18px glyph box to reach the 44px floor. */
+  .trow-meta .trow-folder,
+  .trow-meta .trow-ai { height: 18px; }
+  .trow-meta .trow-folder .icon,
+  .trow-meta .trow-ai .icon { width: var(--icon-inline); height: var(--icon-inline); }
 }
 
 /* ------------------------------------------------------------- table */
@@ -989,7 +1007,12 @@ a.chip:hover { text-decoration: underline; }
 /* -------------------------------------------------------------- tree */
 /* Flat outliner: the shared rows with an indent per depth and a subtle
    vertical guide per level; the toggle is the row's prefix column. */
-.tree { display: flex; flex-direction: column; border-top: 1px solid var(--line-muted); }
+/* No leading divider: the container used to add its own border-top on top of
+   the first row's hairline — a doubled line under the filter card that the
+   Board and the Table don't have. The first row drops its hairline instead,
+   exactly like `.trows > .trow:first-child` does on the other tabs. */
+.tree { display: flex; flex-direction: column; }
+.tree > .tree-node:first-child > .trow { border-top: 0; }
 .tree-node { display: block; }
 .tree .trow {
   padding-left: calc(4px + var(--depth, 0) * 22px);

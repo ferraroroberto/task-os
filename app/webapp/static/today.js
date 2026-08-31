@@ -101,10 +101,12 @@ function groupByRoot(items, sort) {
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
  *          onSnooze?: (id:number, phrase:string)=>Promise<any>,
  *          onPlan?: (id:number)=>Promise<any>, onUnplan?: (id:number)=>Promise<any>,
- *          onReorder?: (ids:number[])=>Promise<any>, onPlanMode?: (on:boolean)=>void}} handlers
+ *          onReorder?: (ids:number[])=>Promise<any>, onPlanMode?: (on:boolean)=>void,
+ *          onToggleSelect?: (id:number)=>void}} handlers
  * @param {{sort?: string, today?: string,
  *          plan?: {items: Array<object>, done: number, total: number},
- *          planMode?: boolean}} [opts]
+ *          planMode?: boolean,
+ *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
  */
 export function renderToday(host, items, handlers, opts) {
   const o = opts || {};
@@ -119,7 +121,7 @@ export function renderToday(host, items, handlers, opts) {
     host.appendChild(buildPlanSection(plan, cands, handlers, o));
   }
   if (o.planMode) {
-    host.appendChild(buildPicker(cands, t, handlers));
+    host.appendChild(buildPicker(cands, t, handlers, o));
   } else if (!plan.items.length && cands.length && handlers.onPlanMode) {
     host.appendChild(buildBanner(cands, t, handlers));
   }
@@ -146,7 +148,7 @@ export function renderToday(host, items, handlers, opts) {
   if (!data.due.length) {
     section.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear'));
   } else {
-    data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers)); });
+    data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers, o)); });
   }
   host.appendChild(section);
 
@@ -178,7 +180,7 @@ export function renderToday(host, items, handlers, opts) {
   if (!data.week.length) {
     body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
   } else {
-    data.week.forEach(function (g) { body.appendChild(buildGroup(g, handlers)); });
+    data.week.forEach(function (g) { body.appendChild(buildGroup(g, handlers, o)); });
   }
   later.appendChild(body);
   host.appendChild(later);
@@ -241,6 +243,14 @@ function buildPlanSection(plan, cands, handlers, o) {
   ul.addEventListener('drop', function (ev) { ev.preventDefault(); });
 
   plan.items.forEach(function (t) {
+    // Select mode (#81): the row is a plain tick target — the grip, the
+    // remove control and the drag all step aside, the Board's rule.
+    if (o.selectable) {
+      ul.appendChild(taskRow(t, handlers, {
+        selectable: true, selected: !!(o.isSelected && o.isSelected(t.id)),
+      }));
+      return;
+    }
     const grip = document.createElement('span');
     grip.className = 'plan-grip';
     grip.setAttribute('aria-hidden', 'true');
@@ -304,7 +314,7 @@ function buildBanner(cands, t, handlers) {
 
 /** Plan mode: the candidates, each with the two large targets — Today (sets
  *  planned_on) and Later (the snooze popover, #87). */
-function buildPicker(cands, t, handlers) {
+function buildPicker(cands, t, handlers, o) {
   const section = document.createElement('section');
   section.className = 'today plan-picker';
   const head = document.createElement('div');
@@ -366,13 +376,17 @@ function buildPicker(cands, t, handlers) {
       sum.appendChild(document.createTextNode('Later'));
       extra.appendChild(later);
     }
-    ul.appendChild(taskRow(c, handlers, { extra: extra }));
+    ul.appendChild(taskRow(c, handlers, {
+      extra: extra,
+      selectable: !!(o && o.selectable),
+      selected: !!(o && o.selectable && o.isSelected && o.isSelected(c.id)),
+    }));
   });
   section.appendChild(ul);
   return section;
 }
 
-function buildGroup(group, handlers) {
+function buildGroup(group, handlers, o) {
   const wrap = document.createElement('section');
   wrap.className = 'today-group';
   const rootId = group.root ? group.root.id : null;
@@ -395,7 +409,10 @@ function buildGroup(group, handlers) {
   n.textContent = String(group.items.length);
   title.appendChild(n);
   wrap.appendChild(title);
-  const list = rowList(group.items, handlers, { hideProject: true, snooze: true });
+  const list = rowList(group.items, handlers, {
+    hideProject: true, snooze: true,
+    selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
+  });
   list.classList.add('today-list');
   list.querySelectorAll('.trow').forEach(function (row) {
     const rel = relDue(row.querySelector('.trow-due') ? row.querySelector('.trow-due').title : '');

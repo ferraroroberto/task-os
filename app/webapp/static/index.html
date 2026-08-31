@@ -376,9 +376,9 @@
     </section>
     <section id="paneTable" class="pane" role="tabpanel" aria-labelledby="tabTable" aria-label="Table" hidden>
       <div class="pane-body">
-        <!-- Top strip (#80): the live text filter, always visible, and the +
-             that opens the quick-add dialog. The rest of the filters stay in
-             the collapsed card below. -->
+        <!-- Top strip (#80): the live text filter, always visible, the Select
+             toggle (#81) and the + that opens the quick-add dialog. The rest
+             of the filters stay in the collapsed card below. -->
         <div class="pane-top">
           <div class="filter-text" id="tableFilterText" hidden></div>
           <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
@@ -397,15 +397,20 @@
     </section>
     <section id="paneTree" class="pane" role="tabpanel" aria-labelledby="tabTree" aria-label="Tree" hidden>
       <div class="pane-body">
-        <!-- Top strip (#80): the live text filter, always visible, and the +
-             that opens the quick-add dialog. The rest of the filters stay in
-             the collapsed card below. -->
+        <!-- Top strip (#80): the live text filter, always visible, the Select
+             toggle (#81) and the + that opens the quick-add dialog. The rest
+             of the filters stay in the collapsed card below. -->
         <div class="pane-top">
           <div class="filter-text" id="treeFilterText" hidden></div>
+          <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
+                  title="Select tasks" aria-label="Select tasks" aria-pressed="false">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+          </button>
           <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
           </button>
+          <div class="bulk-bar" id="treeBulk" hidden></div>
         </div>
         <div class="filter-host" id="treeFilters" hidden></div>
         <div id="treeHost" data-empty="tasks"></div>
@@ -413,15 +418,20 @@
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
       <div class="pane-body">
-        <!-- Top strip (#80): the live text filter, always visible, and the +
-             that opens the quick-add dialog. The rest of the filters stay in
-             the collapsed card below. -->
+        <!-- Top strip (#80): the live text filter, always visible, the Select
+             toggle (#81) and the + that opens the quick-add dialog. The rest
+             of the filters stay in the collapsed card below. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
+          <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
+                  title="Select tasks" aria-label="Select tasks" aria-pressed="false">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+          </button>
           <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
           </button>
+          <div class="bulk-bar" id="todayBulk" hidden></div>
         </div>
         <div class="filter-host" id="todayFilters" hidden></div>
         <!-- Due ≤ today grouped by project, recurring first; "Later this week"
