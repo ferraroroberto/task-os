@@ -14,8 +14,10 @@ Shape: four projects nested to depth 3, ~40 tasks, three people, comments
 status / priority / due changes, a handful of recurring tasks, a few done or
 cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
 **deferred** task (a ``starts`` date 20 days out — #87) so the sleeping state
-is on screen without anyone having to create it, and one **dormant** task
-last touched 45 days back (#101) so the stale filter has something to show.
+is on screen without anyone having to create it, one **dormant** task
+last touched 45 days back (#101) so the stale filter has something to show,
+and a **plan** (#89): two tasks committed to the anchor day plus one planned
+the day before and left unfinished (the "planned yesterday" candidate).
 
 Use it:
 
@@ -202,6 +204,17 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         repo.move(conn, ids["review"], None, actor="seed")
         repo.done(conn, ids["scales"], actor="seed")   # daily → rolls to d(1)
         repo.set_due(conn, ids["scales"], d(0), actor="seed")  # …and back, so "today" stays populated
+
+        # ---- today's plan (#89) --------------------------------------------
+        # Two inbox tasks committed to the anchor day (My plan renders
+        # ordered, "0 of 2 done"; picking inbox items leaves every due/week
+        # bucket exactly as the pre-#89 assertions expect) and one task
+        # planned the day BEFORE and left unfinished — the candidate that
+        # wears the "planned yesterday" note. Updates, not new tasks, so
+        # every seeded id keeps its position.
+        repo.plan_task(conn, ids["inbox1"], d(0), actor="seed")
+        repo.plan_task(conn, ids["inbox2"], d(0), actor="seed")
+        repo.plan_task(conn, ids["tap"], d(-1), actor="seed")
 
     return {"ids": ids, "counts": repo.counts(conn)}
 

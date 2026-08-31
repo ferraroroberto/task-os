@@ -32,10 +32,11 @@ still in the future), intersected with any real statuses alongside it. The
 split happens here, in the one presentational place that knows the URL
 vocabulary; the rule itself is ``list_tasks(deferred=…)``.
 
-``due`` and ``starts`` on create / update accept the same natural phrases the
-CLI does (``tomorrow``, ``next friday``, ``this weekend``, ``in 2 weeks``,
-ISO) — resolved here through ``src.dates.parse_date`` so the repo layer only
-ever sees ISO dates; an unknown phrase is a 422, never a silently unset date.
+``due``, ``starts`` and ``planned_on`` on create / update accept the same
+natural phrases the CLI does (``tomorrow``, ``next friday``, ``this
+weekend``, ``in 2 weeks``, ISO) — resolved here through
+``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
+unknown phrase is a 422, never a silently unset date.
 
 The actor written to ``activity`` / ``comments`` is the body's ``actor`` /
 ``author`` field, else the ``X-Actor`` header, else the configured default
@@ -70,6 +71,7 @@ class TaskCreate(BaseModel):
     priority: str | None = None
     due: str | None = None
     starts: str | None = None
+    planned_on: str | None = None
     recurrence: str | None = None
     description: str | None = None
     folder_ref: str | None = None
@@ -89,6 +91,7 @@ class TaskUpdate(BaseModel):
     priority: str | None = None
     due: str | None = None
     starts: str | None = None
+    planned_on: str | None = None
     recurrence: str | None = None
     description: str | None = None
     folder_ref: str | None = None

@@ -236,7 +236,9 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         page.click("nav.tabs .tab[data-tab='today']")
         expect(page.locator("#paneToday")).to_be_visible()
         today = _get(base, "/api/today")
-        expect(page.locator(".today-counts")).to_have_text(
+        # scoped: My plan (#89) has a .today-counts of its own above this one
+        due_counts = page.locator("section.today:not(.today-plan) > .today-head .today-counts")
+        expect(due_counts).to_have_text(
             f"{today['counts']['overdue']} overdue · {today['counts']['today']} due today"
         )
         groups = page.locator("#paneToday section.today .today-group")
@@ -282,7 +284,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(rolled_row).to_be_visible()
         expect(rolled_row.locator(".trow-status")).to_have_value("todo")
         expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
-        expect(page.locator(".today-counts")).to_contain_text(f"{today['counts']['today'] - 1} due today")
+        expect(due_counts).to_contain_text(f"{today['counts']['today'] - 1} due today")
         page.screenshot(path=str(shots / "story-05-board-6-desktop.png"))
 
         # 7b. The same recurring task, picked "done" instead of "complete":

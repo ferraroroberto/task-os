@@ -40,6 +40,14 @@ Version history:
        search still show it. Snooze is this column worn as a row control, not
        a second mechanism. The recurrence roll never touches it — see the
        contract note below.
+    8  tasks.planned_on (TEXT date, nullable) + tasks.plan_order (INTEGER,
+       nullable) + an index on planned_on                            (issue #89)
+       — the day a task was committed to ("My plan" on Today) and its position
+       inside that day's plan. ``planned_on`` is a first-class task field
+       (activity-logged, mirrored); ``plan_order`` is presentation-level
+       ordering managed by ``src/tasks_repo.py`` only (appended on plan,
+       cleared on unplan, rewritten by ``plan_reorder``) — never PATCHed
+       directly, never mirrored.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -244,8 +252,17 @@ ALTER TABLE tasks ADD COLUMN starts TEXT;
 CREATE INDEX idx_tasks_starts ON tasks(starts);
 """
 
+# tasks.planned_on + tasks.plan_order (#89) — plain nullable columns, so an
+# existing database gains them with nothing planned. The index serves the
+# plan-group and candidate queries (planned_on = today / < today).
+_V8 = """
+ALTER TABLE tasks ADD COLUMN planned_on TEXT;
+ALTER TABLE tasks ADD COLUMN plan_order INTEGER;
+CREATE INDEX idx_tasks_planned_on ON tasks(planned_on);
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7}
+MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

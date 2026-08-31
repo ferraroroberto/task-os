@@ -295,6 +295,81 @@ def test_updated_before_is_a_strict_stale_boundary(conn: sqlite3.Connection) -> 
         repo.list_tasks(conn, updated_before="someday")
 
 
+def test_plan_my_day_rules(conn: sqlite3.Connection, frozen: None) -> None:
+    """#89: planning appends to the day's ordered plan (activity-logged,
+    ``plan_order`` itself never logged), snoozing to a future day un-plans,
+    planning wakes a deferred task, and ``plan_reorder`` takes the whole
+    permutation or refuses."""
+    t = "2026-08-17"
+    a = repo.create_task(conn, "Alpha", status="todo", due=t)
+    b = repo.create_task(conn, "Beta", status="inbox")
+    c = repo.create_task(conn, "Gamma", status="todo", starts="2026-09-01")
+
+    a = repo.plan_task(conn, a["id"], t, actor="me")
+    b = repo.plan_task(conn, b["id"], t, actor="me")
+    assert (a["planned_on"], a["plan_order"]) == (t, 1)
+    assert b["plan_order"] == 2
+    assert ("planned_on", None, t) in _fields(a["activity"])
+    assert "plan_order" not in {f[0] for f in _fields(a["activity"])}
+
+    # snoozing to a future day un-plans — Later means "not today"
+    a = repo.set_starts(conn, a["id"], "2026-09-01", actor="me")
+    assert a["planned_on"] is None and a["plan_order"] is None
+    assert ("planned_on", t, None) in _fields(a["activity"])
+
+    # planning a deferred task wakes it — the gate is moot once you commit
+    c = repo.plan_task(conn, c["id"], t, actor="me")
+    assert c["starts"] is None and c["plan_order"] == 3
+    assert ("starts", "2026-09-01", None) in _fields(c["activity"])
+
+    # unplanning clears the order too
+    c = repo.plan_task(conn, c["id"], None, actor="me")
+    assert c["planned_on"] is None and c["plan_order"] is None
+
+    # reorder: a permutation of every task planned today, or a refusal
+    c = repo.plan_task(conn, c["id"], t, actor="me")
+    assert repo.plan_reorder(conn, [c["id"], b["id"]]) == {"planned": 2}
+    view = repo.today_view(conn)
+    assert [x["title"] for x in view["plan"]["items"]] == ["Gamma", "Beta"]
+    with pytest.raises(repo.ValidationError):
+        repo.plan_reorder(conn, [b["id"]])
+    with pytest.raises(repo.ValidationError):
+        repo.plan_reorder(conn, [b["id"], b["id"]])
+
+    # done planned items stay in the plan group and count as progress; a task
+    # planned today leaves the due bucket (it lives in the plan instead)
+    repo.done(conn, b["id"], actor="me")
+    d = repo.create_task(conn, "Delta", status="todo", due=t)
+    repo.plan_task(conn, d["id"], t, actor="me")
+    view = repo.today_view(conn)
+    assert (view["plan"]["done"], view["plan"]["total"]) == (1, 3)
+    due_titles = {x["title"] for g in view["due"] for x in g["items"]}
+    assert "Delta" not in due_titles
+    with pytest.raises(repo.ValidationError):
+        repo.plan_task(conn, d["id"], "someday")
+
+
+def test_plan_candidates_and_the_seeded_plan(conn: sqlite3.Connection, seeded: dict, frozen: None) -> None:
+    """#89 on the fixture: the seed plans the two inbox tasks for the anchor
+    day and leaves one task planned the day before — the candidate wearing
+    the "planned yesterday" note; already-planned and deferred tasks are
+    never offered."""
+    view = repo.today_view(conn)
+    assert [x["title"] for x in view["plan"]["items"]] == [
+        "Look into a standing desk", "Try the new bakery"]
+    assert (view["plan"]["done"], view["plan"]["total"]) == (0, 2)
+    cands = repo.plan_candidates(conn)
+    titles = [x["title"] for x in cands]
+    tap = next(x for x in cands if x["title"] == "Fix leaking tap")
+    assert tap["planned_on"] == "2026-08-16"          # planned yesterday, unfinished
+    assert "Look into a standing desk" not in titles   # already planned today
+    assert "Compare phone plans" in titles             # inbox, future due — still a candidate
+    assert "Book boiler service" not in titles         # deferred (#87) — not actionable
+    # planned YESTERDAY ≠ planned today: the tap stays in the due groups too
+    due_titles = {x["title"] for g in view["due"] for x in g["items"]}
+    assert "Fix leaking tap" in due_titles
+
+
 def test_recurrence_roll_leaves_starts_alone(conn: sqlite3.Connection, frozen: None) -> None:
     """A snoozed recurring task wakes on its start day and rolls normally after
     — the gate never chases the due date (see ``repo.done``)."""
