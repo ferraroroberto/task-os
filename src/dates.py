@@ -16,9 +16,9 @@ user types map to one deterministic rule set:
     2026-09-01                  → ISO date, passed through
     none · clear · -            → explicit "no date" (returns ``None``)
 
-Recurrence rolls advance a *due date*, never "now": ``advance(date(2026, 1,
-31), "monthly")`` is ``2026-02-28`` (month-end clamps, never overflows into
-March), quarterly is three months, yearly clamps Feb 29 → Feb 28.
+Recurrence rolls advance a *due date*, never "now": a monthly on 31 Jan 2026
+lands on ``2026-02-28`` (month-end clamps, never overflows into March),
+quarterly is three months, yearly clamps Feb 29 → Feb 28.
 
 A recurrence may also carry an **anchor** — the fixed day it lands on, stored
 beside the cadence in ``tasks.recurrence_anchor`` (issue #112, the iCalendar
