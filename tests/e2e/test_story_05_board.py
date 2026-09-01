@@ -507,7 +507,41 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.keyboard.press("Escape")
     expect(page.locator("#boardBulk")).to_be_hidden()
 
-    # 21. `?` is the reference card, built from the one keymap table — and the
+    # 21. The Table's desktop grid is a different element (a <tr>, not the
+    #     shared .trow) — the keys reach it too.
+    page.click("nav.tabs .tab[data-tab='table']")
+    trow = page.locator(f"#tableHost .task-row[data-id='{rid}']")
+    trow.focus()
+    _clear_toasts(page)
+    page.keyboard.press("4")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Status standby"))
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "standby"
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
+
+    # 22. …and a Search hit, which may be a task outside the filtered list —
+    #     the prior values then come from a fetch, not from what is on screen.
+    page.click("nav.tabs .tab[data-tab='search']")
+    page.fill("#searchInput", "README")
+    tasks_group = page.locator(".search-group[data-kind='tasks']")
+    expect(tasks_group).to_be_visible()
+    if not tasks_group.evaluate("el => el.open"):
+        tasks_group.locator("summary.collapse-summary").click()
+    hit = tasks_group.locator(f".trow[data-id='{rid}']").first
+    expect(hit).to_be_visible()
+    hit.locator(".trow-main").focus()
+    _clear_toasts(page)
+    page.keyboard.press("p")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert _get(base, f"/api/tasks/{rid}")["priority"] == "low"
+    page.click("nav.tabs .tab[data-tab='board']")
+
+    # 23. `?` is the reference card, built from the one keymap table — and the
     #     palette lists the same keys, which is where they are discovered.
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()

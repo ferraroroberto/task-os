@@ -12,8 +12,9 @@
 | 4 | Focus a **recurring** task, press `e`, then `z` | `e` rolls the due one cadence forward and leaves the status alone (#54 semantics); the undo restores the **pre-roll** due |
 | 5 | Type `etw` in the filter box; open the drawer and press `1` | Nothing happens to any task — the keys are inert wherever text is typed and while the drawer owns the keyboard |
 | 6 | Tick two rows with **different** statuses, press `1`, then `z` | Both → `inbox`, toast `2 tasks · status inbox`; the undo puts `todo` and `doing` back — one call per group of tasks that shared a value. The ticks survive, so keys come in runs over one set |
-| 7 | Press `?` (light, then dark) | The shortcuts sheet: every action key with what it does, then *Getting around* (Tab · Enter · Space · Ctrl K · Esc). Built from the one keymap table in `keys.js`, so it cannot drift from the handler |
-| 8 | `Ctrl+K` → `>priority` | The palette lists **Cycle priority** with its `P` badge and names what it will act on (the focused row's title, or *N selected*) |
+| 7 | Focus a **Table** grid row (a `<tr>`, not the shared row) and a **Search** hit, press a key on each, undo both | Both act — the Table's own row element is a target, and the search hit's prior values come from a fetch (a hit can be a task outside the filtered list, so what is on screen is not enough) |
+| 8 | Press `?` (light, then dark) | The shortcuts sheet: every action key with what it does, then *Getting around* (Tab · Enter · Space · Ctrl K · Esc). Built from the one keymap table in `keys.js`, so it cannot drift from the handler |
+| 9 | `Ctrl+K` → `>priority` | The palette lists **Cycle priority** with its `P` badge and names what it will act on (the focused row's title, or *N selected*) |
 
 ## Proof
 
