@@ -1,7 +1,8 @@
 """``tasks`` — the terminal / scripting / LLM surface of task-os.
 
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
-              [--recurrence weekly] [--person "Sam"] [--desc "..."]
+              [--recurrence weekly [--recurrence-anchor fri]] [--person "Sam"]
+              [--desc "..."]
     tasks ls [--status todo,doing|open|all] [--project N] [--due today|week|overdue]
              [--deferred] [--updated-before <date|30d>]
     tasks show N
@@ -58,7 +59,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from src.config import load_config
-from src.dates import DateParseError, parse_date
+from src.dates import DateParseError, describe_recurrence, parse_date
 from src.schema import RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -499,7 +500,7 @@ def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
     if t.get("starts"):
         tail.append(f"starts {t['starts']}")
     if t.get("recurrence"):
-        tail.append(f"every {t['recurrence']}")
+        tail.append(describe_recurrence(t["recurrence"], t.get("recurrence_anchor")))
     if t.get("type") == "coding" and t.get("issue_ref"):
         tail.append(f"{t['issue_ref']['repo']}#{t['issue_ref']['number']}")
     if t.get("person"):
@@ -548,7 +549,8 @@ def fmt_show(t: dict[str, Any]) -> str:
         lines.append(f"  in: {crumb}")
     lines.append(f"  type {t['type']} · status {t['status']} · priority {t['priority']} · due {t.get('due') or '-'}"
                  + (f" · starts {t['starts']}" if t.get("starts") else "")
-                 + (f" · every {t['recurrence']}" if t.get("recurrence") else ""))
+                 + (f" · {describe_recurrence(t['recurrence'], t.get('recurrence_anchor'))}"
+                    if t.get("recurrence") else ""))
     if t.get("description"):
         lines.append(f"  {t['description']}")
     if t.get("folder_ref"):
@@ -744,6 +746,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             fields["priority"] = args.priority
         if args.recurrence:
             fields["recurrence"] = args.recurrence
+        if args.recurrence_anchor:
+            fields["recurrence_anchor"] = args.recurrence_anchor
         if args.person:
             fields["person_id"] = _resolve_person(backend, args.person)
         if args.desc:
@@ -787,7 +791,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "done":
         t = backend.done(args.id)
         if t.get("recurrence"):
-            return t, f"#{t['id']} done — recurring {t['recurrence']}, next due {t['due']}"
+            label = describe_recurrence(t["recurrence"], t.get("recurrence_anchor"))
+            return t, f"#{t['id']} done — recurring {label}, next due {t['due']}"
         return t, f"#{t['id']} done"
     if cmd == "plan":
         if args.action == "ls":
@@ -926,6 +931,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--starts", help="the day it starts mattering — hidden from the working views until then")
     a.add_argument("--priority", choices=TASK_PRIORITIES)
     a.add_argument("--recurrence", choices=RECURRENCES)
+    a.add_argument(
+        "--recurrence-anchor",
+        help="the fixed day it lands on — weekly: fri or mon,tue,wed,thu,fri · "
+             "monthly: day-15, 1-sun, last-fri",
+    )
     a.add_argument("--person", help="person id or name")
     a.add_argument("--desc", help="description (markdown)")
 

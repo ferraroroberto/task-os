@@ -123,11 +123,11 @@ Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, option
 
 ## Data model
 
-One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **5**):
+One SQLite file (`data/tasks.db`, WAL, FTS5), migrated by `src/schema.py` (`settings.schema_version`, currently **9**):
 
-`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, starts (v7 - the day it starts mattering; see [Start dates & snooze](#start-dates--snooze)), planned_on + plan_order (v8 - the day it was committed to and its position in that day's plan; see [Plan my day](#plan-my-day)), recurrence daily|weekly|monthly|quarterly|yearly, description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at, external_id)` · `links(task_id, url, label, kind web|folder|email|issue|ai)` (v5 adds `ai` — an AI-conversation link, see [AI conversation links](#ai-conversation-links)) · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync, external_id)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `mirror_state(task_id, path, exported_at, file_mtime_ns, content_hash)` (v4 — what the markdown mirror last wrote per task) · `mirror_events(task_id, kind conflict|rejected, field, file_value, kept_value, ts)` (v6 — a mirror import conflict/rejection, deduped on task+field+file value; issue #84) · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
+`tasks(id, parent_id, code, title, type task|coding|note, status inbox|todo|doing|standby|done|cancelled, priority high|medium|low|none, due, starts (v7 - the day it starts mattering; see [Start dates & snooze](#start-dates--snooze)), planned_on + plan_order (v8 - the day it was committed to and its position in that day's plan; see [Plan my day](#plan-my-day)), recurrence daily|weekly|monthly|quarterly|yearly + recurrence_anchor (v9 — the fixed day a weekly/monthly recurrence lands on; see [Start dates & snooze](#start-dates--snooze)), description, folder_ref, next_action, person_id, created_by, created_at, updated_at, done_at, external_id)` · `links(task_id, url, label, kind web|folder|email|issue|ai)` (v5 adds `ai` — an AI-conversation link, see [AI conversation links](#ai-conversation-links)) · `comments(task_id, author, ts, body, origin ui|cli|md|notion|import|sync, external_id)` · `activity(task_id, ts, actor, field, old_value, new_value)` · `people(name, email, avatar_path, external_id)` · `issue_refs(task_id, provider, repo, number, state, url, last_synced)` · `mirror_state(task_id, path, exported_at, file_mtime_ns, content_hash)` (v4 — what the markdown mirror last wrote per task) · `mirror_events(task_id, kind conflict|rejected, field, file_value, kept_value, ts)` (v6 — a mirror import conflict/rejection, deduped on task+field+file value; issue #84) · `tasks_fts` + `comments_fts` (FTS5, trigger-synced).
 
-Rules the repo layer enforces (`src/tasks_repo.py`): a task with children **is** a project (the `project` filter means "descendant of"); `move` refuses cycles; every due / status / parent / priority (and title, type, recurrence, person, description) change writes an `activity` row; `POST .../done` on a recurring task rolls the **same** task's due one cadence forward from its due date (month-end clamps) and logs the completion, otherwise it sets `done` + `done_at` (the web app's status select reaches this via a recurring task's **complete** option; picking `done` there is always a plain status change — closed for good, recurring or not); `type = coding` **iff** an `issue_refs` row exists (attach an issue to make a task coding — setting the type by hand is rejected); a task whose `starts` day has not arrived is hidden from the working views by `list_tasks` (see [Start dates & snooze](#start-dates--snooze)); planning appends to the day's `plan_order`, snoozing a planned task un-plans it, planning a deferred task wakes it (see [Plan my day](#plan-my-day)); deleting a task deletes its subtree.
+Rules the repo layer enforces (`src/tasks_repo.py`): a task with children **is** a project (the `project` filter means "descendant of"); `move` refuses cycles; every due / status / parent / priority (and title, type, recurrence, person, description) change writes an `activity` row; `POST .../done` on a recurring task rolls the **same** task's due to the next occurrence after both that due and today (the `recurrence_anchor`'s fixed day when it has one; month-end clamps) and logs the completion, otherwise it sets `done` + `done_at` (the web app's status select reaches this via a recurring task's **complete** option; picking `done` there is always a plain status change — closed for good, recurring or not); `type = coding` **iff** an `issue_refs` row exists (attach an issue to make a task coding — setting the type by hand is rejected); a task whose `starts` day has not arrived is hidden from the working views by `list_tasks` (see [Start dates & snooze](#start-dates--snooze)); planning appends to the day's `plan_order`, snoozing a planned task un-plans it, planning a deferred task wakes it (see [Plan my day](#plan-my-day)); deleting a task deletes its subtree.
 
 ## API
 
@@ -171,7 +171,9 @@ Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `G
 
 ```
 tasks add "title" [--parent N] [--due <date>] [--starts <date>] [--priority high|medium|low|none]
-                  [--recurrence daily|weekly|monthly|quarterly|yearly] [--person id|name] [--desc "…"]
+                  [--recurrence daily|weekly|monthly|quarterly|yearly]
+                  [--recurrence-anchor fri | mon,tue,wed,thu,fri | day-15 | 1-sun | last-fri]
+                  [--person id|name] [--desc "…"]
 tasks ls [--status todo,doing | open | all] [--project N] [--due today|week|overdue] [--person id|name]
          [--deferred]              only the sleeping tasks (a start date still ahead)
          [--updated-before <date|30d>]   only tasks last touched strictly before that day (Nd = N days ago)
@@ -205,7 +207,19 @@ Deferred is a **visible state, never a silent absence**. Wherever a sleeping tas
 
 Everywhere a date is typed it is the one vocabulary from `src/dates.py` — `tomorrow`, `fri`, `next friday`, `this weekend`, `in 2 weeks`, `oct 15`, `2026-10-01`, `none` to clear — resolved server-side, so the UI, the CLI, quick-add and the markdown mirror cannot disagree.
 
-**Recurrence:** completing a recurring task rolls its `due` one cadence forward and **leaves `starts` untouched**. A start date is an absolute one-time gate, not a cadence: it always eventually arrives, so a snoozed recurring task wakes on its start day and rolls normally from then on. (Advancing it with the due would make the gate chase the task forever.)
+**Recurrence:** the drawer's **Repeat** field is a cadence — `daily · weekly · monthly · quarterly · yearly` — and, for weekly and monthly, an **On** picker for the fixed day it lands on (#112):
+
+| Cadence | On | Stored as | Means |
+|---|---|---|---|
+| weekly | every Friday | `fri` | that weekday, every week |
+| weekly | weekday (Mon–Fri) | `mon,tue,wed,thu,fri` | any of those days |
+| monthly | the 15th | `day-15` | the 15th, clamped to the end of a shorter month |
+| monthly | the first Sunday · the last Friday | `1-sun` · `last-fri` | the nth (1–4) or last such weekday |
+| daily / quarterly / yearly | — | `null` | a plain offset from the due date |
+
+Completing a recurring task rolls its `due` to the **first occurrence after both the completed due and today**. So a weekly review anchored on Friday, ticked on a Monday, lands on the coming Friday rather than the next Monday — and a task three weeks overdue catches up into the future instead of rolling onto another overdue date. An anchor never retroactively moves the due you already have; the next roll settles onto it. Changing the cadence to one that cannot carry the anchor clears it (with its own activity row).
+
+The roll **leaves `starts` untouched**. A start date is an absolute one-time gate, not a cadence: it always eventually arrives, so a snoozed recurring task wakes on its start day and rolls normally from then on. (Advancing it with the due would make the gate chase the task forever.)
 
 From the terminal:
 
@@ -263,6 +277,7 @@ due: 2026-08-20
 starts: null
 planned_on: null
 recurrence: null
+recurrence_anchor: null
 person: Sam Rivera
 folder_ref: null
 next_action: null
@@ -294,7 +309,7 @@ Markdown, free.
 
 **Import** — a watcher polls the folder's mtimes every 2 s (stdlib, no extra dependency; also on startup, so edits made while the app was down are picked up before the export) and, for a file that changed since it was written:
 
-- **frontmatter fields** `title`, `code`, `status`, `priority`, `due`, `starts` and `planned_on` (ISO or a natural phrase — `tomorrow`, `next friday`, `oct 1`), `recurrence`, `person` (by name), `folder_ref`, `next_action`, `parent` (id; the cycle guard applies) and the **`## Description`** body are applied through the same repo layer as the UI, with **actor `md`** — every change lands in the activity log like any other (`plan_order` is deliberately **not** in the file: presentation-level ordering, and mirroring it would churn every synced file on every drag);
+- **frontmatter fields** `title`, `code`, `status`, `priority`, `due`, `starts` and `planned_on` (ISO or a natural phrase — `tomorrow`, `next friday`, `oct 1`), `recurrence` + `recurrence_anchor`, `person` (by name), `folder_ref`, `next_action`, `parent` (id; the cycle guard applies) and the **`## Description`** body are applied through the same repo layer as the UI, with **actor `md`** — every change lands in the activity log like any other (`plan_order` is deliberately **not** in the file: presentation-level ordering, and mirroring it would churn every synced file on every drag);
 - **new lines under `## Comments`** become comments with `origin = md`: a bare `- your text` (author = the first `team.people` entry, time = now) or a full `- <ISO ts> · <author> · md: text` line; a body may continue on lines indented by two spaces. Comments are **append-only** — a deleted line is not a deletion, an edited existing line reads as a new comment (the original stays);
 - `id`, `external_id`, `type` (derived from the issue link), `links`, the timestamps, `## Log` and any unknown section are read-only / ignored.
 

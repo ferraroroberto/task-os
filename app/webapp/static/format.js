@@ -14,6 +14,80 @@ export const STATUSES = ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled
 export const PRIORITIES = ['high', 'medium', 'low', 'none'];
 export const RECURRENCES = ['', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
+/* Fixed-day anchors (#112) — the cadences that take one, and the options each
+ * offers. The canonical spellings and the wording below mirror
+ * src/dates.py::normalise_anchor / describe_recurrence; the server is the
+ * authority, this is the picker's copy of the same vocabulary. */
+const WEEKDAY_ABBR = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const WEEKDAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const ORDINAL_WORDS = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', last: 'last' };
+
+/** The anchor picker's option groups for a cadence — `[]` when it takes none.
+ *
+ * `[{label, options: [[value, text], …]}]`; the first group is unlabelled and
+ * holds the "no anchor" choice, so the picker always offers a way back to the
+ * plain offset roll. The 66 monthly values are grouped rather than flat: a
+ * native select is a scrollable list on the phone, and "Day of month" /
+ * "Weekday" split it into two readable halves.
+ */
+export function anchorOptions(recurrence) {
+  if (recurrence === 'weekly') {
+    return [
+      { options: [['', 'any day (offset from the due date)']] },
+      {
+        label: 'Every',
+        options: [['mon,tue,wed,thu,fri', 'weekday (Mon–Fri)']].concat(
+          WEEKDAY_ABBR.map(function (abbr, i) { return [abbr, WEEKDAY_FULL[i]]; })
+        ),
+      },
+    ];
+  }
+  if (recurrence === 'monthly') {
+    const days = [];
+    for (let d = 1; d <= 31; d++) days.push(['day-' + d, 'the ' + ordinal(d)]);
+    const nths = [];
+    ['1', '2', '3', '4', 'last'].forEach(function (n) {
+      WEEKDAY_ABBR.forEach(function (abbr, i) {
+        nths.push([n + '-' + abbr, 'the ' + ORDINAL_WORDS[n] + ' ' + WEEKDAY_FULL[i]]);
+      });
+    });
+    return [
+      { options: [['', 'same day each month']] },
+      { label: 'Day of month', options: days },
+      { label: 'Weekday', options: nths },
+    ];
+  }
+  return [];
+}
+
+function ordinal(n) {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th'
+    : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th';
+  return n + suffix;
+}
+
+/** The label for a cadence + anchor — 'every Friday', 'monthly on the 15th', 'weekly'. */
+export function recurrenceLabel(recurrence, anchor) {
+  if (!recurrence) return '';
+  if (!anchor) return recurrence;
+  if (recurrence === 'weekly') {
+    const days = String(anchor).split(',');
+    if (anchor === 'mon,tue,wed,thu,fri') return 'every weekday';
+    const names = days.map(function (d) { return WEEKDAY_FULL[WEEKDAY_ABBR.indexOf(d)] || d; });
+    return 'every ' + (names.length > 1
+      ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]
+      : names[0]);
+  }
+  const day = /^day-(\d{1,2})$/.exec(anchor);
+  if (day) return 'monthly on the ' + ordinal(Number(day[1]));
+  const nth = /^(1|2|3|4|last)-([a-z]+)$/.exec(anchor);
+  if (nth) {
+    return 'monthly on the ' + ORDINAL_WORDS[nth[1]] + ' '
+      + (WEEKDAY_FULL[WEEKDAY_ABBR.indexOf(nth[2])] || nth[2]);
+  }
+  return recurrence;
+}
+
 const DAY_MS = 86400000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

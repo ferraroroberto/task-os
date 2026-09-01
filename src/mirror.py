@@ -7,7 +7,8 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
 
     ---                       YAML frontmatter (flat scalars + a links list)
     id: 42 · external_id · parent · title · code · type · status · priority
-    due · starts · planned_on · recurrence · person (name) · folder_ref · next_action
+    due · starts · planned_on · recurrence · recurrence_anchor · person (name)
+    folder_ref · next_action
     links: [{url, label, kind}] · created_at · updated_at · done_at · exported_at
     ---
     ## Description            markdown, free
@@ -31,8 +32,9 @@ differs from the recorded one, parses them and applies:
 - changed **scalar frontmatter fields** through the repo with ``actor="md"``
   (so activity rows are written like any other change) — ``title``, ``code``,
   ``status``, ``priority``, ``due``, ``starts`` and ``planned_on`` (natural
-  phrases welcome), ``recurrence``, ``person`` (by name), ``folder_ref``,
-  ``next_action``, ``parent``; and the ``## Description`` body. ``plan_order``
+  phrases welcome), ``recurrence`` + ``recurrence_anchor``, ``person`` (by
+  name), ``folder_ref``, ``next_action``, ``parent``; and the
+  ``## Description`` body. ``plan_order``
   is deliberately not mirrored (#89): it is presentation-level ordering, and
   mirroring it would churn every synced file on every drag;
 - **new lines under ``## Comments``** — anything not matching a known comment
@@ -101,13 +103,14 @@ _PLAIN_SAFE_RE = re.compile(r"^[A-Za-z0-9_./ ,+():@%\u00c0-\uffff-]*$")
 #: Frontmatter keys, in the order they are written.
 FRONTMATTER_KEYS = (
     "id", "external_id", "parent", "title", "code", "type", "status", "priority", "due",
-    "starts", "planned_on", "recurrence", "person", "folder_ref", "next_action", "links",
+    "starts", "planned_on", "recurrence", "recurrence_anchor", "person", "folder_ref",
+    "next_action", "links",
     "created_at", "updated_at", "done_at", "exported_at",
 )
 #: Keys the import applies (everything else in the frontmatter is read-only).
 IMPORTABLE_KEYS = (
     "title", "code", "status", "priority", "due", "starts", "planned_on", "recurrence",
-    "person", "folder_ref", "next_action", "parent",
+    "recurrence_anchor", "person", "folder_ref", "next_action", "parent",
 )
 #: file key → activity field name (the conflict baseline lookup).
 _ACTIVITY_FIELD = {"parent": "parent", "person": "person_id"}
@@ -193,6 +196,7 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
         "starts": task.get("starts"),
         "planned_on": task.get("planned_on"),
         "recurrence": task.get("recurrence"),
+        "recurrence_anchor": task.get("recurrence_anchor"),
         "person": (task.get("person") or {}).get("name"),
         "folder_ref": task.get("folder_ref"),
         "next_action": task.get("next_action"),
@@ -639,7 +643,7 @@ class Mirror:
                 return int(raw)
             except (TypeError, ValueError) as exc:
                 raise repo.ValidationError(f"parent must be a task id (got {raw!r})") from exc
-        if key in ("status", "priority", "recurrence"):
+        if key in ("status", "priority", "recurrence", "recurrence_anchor"):
             return str(raw).strip().lower()
         return str(raw).strip()
 

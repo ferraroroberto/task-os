@@ -3,7 +3,8 @@
  * A right-hand side panel on desktop (>= 1024px; the content shrinks so the
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
- * title → fields row (status, priority, due, starts, recurrence, person, code,
+ * title → fields row (status, priority, due, starts, recurrence + its fixed-day
+ * anchor when the cadence takes one, person, code,
  * move-to — re-parent without the tree drag, the phone's path) →
  * folder (the ref as an opener chip + resolved path, an editor that folds a
  * pasted absolute path onto the placeholders, a picker over the folder
@@ -24,8 +25,8 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  PRIORITIES, RECURRENCES, aiChip, chipFor, fmtTs, isDeferred, issueChip, linkKind, linkify,
-  providerIcon, relDue, renderMarkdown, statusPill,
+  PRIORITIES, RECURRENCES, aiChip, anchorOptions, chipFor, fmtTs, isDeferred, issueChip,
+  linkKind, linkify, providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { statusOptions } from './rows.js';
@@ -94,6 +95,40 @@ export function createDrawer(el, opts) {
       const body = {};
       body[name] = v;
       patch(body);
+    });
+    wrap.append(l, sel);
+    return wrap;
+  }
+
+  /** The fixed day a recurrence lands on (#112) — the Repeat field's second half.
+   *
+   *  Its own builder rather than `selectField` because the monthly vocabulary
+   *  is long enough to need `<optgroup>`s; the PATCH it sends is the same
+   *  single-field one.
+   */
+  function anchorField(t, groups) {
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    const l = document.createElement('span');
+    l.className = 'field-label';
+    l.textContent = 'On';
+    const sel = document.createElement('select');
+    sel.className = 'select-native field-control';
+    sel.dataset.field = 'recurrence_anchor';
+    groups.forEach(function (group) {
+      const target = group.label ? document.createElement('optgroup') : sel;
+      if (group.label) target.label = group.label;
+      group.options.forEach(function (pair) {
+        const o = document.createElement('option');
+        o.value = pair[0];
+        o.textContent = pair[1];
+        if (pair[0] === (t.recurrence_anchor || '')) o.selected = true;
+        target.appendChild(o);
+      });
+      if (group.label) sel.appendChild(target);
+    });
+    sel.addEventListener('change', function () {
+      patch({ recurrence_anchor: sel.value === '' ? null : sel.value });
     });
     wrap.append(l, sel);
     return wrap;
@@ -338,7 +373,13 @@ export function createDrawer(el, opts) {
     // Starts sits right after Due — the two dates of a task, read together.
     fields.appendChild(dateField(t, 'starts', 'Starts',
       isDeferred(t) ? relDue(t.starts).text : 'passed'));
+    // Repeat is a composer (#112): the cadence, then — only for the cadences
+    // that can carry one — the fixed day it lands on. Switching the cadence
+    // re-renders, and the server has already dropped an anchor the new
+    // cadence cannot hold, so the second select never shows a stale day.
     fields.appendChild(selectField('Repeat', 'recurrence', RECURRENCES, t.recurrence || '', function (v) { return v || 'never'; }));
+    const anchorGroups = anchorOptions(t.recurrence);
+    if (anchorGroups.length) fields.appendChild(anchorField(t, anchorGroups));
     const people = [{ id: '', name: '—' }].concat(opts.people() || []);
     fields.appendChild(selectField('Person', 'person_id', people.map(function (p) { return p.id; }), t.person_id == null ? '' : t.person_id, function (v) {
       const p = people.find(function (x) { return String(x.id) === String(v == null ? '' : v); });

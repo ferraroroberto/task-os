@@ -13,9 +13,11 @@ Rules enforced here (plan §04):
 - every due / status / parent / priority (and title, type, recurrence,
   person, description, …) change writes an ``activity`` row with actor,
   field, old → new;
-- ``done()`` on a recurring task rolls the *same* task's due forward from the
-  due date (``src.dates.advance``) and logs the completion; a non-recurring
-  task becomes ``done`` with ``done_at``; the roll never touches ``starts``;
+- ``done()`` on a recurring task rolls the *same* task's due forward to the
+  next occurrence after both that due and today (``src.dates.next_due``,
+  honouring the fixed-day ``recurrence_anchor``) and logs the completion; a
+  non-recurring task becomes ``done`` with ``done_at``; the roll never
+  touches ``starts``;
 - a task whose ``starts`` has not arrived is *deferred*: :func:`list_tasks`
   hides it by default, so every working view (Board, Today, Table, the CLI)
   inherits one rule from one clause — :func:`tree` and :func:`search` read
@@ -62,7 +64,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from src.dates import advance
+from src.dates import AnchorError, next_due, normalise_anchor
 from src.schema import (
     COMMENT_ORIGINS,
     ISSUE_PROVIDERS,
@@ -83,7 +85,7 @@ DEFAULT_ACTOR = "me"
 # :func:`plan_reorder`) — never PATCHed, never activity-logged, never mirrored.
 _TASK_FIELDS = (
     "parent_id", "code", "title", "type", "status", "priority", "due", "starts", "recurrence",
-    "planned_on", "description", "folder_ref", "next_action", "person_id",
+    "recurrence_anchor", "planned_on", "description", "folder_ref", "next_action", "person_id",
 )
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
 DATE_FIELDS = ("due", "starts", "planned_on")
@@ -223,6 +225,27 @@ def _validate_enum(field: str, value: Any, nullable: bool = False) -> None:
     allowed = _ENUMS[field]
     if value not in allowed:
         raise ValidationError(f"{field} must be one of {', '.join(allowed)} (got {value!r})")
+
+
+def _validate_anchor(recurrence: str | None, value: Any) -> str | None:
+    """The canonical anchor for ``recurrence``; a bad one is a 422 (#112)."""
+    try:
+        return normalise_anchor(recurrence, value)
+    except AnchorError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _carry_anchor(recurrence: str | None, value: Any) -> str | None:
+    """The stored anchor kept across a *cadence* change, or dropped if it no longer fits.
+
+    Switching Repeat from weekly-on-Friday to quarterly is a deliberate edit,
+    not a mistake to reject — the anchor simply stops applying, so it is
+    cleared (and activity-logged) rather than raised on.
+    """
+    try:
+        return normalise_anchor(recurrence, value)
+    except AnchorError:
+        return None
 
 
 def _validate_date(value: Any, field: str = "due") -> str | None:
@@ -378,7 +401,7 @@ def create_task(
     values: dict[str, Any] = {
         "parent_id": None, "code": None, "type": "task", "status": "inbox",
         "priority": "none", "due": None, "starts": None, "recurrence": None,
-        "planned_on": None, "description": "",
+        "recurrence_anchor": None, "planned_on": None, "description": "",
         "folder_ref": None, "next_action": None, "person_id": None,
     }
     values.update({k: v for k, v in fields.items() if k != "title"})
@@ -392,6 +415,9 @@ def create_task(
     _validate_enum("status", values["status"])
     _validate_enum("priority", values["priority"])
     _validate_enum("recurrence", values["recurrence"], nullable=True)
+    values["recurrence_anchor"] = _validate_anchor(
+        values["recurrence"], values["recurrence_anchor"]
+    )
     for f in DATE_FIELDS:
         values[f] = _validate_date(values[f], f)
     if values["type"] == "coding":
@@ -408,11 +434,11 @@ def create_task(
     cur = conn.execute(
         """
         INSERT INTO tasks(parent_id, code, title, type, status, priority, due, starts, recurrence,
-                          planned_on, plan_order, description, folder_ref, next_action, person_id,
-                          created_by, created_at, updated_at, done_at)
+                          recurrence_anchor, planned_on, plan_order, description, folder_ref,
+                          next_action, person_id, created_by, created_at, updated_at, done_at)
         VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :starts, :recurrence,
-                :planned_on, :plan_order, :description, :folder_ref, :next_action, :person_id,
-                :created_by, :ts, :ts, :done_at)
+                :recurrence_anchor, :planned_on, :plan_order, :description, :folder_ref,
+                :next_action, :person_id, :created_by, :ts, :ts, :done_at)
         """,
         {
             **values,
@@ -477,6 +503,22 @@ def update_task(
                 _require_person(conn, value)
         if value != current[field]:
             sets[field] = value
+
+    # Recurrence anchor (#112) — resolved against the cadence the task *ends*
+    # with, so PATCHing both at once validates the pair, and changing only the
+    # cadence re-checks the anchor already stored (dropping it when the new
+    # cadence cannot carry it) instead of leaving a stale fixed day behind.
+    if "recurrence" in sets or "recurrence_anchor" in changes:
+        cadence = sets.get("recurrence", current["recurrence"])
+        anchor = (
+            _validate_anchor(cadence, changes["recurrence_anchor"])
+            if "recurrence_anchor" in changes
+            else _carry_anchor(cadence, current["recurrence_anchor"])
+        )
+        if anchor != current["recurrence_anchor"]:
+            sets["recurrence_anchor"] = anchor
+        else:
+            sets.pop("recurrence_anchor", None)
 
     if "type" in sets:
         has_ref = conn.execute(
@@ -642,9 +684,13 @@ def move(
 def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) -> dict[str, Any]:
     """Complete a task.
 
-    Recurring → the same task rolls: ``due`` advances one cadence from the
-    current due (from today when it had none), status is untouched, and the
-    log gets ``done`` (old = the due that was completed) plus ``due`` old→new.
+    Recurring → the same task rolls: ``due`` moves to the next occurrence
+    after both the completed due and today (from today when it had none),
+    status is untouched, and the log gets ``done`` (old = the due that was
+    completed) plus ``due`` old→new. A ``recurrence_anchor`` makes that
+    occurrence a fixed day — a Friday task completed on Monday lands on the
+    coming Friday, not the next Monday — and the catch-up means an overdue
+    task never rolls onto another overdue date (#112).
     Non-recurring → ``status='done'``, ``done_at`` stamped, ``status`` logged.
 
     The roll deliberately leaves ``starts`` alone (#87). A start date is an
@@ -655,8 +701,13 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
     current = _require_task(conn, task_id)
     actor = actor or DEFAULT_ACTOR
     if current["recurrence"]:
-        base = date.fromisoformat(current["due"]) if current["due"] else today()
-        nxt = advance(base, current["recurrence"]).isoformat()
+        base = date.fromisoformat(current["due"]) if current["due"] else None
+        nxt = next_due(
+            base,
+            current["recurrence"],
+            current["recurrence_anchor"],
+            today=today(),
+        ).isoformat()
         ts = now_iso()
         conn.execute("UPDATE tasks SET due = ?, updated_at = ? WHERE id = ?", (nxt, ts, task_id))
         _log(conn, task_id, actor, "done", current["due"], nxt, ts)

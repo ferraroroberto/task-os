@@ -23,7 +23,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, linkify, priorityLabel,
-  relDue, startsLabel, statusPill,
+  recurrenceLabel, relDue, startsLabel, statusPill,
 } from './format.js';
 import { rowList, statusSelect } from './rows.js';
 
@@ -280,7 +280,7 @@ function buildDueCell(t, handlers) {
     const r = document.createElement('span');
     r.className = 'due-recur';
     r.innerHTML = icon('repeat');
-    r.title = t.recurrence;
+    r.title = recurrenceLabel(t.recurrence, t.recurrence_anchor);
     btn.appendChild(r);
   }
   // The coarse branch reveals the native input to click it; a cancelled pick

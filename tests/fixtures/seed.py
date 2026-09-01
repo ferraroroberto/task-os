@@ -116,7 +116,8 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         task("photos", "Collect photos", parent_id=passports, status="done", due=d(-2))
         task("school", "School enrolment forms", parent_id=family, status="todo", due=d(0), priority="high", person_id=jordan)
         task("car", "Car insurance renewal", parent_id=family, status="todo", due=d(45), recurrence="yearly")
-        task("water", "Pay water bill", parent_id=family, status="todo", due=d(7), recurrence="monthly")
+        task("water", "Pay water bill", parent_id=family, status="todo", due=d(7),
+             recurrence="monthly", recurrence_anchor="day-15")
         task("dentist", "Dentist check-up", parent_id=family, status="todo", due=d(0), recurrence="quarterly")
 
         # ---- project 3: Side project garden-bot (coding) ---------------
@@ -145,7 +146,8 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         # ---- loose tasks --------------------------------------------------
         task("callback", "Call the plumber back", status="todo", due=d(0), priority="high", person_id=sam)
         task("library", "Return library books", status="todo", due=d(-3), priority="medium")
-        task("review", "Weekly review", status="todo", due=d(5), recurrence="weekly")
+        task("review", "Weekly review", status="todo", due=d(5), recurrence="weekly",
+             recurrence_anchor="fri")
         task("gift", "Buy a birthday gift", status="done", due=d(-7))
         task("bikes", "Sell the old bikes", status="cancelled")
         task("inbox1", "Look into a standing desk", status="inbox")

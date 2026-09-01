@@ -30,10 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 8
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 9
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 8
+        assert schema.current_version(conn) == 9
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -47,13 +47,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 8
-        assert schema.migrate(conn) == 8
+        assert schema.migrate(conn) == 9
+        assert schema.migrate(conn) == 9
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 8
+    assert dbmod.init_db() == 9
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -67,12 +67,36 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 8
+    assert dbmod.init_db() == 9
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 8
+        assert schema.current_version(conn) == 9
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
+    finally:
+        conn.close()
+
+
+def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -> None:
+    """A v8 file's recurring tasks survive and come out unanchored (#112)."""
+    conn = _open(_temp_db)
+    for target in range(1, 9):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '8')")
+    conn.execute(
+        "INSERT INTO tasks(id, title, recurrence, due, created_at, updated_at)"
+        " VALUES (1, 'Weekly review', 'weekly', '2026-08-21', 't', 't')"
+    )
+    conn.commit()
+    conn.close()
+
+    assert dbmod.init_db() == 9
+    conn = dbmod.connect()
+    try:
+        row = conn.execute(
+            "SELECT title, recurrence, recurrence_anchor FROM tasks WHERE id = 1"
+        ).fetchone()
+        assert tuple(row) == ("Weekly review", "weekly", None)
     finally:
         conn.close()
 
@@ -111,7 +135,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 8
+    assert dbmod.init_db() == 9
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
