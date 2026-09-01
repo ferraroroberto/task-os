@@ -2,7 +2,7 @@
 
     GET    /api/tasks                    filtered flat list (summaries)
     POST   /api/tasks                    create → 201
-    POST   /api/tasks/bulk               {ids, status?, due?} → per-id results
+    POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree)
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
@@ -104,14 +104,21 @@ class BulkBody(BaseModel):
     """One change applied to many tasks — the Board/Table selection (issue #81).
 
     ``status`` takes the same vocabulary as the row select, ``complete``
-    included; ``due`` takes the same natural phrases as a single-task update
-    (``null`` / ``""`` clears it). Both may travel together, except
-    ``complete`` (which rolls the due itself) with an explicit ``due``.
+    included; ``due``, ``starts`` and ``priority`` take the same values as a
+    single-task update (a natural phrase for the dates, ``null`` / ``""``
+    clears them). They may travel together, except ``complete`` (which rolls
+    the due itself) with an explicit ``due``.
+
+    ``starts`` and ``priority`` joined the body with the single-key row
+    actions (issue #99): the same keystroke has to mean the same thing on a
+    selection as on one row, and the row keys snooze and cycle priority.
     """
 
     ids: list[int] = Field(min_length=1, max_length=500)
     status: str | None = None
     due: str | None = None
+    starts: str | None = None
+    priority: str | None = None
     actor: str | None = None
 
 
@@ -252,19 +259,19 @@ def create_task(
 def bulk_tasks(
     body: BulkBody, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    """Apply one status / due change to a selection of tasks (issue #81).
+    """Apply one change to a selection of tasks (issue #81; #99 added the fields).
 
     Declared before ``/tasks/{task_id}`` so the literal path always wins.
-    ``due`` is resolved **once** here: an unparseable phrase is one 422 for
-    the request, not the same error repeated per id. Per-*task* failures (an
-    id deleted in another tab, a status the task refuses) are data, not an
-    error — they come back as ``ok: false`` rows on a 200 so the caller can
-    say which ids failed and keep them selected for a retry.
+    ``due`` / ``starts`` are resolved **once** here: an unparseable phrase is
+    one 422 for the request, not the same error repeated per id. Per-*task*
+    failures (an id deleted in another tab, a status the task refuses) are
+    data, not an error — they come back as ``ok: false`` rows on a 200 so the
+    caller can say which ids failed and keep them selected for a retry.
     """
     changes = body.model_dump(exclude={"ids", "actor", "status"}, exclude_unset=True)
     complete = body.status == "complete"
-    if body.status is None and "due" not in changes:
-        raise repo.ValidationError("a bulk change needs a status, a due date, or both")
+    if body.status is None and not changes:
+        raise repo.ValidationError("a bulk change needs a status, a due date, a start date or a priority")
     if complete and "due" in changes:
         raise repo.ValidationError("'complete' rolls the due date itself — don't set one too")
     if body.status is not None and not complete:

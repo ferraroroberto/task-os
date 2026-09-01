@@ -328,6 +328,32 @@ def test_bulk_status_and_due_across_a_selection(client: TestClient) -> None:
     assert [(x["task"]["status"], x["task"]["due"]) for x in r.json()["results"]] == [("todo", None)] * 3
 
 
+def test_bulk_sets_starts_and_priority_for_the_row_keys(client: TestClient) -> None:
+    """The `s` and `p` keys act on a selection too (#99), so bulk takes both.
+
+    Each id still goes through the single-task path: the start date is
+    resolved from the same phrase vocabulary, and the priority cycle sends one
+    call per group of tasks that shared a value — which is why a bulk body
+    carrying only a priority has to be a valid request.
+    """
+    ids = [_mk(client, f"T{n}") for n in range(2)]
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "starts": "2026-09-10"})
+    assert r.status_code == 200 and r.json()["failed"] == 0
+    assert {x["task"]["starts"] for x in r.json()["results"]} == {"2026-09-10"}
+
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "priority": "high"})
+    assert {x["task"]["priority"] for x in r.json()["results"]} == {"high"}
+
+    # …and the undo of either is the same call carrying the prior value back
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "starts": None, "priority": "none"})
+    assert [(x["task"]["starts"], x["task"]["priority"]) for x in r.json()["results"]] == [
+        (None, "none")
+    ] * 2
+
+    # an unparseable start date is one request-level 422, like `due`
+    assert client.post("/api/tasks/bulk", json={"ids": ids, "starts": "whenever"}).status_code == 422
+
+
 def test_bulk_partial_failure_is_a_200_that_names_the_id(client: TestClient) -> None:
     ids = [_mk(client, f"T{n}") for n in range(2)]
     r = client.post("/api/tasks/bulk", json={"ids": [ids[0], 4242, ids[1]], "status": "todo"})

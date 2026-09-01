@@ -1835,3 +1835,48 @@ kbd {
   .search-hit-actions { grid-column: 2; justify-content: flex-start; }
   .search-hit-actions .button-ghost { min-height: 36px; }
 }
+
+/* ------------------------------------------------- keyboard actions (#99) */
+/* The `s` popover: the row's own snooze menu, mounted beside whatever is
+   focused on a tab whose rows carry no snooze button. It is pinned to the
+   VIEWPORT (a row can sit in a Board column that scrolls on its own, so page
+   coordinates would strand it) and closes on any scroll — hence position:
+   fixed here and static for the menu it wraps, which is otherwise positioned
+   against its <details>. */
+.snooze-pop { position: fixed; z-index: 60; }
+.snooze-pop > .snooze-menu { position: static; }
+
+/* The row a key will act on must be visible as such: focus moved by script
+   after a re-render does not reliably light :focus-visible, so the row marks
+   itself whenever focus is anywhere inside it. The hover surface, not the
+   accent tint — the tint means "ticked" everywhere else in the app, and a
+   focused row inside Select mode must not read as a selected one. */
+.trow:focus-within { background: var(--card-2); }
+tr.task-row:focus-within > td { background: var(--card-2); }
+/* …and a ticked row stays visibly ticked while focused, same as under the
+   cursor (#81) — this block is later in the file, so it has to say so. */
+.trow.is-selected:focus-within { background: var(--accent-soft); }
+tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
+
+/* The shortcuts sheet — the vendored modal shell, read-only. */
+.detail-dialog.keys-dialog { width: min(560px, 94vw); margin-top: 6vh; }
+.keys-lead { margin: 0 0 10px; font-size: var(--font-caption); }
+.keys-sub { margin: 14px 0 2px; font-size: var(--font-label); }
+.keys-rows { display: grid; }
+.keys-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 6px 0;
+}
+.keys-row + .keys-row { border-top: 1px solid var(--line-muted); }
+/* one width for the key column, so every label starts on the same line —
+   a `W` is wider than an `E` and the ragged edge showed */
+.keys-combo { display: inline-flex; gap: 4px; align-self: center; min-width: 40px; }
+.keys-main { min-width: 0; }
+.keys-label { font-size: var(--font-label); }
+.keys-hint { font-size: var(--font-caption); }
+@media (pointer: coarse) and (max-width: 520px) {
+  .detail-dialog.keys-dialog { width: 100vw; max-width: 100vw; margin: env(safe-area-inset-top, 0px) 0 auto; }
+}

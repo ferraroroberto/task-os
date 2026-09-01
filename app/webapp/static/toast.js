@@ -13,7 +13,9 @@ const TTL_MS = 4500;
 // A toast carrying an action stays up longer: 4.5 s is enough to *read* a
 // result, not enough to notice an Undo, move the pointer and click it. Caught
 // on the #87 walk — the snooze toast was gone before it could be used.
-const ACTION_TTL_MS = 10000;
+// Exported because the keyboard undo buffer (#99) expires with its toast: one
+// window, not a second timer that could outlive the offer on screen.
+export const ACTION_TTL_MS = 10000;
 
 /**
  * @param {string} message

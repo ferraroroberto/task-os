@@ -44,6 +44,47 @@ function wireOutside() {
 }
 
 /**
+ * The four options as a menu, with no trigger attached.
+ *
+ * One options list, one commit path: the Today row's button below mounts it
+ * inside its `<details>`, and the `s` key (issue #99) mounts the same element
+ * in a popover beside whatever row is focused — on a tab whose rows carry no
+ * snooze button at all. A second list would be a second date vocabulary to
+ * keep in step, which is the whole reason the phrases go to the server.
+ *
+ * @param {object} t                          a task summary (only `title` is read)
+ * @param {(phrase:string) => void} onPick    a phrase, or an ISO date from the picker
+ * @returns {HTMLElement} a `<div class="snooze-menu">`
+ */
+export function snoozeMenu(t, onPick) {
+  const menu = document.createElement('div');
+  menu.className = 'snooze-menu';
+  menu.setAttribute('role', 'group');
+  menu.setAttribute('aria-label', 'Snooze ' + t.title + ' until');
+
+  SNOOZE_OPTIONS.forEach(function (opt) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'snooze-opt';
+    b.textContent = opt[1];
+    b.addEventListener('click', function () { onPick(opt[0]); });
+    menu.appendChild(b);
+  });
+
+  // "Pick a date…" — the same calendar button every other date control opens.
+  const pick = duePicker({
+    className: 'snooze-opt snooze-pick',
+    title: 'Pick a date',
+    ariaLabel: 'Snooze ' + t.title + ' until a date you pick',
+    onPick: function (iso) { if (iso) onPick(iso); },
+  });
+  pick.button.innerHTML = icon('calendar-days');
+  pick.button.appendChild(document.createTextNode('Pick a date…'));
+  menu.append(pick.button, pick.picker);
+  return menu;
+}
+
+/**
  * The snooze control for one row.
  * @param {object} t                                     a task summary
  * @param {(id:number, phrase:string) => Promise<any>} onSnooze
@@ -67,11 +108,6 @@ export function snoozeButton(t, onSnooze) {
   summary.innerHTML = icon('clock');
   d.appendChild(summary);
 
-  const menu = document.createElement('div');
-  menu.className = 'snooze-menu';
-  menu.setAttribute('role', 'group');
-  menu.setAttribute('aria-label', 'Snooze ' + t.title + ' until');
-
   function commit(phrase) {
     d.open = false;
     summary.setAttribute('aria-busy', 'true');
@@ -80,26 +116,6 @@ export function snoozeButton(t, onSnooze) {
       .finally(function () { summary.removeAttribute('aria-busy'); });
   }
 
-  SNOOZE_OPTIONS.forEach(function (opt) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'snooze-opt';
-    b.textContent = opt[1];
-    b.addEventListener('click', function () { commit(opt[0]); });
-    menu.appendChild(b);
-  });
-
-  // "Pick a date…" — the same calendar button every other date control opens.
-  const pick = duePicker({
-    className: 'snooze-opt snooze-pick',
-    title: 'Pick a date',
-    ariaLabel: 'Snooze ' + t.title + ' until a date you pick',
-    onPick: function (iso) { if (iso) commit(iso); },
-  });
-  pick.button.innerHTML = icon('calendar-days');
-  pick.button.appendChild(document.createTextNode('Pick a date…'));
-  menu.append(pick.button, pick.picker);
-
-  d.appendChild(menu);
+  d.appendChild(snoozeMenu(t, commit));
   return d;
 }
