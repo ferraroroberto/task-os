@@ -30,6 +30,7 @@ geometry       = { src = "tests/e2e/_geometry.py",                    sha = "d15
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "tests/e2e/_browser_sweep.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "scripts/classify_e2e.py" }
 no_window      = { src = "src/no_window.py",                          sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "src/no_window.py" }
+runtime_data   = { src = "src/runtime_data.py",                        sha = "346765f7c14af0ec61e960333c055974e4e9e1db", dest = "src/runtime_data.py" }
 # gen_tailscale_cert.py is copy-to-adapt, not vendor-verbatim (project-scaffolding#232) —
 # it is not in the scaffold's [components] catalog, so no [vendored] entry here either.
 # automation (ferraroroberto/automation, system/foldersearcher — the GUI-free half
