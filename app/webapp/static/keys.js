@@ -303,6 +303,7 @@ export function mountKeys(helpDialog, handlers) {
     if (!pop) return;
     pop.remove();
     pop = null;
+    document.querySelectorAll('.is-key-target').forEach(function (el) { el.classList.remove('is-key-target'); });
   }
 
   /** The row's snooze menu, mounted beside whatever is focused — the tabs
@@ -317,6 +318,9 @@ export function mountKeys(helpDialog, handlers) {
       commit(action, tasks, phrase, rec).finally(function () { busy = false; });
     }));
     document.body.appendChild(pop);
+    // The menu takes focus, so the row loses its :focus-within tint just as
+    // the user is about to pick a date for it — keep it marked explicitly.
+    if (anchor && anchor.classList.contains('trow')) anchor.classList.add('is-key-target');
     const r = (anchor || document.body).getBoundingClientRect();
     const w = pop.offsetWidth;
     pop.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
@@ -473,6 +477,8 @@ export function mountKeys(helpDialog, handlers) {
 
   return {
     openHelp: openHelp,
+    /** Is there a row focused / ticked — i.e. would a key do anything now? */
+    hasTarget: function () { return !!target('palette'); },
     /**
      * The same actions as palette commands, each carrying its key — the
      * palette is where a shortcut is *discovered* (the sheet is the reference

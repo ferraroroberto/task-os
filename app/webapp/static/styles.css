@@ -1851,7 +1851,7 @@ kbd {
    itself whenever focus is anywhere inside it. The hover surface, not the
    accent tint — the tint means "ticked" everywhere else in the app, and a
    focused row inside Select mode must not read as a selected one. */
-.trow:focus-within { background: var(--card-2); }
+.trow:focus-within, .trow.is-key-target { background: var(--card-2); }
 tr.task-row:focus-within > td { background: var(--card-2); }
 /* …and a ticked row stays visibly ticked while focused, same as under the
    cursor (#81) — this block is later in the file, so it has to say so. */

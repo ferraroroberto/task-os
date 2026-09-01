@@ -733,15 +733,19 @@ function paletteCommands() {
     { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
       if (quickAdd) quickAdd.open();
     } },
-    // The row keys, each with its key on the row (#99) — the palette is where
-    // a shortcut is discovered, so they sit above the navigation entries.
-    ...(keys ? keys.commands() : []),
+    // The row keys, each showing its key (#99) — the palette is where a
+    // shortcut is discovered. Top of the list while a row is focused or
+    // ticked, because acting on it is then the likeliest intent; otherwise
+    // they are still listed (that is the discovery), just under the places
+    // you can actually go right now.
+    ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-table', label: 'Go to Table', icon: 'table', run: go('table') },
     { id: 'go-tree', label: 'Go to Tree', icon: 'list-tree', run: go('tree') },
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
+    ...(keys && !keys.hasTarget() ? keys.commands() : []),
   ];
   ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'].forEach(function (st) {
     cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
