@@ -48,11 +48,20 @@ Version history:
        ordering managed by ``src/tasks_repo.py`` only (appended on plan,
        cleared on unplan, rewritten by ``plan_reorder``) — never PATCHed
        directly, never mirrored.
+    9  tasks.recurrence_anchor (TEXT, nullable)                     (issue #112)
+       — the fixed day a recurrence lands on, beside the cadence rather than
+       inside it (the iCalendar split: ``FREQ=WEEKLY;BYDAY=FR``). ``weekly``
+       takes a weekday list (``fri``, ``mon,tue,wed,thu,fri``), ``monthly``
+       takes ``day-N`` or ``<1..4|last>-<weekday>``; the other cadences take
+       none. NULL keeps the plain offset roll. Grammar and arithmetic live in
+       ``src/dates.py``, validation in ``src/tasks_repo.py``.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
 status / parent / priority change writes ``activity``; recurrence rolls the
-same task's due forward on done — and leaves ``starts`` alone (issue #87): a
+same task's due forward on done — to the first occurrence that is after both
+the completed due *and* today, so an overdue task never rolls into another
+overdue date (issue #112) — and leaves ``starts`` alone (issue #87): a
 start date is an absolute one-time gate that always eventually arrives, so a
 snoozed recurring task wakes on its start day and rolls normally from then on
 rather than being hidden forever by a gate that moves with it.
@@ -261,8 +270,23 @@ ALTER TABLE tasks ADD COLUMN plan_order INTEGER;
 CREATE INDEX idx_tasks_planned_on ON tasks(planned_on);
 """
 
+# tasks.recurrence_anchor (#112) — a plain nullable column, so an existing
+# database gains it with every recurring task unanchored (NULL = the offset
+# roll it has always had). The fixed day lives beside the cadence rather than
+# inside it because widening ``tasks.recurrence``'s CHECK would mean rebuilding
+# ``tasks`` — and ``DROP TABLE tasks`` with foreign keys on fires the
+# ON DELETE CASCADE of links / comments / activity / issue_refs, while
+# ``PRAGMA foreign_keys`` is a no-op inside the transaction this step runs in.
+# (v5's ``links`` rebuild was safe only because nothing references ``links``.)
+# No index: the column is never a query predicate, only carried on the row.
+_V9 = """
+ALTER TABLE tasks ADD COLUMN recurrence_anchor TEXT;
+"""
+
 #: version → SQL script that upgrades from version - 1.
-MIGRATIONS: dict[int, str] = {1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8}
+MIGRATIONS: dict[int, str] = {
+    1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9,
+}
 
 #: The version a freshly migrated database carries.
 SCHEMA_VERSION = max(MIGRATIONS)

@@ -164,13 +164,14 @@ def test_validation_errors(conn: sqlite3.Connection) -> None:
     [
         ("daily", "2026-08-31", "2026-09-01"),
         ("weekly", "2026-08-31", "2026-09-07"),
-        ("monthly", "2026-01-31", "2026-02-28"),
         ("monthly", "2026-08-31", "2026-09-30"),
         ("quarterly", "2026-11-30", "2027-02-28"),
         ("yearly", "2028-02-29", "2029-02-28"),
     ],
 )
-def test_done_rolls_recurring_from_due(conn: sqlite3.Connection, cadence: str, due: str, expected: str) -> None:
+def test_done_rolls_recurring_from_due(
+    conn: sqlite3.Connection, frozen: None, cadence: str, due: str, expected: str
+) -> None:
     t = repo.create_task(conn, "Recurring", recurrence=cadence, due=due, status="todo")
     rolled = repo.done(conn, t["id"], actor="me")
     assert rolled["id"] == t["id"]              # same task
@@ -185,6 +186,61 @@ def test_done_rolls_recurring_from_due(conn: sqlite3.Connection, cadence: str, d
 def test_done_recurring_without_due_rolls_from_today(conn: sqlite3.Connection, frozen: None) -> None:
     t = repo.create_task(conn, "Stretch", recurrence="weekly")
     assert repo.done(conn, t["id"])["due"] == "2026-08-24"
+
+
+# ------------------------------------------- fixed-day anchors (#112)
+
+def test_done_rolls_to_the_anchored_weekday(conn: sqlite3.Connection, frozen: None) -> None:
+    """The story: a Friday task ticked on Monday lands on Friday, not next Monday."""
+    t = repo.create_task(conn, "Weekly review", status="todo", due="2026-08-14",
+                         recurrence="weekly", recurrence_anchor="fri")
+    rolled = repo.done(conn, t["id"], actor="me")
+    assert rolled["due"] == "2026-08-21"                        # today is Mon 17 Aug
+    assert ("due", "2026-08-14", "2026-08-21") in _fields(rolled["activity"])
+
+
+def test_done_rolls_an_overdue_plain_recurrence_into_the_future(
+    conn: sqlite3.Connection, frozen: None
+) -> None:
+    """A month-late weekly keeps its weekday and clears today — no second past due."""
+    t = repo.create_task(conn, "Water the plants", status="todo",
+                         due="2026-07-20", recurrence="weekly")
+    assert repo.done(conn, t["id"])["due"] == "2026-08-24"      # a Monday, ahead of today
+
+
+def test_done_rolls_to_the_anchored_day_of_month(conn: sqlite3.Connection, frozen: None) -> None:
+    t = repo.create_task(conn, "Pay water bill", status="todo", due="2026-08-15",
+                         recurrence="monthly", recurrence_anchor="day-15")
+    assert repo.done(conn, t["id"])["due"] == "2026-09-15"
+
+
+def test_anchor_is_stored_canonically(conn: sqlite3.Connection) -> None:
+    t = repo.create_task(conn, "Standup notes", recurrence="weekly",
+                         recurrence_anchor=" Friday , mon ")
+    assert t["recurrence_anchor"] == "mon,fri"
+
+
+@pytest.mark.parametrize(
+    ("cadence", "anchor"),
+    [("daily", "fri"), ("yearly", "day-1"), ("weekly", "funday"), ("monthly", "5-sun")],
+)
+def test_bad_anchor_is_rejected(conn: sqlite3.Connection, cadence: str, anchor: str) -> None:
+    with pytest.raises(repo.ValidationError):
+        repo.create_task(conn, "Nope", recurrence=cadence, recurrence_anchor=anchor)
+    t = repo.create_task(conn, "Nope too", recurrence=cadence)
+    with pytest.raises(repo.ValidationError):
+        repo.update_task(conn, t["id"], recurrence_anchor=anchor)
+
+
+def test_changing_the_cadence_drops_an_anchor_it_cannot_carry(conn: sqlite3.Connection) -> None:
+    """Switching Repeat is an edit, not a mistake — the fixed day is cleared and logged."""
+    t = repo.create_task(conn, "Weekly review", recurrence="weekly", recurrence_anchor="fri")
+    rolled = repo.update_task(conn, t["id"], recurrence="quarterly", actor="me")
+    assert rolled["recurrence_anchor"] is None
+    assert ("recurrence_anchor", "fri", None) in _fields(rolled["activity"])
+    # and clearing the recurrence altogether takes the anchor with it
+    back = repo.update_task(conn, t["id"], recurrence="weekly", recurrence_anchor="mon")
+    assert repo.update_task(conn, back["id"], recurrence=None)["recurrence_anchor"] is None
 
 
 def test_done_non_recurring_closes(conn: sqlite3.Connection) -> None:

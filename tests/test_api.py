@@ -35,7 +35,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 8
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 9
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -96,9 +96,11 @@ def test_move_cycle_done_and_delete(client: TestClient) -> None:
     ok = client.post(f"/api/tasks/{b}/move", json={"parent_id": None})
     assert ok.status_code == 200 and ok.json()["parent_id"] is None
     # recurring done rolls; plain done closes
-    r = client.post("/api/tasks", json={"title": "R", "recurrence": "monthly", "due": "2026-01-31"}).json()["id"]
+    # (a far-future due so the #112 catch-up cannot make the expectation
+    # depend on the day the suite runs — the arithmetic itself is test_dates')
+    r = client.post("/api/tasks", json={"title": "R", "recurrence": "monthly", "due": "2099-01-31"}).json()["id"]
     rolled = client.post(f"/api/tasks/{r}/done").json()
-    assert rolled["due"] == "2026-02-28" and rolled["status"] == "inbox"
+    assert rolled["due"] == "2099-02-28" and rolled["status"] == "inbox"
     d = client.post(f"/api/tasks/{b}/done", json={"actor": "x"}).json()
     assert d["status"] == "done" and d["done_at"]
     assert client.get("/api/tasks").json()["count"] == 2            # A + R (B done hidden)
@@ -366,13 +368,28 @@ def test_bulk_partial_failure_is_a_200_that_names_the_id(client: TestClient) -> 
 
 
 def test_bulk_complete_rolls_a_recurring_task(client: TestClient) -> None:
-    rolling = _mk(client, "Weekly", recurrence="weekly", due="2026-08-31", status="todo")
-    oneoff = _mk(client, "One-off", due="2026-08-31", status="todo")
+    # Far-future dues: the #112 roll now also catches an overdue task up past
+    # today, so a due near the suite's own run date would decide the answer.
+    rolling = _mk(client, "Weekly", recurrence="weekly", due="2099-08-31", status="todo")
+    oneoff = _mk(client, "One-off", due="2099-08-31", status="todo")
     r = client.post("/api/tasks/bulk", json={"ids": [rolling, oneoff], "status": "complete"})
     assert r.status_code == 200 and r.json()["failed"] == 0
     results = {x["id"]: x["task"] for x in r.json()["results"]}
-    assert results[rolling]["due"] == "2026-09-07" and results[rolling]["status"] == "todo"
+    assert results[rolling]["due"] == "2099-09-07" and results[rolling]["status"] == "todo"
     assert results[oneoff]["status"] == "done"
+
+
+def test_recurrence_anchor_round_trips_and_rejects_a_bad_pair(client: TestClient) -> None:
+    """The anchor is a first-class field on create, PATCH and read (#112)."""
+    tid = _mk(client, "Weekly review", recurrence="weekly", recurrence_anchor="Friday")
+    assert client.get(f"/api/tasks/{tid}").json()["recurrence_anchor"] == "fri"
+    patched = client.patch(f"/api/tasks/{tid}", json={"recurrence_anchor": "mon,thu"}).json()
+    assert patched["recurrence_anchor"] == "mon,thu"
+    bad = client.patch(f"/api/tasks/{tid}", json={"recurrence_anchor": "funday"})
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
+    assert client.patch(f"/api/tasks/{tid}", json={"recurrence_anchor": None}).json()[
+        "recurrence_anchor"
+    ] is None
 
 
 @pytest.mark.parametrize(
