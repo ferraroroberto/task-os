@@ -1,6 +1,7 @@
 """SQLite lifecycle — one ``get_db()`` dependency, WAL, ``sqlite3.Row``.
 
-Opens ``data/tasks.db`` and brings it to the current schema through the
+Opens the task database — ``<fleet runtime-data root>/task-os/tasks.db``, resolved
+by ``src/runtime_data.py`` — and brings it to the current schema through the
 versioned migrations in ``src/schema.py`` (``settings.schema_version`` is the
 marker). Every handler takes ``db: sqlite3.Connection = Depends(get_db)`` —
 never a per-handler ``sqlite3.connect`` (the fleet's one-dependency rule,
@@ -18,20 +19,25 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+from src.runtime_data import runtime_db_path
 from src.schema import SCHEMA_VERSION, migrate
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-DEFAULT_DB_PATH = DATA_DIR / "tasks.db"
+# Default DB location: the fleet runtime-data root (``C:\sqlite\task-os\`` on
+# Windows), not this repo's ``data/`` — an always-on service's fsync-backed
+# writes should not land on whichever drive the repo was cloned onto, which here
+# is a spinning HDD (project-scaffolding#243). This replaced the module's only
+# use of ``PROJECT_ROOT``/``DATA_DIR``, so both are gone rather than left as
+# dead module state; nothing imported them.
+DEFAULT_DB_PATH = runtime_db_path("task-os", "tasks.db")
 DB_PATH_ENV = "TASKOS_DB_PATH"
 
 __all__ = ["SCHEMA_VERSION", "connect", "db_path", "get_db", "init_db", "schema_version"]
 
 
 def db_path() -> Path:
-    """The database file this process uses: env override → ``data/tasks.db``."""
+    """The database file this process uses: env override → the fleet runtime-data root."""
     override = os.environ.get(DB_PATH_ENV, "").strip()
     return Path(override) if override else DEFAULT_DB_PATH
 
