@@ -22,6 +22,8 @@ Rules: screenshots come from a **synthetic / empty fixture**, never real data (t
 | 14 | [The stale pass (#101)](validation/story-14-stale-window.md) | inside `tests/e2e/test_story_04_triage.py` (`_walk_stale_window`) · `tests/test_repo.py::test_updated_before_is_a_strict_stale_boundary` · `tests/test_api.py::test_updated_before_lists_the_dormant_task` · `tests/test_cli.py::test_ls_updated_before_over_both_backends` | verified (e2e + unit + live walk, filter applied read-only on the real install) | 2026-08-30 |
 | 15 | [Plan my day (#89)](validation/story-15-plan-my-day.md) | inside `tests/e2e/test_story_04_triage.py` (`_walk_plan_my_day` + phone leg) · `tests/test_repo.py::test_plan_my_day_rules` · `tests/test_repo.py::test_plan_candidates_and_the_seeded_plan` · `tests/test_api.py::test_plan_my_day_over_http` · `tests/test_mirror.py::test_planned_on_round_trips_plan_order_stays_home` · `tests/test_cli.py::test_plan_over_both_backends` | verified (e2e + unit + live walk on the real install) | 2026-08-31 |
 
+| 16 | [Triage with the keyboard (#99)](validation/story-16-keyboard-triage.md) | inside `tests/e2e/test_story_05_board.py` (`_walk_keyboard_actions`) · `tests/test_api.py::test_bulk_sets_starts_and_priority_for_the_row_keys` | verified (e2e + unit + live walk on the real install) | 2026-09-01 |
+
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 
 ## UX rounds

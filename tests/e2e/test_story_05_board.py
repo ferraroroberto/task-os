@@ -31,6 +31,13 @@ way #77 rides inside story 09): Select mode across Board and Table over ONE
 selection store, the bulk status / due actions, and the partial-failure
 report. Story 12 in ``docs/validation.md`` points here.
 
+§ #99 (``_walk_keyboard_actions``, same reason): a keyboard-only triage —
+the row keys and their undo, the inert-while-typing and inert-while-the-
+drawer-is-open guards, the same keys over a selection, the `?` sheet and the
+palette entries that carry them. Story 16 points here.
+
+    docs/screenshots/story-16-keyboard-triage-{1..5}-desktop.png
+
 UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
 title + status select on line 1, the meta line under it) and shares ONE
 filter card; the Today checkbox is gone — "ticking" is the row's status
@@ -390,9 +397,178 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         page.click("#paneTable [data-select-toggle]")
         expect(page.locator("#tableHost th.c-sel")).to_have_count(0)
         expect(page.locator("#paneTable [data-quick-add]")).to_be_visible()
+
+        _walk_keyboard_actions(page, base, shots)
         assert errors == [], errors
     finally:
         context.close()
+
+
+def _clear_toasts(page: Page) -> None:
+    """Toasts stack and outlive a step, so each assertion below reads only its
+    own: drop what is on screen before pressing the next key."""
+    page.evaluate("document.getElementById('toasts').replaceChildren()")
+
+
+def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
+    """§ #99 — a keyboard-only triage, with undo, on the Board.
+
+    Story 16 in ``docs/validation.md`` points here. The keys act on the row
+    that has focus (or on the ticked set), so the walk focuses rows the way a
+    user's Tab does and then only presses keys.
+    """
+    page.click("nav.tabs .tab[data-tab='board']")
+
+    # 15. `p` cycles the focused row's priority, and the toast offers the undo
+    #     the `z` key runs. The reversal is a real write: the activity log
+    #     carries both directions, which a client-side rollback could not.
+    readme = _card(page, "Write README")
+    rid = int(readme.get_attribute("data-id"))
+    assert _get(base, f"/api/tasks/{rid}")["priority"] == "low"
+    readme.locator(".trow-main").focus()
+    _clear_toasts(page)
+    page.keyboard.press("p")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
+    expect(page.locator(".toast-action").first).to_have_text("Undo (Z)")
+    assert _get(base, f"/api/tasks/{rid}")["priority"] == "medium"
+    page.screenshot(path=str(shots / "story-16-keyboard-triage-1-desktop.png"))
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    detail = _get(base, f"/api/tasks/{rid}")
+    assert detail["priority"] == "low"
+    prio = [a for a in detail["activity"] if a["field"] == "priority"]
+    assert [(a["old_value"], a["new_value"]) for a in prio[:2]] == [
+        ("medium", "low"), ("low", "medium"),
+    ], prio
+
+    # 16. Focus follows the work: after the write the same row still has it,
+    #     so the next key lands where the eye is. `t` sets the due date.
+    expect(page.locator(f"#paneBoard .trow[data-id='{rid}'] .trow-main")).to_be_focused()
+    _clear_toasts(page)
+    page.keyboard.press("t")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Due tomorrow"))
+    assert _get(base, f"/api/tasks/{rid}")["due"] == (date.today() + timedelta(days=1)).isoformat()
+
+    # 17. `e` completes — and on a recurring task that means the roll, whose
+    #     undo has to put the *pre-roll* due back (issue #54 semantics).
+    weekly = _card(page, "Weekly review")
+    wid = int(weekly.get_attribute("data-id"))
+    before = _get(base, f"/api/tasks/{wid}")
+    weekly.locator(".trow-main").focus()
+    _clear_toasts(page)
+    page.keyboard.press("e")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Completed"))
+    rolled = _get(base, f"/api/tasks/{wid}")
+    assert rolled["due"] > before["due"] and rolled["status"] == before["status"]
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert _get(base, f"/api/tasks/{wid}")["due"] == before["due"]
+
+    # 18. The keys are inert wherever text is being typed — the Board's filter
+    #     box swallows every one of them as characters.
+    page.fill("#boardFilterText input", "")
+    page.click("#boardFilterText input")
+    page.keyboard.type("etw")
+    expect(page.locator("#boardFilterText input")).to_have_value("etw")
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
+    page.fill("#boardFilterText input", "")
+
+    # 19. …and while the drawer is open, which owns the keyboard.
+    _card(page, "Write README").locator(".trow-main").click()
+    expect(page.locator("#taskDrawer")).to_be_visible()
+    page.keyboard.press("1")
+    page.keyboard.press("Escape")
+    expect(page.locator("#taskDrawer")).to_be_hidden()
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
+
+    # 20. With tasks ticked the same key acts on the set — and the undo puts
+    #     each task's OWN prior status back, not one shared value.
+    page.click("#paneBoard [data-select-toggle]")
+    picks = ["Write README", "Fix watering schedule drift"]        # todo · doing
+    for title in picks:
+        _card(page, title).locator(".trow-check").check()
+    ids = [int(_card(page, t).get_attribute("data-id")) for t in picks]
+    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "doing"]
+    page.evaluate(f"document.querySelector('.trow[data-id=\"{ids[0]}\"] .trow-main').focus()")
+    _clear_toasts(page)
+    page.keyboard.press("1")
+    expect(page.locator(".toasts")).to_have_text(re.compile("2 tasks"))
+    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["inbox", "inbox"]
+    page.screenshot(path=str(shots / "story-16-keyboard-triage-2-desktop.png"))
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "doing"]
+    # the ticks survive a keyed action (several keys, one set), so Escape is
+    # what leaves Select mode — the toggle is hidden while the bar is up
+    expect(page.locator(f"#paneBoard .trow[data-id='{ids[0]}']")).to_have_class(re.compile("is-selected"))
+    page.keyboard.press("Escape")
+    expect(page.locator("#boardBulk")).to_be_hidden()
+
+    # 21. The Table's desktop grid is a different element (a <tr>, not the
+    #     shared .trow) — the keys reach it too.
+    page.click("nav.tabs .tab[data-tab='table']")
+    trow = page.locator(f"#tableHost .task-row[data-id='{rid}']")
+    trow.focus()
+    _clear_toasts(page)
+    page.keyboard.press("4")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Status standby"))
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "standby"
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
+
+    # 22. …and a Search hit, which may be a task outside the filtered list —
+    #     the prior values then come from a fetch, not from what is on screen.
+    page.click("nav.tabs .tab[data-tab='search']")
+    page.fill("#searchInput", "README")
+    tasks_group = page.locator(".search-group[data-kind='tasks']")
+    expect(tasks_group).to_be_visible()
+    if not tasks_group.evaluate("el => el.open"):
+        tasks_group.locator("summary.collapse-summary").click()
+    hit = tasks_group.locator(f".trow[data-id='{rid}']").first
+    expect(hit).to_be_visible()
+    hit.locator(".trow-main").focus()
+    _clear_toasts(page)
+    page.keyboard.press("p")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
+    _clear_toasts(page)
+    page.keyboard.press("z")
+    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    assert _get(base, f"/api/tasks/{rid}")["priority"] == "low"
+    page.click("nav.tabs .tab[data-tab='board']")
+
+    # 23. `?` is the reference card, built from the one keymap table — and the
+    #     palette lists the same keys, which is where they are discovered.
+    page.keyboard.press("?")
+    expect(page.locator("#keysHelp")).to_be_visible()
+    # 9 actions + Z + ?, then the five "getting around" keys
+    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(11)
+    expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
+    expect(page.locator("#keysHelp")).to_contain_text("Getting around")
+    page.screenshot(path=str(shots / "story-16-keyboard-triage-3-desktop.png"))
+    page.keyboard.press("Escape")
+    expect(page.locator("#keysHelp")).to_be_hidden()
+
+    # the same sheet in the dark theme (the modal's backdrop swallows a click
+    # on the header toggle, so the theme flips between openings)
+    page.click("#themeToggle")
+    page.keyboard.press("?")
+    expect(page.locator("#keysHelp")).to_be_visible()
+    page.screenshot(path=str(shots / "story-16-keyboard-triage-4-desktop.png"))
+    page.keyboard.press("Escape")
+    page.click("#themeToggle")
+
+    page.click("#paletteBtn")
+    page.fill("#paletteInput", ">priority")
+    expect(page.locator(".palette-item").first).to_contain_text("Cycle priority")
+    expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
+    page.screenshot(path=str(shots / "story-16-keyboard-triage-5-desktop.png"))
+    page.keyboard.press("Escape")
+    expect(page.locator("#palette")).to_be_hidden()
 
 
 # ------------------------------------------------------------- phone leg

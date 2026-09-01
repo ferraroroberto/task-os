@@ -40,6 +40,7 @@ import {
   mountFilters,
 } from './filters.js';
 import { fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
+import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { CLOSED, sortItems } from './rows.js';
@@ -86,6 +87,7 @@ const els = {
   todayHost: document.getElementById('todayHost'),
   searchFilters: document.getElementById('searchFilters'),
   drawer: document.getElementById('taskDrawer'),
+  keysHelp: document.getElementById('keysHelp'),
 };
 
 const state = {
@@ -108,6 +110,7 @@ let board = null;
 let search = null;
 let settings = null;
 let palette = null;
+let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
 const bulkBars = [];      // one per pane strip (Board · Table · Tree · Today), all over one selection (#81)
@@ -377,6 +380,17 @@ async function bulkApply(changes) {
   await refreshAll();
   if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) drawer.refresh();
   return res;
+}
+
+/** The task behind a row, for the keymap (#99): the summary already on screen
+ *  when there is one, else a fetch — a Search hit can be a task outside the
+ *  filtered list, and undo needs that task's real prior values, not a guess. */
+async function resolveTask(id) {
+  const n = Number(id);
+  const local = state.items.concat(state.deferred, state.plan.items || [])
+    .find(function (t) { return t.id === n; });
+  if (local) return local;
+  try { return await api('/api/tasks/' + n); } catch (_) { return null; }
 }
 
 /** What the list views show: the filtered list — minus the closed tasks that
@@ -719,12 +733,19 @@ function paletteCommands() {
     { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
       if (quickAdd) quickAdd.open();
     } },
+    // The row keys, each showing its key (#99) — the palette is where a
+    // shortcut is discovered. Top of the list while a row is focused or
+    // ticked, because acting on it is then the likeliest intent; otherwise
+    // they are still listed (that is the discovery), just under the places
+    // you can actually go right now.
+    ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-table', label: 'Go to Table', icon: 'table', run: go('table') },
     { id: 'go-tree', label: 'Go to Tree', icon: 'list-tree', run: go('tree') },
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
+    ...(keys && !keys.hasTarget() ? keys.commands() : []),
   ];
   ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'].forEach(function (st) {
     cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
@@ -750,6 +771,23 @@ function paletteCommands() {
     location.assign('/login');
   } });
   return cmds;
+}
+
+/** The row keymap (#99). Every keyed write is one POST /api/tasks/bulk — one
+ *  id or the whole ticked set — so a key means the same thing either way and
+ *  each task still goes through the repo layer's single-task path. */
+function wireKeys() {
+  keys = mountKeys(els.keysHelp, {
+    write: function (ids, changes) {
+      return api('/api/tasks/bulk', { method: 'POST', body: Object.assign({ ids: ids }, changes) });
+    },
+    refresh: async function () {
+      await refreshAll();
+      if (drawer.currentId() != null) drawer.refresh();
+    },
+    resolveTask: resolveTask,
+    isBlocked: function () { return drawer.currentId() != null; },
+  });
 }
 
 function wirePalette() {
@@ -819,6 +857,10 @@ async function boot() {
     onStatus: setStatus,
   });
   if (searchQ) search.setQuery(searchQ);
+  // Before the palette and before Escape below: the keymap's own listener has
+  // to be the first document keydown so it can stop Escape from also leaving
+  // Select mode when all it should do is close its popover (keys.js).
+  wireKeys();
   wirePalette();
   document.addEventListener('keydown', function (ev) {
     if (ev.key !== 'Escape') return;

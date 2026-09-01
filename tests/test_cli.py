@@ -174,7 +174,10 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
     run("add", "Project")
     run("add", "Child A", "--parent", "1", "--due", "today", "--priority", "high")
     run("add", "Child B", "--parent", "1", "--due", "2020-01-01")
-    run("add", "Chore", "--recurrence", "weekly", "--due", "2026-08-31")
+    # relative, not a literal: the expected order below is "overdue · today ·
+    # later · no due", so a hardcoded date silently changes the answer the day
+    # it goes past
+    run("add", "Chore", "--recurrence", "weekly", "--due", "in 3 days")
     code, out, _ = run("ls", "--json")
     assert code == 0 and [t["title"] for t in _json(out)] == ["Child B", "Child A", "Chore", "Project"]
     code, out, _ = run("ls", "--project", "1", "--json")
@@ -184,7 +187,7 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
     code, out, _ = run("ls", "--due", "today")
     assert "Child A" in out and "Child B" not in out
     code, out, _ = run("done", "4")
-    assert code == 0 and "next due 2026-09-07" in out
+    assert code == 0 and f"next due {(date.today() + timedelta(days=10)).isoformat()}" in out
     code, out, _ = run("done", "3")
     assert code == 0 and out.strip() == "#3 done"
     code, out, _ = run("ls", "--status", "done", "--json")
