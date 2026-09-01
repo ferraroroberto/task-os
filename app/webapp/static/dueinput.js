@@ -1,15 +1,14 @@
-/* task-os — the due-date controls, in one place.
+/* task-os — the due-date picker, in one place.
  *
- * Two pieces, because two callers want different amounts of it:
+ * `duePicker()` is the calendar button + the hidden `<input type="date">` it
+ * opens. Four callers wear it: the bulk-action bar's strip square (#81), the
+ * snooze menu's "Pick a date…" (#87), the Table's due cell and the task row's
+ * due chip (#107) — the last two because clicking a date should open a
+ * calendar, not a text box you then type into. Typing a phrase (`tomorrow`,
+ * `fri`, `in 2 weeks`) is still how the drawer and quick-add take a date;
+ * `src/dates.py` owns that vocabulary server-side either way.
  *
- *   duePicker()  the calendar button + the hidden `<input type="date">` it
- *                opens. The bulk-action bar (#81) uses this alone — one
- *                square button on the strip's line, no text box.
- *   dueInput()   that picker with a text box in front of it, for the natural
- *                phrases (`tomorrow`, `fri`, `in 2 weeks`). The Table's
- *                inline due cell uses this.
- *
- * The reason the picker is its own function is the coarse-pointer branch
+ * The reason the picker is a shared function is the coarse-pointer branch
  * (#50): touch/WebKit reports `showPicker()` as a callable function and
  * calling it throws nothing — it just opens nothing — so the exception-based
  * fallback never runs there. Coarse pointers therefore skip straight to the
@@ -60,33 +59,4 @@ export function duePicker(opts) {
   picker.addEventListener('change', function () { o.onPick(picker.value); });
 
   return { button: button, picker: picker, nodes: [button, picker] };
-}
-
-/**
- * A text box for the natural phrases, with {@link duePicker} beside it.
- * @param {{value?: string, placeholder?: string, ariaLabel?: string,
- *          onCommit: (value: string) => void, onCancel?: () => void}} opts
- *        onCommit fires on Enter in the text box and on picking a date;
- *        onCancel (optional) on Escape.
- * @returns {{row: HTMLElement, input: HTMLInputElement, picker: HTMLInputElement}}
- */
-export function dueInput(opts) {
-  const o = opts || {};
-  const row = document.createElement('span');
-  row.className = 'due-input';
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'input-native due-text';
-  input.value = o.value || '';
-  input.placeholder = o.placeholder || 'tomorrow · fri · in 2 weeks';
-  input.setAttribute('aria-label', o.ariaLabel || 'Due date');
-  input.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter') { ev.preventDefault(); o.onCommit(input.value.trim()); }
-    if (ev.key === 'Escape' && o.onCancel) { ev.preventDefault(); o.onCancel(); }
-  });
-
-  const pick = duePicker({ value: o.value, onPick: o.onCommit });
-  row.append(input, pick.button, pick.picker);
-  return { row: row, input: input, picker: pick.picker };
 }

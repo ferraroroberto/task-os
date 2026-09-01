@@ -414,8 +414,13 @@ function buildGroup(group, handlers, o) {
     selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
   });
   list.classList.add('today-list');
+  // The overdue / due-today tint on the whole row. The date comes off the
+  // chip's `data-due` (rows.js) — the ISO value, stated as a value; reading it
+  // out of the chip's tooltip is what this used to do, and it broke the moment
+  // the tooltip gained a word (#107).
   list.querySelectorAll('.trow').forEach(function (row) {
-    const rel = relDue(row.querySelector('.trow-due') ? row.querySelector('.trow-due').title : '');
+    const chip = row.querySelector('.trow-due');
+    const rel = relDue(chip ? chip.dataset.due : '');
     if (rel.tone) row.classList.add('is-' + rel.tone);
   });
   wrap.appendChild(list);
