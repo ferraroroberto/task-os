@@ -321,6 +321,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 
         # ------------------------------------------- plan my day (#89) ----
         _walk_plan_my_day(page, base, shots)
+
+        # --------------------------------------- recurrence anchor (#112) ----
+        _walk_recurrence_anchor(page, base, shots)
     finally:
         context.close()
 
@@ -338,6 +341,60 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         dark_page.screenshot(path=str(shots / "story-15-plan-my-day-6-desktop.png"))
     finally:
         dark_ctx.close()
+
+
+# ------------------------------------------- recurrence anchor (#112)
+#
+# Riding inside this test for the same reason stories 13–15 do: the suite is
+# capped at 15 tests and this walks the drawer the triage story already has
+# open. The seeded instance is session-scoped, so the walk puts the task back
+# the way it found it before returning.
+
+
+def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
+    """#112 — Repeat is a cadence *and* the fixed day it lands on.
+
+    The seed's "Weekly review" repeats every Friday. The drawer shows both
+    selects; completing it from the status select rolls the due to a Friday
+    rather than one flat week on, and switching the cadence to one that
+    cannot carry a weekday clears the anchor rather than keeping a stale day.
+
+    Screenshot: docs/screenshots/story-17-recurrence-anchor-1-desktop.png
+    """
+    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
+    page.goto(f"{base}/#task/{review['id']}")
+    cadence = page.locator("#taskDrawer select[data-field='recurrence']")
+    anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
+    expect(cadence).to_have_value("weekly")
+    expect(anchor).to_have_value("fri")
+    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    page.screenshot(path=str(shots / "story-17-recurrence-anchor-1-desktop.png"))
+
+    # Complete it: the same task stays open and its new due is a Friday,
+    # strictly after both the due it had and today.
+    old_due = date.fromisoformat(review["due"])
+    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
+    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
+    rolled = date.fromisoformat(
+        page.locator("#taskDrawer input[data-field='due']").input_value()
+    )
+    assert rolled.weekday() == 4, f"rolled to {rolled} ({rolled:%A}), expected a Friday"
+    assert rolled > old_due and rolled > date.today()
+
+    # A cadence that takes no fixed day drops the anchor — and the picker with
+    # it. The picker vanishing is the re-render signal: the drawer only redraws
+    # once the PATCH has come back, so the stored value is safe to read here.
+    cadence.select_option("quarterly")
+    expect(anchor).to_have_count(0)
+    assert page.request.get(
+        f"{base}/api/tasks/{review['id']}"
+    ).json()["recurrence_anchor"] is None
+
+    # Restore over the API, not the UI — the seeded instance is session-scoped
+    # and later stories read the same DB; one synchronous call cannot race.
+    page.request.patch(f"{base}/api/tasks/{review['id']}", data={
+        "recurrence": "weekly", "recurrence_anchor": "fri", "due": review["due"],
+    })
 
 
 # ------------------------------------------------- stale window (#101)
@@ -485,7 +542,12 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
     starts_input.fill("")
     starts_input.blur()
-    expect(starts_input).to_have_value("")
+    # The field's own label is the *re-render* signal: `dateField` appends
+    # " · <caption>" only while the field has a value, so a bare "Starts"
+    # means the PATCH came back and the drawer redrew from the response.
+    # Asserting on the input alone would pass on the local edit and let the
+    # API read below race the write (seen failing once against a stale value).
+    expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
     assert _get(base, f"/api/tasks/{tap_id}")["status"] == "todo"
 
