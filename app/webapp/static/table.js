@@ -2,11 +2,12 @@
  *
  * Desktop: a full-width flat grid (no card wrapper — hairline rows under a
  * sticky header, issue #46) with columns code · title (+ breadcrumb) · due
- * (relative, ISO tooltip, overdue tinted) · status (the shared status select)
- * · priority · person · project (top ancestor) · folder chip · last comment
- * (links as chips) · next action. Inline due edits go through the caller's
- * `onPatch`; status goes through `onStatus` (the shared handler every view
- * uses — issue #54's `complete` vs `done` split lives there, not per-view).
+ * (relative, ISO tooltip, overdue tinted — the cell opens the date picker,
+ * #107) · status (the shared status select) · priority · person · project (top
+ * ancestor) · folder chip · last comment (links as chips) · next action. Due
+ * edits go through the caller's `onPatch`; status goes through `onStatus` (the
+ * shared handler every view uses — issue #54's `complete` vs `done` split
+ * lives there, not per-view).
  *
  * Phone (< 768px): the grid has no room, so the same items render as the ONE
  * task row (rows.js) — identical to the Board's rows. The caller decides
@@ -19,7 +20,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { dueInput } from './dueinput.js';
+import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, linkify, priorityLabel,
   relDue, startsLabel, statusPill,
@@ -50,6 +51,7 @@ export function renderTable(host, items, handlers, opts) {
   const isSelected = o.isSelected || function () { return false; };
   const rowHandlers = {
     onOpen: handlers.onOpen,
+    onPatch: handlers.onPatch,          // the phone row's due chip re-plans too (#107)
     onStatus: handlers.onStatus,
     onToggleSelect: handlers.onToggleSelect,
   };
@@ -252,16 +254,24 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
 }
 
 /** The due cell: a button showing the relative date; click → text + date inputs. */
+/* The due cell IS the picker's trigger (#107): one click opens the same native
+ * calendar the card's Due field opens, instead of swapping the cell for a text
+ * box you then have to type a date into. Re-planning is the most frequent thing
+ * done while reading a list, so it costs one gesture; the phrase vocabulary
+ * (`tomorrow`, `fri`, `in 2 weeks`) still lives in the drawer and quick-add,
+ * which is where a date gets *typed* rather than picked. */
 function buildDueCell(t, handlers) {
   const box = document.createElement('div');
   box.className = 'due-cell';
   const rel = relDue(t.due);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'due-btn' + (rel.tone ? ' due-' + rel.tone : '') + (t.due ? '' : ' due-none');
-  btn.title = t.due ? t.due + ' — click to change' : 'No due date — click to set';
-  btn.setAttribute('aria-label', 'Due date of ' + t.title + (t.due ? ': ' + t.due : ': none'));
-  btn.innerHTML = icon('calendar-days');
+  const pick = duePicker({
+    className: 'due-btn' + (rel.tone ? ' due-' + rel.tone : '') + (t.due ? '' : ' due-none'),
+    value: t.due || '',
+    title: t.due ? t.due + ' — click to change' : 'No due date — click to set',
+    ariaLabel: 'Due date of ' + t.title + (t.due ? ': ' + t.due : ': none'),
+    onPick: function (iso) { if (iso) handlers.onPatch(t.id, { due: iso }); },
+  });
+  const btn = pick.button;
   const lbl = document.createElement('span');
   lbl.className = 'due-label';
   lbl.textContent = t.due ? rel.text : '—';
@@ -273,34 +283,10 @@ function buildDueCell(t, handlers) {
     r.title = t.recurrence;
     btn.appendChild(r);
   }
-  box.appendChild(btn);
-
-  btn.addEventListener('click', function () {
-    let done = false;
-    function commit(value) {
-      if (done) return;
-      done = true;
-      handlers.onPatch(t.id, { due: value }).catch(function () { restore(); });
-    }
-    function restore() { box.replaceChildren(btn); }
-    // the shared trio (dueinput.js) — text + calendar button + hidden date
-    // input, with the coarse-pointer showPicker fallback (#50) living there
-    const edit = dueInput({
-      value: t.due || '',
-      onCommit: commit,
-      onCancel: function () { done = true; restore(); },
-    });
-    const editor = edit.row;
-    editor.classList.add('due-editor');
-    box.replaceChildren(editor);
-    edit.input.focus();
-    edit.input.select();
-    editor.addEventListener('focusout', function (ev) {
-      if (editor.contains(ev.relatedTarget)) return;
-      // leaving the editor without committing keeps the old value
-      window.setTimeout(function () { if (!done && !editor.contains(document.activeElement)) { done = true; restore(); } }, 0);
-    });
-  });
+  // The coarse branch reveals the native input to click it; a cancelled pick
+  // must not leave a date box sitting in the cell until the next render.
+  pick.picker.addEventListener('blur', function () { pick.picker.classList.remove('is-visible'); });
+  box.append(btn, pick.picker);
   return box;
 }
 

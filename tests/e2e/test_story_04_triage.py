@@ -1,6 +1,7 @@
 """Story 04 — Monday triage (Step 4/13, issue #5).
 
-    Table filtered status:doing → change a due date inline → the activity log
+    Table filtered status:doing → click the due cell → the date picker opens
+    and the pick lands → the activity log
     shows old → new with time → open a drawer → add a comment containing a
     link → the link is a clickable chip → the + opens the quick-add dialog
     (#80) → "renew passport next friday" → the parsed date shows as a chip →
@@ -82,6 +83,16 @@ def _trow(page: Page, title: str, scope: str = ""):
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
 
 
+# A native date picker is an OS widget no browser automation can see or drive,
+# so `showPicker()` is recorded instead: the call is what "the picker opened"
+# means from the page's side, and the `change` the test then dispatches on the
+# same input is what the user picking a day produces (#107).
+_RECORD_SHOW_PICKER = """
+window.__pickerOpens = [];
+HTMLInputElement.prototype.showPicker = function () { window.__pickerOpens.push(this.className); };
+"""
+
+
 def _open_filters(page: Page, host_id: str):
     """The shared filter card is collapsed by default — open it like a user would."""
     card = page.locator(f"#{host_id} .filter-card")
@@ -99,6 +110,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
+        page.add_init_script(_RECORD_SHOW_PICKER)
 
         # 1. Table filtered status:doing — via the URL, the shareable view. The
         #    filter is shared by every tab (UX round 3), so the URL never moves
@@ -128,15 +140,22 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-04-triage-1-desktop.png"))
 
-        # 2. Change a due date inline — natural text into the due editor.
+        # 2. Change a due date inline — one click on the cell opens the date
+        # picker (#107), where it used to swap the cell for a text box you had
+        # to type a phrase into. `showPicker()` opens a native calendar no
+        # browser automation can drive, so the walk proves the two halves that
+        # are observable: the click really does call it (stubbed at page load
+        # in `_count_show_picker`), and the pick it commits really does PATCH.
         task_id = int(quotes.get_attribute("data-id"))
         old_due = _get(base, f"/api/tasks/{task_id}")["due"]
+        page.evaluate("window.__pickerOpens = []")
         quotes.locator(".due-btn").click()
-        editor = quotes.locator(".due-text")
-        expect(editor).to_be_visible()
-        editor.fill("in 2 weeks")
-        editor.press("Enter")
+        assert page.evaluate("window.__pickerOpens") == ["due-date"], "the cell did not open the picker"
+        assert quotes.locator(".due-text").count() == 0, "the cell still swaps in a text box"
         new_due = (date.today() + timedelta(days=14)).isoformat()
+        quotes.locator(".due-date").evaluate(
+            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due
+        )
         expect(page.locator(f".task-row[data-id='{task_id}'] .due-btn")).to_have_attribute(
             "title", f"{new_due} — click to change"
         )

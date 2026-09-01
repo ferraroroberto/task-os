@@ -13,6 +13,12 @@
  *           recurrence · folder chip · issue chip · children ·
  *           comments · person — only the parts that have content
  *
+ * Three of the meta line's parts are their own tap targets, not just text: the
+ * due date opens the date picker (#107), the folder chip its twin/popover and
+ * the AI chip its conversation. They are laid out so no two of their expanded
+ * surfaces share a pixel — see `.trow-due-box` / `.trow-folder` / `.trow-ai`
+ * in styles.css.
+ *
  * Flat hairline separators between rows, no per-row box, the priority accent
  * on the left edge of a high-priority row. A view passes a `prefix` element
  * (the Tree's expand toggle) and/or an `extra` line (a Search snippet) — the
@@ -21,6 +27,7 @@
 
 'use strict';
 
+import { duePicker } from './dueinput.js';
 import { icon } from './_vendored/icons/icons.js';
 import { STATUSES, aiChip, chipFor, isDeferred, issueChip, relDue, startsLabel } from './format.js';
 import { snoozeButton } from './snooze.js';
@@ -115,10 +122,62 @@ function metaPart(cls, iconName, text, title) {
 }
 
 /**
+ * The due chip. Given an `onDue` handler it IS the date picker's trigger
+ * (#107) — tapping the date on the row opens the same native picker the card's
+ * Due field opens, so re-planning costs one gesture instead of open-the-card-
+ * then-click-the-date. Without one it stays the plain span it always was: a
+ * view that wires no `onPatch`, and Select mode, where every row gesture has
+ * to tick rather than do something of its own.
+ *
+ * The picker comes from `duePicker()` and not from a fourth hand-rolled call:
+ * the coarse-pointer branch that makes a native date input actually open on
+ * touch (#50) lives there once, and a copy here is exactly the drift its
+ * header warns about.
+ * @param {object} t
+ * @param {{text: string, tone: string}} rel        relDue(t.due)
+ * @param {((id:number, iso:string) => any)|null} onDue
+ */
+function dueChip(t, rel, onDue) {
+  const cls = 'due' + (rel.tone ? ' due-' + rel.tone : '');
+  if (!onDue) {
+    const span = metaPart(cls, 'calendar-days', rel.text, t.due);
+    span.dataset.due = t.due;
+    return span;
+  }
+  const box = document.createElement('span');
+  box.className = 'trow-due-box';
+  const pick = duePicker({
+    className: 'trow-' + cls + ' hit-target',
+    value: t.due,
+    // The bare ISO date, exactly the tooltip the span twin carries: the chip
+    // is one line of a dense row, and the aria-label below is where "you can
+    // change this" belongs. The Table's roomier cell says it in words.
+    title: t.due,
+    ariaLabel: 'Due ' + rel.text + ' — change the due date of ' + t.title,
+    onPick: function (iso) { if (iso) onDue(t.id, iso); },
+  });
+  // The label goes after the glyph, exactly as metaPart builds the span twin,
+  // and it is what gives the accessible name its visible text (WCAG 2.5.3).
+  pick.button.appendChild(document.createTextNode(rel.text));
+  // The ISO date, for anything that needs the value rather than the words.
+  // It used to be readable only off the chip's `title`, which made the tooltip
+  // load-bearing: widening it to say the chip is clickable silently cost Today
+  // its overdue tint, because that is where today.js read the date from.
+  pick.button.dataset.due = t.due;
+  // The coarse branch reveals the native input in order to click it. Put it
+  // back out of the flow once the sheet closes — a cancelled pick must not
+  // leave a date box sitting in the meta line until the next render.
+  pick.picker.addEventListener('blur', function () { pick.picker.classList.remove('is-visible'); });
+  box.append(pick.button, pick.picker);
+  return box;
+}
+
+/**
  * Build the meta line (line 2). Exported so the Table's desktop grid can
  * reuse the same parts in its cells if it ever needs to.
  * @param {object} t
- * @param {{hideProject?: boolean}} [opts]
+ * @param {{hideProject?: boolean, onDue?: (id:number, iso:string) => any}} [opts]
+ *        onDue (optional) turns the due chip into the picker's trigger (#107)
  */
 export function metaLine(t, opts) {
   const o = opts || {};
@@ -127,11 +186,7 @@ export function metaLine(t, opts) {
   if (t.code) meta.appendChild(metaPart('code', null, t.code, 'code'));
   const project = t.root ? t.root.title : '';
   if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, project));
-  if (t.due) {
-    const rel = relDue(t.due);
-    const due = metaPart('due' + (rel.tone ? ' due-' + rel.tone : ''), 'calendar-days', rel.text, t.due);
-    meta.appendChild(due);
-  }
+  if (t.due) meta.appendChild(dueChip(t, relDue(t.due), o.onDue || null));
   // A sleeping task says so wherever it still shows (the Tree, a search hit,
   // the Deferred filter) — the working views drop it, they never lie about it.
   if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
@@ -169,7 +224,9 @@ export function metaLine(t, opts) {
  * One task row.
  * @param {object} t                    a list summary (/api/tasks item, board/today item, search hit)
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
- *          onToggleSelect?: (id:number)=>void, onSnooze?: (id:number, phrase:string)=>Promise<any>}} handlers
+ *          onToggleSelect?: (id:number)=>void, onSnooze?: (id:number, phrase:string)=>Promise<any>,
+ *          onPatch?: (id:number, patch:object)=>Promise<any>}} handlers
+ *          onPatch (optional) makes the due chip the date picker's trigger (#107)
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean,
  *          snooze?: boolean}} [opts]
@@ -232,7 +289,13 @@ export function taskRow(t, handlers, opts) {
   if (withSnooze) li.appendChild(snoozeButton(t, handlers.onSnooze));
   li.appendChild(statusSelect(t, handlers.onStatus));
 
-  const meta = metaLine(t, o);
+  // The due chip re-plans in place (#107) wherever the view wired a patch —
+  // never in Select mode, where the row's one job is to tick. The meta line's
+  // own click handler already ignores buttons, so the picker's trigger stops
+  // opening the drawer without a second rule.
+  const meta = metaLine(t, !handlers.onPatch || o.selectable ? o : Object.assign({}, o, {
+    onDue: function (id, iso) { return handlers.onPatch(id, { due: iso }); },
+  }));
   if (meta.childNodes.length) li.appendChild(meta);
   if (o.extra) {
     o.extra.classList.add('trow-extra');

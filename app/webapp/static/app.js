@@ -497,7 +497,7 @@ function selectOpts() {
 
 function renderBoardPane() {
   if (!board) {
-    board = mountBoard({ onOpen: openTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect });
+    board = mountBoard({ onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect });
   }
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   board.render(state.items, state.filters, selectOpts());
@@ -505,7 +505,7 @@ function renderBoardPane() {
 
 function renderTodayPane() {
   renderToday(els.todayHost, viewItems(), {
-    onOpen: openTask, onStatus: setStatus, onSnooze: snoozeTask,
+    onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onSnooze: snoozeTask,
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
     onToggleSelect: selectHandlers.onToggleSelect,
   }, Object.assign({ sort: state.filters.sort, plan: state.plan, planMode: state.planMode }, selectOpts()));
@@ -531,7 +531,7 @@ function renderTreePane() {
   const byId = {};
   items.forEach(function (t) { byId[t.id] = t; });
   const n = renderTree(els.treeHost, state.tree,
-    { onOpen: openTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
+    { onOpen: openTask, onPatch: patchTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
     Object.assign({ keep: keep, byId: byId, sort: state.filters.sort }, selectOpts()));
   if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
 }
@@ -855,6 +855,7 @@ async function boot() {
     onQuery: syncSearchUrl,
     filters: function () { return state.filters; },
     onStatus: setStatus,
+    onPatch: patchTask,
   });
   if (searchQ) search.setQuery(searchQ);
   // Before the palette and before Escape below: the keymap's own listener has

@@ -814,6 +814,28 @@ a.chip:hover { text-decoration: underline; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; }
 .trow-due { color: var(--fg); }
+/* The due chip is a real button now (#107) — clicking the date opens the same
+   picker the card's Due field opens. It must render exactly like the span it
+   replaced: `.trow-meta > span` above styles the informational parts and does
+   not reach a button, so the button restates that one rule and strips the UA
+   chrome rather than carrying a second, competing box. Nothing here is new
+   appearance; `.due-overdue` / `.due-today` still win on colour (they are
+   `!important`), and the picker input rides in the wrapper, out of flow. */
+.trow-due-box { position: relative; }
+.trow-meta button.trow-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+  color: var(--fg);
+  cursor: pointer;
+}
 /* The sleeping marker (#87) — muted like the rest of the meta line: it is a
    statement of fact, not a state to warn about, so it takes no status colour. */
 .trow-starts { color: var(--muted); }
@@ -897,11 +919,11 @@ a.chip:hover { text-decoration: underline; }
      already says "tappable", and a marked box read as heavier than the
      calendar and repeat glyphs beside it, which are the same 16px.
      The tap surface is widened INVISIBLY instead, and the inset is kept
-     inside the row's own box so it never reaches into the next card — the
-     row, the folder and the status select are the only targets here, and
-     nothing else on the meta line competes for the tap.
+     inside the row's own box so it never reaches into the next card.
      The name is on aria-label (rows.js); the tap behaviour (web twin, else
-     the path popover) is unchanged. */
+     the path popover) is unchanged.
+     Since #107 the folder is no longer the only competitor on this line —
+     see the separation rules below. */
   .trow-meta .trow-folder,
   .trow-meta .trow-ai {
     position: relative;
@@ -923,6 +945,38 @@ a.chip:hover { text-decoration: underline; }
   .trow-meta .trow-ai { height: 18px; }
   .trow-meta .trow-folder .icon,
   .trow-meta .trow-ai .icon { width: var(--icon-inline); height: var(--icon-inline); }
+  /* ---- three targets on one line, none of them sharing a pixel (#107) ----
+     The meta line carries up to three tap targets — the due chip, the folder
+     and the AI conversation — and each needs both a 44px surface AND pixels of
+     its own: two expanded rectangles that overlap make a tap in the shared
+     band a coin toss. The folder/AI pair already overlapped before #107 (two
+     18px glyphs, 13px of expansion on each side, 10px of column gap = a 16px
+     shared band in which a tap meant for the folder opened the conversation);
+     the extra margin below is what actually separates them. Numbers, not
+     decoration: the margin closes the gap to the sum of the two facing
+     expansions, so measure both before touching either. */
+  .trow-meta .trow-folder + .trow-ai { margin-left: 16px; }        /* 10 + 16 = 26 = 13 + 13 */
+  .trow-meta .trow-due-box + .trow-folder,
+  .trow-meta .trow-due-box + .trow-ai { margin-left: 7px; }        /* 10 +  7 = 17 =  4 + 13 */
+  /* The due chip's own surface, and the one number here that is a compromise
+     rather than a derivation. Every side is already spoken for:
+     - 6 above is the row's `row-gap` between the title and the meta. One pixel
+       more and the target reaches into `.trow-main`, which is the *row-open*
+       target — tapping the bottom of a title would open the date picker
+       instead of the task. A caught regression, not theory.
+     - 13 below is the row's own bottom padding, the same bound the folder
+       glyph's target obeys: a target that reaches past its card steals the
+       next row's taps.
+     - 4 each side keeps the bleed off the neighbours on a 390px line.
+     That yields 54.6 x 35.2 — 2.4x the area of the bare 46.6 x 16.2 text, and
+     comfortably past WCAG 2.5.8's 24px floor, but short of the 44px the fleet
+     spec asks for and every other control here meets. It cannot reach 44
+     without either stealing the title's taps or making the card deeper, and a
+     deeper card breaks the ≤96px phone-row budget that issue #32 set for this
+     surface and story 05 asserts. Two contracts, one row: the density budget
+     wins, because it is the one this app chose for itself. Raise the budget
+     first if this is ever to become a 44px target. */
+  .trow-meta button.trow-due::before { inset: -6px -4px -13px; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -988,7 +1042,9 @@ a.chip:hover { text-decoration: underline; }
 .t-comment-meta { color: var(--muted); font-size: var(--font-caption); }
 .c-next { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-status .trow-status { height: 30px; }
-/* Due cell: a quiet inline button (icon + relative label) → text + date editor. */
+/* Due cell: a quiet inline button (icon + relative label) that opens the date
+   picker (#107). Positioned so the hidden date input it owns has an anchor. */
+.due-cell { position: relative; }
 .due-btn {
   display: inline-flex;
   align-items: center;
@@ -1007,14 +1063,12 @@ a.chip:hover { text-decoration: underline; }
 .due-btn.due-none { color: var(--muted); }
 .due-recur { color: var(--muted); display: inline-flex; }
 .due-recur .icon { width: var(--icon-inline); height: var(--icon-inline); }
-/* the shared trio (dueinput.js): text box + calendar button + hidden date
-   input — the Table's inline cell (.due-editor) and the bulk bar both wear it */
-.due-input { position: relative; display: inline-flex; align-items: center; gap: 4px; }
-.due-text { width: 170px; }
+/* the shared pair (dueinput.js): calendar button + hidden date input — the
+   bulk bar's strip square and the snooze menu's "Pick a date…" both wear it */
 .due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
 .due-pick-btn:hover { color: var(--accent); }
 /* hidden by default — the calendar button opens it (showPicker() or the
-   coarse-pointer fallback in table.js), same pattern as .field-due-picker. */
+   coarse-pointer fallback in dueinput.js), same pattern as .field-due-picker. */
 .due-date { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .due-date.is-visible { position: static; width: auto; height: 30px; opacity: 1; pointer-events: auto; }
 

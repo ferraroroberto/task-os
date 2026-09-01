@@ -59,7 +59,8 @@ function saveOpen(map) {
  * @param {HTMLElement} box   the search card (holds #searchInput + #searchMeta)
  * @param {HTMLElement} host  where the result groups render
  * @param {{onOpenTask: (id:number) => void, onQuery: (q:string) => void,
- *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>}} opts
+ *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>,
+ *          onPatch?: (id:number, patch:object) => Promise<any>}} opts
  */
 export function mountSearch(box, host, opts) {
   const input = box.querySelector('#searchInput');
@@ -257,7 +258,18 @@ export function mountSearch(box, host, opts) {
   function taskHitRow(t, idx) {
     const h = t._hit;
     const extra = snippetLine(h, t.title);
-    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus }, extra ? { extra: extra } : undefined);
+    // Re-planning from the row (#107) has to land on the hit cache too: a hit's
+    // row is rebuilt from `h.task` on every render, so a patch that only went
+    // to the server would snap back to the date the query returned.
+    const onPatch = opts.onPatch && function (id, patch) {
+      return opts.onPatch(id, patch).then(function (r) {
+        if (h.task) Object.assign(h.task, patch);
+        if (last) render(last);
+        return r;
+      });
+    };
+    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, onPatch: onPatch },
+      extra ? { extra: extra } : undefined);
     li.classList.add('search-hit');
     li.dataset.kind = 'tasks';
     li.dataset.idx = String(idx);

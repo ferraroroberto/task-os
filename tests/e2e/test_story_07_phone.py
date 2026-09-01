@@ -20,6 +20,10 @@ allowed on screen). What a browser can prove of the story:
 - a 430-wide leg (the larger phones) of the same carousel;
 - the vendored geometry contract at 320 / 390 / 430 / 772: no horizontal
   overflow, ≥ 44 px targets on the nav pill + the column strip;
+- a row's three meta-line tap targets (#107) — the due chip (which opens the
+  date picker), the folder and the AI conversation: none of them sharing a
+  pixel with another, all inside their own card, the row still inside the
+  ≤96px density budget, and the date's own (deliberately sub-44px) floor;
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
   comes back and the shell loads. The non-loopback gate itself is unit-level
@@ -35,6 +39,7 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-6-phone.png    Board carousel at 430 wide
     docs/screenshots/story-07-phone-7-phone.png    /login on the phone
     docs/screenshots/story-07-phone-8-desktop.png  /login on the desktop
+    docs/screenshots/story-07-phone-9-phone.png    a row's three tap targets (#107)
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -47,7 +52,7 @@ import json
 import os
 import re
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -58,6 +63,7 @@ from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
     assert_no_overlap,
+    effective_rects,
 )
 from tests.e2e.conftest import _boot, _terminate
 
@@ -97,6 +103,89 @@ def authed_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     finally:
         _terminate(proc)
         log.close()
+
+
+def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
+    """The row's three tap targets on a phone: due chip · folder · AI (#107).
+
+    Re-planning is the most frequent thing done while reading a list, so the
+    date on the row IS the picker's trigger — one tap, no drawer, no text box.
+    That makes three targets on one meta line, and the contract is that no two
+    of them share a pixel: before #107 the folder and the AI glyph overlapped
+    by 16px (two 18px glyphs, 13px of expansion each side, 10px of column gap),
+    so a tap just right of the folder opened the conversation instead.
+
+    The row it measures is built here rather than borrowed from the seed, and
+    deliberately bare — a date, a folder, an AI link and **nothing after them**,
+    so all three land side by side on one line. No seeded row carries all three
+    (and the seeded ones that carry two also carry comments or a person, which
+    pushes them apart), so the tight case would otherwise go unmeasured.
+    Deleted again at the end.
+    """
+    page.goto(f"{base}/")
+    made = page.request.post(f"{base}/api/tasks", data=json.dumps({
+        "title": "Wire the moisture sensor",
+        "due": (date.today() + timedelta(days=3)).isoformat(),
+        "folder_ref": "{user}/code/garden-bot",
+    }), headers={"content-type": "application/json"})
+    assert made.ok, made.text()
+    task = made.json()
+    page.request.post(f"{base}/api/tasks/{task['id']}/links", data=json.dumps({
+        "url": "https://claude.ai/code/session_01SeedExampleTapTargets0", "label": "sensor session", "kind": "ai",
+    }), headers={"content-type": "application/json"})
+    try:
+        page.goto(f"{base}/")
+        page.locator("nav.tabs .tab[data-tab='table']").tap()
+        row = page.locator(f"#paneTable .trow[data-id='{task['id']}']")
+        expect(row).to_be_visible()
+        chip = row.locator(".trow-due")
+        expect(chip).to_have_count(1)
+        assert chip.evaluate("el => el.tagName") == "BUTTON", "the date is not a control"
+        # the look is untouched: no pill, no fill, no border — only the
+        # invisible ::before grew (the folder's rule, applied to the date)
+        skin = chip.evaluate("el => { const cs = getComputedStyle(el);"
+                             " return [cs.backgroundColor, cs.borderTopWidth, cs.padding]; }")
+        assert skin[0] in ("rgba(0, 0, 0, 0)", "transparent") and skin[1] == "0px" and skin[2] == "0px", skin
+        targets = row.locator(".trow-due, .trow-folder, .trow-ai")
+        expect(targets).to_have_count(3)
+        assert_no_overlap(targets)          # the folder/AI pair included — #107's other half
+        assert_min_target(row.locator(".trow-folder, .trow-ai"))
+        # The date is the one target here that does NOT reach the fleet's 44px
+        # floor, and deliberately: every side of it is bounded (styles.css says
+        # by what), and buying the last 9px means a deeper card, which breaks
+        # the ≤96px phone-row budget issue #32 set for this surface and story
+        # 05 asserts. It gets everything the row can give — 2.4x the bare
+        # text's area, past WCAG 2.5.8's 24px — and the budget keeps the rest.
+        # Assert the floor it does meet, so a later shrink still fails loud.
+        assert_min_target(row.locator(".trow-due"), 32.0)
+        # …and every one of them stays inside its own card, so none steals a
+        # tap from the row below (the #74 rule, now for three targets).
+        box = row.bounding_box()
+        for t in effective_rects(targets):
+            assert t.effective.top >= box["y"] - 0.5, (t, box)
+            assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
+        # the row keeps the phone's density budget (#32) with all three on it
+        assert row.bounding_box()["height"] <= 96, row.bounding_box()
+        page.screenshot(path=str(shots / "story-07-phone-9-phone.png"))
+
+        # tapping it opens the picker: on a coarse pointer that is the reveal-
+        # and-click fallback (#50), since showPicker() opens nothing on touch
+        chip.tap()
+        expect(row.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
+        assert not page.locator("#taskDrawer").is_visible(), "the date tap opened the drawer"
+        # picking a day commits it — the row re-renders on the new date
+        new_due = (date.today() + timedelta(days=5)).isoformat()
+        row.locator(".due-date").evaluate(
+            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
+        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
+            "title", new_due)
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
+        # Let the re-render the patch kicked off finish before the row's task is
+        # deleted below: pulling it out from under the in-flight GETs aborts
+        # them, and WebKit reports an aborted request as a page error.
+        page.wait_for_load_state("networkidle")
+    finally:
+        page.request.delete(f"{base}/api/tasks/{task['id']}")
 
 
 # ---------------------------------------------------------- phone story
@@ -292,6 +381,16 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
         page.screenshot(path=str(shots / "story-07-phone-5-phone.png"))
+        assert errors == [], errors
+        context.close()
+
+        # 5b. The meta line's three tap targets (#107) — the due chip now opens
+        # the date picker, beside the folder and the AI conversation.
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        _walk_row_tap_targets(page, base, shots)
         assert errors == [], errors
         context.close()
 
