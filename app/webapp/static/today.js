@@ -1,7 +1,8 @@
 /* task-os — the Today tab: what is due, from the shared list.
  *
  * Tasks due ≤ today (overdue first, then today), grouped by root project
- * with recurring tasks first inside each group; "Later this week"
+ * with the shared due-first sort inside each group (#116 — a task's date
+ * always decides its position, recurring or not); "Later this week"
  * (tomorrow … +7 days) sits collapsed below as a flat disclosure. Rows are
  * the ONE task row (rows.js, issue #46) — title + status select (the Board
  * control; the old checkbox is gone), the meta line (project hidden — the
@@ -73,8 +74,9 @@ export function planCandidates(items, today) {
 }
 
 /** [{root, items}] — by top ancestor (null = no project); groups ordered by
- *  earliest due then title; inside a group recurring tasks first, then the
- *  shared sort. */
+ *  earliest due then title; inside a group, the shared sort — same as every
+ *  other view, so editing a task's due date always reorders it correctly
+ *  relative to its group-mates, recurring or not (#116). */
 function groupByRoot(items, sort) {
   const cmp = compareItems(sort || 'due');
   const groups = new Map();
@@ -85,7 +87,7 @@ function groupByRoot(items, sort) {
   });
   const out = Array.from(groups.values());
   out.forEach(function (g) {
-    g.items.sort(function (a, b) { return ((a.recurrence ? 0 : 1) - (b.recurrence ? 0 : 1)) || cmp(a, b); });
+    g.items.sort(cmp);
   });
   out.sort(function (a, b) {
     const ad = a.items.reduce(function (m, it) { return m == null || it.due < m ? it.due : m; }, null) || '';

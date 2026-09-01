@@ -5,8 +5,9 @@
     opens the quick-add dialog (#80) → project chip
     filters to one project (shared with the Table, encoded in the URL) → drag
     a row doing → standby → the counts update and the activity log has the
-    row → Today tab lists due / overdue grouped by project, recurring first →
-    mark a recurring task complete → its due rolls a cadence forward and it
+    row → Today tab lists due / overdue grouped by project, sorted by due
+    then priority within a group → mark a recurring task complete → its due
+    rolls a cadence forward and it
     leaves Today's due list, then mark it done instead → it closes for good
     (issue #54) → mark a plain task done → it lands in the Board's Done
     today.
@@ -239,7 +240,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         drawer.locator(".drawer-close").click()
         expect(drawer).to_be_hidden()
 
-        # 6. Today: due ≤ today grouped by root project, overdue first, recurring first.
+        # 6. Today: due ≤ today grouped by root project, overdue first, sorted
+        #    by due then priority within a group — recurring or not (#116).
         page.click("nav.tabs .tab[data-tab='today']")
         expect(page.locator("#paneToday")).to_be_visible()
         today = _get(base, "/api/today")
@@ -254,12 +256,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
             "els => els.map(e => e.firstChild.textContent.trim())"
         )
         assert titles[0] == "Home renovation" and "Family admin" in titles and "No project" in titles
-        # first group holds only overdue rows; a group's recurring rows lead
+        # first group holds only overdue rows
         expect(groups.first.locator(".trow.is-overdue")).to_have_count(2)
         fam = groups.filter(has=page.locator(".today-group-link", has_text="Family admin"))
         fam_titles = fam.locator(".trow-title").evaluate_all("els => els.map(e => e.textContent)")
-        assert fam_titles == ["Dentist check-up", "School enrolment forms"]
-        expect(fam.locator(".trow").first.locator(".trow-recur")).to_be_visible()
+        # both due today — the tie breaks on priority, not on the recurring
+        # "Dentist check-up" being recurring (#116: a task's schedule always
+        # decides its position, so a date/priority change actually reorders it)
+        assert fam_titles == ["School enrolment forms", "Dentist check-up"]
+        expect(fam.locator(".trow").last.locator(".trow-recur")).to_be_visible()
         # the ONE row here too (#46): the status select on every row; the
         # project is NOT repeated on the meta line — the group already names it
         school = _today_row(page, "School enrolment forms")
