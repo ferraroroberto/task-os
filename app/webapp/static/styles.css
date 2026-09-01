@@ -1851,7 +1851,16 @@ kbd {
    itself whenever focus is anywhere inside it. The hover surface, not the
    accent tint — the tint means "ticked" everywhere else in the app, and a
    focused row inside Select mode must not read as a selected one. */
-.trow:focus-within, .trow.is-key-target { background: var(--card-2); }
+.trow:focus-within { background: var(--card-2); }
+/* While the s menu is up, the row it belongs to wears the focus ring itself —
+   the menu holds the focus, and "which task am I picking a date for" has to
+   stay answerable without reading the popover's position. */
+.trow.is-key-target {
+  background: var(--card-2);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
 tr.task-row:focus-within > td { background: var(--card-2); }
 /* …and a ticked row stays visibly ticked while focused, same as under the
    cursor (#81) — this block is later in the file, so it has to say so. */
