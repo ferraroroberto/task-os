@@ -1,6 +1,6 @@
 """Story 08 — an issue becomes a task (Step 8/13, issue #9).
 
-    ↻ sync → my open issues appear as coding tasks in Inbox → open one: the
+    ↻ sync → my open issues appear as coding tasks in To do → open one: the
     drawer's issue panel (repo#N, state, labels, last synced) → nest it under
     a project in the Tree → the issue is closed on the forge → ↻ → the task
     is done and the log says ``sync`` → "Create issue" on a plain task → it
@@ -11,7 +11,7 @@ Walks the story against the **issues** disposable instance (conftest
 "forge" is a JSON file this test edits; never ``gh``, never the network) at
 1440×900 Chromium, saving the proof shots the validation record links to:
 
-    docs/screenshots/story-08-issues-1-desktop.png   Board after ↻: two new coding rows in Inbox, toast
+    docs/screenshots/story-08-issues-1-desktop.png   Board after ↻: two new coding rows in To do, toast
     docs/screenshots/story-08-issues-2-desktop.png   drawer: issue panel — chip, open, label, last synced
     docs/screenshots/story-08-issues-3-desktop.png   Tree: the issue task nested under the project
     docs/screenshots/story-08-issues-4-desktop.png   drawer after the close: done · activity by sync · closed chip
@@ -50,7 +50,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
     base = inst.base
     st = _get(base, "/api/issues/status")
     assert st["enabled"] is True and st["provider"] == "github"
-    inbox_before = _get(base, "/api/tasks?status=inbox")["count"]
+    todo_before = _get(base, "/api/tasks?status=todo")["count"]
 
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
@@ -58,23 +58,23 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
 
-        # 1. Board → ↻ (header) → the two issues without a task become coding tasks in Inbox.
+        # 1. Board → ↻ (header) → the two issues without a task become coding tasks in To do.
         page.goto(f"{base}/")
         expect(page.locator("#paneBoard")).to_be_visible()
         sync = page.locator("#issuesSync")
         expect(sync).to_be_visible()
         sync.click()
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
-        inbox = page.locator(".board-col[data-col='inbox']")
+        todo_col = page.locator(".board-col[data-col='todo']")
         # UX rounds 2+3 (#32/#46): a coding task's row names the issue as the
         # code on its meta line (the launcher's "repo#N" look) — no duplicate
         # issue chip on the row.
-        expect(inbox.locator(".trow .trow-code", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
-        expect(inbox.locator(".trow .trow-code", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
-        expect(inbox.locator(".trow", has=page.locator(".trow-code", has_text="garden-bot#14")).locator(".chip-issue")).to_have_count(0)
-        expect(page.locator(".board-col-count[data-col='inbox']")).to_have_text(str(inbox_before + 2))
-        api_inbox = _get(base, "/api/tasks?status=inbox")["items"]
-        new = {t["code"]: t for t in api_inbox if t.get("issue_ref")}
+        expect(todo_col.locator(".trow .trow-code", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
+        expect(todo_col.locator(".trow .trow-code", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
+        expect(todo_col.locator(".trow", has=page.locator(".trow-code", has_text="garden-bot#14")).locator(".chip-issue")).to_have_count(0)
+        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(todo_before + 2))
+        api_todo = _get(base, "/api/tasks?status=todo")["items"]
+        new = {t["code"]: t for t in api_todo if t.get("issue_ref")}
         assert set(new) == {"garden-bot#14", "home-dashboard#3"}
         sensor = new["garden-bot#14"]
         assert sensor["type"] == "coding" and sensor["title"] == "Add soil-moisture sensor to the loop"
@@ -84,7 +84,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         page.screenshot(path=str(shots / "story-08-issues-1-desktop.png"))
 
         # 2. Open the new task → the drawer's issue panel.
-        card = inbox.locator(f".trow[data-id='{sensor['id']}'] .trow-main")
+        card = todo_col.locator(f".trow[data-id='{sensor['id']}'] .trow-main")
         card.click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
@@ -131,7 +131,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         done = _get(base, f"/api/tasks/{sensor['id']}")
         assert done["status"] == "done" and done["done_at"] and done["issue_ref"]["state"] == "closed"
         acts = [(a["field"], a["old_value"], a["new_value"], a["actor"]) for a in done["activity"][:2]]
-        assert ("status", "inbox", "done", "sync") in acts and ("issue_state", "open", "closed", "sync") in acts
+        assert ("status", "todo", "done", "sync") in acts and ("issue_state", "open", "closed", "sync") in acts
         page.goto(f"{base}/#task/{sensor['id']}")
         expect(drawer).to_be_visible()
         expect(drawer.locator(".drawer-fields select[data-field='status']")).to_have_value("done")
@@ -172,10 +172,13 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
         page.screenshot(path=str(shots / "story-08-issues-6-desktop.png"))
-        # the code is on the Board row's meta line too (#32/#46)
+        # the code is on the Board row's meta line too (#32/#46) — linking an
+        # existing task to an issue doesn't change its status, so it's still
+        # wherever it was seeded (inbox), not the sync-default todo column.
         page.keyboard.press("Escape")
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(inbox.locator(f".trow[data-id='{plain['id']}'] .trow-code")).to_have_text("garden-bot#15")
+        inbox_col = page.locator(".board-col[data-col='inbox']")
+        expect(inbox_col.locator(f".trow[data-id='{plain['id']}'] .trow-code")).to_have_text("garden-bot#15")
 
         # 6. Settings (dark): provider enabled, the last sync's counts.
         page.evaluate("document.documentElement.dataset.theme = 'dark'")

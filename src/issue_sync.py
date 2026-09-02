@@ -7,7 +7,7 @@ connection and an :class:`~src.issues.base.IssueProvider`:
    provider failure aborts the pass with the error recorded (nothing is
    changed on a bad read — never "no issues" from an empty answer).
 2. Every open issue **without** a local ref → a new task: ``title`` = the issue
-   title, ``code`` = ``<repo>#<n>`` (short repo name), ``status = inbox``,
+   title, ``code`` = ``<repo>#<n>`` (short repo name), ``status = todo``,
    ``description`` = the issue body (trimmed), a ``links`` row (kind
    ``issue``) and the ``issue_refs`` row that makes it ``coding``. Dedupe key
    is (provider, repo, number) — a re-run touches nothing it already made.
@@ -96,10 +96,10 @@ def _trim(body: str | None) -> str:
 
 
 def task_from_issue(conn: Any, info: IssueInfo, *, actor: str = SYNC_ACTOR) -> dict[str, Any]:
-    """Create the coding task for ``info`` (title, code, inbox, description, issue link + ref)."""
+    """Create the coding task for ``info`` (title, code, todo, description, issue link + ref)."""
     task = repo.create_task(
         conn, info.title or info.ref, actor=actor,
-        code=f"{short_repo(info.repo)}#{info.number}", status="inbox", description=_trim(info.body),
+        code=f"{short_repo(info.repo)}#{info.number}", status="todo", description=_trim(info.body),
     )
     repo.add_link(conn, task["id"], info.url, label=info.ref, kind="issue")
     return repo.set_issue_ref(

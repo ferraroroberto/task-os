@@ -73,7 +73,7 @@ def _activity(conn, task_id: int) -> list[tuple[str, str | None, str | None, str
 # ------------------------------------------------------------- the sync rules
 
 
-def test_sync_creates_coding_tasks_in_inbox_and_dedupes(conn, fake: FakeProvider) -> None:
+def test_sync_creates_coding_tasks_in_todo_and_dedupes(conn, fake: FakeProvider) -> None:
     r = sync_once(conn, fake)
     assert (r.listed, r.created, r.unchanged) == (2, 2, 0)
     tasks = repo.list_tasks(conn, type="coding")
@@ -81,7 +81,7 @@ def test_sync_creates_coding_tasks_in_inbox_and_dedupes(conn, fake: FakeProvider
     a = next(t for t in tasks if t["issue_ref"]["number"] == 14)
     assert a["title"] == "Add soil-moisture sensor"
     assert a["code"] == "garden-bot#14"                       # short repo name + number
-    assert a["status"] == "inbox" and a["type"] == "coding" and a["created_by"] == SYNC_ACTOR
+    assert a["status"] == "todo" and a["type"] == "coding" and a["created_by"] == SYNC_ACTOR
     assert a["issue_ref"]["repo"] == "example/garden-bot" and a["issue_ref"]["state"] == "open"
     assert a["issue_ref"]["url"] == ISSUE_A["url"] and a["issue_ref"]["last_synced"]
     detail = repo.get_task(conn, a["id"])
@@ -161,7 +161,7 @@ def test_sync_missing_from_the_list_but_still_open_is_not_closed(conn, fake: Fak
     r = sync_once(conn, fake)
     assert (r.listed, r.checked, r.closed, r.unchanged) == (1, 1, 0, 2)
     t = repo.get_task(conn, task["id"])
-    assert t["status"] == "inbox" and t["issue_ref"]["state"] == "open"
+    assert t["status"] == "todo" and t["issue_ref"]["state"] == "open"
 
 
 def test_sync_lookup_error_leaves_the_task_alone_and_is_reported(conn, fake: FakeProvider) -> None:
@@ -173,7 +173,7 @@ def test_sync_lookup_error_leaves_the_task_alone_and_is_reported(conn, fake: Fak
     r = sync_once(conn, fake)
     assert r.checked == 1 and r.closed == 0
     assert r.errors == ["example/garden-bot#14: example/garden-bot#14 not found"]
-    assert repo.get_task(conn, task["id"])["status"] == "inbox"
+    assert repo.get_task(conn, task["id"])["status"] == "todo"
 
 
 def test_sync_a_listing_failure_changes_nothing(conn, tmp_path: Path) -> None:
@@ -390,9 +390,9 @@ def test_routes_status_sync_create_link_unlink(client: TestClient, fake: FakePro
     assert r.status_code == 200 and r.json()["created"] == 2
     st = client.get("/api/issues/status").json()
     assert st["last_sync"] and st["last_result"]["listed"] == 2 and st["repos"] == ["example/garden-bot", "example/home-dashboard"]
-    inbox = client.get("/api/tasks?status=inbox").json()["items"]
-    assert sorted(t["code"] for t in inbox) == ["garden-bot#14", "home-dashboard#3"]
-    a = next(t for t in inbox if t["code"] == "garden-bot#14")
+    todo = client.get("/api/tasks?status=todo").json()["items"]
+    assert sorted(t["code"] for t in todo) == ["garden-bot#14", "home-dashboard#3"]
+    a = next(t for t in todo if t["code"] == "garden-bot#14")
     panel = client.get(f"/api/tasks/{a['id']}/issue").json()
     assert panel["ref"]["state"] == "open" and panel["info"]["labels"] == ["enhancement"]
     # tree nodes carry the ref too (the Tree renders the chip)
