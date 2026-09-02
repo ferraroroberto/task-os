@@ -17,10 +17,12 @@
  *
  * Every tab is its own module and this file is the wiring: board.js ·
  * table.js · tree.js · today.js · search.js · settings.js (issue #37 — the
- * Settings cards used to live here). What stays is what more than one tab
- * needs: routing (nav, the URL, #task/<id> and the two #settings/… deep
- * links), `state`, and the shared calls the drawer and the palette also make
- * — `syncIssues()` and the header ↻ among them.
+ * Settings cards used to live here) · journal.js (the done journal, #102 —
+ * `#journal`, a pane without a tab: reached from the palette and the Board's
+ * Done column, left by pressing any tab). What stays is what more than one
+ * tab needs: routing (nav, the URL, #task/<id>, #journal and the two
+ * #settings/… deep links), `state`, and the shared calls the drawer and the
+ * palette also make — `syncIssues()` and the header ↻ among them.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -40,6 +42,7 @@ import {
   mountFilters,
 } from './filters.js';
 import { fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
+import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
@@ -57,6 +60,9 @@ const TAB_KEY = 'task-os.tab';
 const PHONE_TABLE_MQ = '(max-width: 767px)';
 // Deep links into the Settings pane: hash → the card settings.js opens.
 const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search' };
+// The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it (#102).
+const JOURNAL_HASH = /^#journal(\/|$)/;
+const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];
 
 const els = {
   themeToggle: document.getElementById('themeToggle'),
@@ -86,6 +92,10 @@ const els = {
   todayFilterText: document.getElementById('todayFilterText'),
   todayHost: document.getElementById('todayHost'),
   searchFilters: document.getElementById('searchFilters'),
+  paneJournal: document.getElementById('paneJournal'),
+  journalFilters: document.getElementById('journalFilters'),
+  journalFilterText: document.getElementById('journalFilterText'),
+  journalHost: document.getElementById('journalHost'),
   drawer: document.getElementById('taskDrawer'),
   keysHelp: document.getElementById('keysHelp'),
 };
@@ -102,6 +112,10 @@ const state = {
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
+  // The done journal (#102): its own list (closed tasks in a window of whole
+  // weeks ending today, newest closing first), never merged into `items`.
+  // `older` is null until the probe answered — unknown, not "no".
+  journal: { open: false, weeks: 1, items: [], older: null, cancelled: true },
 };
 
 let nav = null;
@@ -140,7 +154,7 @@ function renderNoTasks() {
     }));
   });
   ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText', 'treeFilters', 'treeFilterText',
-    'todayFilters', 'todayFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+    'todayFilters', 'todayFilterText', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -245,6 +259,7 @@ async function refreshAll() {
     }
     renderAll();
     els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
+    if (state.journal.open) refreshJournal();
   } catch (err) {
     els.homeHeadStatus.textContent = 'Server unreachable';
     toast(err.message || 'Could not load tasks', 'error');
@@ -387,7 +402,7 @@ async function bulkApply(changes) {
  *  filtered list, and undo needs that task's real prior values, not a guess. */
 async function resolveTask(id) {
   const n = Number(id);
-  const local = state.items.concat(state.deferred, state.plan.items || [])
+  const local = state.items.concat(state.deferred, state.plan.items || [], state.journal.items)
     .find(function (t) { return t.id === n; });
   if (local) return local;
   try { return await api('/api/tasks/' + n); } catch (_) { return null; }
@@ -420,6 +435,7 @@ function onFilterChange(next) {
   syncUrl();
   loadItems().then(function () {
     renderAll();
+    if (state.journal.open) refreshJournal();
   }).catch(function (err) { toast(err.message, 'error'); });
 }
 
@@ -429,14 +445,22 @@ function renderFilters() {
   // Search has none: its own box owns the text]
   [['board', els.boardFilters, els.boardFilterText], ['table', els.tableFilters, els.tableFilterText],
     ['tree', els.treeFilters, els.treeFilterText], ['today', els.todayFilters, els.todayFilterText],
-    ['search', els.searchFilters, null]]
+    ['search', els.searchFilters, null], ['journal', els.journalFilters, els.journalFilterText]]
     .forEach(function (pair) {
       const host = pair[1];
       if (!host) return;
       if (!filterCards[pair[0]]) {
-        filterCards[pair[0]] = mountFilters(host, { onChange: onFilterChange, textHost: pair[2] });
+        filterCards[pair[0]] = mountFilters(host, pair[0] === 'journal'
+          // the journal's status is implicit (done + cancelled), its order the
+          // closing time, and a due / modified window says nothing about a
+          // closed task — only project · person · text apply (#102)
+          ? { onChange: onFilterChange, textHost: pair[2], hide: JOURNAL_HIDES, countLabel: 'closed' }
+          : { onChange: onFilterChange, textHost: pair[2] });
       }
-      filterCards[pair[0]].render(state.filters, pair[0] === 'search' ? { projects: state.projects, people: state.people } : options);
+      const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
+        : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }
+          : options;
+      filterCards[pair[0]].render(state.filters, opts);
     });
 }
 
@@ -536,6 +560,87 @@ function renderTreePane() {
   if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
 }
 
+// ---------------------------------------------------------------- journal
+/** The done journal (#102) — journal.js draws it; this owns its window and
+ *  its two reads: the page (closed tasks in the window, the API's done window
+ *  orders them newest closing first) and the older-probe (one row before the
+ *  window, if any). `older` stays null while the probe is unanswered — an
+ *  unknown keeps the "week before" button; the end of the journal is only
+ *  ever stated when the server said so. */
+function journalWindow() {
+  const to = todayISO();
+  const from = new Date(to + 'T00:00:00');
+  from.setDate(from.getDate() - (7 * state.journal.weeks - 1));
+  return { from: todayISO(from), to: to };
+}
+
+function journalParams() {
+  const f = state.filters;
+  return {
+    status: state.journal.cancelled ? ['done', 'cancelled'] : ['done'],
+    project: f.project || undefined,
+    person: f.person.length ? f.person : undefined,
+    q: f.q || undefined,
+  };
+}
+
+async function loadJournal() {
+  const w = journalWindow();
+  const base = journalParams();
+  const before = new Date(w.from + 'T00:00:00');
+  before.setDate(before.getDate() - 1);
+  const [page, probe] = await Promise.all([
+    api('/api/tasks' + qs(Object.assign({}, base, { done_from: w.from, done_to: w.to }))),
+    api('/api/tasks' + qs(Object.assign({}, base, { done_to: todayISO(before), limit: 1 })))
+      .catch(function () { return null; }),
+  ]);
+  state.journal.items = page.items || [];
+  state.journal.older = probe ? probe.count > 0 : null;
+}
+
+function renderJournalPane() {
+  const w = journalWindow();
+  renderJournal(els.journalHost, state.journal.items,
+    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus },
+    {
+      from: w.from, weeks: state.journal.weeks, hasOlder: state.journal.older, cancelled: state.journal.cancelled,
+      onOlder: function () { state.journal.weeks += 1; refreshJournal(); },
+      onCancelled: function (on) { state.journal.cancelled = on; refreshJournal(); },
+    });
+  if (filterCards.journal) {
+    filterCards.journal.render(state.filters, { projects: state.projects, people: state.people, count: state.journal.items.length });
+  }
+}
+
+function refreshJournal() {
+  return loadJournal().then(renderJournalPane)
+    .catch(function (err) { toast(err.message || 'Could not load the journal', 'error'); });
+}
+
+/** Show the journal over whichever pane the nav has up. The pill itself is
+ *  untouched (vendored contract); only its lit state comes off the tab whose
+ *  pane is now covered, so no tab claims to be showing. Any tab press leaves
+ *  (the nav re-shows its pane on its own — see boot()). */
+function openJournal() {
+  if (!state.journal.open) {
+    state.journal.open = true;
+    const navEl = document.querySelector('nav.tabs');
+    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+    navEl.dataset.activeTab = 'journal';
+    document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneJournal; });
+    window.scrollTo(0, 0);
+  }
+  if (!JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#journal');
+  return refreshJournal();
+}
+
+function hideJournal() {
+  if (!state.journal.open) return;
+  state.journal.open = false;
+  els.paneJournal.hidden = true;
+  if (JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+}
+
 // ---------------------------------------------------------- URL / drawer
 function syncUrl() {
   if (nav && nav.getTab() === 'search') return;    // the Search box owns ?q= there
@@ -544,20 +649,24 @@ function syncUrl() {
 }
 
 function hashTaskId() {
-  const m = /^#task\/(\d+)$/.exec(location.hash || '');
+  const m = /^#(?:journal\/)?task\/(\d+)$/.exec(location.hash || '');
   return m ? Number(m[1]) : null;
 }
 
 function openTask(id) {
   if (hashTaskId() !== id) {
-    history.pushState(null, '', location.pathname + location.search + '#task/' + id);
+    // inside the journal the hash keeps saying so, or a reload would land on a tab
+    const prefix = state.journal.open ? '#journal/task/' : '#task/';
+    history.pushState(null, '', location.pathname + location.search + prefix + id);
   }
   drawer.open(id);
 }
 
 function closeTask() {
   drawer.close();
-  if (hashTaskId() != null) history.replaceState(null, '', location.pathname + location.search);
+  if (hashTaskId() != null) {
+    history.replaceState(null, '', location.pathname + location.search + (state.journal.open ? '#journal' : ''));
+  }
 }
 
 function onHashChange() {
@@ -577,6 +686,11 @@ function onHashChange() {
     return;
   }
   const id = hashTaskId();
+  // #journal (#102): open it, or — Back to a hashless URL — leave it and let
+  // the nav re-show the tab it still holds.
+  const wantsJournal = JOURNAL_HASH.test(location.hash);
+  if (wantsJournal && !state.journal.open) openJournal();
+  else if (!wantsJournal && state.journal.open && id == null) { hideJournal(); nav.setTab(nav.getTab()); }
   if (id == null) { if (drawer.currentId() != null) drawer.close(); return; }
   if (drawer.currentId() !== id) drawer.open(id);
 }
@@ -745,6 +859,7 @@ function paletteCommands() {
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
+    { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
     ...(keys && !keys.hasTarget() ? keys.commands() : []),
   ];
   ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'].forEach(function (st) {
@@ -838,6 +953,7 @@ async function boot() {
     defaultTab: coarse ? 'today' : 'board',
     onChange: function (tab) {
       state.tab = tab;
+      hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
       if (tab === 'board' && board) board.show();
       if (tab === 'settings') { settings.refreshStatus(); fetchIssuesStatus(); settings.refreshSearchStatus(); }
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }

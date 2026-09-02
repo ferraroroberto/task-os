@@ -299,3 +299,23 @@ def test_pick_backend_falls_back_to_local_when_app_is_down(
     args = cli.build_parser().parse_args(["ls"])
     be = cli.pick_backend(args)
     assert isinstance(be, cli.HttpBackend) and be.base.startswith("http://127.0.0.1:")
+
+
+def test_journal_over_both_backends(run: Runner) -> None:
+    """#102 CLI parity: `tasks journal` groups what closed by local day,
+    newest first, through either backend; `--weeks` widens the window; the
+    `--json` shape is the same both ways."""
+    run("add", "Ship the thing")
+    run("add", "Still open")
+    run("done", "1")
+    today = date.today()
+    code, out, _ = run("journal", "--json")
+    assert code == 0
+    j = _json(out)
+    assert (j["from"], j["to"], j["count"]) == ((today - timedelta(days=6)).isoformat(), today.isoformat(), 1)
+    assert [d["day"] for d in j["days"]] == [today.isoformat()] and j["days"][0]["count"] == 1
+    assert [t["title"] for t in j["days"][0]["items"]] == ["Ship the thing"]
+    code, out, _ = run("journal")
+    assert code == 0 and "1 done" in out and "[x] #1  Ship the thing" in out and "Still open" not in out
+    code, out, _ = run("journal", "--weeks", "3", "--json")
+    assert code == 0 and _json(out)["from"] == (today - timedelta(days=20)).isoformat()

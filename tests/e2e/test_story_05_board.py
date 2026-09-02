@@ -39,6 +39,17 @@ palette entries that carry them. Story 16 points here.
 
     docs/screenshots/story-16-keyboard-triage-{1..5}-desktop.png
 
+§ #102 (``_walk_done_journal``, same reason): the done journal — reached
+from the Done column's link and the palette, days newest first with counts,
+the seed's own closings (yesterday · two days back with a cancelled row ·
+the week before), the cancelled switch, the shared filters riding the URL
+with the status / due / modified / sort controls hidden, "the week before"
+loading older weeks down to the seed's first closing day, the drawer under
+``#journal/task/<id>``, and a tab press leaving. Story 18 points here.
+
+    docs/screenshots/story-18-done-journal-{1,2}-desktop.png
+    docs/screenshots/story-18-done-journal-3-phone.png   (phone leg, below)
+
 UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
 title + status select on line 1, the meta line under it) and shares ONE
 filter card; the Today checkbox is gone — "ticking" is the row's status
@@ -404,6 +415,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator("#paneTable [data-quick-add]")).to_be_visible()
 
         _walk_keyboard_actions(page, base, shots)
+        _walk_done_journal(page, base, shots)
         assert errors == [], errors
     finally:
         context.close()
@@ -576,6 +588,131 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#palette")).to_be_hidden()
 
 
+def _journal_day(page: Page, day: str):
+    return page.locator(f".journal-day[data-day='{day}']")
+
+
+def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
+    """§ #102 — the done journal, from the Board's Done column.
+
+    Runs after the keyboard walk, so today already holds what the story
+    closed; the seed adds yesterday (two done), two days back (one done, one
+    cancelled) and nine days back (the week before). One task is completed
+    through the API mid-walk — the coding task with the issue chip — and
+    restored at the end, so the phone leg's Today reads as seeded.
+    """
+    today = date.today()
+    iso = lambda days_ago: (today - timedelta(days=days_ago)).isoformat()  # noqa: E731
+    watering = _get(base, "/api/tasks?q=watering%20schedule")["items"][0]
+    assert watering["status"] == "doing", watering["status"]     # the keyboard walk put it back
+
+    # 1. The Done column's head links to the journal: no tab lit, #journal in the URL.
+    _clear_toasts(page)
+    page.click("nav.tabs .tab[data-tab='board']")
+    page.click(".board-col[data-col='done'] .board-col-link")
+    expect(page.locator("#paneJournal")).to_be_visible()
+    expect(page.locator("#paneBoard")).to_be_hidden()
+    expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+    assert page.evaluate("location.hash") == "#journal"
+
+    # 2. Days newest first with counts; the seed's closings where they belong.
+    days = page.locator(".journal-day")
+    expect(days.first).to_have_attribute("data-day", iso(0))
+    listed = days.evaluate_all("els => els.map(e => e.dataset.day)")
+    assert listed == sorted(listed, reverse=True) and listed[:3] == [iso(0), iso(1), iso(2)], listed
+    assert iso(9) not in listed                                   # the week before is a load away
+    expect(_journal_day(page, iso(1)).locator(".today-group-title")).to_contain_text("Yesterday")
+    expect(_journal_day(page, iso(1)).locator(".today-group-count")).to_have_text("2 done")
+    kettle = _trow(page, f".journal-day[data-day='{iso(1)}']", "Descale the kettle")
+    expect(kettle.locator(".trow-project")).to_have_text("Home renovation")
+    expect(kettle.locator(".trow-status")).to_have_value("done")
+    expect(_journal_day(page, iso(2)).locator(".today-group-count")).to_have_text("1 done · 1 cancelled")
+    muted = _trow(page, f".journal-day[data-day='{iso(2)}']", "Cancel the unused streaming plan")
+    assert float(muted.evaluate("el => getComputedStyle(el).opacity")) < 1
+    # the page is exactly the API's window (this week, both closed statuses)
+    api = _get(base, f"/api/tasks?status=done,cancelled&done_from={iso(6)}&done_to={iso(0)}")
+    assert page.locator("#journalHost .trow").count() == api["count"]
+
+    # 3. A coding task closed now lands on today with its issue chip; #journal
+    #    deep-links straight back here after a reload.
+    page.evaluate(f"fetch('/api/tasks/{watering['id']}', {{method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{status: 'done'}})}})")
+    page.wait_for_function(f"() => fetch('/api/tasks/{watering['id']}').then(r => r.json()).then(t => t.status === 'done')")
+    page.reload()
+    expect(page.locator("#paneJournal")).to_be_visible()
+    expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+    drift = _trow(page, f".journal-day[data-day='{iso(0)}']", "Fix watering schedule drift")
+    expect(drift.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
+    expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
+    page.screenshot(path=str(shots / "story-18-done-journal-1-desktop.png"))
+
+    # 4. The cancelled switch drops the muted rows (and the count follows).
+    page.click(".journal-toggle .toggle")
+    expect(page.locator("#journalHost .trow[data-status='cancelled']")).to_have_count(0)
+    expect(_journal_day(page, iso(2)).locator(".today-group-count")).to_have_text("1 done")
+    page.click(".journal-toggle .toggle")
+    expect(page.locator("#journalHost .trow[data-status='cancelled']")).to_have_count(1)
+
+    # 5. The shared filters apply and ride the URL; the controls that say
+    #    nothing about a closed task are not there.
+    family = _get(base, "/api/tasks?q=family%20admin")["items"][0]
+    _open_filters(page, "journalFilters")
+    expect(page.locator("#journalFilters select[name='due'], #journalFilters select[name='updated'],"
+                        " #journalFilters select[name='sort'], #journalFilters .msel[data-name='status']")).to_have_count(0)
+    page.select_option("#journalFilters select[name='project']", str(family["id"]))
+    expect(page.locator("#journalHost .trow-project").first).to_have_text("Family admin")
+    projects = page.locator("#journalHost .trow-project").all_inner_texts()
+    assert projects and set(projects) == {"Family admin"}, projects
+    assert f"project={family['id']}" in page.url and page.url.endswith("#journal"), page.url
+    expect(page.locator("#journalFilters .filter-desc")).to_contain_text("Family admin")
+    page.click("#journalFilters .filter-clear")
+    expect(page.locator("#journalHost .trow-project").first).not_to_have_text("Family admin")
+
+    # 6. Older weeks load on demand, down to the seed's first closing day —
+    #    and only then does the journal say it has reached the end.
+    page.click(".journal-older")
+    expect(_journal_day(page, iso(9))).to_be_visible()
+    expect(_trow(page, f".journal-day[data-day='{iso(9)}']", "Return the borrowed drill")).to_be_visible()
+    for _ in range(8):
+        if page.locator(".journal-end").count():
+            break
+        page.click(".journal-older")
+        page.locator(".journal-older:enabled, .journal-end").first.wait_for()
+    expect(page.locator(".journal-end")).to_be_visible()
+    expect(_trow(page, "#journalHost", "Buy a birthday gift")).to_be_visible()   # the seed's oldest closings
+    page.click("#themeToggle")
+    page.screenshot(path=str(shots / "story-18-done-journal-2-desktop.png"))
+    page.click("#themeToggle")
+
+    # 7. A row opens the drawer under #journal/task/<id>; closing it keeps the journal.
+    kettle = _trow(page, f".journal-day[data-day='{iso(1)}']", "Descale the kettle")
+    kettle.locator(".trow-main").click()
+    expect(page.locator("#taskDrawer")).to_be_visible()
+    assert page.evaluate("location.hash").startswith("#journal/task/"), page.url
+    page.keyboard.press("Escape")
+    expect(page.locator("#taskDrawer")).to_be_hidden()
+    assert page.evaluate("location.hash") == "#journal"
+    expect(page.locator("#paneJournal")).to_be_visible()
+
+    # 8. A tab press leaves; the palette lists Journal and brings it back.
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator("#paneJournal")).to_be_hidden()
+    expect(page.locator("#paneBoard")).to_be_visible()
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+    assert page.evaluate("location.hash") == ""
+    page.click("#paletteBtn")
+    page.fill("#paletteInput", ">journal")
+    expect(page.locator(".palette-item").first).to_contain_text("Journal")
+    page.keyboard.press("Enter")
+    expect(page.locator("#paneJournal")).to_be_visible()
+    assert page.evaluate("location.hash") == "#journal"
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator("#paneJournal")).to_be_hidden()
+
+    # leave the coding task as the seed had it (the phone leg reads Today)
+    page.evaluate(f"fetch('/api/tasks/{watering['id']}', {{method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{status: 'doing'}})}})")
+    page.wait_for_function(f"() => fetch('/api/tasks/{watering['id']}').then(r => r.json()).then(t => t.status === 'doing')")
+
+
 # ------------------------------------------------------------- phone leg
 
 def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
@@ -719,6 +856,27 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert bar_box["height"] < 2 * boxes[0]["h"], bar_box   # never wrapped
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-05-board-10-phone.png"))
+
+        # 12. § #102 on the phone: #journal deep-links the journal (no tab
+        #     lit), the rows and the head fit the width, the pill stays.
+        page.goto(f"{base}/#journal")
+        expect(page.locator("#paneJournal")).to_be_visible()
+        expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+        expect(page.locator(".journal-day").first).to_be_visible()
+        expect(page.locator("nav.tabs")).to_be_visible()
+        assert_min_target(page.locator(".journal-toggle .toggle"))
+        assert_no_horizontal_overflow(page)
+        # no tab is lit — once the pill's 0.16 s fade is over, every button
+        # wears the same (un-tinted) fill
+        expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+        page.wait_for_function(
+            "() => new Set([...document.querySelectorAll('nav.tabs .tab')]"
+            ".map(e => getComputedStyle(e).backgroundColor)).size === 1"
+        )
+        page.screenshot(path=str(shots / "story-18-done-journal-3-phone.png"))
+        page.locator("nav.tabs .tab[data-tab='today']").tap()
+        expect(page.locator("#paneJournal")).to_be_hidden()
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         context.close()
     finally:
         wk.close()

@@ -280,6 +280,10 @@
     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
     <path d="M3 3v5h5" />
   </symbol>
+  <symbol id="i-book-open" viewBox="0 0 24 24" fill="none">
+    <path d="M12 7v14" />
+    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
+  </symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24" fill="none">
     <path d="M10 8h.01" />
     <path d="M12 12h.01" />
@@ -470,6 +474,20 @@
              above owns the text); applies to the task hits. -->
         <div class="filter-host" id="searchFilters" hidden></div>
         <div id="searchHost" class="search-host"></div>
+      </div>
+    </section>
+    <!-- The done journal (#102): a pane with no tab in the pill (the pill is
+         the vendored nav contract; the journal is read, not lived in). Reached
+         as #journal from the palette and the Board's Done column; any tab
+         press leaves it (app.js). The shared text strip + filter card apply
+         (project · person · text — status, due, modified and sort hidden). -->
+    <section id="paneJournal" class="pane" role="region" aria-label="Done journal" hidden>
+      <div class="pane-body">
+        <div class="pane-top">
+          <div class="filter-text" id="journalFilterText" hidden></div>
+        </div>
+        <div class="filter-host" id="journalFilters" hidden></div>
+        <div id="journalHost" data-empty="tasks"></div>
       </div>
     </section>
     <section id="paneSettings" class="pane" role="tabpanel" aria-labelledby="tabSettings" aria-label="Settings" hidden>

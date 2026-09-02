@@ -35,7 +35,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 9
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 10
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -405,3 +405,19 @@ def test_bulk_refuses_a_malformed_request(client: TestClient, body: dict, status
     _mk(client, "Present")
     r = client.post("/api/tasks/bulk", json=body)
     assert r.status_code == status and "error" in r.json()
+
+
+def test_done_window_over_http_orders_newest_first(seeded: TestClient) -> None:
+    """#102 — the journal's read: ``status=done,cancelled`` + a ``done_from`` /
+    ``done_to`` window comes back newest closing first; the older-probe is the
+    same call with ``done_to`` and ``limit=1``; a bad date is a 422."""
+    r = seeded.get("/api/tasks", params={"status": "done,cancelled", "done_from": "2026-08-11", "done_to": "2026-08-17"})
+    assert r.status_code == 200
+    assert [t["title"] for t in r.json()["items"]] == [
+        "Descale the kettle", "Send the lease renewal",
+        "Fix the watering timezone bug", "Cancel the unused streaming plan",
+    ]
+    older = seeded.get("/api/tasks", params={"status": "done,cancelled", "done_to": "2026-08-10", "limit": 1}).json()
+    assert older["count"] == 1 and older["items"][0]["title"] == "Return the borrowed drill"
+    bad = seeded.get("/api/tasks", params={"done_from": "last tuesday"})
+    assert bad.status_code == 422 and "done_from" in bad.json()["error"]["message"]

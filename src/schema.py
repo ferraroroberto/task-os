@@ -55,6 +55,13 @@ Version history:
        takes ``day-N`` or ``<1..4|last>-<weekday>``; the other cadences take
        none. NULL keeps the plain offset roll. Grammar and arithmetic live in
        ``src/dates.py``, validation in ``src/tasks_repo.py``.
+    10 tasks.done_at backfilled for cancelled tasks — no DDL           (issue #102)
+       — ``done_at`` becomes the *closed-at* stamp: set when a task enters
+       ``done`` **or** ``cancelled``, cleared when it reopens. The done
+       journal groups both by that day. Rows cancelled before this step carry
+       the timestamp of their ``status → cancelled`` activity row (the moment
+       it actually happened), or ``updated_at`` when no such row exists (an
+       import that arrived already cancelled).
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -283,9 +290,23 @@ _V9 = """
 ALTER TABLE tasks ADD COLUMN recurrence_anchor TEXT;
 """
 
+# done_at for cancelled tasks (#102) — a data step, no DDL. Until here only
+# ``done`` stamped ``done_at``; the journal reads it as "closed at", so a
+# cancelled task needs one too. The activity log knows when the cancellation
+# happened; ``updated_at`` is the honest fallback for a row that never logged
+# one (created cancelled by an importer). Idempotent: only NULLs are touched.
+_V10 = """
+UPDATE tasks
+   SET done_at = COALESCE(
+       (SELECT MAX(a.ts) FROM activity a
+         WHERE a.task_id = tasks.id AND a.field = 'status' AND a.new_value = 'cancelled'),
+       updated_at)
+ WHERE status = 'cancelled' AND done_at IS NULL;
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
-    1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9,
+    1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10,
 }
 
 #: The version a freshly migrated database carries.

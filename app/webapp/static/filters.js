@@ -167,8 +167,9 @@ export function matchesFilters(t, f, today) {
  * the Search tab's own box), so repeating it under that box is noise (#80). */
 export function describeFilters(f, options) {
   const o = options || {};
+  const hidden = new Set(o.hide || []);   // a hidden control's value is not applied, so not described
   const bits = [];
-  if (f.status.length) bits.push(f.status.join(', '));
+  if (f.status.length && !hidden.has('status')) bits.push(f.status.join(', '));
   if (f.project) {
     const p = (o.projects || []).find(function (x) { return String(x.id) === String(f.project); });
     bits.push(p ? p.title : 'project #' + f.project);
@@ -179,9 +180,9 @@ export function describeFilters(f, options) {
       return p ? p.name : 'person #' + id;
     }).join(', '));
   }
-  if (f.due) bits.push((DUE_WINDOWS.find(function (w) { return w[0] === f.due; }) || [])[1].toLowerCase());
-  if (f.updated) bits.push((UPDATED_WINDOWS.find(function (w) { return w[0] === f.updated; }) || [])[1].toLowerCase());
-  bits.push('sorted by ' + sortLabel(f.sort));
+  if (f.due && !hidden.has('due')) bits.push((DUE_WINDOWS.find(function (w) { return w[0] === f.due; }) || [])[1].toLowerCase());
+  if (f.updated && !hidden.has('updated')) bits.push((UPDATED_WINDOWS.find(function (w) { return w[0] === f.updated; }) || [])[1].toLowerCase());
+  if (!hidden.has('sort')) bits.push('sorted by ' + sortLabel(f.sort));
   return bits;
 }
 
@@ -287,7 +288,17 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
  * @returns {{render: (filters: object, options: {projects: Array, people: Array, count: number}) => void,
  *            setOpen: (open: boolean) => void}}
  */
+/**
+ * @param {HTMLElement} host
+ * @param {{onChange: (f: object) => void, textHost?: HTMLElement, hide?: string[],
+ *          countLabel?: string}} opts
+ *          hide = control names this card leaves out (`status` · `due` ·
+ *          `updated` · `sort` · `project` · `person`) — the journal (#102)
+ *          drops the four that say nothing about a closed task; a hidden
+ *          control's value is neither drawn nor described
+ */
 export function mountFilters(host, opts) {
+  const hidden = new Set(opts.hide || []);
   let open = false;
   let openMenu = null;       // the multi-select left open across a re-render
   let textTimer = 0;
@@ -341,7 +352,7 @@ export function mountFilters(host, opts) {
     main.appendChild(h);
     const desc = document.createElement('span');
     desc.className = 'collapse-count filter-desc';
-    const bits = describeFilters(filters, { projects: o.projects, people: o.people });
+    const bits = describeFilters(filters, { projects: o.projects, people: o.people, hide: opts.hide });
     if (o.count != null) bits.push(o.count + ' ' + (opts.countLabel || (o.count === 1 ? 'task' : 'tasks')));
     desc.textContent = bits.join(' · ');
     main.appendChild(desc);
@@ -364,19 +375,23 @@ export function mountFilters(host, opts) {
     const projectValues = [['', 'All projects']].concat((o.projects || []).map(function (p) {
       return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
     }));
-    row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
-    row.appendChild(multiSelect('person', 'Person', (o.people || []).map(function (p) { return [String(p.id), p.name]; }),
-      filters.person, change('person'), { none: 'Anyone', many: 'people', open: openMenu === 'person' }));
+    if (!hidden.has('project')) row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
+    if (!hidden.has('person')) {
+      row.appendChild(multiSelect('person', 'Person', (o.people || []).map(function (p) { return [String(p.id), p.name]; }),
+        filters.person, change('person'), { none: 'Anyone', many: 'people', open: openMenu === 'person' }));
+    }
     // 2. due | modified
-    row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
-    row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
+    if (!hidden.has('due')) row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
+    if (!hidden.has('updated')) row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
     // 3. status | sort
     // `deferred` rides the end of the status list — the one visible way to see
     // the sleeping tasks the working views leave out (#87).
     const statusValues = STATUSES.map(function (s) { return [s, s]; }).concat([[DEFERRED, DEFERRED]]);
-    row.appendChild(multiSelect('status', 'Status', statusValues,
-      filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
-    row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
+    if (!hidden.has('status')) {
+      row.appendChild(multiSelect('status', 'Status', statusValues,
+        filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
+    }
+    if (!hidden.has('sort')) row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
     if (!isDefaultFilters(Object.assign({}, filters, { q: opts.textHost ? filters.q : '' }))) {
       const clear = document.createElement('button');
       clear.type = 'button';
