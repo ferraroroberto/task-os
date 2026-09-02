@@ -24,7 +24,8 @@ Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 · ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``
 (repeatable / comma-separated ids), ``q`` (full text), ``updated_since``
 (date), ``updated_before`` (date — the stale windows' inverse twin, #101),
-``done_on`` (date), ``include_closed``, ``limit``.
+``done_on`` (date), ``done_from`` / ``done_to`` (dates — the done journal's
+window, #102; newest closing first), ``include_closed``, ``limit``.
 
 ``status`` also takes the pseudo-value ``deferred`` (#87) — not a status but
 a modifier: it flips the list from awake tasks to the sleeping ones (``starts``
@@ -209,6 +210,8 @@ def list_tasks(
     updated_since: str | None = None,
     updated_before: str | None = None,
     done_on: str | None = None,
+    done_from: str | None = None,
+    done_to: str | None = None,
     include_closed: bool = False,
     limit: int | None = Query(default=None, ge=1, le=1000),
     db: sqlite3.Connection = Depends(get_db),
@@ -242,6 +245,8 @@ def list_tasks(
         include_closed=include_closed,
         limit=limit,
         done_on=done_on,
+        done_from=done_from,
+        done_to=done_to,
         updated_since=updated_since,
         updated_before=updated_before,
         deferred=deferred,

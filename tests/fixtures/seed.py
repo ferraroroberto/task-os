@@ -16,8 +16,11 @@ cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
 **deferred** task (a ``starts`` date 20 days out — #87) so the sleeping state
 is on screen without anyone having to create it, one **dormant** task
 last touched 45 days back (#101) so the stale filter has something to show,
-and a **plan** (#89): two tasks committed to the anchor day plus one planned
-the day before and left unfinished (the "planned yesterday" candidate).
+a **plan** (#89): two tasks committed to the anchor day plus one planned
+the day before and left unfinished (the "planned yesterday" candidate), and
+five tasks **closed on known days** (#102) — yesterday, two days back (one
+of them cancelled) and nine days back — so the done journal has days to
+group, a cancelled row to mute and an older week to load.
 
 Use it:
 
@@ -175,6 +178,28 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         with repo.use_clock(_Clock(datetime.combine(anchor - timedelta(days=45), datetime.min.time()).astimezone())):
             task("dormant", "Sort the garage shelves", parent_id=ids["home"],
                  status="todo", priority="low")
+
+        # ---- closed on known days (#102) ---------------------------------
+        # Every other closed task above closed on day one of the seed clock
+        # (anchor−30) — a journal with one page. These close on their own
+        # clocks: two yesterday, two the day before (one done, one cancelled),
+        # one nine days back (the week before) — so the journal has days to
+        # group, a cancelled row to mute and an older week to load. Appended
+        # last for the same id-position reason as the two tasks above.
+        def closed_on(days_ago: int, hour: int, minute: int) -> Any:
+            at = datetime.combine(anchor - timedelta(days=days_ago), datetime.min.time()).astimezone()
+            return repo.use_clock(_Clock(at + timedelta(hours=hour, minutes=minute)))
+
+        with closed_on(1, 18, 40):
+            task("kettle", "Descale the kettle", parent_id=ids["home"], status="done")
+        with closed_on(1, 9, 15):
+            task("lease", "Send the lease renewal", parent_id=ids["family"], status="done", priority="medium")
+        with closed_on(2, 16, 5):
+            task("timezone", "Fix the watering timezone bug", parent_id=ids["bot"], status="done")
+        with closed_on(2, 11, 30):
+            task("streaming", "Cancel the unused streaming plan", parent_id=ids["family"], status="cancelled")
+        with closed_on(9, 11, 0):
+            task("drill", "Return the borrowed drill", status="done")
 
         # ---- comments (some with links) ---------------------------------
         repo.add_comment(conn, ids["quotes"], "First quote in: https://example.com/quotes/1 — a bit high.", author="Sam Rivera", origin="ui")

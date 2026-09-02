@@ -96,6 +96,15 @@ export function mountBoard(handlers) {
     n.dataset.col = col.key;
     n.textContent = '0';
     h.appendChild(n);
+    if (col.key === 'done') {
+      // the reading surface behind this column (#102) — a link, not a tab
+      const link = document.createElement('a');
+      link.className = 'board-col-link';
+      link.href = '#journal';
+      link.textContent = 'journal';
+      link.title = 'Done journal — everything closed, by day';
+      h.appendChild(link);
+    }
     section.appendChild(h);
     const list = document.createElement('ul');
     list.className = 'trows board-list';

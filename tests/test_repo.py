@@ -61,8 +61,8 @@ def test_nesting_tree_and_breadcrumb(conn: sqlite3.Connection, seeded: dict) -> 
     quotes = repo.get_task(conn, seeded["quotes"])
     assert [c["title"] for c in quotes["breadcrumb"]] == ["Home renovation", "Kitchen"]
     home = repo.get_task(conn, seeded["home"])
-    assert home["is_project"] and home["child_count"] == 4    # 3 rooms + the dormant task (#101)
-    assert [c["title"] for c in home["children"]] == ["Kitchen", "Bathroom", "Garden", "Sort the garage shelves"]
+    assert home["is_project"] and home["child_count"] == 5    # 3 rooms + the dormant task (#101) + the kettle (#102)
+    assert [c["title"] for c in home["children"]] == ["Kitchen", "Bathroom", "Garden", "Sort the garage shelves", "Descale the kettle"]
 
     forest = repo.tree(conn)
     roots = [n["title"] for n in forest]
@@ -664,3 +664,44 @@ def test_bulk_update_collapses_duplicate_ids(conn: sqlite3.Connection) -> None:
     results = repo.bulk_update(conn, [rolling, rolling, rolling], complete=True)
     assert [r["id"] for r in results] == [rolling]
     assert repo.get_task(conn, rolling)["due"] == "2026-09-07"    # rolled once, not three times
+
+
+# ------------------------------------------------------------ done journal (#102)
+
+
+def _at(y: int, mo: int, d: int, h: int = 9, mi: int = 0):
+    return repo.use_clock(lambda: datetime(y, mo, d, h, mi, 0).astimezone())
+
+
+def test_done_window_is_local_midnight_and_newest_first(conn: sqlite3.Connection, seeded: dict) -> None:
+    """#102 — ``done_from`` / ``done_to`` bound the closing day at local
+    midnight (the ``done_on`` rule), a window flips the order to newest
+    closing first, and cancelling stamps the same closed-at column."""
+    with _at(2026, 8, 16, 23, 59):
+        repo.done(conn, seeded["library"])
+    with _at(2026, 8, 17, 0, 0):
+        repo.done(conn, seeded["callback"])
+    with _at(2026, 8, 17, 12, 0):
+        cancelled = repo.set_status(conn, seeded["inbox3"], "cancelled", actor="me")
+    assert cancelled["done_at"].startswith("2026-08-17T12:00")
+    closed = ["done", "cancelled"]
+    day = repo.list_tasks(conn, status=closed, done_from="2026-08-17", done_to="2026-08-17")
+    assert [t["id"] for t in day] == [seeded["inbox3"], seeded["callback"]]    # 23:59 the day before is out
+    both = repo.list_tasks(conn, status=closed, done_from="2026-08-16", done_to="2026-08-17")
+    # …then the 16th: the library book at 23:59, and the seed's two "yesterday" closings
+    assert [t["id"] for t in both] == [seeded["inbox3"], seeded["callback"], seeded["library"], seeded["kettle"], seeded["lease"]]
+    # the seed's own closed days (anchor−1, −2, −9): a week holds seven, the
+    # week before starts with the drill — newest closing first throughout
+    week = [t["title"] for t in repo.list_tasks(conn, status=closed, done_from="2026-08-11", done_to="2026-08-17")]
+    assert week == [
+        "Compare phone plans", "Call the plumber back", "Return library books",
+        "Descale the kettle", "Send the lease renewal",
+        "Fix the watering timezone bug", "Cancel the unused streaming plan",
+    ]
+    older = repo.list_tasks(conn, status=closed, done_to="2026-08-10")
+    assert older[0]["title"] == "Return the borrowed drill"
+    assert "Sell the old bikes" in [t["title"] for t in older]      # created cancelled → stamped too
+    # reopening clears the stamp — a reopened task has no closing day
+    assert repo.set_status(conn, seeded["inbox3"], "todo")["done_at"] is None
+    with pytest.raises(repo.ValidationError):
+        repo.list_tasks(conn, done_from="whenever")

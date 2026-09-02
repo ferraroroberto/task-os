@@ -30,7 +30,7 @@
 import { duePicker } from './dueinput.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  STATUSES, aiChip, chipFor, isDeferred, issueChip, recurrenceLabel, relDue, startsLabel,
+  STATUSES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, recurrenceLabel, relDue, startsLabel,
 } from './format.js';
 import { snoozeButton } from './snooze.js';
 
@@ -187,7 +187,9 @@ export function metaLine(t, opts) {
   meta.className = 'trow-meta';
   if (t.code) meta.appendChild(metaPart('code', null, t.code, 'code'));
   const project = t.root ? t.root.title : '';
-  if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, project));
+  // the part names the root; its tooltip is the whole path (a journal row
+  // three levels down reads "Home renovation › Kitchen" on hover, #102)
+  if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, breadcrumbText(t.breadcrumb) || project));
   if (t.due) meta.appendChild(dueChip(t, relDue(t.due), o.onDue || null));
   // A sleeping task says so wherever it still shows (the Tree, a search hit,
   // the Deferred filter) — the working views drop it, they never lie about it.

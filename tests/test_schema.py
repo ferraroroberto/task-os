@@ -30,10 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 9
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 10
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 9
+        assert schema.current_version(conn) == 10
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -47,13 +47,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 9
-        assert schema.migrate(conn) == 9
+        assert schema.migrate(conn) == 10
+        assert schema.migrate(conn) == 10
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 9
+    assert dbmod.init_db() == 10
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -67,10 +67,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 9
+    assert dbmod.init_db() == 10
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 9
+        assert schema.current_version(conn) == 10
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -90,7 +90,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 9
+    assert dbmod.init_db() == 10
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -135,7 +135,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 9
+    assert dbmod.init_db() == 10
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -165,5 +165,43 @@ def test_check_constraints_reject_bad_enums(_temp_db: Path) -> None:
             conn.execute(
                 "INSERT INTO tasks(title, type, created_at, updated_at) VALUES ('x', 'epic', 't', 't')"
             )
+    finally:
+        conn.close()
+
+
+def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
+    """A v9 file's cancelled tasks gain ``done_at`` (#102): the time of their
+    ``status → cancelled`` activity row when one was logged, ``updated_at``
+    otherwise; done and open tasks are untouched."""
+    conn = _open(_temp_db)
+    for target in range(1, 10):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '9')")
+    rows = [
+        (1, "Logged", "cancelled", "2026-08-20T10:00:00+02:00", None),
+        (2, "Imported", "cancelled", "2026-08-01T08:00:00+02:00", None),
+        (3, "Done", "done", "2026-07-02T08:00:00+02:00", "2026-07-01T08:00:00+02:00"),
+        (4, "Open", "todo", "2026-07-02T08:00:00+02:00", None),
+    ]
+    conn.executemany(
+        "INSERT INTO tasks(id, title, status, created_at, updated_at, done_at) VALUES (?, ?, ?, 'c', ?, ?)", rows
+    )
+    conn.execute(
+        "INSERT INTO activity(task_id, ts, actor, field, old_value, new_value)"
+        " VALUES (1, '2026-08-19T09:30:00+02:00', 'me', 'status', 'todo', 'cancelled')"
+    )
+    conn.commit()
+    conn.close()
+
+    assert dbmod.init_db() == 10
+    conn = dbmod.connect()
+    try:
+        stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
+        assert stamped == {
+            1: "2026-08-19T09:30:00+02:00",   # the moment it was cancelled
+            2: "2026-08-01T08:00:00+02:00",   # no log row → updated_at
+            3: "2026-07-01T08:00:00+02:00",   # done: as it was
+            4: None,
+        }
     finally:
         conn.close()

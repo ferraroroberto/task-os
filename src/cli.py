@@ -13,6 +13,7 @@
     tasks done N
     tasks plan                  plan the day: y/n/s over the candidates (#89)
     tasks plan ls               today's plan, ordered, with the n-of-m progress line
+    tasks journal [--weeks N]   what got done, grouped by day, newest first (#102)
     tasks move N --parent M     (--parent root → top level)
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
@@ -290,6 +291,8 @@ class LocalBackend:
             q=filters.get("q"),
             include_closed=bool(filters.get("include_closed")),
             updated_before=filters.get("updated_before"),
+            done_from=filters.get("done_from"),
+            done_to=filters.get("done_to"),
             # None = follow include_closed, so `ls --status all` means all
             deferred="only" if filters.get("deferred") else None,
         )
@@ -529,6 +532,39 @@ def fmt_ls(items: list[dict[str, Any]]) -> str:
     for r in rows:
         out.append("  ".join(r[i].ljust(widths[i]) for i in range(4)) + "  " + r[4])
     return "\n".join(out)
+
+
+def group_journal(items: list[dict[str, Any]], done_from: str, done_to: str) -> dict[str, Any]:
+    """The done journal's shape (#102): closed tasks grouped by the local
+    calendar day of ``done_at``, newest day first, each day with its count.
+
+    The same grouping the web journal draws — ``done_at`` is a local
+    timestamp, so the day is its first ten characters (never UTC
+    arithmetic). Both backends hand the list over already ordered newest
+    closing first, so the groups come out in order without a sort here.
+    """
+    days: list[dict[str, Any]] = []
+    for t in items:
+        day = (t.get("done_at") or "")[:10]
+        if not days or days[-1]["day"] != day:
+            days.append({"day": day, "count": 0, "items": []})
+        days[-1]["items"].append(t)
+        days[-1]["count"] += 1
+    return {"from": done_from, "to": done_to, "count": len(items), "days": days}
+
+
+def fmt_journal(journal: dict[str, Any]) -> str:
+    if not journal["days"]:
+        return f"(nothing closed between {journal['from']} and {journal['to']})"
+    lines = []
+    for d in journal["days"]:
+        when = date.fromisoformat(d["day"]).strftime("%a %d %b") if d["day"] else "(no date)"
+        lines.append(f"{when} · {d['count']} done")
+        for t in d["items"]:
+            mark = "x" if t.get("status") == "done" else "-"
+            crumb = _crumb(t)
+            lines.append(f"  [{mark}] {_fmt_task_line(t)}" + (f"  {crumb}" if crumb else ""))
+    return "\n".join(lines)
 
 
 def fmt_plan(plan: dict[str, Any]) -> str:
@@ -773,6 +809,17 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             filters["updated_before"] = _parse_before_arg(args.updated_before)
         items = backend.ls(**filters)
         return items, fmt_ls(items)
+    if cmd == "journal":
+        weeks = args.weeks if args.weeks and args.weeks > 0 else 1
+        done_to = date.today().isoformat()
+        done_from = (date.today() - timedelta(days=7 * weeks - 1)).isoformat()
+        filters = {"status": "done,cancelled", "done_from": done_from, "done_to": done_to}
+        if args.project is not None:
+            filters["project"] = args.project
+        if args.person:
+            filters["person"] = _resolve_person(backend, args.person)
+        journal = group_journal(backend.ls(**filters), done_from, done_to)
+        return journal, fmt_journal(journal)
     if cmd == "show":
         t = backend.show(args.id)
         return t, fmt_show(t)
@@ -948,6 +995,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="only tasks last touched strictly before this day (a date, or Nd = N days ago)")
     ls.add_argument("--deferred", action="store_true",
                     help="only tasks still sleeping (a start date in the future)")
+
+    j = sub.add_parser("journal", parents=[common],
+                       help="what got done, grouped by day, newest first (this week by default)")
+    j.add_argument("--weeks", type=int, default=1, help="how many weeks back (7-day steps ending today)")
+    j.add_argument("--project", type=int, help="only descendants of this task")
+    j.add_argument("--person", help="person id or name")
 
     s = sub.add_parser("show", parents=[common], help="task detail with comments + activity")
     s.add_argument("id", type=int)

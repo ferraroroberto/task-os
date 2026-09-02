@@ -17,7 +17,9 @@ Rules enforced here (plan §04):
   next occurrence after both that due and today (``src.dates.next_due``,
   honouring the fixed-day ``recurrence_anchor``) and logs the completion; a
   non-recurring task becomes ``done`` with ``done_at``; the roll never
-  touches ``starts``;
+  touches ``starts``. ``done_at`` is the *closed-at* stamp (#102): entering
+  ``done`` or ``cancelled`` sets it, reopening clears it — the done journal
+  groups both by that local day;
 - a task whose ``starts`` has not arrived is *deferred*: :func:`list_tasks`
   hides it by default, so every working view (Board, Today, Table, the CLI)
   inherits one rule from one clause — :func:`tree` and :func:`search` read
@@ -90,6 +92,8 @@ _TASK_FIELDS = (
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
 DATE_FIELDS = ("due", "starts", "planned_on")
 _TASK_COLUMNS = ("id", *_TASK_FIELDS, "created_by", "created_at", "updated_at", "done_at")
+#: The two statuses a task leaves the working views in — both stamp ``done_at`` (#102).
+CLOSED_STATUSES = ("done", "cancelled")
 _ENUMS: dict[str, tuple[str, ...]] = {
     "type": TASK_TYPES,
     "status": TASK_STATUSES,
@@ -447,7 +451,7 @@ def create_task(
             ),
             "created_by": actor,
             "ts": ts,
-            "done_at": ts if values["status"] == "done" else None,
+            "done_at": ts if values["status"] in CLOSED_STATUSES else None,
         },
     )
     task_id = int(cur.lastrowid)
@@ -551,9 +555,11 @@ def update_task(
 
     ts = now_iso()
     if "status" in sets:
-        if sets["status"] == "done":
+        # closed-at (#102): any move into done / cancelled stamps the moment,
+        # any move back out clears it (a reopened task has no closing day)
+        if sets["status"] in CLOSED_STATUSES:
             sets["done_at"] = ts
-        elif current["status"] == "done":
+        elif current["status"] in CLOSED_STATUSES:
             sets["done_at"] = None
     sets["updated_at"] = ts
     assignments = ", ".join(f"{k} = :{k}" for k in sets)
@@ -864,6 +870,8 @@ def list_tasks(
     include_closed: bool = False,
     limit: int | None = None,
     done_on: str | None = None,
+    done_from: str | None = None,
+    done_to: str | None = None,
     updated_since: str | None = None,
     updated_before: str | None = None,
     deferred: str | None = None,
@@ -879,6 +887,13 @@ def list_tasks(
     - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
       on that day (the Board's *Done today* column; ``done_at`` is a local
       timestamp, so the boundary is local midnight).
+    - ``done_from`` / ``done_to``: an inclusive window of local calendar days
+      over ``done_at`` — the done journal's page (#102), same midnight rule.
+      ``done_at`` is the closed-at stamp, so ``status=done,cancelled`` plus a
+      window is "everything that closed that week". A done window flips the
+      order to **newest closing first** (``done_at`` desc): it is only ever
+      read as a journal, and a due-first order would scatter one day's
+      completions across the page.
     - ``updated_since``: a local calendar date — only tasks whose ``updated_at``
       falls on or after that day (the shared filter card's *modified* window).
     - ``updated_before``: the inverse twin — only tasks whose ``updated_at``
@@ -968,6 +983,14 @@ def list_tasks(
         where.append("substr(t.done_at, 1, 10) = ?")
         args.append(_validate_date(done_on, "done_on"))
 
+    if done_from:
+        where.append("substr(t.done_at, 1, 10) >= ?")
+        args.append(_validate_date(done_from, "done_from"))
+
+    if done_to:
+        where.append("substr(t.done_at, 1, 10) <= ?")
+        args.append(_validate_date(done_to, "done_to"))
+
     if updated_since:
         where.append("substr(t.updated_at, 1, 10) >= ?")
         args.append(_validate_date(updated_since, "updated_since"))
@@ -986,10 +1009,13 @@ def list_tasks(
     sql = "SELECT t.* FROM tasks t"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += (
-        " ORDER BY t.due IS NULL, t.due, "
-        "CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END, t.id"
-    )
+    if done_from or done_to:
+        sql += " ORDER BY t.done_at DESC, t.id DESC"
+    else:
+        sql += (
+            " ORDER BY t.due IS NULL, t.due, "
+            "CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END, t.id"
+        )
     if limit:
         sql += f" LIMIT {int(limit)}"
     items = [_summary(conn, dict(r)) for r in conn.execute(sql, args).fetchall()]
