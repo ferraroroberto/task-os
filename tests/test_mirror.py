@@ -326,6 +326,51 @@ def test_appended_comment_lines_become_md_comments(env, mirror: Mirror) -> None:
     assert len(repo.list_comments(conn, tid)) == 3
 
 
+def test_non_md_origin_line_imports_once(env, mirror: Mirror) -> None:
+    """A file the app did not write imports its comment once, however often it is read (#123).
+
+    Every imported comment is stored with ``origin=md``, so keying the dedup on the
+    file's own origin token meant a ``· ui:`` line never matched the row it had just
+    created — and was re-inserted on every pass, without bound.
+    """
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    mirror.export_task(conn, tid)
+    doctored = path.read_text(encoding="utf-8").replace(
+        "\n## Log", "- 2026-07-31T00:46:00+02:00 · Sam Rivera · ui: an outside comment\n\n## Log"
+    )
+    for _ in range(3):
+        _touch(path, doctored)  # the same file keeps arriving (a restore, a re-drop, a copied line)
+        mirror.import_file(conn, path)
+    bodies = [c["body"] for c in repo.list_comments(conn, tid)]
+    assert bodies.count("an outside comment") == 1, bodies
+    stored = next(c for c in repo.list_comments(conn, tid) if c["body"] == "an outside comment")
+    assert stored["origin"] == "md"  # provenance is where it arrived, not what the file claimed
+    assert stored["author"] == "Sam Rivera"
+
+
+def test_unsigned_line_imports_once(env, mirror: Mirror) -> None:
+    """A line written with the ``-`` author sentinel imports once, not once per pass (#123).
+
+    ``-`` is what ``render`` emits for a missing author, so it is the natural thing
+    to type; it comes back in as the configured owner, and keying the dedup on the
+    raw token meant the stored row could never match the line that created it.
+    """
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    mirror.export_task(conn, tid)
+    doctored = path.read_text(encoding="utf-8").replace(
+        "\n## Log", "- 2026-07-31T00:46:00+02:00 · - · md: nobody signed this\n\n## Log"
+    )
+    for _ in range(3):
+        _touch(path, doctored)
+        mirror.import_file(conn, path)
+    bodies = [c["body"] for c in repo.list_comments(conn, tid)]
+    assert bodies.count("nobody signed this") == 1, bodies
+    stored = next(c for c in repo.list_comments(conn, tid) if c["body"] == "nobody signed this")
+    assert stored["author"] == "Roberto Ferraro"  # the configured owner, per the sample config
+
+
 def test_deleted_comment_lines_are_not_deletions(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)
