@@ -479,6 +479,9 @@ a.chip:hover { text-decoration: underline; }
 .bulk-due:hover { color: var(--accent); }
 .bulk-exit { margin-left: auto; }
 .bulk-exit:hover { color: var(--fg); }
+/* Delete (#121): quiet until hovered, then the danger tone — state, not decoration */
+.bulk-delete { color: var(--muted); }
+.bulk-delete:hover { color: var(--danger); }
 @media (max-width: 360px) {
   /* the narrowest phones: drop the WORD so the select keeps a readable width
      and the row still never wraps — the count itself always stays, it is what
@@ -1923,6 +1926,21 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* The shortcuts sheet — the vendored modal shell, read-only. */
 .detail-dialog.keys-dialog { width: min(560px, 94vw); margin-top: 6vh; }
+
+/* ---- the confirmation dialog (#121): the vendored modal shell, one danger primary */
+.detail-dialog.confirm-dialog { width: min(480px, 94vw); margin-top: 14vh; }
+.confirm-body { margin: 12px 0 0; font-size: var(--font-label); color: var(--ink); }
+.confirm-body p { margin: 0 0 8px; }
+.confirm-warn { color: var(--danger); font-weight: 600; }
+/* the destructive primary restates the tint recipe on danger (design.md) */
+.detail-save-btn.confirm-danger { background: var(--deficit-soft); color: var(--danger); border-color: var(--deficit-border-soft); }
+.detail-save-btn.confirm-danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+
+/* ---- the drawer's delete foot (#121) */
+.drawer-danger { padding: 14px 0 18px; }
+.drawer-delete { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; color: var(--danger); border-color: var(--deficit-border-soft); }
+.drawer-delete:hover { background: var(--deficit-soft); }
+.drawer-delete .icon { width: var(--icon-title); height: var(--icon-title); }
 .keys-lead { margin: 0 0 10px; font-size: var(--font-caption); }
 .keys-sub { margin: 14px 0 2px; font-size: var(--font-label); }
 .keys-rows { display: grid; }

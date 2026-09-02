@@ -5,15 +5,17 @@
  * stacking a third row above the board: the pane keeps its height, and on the
  * phone nothing lands near the floating bottom-nav pill.
  *
- *   ☑ 3 selected   [Set status…▾]   📅   ✕
+ *   ☑ 3 selected   [Set status…▾]   📅   🗑   ✕
  *
  * One line, and every control the same square height as the strip's own
- * buttons. Two actions, both applying the moment they are given a value — the
+ * buttons. Two edits, both applying the moment they are given a value — the
  * same commit gesture the single-task controls use (the row's status select
  * applies on change; a picked date on change), so nothing here needs a Save
  * the rest of the app doesn't have. `complete` is offered alongside the plain
  * statuses because the selection may hold recurring tasks; the server decides
- * per task what it means (issue #54 semantics, applied in bulk).
+ * per task what it means (issue #54 semantics, applied in bulk). The third
+ * action, delete (#121), is the one that asks first — the caller owns the
+ * confirmation and the request; the bar only locks while it runs.
  *
  * Mounted once per pane (Board, Table); every instance reads the one selection
  * store, so both bars always say the same number.
@@ -31,6 +33,7 @@ const STATUS_PLACEHOLDER = '';
 /**
  * @param {HTMLElement} host   the `.bulk-bar` container in a pane's top strip
  * @param {{onApply: (changes: {status?: string, due?: string}) => Promise<any>,
+ *          onDelete: () => Promise<any>,
  *          onExit: () => void}} handlers
  * @returns {{render: () => void}}
  */
@@ -84,9 +87,26 @@ export function mountBulkBar(host, handlers) {
     onPick: function (value) { apply({ due: value }, function () { due.picker.value = ''; }); },
   });
 
+  // Delete (#121): the caller confirms and posts; this square only locks the
+  // bar while that runs, exactly like an apply.
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'button-surface strip-square bulk-delete';
+  del.title = 'Delete the selected tasks';
+  del.setAttribute('aria-label', 'Delete the selected tasks');
+  del.innerHTML = icon('trash-2');
+  del.addEventListener('click', function () {
+    if (busy) return;
+    busy = true;
+    setDisabled(true);
+    Promise.resolve(handlers.onDelete())
+      .catch(function () { /* toasted by the caller */ })
+      .finally(function () { busy = false; setDisabled(false); });
+  });
+
   const exit = document.createElement('button');
   exit.type = 'button';
-  // the same class stack the strip's + and Select toggle wear, so all four
+  // the same class stack the strip's + and Select toggle wear, so all five
   // squares are one control by construction, not by two rules agreeing
   exit.className = 'button-surface strip-square bulk-exit';
   exit.title = 'Leave select mode';
@@ -120,9 +140,10 @@ export function mountBulkBar(host, handlers) {
   function setDisabled(on) {
     status.disabled = on;
     due.button.disabled = on;
+    del.disabled = on;
   }
 
-  host.append(count, status, due.button, due.picker, exit);
+  host.append(count, status, due.button, due.picker, del, exit);
 
   function render() {
     const n = selection.size();

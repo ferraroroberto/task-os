@@ -575,6 +575,27 @@ def test_delete_cascades_subtree(conn: sqlite3.Connection, seeded: dict) -> None
         repo.get_task(conn, seeded["quotes"])
 
 
+def test_bulk_delete_names_the_gone_and_folds_a_child_into_its_parent(
+    conn: sqlite3.Connection, seeded: dict
+) -> None:
+    """#121: the detail carries the whole subtree's size (what a delete takes),
+    and the bulk twin reports per id — a ticked child whose parent went first
+    is not a failure, an id that was never there is a named one."""
+    kitchen, quotes = seeded["kitchen"], seeded["quotes"]
+    assert repo.get_task(conn, kitchen)["descendant_count"] == 3
+    assert repo.get_task(conn, kitchen)["child_count"] == 3
+    assert repo.get_task(conn, quotes)["descendant_count"] == 0
+    before = repo.counts(conn)["tasks"]
+    rows = repo.bulk_delete(conn, [kitchen, quotes, kitchen, 999_999])
+    assert [(r["id"], r["ok"], r.get("deleted")) for r in rows] == [
+        (kitchen, True, 4),
+        (quotes, True, 0),          # went with its parent — not a failure
+        (999_999, False, None),     # duplicates collapse; the unknown id is named
+    ]
+    assert rows[2]["error"]["code"] == "not_found"
+    assert before - repo.counts(conn)["tasks"] == 4
+
+
 # --------------------------------------------------------------- search
 
 def test_search_title_description_and_comments(conn: sqlite3.Connection, seeded: dict) -> None:

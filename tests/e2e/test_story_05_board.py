@@ -50,6 +50,15 @@ loading older weeks down to the seed's first closing day, the drawer under
     docs/screenshots/story-18-done-journal-{1,2}-desktop.png
     docs/screenshots/story-18-done-journal-3-phone.png   (phone leg, below)
 
+§ #121 (``_walk_delete_task``, same reason): deleting a task — the drawer's
+Delete and its confirmation naming the task and the subtree that goes with
+it, cancel leaving everything untouched, confirm closing the drawer with a
+toast and a 404 behind it, then the Select bar's delete over a batch of
+mistakes. The walk makes its own tasks over the API so the seed stays whole.
+Story 19 points here.
+
+    docs/screenshots/story-19-delete-task-{1,2}-desktop.png
+
 UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
 title + status select on line 1, the meta line under it) and shares ONE
 filter card; the Today checkbox is gone — "ticking" is the row's status
@@ -358,7 +367,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         # .icon-btn's 34px against the select's 36px
         boxes = bar.locator("select, button").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
-        assert len(boxes) == 3, boxes                        # status select · date · ✕
+        assert len(boxes) == 4, boxes                        # status select · date · delete · ✕
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
         assert all(round(s["w"]) == round(s["h"]) for s in boxes[1:]), boxes
@@ -416,6 +425,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
 
         _walk_keyboard_actions(page, base, shots)
         _walk_done_journal(page, base, shots)
+        _walk_delete_task(page, base, shots)
         assert errors == [], errors
     finally:
         context.close()
@@ -715,6 +725,84 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
 
 # ------------------------------------------------------------- phone leg
 
+def _status(page: Page, base: str, path: str) -> int:
+    """The HTTP status of a GET — for the 404 a deleted task must answer with
+    (`_get` raises on 4xx, which is the wrong shape for that assertion)."""
+    return page.evaluate("p => fetch(p).then(r => r.status)", path)
+
+
+def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
+    """§ #121 — delete a task from the drawer, then a batch from the Select bar.
+
+    The walk makes its own tasks over the API (a small project with two
+    children, two loose mistakes) so nothing the seed proves elsewhere is
+    touched; a reload on the deep link brings the Board up to date.
+    """
+    mk = lambda body: page.evaluate(  # noqa: E731
+        "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
+        "body: JSON.stringify(b)}).then(r => r.json())", body)
+    fence = mk({"title": "Repaint the garden fence", "status": "todo"})["id"]
+    kid = mk({"title": "Buy the primer", "parent_id": fence})["id"]
+    mk({"title": "Sand the posts", "parent_id": fence})
+    dupe = mk({"title": "Repaint the fence (duplicate)"})["id"]
+    test = mk({"title": "test task, ignore"})["id"]
+
+    # 1. The drawer's foot carries Delete; the dialog names the task and its subtree.
+    _clear_toasts(page)
+    page.goto(f"{base}/#task/{fence}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    expect(drawer.locator("#drawerTitle")).to_have_value("Repaint the garden fence")
+    drawer.locator(".drawer-delete").click()
+    dialog = page.locator("#confirmDialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.locator("#confirmTitle")).to_have_text('Delete "Repaint the garden fence"?')
+    expect(dialog.locator(".confirm-body")).to_contain_text("Its 2 child tasks go with it.")
+    expect(dialog.locator(".confirm-body")).to_contain_text("cannot be undone")
+    expect(dialog.locator(".confirm-warn")).to_have_count(0)     # not a synced coding task
+    page.screenshot(path=str(shots / "story-19-delete-task-1-desktop.png"))
+
+    # 2. Escape is "no": the drawer stays, the task is still there.
+    page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+    expect(drawer).to_be_visible()
+    assert _status(page, base, f"/api/tasks/{fence}") == 200
+
+    # 3. Confirm: the subtree is gone, the drawer closes, the hash clears, a toast says how much.
+    drawer.locator(".drawer-delete").click()
+    expect(dialog).to_be_visible()
+    dialog.locator(".confirm-danger").click()
+    expect(dialog).to_be_hidden()
+    expect(drawer).to_be_hidden()
+    assert page.evaluate("location.hash") == ""
+    expect(page.locator(".toasts")).to_contain_text('Deleted "Repaint the garden fence" · 3 tasks')
+    assert _status(page, base, f"/api/tasks/{fence}") == 404
+    assert _status(page, base, f"/api/tasks/{kid}") == 404
+    expect(page.locator(f"#boardHost .trow[data-id='{fence}']")).to_have_count(0)
+
+    # 4. A batch of mistakes from the Table's Select bar: one dialog with the count.
+    _clear_toasts(page)
+    page.click("nav.tabs .tab[data-tab='table']")
+    expect(page.locator(f"#tableHost .task-row[data-id='{dupe}']")).to_be_visible()
+    page.click("#paneTable [data-select-toggle]")
+    page.locator(f"#tableHost .task-row[data-id='{dupe}'] .row-check").check()
+    page.locator(f"#tableHost .task-row[data-id='{test}'] .row-check").check()
+    page.locator("#tableBulk .bulk-delete").click()
+    expect(dialog).to_be_visible()
+    expect(dialog.locator("#confirmTitle")).to_have_text("Delete 2 tasks?")
+    page.screenshot(path=str(shots / "story-19-delete-task-2-desktop.png"))
+    dialog.locator(".confirm-danger").click()
+    expect(dialog).to_be_hidden()
+    expect(page.locator(".toasts")).to_contain_text("2 tasks deleted")
+    expect(page.locator(f"#tableHost .task-row[data-id='{dupe}']")).to_have_count(0)
+    expect(page.locator(f"#tableHost .task-row[data-id='{test}']")).to_have_count(0)
+    assert _status(page, base, f"/api/tasks/{dupe}") == 404
+    # a clean batch clears the selection but stays in Select mode; leave it as found
+    expect(page.locator("#tableBulk")).to_be_hidden()
+    page.click("#paneTable [data-select-toggle]")
+    expect(page.locator("#paneTable [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+
+
 def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
     one-column scroll-snap carousel with the count strip, 44px targets (the
@@ -848,7 +936,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         # second line, and the date was a phrase box, before the owner's call)
         boxes = bar.locator("select, button").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
-        assert len(boxes) == 3, boxes                       # status select · date · ✕
+        assert len(boxes) == 4, boxes                       # status select · date · delete · ✕
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
         squares = boxes[1:]
