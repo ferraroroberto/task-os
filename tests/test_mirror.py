@@ -501,6 +501,141 @@ def test_disabled_when_dir_not_configured_or_parent_missing(tmp_path: Path, monk
     assert m4.status(conn)["enabled"] and m4.status(conn)["files"] == 0
 
 
+# ------------------------------------------------- provenance (#126)
+
+
+def _exported_at(conn: sqlite3.Connection, tid: int) -> str:
+    return conn.execute("SELECT exported_at FROM mirror_state WHERE task_id = ?", (tid,)).fetchone()[0]
+
+
+def test_foreign_export_is_not_an_edit(env, mirror: Mirror) -> None:
+    """#126: a file whose ``exported_at`` is newer than ours was rendered by another
+    task-os instance — nothing in it is applied, every differing value is a standing
+    event, and the file converges back to ours so a later real edit reads as one."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    alex = conn.execute("SELECT id FROM people WHERE name = 'Alex Chen'").fetchone()["id"]
+    with repo.use_clock(_clock(T0.replace(hour=8))):
+        repo.update_task(conn, tid, person_id=alex, actor="ui")
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    ours = _exported_at(conn, tid)
+    # what a second instance renders: its people table lacks Alex Chen, so its copy
+    # of the task says null — under its own, later, exported_at
+    later = T0.replace(hour=12).isoformat()
+    foreign = (
+        path.read_text(encoding="utf-8")
+        .replace("\nperson: Alex Chen\n", "\nperson: null\n")
+        .replace("\ntitle: Bathroom\n", "\ntitle: Someone else's task\n")
+        .replace(f"\nexported_at: {ours}\n", f"\nexported_at: {later}\n")
+    )
+    assert "person: null" in foreign and f"exported_at: {later}" in foreign
+    _touch(path, foreign)
+    with repo.use_clock(_clock(T0.replace(hour=13))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {} and res["rejected"] == [] and res["comments_added"] == 0
+    assert [c.split(":")[0] for c in res["conflicts"]] == ["import conflict on title", "import conflict on person"]
+    assert all("written by another task-os instance" in c for c in res["conflicts"])
+    task = repo.get_task(conn, tid)
+    assert task["title"] == "Bathroom" and task["person"]["name"] == "Alex Chen"
+    assert task["activity"][0]["actor"] == "ui"  # no md row was written
+    events = {e["field"]: e for e in repo.list_mirror_events(conn)}
+    assert set(events) == {"title", "person"}
+    assert (events["person"]["kind"], events["person"]["file_value"], events["person"]["kept_value"]) == ("conflict", "∅", "Alex Chen")
+    # the file converged back to ours, under our new stamp, and is not re-read
+    text = path.read_text(encoding="utf-8")
+    assert "person: Alex Chen" in text and "title: Bathroom" in text and later not in text
+    assert mirror.import_tick(conn)["imported"] == []
+    # a human blanking the person in *that* file is still a deliberate unassign
+    _touch(path, text.replace("\nperson: Alex Chen\n", "\nperson: null\n"))
+    res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"person": None} and res["conflicts"] == []
+    assert repo.get_task(conn, tid)["person_id"] is None
+    assert "person" not in {e["field"] for e in repo.list_mirror_events(conn)}
+
+
+def test_foreign_file_under_a_name_we_never_wrote_is_skipped(env, mirror: Mirror) -> None:
+    """#126: another instance's rendering of the same id under its own slug is
+    skipped (events recorded, our file untouched) and not re-read every tick."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    stranger = env["dir"] / f"{tid:04d}-someone-elses-task.md"
+    stranger.write_text(
+        path.read_text(encoding="utf-8")
+        .replace("\ntitle: Bathroom\n", "\ntitle: Someone else's task\n")
+        .replace(f"\nexported_at: {_exported_at(conn, tid)}\n", f"\nexported_at: {T0.replace(hour=12).isoformat()}\n"),
+        encoding="utf-8", newline="\n",
+    )
+    before = path.stat().st_mtime_ns
+    r1 = mirror.import_tick(conn)
+    assert r1["imported"] == [] and [e["path"] for e in r1["errors"]] == [stranger.name]
+    assert "written by another task-os instance" in r1["errors"][0]["error"]
+    assert repo.get_task(conn, tid)["title"] == "Bathroom"
+    assert path.stat().st_mtime_ns == before and stranger.exists()
+    assert [(e["field"], e["file_value"]) for e in repo.list_mirror_events(conn)] == [("title", "Someone else's task")]
+    assert mirror.status(conn)["error_files"] == [stranger.name]
+    assert mirror.import_tick(conn) == {"checked": 2, "imported": [], "errors": []}
+    # removing the stranger clears it from the skipped list on the next tick
+    stranger.unlink()
+    mirror.import_tick(conn)
+    assert mirror.status(conn)["error_files"] == []
+
+
+def test_stale_copy_of_our_file_is_judged_against_its_own_snapshot(env, mirror: Mirror) -> None:
+    """A restored older version of our own file (``exported_at`` older than ours) is
+    an edit made against *that* snapshot: what the DB changed since it wins."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    old = path.read_text(encoding="utf-8")  # the 09:00 rendering — due null, code null
+    with repo.use_clock(_clock(T0.replace(hour=10))):
+        repo.update_task(conn, tid, due="2026-11-11", actor="ui")
+    with repo.use_clock(_clock(T0.replace(hour=11))):
+        mirror.export_task(conn, tid)
+    # a sync client brings the 09:00 version back, with a code the user had typed into it
+    _touch(path, old.replace("\ncode: null\n", "\ncode: BATH\n"))
+    with repo.use_clock(_clock(T0.replace(hour=12))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"code": "BATH"}
+    assert res["conflicts"] == ["import conflict on due: file said ∅, kept 2026-11-11"]
+    assert repo.get_task(conn, tid)["due"] == "2026-11-11"
+
+
+def test_overridden_db_only_mirrors_beside_itself(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#126: an instance on ``TASKOS_DB_PATH`` (a harness, a scratch walk) never gets
+    the mirror or the backup into a folder that is not next to that database."""
+    from src.backup import BackupScheduler
+
+    db = tmp_path / "instance" / "tasks.db"
+    db.parent.mkdir()
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(db))
+    shared = tmp_path / "shared"  # stands in for the real synced folder
+    shared.mkdir()
+    cfg = load_config(write_test_config(tmp_path / "c.json", dir=str(shared / "mirror"), backup_dir=str(shared / "backup")))
+    m = Mirror(cfg)
+    assert not m.enabled and "outside the TASKOS_DB_PATH folder" in m.reason and m.reason.startswith("mirror.dir:")
+    b = BackupScheduler(cfg)
+    assert not b.enabled and "outside the TASKOS_DB_PATH folder" in b.reason and b.reason.startswith("mirror.backup_dir:")
+    assert not (shared / "mirror").exists() and not (shared / "backup").exists()
+    beside = load_config(write_test_config(tmp_path / "c2.json", dir=str(db.parent / "mirror"), backup_dir=str(db.parent / "backup")))
+    assert Mirror(beside).enabled and BackupScheduler(beside).enabled
+
+
+def test_committed_sample_never_enables_mirror_or_backup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#126: a checkout without its own config (a fresh clone, a worktree) reads the
+    sample, whose placeholders resolve to a real synced folder — both services stay off."""
+    from src.config import CONFIG_SAMPLE_PATH
+
+    cfg = load_config(CONFIG_SAMPLE_PATH)
+    assert cfg.mirror.dir == "" and cfg.mirror.backup_dir == ""
+    assert cfg.placeholders.get("onedrive") and cfg.issues.owner  # the rest of the sample still loads
+    monkeypatch.setenv("TASKOS_CONFIG_PATH", str(CONFIG_SAMPLE_PATH))
+    assert Mirror(load_config()).reason == "mirror.dir not configured"
+
+
 # ------------------------------------------------------------- schema v4
 
 

@@ -61,10 +61,27 @@ After every import the file is re-exported so it converges to canonical
 form. Malformed YAML → the file is skipped (warning once per change, counted
 in :meth:`Mirror.status` ``errors``), never a crash.
 
+**Provenance rule** (#126) — the file's ``exported_at`` is the one line no
+human edit touches, so it says whose rendering a file is. Equal to what we
+last wrote: our file, edited. Older: a stale copy of our file (a sync client
+restoring a previous version) — still an edit, judged against *that*
+snapshot. **Newer: we never wrote it** — another task-os instance rendered
+its own database into this folder (a fresh checkout on the sample config, a
+harness pointed at the real folder). That is not an edit: nothing is
+applied, every differing value is a ``conflict`` event, the file is
+re-exported to canonical (or, under a name we never wrote, skipped and left
+alone). Without this, a second instance whose ``people`` table lacked a name
+re-exported ``person: null`` over the live files and the live watcher cleared
+23 assignments in one pass — and once rewrote 79 titles.
+
 Enabled only when ``mirror.dir`` resolves (``config.placeholders``) to a path
 whose parent exists — the leaf is created; otherwise :attr:`Mirror.enabled`
 is ``False`` with a one-line reason surfaced by the log, ``/api/status`` and
-``tasks mirror status``, never a silent no-op.
+``tasks mirror status``, never a silent no-op. Two boundaries keep a
+*disposable* instance out of the real folder by construction: an instance on
+an overridden database (``TASKOS_DB_PATH``) only mirrors / backs up to a
+folder beside that database, and the committed sample config never enables
+either service (``src.config.load_config``).
 """
 
 from __future__ import annotations
@@ -86,7 +103,7 @@ from typing import Any
 from src import tasks_repo as repo
 from src.config import AppConfig, resolve_placeholders, unresolved_placeholders
 from src.dates import DateParseError, parse_date
-from src.db import connect
+from src.db import DB_PATH_ENV, connect
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +137,8 @@ IMPORTABLE_KEYS = (
 _ACTIVITY_FIELD = {"parent": "parent", "person": "person_id"}
 #: file key → task column
 _TASK_FIELD = {"parent": "parent_id", "person": "person_id"}
+#: a foreign file's value this database cannot even resolve (never equal to a stored one)
+_UNRESOLVED = object()
 
 
 class MirrorParseError(ValueError):
@@ -393,6 +412,21 @@ def resolve_dir(raw: str, placeholders: dict[str, str], *, label: str) -> tuple[
     if missing:
         return None, f"{label}: unresolved placeholder(s) {', '.join('{' + m + '}' for m in missing)} — add them to config.placeholders"
     path = Path(resolved).expanduser()
+    override = os.environ.get(DB_PATH_ENV, "").strip()
+    if override:
+        # A harness / disposable instance (the one thing TASKOS_DB_PATH is for)
+        # only mirrors beside its own database. One pointed at the real synced
+        # folder rendered a temp DB over the live files, and the live watcher
+        # imported that as human edits (#126) — so this is refused, loudly,
+        # rather than left to whoever copies the sample config next.
+        root = Path(override).expanduser().resolve().parent
+        try:
+            path.resolve().relative_to(root)
+        except ValueError:
+            return None, (
+                f"{label}: {path} is outside the {DB_PATH_ENV} folder {root} — an instance on an "
+                f"overridden database only mirrors beside it; put {label} under {root} or unset {DB_PATH_ENV}"
+            )
     if path.is_dir():
         return path, ""
     if path.parent.is_dir():
@@ -675,10 +709,23 @@ class Mirror:
                 return self._mark_bad(result, path, f"task {task_id} does not exist")
             self._bad_files.pop(path.name, None)
             state = self._state(conn, task_id)
-            baseline = (state or {}).get("exported_at") or parsed.frontmatter.get("exported_at")
-            baseline = str(baseline) if baseline else None
-            self._apply_fields(conn, task, parsed, baseline, result)
-            self._apply_comments(conn, task, parsed, result)
+            baseline, foreign = self._provenance(state, parsed)
+            self._apply_fields(conn, task, parsed, baseline, result, foreign=foreign)
+            if foreign is not None:
+                # Not an edit of our file: another task-os instance rendered its
+                # own database into this folder (#126). Nothing was applied —
+                # every differing value is a standing event — and the file is
+                # rewritten to canonical below so a later human edit of it is
+                # read as an edit again. A file under a name we never wrote is
+                # left alone (and not re-read) so it cannot churn every tick.
+                logger.warning(
+                    "⚠️ mirror: %s — %s; nothing applied, %d value(s) kept as events",
+                    path.name, foreign, len(result.conflicts),
+                )
+                if state is not None and state["path"] != path.name:
+                    return self._mark_bad(result, path, f"{foreign}; nothing applied, {len(result.conflicts)} value(s) kept as events")
+            else:
+                self._apply_comments(conn, task, parsed, result)
             self.imports += 1
             self.last_import = repo.now_iso()
             if result.applied or result.comments_added or result.conflicts or result.rejected:
@@ -695,6 +742,33 @@ class Mirror:
                     conn.execute("UPDATE mirror_state SET file_mtime_ns = ? WHERE task_id = ?", (mtime_ns, task_id))
                     conn.commit()
         return result
+
+    @staticmethod
+    def _provenance(state: dict[str, Any] | None, parsed: ParsedFile) -> tuple[str | None, str | None]:
+        """``(baseline, foreign)`` from the file's ``exported_at`` against what we last wrote.
+
+        ``exported_at`` is the one line no human edit touches, so it says which
+        database snapshot a file is a rendering of:
+
+        - **equal** (or absent, or no record yet) — our own file, edited: the
+          per-field conflict rule applies against our ``exported_at``;
+        - **older** — a stale copy of our own file (a sync client restoring a
+          previous version, an editor saving a stale buffer): still an edit,
+          but made against *that* snapshot, so the baseline is the file's own
+          stamp and anything the DB changed since it wins;
+        - **newer** — we never wrote this: another task-os instance rendered
+          *its* database into this folder (a fresh checkout on the sample
+          config, a harness pointed at the real folder — #126). Not an edit.
+          ``foreign`` carries the reason and :meth:`_apply_fields` applies nothing.
+        """
+        stamp = parsed.frontmatter.get("exported_at")
+        stamp = str(stamp) if stamp else None
+        ours = (state or {}).get("exported_at") or None
+        if not ours or not stamp:
+            return ours or stamp, None
+        if _after(stamp, ours):
+            return ours, f"written by another task-os instance (file exported_at {stamp}, ours {ours})"
+        return (stamp if _after(ours, stamp) else ours), None
 
     def _mark_bad(self, result: ImportResult, path: Path, message: str) -> ImportResult:
         result.error = message
@@ -715,6 +789,8 @@ class Mirror:
         parsed: ParsedFile,
         baseline: str | None,
         result: ImportResult,
+        *,
+        foreign: str | None = None,
     ) -> None:
         fm = parsed.frontmatter
         candidates: list[tuple[str, Any]] = [(k, fm[k]) for k in IMPORTABLE_KEYS if k in fm]
@@ -729,15 +805,25 @@ class Mirror:
             try:
                 value = self._file_value(conn, key, raw)
             except repo.RepoError as exc:
-                self._note(
-                    conn, task_id, result.rejected, kind="rejected", field=key,
-                    file_value=repr(raw), kept_value=self._show(task, key), detail=str(exc),
-                )
-                continue
+                if foreign is None:
+                    self._note(
+                        conn, task_id, result.rejected, kind="rejected", field=key,
+                        file_value=repr(raw), kept_value=self._show(task, key), detail=str(exc),
+                    )
+                    continue
+                value = _UNRESOLVED  # unresolvable here — differs from what we hold either way
             if key == "description":
                 value = value or ""
             if value == current:
                 repo.resolve_mirror_field(conn, task_id, key)
+                continue
+            if foreign is not None:
+                # another instance's rendering of its own task: kept as a standing
+                # event, never applied — the DB it describes is not this one (#126)
+                self._note(
+                    conn, task_id, result.conflicts, kind="conflict", field=key,
+                    file_value=self._fmt(raw), kept_value=self._show(task, key), detail=foreign,
+                )
                 continue
             last = self._last_change(conn, task_id, key)
             if baseline and last and _after(last, baseline):
@@ -832,6 +918,9 @@ class Mirror:
         states = {
             r["path"]: dict(r) for r in conn.execute("SELECT * FROM mirror_state").fetchall()
         }
+        present = {e.name for e in entries}
+        for name in [n for n in self._bad_files if n not in present]:
+            del self._bad_files[name]  # removed from the folder → no longer a standing error
         for entry in sorted(entries, key=lambda e: e.name):
             report["checked"] += 1
             try:

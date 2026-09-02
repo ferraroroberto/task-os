@@ -2,8 +2,11 @@
 
 The real file is gitignored (it carries this machine's paths); the committed
 ``config/config.sample.json`` documents every key. Loading is defensive: a
-missing real file falls back to the sample so a fresh clone boots, and every
-key has a code-level default so a partial file never crashes startup.
+missing real file falls back to the sample so a fresh clone boots — with the
+markdown mirror and the backup **off** (the sample's placeholders resolve to
+a real synced folder; a checkout without its own config must never write
+into it, #126) — and every key has a code-level default so a partial file
+never crashes startup.
 
 ``TASKOS_CONFIG_PATH`` overrides the file location — the e2e harness points a
 disposable instance at a temp copy so the gate never reads (or writes) the
@@ -115,6 +118,14 @@ def config_path() -> Path:
     return CONFIG_SAMPLE_PATH
 
 
+def _is_sample(src: Path) -> bool:
+    """``src`` is the committed sample itself — by any spelling of its path."""
+    try:
+        return src.resolve() == CONFIG_SAMPLE_PATH.resolve()
+    except OSError:
+        return src == CONFIG_SAMPLE_PATH
+
+
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -154,8 +165,6 @@ def load_config(path: Path | None = None) -> AppConfig:
     raw: dict[str, Any] = {}
     try:
         raw = _as_dict(json.loads(src.read_text(encoding="utf-8")))
-        if src == CONFIG_SAMPLE_PATH:
-            logger.info("ℹ️ config: no config/config.json — using the committed sample")
     except FileNotFoundError:
         logger.warning("⚠️ config: %s not found — using built-in defaults", src)
     except (OSError, ValueError) as exc:
@@ -163,6 +172,18 @@ def load_config(path: Path | None = None) -> AppConfig:
 
     issues = _as_dict(raw.get("issues"))
     mirror = _as_dict(raw.get("mirror"))
+    if _is_sample(src):
+        # The sample documents the shape; its placeholders resolve to a real
+        # synced folder on the developer's machine. A checkout without its own
+        # config/config.json (a fresh clone, a git worktree) must therefore
+        # never mirror or back up into it: two databases rendering into one
+        # folder is how the live one lost data (#126). Everything read-only
+        # (search roots, the issue provider) keeps working from the sample.
+        mirror = {"dir": "", "backup_dir": ""}
+        logger.warning(
+            "⚠️ config: no config/config.json — using the committed sample; the markdown mirror and "
+            "the backup stay off until you create it (the sample is documentation, never a folder to write into)"
+        )
     search = _as_dict(raw.get("search"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
