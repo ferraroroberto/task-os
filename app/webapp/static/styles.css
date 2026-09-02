@@ -1278,6 +1278,8 @@ a.chip:hover { text-decoration: underline; }
 }
 .link-rm::before { content: ""; position: absolute; inset: -9px; }   /* 26 + 2x9 = 44 */
 .link-rm:hover { color: var(--danger); }
+.link-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.link-label-edit { flex: 1 1 auto; min-width: 0; }
 .icon-btn {
   width: 34px;
   height: 34px;
