@@ -14,6 +14,7 @@
     POST   /api/tasks/{id}/comments      {body, origin?, author?} → 201
     GET    /api/tasks/{id}/links
     POST   /api/tasks/{id}/links         {url, label?, kind?} → 201
+    PATCH  /api/tasks/{id}/links/{lid}   {label} rename
     DELETE /api/tasks/{id}/links/{lid}
     PUT    /api/tasks/{id}/issue         {provider, repo, number, url?, state?} → type=coding
     DELETE /api/tasks/{id}/issue         detach → type=task
@@ -152,6 +153,10 @@ class LinkBody(BaseModel):
     url: str
     label: str | None = None
     kind: str = "web"
+
+
+class LinkLabelBody(BaseModel):
+    label: str | None = None
 
 
 class ParseBody(BaseModel):
@@ -394,6 +399,11 @@ def list_links(task_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict[s
 @router.post("/tasks/{task_id}/links", status_code=201)
 def add_link(task_id: int, body: LinkBody, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     return repo.add_link(db, task_id, body.url, label=body.label, kind=body.kind)
+
+
+@router.patch("/tasks/{task_id}/links/{link_id}")
+def rename_link(task_id: int, link_id: int, body: LinkLabelBody, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    return repo.rename_link(db, task_id, link_id, body.label)
 
 
 @router.delete("/tasks/{task_id}/links/{link_id}")

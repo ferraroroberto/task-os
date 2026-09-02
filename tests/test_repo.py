@@ -508,6 +508,18 @@ def test_links_add_list_remove(conn: sqlite3.Connection) -> None:
         repo.add_link(conn, t["id"], "x", kind="carrier-pigeon")
 
 
+def test_links_rename(conn: sqlite3.Connection) -> None:
+    t = repo.create_task(conn, "Docs")
+    lk = repo.add_link(conn, t["id"], "https://example.com", label="old label", kind="web")
+    renamed = repo.rename_link(conn, t["id"], lk["id"], "new label")
+    assert renamed["label"] == "new label"
+    assert renamed["url"] == "https://example.com" and renamed["kind"] == "web"
+    cleared = repo.rename_link(conn, t["id"], lk["id"], "  ")
+    assert cleared["label"] is None
+    with pytest.raises(repo.NotFound):
+        repo.rename_link(conn, t["id"], lk["id"] + 999, "x")
+
+
 # ------------------------------------------------------- coding / issue
 
 def test_coding_iff_issue_ref(conn: sqlite3.Connection) -> None:

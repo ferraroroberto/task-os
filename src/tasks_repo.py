@@ -1318,6 +1318,18 @@ def remove_link(conn: sqlite3.Connection, task_id: int, link_id: int) -> None:
     _touched(task_id)
 
 
+def rename_link(conn: sqlite3.Connection, task_id: int, link_id: int, label: str | None) -> dict[str, Any]:
+    label = (label or "").strip() or None
+    cur = conn.execute(
+        "UPDATE links SET label = ? WHERE id = ? AND task_id = ?", (label, link_id, task_id)
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        raise NotFound(f"link {link_id} on task {task_id} not found")
+    _touched(task_id)
+    return _row(conn.execute("SELECT * FROM links WHERE id = ?", (link_id,)).fetchone())  # type: ignore[return-value]
+
+
 # --------------------------------------------------------------- activity
 
 

@@ -49,6 +49,7 @@ export function createDrawer(el, opts) {
   let current = null;      // the detail payload
   let descEditing = false;
   let pickerOpen = false;  // the folder-index picker under the Folder field
+  let editingLinkId = null;
 
   function section(name, title, iconName) {
     const s = document.createElement('section');
@@ -444,11 +445,54 @@ export function createDrawer(el, opts) {
     (t.links || []).forEach(function (l) {
       const row = document.createElement('div');
       row.className = 'link-row';
+      if (editingLinkId === l.id) {
+        const editInput = document.createElement('input');
+        editInput.type = 'text';
+        editInput.className = 'input-native link-label-edit';
+        editInput.value = l.label || '';
+        editInput.placeholder = 'label';
+        editInput.setAttribute('aria-label', 'Edit label for ' + (l.label || l.url));
+        const commit = async function () {
+          const v = editInput.value.trim();
+          editingLinkId = null;
+          if (v !== (l.label || '')) {
+            try {
+              await api('/api/tasks/' + t.id + '/links/' + l.id, { method: 'PATCH', body: { label: v || null } });
+              await refresh();
+            } catch (err) { toast(err.message, 'error'); render(); }
+          } else {
+            render();
+          }
+        };
+        editInput.addEventListener('keydown', function (ev) {
+          // stopPropagation, not just preventDefault: commit() re-renders the drawer
+          // synchronously (even on a no-op Escape), which detaches this input before the
+          // keydown finishes bubbling — app.js's document-level Escape handler would then
+          // see a target it no longer recognizes as "a field owns this key" and close the
+          // drawer on top of the cancelled edit.
+          if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); editInput.blur(); }
+          if (ev.key === 'Escape') { ev.stopPropagation(); editInput.value = l.label || ''; editInput.blur(); }
+        });
+        editInput.addEventListener('blur', commit);
+        row.appendChild(editInput);
+        linkList.appendChild(row);
+        requestAnimationFrame(function () { editInput.focus(); editInput.select(); });
+        return;
+      }
       // an email link is a .msg ref the opener opens as a file — same chip, mail glyph;
       // an ai link keeps the bot chip + open/resume popover regardless of URL shape
       row.appendChild(l.kind === 'ai'
         ? aiChip(l.url, l.label || null)
         : chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
+      const actions = document.createElement('div');
+      actions.className = 'link-actions';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'link-rm';   // borderless, chip-height; ::before carries the 44px hit rect
+      edit.setAttribute('aria-label', 'Edit label for ' + (l.label || l.url));
+      edit.innerHTML = icon('pencil');
+      edit.addEventListener('click', function () { editingLinkId = l.id; render(); });
+      actions.appendChild(edit);
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'link-rm';   // borderless, chip-height; ::before carries the 44px hit rect
@@ -460,7 +504,8 @@ export function createDrawer(el, opts) {
           await refresh();
         } catch (err) { toast(err.message, 'error'); }
       });
-      row.appendChild(rm);
+      actions.appendChild(rm);
+      row.appendChild(actions);
       linkList.appendChild(row);
     });
     if (!(t.links || []).length) {
@@ -957,6 +1002,7 @@ export function createDrawer(el, opts) {
     async open(id) {
       descEditing = false;
       pickerOpen = false;
+      editingLinkId = null;
       try {
         const data = await api('/api/tasks/' + id);
         current = data;

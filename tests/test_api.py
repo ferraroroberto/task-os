@@ -243,6 +243,11 @@ def test_links_issue_and_people(seeded: TestClient) -> None:
     lk = seeded.post(f"/api/tasks/{t}/links", json={"url": "https://example.com", "kind": "web"})
     assert lk.status_code == 201
     assert seeded.get(f"/api/tasks/{t}/links").json()["items"][0]["url"] == "https://example.com"
+    lid = lk.json()["id"]
+    ren = seeded.patch(f"/api/tasks/{t}/links/{lid}", json={"label": "renamed"})
+    assert ren.status_code == 200 and ren.json()["label"] == "renamed"
+    assert ren.json()["url"] == "https://example.com"
+    assert seeded.patch(f"/api/tasks/{t}/links/{lid + 999}", json={"label": "x"}).status_code == 404
     assert seeded.delete(f"/api/tasks/{t}/links/{lk.json()['id']}").json()["deleted"] == 1
     assert seeded.delete(f"/api/tasks/{t}/links/{lk.json()['id']}").status_code == 404
 
