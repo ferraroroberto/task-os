@@ -3,6 +3,7 @@
     GET    /api/tasks                    filtered flat list (summaries)
     POST   /api/tasks                    create → 201
     POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
+    POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree)
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
@@ -123,6 +124,13 @@ class BulkBody(BaseModel):
     starts: str | None = None
     priority: str | None = None
     actor: str | None = None
+
+
+class BulkDeleteBody(BaseModel):
+    """The Select bar's delete (issue #121) — its own body, so a delete can
+    never travel with a status or a date in the same request."""
+
+    ids: list[int] = Field(min_length=1, max_length=500)
 
 
 class MoveBody(BaseModel):
@@ -289,6 +297,23 @@ def bulk_tasks(
     )
     updated = sum(1 for r in results if r["ok"])
     return {"results": results, "updated": updated, "failed": len(results) - updated}
+
+
+@router.post("/tasks/bulk/delete")
+def bulk_delete_tasks(
+    body: BulkDeleteBody, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    """Delete a selection of tasks, subtrees included (issue #121).
+
+    Per-id results like the bulk change: an id already gone is a named
+    ``ok: false`` row on a 200, never a lost batch. ``deleted`` counts every
+    row that went — a selected project's children are in it even when they
+    were not ticked, because the cascade does not ask.
+    """
+    results = repo.bulk_delete(db, body.ids)
+    deleted = sum(int(r.get("deleted", 0)) for r in results if r["ok"])
+    failed = sum(1 for r in results if not r["ok"])
+    return {"results": results, "deleted": deleted, "failed": failed}
 
 
 @router.get("/tasks/tree")

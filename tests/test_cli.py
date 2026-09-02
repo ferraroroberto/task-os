@@ -319,3 +319,26 @@ def test_journal_over_both_backends(run: Runner) -> None:
     assert code == 0 and "1 done" in out and "[x] #1  Ship the thing" in out and "Still open" not in out
     code, out, _ = run("journal", "--weeks", "3", "--json")
     assert code == 0 and _json(out)["from"] == (today - timedelta(days=20)).isoformat()
+
+
+def test_rm_over_both_backends(run: Runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#121: `tasks rm N` names what goes (the subtree count) on stderr and
+    asks; a refusal is a clean error so a script that forgot --yes fails
+    loud; `delete` is the alias; --yes is silent; an unknown id is exit 1."""
+    run("add", "Kitchen")                        # 1
+    run("add", "Quotes", "--parent", "1")        # 2
+    run("add", "Loose end")                      # 3
+    monkeypatch.setattr("sys.stdin", io.StringIO("n\n"))
+    code, out, err = run("rm", "1", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "cancelled"
+    assert "Kitchen" in err and "1 child task" in err and "[y/N]" in err
+    assert run("show", "1", "--json")[0] == 0     # nothing happened
+    monkeypatch.setattr("sys.stdin", io.StringIO("y\n"))
+    code, out, err = run("delete", "1", "--json")
+    assert code == 0 and _json(out) == {"id": 1, "deleted": 2}
+    assert run("show", "2", "--json")[0] == 1     # the child went with it
+    code, out, err = run("rm", "3", "--yes")
+    assert (code, out.strip()) == (0, "#3 deleted")
+    assert "delete?" not in err and "[y/N]" not in err      # --yes: no dialogue
+    code, out, _ = run("rm", "3", "--yes", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "not_found"

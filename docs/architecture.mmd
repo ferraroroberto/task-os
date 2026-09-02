@@ -3,7 +3,7 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>journal.js (the done journal — #journal, a pane with no tab, closed tasks by day, #102)<br/>selection.js (the ONE selection) · bulkbar.js (Board + Table bulk actions, #81)<br/>keys.js (the ONE keymap: row keys + undo + the ? sheet + its palette entries, #99)<br/>snooze.js (the four-option menu, shared by the Today row and the s key)<br/>drawer.js · quickadd.js (the add dialog) · folderpick.js (the shared folder-index picker)<br/>format.js · api.js · toast.js · dueinput.js (the shared due trio)<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>login.html (token / password → cookie)"]
+    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>journal.js (the done journal — #journal, a pane with no tab, closed tasks by day, #102)<br/>selection.js (the ONE selection) · bulkbar.js (Board + Table bulk actions, #81)<br/>keys.js (the ONE keymap: row keys + undo + the ? sheet + its palette entries, #99)<br/>snooze.js (the four-option menu, shared by the Today row and the s key)<br/>drawer.js (+ Delete task, #121) · quickadd.js (the add dialog) · confirm.js (the one destructive-action dialog, #121) · folderpick.js (the shared folder-index picker)<br/>format.js · api.js · toast.js · dueinput.js (the shared due trio)<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>login.html (token / password → cookie)"]
     phone["Phone · https://‹host›.ts.net:8448<br/>installed PWA (manifest · icons · iOS meta)"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
@@ -17,7 +17,7 @@ flowchart LR
     authmw["src/auth.py · AuthMiddleware<br/>loopback = owner · else bearer / cookie<br/>public: /static /healthz /api/version /login"]
     misc["routers/misc<br/>/ · /healthz · /api/version<br/>/opener/opener.{cmd,ps1} (public)"]
     authr["routers/auth<br/>/login · /api/login · /api/logout<br/>access_status() → /api/status"]
-    tasksr["routers/tasks<br/>/api/tasks… (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99)<br/>/api/activity · /api/parse (quick-add)"]
+    tasksr["routers/tasks<br/>/api/tasks… (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99) · POST /api/tasks/bulk/delete (#121)<br/>/api/activity · /api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
     viewsr["routers/views<br/>/api/board · /api/today (+ plan group, #89)<br/>/api/plan/candidates · POST /api/plan/reorder"]

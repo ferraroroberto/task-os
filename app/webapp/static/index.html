@@ -754,6 +754,12 @@
        from keys.js's one ACTIONS table, never listed twice by hand. -->
   <dialog class="detail-dialog keys-dialog" id="keysHelp" aria-labelledby="keysHelpTitle"></dialog>
 
+  <!-- Confirmation (#121): the one destructive-action dialog, built by
+       confirm.js per ask (deleting a task from the drawer, a selection from
+       the Select bar). Same vendored shell; its single primary restates the
+       tint recipe on danger, and every other way out means "no". -->
+  <dialog class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
+
   <!-- Toasts: user-initiated command results / errors (design.md "Async data
        & feedback") — one polite live region, assertive for errors. -->
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>

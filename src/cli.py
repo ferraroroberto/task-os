@@ -15,6 +15,7 @@
     tasks plan ls               today's plan, ordered, with the n-of-m progress line
     tasks journal [--weeks N]   what got done, grouped by day, newest first (#102)
     tasks move N --parent M     (--parent root → top level)
+    tasks rm N [--yes]          delete N and its subtree — asks [y/N] on stderr; alias: delete (#121)
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
     tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
@@ -184,6 +185,9 @@ class HttpBackend:
     def done(self, task_id: int) -> dict[str, Any]:
         return self._call("POST", f"/api/tasks/{task_id}/done", {"actor": self.actor})
 
+    def delete(self, task_id: int) -> dict[str, Any]:
+        return self._call("DELETE", f"/api/tasks/{task_id}")
+
     def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
         body = {"parent_id": parent_id, "actor": self.actor}
         return self._call("POST", f"/api/tasks/{task_id}/move", body)
@@ -323,6 +327,9 @@ class LocalBackend:
 
     def done(self, task_id: int) -> dict[str, Any]:
         return self._wrap(self._repo.done, task_id, actor=self.actor)
+
+    def delete(self, task_id: int) -> dict[str, Any]:
+        return self._wrap(self._repo.delete_task, task_id)
 
     def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
         return self._wrap(self._repo.move, task_id, parent_id, actor=self.actor)
@@ -769,7 +776,7 @@ def _resolve_person(backend: HttpBackend | LocalBackend, text: str | None) -> in
 
 def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
     """Execute one command → (json payload, human text)."""
-    cmd = args.command
+    cmd = "rm" if args.command == "delete" else args.command   # `delete` is rm's alias
     if cmd == "add":
         fields: dict[str, Any] = {"title": args.title}
         if args.parent is not None:
@@ -894,6 +901,33 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         plan = backend.today_view()["plan"]
         payload = {"planned": planned, "snoozed": snoozed, "skipped": skipped, "plan": plan}
         return payload, fmt_plan(plan)
+    if cmd == "rm":
+        # Delete with a confirmation that names what goes (#121). The
+        # dialogue is on stderr — stdout stays clean for --json — and a
+        # refusal is an error, so a script that forgot --yes fails loud
+        # instead of half-working.
+        t = backend.show(args.id)
+        n = int(t.get("descendant_count") or 0)
+        ref = t.get("issue_ref") or {}
+        if not args.yes:
+            say = lambda text: print(text, file=sys.stderr)  # noqa: E731
+            say(_fmt_task_line(t))
+            if n:
+                say(f"  and its {n} child task{'s' if n != 1 else ''}")
+            if ref.get("state") == "open":
+                say(f"  synced coding task: the next issue sync recreates it while "
+                    f"{ref.get('repo')}#{ref.get('number')} stays open — unlink it first, or close the issue")
+            say("  delete? This cannot be undone. [y/N] ")
+            try:
+                answer = input().strip().lower()
+            except EOFError:
+                answer = ""
+            if answer not in ("y", "yes"):
+                raise CliError(f"#{args.id} not deleted", code="cancelled")
+        r = backend.delete(args.id)
+        gone = int(r.get("deleted") or 1)
+        tail = f" ({gone} tasks)" if gone > 1 else ""
+        return r, f"#{r['id']} deleted{tail}"
     if cmd == "move":
         t = backend.move(args.id, _parent_arg(args.parent))
         where = _crumb(t) or "top level"
@@ -1033,6 +1067,11 @@ def build_parser() -> argparse.ArgumentParser:
     m = sub.add_parser("move", parents=[common], help="re-parent")
     m.add_argument("id", type=int)
     m.add_argument("--parent", required=True, help="new parent id, or 'root'")
+
+    rm = sub.add_parser("rm", parents=[common], aliases=["delete"],
+                        help="delete a task and its subtree (asks first; --yes for scripts)")
+    rm.add_argument("id", type=int)
+    rm.add_argument("--yes", "-y", action="store_true", help="skip the confirmation")
 
     se = sub.add_parser("search", parents=[common], help="federated search: tasks · folders · emails · issues")
     se.add_argument("query")

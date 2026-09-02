@@ -36,6 +36,7 @@ import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
 import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
+import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
   DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams,
@@ -361,6 +362,54 @@ async function reorderPlan(ids) {
 function setPlanMode(on) {
   state.planMode = !!on;
   renderTodayPane();
+}
+
+/** Delete every ticked task (#121) — POST /api/tasks/bulk/delete, after the
+ *  one confirmation names the count, the projects whose children go too and
+ *  the synced coding tasks the next sync would bring back. Per-id results as
+ *  the bulk change: what failed is named and stays ticked; a clean batch
+ *  clears the selection but stays in Select mode. */
+async function bulkDelete() {
+  const ids = selection.selectedIds();
+  if (!ids.length) return;
+  const loaded = state.items.concat(state.deferred);
+  const known = ids.map(function (id) {
+    return loaded.find(function (t) { return t.id === id; });
+  }).filter(Boolean);
+  const projects = known.filter(function (t) { return t.child_count > 0; }).length;
+  const coding = known.filter(function (t) { return t.issue_ref && t.issue_ref.state === 'open'; }).length;
+  const ok = await confirmDialog({
+    title: 'Delete ' + ids.length + ' task' + (ids.length === 1 ? '' : 's') + '?',
+    lines: [
+      projects
+        ? (projects === 1 ? 'One of them is a project — its' : projects + ' of them are projects — their') + ' child tasks go too.'
+        : null,
+      'This cannot be undone: the tasks, their comments, links and history are removed.',
+    ],
+    warn: coding
+      ? (coding === 1 ? 'One is a synced coding task that' : coding + ' are synced coding tasks that') + ' the next issue sync recreates while the issue stays open. Unlink first, or close the issue.'
+      : null,
+    action: 'Delete',
+  });
+  if (!ok) return;
+  let res;
+  try {
+    res = await api('/api/tasks/bulk/delete', { method: 'POST', body: { ids: ids } });
+  } catch (err) {
+    toast(err.message || 'Delete failed', 'error');
+    throw err;
+  }
+  const failed = (res.results || []).filter(function (r) { return !r.ok; });
+  if (!failed.length) {
+    toast(res.deleted + ' task' + (res.deleted === 1 ? '' : 's') + ' deleted', 'success');
+    selection.clear();
+  } else {
+    const first = failed[0];
+    toast(res.deleted + ' deleted · ' + failed.length + ' failed (#' + first.id + ': ' + first.error.message + ')', 'error');
+    selection.keepOnly(new Set(failed.map(function (r) { return r.id; })));
+  }
+  if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) closeTask();
+  await refreshAll();
 }
 
 /** Apply one change to every ticked task (#81) — POST /api/tasks/bulk.
@@ -721,6 +770,7 @@ function wireSelectMode() {
     if (!host) return;
     bulkBars.push(mountBulkBar(host, {
       onApply: bulkApply,
+      onDelete: bulkDelete,
       onExit: function () { selection.setActive(false); },
     }));
   });
@@ -985,6 +1035,9 @@ async function boot() {
     // A checkbox does not: after ticking a row the focus sits on one, and
     // Escape there has to leave Select mode or the key looks broken (#81).
     if (ev.target.closest('textarea, select, input:not([type="checkbox"])')) return;
+    // an open dialog (palette, quick-add, the keys card, a confirmation) owns
+    // Escape natively — it must not also close the drawer underneath (#121)
+    if (document.querySelector('dialog[open]')) return;
     // the drawer first (it is the thing on top), then Select mode
     if (drawer.currentId() != null) closeTask();
     else if (selection.isActive()) selection.setActive(false);

@@ -110,6 +110,25 @@ def test_move_cycle_done_and_delete(client: TestClient) -> None:
     assert client.get(f"/api/tasks/{a}").status_code == 404
 
 
+def test_bulk_delete_reports_per_id(client: TestClient) -> None:
+    """#121: the Select bar's delete — every id attempted, subtrees counted,
+    a child ticked with its parent folds into it, an unknown id is named."""
+    p = client.post("/api/tasks", json={"title": "P"}).json()["id"]
+    c = client.post("/api/tasks", json={"title": "C", "parent_id": p}).json()["id"]
+    g = client.post("/api/tasks", json={"title": "G", "parent_id": c}).json()["id"]
+    loose = client.post("/api/tasks", json={"title": "L"}).json()["id"]
+    detail = client.get(f"/api/tasks/{p}").json()
+    assert (detail["child_count"], detail["descendant_count"]) == (1, 2)
+    res = client.post("/api/tasks/bulk/delete", json={"ids": [p, g, loose, 424242]}).json()
+    assert (res["deleted"], res["failed"]) == (4, 1)
+    assert [(r["id"], r["ok"], r.get("deleted")) for r in res["results"]] == [
+        (p, True, 3), (g, True, 0), (loose, True, 1), (424242, False, None),
+    ]
+    assert res["results"][3]["error"]["code"] == "not_found"
+    assert client.get("/api/tasks?include_closed=true").json()["count"] == 0
+    assert client.post("/api/tasks/bulk/delete", json={"ids": []}).status_code == 422
+
+
 def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     items = seeded.get("/api/tasks?project=1&status=standby").json()["items"]
     assert [t["title"] for t in items] == ["Plant tomatoes", "Garden"]

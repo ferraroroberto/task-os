@@ -734,6 +734,43 @@ def delete_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     return {"id": task_id, "deleted": 1 + len(subtree)}
 
 
+def bulk_delete(conn: sqlite3.Connection, task_ids: Iterable[int]) -> list[dict[str, Any]]:
+    """Delete many tasks — one result row per id, in order (issue #121).
+
+    The bulk twin of :func:`delete_task`, shaped like :func:`bulk_update`:
+    **every id is attempted**, a :class:`RepoError` on one id is that id's
+    failure row, duplicates collapse to the first occurrence. One wrinkle is
+    the selection that holds a parent *and* one of its children: the parent's
+    cascade takes the child first, so the child's row reads ``ok: True,
+    deleted: 0`` (it went with its parent) rather than a spurious not-found —
+    only an id that is genuinely gone for another reason is a named failure.
+
+    :returns: ``[{"id", "ok": True, "deleted": n} | {"id", "ok": False, "error": {"code", "message"}}]``
+    """
+    seen: set[int] = set()
+    gone: set[int] = set()
+    results: list[dict[str, Any]] = []
+    for raw in task_ids:
+        task_id = int(raw)
+        if task_id in seen:
+            continue
+        seen.add(task_id)
+        if task_id in gone:
+            results.append({"id": task_id, "ok": True, "deleted": 0})
+            continue
+        subtree = _descendant_ids(conn, task_id)   # [] for an id that is not there
+        try:
+            r = delete_task(conn, task_id)
+        except RepoError as exc:
+            results.append(
+                {"id": task_id, "ok": False, "error": {"code": exc.code, "message": str(exc)}}
+            )
+        else:
+            gone.update(subtree)
+            results.append({"id": task_id, "ok": True, "deleted": r["deleted"]})
+    return results
+
+
 _EXTERNAL_ID_TABLES = ("tasks", "comments", "people")
 
 
@@ -827,6 +864,9 @@ def get_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     """The full detail view: task + links, comments, activity, children, breadcrumb."""
     row = _require_task(conn, task_id)
     out = _summary(conn, row)
+    # the whole subtree, not just the direct children — what a delete takes
+    # with it, so a confirmation can name the count (#121)
+    out["descendant_count"] = len(_descendant_ids(conn, task_id))
     out["breadcrumb"] = _ancestors(conn, task_id)
     out["children"] = [
         _summary(conn, dict(r))
