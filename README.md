@@ -32,7 +32,7 @@ tasks tree
 tasks due 2 2026-09-01
 tasks show 2            # activity log shows due: ∅ → 2026-09-01
 tasks mirror status     # markdown mirror + backup: enabled? where? last export / import
-tasks issues sync       # my open GitHub issues → coding tasks in Inbox; closed ones → done
+tasks issues sync       # my open GitHub issues → coding tasks in To do; closed ones → done
 tasks folders search kitchen   # the folder index (search.folder_roots) — refs you can paste on a task
 ```
 
@@ -338,7 +338,7 @@ A coding task **is** an issue: `type = coding` ⇔ an `issue_refs` row (provider
 
 | On the forge | In task-os |
 | --- | --- |
-| an open issue assigned to you with no task | a new **coding** task in **Inbox**: `title` = the issue title, `code` = `<repo>#<n>` (short repo name), `description` = the issue body, a link (`kind = issue`), the ref (state `open`, url); `created_by = sync`. Dedupe key = (provider, repo, number) — a re-run touches nothing it already made |
+| an open issue assigned to you with no task | a new **coding** task in **To do**: `title` = the issue title, `code` = `<repo>#<n>` (short repo name), `description` = the issue body, a link (`kind = issue`), the ref (state `open`, url); `created_by = sync`. Dedupe key = (provider, repo, number) — a re-run touches nothing it already made |
 | the issue's **title changed** | the task title follows (activity `title` by `sync`) — the issue title is canonical for a coding task; rename it on the forge |
 | an issue that was **closed** is open again | the ref goes `open`; a task that was done / cancelled is **reopened** to `todo` (activity by `sync`) |
 | a ref that should be open is **missing from the list** | confirmed first with one `gh issue view`: **closed** → the ref goes `closed` and the task is **done** (skipped when already done / cancelled; activity `status … → done · sync` + `issue_state open → closed · sync`); still open (unassigned from you, another owner) → nothing but `last_synced` moves; the lookup failed → the task is left alone and the error is in the result. Closed refs are not polled again |
