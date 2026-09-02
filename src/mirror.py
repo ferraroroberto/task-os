@@ -38,8 +38,12 @@ differs from the recorded one, parses them and applies:
   is deliberately not mirrored (#89): it is presentation-level ordering, and
   mirroring it would churn every synced file on every drag;
 - **new lines under ``## Comments``** — anything not matching a known comment
-  by (ts, author, origin, body) — as comments ``origin=md`` (author from the
-  line, else the configured owner);
+  by (ts, author, body) — as comments ``origin=md`` (author from the line, else
+  the configured owner). The origin token is read but never part of that
+  identity: an imported comment is always stored as ``md``, so keying on what
+  the line claimed made a ``· ui:`` line re-import on every pass (#123). A
+  bare line (no timestamp) is always a new comment — that is how you add one
+  by typing into the file, and the re-export dates it;
 - ``## Log``, read-only keys (``id``, ``type``, ``links``, timestamps) and
   unknown sections are ignored; deleted lines are not deletions (append-only:
   the re-export restores them).
@@ -789,19 +793,31 @@ class Mirror:
     def _apply_comments(
         self, conn: sqlite3.Connection, task: dict[str, Any], parsed: ParsedFile, result: ImportResult
     ) -> None:
-        known = {
-            (c["ts"], c.get("author") or "-", c.get("origin") or "ui", (c.get("body") or "").strip())
-            for c in task.get("comments") or []
-        }
+        # A comment's identity across the round-trip is (ts, author, body) — the
+        # two axes the import cannot preserve are deliberately NOT in the key:
+        #   · origin — every comment imported here is stored as MD_ACTOR whatever
+        #     the line claimed, so keying on it meant a "· ui:" line never matched
+        #     the row it had itself created, and was re-inserted on every pass;
+        #   · a "-" author — the file's sentinel for NULL, which comes back in as
+        #     the configured owner, so keying on the raw token had the same effect.
+        # Both sides normalise through _comment_key so they cannot drift (#123).
+        # The app's own re-export hides this (it rewrites the file to "· md:" with
+        # a resolved author), so it only bites a file the app did not write:
+        # hand-edited, restored by a sync client, or dropped in from elsewhere.
+        known = {self._comment_key(c["ts"], c.get("author"), c.get("body")) for c in task.get("comments") or []}
         for entry in parsed.comments:
-            key = (entry["ts"], entry["author"], entry["origin"], entry["body"])
+            key = self._comment_key(entry["ts"], entry["author"], entry["body"])
             if entry["ts"] is not None and key in known:
                 continue
-            author = entry["author"] if entry["author"] and entry["author"] != "-" else self.owner
             ts = entry["ts"] if entry["ts"] and _valid_ts(entry["ts"]) else None
-            repo.add_comment(conn, task["id"], entry["body"], author=author, origin=MD_ACTOR, ts=ts)
+            repo.add_comment(conn, task["id"], entry["body"], author=key[1], origin=MD_ACTOR, ts=ts)
             known.add(key)
             result.comments_added += 1
+
+    def _comment_key(self, ts: str | None, author: str | None, body: str | None) -> tuple[str | None, str, str]:
+        """Round-trip identity of one comment — a stored row and its file line agree here."""
+        name = (author or "").strip()
+        return (ts, name if name and name != "-" else self.owner, (body or "").strip())
 
     def import_tick(self, conn: sqlite3.Connection) -> dict[str, Any]:
         """One watcher pass: import every file whose mtime moved since we wrote it."""
