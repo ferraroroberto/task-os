@@ -67,9 +67,19 @@ def default_dest() -> Path:
 
 
 def launcher_command_line(dest: Path) -> str:
-    """The preferred registration: an executable that takes the URL as an argument."""
+    """The preferred registration: an executable that takes the URL as an argument.
+
+    Wrapped in ``conhost.exe --headless`` so ShellExecute allocates no visible
+    console — measured on this PC (task-os#130): plain ``powershell.exe``, even
+    with ``-WindowStyle Hidden``, still flashes a Windows Terminal window
+    because WT is the default terminal here; the headless pseudo-console does
+    not. The undocumented switch also swallows stdout on the *caller* side, so
+    :func:`launcher_runs` deliberately keeps probing the bare ``powershell.exe
+    -File`` form below, unwrapped — the probe only needs to know whether the
+    script *runs*, not whether ShellExecute would hide its console.
+    """
     return (
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -File '
+        'conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File '
         f'"{dest / LAUNCHER_NAME}" -Url "%1"'
     )
 

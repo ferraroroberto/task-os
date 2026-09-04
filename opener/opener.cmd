@@ -50,6 +50,9 @@ rem gate, not the mitigation: opener.ps1 has already refused, and on the fallbac
 rem registration cmd has already re-parsed the string before this line runs.
 rem (!VAR! is substituted after the line is parsed, so a quote inside the value
 rem cannot unbalance this comparison the way a %VAR% one would)
+rem This whole block only runs when VIAPS is defined (the goto above skips it
+rem otherwise), i.e. only via the launcher - which is headless now (task-os#130).
+rem No pause: opener.ps1 captures this echoed text and pops it up on exit 3.
 if not defined VIAPS goto :url_ready
 set "NOQ=!URL:"=!"
 if not "!NOQ!"=="!URL!" (
@@ -59,7 +62,6 @@ if not "!NOQ!"=="!URL!" (
   echo   This link carries a quote character, which the app never sends.
   echo   Nothing was opened.
   echo.
-  pause
   exit /b 3
 )
 :url_ready
@@ -112,7 +114,7 @@ findstr /r /c:"%%[0-9A-Fa-f][0-9A-Fa-f]" "%PROBE%" >nul 2>&1
 set "STILL=%ERRORLEVEL%"
 del "%PROBE%" >nul 2>&1
 if "%STILL%"=="0" (
-  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; $r=[uri]::UnescapeDataString($env:RAW); if($r.Contains($q)){ Write-Host ($n+'  task-os opener'+$n+$n+'  This link carries a quote character, which the app never sends.'+$n+'  Nothing was opened.'+$n); if(-not $env:TASKOS_OPENER_DRYRUN){ Read-Host 'Press Enter to close' | Out-Null }; exit 3 }; $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; if($env:TASKOS_OPENER_DRYRUN){ if(Test-Path -LiteralPath $r){'open: '+$r}else{'missing: '+$r}; exit 0 }; if(Test-Path -LiteralPath $r -PathType Container){ Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ Start-Process -LiteralPath $r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); Read-Host 'Press Enter to close' | Out-Null; exit 1"
+  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; $r=[uri]::UnescapeDataString($env:RAW); if($r.Contains($q)){ Write-Host ($n+'  task-os opener'+$n+$n+'  This link carries a quote character, which the app never sends.'+$n+'  Nothing was opened.'+$n); if(-not $env:TASKOS_OPENER_DRYRUN -and -not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 3 }; $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; if($env:TASKOS_OPENER_DRYRUN){ if(Test-Path -LiteralPath $r){'open: '+$r}else{'missing: '+$r}; exit 0 }; if(Test-Path -LiteralPath $r -PathType Container){ Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ Start-Process -LiteralPath $r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); if(-not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 1"
   exit /b !ERRORLEVEL!
 )
 
@@ -158,7 +160,9 @@ echo   Copy the path above, sync the folder here, or add its placeholder to
 echo       %ENVFILE%
 echo   (one "name=path" line per placeholder, e.g. docs=C:\Users\me\Tenant\docs)
 echo.
-pause
+rem via the launcher (VIAPS) opener.ps1 captures this text and pops it up
+rem instead - a paused console here would be invisible (task-os#130)
+if not defined VIAPS pause
 exit /b 1
 
 :resume_fallback
@@ -170,5 +174,5 @@ echo.
 echo   Resuming a session needs the PowerShell opener, which this PC's
 echo   policy blocked at install time. Open the conversation link instead.
 echo.
-pause
+if not defined VIAPS pause
 exit /b 5

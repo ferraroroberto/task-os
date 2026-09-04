@@ -8,6 +8,7 @@ elsewhere); ``install_opener.py --dry-run`` and ``src/opener.py`` run anywhere."
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import os
 import subprocess
 import sys
@@ -316,7 +317,10 @@ def test_both_installers_register_the_launcher_and_keep_the_fallback_visible() -
 
     dest = Path(r"C:\Users\me\AppData\Local\task-os")
     preferred = mod.command_line(dest, launcher=True)
-    assert preferred.startswith("powershell.exe ") and "-File" in preferred
+    # task-os#130: wrapped in conhost.exe --headless so ShellExecute allocates
+    # no visible console (measured on this PC - plain powershell.exe, even
+    # -WindowStyle Hidden, still flashes a Windows Terminal window)
+    assert preferred.startswith("conhost.exe --headless powershell.exe ") and "-File" in preferred
     assert str(dest / "opener.ps1") in preferred and '-Url "%1"' in preferred
     assert "cmd.exe" not in preferred                       # no interpreter re-parse
     fallback = mod.command_line(dest, launcher=False)
@@ -324,12 +328,46 @@ def test_both_installers_register_the_launcher_and_keep_the_fallback_visible() -
     assert "FALLBACK" in "\n".join(mod.plan(dest, uninstall=False, launcher=False))
     assert "FALLBACK" not in "\n".join(mod.plan(dest, uninstall=False, launcher=True))
 
+    # the self-test probe deliberately stays unwrapped (bare powershell.exe):
+    # conhost.exe --headless swallows the caller's stdout capture, so probing
+    # through it would always read as "cannot run the launcher"
+    probe_src = inspect.getsource(mod.launcher_runs)
+    assert '"powershell.exe"' in probe_src and "conhost" not in probe_src
+
     # install.txt registers the same two shapes, chosen by the same probe
     install, uninstall = opener_info.install_commands()
     assert "opener.ps1" in install and mod.SELFTEST_OK in install
+    assert "conhost.exe --headless powershell.exe" in install       # registration
     assert '-Url "%1"' in install and 'cmd.exe /c ""' in install   # preferred + fallback
     assert "FALLBACK mode" in install
     assert "opener.ps1" in uninstall and "opener.cmd" in uninstall
+    # the self-test line itself must stay unwrapped, same reasoning as above
+    selftest_line = next(ln for ln in install.split(";") if "taskos://selftest" in ln)
+    assert "conhost" not in selftest_line and "powershell.exe" in selftest_line
+
+
+def test_registration_mode_distinguishes_stale_from_headless(monkeypatch: pytest.MonkeyPatch) -> None:
+    """task-os#130: a launcher registered before the conhost.exe --headless wrap
+    landed is still a launcher, but it flashes a console every open - report it
+    as stale so Settings tells the PC to re-run the install command, the same
+    as a fallback install."""
+    monkeypatch.setattr(
+        opener_info, "_registered_command",
+        lambda: 'conhost.exe --headless powershell.exe -File "C:\\x\\opener.ps1" -Url "%1"',
+    )
+    assert opener_info.registration_mode() == "launcher"
+    monkeypatch.setattr(
+        opener_info, "_registered_command",
+        lambda: 'powershell.exe -File "C:\\x\\opener.ps1" -Url "%1"',
+    )
+    assert opener_info.registration_mode() == "launcher-stale"
+    monkeypatch.setattr(
+        opener_info, "_registered_command",
+        lambda: 'cmd.exe /c ""C:\\x\\opener.cmd" "%1""',
+    )
+    assert opener_info.registration_mode() == "fallback"
+    monkeypatch.setattr(opener_info, "_registered_command", lambda: None)
+    assert opener_info.registration_mode() is None
 
 
 def test_env_template_from_placeholders() -> None:
