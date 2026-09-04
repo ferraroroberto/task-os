@@ -104,6 +104,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         page.keyboard.press("Escape")
         rows = page.locator("#paneBoard .trow")
         expect(rows).to_have_count(1)
+        expect(rows.first).to_be_visible()   # not just present — the column it's in must not be hidden
         expect(rows.locator(".trow-title")).to_have_text("Release v0.2")
         expect(rows.locator(".trow-blocked")).to_have_text("blocked by 1")
         assert_no_horizontal_overflow(page)
@@ -114,8 +115,12 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
 
         # 5. Cycle guard through the real UI: two fresh tasks, B blocks A, then
         #    A blocking B back is refused with a toast — nothing applied — and
-        #    a real add/remove updates the lock live. Dark, for the paired shot.
-        page.evaluate("document.documentElement.dataset.theme = 'dark'")
+        #    a real add/remove updates the lock live. Dark, for the paired shot
+        #    — through localStorage, not a DOM mutation: the steps below do full
+        #    page navigations (fresh `boot()`, so the blocker picker's
+        #    state.taskIndex sees the two new tasks), which wipe an in-memory
+        #    `dataset.theme` flip but read the persisted key on every load.
+        page.evaluate("localStorage.setItem('task-os.theme', 'dark')")
         made_a = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle A"}),
                                     headers={"content-type": "application/json"})
         made_b = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle B"}),
@@ -128,6 +133,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         # POST made outside the page never refreshes it on its own, and a
         # hash-only goto on an already-loaded page never re-runs boot() at all.
         page.goto(f"{base}/?_e2e=1#task/{a_id}")
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         expect(drawer).to_be_visible()
         blocked_sec = drawer.locator(".drawer-blocked")
         expect(blocked_sec.locator(".drawer-none")).to_have_text("Not blocked by anything.")
