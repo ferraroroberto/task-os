@@ -842,6 +842,9 @@ a.chip:hover { text-decoration: underline; }
 /* The sleeping marker (#87) — muted like the rest of the meta line: it is a
    statement of fact, not a state to warn about, so it takes no status colour. */
 .trow-starts { color: var(--muted); }
+/* The locked marker (#100) — same muted treatment as `.trow-starts`, which it
+   replaces on the meta line whenever both would otherwise show. */
+.trow-blocked { color: var(--muted); }
 .trow-prio { text-transform: capitalize; }
 .trow-prio::before {
   content: "";
@@ -1034,6 +1037,10 @@ a.chip:hover { text-decoration: underline; }
    `.trow-starts` twin (#87), same muted weight, no status colour. */
 .t-starts { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
 .t-starts .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* The locked marker (#100) — same shape as `.t-starts`, which it replaces on
+   the title cell whenever both would otherwise show. */
+.t-blocked { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
+.t-blocked .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .c-due { white-space: nowrap; }
 .c-priority { text-transform: capitalize; }
 .prio-high { color: var(--danger); font-weight: 600; }
@@ -1298,6 +1305,28 @@ a.chip:hover { text-decoration: underline; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
+/* Blocked by (#100) — same row/form shape as Links: a flat list of removable
+   rows, then a Move-to-style picker to add one. */
+.drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.blocker-row { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.blocker-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-label);
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.blocker-form { display: flex; gap: 6px; flex-wrap: nowrap; }
+.blocker-form .select-native { flex: 1 1 auto; min-width: 0; }
+.blocker-form .button-surface { white-space: nowrap; flex: none; }
 .comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
 .comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; }
 /* Send matches the Description "Edit" button (ghost tier, same metrics). */

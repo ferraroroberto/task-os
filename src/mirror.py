@@ -9,6 +9,7 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
     id: 42 · external_id · parent · title · code · type · status · priority
     due · starts · planned_on · recurrence · recurrence_anchor · person (name)
     folder_ref · next_action
+    blocked_by: [id, id]     the tasks that must close first (#100)
     links: [{url, label, kind}] · created_at · updated_at · done_at · exported_at
     ---
     ## Description            markdown, free
@@ -37,6 +38,11 @@ differs from the recorded one, parses them and applies:
   ``## Description`` body. ``plan_order``
   is deliberately not mirrored (#89): it is presentation-level ordering, and
   mirroring it would churn every synced file on every drag;
+- ``blocked_by: [ids]`` (#100) — a relation, not a scalar field, diffed
+  against the stored edges and applied add/remove through
+  :func:`src.tasks_repo.add_blocker` / :func:`~src.tasks_repo.remove_blocker`
+  — the same cycle-guard rejection path ``parent`` gets from :func:`~src.tasks_repo.move`;
+  a rejected edit is a ``mirror_events`` row like any other, never a comment;
 - **new lines under ``## Comments``** — anything not matching a known comment
   by (ts, author, body) — as comments ``origin=md`` (author from the line, else
   the configured owner). The origin token is read but never part of that
@@ -125,10 +131,12 @@ _PLAIN_SAFE_RE = re.compile(r"^[A-Za-z0-9_./ ,+():@%\u00c0-\uffff-]*$")
 FRONTMATTER_KEYS = (
     "id", "external_id", "parent", "title", "code", "type", "status", "priority", "due",
     "starts", "planned_on", "recurrence", "recurrence_anchor", "person", "folder_ref",
-    "next_action", "links",
+    "next_action", "blocked_by", "links",
     "created_at", "updated_at", "done_at", "exported_at",
 )
 #: Keys the import applies (everything else in the frontmatter is read-only).
+#: ``blocked_by`` is importable but not a scalar task field — it goes through
+#: :meth:`Mirror._apply_blocked_by`, not the generic per-field loop below.
 IMPORTABLE_KEYS = (
     "title", "code", "status", "priority", "due", "starts", "planned_on", "recurrence",
     "recurrence_anchor", "person", "folder_ref", "next_action", "parent",
@@ -223,6 +231,7 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
         "person": (task.get("person") or {}).get("name"),
         "folder_ref": task.get("folder_ref"),
         "next_action": task.get("next_action"),
+        "blocked_by": [b["id"] for b in task.get("blocked_by") or []],
         "created_at": task.get("created_at"),
         "updated_at": task.get("updated_at"),
         "done_at": task.get("done_at"),
@@ -230,6 +239,10 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
     }
     lines = ["---"]
     for key in FRONTMATTER_KEYS:
+        if key == "blocked_by":
+            ids = fm["blocked_by"]
+            lines.append("blocked_by: [" + ", ".join(str(i) for i in ids) + "]")
+            continue
         if key == "links":
             links = task.get("links") or []
             if not links:
@@ -342,6 +355,20 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             data[key] = items
         elif rest_s in ("[]", "[ ]"):
             data[key] = []
+        elif rest_s.startswith("[") and rest_s.endswith("]"):
+            # An inline scalar list — only ``blocked_by: [3, 7]`` writes this
+            # shape today, so an int-only reader is enough; anything else is
+            # malformed rather than silently coerced.
+            inner = rest_s[1:-1].strip()
+            items_flat: list[Any] = []
+            for part in inner.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                if not _INT_RE.match(part):
+                    raise MirrorParseError(f"expected an integer list at frontmatter line {i}: {line[:40]!r}")
+                items_flat.append(int(part))
+            data[key] = items_flat
         else:
             data[key] = _parse_scalar(rest_s)
     body = "\n".join(lines[end + 1:])
@@ -711,6 +738,7 @@ class Mirror:
             state = self._state(conn, task_id)
             baseline, foreign = self._provenance(state, parsed)
             self._apply_fields(conn, task, parsed, baseline, result, foreign=foreign)
+            self._apply_blocked_by(conn, task, parsed, result, foreign=foreign)
             if foreign is not None:
                 # Not an edit of our file: another task-os instance rendered its
                 # own database into this folder (#126). Nothing was applied —
@@ -842,6 +870,71 @@ class Mirror:
                     conn, task_id, result.rejected, kind="rejected", field=key,
                     file_value=self._fmt(raw), kept_value=self._show(task, key), detail=str(exc),
                 )
+
+    def _apply_blocked_by(
+        self,
+        conn: sqlite3.Connection,
+        task: dict[str, Any],
+        parsed: ParsedFile,
+        result: ImportResult,
+        *,
+        foreign: str | None,
+    ) -> None:
+        """``blocked_by: [ids]`` import (#100) — a relation, not a scalar, so it
+        cannot go through :meth:`_apply_fields`'s per-field diff: the wanted set
+        is diffed against the stored one and applied edge by edge, each add
+        through :func:`src.tasks_repo.add_blocker` (the same cycle-guard
+        rejection path :meth:`_apply_fields` gives ``parent``)."""
+        fm = parsed.frontmatter
+        if "blocked_by" not in fm:
+            return
+        task_id = task["id"]
+        current_ids = sorted(b["id"] for b in task.get("blocked_by") or [])
+        raw = fm["blocked_by"]
+        if not isinstance(raw, list) or any(not isinstance(v, int) for v in raw):
+            self._note(
+                conn, task_id, result.rejected, kind="rejected", field="blocked_by",
+                file_value=repr(raw), kept_value=self._fmt(current_ids),
+                detail="blocked_by must be a list of task ids",
+            )
+            return
+        wanted_ids = sorted(set(raw))
+        if wanted_ids == current_ids:
+            repo.resolve_mirror_field(conn, task_id, "blocked_by")
+            return
+        if foreign is not None:
+            self._note(
+                conn, task_id, result.conflicts, kind="conflict", field="blocked_by",
+                file_value=self._fmt(wanted_ids), kept_value=self._fmt(current_ids), detail=foreign,
+            )
+            return
+        any_rejected = False
+        for bid in set(wanted_ids) - set(current_ids):
+            try:
+                repo.add_blocker(conn, task_id, bid, actor=MD_ACTOR)
+                result.applied.setdefault("blocked_by", []).append(f"+{bid}")
+            except repo.RepoError as exc:
+                any_rejected = True
+                self._note(
+                    conn, task_id, result.rejected, kind="rejected", field="blocked_by",
+                    file_value=f"+{bid}", kept_value=self._fmt(current_ids), detail=str(exc),
+                )
+        for bid in set(current_ids) - set(wanted_ids):
+            try:
+                repo.remove_blocker(conn, task_id, bid, actor=MD_ACTOR)
+                result.applied.setdefault("blocked_by", []).append(f"-{bid}")
+            except repo.RepoError as exc:
+                any_rejected = True
+                self._note(
+                    conn, task_id, result.rejected, kind="rejected", field="blocked_by",
+                    file_value=f"-{bid}", kept_value=self._fmt(current_ids), detail=str(exc),
+                )
+        # A field that imported cleanly clears any standing event for it, the
+        # same rule every scalar field follows — but only once every edge in
+        # this pass applied: a rejected edge's event must survive this call,
+        # or the very note just recorded above would erase itself (#100).
+        if not any_rejected:
+            repo.resolve_mirror_field(conn, task_id, "blocked_by")
 
     @staticmethod
     def _fmt(value: Any) -> str:

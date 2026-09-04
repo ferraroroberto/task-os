@@ -263,6 +263,50 @@ def test_starts_round_trips_and_conflicts_like_any_field(env, mirror: Mirror) ->
     assert "starts: 2027-02-02" in path.read_text(encoding="utf-8")
 
 
+def test_blocked_by_round_trips_and_rejects_a_cycle(env, mirror: Mirror) -> None:
+    """#100: `blocked_by:` exports as an inline id list and imports through
+    add_blocker/remove_blocker, diffed edge by edge — a cyclic edit is
+    rejected the same way an invalid `parent` is (an event, never a comment)."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    tap_id = conn.execute("SELECT id FROM tasks WHERE title = 'Fix leaking tap'").fetchone()["id"]
+    with repo.use_clock(_clock(T0)):
+        mirror.export_task(conn, tid)
+    text = path.read_text(encoding="utf-8")
+    assert "\nblocked_by: []\n" in text                    # exported, empty
+
+    _touch(path, text.replace("\nblocked_by: []\n", f"\nblocked_by: [{tap_id}]\n"))
+    with repo.use_clock(_clock(T0.replace(hour=11))):
+        res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"blocked_by": [f"+{tap_id}"]}
+    task = repo.get_task(conn, tid)
+    assert [b["id"] for b in task["blocked_by"]] == [tap_id] and task["blocked"] is True
+    assert (task["activity"][0]["field"], task["activity"][0]["actor"]) == ("blocked_by", "md")
+    assert f"blocked_by: [{tap_id}]" in path.read_text(encoding="utf-8")
+
+    # removing it from the file clears the edge
+    text = path.read_text(encoding="utf-8").replace(f"\nblocked_by: [{tap_id}]\n", "\nblocked_by: []\n")
+    _touch(path, text)
+    with repo.use_clock(_clock(T0.replace(hour=12))):
+        res2 = mirror.import_tick(conn)["imported"][0]
+    assert res2["applied"] == {"blocked_by": [f"-{tap_id}"]}
+    assert repo.get_task(conn, tid)["blocked_by"] == []
+
+    # a cyclic edit: tap already blocks bathroom, so bathroom blocking tap
+    # back would close the loop — rejected, recorded as an event, no comment
+    n_comments = len(repo.get_task(conn, tid)["comments"])
+    repo.add_blocker(conn, tap_id, tid, actor="tester")     # bathroom now blocks tap
+    text = path.read_text(encoding="utf-8").replace("\nblocked_by: []\n", f"\nblocked_by: [{tap_id}]\n")
+    _touch(path, text)
+    with repo.use_clock(_clock(T0.replace(hour=13))):
+        res3 = mirror.import_tick(conn)["imported"][0]
+    assert len(res3["rejected"]) == 1 and "blocked_by" in res3["rejected"][0]
+    assert repo.get_task(conn, tid)["blocked_by"] == []     # nothing applied
+    assert len(repo.get_task(conn, tid)["comments"]) == n_comments
+    events = [e for e in repo.list_mirror_events(conn) if e["field"] == "blocked_by"]
+    assert events and events[0]["kind"] == "rejected"
+
+
 def test_planned_on_round_trips_plan_order_stays_home(env, mirror: Mirror) -> None:
     """#89: `planned_on:` exports and imports like `starts` — same one layer,
     same conflict policy — while `plan_order` never appears in the file:

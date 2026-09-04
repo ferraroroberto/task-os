@@ -8,7 +8,9 @@
  * move-to — re-parent without the tree drag, the phone's path) →
  * folder (the ref as an opener chip + resolved path, an editor that folds a
  * pasted absolute path onto the placeholders, a picker over the folder
- * index — Step 9) → description (markdown, edit/preview) → links (add/remove) → comments
+ * index — Step 9) → description (markdown, edit/preview) → links (add/remove)
+ * → blocked by (#100: the open blockers, a Move-to-style picker to add one,
+ * remove per row) → comments
  * newest-first with URLs as clickable chips + composer (Ctrl+Enter sends,
  * origin=ui) → activity log (field old → new · actor · time) → children
  * (click to navigate, add child) → issue panel: the linked issue (provider
@@ -38,6 +40,7 @@ import { toast } from './toast.js';
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
  *          projects: () => Array<{id:number,title:string,depth?:number}>,
+ *          allTasks: () => Array<{id:number,title:string,depth?:number}>,
  *          onMove: (id:number, parentId:number|null) => Promise<any>,
  *          onStatus: (id:number, status:string) => Promise<any>,
  *          issues: () => ({enabled:boolean, reason?:string, provider?:string, repos?:string[]}|null),
@@ -545,6 +548,9 @@ export function createDrawer(el, opts) {
     links.appendChild(linkForm);
     el.appendChild(links);
 
+    // ---- blocked by (#100)
+    el.appendChild(blockedBySection(t));
+
     // ---- comments (newest first) + composer
     const comments = section('comments', 'Comments', 'message-square');
     const composer = document.createElement('form');
@@ -895,6 +901,83 @@ export function createDrawer(el, opts) {
     }
     issue.appendChild(ib);
     return issue;
+  }
+
+  /** "Blocked by" (#100): the open blockers as removable rows, a Move-to-style
+   *  picker to add one — the server's cycle guard answers a bad pick, same as
+   *  the "Move to" field answers a bad re-parent. */
+  function blockedBySection(t) {
+    const sec = section('blocked', 'Blocked by', 'lock');
+    const list = document.createElement('div');
+    list.className = 'drawer-blockers';
+    const blockers = t.blocked_by || [];
+    blockers.forEach(function (b) {
+      const row = document.createElement('div');
+      row.className = 'blocker-row';
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'blocker-title';
+      link.textContent = b.title;
+      link.addEventListener('click', function () { opts.onOpen(b.id); });
+      row.appendChild(link);
+      row.appendChild(statusPill(b.status));
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'icon-btn';
+      rm.setAttribute('aria-label', 'Remove blocker ' + b.title);
+      rm.innerHTML = icon('trash-2');
+      rm.addEventListener('click', async function () {
+        try {
+          await api('/api/tasks/' + t.id + '/blockers/' + b.id, { method: 'DELETE' });
+          await refresh();
+          opts.onChanged();
+        } catch (err) { toast(err.message || 'Remove blocker failed', 'error'); }
+      });
+      row.appendChild(rm);
+      list.appendChild(row);
+    });
+    if (!blockers.length) {
+      const none = document.createElement('p');
+      none.className = 'muted drawer-none';
+      none.textContent = 'Not blocked by anything.';
+      list.appendChild(none);
+    }
+    sec.appendChild(list);
+
+    const form = document.createElement('form');
+    form.className = 'blocker-form';
+    const sel = document.createElement('select');
+    sel.className = 'select-native field-control';
+    sel.setAttribute('aria-label', 'Add a blocker');
+    const taken = new Set(blockers.map(function (b) { return b.id; }));
+    const optDefault = document.createElement('option');
+    optDefault.value = '';
+    optDefault.textContent = 'pick a task…';
+    sel.appendChild(optDefault);
+    (opts.allTasks ? opts.allTasks() : []).forEach(function (p) {
+      if (p.id === t.id || taken.has(p.id)) return;
+      const o = document.createElement('option');
+      o.value = String(p.id);
+      o.textContent = (p.depth ? ' '.repeat(p.depth) : '') + p.title;
+      sel.appendChild(o);
+    });
+    const add = document.createElement('button');
+    add.type = 'submit';
+    add.className = 'button-surface';
+    add.textContent = 'Add blocker';
+    form.append(sel, add);
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      const v = sel.value;
+      if (!v) return;
+      try {
+        await api('/api/tasks/' + t.id + '/blockers', { method: 'POST', body: { blocker_id: Number(v) } });
+        await refresh();
+        opts.onChanged();
+      } catch (err) { toast(err.message || 'Add blocker failed', 'error'); }
+    });
+    sec.appendChild(form);
+    return sec;
   }
 
   // ---- folder section: two lines — [chip + delete] / [ref + Change + Pick]

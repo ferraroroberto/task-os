@@ -9,8 +9,9 @@
  *           fine and coarse pointers alike; a view with drag-and-drop keeps it too),
  *           preceded on Today by the snooze control (#87)
  *   line 2  the meta line: code (coding tasks) · project (root title) · due ·
- *           starts (only while the task is still asleep) · priority ·
- *           recurrence · folder chip · issue chip · children ·
+ *           blocked (lock, only while an open blocker gates it — wins over
+ *           starts, #100) · starts (only while the task is still asleep) ·
+ *           priority · recurrence · folder chip · issue chip · children ·
  *           comments · person — only the parts that have content
  *
  * Three of the meta line's parts are their own tap targets, not just text: the
@@ -30,7 +31,8 @@
 import { duePicker } from './dueinput.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  STATUSES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, recurrenceLabel, relDue, startsLabel,
+  STATUSES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
+  recurrenceLabel, relDue, startsLabel,
 } from './format.js';
 import { snoozeButton } from './snooze.js';
 
@@ -191,9 +193,11 @@ export function metaLine(t, opts) {
   // three levels down reads "Home renovation › Kitchen" on hover, #102)
   if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, breadcrumbText(t.breadcrumb) || project));
   if (t.due) meta.appendChild(dueChip(t, relDue(t.due), o.onDue || null));
-  // A sleeping task says so wherever it still shows (the Tree, a search hit,
-  // the Deferred filter) — the working views drop it, they never lie about it.
-  if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
+  // Blocked wins over deferred (#100) — it's the harder gate: a task both
+  // asleep and blocked shows the lock, not the clock, wherever either still
+  // shows (the Tree, a search hit, the Deferred/blocked filters).
+  if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
+  else if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
   if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
   if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', recurrenceLabel(t.recurrence, t.recurrence_anchor)));
   if (t.folder_ref) {

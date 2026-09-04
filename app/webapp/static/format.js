@@ -143,6 +143,21 @@ export function isDeferred(t, now) {
   return !!(t && t.starts) && t.starts > todayISO(now ? new Date(now + 'T00:00:00') : undefined);
 }
 
+/** Is this task blocked right now? — it has at least one still-open blocker
+ *  (#100). The ONE place the browser answers that question, so the row
+ *  marker, the drawer and the client-side filter agree — mirrors `isDeferred`.
+ * @param {object} t   a task summary or detail (carries `blocked` server-side)
+ */
+export function isBlocked(t) {
+  return !!(t && t.blocked);
+}
+
+/** "blocked by 2" — the meta-line marker a locked task wears (#100). */
+export function blockedLabel(t) {
+  const n = (t && t.blocker_count) || 0;
+  return 'blocked by ' + n;
+}
+
 /** "starts 5 Sep" — the quiet marker a sleeping task wears (#87). */
 export function startsLabel(iso) {
   const d = parseISO(iso);

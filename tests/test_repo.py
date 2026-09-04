@@ -115,6 +115,87 @@ def test_move_and_cycle_guard(conn: sqlite3.Connection, seeded: dict) -> None:
     assert len(repo.list_activity(conn, quotes)) == n
 
 
+# ---------------------------------------------------------- blocked-by (#100)
+
+def test_seeded_blocked_pair(conn: sqlite3.Connection, seeded: dict) -> None:
+    """The seed's one real pair (Release v0.2 blocked on the sensor driver):
+    hidden from the default working-view list, present under the ``blocked``
+    filter and in the tree, with a lock and the right count."""
+    release, driver = seeded["release"], seeded["driver"]
+    task = repo.get_task(conn, release)
+    assert task["blocked"] is True and task["blocker_count"] == 1
+    assert [b["id"] for b in task["blocked_by"]] == [driver]
+
+    open_ids = {t["id"] for t in repo.list_tasks(conn)}
+    assert release not in open_ids                       # hidden by default (blocked="hide")
+    only_ids = {t["id"] for t in repo.list_tasks(conn, blocked="only")}
+    assert only_ids == {release}
+    all_ids = {t["id"] for t in repo.list_tasks(conn, blocked="all")}
+    assert release in all_ids
+
+    node = next(n for n in repo.tree(conn) if n["title"] == "Side project: garden-bot")
+    release_node = next(
+        c for c in node["children"] if c["title"] == "Release v0.2"
+    )
+    assert release_node["blocked"] is True and release_node["blocker_count"] == 1
+
+
+def test_add_blocker_refuses_self_and_cycle(conn: sqlite3.Connection, seeded: dict) -> None:
+    quotes, worktop = seeded["quotes"], seeded["worktop"]
+    with pytest.raises(repo.CycleError):
+        repo.add_blocker(conn, quotes, quotes)            # self-block
+    repo.add_blocker(conn, quotes, worktop, actor="tester")  # worktop blocks quotes
+    with pytest.raises(repo.CycleError):
+        repo.add_blocker(conn, worktop, quotes)            # would close the loop
+    with pytest.raises(repo.NotFound):
+        repo.add_blocker(conn, quotes, 9999)
+
+
+def test_add_and_remove_blocker_logs_both_sides_and_is_idempotent(
+    conn: sqlite3.Connection, seeded: dict
+) -> None:
+    quotes, worktop = seeded["quotes"], seeded["worktop"]
+    n_quotes = len(repo.list_activity(conn, quotes))
+    n_worktop = len(repo.list_activity(conn, worktop))
+    blocked = repo.add_blocker(conn, quotes, worktop, actor="tester")
+    assert blocked["blocked"] is True and blocked["blocker_count"] == 1
+    assert _fields(repo.list_activity(conn, quotes))[0] == ("blocked_by", None, str(worktop))
+    assert _fields(repo.list_activity(conn, worktop))[0] == ("blocks", None, str(quotes))
+    # duplicate add is a no-op: no new activity rows
+    repo.add_blocker(conn, quotes, worktop, actor="tester")
+    assert len(repo.list_activity(conn, quotes)) == n_quotes + 1
+    assert len(repo.list_activity(conn, worktop)) == n_worktop + 1
+
+    unblocked = repo.remove_blocker(conn, quotes, worktop, actor="tester")
+    assert unblocked["blocked"] is False and unblocked["blocker_count"] == 0
+    assert _fields(repo.list_activity(conn, quotes))[0] == ("blocked_by", str(worktop), None)
+    assert _fields(repo.list_activity(conn, worktop))[0] == ("blocks", str(quotes), None)
+    with pytest.raises(repo.NotFound):
+        repo.remove_blocker(conn, quotes, worktop)
+
+
+def test_a_closed_blocker_does_not_block(conn: sqlite3.Connection, seeded: dict) -> None:
+    """Only OPEN blockers gate a task — closing the last one unblocks it,
+    and re-listing without ``blocked`` shows it again."""
+    release, driver = seeded["release"], seeded["driver"]
+    repo.set_status(conn, driver, "done", actor="tester")
+    task = repo.get_task(conn, release)
+    assert task["blocked"] is False and task["blocker_count"] == 0
+    assert [b["id"] for b in task["blocked_by"]] == [driver]   # the edge itself is untouched
+    assert release in {t["id"] for t in repo.list_tasks(conn)}
+
+
+def test_delete_a_blocker_logs_unblock_on_the_survivor(conn: sqlite3.Connection, seeded: dict) -> None:
+    release, driver = seeded["release"], seeded["driver"]
+    n = len(repo.list_activity(conn, release))
+    repo.delete_task(conn, driver, actor="tester")
+    log = _fields(repo.list_activity(conn, release))
+    assert log[0] == ("blocked_by", str(driver), None)
+    assert len(log) == n + 1
+    task = repo.get_task(conn, release)
+    assert task["blocked"] is False and task["blocked_by"] == []
+
+
 # ------------------------------------------------- activity on every change
 
 def test_activity_on_every_change(conn: sqlite3.Connection, frozen: None) -> None:

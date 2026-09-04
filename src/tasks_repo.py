@@ -340,6 +340,32 @@ def _descendant_ids(conn: sqlite3.Connection, task_id: int) -> list[int]:
     return [r["id"] for r in rows]
 
 
+def _blocked_reachable(conn: sqlite3.Connection, blocker_id: int) -> set[int]:
+    """Every id ``blocker_id`` transitively blocks, following ``blocks`` edges."""
+    rows = conn.execute(
+        """
+        WITH RECURSIVE down(id) AS (
+            SELECT blocked_id FROM task_blocks WHERE blocker_id = ?
+            UNION ALL
+            SELECT tb.blocked_id FROM task_blocks tb JOIN down ON tb.blocker_id = down.id
+        )
+        SELECT id FROM down
+        """,
+        (blocker_id,),
+    ).fetchall()
+    return {r["id"] for r in rows}
+
+
+def _currently_blocked_ids(conn: sqlite3.Connection) -> set[int]:
+    """Every task with at least one still-open blocker — the one query
+    :func:`list_tasks` filters on (#100)."""
+    rows = conn.execute(
+        "SELECT DISTINCT tb.blocked_id FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
+        " WHERE t.status NOT IN ('done', 'cancelled')"
+    ).fetchall()
+    return {r["blocked_id"] for r in rows}
+
+
 def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
     """A task row plus the cheap derived bits every list view wants."""
     out = dict(row)
@@ -381,6 +407,21 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
     ).fetchone()
     out["ai_url"] = ai["url"] if ai else None
     out["ai_label"] = (ai["label"] if ai else None) or None
+    # blocked-by dependencies (#100): the blockers themselves (id/title/status,
+    # for the drawer's list and the mirror export) plus the two derived facts
+    # every list view wants without walking edges itself — blocked (any
+    # blocker still open) and blocker_count (how many of them).
+    blockers = _rows(
+        conn.execute(
+            "SELECT t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
+            " WHERE tb.blocked_id = ? ORDER BY t.id",
+            (row["id"],),
+        ).fetchall()
+    )
+    out["blocked_by"] = blockers
+    open_blockers = [b for b in blockers if b["status"] not in CLOSED_STATUSES]
+    out["blocked"] = bool(open_blockers)
+    out["blocker_count"] = len(open_blockers)
     return out
 
 
@@ -687,6 +728,85 @@ def move(
     return get_task(conn, task_id)
 
 
+# ------------------------------------------------------------------ blocks
+
+
+def list_blockers(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]]:
+    """``task_id``'s blockers — id/title/status, ordered by id."""
+    _require_task(conn, task_id)
+    return _rows(
+        conn.execute(
+            "SELECT t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
+            " WHERE tb.blocked_id = ? ORDER BY t.id",
+            (task_id,),
+        ).fetchall()
+    )
+
+
+def add_blocker(
+    conn: sqlite3.Connection,
+    task_id: int,
+    blocker_id: int,
+    *,
+    actor: str | None = None,
+) -> dict[str, Any]:
+    """``blocker_id`` must close before ``task_id`` counts as unblocked (#100).
+
+    Refuses a self-block and a cycle: ``blocker_id`` may not be (transitively)
+    blocked by ``task_id`` already — a separate graph from the parent tree, so
+    a blocks-edge may freely cross subtrees; only its own edges can cycle.
+    Logs ``blocked_by`` on ``task_id`` and ``blocks`` on ``blocker_id`` (#100
+    asks for both sides to tell the story); idempotent on a duplicate edge.
+    """
+    task_id = int(task_id)
+    blocker_id = int(blocker_id)
+    if blocker_id == task_id:
+        raise CycleError(f"task {task_id} cannot block itself")
+    _require_task(conn, task_id)
+    _require_task(conn, blocker_id)
+    if blocker_id in _blocked_reachable(conn, task_id):
+        raise CycleError(
+            f"task {task_id} already (transitively) blocks task {blocker_id} — that would be a cycle"
+        )
+    exists = conn.execute(
+        "SELECT 1 FROM task_blocks WHERE blocker_id = ? AND blocked_id = ?", (blocker_id, task_id)
+    ).fetchone()
+    if exists:
+        return get_task(conn, task_id)
+    ts = now_iso()
+    conn.execute(
+        "INSERT INTO task_blocks(blocker_id, blocked_id) VALUES (?, ?)", (blocker_id, task_id)
+    )
+    _log(conn, task_id, actor, "blocked_by", None, blocker_id, ts)
+    _log(conn, blocker_id, actor, "blocks", None, task_id, ts)
+    conn.commit()
+    _touched(task_id, blocker_id)
+    return get_task(conn, task_id)
+
+
+def remove_blocker(
+    conn: sqlite3.Connection,
+    task_id: int,
+    blocker_id: int,
+    *,
+    actor: str | None = None,
+) -> dict[str, Any]:
+    """Drop the ``blocker_id → task_id`` edge; logs on both sides like :func:`add_blocker`."""
+    task_id = int(task_id)
+    blocker_id = int(blocker_id)
+    cur = conn.execute(
+        "DELETE FROM task_blocks WHERE blocker_id = ? AND blocked_id = ?", (blocker_id, task_id)
+    )
+    if cur.rowcount == 0:
+        raise NotFound(f"task {task_id} is not blocked by task {blocker_id}")
+    ts = now_iso()
+    _log(conn, task_id, actor, "blocked_by", blocker_id, None, ts)
+    _log(conn, blocker_id, actor, "blocks", task_id, None, ts)
+    conn.commit()
+    _touched(task_id, blocker_id)
+    return get_task(conn, task_id)
+
+
 def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) -> dict[str, Any]:
     """Complete a task.
 
@@ -724,13 +844,33 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
     return set_status(conn, task_id, "done", actor=actor)
 
 
-def delete_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
-    """Delete a task **and its subtree** (FK cascade); returns ``{id, deleted}`` counts."""
+def delete_task(
+    conn: sqlite3.Connection, task_id: int, *, actor: str | None = None
+) -> dict[str, Any]:
+    """Delete a task **and its subtree** (FK cascade); returns ``{id, deleted}`` counts.
+
+    A task the doomed subtree blocks loses that blocker: the ``task_blocks``
+    row cascades with the row, but a still-alive dependent gets an explicit
+    ``blocked_by`` old→None activity row (#100) so its own log says why it
+    unblocked rather than the edge just vanishing silently.
+    """
     current = _require_task(conn, task_id)
     subtree = _descendant_ids(conn, task_id)
+    doomed = {task_id, *subtree}
+    freed = conn.execute(
+        f"SELECT DISTINCT blocker_id, blocked_id FROM task_blocks"
+        f" WHERE blocker_id IN ({', '.join('?' * len(doomed))})",
+        list(doomed),
+    ).fetchall()
+    ts = now_iso()
+    survivors: set[int] = set()
+    for r in freed:
+        if r["blocked_id"] not in doomed:
+            _log(conn, r["blocked_id"], actor, "blocked_by", r["blocker_id"], None, ts)
+            survivors.add(r["blocked_id"])
     conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
-    _touched(task_id, *subtree, current["parent_id"])
+    _touched(task_id, *subtree, current["parent_id"], *survivors)
     return {"id": task_id, "deleted": 1 + len(subtree)}
 
 
@@ -915,6 +1055,7 @@ def list_tasks(
     updated_since: str | None = None,
     updated_before: str | None = None,
     deferred: str | None = None,
+    blocked: str | None = None,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
 
@@ -953,6 +1094,13 @@ def list_tasks(
       Today, Table and the CLI are all projections of this function, so they
       inherit it. :func:`tree` and :func:`search` do not go through here on
       purpose — a deferred task stays findable.
+    - ``blocked``: what to do with a task that has an open blocker (#100) —
+      ``"hide"`` (only unblocked tasks — the default working-view rule),
+      ``"only"`` (only blocked ones — the status multi-select's ``blocked``
+      pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows
+      ``include_closed`` exactly like ``deferred``. This is the ONE place the
+      rule lives; :func:`tree` and :func:`search` keep showing a blocked task
+      (with its lock) on purpose.
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
     top ancestor — the Table's project column) and ``last_comment``.
@@ -969,6 +1117,22 @@ def list_tasks(
             "(t.starts IS NULL OR t.starts <= ?)" if deferred == "hide" else "t.starts > ?"
         )
         args.append(today().isoformat())
+
+    if blocked is None:
+        blocked = "all" if include_closed else "hide"
+    if blocked not in ("hide", "only", "all"):
+        raise ValidationError(f"blocked must be hide, only or all (got {blocked!r})")
+    if blocked != "all":
+        blocked_ids = _currently_blocked_ids(conn)
+        if blocked == "hide":
+            if blocked_ids:
+                where.append(f"t.id NOT IN ({', '.join('?' * len(blocked_ids))})")
+                args.extend(blocked_ids)
+        else:  # only
+            if not blocked_ids:
+                return []
+            where.append(f"t.id IN ({', '.join('?' * len(blocked_ids))})")
+            args.extend(blocked_ids)
 
     if status:
         values = [status] if isinstance(status, str) else list(status)
@@ -1128,9 +1292,24 @@ def tree(
     """
     rows = conn.execute("SELECT * FROM tasks ORDER BY id").fetchall()
     by_parent: dict[int | None, list[dict[str, Any]]] = {}
+    all_by_id: dict[int, dict[str, Any]] = {}
     for r in rows:
         by_parent.setdefault(r["parent_id"], []).append(dict(r))
+        all_by_id[r["id"]] = dict(r)
     refs = {r["task_id"]: dict(r) for r in conn.execute("SELECT * FROM issue_refs").fetchall()}
+    # blocked-by (#100), prefetched like issue_refs above: one query for the
+    # whole tree rather than a per-node lookup.
+    blockers_by: dict[int, list[int]] = {}
+    for r in conn.execute("SELECT blocker_id, blocked_id FROM task_blocks").fetchall():
+        blockers_by.setdefault(r["blocked_id"], []).append(r["blocker_id"])
+
+    def blocked_fields(task_id: int) -> dict[str, Any]:
+        blocked_by = [
+            {"id": bid, "title": all_by_id[bid]["title"], "status": all_by_id[bid]["status"]}
+            for bid in blockers_by.get(task_id, []) if bid in all_by_id
+        ]
+        open_blockers = [b for b in blocked_by if b["status"] not in CLOSED_STATUSES]
+        return {"blocked_by": blocked_by, "blocked": bool(open_blockers), "blocker_count": len(open_blockers)}
 
     def build(pid: int | None, depth: int) -> list[dict[str, Any]]:
         out = []
@@ -1138,6 +1317,7 @@ def tree(
             node = dict(row)
             node["depth"] = depth
             node["issue_ref"] = refs.get(row["id"])
+            node.update(blocked_fields(row["id"]))
             node["children"] = build(row["id"], depth + 1)
             node["child_count"] = len(by_parent.get(row["id"], []))
             node["is_project"] = node["child_count"] > 0
@@ -1153,6 +1333,7 @@ def tree(
     node = dict(root)
     node["depth"] = 0
     node["issue_ref"] = refs.get(root_id)
+    node.update(blocked_fields(root_id))
     node["children"] = build(root_id, 1)
     node["child_count"] = len(by_parent.get(root_id, []))
     node["is_project"] = node["child_count"] > 0

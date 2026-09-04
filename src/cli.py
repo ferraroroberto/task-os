@@ -4,7 +4,7 @@
               [--recurrence weekly [--recurrence-anchor fri]] [--person "Sam"]
               [--desc "..."]
     tasks ls [--status todo,doing|open|all] [--project N] [--due today|week|overdue]
-             [--deferred] [--updated-before <date|30d>]
+             [--deferred] [--blocked] [--updated-before <date|30d>]
     tasks show N
     tasks tree [N]
     tasks comment N "text"
@@ -15,6 +15,8 @@
     tasks plan ls               today's plan, ordered, with the n-of-m progress line
     tasks journal [--weeks N]   what got done, grouped by day, newest first (#102)
     tasks move N --parent M     (--parent root → top level)
+    tasks block N --on M        N is blocked by M — refused on a self-block or a cycle (#100)
+    tasks unblock N M           remove M as a blocker of N
     tasks rm N [--yes]          delete N and its subtree — asks [y/N] on stderr; alias: delete (#121)
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
@@ -151,6 +153,10 @@ class HttpBackend:
             # one spelling of "show me the sleeping ones", not two.
             picked = [s for s in str(params.get("status") or "").split(",") if s]
             params["status"] = ",".join([*picked, "deferred"])
+        if params.pop("blocked", False):
+            # same trick as `deferred`, its own pseudo-value (#100)
+            picked = [s for s in str(params.get("status") or "").split(",") if s]
+            params["status"] = ",".join([*picked, "blocked"])
         query = urllib.parse.urlencode(params)
         return self._call("GET", "/api/tasks" + (f"?{query}" if query else ""))["items"]
 
@@ -191,6 +197,13 @@ class HttpBackend:
     def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
         body = {"parent_id": parent_id, "actor": self.actor}
         return self._call("POST", f"/api/tasks/{task_id}/move", body)
+
+    def block(self, task_id: int, blocker_id: int) -> dict[str, Any]:
+        body = {"blocker_id": blocker_id, "actor": self.actor}
+        return self._call("POST", f"/api/tasks/{task_id}/blockers", body)
+
+    def unblock(self, task_id: int, blocker_id: int) -> dict[str, Any]:
+        return self._call("DELETE", f"/api/tasks/{task_id}/blockers/{blocker_id}")
 
     def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {"q": q}
@@ -299,6 +312,7 @@ class LocalBackend:
             done_to=filters.get("done_to"),
             # None = follow include_closed, so `ls --status all` means all
             deferred="only" if filters.get("deferred") else None,
+            blocked="only" if filters.get("blocked") else None,
         )
 
     def show(self, task_id: int) -> dict[str, Any]:
@@ -333,6 +347,12 @@ class LocalBackend:
 
     def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
         return self._wrap(self._repo.move, task_id, parent_id, actor=self.actor)
+
+    def block(self, task_id: int, blocker_id: int) -> dict[str, Any]:
+        return self._wrap(self._repo.add_blocker, task_id, blocker_id, actor=self.actor)
+
+    def unblock(self, task_id: int, blocker_id: int) -> dict[str, Any]:
+        return self._wrap(self._repo.remove_blocker, task_id, blocker_id, actor=self.actor)
 
     def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
         # The same four adapters the webapp runs, built here over this
@@ -513,6 +533,8 @@ def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
         tail.append(describe_recurrence(t["recurrence"], t.get("recurrence_anchor")))
     if t.get("type") == "coding" and t.get("issue_ref"):
         tail.append(f"{t['issue_ref']['repo']}#{t['issue_ref']['number']}")
+    if t.get("blocked"):
+        tail.append(f"blocked by {t['blocker_count']}")
     if t.get("person"):
         tail.append(f"@{t['person']['name']}")
     line = "  " * indent + "  ".join(bits)
@@ -600,6 +622,11 @@ def fmt_show(t: dict[str, Any]) -> str:
         lines.append(f"  folder: {t['folder_ref']}")
     if t.get("next_action"):
         lines.append(f"  next: {t['next_action']}")
+    if t.get("blocked_by"):
+        lines.append("  blocked by: " + ", ".join(
+            f"#{b['id']} {b['title']}" + ("" if b["status"] not in ("done", "cancelled") else f" ({b['status']})")
+            for b in t["blocked_by"]
+        ))
     lines.append(f"  created {t['created_at']} by {t.get('created_by') or '-'} · updated {t['updated_at']}"
                  + (f" · done {t['done_at']}" if t.get("done_at") else ""))
     if t.get("children"):
@@ -812,6 +839,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             filters["person"] = _resolve_person(backend, args.person)
         if args.deferred:
             filters["deferred"] = True
+        if args.blocked:
+            filters["blocked"] = True
         if args.updated_before:
             filters["updated_before"] = _parse_before_arg(args.updated_before)
         items = backend.ls(**filters)
@@ -932,6 +961,12 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         t = backend.move(args.id, _parent_arg(args.parent))
         where = _crumb(t) or "top level"
         return t, f"#{t['id']} moved → {where}"
+    if cmd == "block":
+        t = backend.block(args.id, args.on)
+        return t, f"#{t['id']} blocked by #{args.on} ({t['blocker_count']} open blocker(s))"
+    if cmd == "unblock":
+        t = backend.unblock(args.id, args.blocker)
+        return t, f"#{t['id']} unblocked from #{args.blocker} ({t['blocker_count']} open blocker(s) left)"
     if cmd == "search":
         kinds = [args.kind] if getattr(args, "kind", None) else None
         result = backend.search(args.query, kinds)
@@ -1029,6 +1064,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="only tasks last touched strictly before this day (a date, or Nd = N days ago)")
     ls.add_argument("--deferred", action="store_true",
                     help="only tasks still sleeping (a start date in the future)")
+    ls.add_argument("--blocked", action="store_true",
+                    help="only tasks with an open blocker (#100)")
 
     j = sub.add_parser("journal", parents=[common],
                        help="what got done, grouped by day, newest first (this week by default)")
@@ -1067,6 +1104,14 @@ def build_parser() -> argparse.ArgumentParser:
     m = sub.add_parser("move", parents=[common], help="re-parent")
     m.add_argument("id", type=int)
     m.add_argument("--parent", required=True, help="new parent id, or 'root'")
+
+    bl = sub.add_parser("block", parents=[common], help="add a blocker (#100) — N is blocked by M")
+    bl.add_argument("id", type=int)
+    bl.add_argument("--on", type=int, required=True, help="the blocker's task id")
+
+    ub = sub.add_parser("unblock", parents=[common], help="remove a blocker (#100)")
+    ub.add_argument("id", type=int)
+    ub.add_argument("blocker", type=int, help="the blocker task id to remove")
 
     rm = sub.add_parser("rm", parents=[common], aliases=["delete"],
                         help="delete a task and its subtree (asks first; --yes for scripts)")

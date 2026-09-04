@@ -128,6 +128,34 @@ def test_starts_and_deferred_over_both_backends(run: Runner) -> None:
     assert code == 1 and _json(out)["error"]["code"] == "bad_date"
 
 
+def test_block_unblock_and_ls_blocked_over_both_backends(run: Runner) -> None:
+    """#100 CLI parity: `tasks block --on`, `tasks unblock`, `tasks ls --blocked`
+    — a cycle is a CLI error, and `show` names the blocker."""
+    run("add", "X")
+    run("add", "Y")
+    code, out, _ = run("block", "1", "--on", "1", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "cycle"
+    code, out, _ = run("block", "1", "--on", "2", "--json")
+    assert code == 0
+    t = _json(out)
+    assert t["blocked"] is True and t["blocker_count"] == 1
+
+    code, out, _ = run("ls", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["Y"]         # X hidden while blocked
+    code, out, _ = run("ls", "--blocked", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["X"]
+    code, out, _ = run("show", "1")
+    assert code == 0 and "blocked by: #2 Y" in out
+
+    code, out, _ = run("block", "2", "--on", "1", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "cycle"
+
+    code, out, _ = run("unblock", "1", "2", "--json")
+    assert code == 0 and _json(out)["blocked"] is False
+    code, out, _ = run("ls", "--json")
+    assert code == 0 and {t["title"] for t in _json(out)} == {"X", "Y"}
+
+
 def test_ls_updated_before_over_both_backends(run: Runner) -> None:
     """#101 CLI parity: `--updated-before` takes a date or `Nd` (= N days ago,
     resolved CLI-side so the wire only ever sees a plain date)."""
