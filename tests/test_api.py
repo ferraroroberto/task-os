@@ -35,7 +35,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 10
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 11
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -108,6 +108,39 @@ def test_move_cycle_done_and_delete(client: TestClient) -> None:
     assert client.get("/api/tasks?status=done").json()["count"] == 1
     assert client.delete(f"/api/tasks/{a}").json() == {"id": a, "deleted": 1}
     assert client.get(f"/api/tasks/{a}").status_code == 404
+
+
+def test_blockers_add_remove_cycle_and_the_blocked_filter(client: TestClient) -> None:
+    """#100: POST/GET/DELETE /api/tasks/{id}/blockers, a self-block and a
+    cycle both 409, and the status list's `blocked` pseudo-filter narrows
+    like `deferred` does — the same one-URL-vocabulary shape."""
+    x = client.post("/api/tasks", json={"title": "X"}).json()["id"]
+    y = client.post("/api/tasks", json={"title": "Y"}).json()["id"]
+
+    self_block = client.post(f"/api/tasks/{x}/blockers", json={"blocker_id": x})
+    assert self_block.status_code == 409 and self_block.json()["error"]["code"] == "cycle"
+
+    add = client.post(f"/api/tasks/{x}/blockers", json={"blocker_id": y, "actor": "tester"})
+    assert add.status_code == 201
+    task = add.json()
+    assert task["blocked"] is True and task["blocker_count"] == 1
+    assert [b["id"] for b in task["blocked_by"]] == [y]
+    assert client.get(f"/api/tasks/{x}/blockers").json()["items"][0]["id"] == y
+
+    cyc = client.post(f"/api/tasks/{y}/blockers", json={"blocker_id": x})
+    assert cyc.status_code == 409 and cyc.json()["error"]["code"] == "cycle"
+
+    # the blocked pseudo-filter rides the status list, same shape as deferred
+    assert client.get("/api/tasks").json()["count"] == 1                       # X hidden by default
+    only = client.get("/api/tasks?status=blocked").json()
+    assert only["count"] == 1 and only["items"][0]["id"] == x
+    assert client.get("/api/tasks?include_closed=true").json()["count"] == 2   # blocked shows with include_closed
+
+    rm = client.delete(f"/api/tasks/{x}/blockers/{y}")
+    assert rm.status_code == 200 and rm.json()["blocked"] is False
+    missing = client.delete(f"/api/tasks/{x}/blockers/{y}")
+    assert missing.status_code == 404
+    assert client.get("/api/tasks").json()["count"] == 2
 
 
 def test_bulk_delete_reports_per_id(client: TestClient) -> None:

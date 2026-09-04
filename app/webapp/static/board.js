@@ -182,8 +182,15 @@ export function mountBoard(handlers) {
     const wantsDone = f.status.indexOf('done') >= 0;
     titles.done.textContent = wantsDone ? 'Done' : 'Done today';
     stripBtns.done.title = wantsDone ? 'Done' : 'Done today';
+    // Only a REAL status pill narrows which columns show — a pseudo-value
+    // ticked alone (`deferred` #87, `blocked` #100) is not a column key, so
+    // treating it as one hid every column instead of leaving all five up and
+    // letting the (already server-filtered) items land in their own status.
+    const realStatuses = f.status.filter(function (s) {
+      return BOARD_COLUMNS.some(function (c) { return c.key === s; });
+    });
     BOARD_COLUMNS.forEach(function (col) {
-      const hidden = f.status.length > 0 && f.status.indexOf(col.key) < 0;
+      const hidden = realStatuses.length > 0 && realStatuses.indexOf(col.key) < 0;
       sections[col.key].hidden = hidden;
       stripBtns[col.key].hidden = hidden;
       const rows = sortItems(byStatus[col.key], f.sort);

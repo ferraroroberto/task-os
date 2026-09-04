@@ -12,7 +12,7 @@ from src import schema
 
 EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
-    "tasks_fts", "comments_fts", "mirror_state", "mirror_events",
+    "tasks_fts", "comments_fts", "mirror_state", "mirror_events", "task_blocks",
 }
 
 
@@ -30,10 +30,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 10
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 11
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 10
+        assert schema.current_version(conn) == 11
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -47,13 +47,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 10
-        assert schema.migrate(conn) == 10
+        assert schema.migrate(conn) == 11
+        assert schema.migrate(conn) == 11
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 10
+    assert dbmod.init_db() == 11
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -67,10 +67,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 10
+    assert dbmod.init_db() == 11
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 10
+        assert schema.current_version(conn) == 11
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -90,7 +90,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 10
+    assert dbmod.init_db() == 11
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -135,7 +135,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 10
+    assert dbmod.init_db() == 11
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -193,7 +193,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 10
+    assert dbmod.init_db() == 11
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}

@@ -39,8 +39,8 @@ import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
-  DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters, listParams,
-  mountFilters,
+  BLOCKED, DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters,
+  listParams, mountFilters,
 } from './filters.js';
 import { fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
@@ -105,9 +105,11 @@ const state = {
   filters: filtersFromSearch(location.search),
   people: [],
   projects: [],     // [{id, title, depth}] — every task with children, tree order
+  taskIndex: [],    // [{id, title, depth}] — EVERY task, tree order (#100 blocker picker)
   tree: [],         // /api/tasks/tree?include_closed=true — the full forest
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
+  blocked: [],      // the locked tasks (#100) — same shape as deferred, the Tree only
   plan: { items: [], done: 0, total: 0 },  // /api/today's plan group (#89) — unfiltered on purpose
   planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
@@ -186,24 +188,40 @@ function flattenProjects(forest) {
   return out;
 }
 
+/** Every task, not just projects — the blocker picker (#100) offers any
+ *  task, unlike Move-to which only offers a re-parent target. */
+function flattenAll(forest) {
+  const out = [];
+  (function walk(nodes) {
+    nodes.forEach(function (n) {
+      out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
+      if (n.children && n.children.length) walk(n.children);
+    });
+  })(forest);
+  return out;
+}
+
 async function loadTree() {
   const res = await api('/api/tasks/tree?include_closed=true');
   state.tree = res.items || [];
   state.projects = flattenProjects(state.tree);
+  state.taskIndex = flattenAll(state.tree);
 }
 
 /** The shared list: the filters as sent to /api/tasks; when no status is
  *  picked, today's done tasks ride along (the Board's Done-today column).
  *
- *  Deferred tasks (#87) are fetched **separately**, never merged into
- *  `state.items`: the working views are supposed to be rid of them, and the
- *  one view that must still show them — the Tree, which prunes to the ids in
- *  the filtered list — reads `state.deferred` on top. Merging them here would
- *  put a sleeping task back on the Board the moment anyone forgot to filter. */
+ *  Deferred (#87) and blocked (#100) tasks are each fetched **separately**,
+ *  never merged into `state.items`: the working views are supposed to be rid
+ *  of them, and the one view that must still show them — the Tree, which
+ *  prunes to the ids in the filtered list — reads `state.deferred` /
+ *  `state.blocked` on top. Merging them here would put a sleeping or locked
+ *  task back on the Board the moment anyone forgot to filter. */
 async function loadItems() {
   const f = state.filters;
   const params = listParams(f);
   const showsDeferred = f.status.indexOf(DEFERRED) >= 0;
+  const showsBlocked = f.status.indexOf(BLOCKED) >= 0;
   const calls = [api('/api/tasks' + qs(params))];
   if (!f.status.length) {
     calls.push(api('/api/tasks' + qs(Object.assign({}, params, { status: ['done'], done_on: todayISO() }))));
@@ -211,7 +229,10 @@ async function loadItems() {
   const deferredCall = showsDeferred
     ? Promise.resolve({ items: [] })   // already the whole list — no second call
     : api('/api/tasks' + qs(Object.assign({}, params, { status: [DEFERRED] })));
-  const [results, sleeping] = await Promise.all([Promise.all(calls), deferredCall]);
+  const blockedCall = showsBlocked
+    ? Promise.resolve({ items: [] })   // already the whole list — no second call
+    : api('/api/tasks' + qs(Object.assign({}, params, { status: [BLOCKED] })));
+  const [results, sleeping, locked] = await Promise.all([Promise.all(calls), deferredCall, blockedCall]);
   const seen = new Set();
   const items = [];
   results.forEach(function (r) {
@@ -219,6 +240,7 @@ async function loadItems() {
   });
   state.items = items;
   state.deferred = showsDeferred ? items.slice() : (sleeping.items || []);
+  state.blocked = showsBlocked ? items.slice() : (locked.items || []);
 }
 
 function countOpen(forest) {
@@ -236,9 +258,9 @@ function countOpen(forest) {
  *  out — so a bulk POST never carries an id the user cannot see (#81). */
 function pruneSelection() {
   if (!selection.isActive()) return;
-  // deferred ids included: the Tree's rows are tickable too (#81 parity)
+  // deferred + blocked ids included: the Tree's rows are tickable too (#81 parity)
   selection.keepOnly(new Set(
-    state.items.concat(state.deferred).map(function (t) { return t.id; })
+    state.items.concat(state.deferred, state.blocked).map(function (t) { return t.id; })
   ));
 }
 
@@ -372,7 +394,7 @@ function setPlanMode(on) {
 async function bulkDelete() {
   const ids = selection.selectedIds();
   if (!ids.length) return;
-  const loaded = state.items.concat(state.deferred);
+  const loaded = state.items.concat(state.deferred, state.blocked);
   const known = ids.map(function (id) {
     return loaded.find(function (t) { return t.id === id; });
   }).filter(Boolean);
@@ -451,7 +473,7 @@ async function bulkApply(changes) {
  *  filtered list, and undo needs that task's real prior values, not a guess. */
 async function resolveTask(id) {
   const n = Number(id);
-  const local = state.items.concat(state.deferred, state.plan.items || [], state.journal.items)
+  const local = state.items.concat(state.deferred, state.blocked, state.plan.items || [], state.journal.items)
     .find(function (t) { return t.id === n; });
   if (local) return local;
   try { return await api('/api/tasks/' + n); } catch (_) { return null; }
@@ -597,9 +619,10 @@ function renderTable() {
 }
 
 function renderTreePane() {
-  // The Tree is the map of everything, so a deferred task stays on it — with
-  // its `starts` marker saying why the working views are quiet about it (#87).
-  const items = viewItems().concat(state.deferred);
+  // The Tree is the map of everything, so a deferred (#87) or blocked (#100)
+  // task stays on it — with the marker saying why the working views are
+  // quiet about it.
+  const items = viewItems().concat(state.deferred, state.blocked);
   const keep = new Set(items.map(function (t) { return t.id; }));
   const byId = {};
   items.forEach(function (t) { byId[t.id] = t; });
@@ -975,6 +998,7 @@ async function boot() {
     onClose: closeTask,
     people: function () { return state.people; },
     projects: function () { return state.projects; },
+    allTasks: function () { return state.taskIndex; },
     onMove: moveTask,
     onStatus: setStatus,
     issues: function () { return state.issues; },

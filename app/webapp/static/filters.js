@@ -37,6 +37,14 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  * applies the same rule to rows that never went through /api/tasks.
  */
 export const DEFERRED = 'deferred';
+/**
+ * The status multi-select's second pseudo-value (#100). Same shape as
+ * `DEFERRED`: not a status, narrows the list to tasks with an open blocker,
+ * intersected with any real statuses ticked alongside it. The server splits
+ * it back out in `app/webapp/routers/tasks.py`; `matchesFilters` below
+ * applies the same rule to rows that never went through /api/tasks.
+ */
+export const BLOCKED = 'blocked';
 export const DUE_WINDOWS = [['', 'Any due date'], ['today', 'Due today'], ['week', 'Due this week'], ['overdue', 'Overdue']];
 // The `stale*` windows are the inverse (#101): untouched for MORE than N days.
 // The boundary date is computed client-side — the API only ever sees a plain
@@ -52,7 +60,7 @@ function csv(value) {
 export function filtersFromSearch(search) {
   const p = new URLSearchParams(search || '');
   const f = Object.assign({}, DEFAULT_FILTERS);
-  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED; });
+  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED || s === BLOCKED; });
   f.project = p.get('project') || '';
   f.person = csv(p.get('person')).filter(function (s) { return /^\d+$/.test(s); });
   f.due = DUE_WINDOWS.some(function (w) { return w[0] === p.get('due'); }) ? p.get('due') : '';
@@ -128,7 +136,11 @@ export function matchesFilters(t, f, today) {
   // the sleeping tasks here too, but NOT ticking it hides nothing — the only
   // caller is the Search tab, and a deferred task is meant to stay findable.
   if (f.status.indexOf(DEFERRED) >= 0 && !(t.starts && t.starts > (today || todayISO()))) return false;
-  const statuses = f.status.filter(function (s) { return s !== DEFERRED; });
+  // Same shape as deferred (#100): ticking `blocked` narrows to tasks with an
+  // open blocker; not ticking it hides nothing (a blocked task stays findable
+  // wherever this predicate runs — the Search tab).
+  if (f.status.indexOf(BLOCKED) >= 0 && !t.blocked) return false;
+  const statuses = f.status.filter(function (s) { return s !== DEFERRED && s !== BLOCKED; });
   if (statuses.length) { if (statuses.indexOf(t.status) < 0) return false; }
   else if (CLOSED[t.status]) return false;
   if (f.project) {
@@ -384,9 +396,10 @@ export function mountFilters(host, opts) {
     if (!hidden.has('due')) row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
     if (!hidden.has('updated')) row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
     // 3. status | sort
-    // `deferred` rides the end of the status list — the one visible way to see
-    // the sleeping tasks the working views leave out (#87).
-    const statusValues = STATUSES.map(function (s) { return [s, s]; }).concat([[DEFERRED, DEFERRED]]);
+    // `deferred` and `blocked` ride the end of the status list — the one
+    // visible way to see the sleeping (#87) and the locked (#100) tasks the
+    // working views leave out.
+    const statusValues = STATUSES.map(function (s) { return [s, s]; }).concat([[DEFERRED, DEFERRED], [BLOCKED, BLOCKED]]);
     if (!hidden.has('status')) {
       row.appendChild(multiSelect('status', 'Status', statusValues,
         filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));

@@ -18,6 +18,9 @@
     DELETE /api/tasks/{id}/links/{lid}
     PUT    /api/tasks/{id}/issue         {provider, repo, number, url?, state?} → type=coding
     DELETE /api/tasks/{id}/issue         detach → type=task
+    GET    /api/tasks/{id}/blockers      the tasks that block this one
+    POST   /api/tasks/{id}/blockers      {blocker_id} → add (409 on a cycle/self-block)
+    DELETE /api/tasks/{id}/blockers/{bid} remove one blocker
     GET    /api/activity?task=N&limit=   newest first (all tasks when no task)
     POST   /api/parse                    {text} → quick-add split: title, due, parent
 
@@ -33,7 +36,10 @@ window, #102; newest closing first), ``include_closed``, ``limit``.
 a modifier: it flips the list from awake tasks to the sleeping ones (``starts``
 still in the future), intersected with any real statuses alongside it. The
 split happens here, in the one presentational place that knows the URL
-vocabulary; the rule itself is ``list_tasks(deferred=…)``.
+vocabulary; the rule itself is ``list_tasks(deferred=…)``. ``status`` also
+takes ``blocked`` (#100), the same shape: narrows to tasks with an open
+blocker instead of following the default hide rule; ``list_tasks(blocked=…)``
+owns the rule.
 
 ``due``, ``starts`` and ``planned_on`` on create / update accept the same
 natural phrases the CLI does (``tomorrow``, ``next friday``, ``this
@@ -164,8 +170,9 @@ class ParseBody(BaseModel):
     today: str | None = None
 
 
-#: The pseudo-value the status multi-select adds (#87) — see the module docstring.
-DEFERRED = "deferred"
+#: The pseudo-values the status multi-select adds — see the module docstring.
+DEFERRED = "deferred"   # #87
+BLOCKED = "blocked"     # #100
 
 
 def _resolve_dates(fields: dict[str, Any]) -> dict[str, Any]:
@@ -195,6 +202,19 @@ def _split_deferred(statuses: list[str]) -> tuple[list[str], str | None]:
     if DEFERRED not in statuses:
         return statuses, None
     return [s for s in statuses if s != DEFERRED], "only"
+
+
+def _split_blocked(statuses: list[str]) -> tuple[list[str], str | None]:
+    """``[…, "blocked"] → (the real statuses, "only")`` (#100) — the same
+    split as ``deferred``, its own pseudo-value on the same status list."""
+    if BLOCKED not in statuses:
+        return statuses, None
+    return [s for s in statuses if s != BLOCKED], "only"
+
+
+class BlockerBody(BaseModel):
+    blocker_id: int
+    actor: str | None = None
 
 
 class IssueBody(BaseModel):
@@ -233,6 +253,7 @@ def list_tasks(
     for s in status or []:
         statuses.extend(p.strip() for p in s.split(",") if p.strip())
     statuses, deferred = _split_deferred(statuses)
+    statuses, blocked = _split_blocked(statuses)
     people: list[int] = []
     for s in person or []:
         for p in s.split(","):
@@ -263,6 +284,7 @@ def list_tasks(
         updated_since=updated_since,
         updated_before=updated_before,
         deferred=deferred,
+        blocked=blocked,
     )
     return {"items": items, "count": len(items)}
 
@@ -410,6 +432,30 @@ def rename_link(task_id: int, link_id: int, body: LinkLabelBody, db: sqlite3.Con
 def remove_link(task_id: int, link_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     repo.remove_link(db, task_id, link_id)
     return {"id": link_id, "deleted": 1}
+
+
+# ---------------------------------------------------------------- blockers
+
+
+@router.get("/tasks/{task_id}/blockers")
+def list_blockers(task_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    return {"items": repo.list_blockers(db, task_id)}
+
+
+@router.post("/tasks/{task_id}/blockers", status_code=201)
+def add_blocker(
+    task_id: int, body: BlockerBody, request: Request, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    return repo.add_blocker(
+        db, task_id, body.blocker_id, actor=resolve_actor(request, body.actor)
+    )
+
+
+@router.delete("/tasks/{task_id}/blockers/{blocker_id}")
+def remove_blocker(
+    task_id: int, blocker_id: int, request: Request, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    return repo.remove_blocker(db, task_id, blocker_id, actor=resolve_actor(request))
 
 
 # ----------------------------------------------------------------- issue

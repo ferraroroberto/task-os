@@ -717,10 +717,11 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         card = _open_filters(page, "tableFilters")
         status_sel = card.locator(".msel[data-name='status']")
         status_sel.locator("summary.msel-summary").click()
-        # six statuses + `deferred`, the pseudo-value that shows the sleeping
-        # tasks the working views leave out (#87)
-        expect(status_sel.locator("input[name='status']")).to_have_count(7)
+        # six statuses + `deferred` (#87) + `blocked` (#100), the pseudo-values
+        # that show the sleeping and the locked tasks the working views leave out
+        expect(status_sel.locator("input[name='status']")).to_have_count(8)
         expect(status_sel.locator("input[name='status'][value='deferred']")).to_have_count(1)
+        expect(status_sel.locator("input[name='status'][value='blocked']")).to_have_count(1)
         expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
         page.keyboard.press("Escape")
         boxes = card.locator(".filter-row > .filter-select, .filter-row > .msel").evaluate_all(

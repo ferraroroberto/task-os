@@ -22,8 +22,8 @@
 import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
 import {
-  PRIORITIES, aiChip, breadcrumbText, chipFor, isDeferred, issueChip, linkify, priorityLabel,
-  recurrenceLabel, relDue, startsLabel, statusPill,
+  PRIORITIES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
+  linkify, priorityLabel, recurrenceLabel, relDue, startsLabel, statusPill,
 } from './format.js';
 import { rowList, statusSelect } from './rows.js';
 
@@ -162,11 +162,19 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
     bc.title = bc.textContent;
     title.appendChild(bc);
   }
-  // A sleeping task says when it wakes here too (#87). The desktop grid has
-  // its own cells rather than the shared row, so the marker the shared row
-  // puts on its meta line has to be placed explicitly — and the Deferred
-  // filter's own list is exactly where the date matters most.
-  if (isDeferred(t)) {
+  // A sleeping task says when it wakes here too (#87), and a blocked one says
+  // what it's waiting on (#100) — blocked wins when both apply (the harder
+  // gate), same precedence the shared row's meta line uses. The desktop grid
+  // has its own cells rather than the shared row, so the marker has to be
+  // placed explicitly here too.
+  if (isBlocked(t)) {
+    const bl = document.createElement('div');
+    bl.className = 't-blocked';
+    bl.innerHTML = icon('lock');
+    bl.appendChild(document.createTextNode(blockedLabel(t)));
+    bl.title = blockedLabel(t);
+    title.appendChild(bl);
+  } else if (isDeferred(t)) {
     const st = document.createElement('div');
     st.className = 't-starts';
     st.innerHTML = icon('clock');

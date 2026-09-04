@@ -17,10 +17,13 @@ cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
 is on screen without anyone having to create it, one **dormant** task
 last touched 45 days back (#101) so the stale filter has something to show,
 a **plan** (#89): two tasks committed to the anchor day plus one planned
-the day before and left unfinished (the "planned yesterday" candidate), and
+the day before and left unfinished (the "planned yesterday" candidate),
 five tasks **closed on known days** (#102) — yesterday, two days back (one
 of them cancelled) and nine days back — so the done journal has days to
-group, a cancelled row to mute and an older week to load.
+group, a cancelled row to mute and an older week to load, and one
+**blocked-by pair** (#100) — "Release v0.2" blocked on "Write sensor
+driver" — so the lock glyph and the blocked filter have something real to
+show without anyone creating it.
 
 Use it:
 
@@ -231,6 +234,12 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         repo.move(conn, ids["review"], None, actor="seed")
         repo.done(conn, ids["scales"], actor="seed")   # daily → rolls to d(1)
         repo.set_due(conn, ids["scales"], d(0), actor="seed")  # …and back, so "today" stays populated
+
+        # ---- blocked-by dependency (#100) ---------------------------------
+        # "Release v0.2" already has a comment saying "Blocked on the sensor
+        # driver" — make that literal: it cannot ship before the driver task
+        # is written, so the working views hide it (lock glyph everywhere else).
+        repo.add_blocker(conn, ids["release"], ids["driver"], actor="seed")
 
         # ---- today's plan (#89) --------------------------------------------
         # Two inbox tasks committed to the anchor day (My plan renders

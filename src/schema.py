@@ -62,6 +62,13 @@ Version history:
        the timestamp of their ``status → cancelled`` activity row (the moment
        it actually happened), or ``updated_at`` when no such row exists (an
        import that arrived already cancelled).
+    11 task_blocks(blocker_id, blocked_id) + its two indexes           (issue #100)
+       — a *blocks* edge, separate from the parent tree: ``blocker_id`` must
+       close before ``blocked_id`` counts as unblocked. ``ON DELETE CASCADE``
+       on both columns drops a task's edges when it (or the other end) is
+       deleted. A second graph, so its cycle guard (``src/tasks_repo.py``)
+       walks ``task_blocks`` alone — a blocks-edge may cross parent subtrees
+       freely, unlike ``move()``'s parent-tree guard.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -304,9 +311,24 @@ UPDATE tasks
  WHERE status = 'cancelled' AND done_at IS NULL;
 """
 
+# task_blocks (#100) — a *blocks* edge (blocker_id must close before
+# blocked_id counts as unblocked), separate from the parent tree. Both FKs
+# cascade: deleting either end of an edge drops the edge with it. Indexed on
+# both columns — blocked_id for "who blocks me" (the visibility clause),
+# blocker_id for "who do I block" (freed on delete, the cycle-guard walk).
+_V11 = """
+CREATE TABLE task_blocks (
+    blocker_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    blocked_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX idx_task_blocks_blocked ON task_blocks(blocked_id);
+CREATE INDEX idx_task_blocks_blocker ON task_blocks(blocker_id);
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
-    1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10,
+    1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
 }
 
 #: The version a freshly migrated database carries.
