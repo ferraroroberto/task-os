@@ -13,6 +13,12 @@
 # a script file the line falls back to registering opener.cmd directly and SAYS SO —
 # read the last output line; a fallback install is the shape that carries that risk.
 #
+# The launcher runs wrapped in conhost.exe --headless, so no console window is
+# visible at any point (task-os#130 — measured on this PC: plain powershell.exe,
+# even -WindowStyle Hidden, still flashes a Windows Terminal window). A notice
+# that must be read (a folder not synced here, a refused link) shows as a popup
+# instead of a paused console.
+#
 # Replace <base-url> with your task-os address (e.g. https://your-host.ts.net:8448
 # or http://127.0.0.1:8448 on the server itself). Settings → "Folder opener" in
 # the app shows this line with the address already filled in and a Copy button.
@@ -20,7 +26,7 @@
 # File format: the first non-comment line below is the INSTALL command, the
 # second the UNINSTALL command (the app reads them from here — keep that order).
 
-$d="$env:LOCALAPPDATA\task-os"; New-Item -ItemType Directory -Force $d | Out-Null; Invoke-WebRequest "<base-url>/opener/opener.cmd" -OutFile "$d\opener.cmd" -UseBasicParsing; Invoke-WebRequest "<base-url>/opener/opener.ps1" -OutFile "$d\opener.ps1" -UseBasicParsing; if (-not (Test-Path "$d\opener.env")) { Set-Content "$d\opener.env" "# task-os opener placeholders — one name=path line per placeholder, e.g. docs=C:\Users\me\Tenant\docs - Documents  ({sharepoint:docs} and {docs}); onedrive=D:\OneDrive overrides {onedrive}" }; $ok=$null; try { $ok = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$d\opener.ps1" -Url "taskos://selftest" 2>$null) -match "TASKOS_OPENER_PS_OK" } catch {}; $c = if ($ok) { 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $d + '\opener.ps1" -Url "%1"' } else { 'cmd.exe /c ""' + $d + '\opener.cmd" "%1""' }; $k="HKCU:\Software\Classes\taskos"; New-Item $k -Force | Out-Null; Set-ItemProperty $k "(default)" "URL:task-os opener"; Set-ItemProperty $k "URL Protocol" ""; New-Item "$k\DefaultIcon" -Force | Out-Null; Set-ItemProperty "$k\DefaultIcon" "(default)" "explorer.exe,0"; New-Item "$k\shell\open\command" -Force | Out-Null; Set-ItemProperty "$k\shell\open\command" "(default)" $c; if ($ok) { "task-os opener installed (launcher mode): $d — placeholders in $d\opener.env" } else { "task-os opener installed (FALLBACK mode: this PC cannot run the launcher — see opener/README.md 'Caveats'): $d — placeholders in $d\opener.env" }
+$d="$env:LOCALAPPDATA\task-os"; New-Item -ItemType Directory -Force $d | Out-Null; Invoke-WebRequest "<base-url>/opener/opener.cmd" -OutFile "$d\opener.cmd" -UseBasicParsing; Invoke-WebRequest "<base-url>/opener/opener.ps1" -OutFile "$d\opener.ps1" -UseBasicParsing; if (-not (Test-Path "$d\opener.env")) { Set-Content "$d\opener.env" "# task-os opener placeholders — one name=path line per placeholder, e.g. docs=C:\Users\me\Tenant\docs - Documents  ({sharepoint:docs} and {docs}); onedrive=D:\OneDrive overrides {onedrive}" }; $ok=$null; try { $ok = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$d\opener.ps1" -Url "taskos://selftest" 2>$null) -match "TASKOS_OPENER_PS_OK" } catch {}; $c = if ($ok) { 'conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $d + '\opener.ps1" -Url "%1"' } else { 'cmd.exe /c ""' + $d + '\opener.cmd" "%1""' }; $k="HKCU:\Software\Classes\taskos"; New-Item $k -Force | Out-Null; Set-ItemProperty $k "(default)" "URL:task-os opener"; Set-ItemProperty $k "URL Protocol" ""; New-Item "$k\DefaultIcon" -Force | Out-Null; Set-ItemProperty "$k\DefaultIcon" "(default)" "explorer.exe,0"; New-Item "$k\shell\open\command" -Force | Out-Null; Set-ItemProperty "$k\shell\open\command" "(default)" $c; if ($ok) { "task-os opener installed (launcher mode): $d — placeholders in $d\opener.env" } else { "task-os opener installed (FALLBACK mode: this PC cannot run the launcher — see opener/README.md 'Caveats'): $d — placeholders in $d\opener.env" }
 
 Remove-Item "HKCU:\Software\Classes\taskos" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\task-os\opener.cmd","$env:LOCALAPPDATA\task-os\opener.ps1" -Force -ErrorAction SilentlyContinue; "task-os opener removed (opener.env kept in $env:LOCALAPPDATA\task-os)"
 

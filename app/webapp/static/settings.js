@@ -188,6 +188,7 @@ export function mountSettings(opts) {
     // Which registration shape is in use is its own state: the fallback hands the
     // URL to a command interpreter as a string, so it must not read as "installed".
     if (op.mode === 'launcher') dd.append(' · ', statusPart('ok', 'launcher mode'));
+    else if (op.mode === 'launcher-stale') dd.append(' · ', statusPart('warn', 'launcher mode (old, visible console) — re-run the command below'));
     else if (op.mode === 'fallback') dd.append(' · ', statusPart('warn', 'fallback mode — re-run the command below; see opener/README.md'));
     dd.append(' · other PCs: paste the command below once (this browser asks "Open task-os opener?" the first time)');
     const cmd = (op.install || '').split(op.base_url_token || '<base-url>').join(location.origin);

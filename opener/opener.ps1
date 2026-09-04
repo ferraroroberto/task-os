@@ -13,7 +13,18 @@ to one argument and no command interpreter ever sees the string.
 So this file is the registered command; it hands the URL to opener.cmd through
 the environment, which cmd's delayed expansion never re-tokenises:
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File opener.ps1 -Url "%1"
+    conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File opener.ps1 -Url "%1"
+
+The conhost.exe --headless wrap is task-os#130: ShellExecute allocates a
+console for any console-subsystem exe before a line of the script runs, and on
+this PC (Windows Terminal as default terminal) even `-WindowStyle Hidden`
+still flashes that console — measured, not assumed. The headless pseudo-
+console conhost.exe creates does not. It also means nothing is ever on screen
+to read this script's own console text, so every notice below shows as a
+popup (WScript.Shell) instead of pausing a console for Read-Host, and this
+file captures opener.cmd's output and pops it up on a non-zero exit too (see
+the tail). TASKOS_OPENER_DRYRUN=1 keeps the old plain-text behaviour and never
+pops a window, so tests/test_opener.py stays hermetic.
 
 install_opener.py / install.txt register this shape when the PC can run it and
 fall back to the plain .cmd registration when a machine policy blocks script
@@ -21,7 +32,10 @@ files - a fallback that is reported, never silent, because it is the shape that
 carries the risk above.
 
     -Url taskos://selftest   prints TASKOS_OPENER_PS_OK and exits (the probe
-                             the installers use to pick the shape)
+                             the installers use to pick the shape - deliberately
+                             run unwrapped, bare powershell.exe: conhost.exe
+                             --headless swallows the caller's stdout capture,
+                             so the probe only needs to know the script runs)
 #>
 param([string]$Url)
 
@@ -31,12 +45,18 @@ if ($Url -eq $SelfTest) { 'TASKOS_OPENER_PS_OK'; exit 0 }
 
 function Show-Notice {
     param([string[]]$Lines)
-    Write-Host ''
-    Write-Host '  task-os opener'
-    Write-Host ''
-    foreach ($l in $Lines) { Write-Host "  $l" }
-    Write-Host ''
-    if (-not $env:TASKOS_OPENER_DRYRUN) { Read-Host 'Press Enter to close' | Out-Null }
+    if ($env:TASKOS_OPENER_DRYRUN) {
+        Write-Host ''
+        Write-Host '  task-os opener'
+        Write-Host ''
+        foreach ($l in $Lines) { Write-Host "  $l" }
+        Write-Host ''
+        return
+    }
+    # Headless (see the header) - nothing is on screen to pause, so pop a modal
+    # the user can read and dismiss instead of Read-Host on an invisible console.
+    $body = "task-os opener`n`n" + (($Lines | ForEach-Object { "  $_" }) -join "`n")
+    (New-Object -ComObject WScript.Shell).Popup($body, 0, 'task-os opener', 0x0) | Out-Null
 }
 
 if ([string]::IsNullOrWhiteSpace($Url)) {
@@ -126,5 +146,17 @@ if (-not (Test-Path -LiteralPath $handler)) {
 
 # The URL travels in the environment, never on a command line - see the header.
 $env:TASKOS_OPENER_URL = $Url
-& $handler
-exit $LASTEXITCODE
+if ($env:TASKOS_OPENER_DRYRUN) {
+    # dry run: let the handler's own "open: <path>" / "missing: <path>" line
+    # reach stdout untouched - tests read it directly, no popup involved
+    & $handler
+    exit $LASTEXITCODE
+}
+# Headless now (see the header): capture the handler's output instead of
+# letting it print to a console nobody can see, and pop it up on failure.
+$out = ((& $handler 2>&1) | Out-String).TrimEnd()
+$code = $LASTEXITCODE
+if ($code -ne 0 -and $out) {
+    (New-Object -ComObject WScript.Shell).Popup($out, 0, 'task-os opener', 0x0) | Out-Null
+}
+exit $code

@@ -92,17 +92,20 @@ def installed_here() -> bool | None:
 
 
 def registration_mode() -> str | None:
-    """Which shape is registered here: ``"launcher"``, ``"fallback"``, or ``None``.
+    """Which shape is registered here: ``"launcher"``, ``"launcher-stale"``,
+    ``"fallback"``, or ``None``.
 
     ``None`` covers both "not installed" and "not this OS" — the caller already
-    has :func:`installed_here` for that distinction. The mode matters because
-    the fallback hands the URL to a command interpreter as a string, which
-    re-parses it (see ``opener/opener.ps1``); it is reported so a degraded
-    install is visible rather than silent.
+    has :func:`installed_here` for that distinction. ``"fallback"`` matters
+    because it hands the URL to a command interpreter as a string, which
+    re-parses it (see ``opener/opener.ps1``). ``"launcher-stale"`` (task-os#130)
+    is a launcher registered before the ``conhost.exe --headless`` wrap landed —
+    still safe, but every open flashes a console window; reported so the PC can
+    be told to re-run the install command, same as a fallback install.
     """
     command = (_registered_command() or "").lower()
     if "opener.ps1" in command:
-        return "launcher"
+        return "launcher" if "conhost.exe" in command and "--headless" in command else "launcher-stale"
     if "opener.cmd" in command:
         return "fallback"
     return None

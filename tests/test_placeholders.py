@@ -172,8 +172,9 @@ def test_status_carries_folders_opener_and_placeholders(client: TestClient) -> N
     assert st["placeholders"] == {"onedrive": "E:/onedrive", "user": "rober"}
     assert st["opener"]["installed_here"] in (True, False, None)
     # which registration shape is in use is its own state, never folded into
-    # installed_here — the fallback hands the URL to a command interpreter
-    assert st["opener"]["mode"] in ("launcher", "fallback", None)
+    # installed_here — the fallback hands the URL to a command interpreter,
+    # "launcher-stale" is a pre-#130 launcher that still flashes a console
+    assert st["opener"]["mode"] in ("launcher", "launcher-stale", "fallback", None)
 
 
 def test_opener_handler_is_served_publicly(client: TestClient) -> None:
