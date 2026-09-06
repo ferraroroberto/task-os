@@ -267,6 +267,49 @@ html, body {
 
 .muted { color: var(--muted); }
 
+/* ---------------------------------------------------------- checkbox */
+/* The ONE checkbox — a *selection* control (ticking rows, picking filter
+   values), not a boolean setting: that one is the vendored switch, and a
+   switch in a list of rows would read as "turn this task on". Modelled on
+   shadcn's Checkbox (design.md Base UI): a 16px hairline square that fills
+   with the accent and draws a check when ticked.
+   The element stays a real <input type=checkbox> — `appearance: none` takes
+   only the paint, so the label pairing, Space, :checked and the form value
+   are still the platform's. */
+.check {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+  width: var(--icon-inline);
+  height: var(--icon-inline);
+  border: 1px solid var(--line);
+  /* half the smallest fleet radius: 8px on a 16px box is a circle, and a
+     round tick target reads as a radio. shadcn's Checkbox is 4px too. */
+  border-radius: calc(var(--radius-sm) / 2);
+  background: var(--card);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+/* the check glyph: two borders of an empty box, rotated — no sprite lookup
+   in a control that repeats once per row. */
+.check::before {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: 2px solid var(--accent-fg);
+  border-top: 0;
+  border-right: 0;
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 0;
+}
+.check:checked { background: var(--accent); border-color: var(--accent); }
+.check:checked::before { opacity: 1; }
+.check:hover:not(:checked) { border-color: var(--accent); }
+.check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ------------------------------------------------------------- chips */
 /* Chips = pill radius, inset canvas-subtle fill, hairline. A link chip is
    an <a target=_blank rel=noopener> in accent; folder / issue / date / parent
@@ -617,7 +660,6 @@ a.chip:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .msel-opt:hover { background: var(--card-2); }
-.msel-opt input { margin: 0; accent-color: var(--accent); }
 .msel-none { margin: 0; padding: 6px 8px; font-size: var(--font-caption); }
 @media (pointer: coarse) {
   .msel-summary { line-height: calc(var(--row-sm) - 2px); }
@@ -759,15 +801,7 @@ a.chip:hover { text-decoration: underline; }
     "sel prefix main ctrl"
     "sel prefix meta meta";
 }
-.trow-check {
-  grid-area: sel;
-  align-self: center;
-  margin: 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
+.trow-check { grid-area: sel; align-self: center; }
 .trow:hover { background: var(--card-2); }
 .trow.is-high { border-left: 3px solid var(--danger); padding-left: 6px; }
 .trow.is-dragging { opacity: 0.5; }
@@ -859,9 +893,12 @@ a.chip:hover { text-decoration: underline; }
 /* chips on the meta line stay meta-sized: caption text, tight padding,
    ellipsized — and capped to the meta line's own height, so a row with a
    folder chip is exactly as tall as one without (the #74 rule, applied to
-   the shared row's meta line: a chip never changes a card's height). */
-.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; height: 16px; line-height: 1; }
-.trow-meta .chip .icon { width: 12px; height: 12px; }
+   the shared row's meta line: a chip never changes a card's height).
+   The glyph is the fleet's 16px `inline` step like every other icon on this
+   line (#129) — the same 16px as the chip's border box, so the chip does NOT
+   grow and the height invariant above still holds: a Lucide glyph carries its
+   own stroke padding, so the ink stays comfortably inside the hairline. */
+.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; height: var(--icon-inline); line-height: 1; }
 .trow-extra { grid-column: 1 / -1; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 .trow.has-prefix .trow-extra { grid-column: 2 / -1; }
 @media (pointer: coarse) {
@@ -877,7 +914,7 @@ a.chip:hover { text-decoration: underline; }
        at the top with nothing balancing it at the bottom; a symmetric padding
        leaves the content — and with it the centred status select — half a pixel
        low. A row with no hairline above it gets the full 13px back. */
-  .trow { min-height: 64px; padding: 12px 4px 13px; row-gap: 6px; }
+  .trow { min-height: var(--row-lg); padding: 12px 4px 13px; row-gap: 6px; }
   .trows > .trow:first-child,
   .board-list > .trow:first-child,
   .today-list > .trow:first-child,
@@ -1026,7 +1063,6 @@ a.chip:hover { text-decoration: underline; }
    its own leading column — the rows.js one belongs to the phone rendering.
    After :hover so a ticked row stays visibly ticked under the cursor. */
 .c-sel { width: 1%; white-space: nowrap; }
-.row-check { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .task-row.is-selected td, .task-row.is-selected:hover td { background: var(--accent-soft); }
 .c-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
 .c-title { min-width: 220px; max-width: 420px; }
@@ -1480,7 +1516,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 @media (prefers-reduced-motion: reduce) {
   .is-busy .icon { animation: none; }
-  .task-row, .trow, .toast { transition: none; }
+  .task-row, .trow, .toast, .check { transition: none; }
 }
 
 /* ======================================================= Step 5 surfaces */

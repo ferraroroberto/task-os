@@ -118,7 +118,7 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
     const sel = td('sel', 'Select');
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.className = 'row-check';
+    box.className = 'check row-check';
     box.checked = !!selected;
     box.setAttribute('aria-label', 'Select ' + t.title);
     box.addEventListener('change', function () { rowHandlers.onToggleSelect(t.id); });

@@ -265,6 +265,7 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
     opt.dataset.value = String(v[0]);
     const cb = document.createElement('input');
     cb.type = 'checkbox';
+    cb.className = 'check';
     cb.name = name;
     cb.value = String(v[0]);
     cb.checked = selected.indexOf(String(v[0])) >= 0;
