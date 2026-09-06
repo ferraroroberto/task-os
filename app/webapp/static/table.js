@@ -210,15 +210,21 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
   project.textContent = t.root ? t.root.title : '';
   tr.appendChild(project);
 
-  // folder chip → taskos://open?ref=… (the per-PC opener); tooltip = the resolved path
+  // folder chip → taskos://open?ref=… (the per-PC opener); tooltip = the resolved path.
+  // The chips live in an inner wrapper, not directly on the td: flexing the td
+  // itself (for gap between chips) would blockify it out of table-cell box
+  // type, breaking the row's vertical-align: middle.
   const folder = td('folder', 'Folder');
-  if (t.folder_ref) folder.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
+  const folderChips = document.createElement('span');
+  folderChips.className = 'folder-chips';
+  if (t.folder_ref) folderChips.appendChild(chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url }));
   if (t.ai_url) {
     // the AI-conversation chip (#77) shares the chips cell with the folder
     const ac = aiChip(t.ai_url, t.ai_label);
     ac.setAttribute('aria-label', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : ''));
-    folder.appendChild(ac);
+    folderChips.appendChild(ac);
   }
+  folder.appendChild(folderChips);
   tr.appendChild(folder);
 
   // last comment

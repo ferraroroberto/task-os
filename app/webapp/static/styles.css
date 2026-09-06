@@ -1082,7 +1082,7 @@ a.chip:hover { text-decoration: underline; }
 .prio-high { color: var(--danger); font-weight: 600; }
 .prio-none { color: var(--muted); }
 .c-person, .c-project { white-space: nowrap; }
-.c-folder { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .c-folder .chip { max-width: 200px; }
 .c-comment { max-width: 280px; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
