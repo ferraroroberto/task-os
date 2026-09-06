@@ -1807,16 +1807,15 @@ def board(
 
 def _group_by_root(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """``[{root, items}]`` — grouped by top ancestor (``None`` = no project);
-    groups ordered by their earliest due, then root title; inside a group
-    recurring tasks come first, then due → priority → id (the list order)."""
+    groups ordered by their earliest due, then root title; inside a group,
+    items keep the incoming due → priority → id order (the list order),
+    recurring or not — same as every other view (#118, following #116)."""
     groups: dict[int | None, dict[str, Any]] = {}
     for it in items:
         root = it.get("root")
         key = root["id"] if root else None
         g = groups.setdefault(key, {"root": root, "items": []})
         g["items"].append(it)
-    for g in groups.values():
-        g["items"].sort(key=lambda t: 0 if t.get("recurrence") else 1)  # stable: keeps due order
     return sorted(
         groups.values(),
         key=lambda g: (
@@ -1828,8 +1827,8 @@ def _group_by_root(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dict[str, Any]:
     """The Today tab: open tasks due ≤ today (overdue first, then today),
-    grouped by root project with recurring tasks first, plus a *later this
-    week* bucket (tomorrow … +7 days) in the same shape — and *My plan* (#89):
+    grouped by root project, plus a *later this week* bucket (tomorrow …
+    +7 days) in the same shape — and *My plan* (#89):
     the tasks committed to today, ordered by ``plan_order``, done ones
     included so the "n of m" progress line is computable. A task planned
     today leaves the due/week buckets (it moved up into the plan), so the

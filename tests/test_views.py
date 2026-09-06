@@ -1,6 +1,6 @@
 """``tasks_repo.board`` / ``today_view`` — the Board and Today bucketing rules
-(done-today boundary at local midnight, recurring first, overdue ordering) and
-their routes."""
+(done-today boundary at local midnight, due → priority → id ordering,
+overdue ordering) and their routes."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def _titles(groups: list[dict]) -> dict[str, list[str]]:
     return {(g["root"] or {}).get("title", "—"): [t["title"] for t in g["items"]] for g in groups}
 
 
-def test_today_groups_by_root_recurring_first_overdue_first(conn: sqlite3.Connection, seeded: dict) -> None:
+def test_today_groups_by_root_due_priority_id_overdue_first(conn: sqlite3.Connection, seeded: dict) -> None:
     with _at(2026, 8, 17):
         v = repo.today_view(conn)
     assert v["today"] == "2026-08-17"
@@ -113,10 +113,13 @@ def test_today_groups_by_root_recurring_first_overdue_first(conn: sqlite3.Connec
     order = [(g["root"] or {}).get("title", "—") for g in v["due"]]
     assert order.index("Home renovation") < order.index("—") < order.index("Family admin")
     groups = _titles(v["due"])
-    # inside Family admin the recurring dentist comes before the non-recurring form
+    # inside Family admin, both due today: the high-priority form sorts ahead
+    # of the (unprioritised) recurring dentist check-up — priority breaks the
+    # tie, not which row recurs (#118, following #116)
     fam = groups["Family admin"]
-    assert fam.index("Dentist check-up") < fam.index("School enrolment forms")
-    # inside Learning both today's items are recurring (weekly + daily) — both first
+    assert fam.index("School enrolment forms") < fam.index("Dentist check-up")
+    # inside Learning both today's items are recurring (weekly + daily) and
+    # unprioritised — the tie breaks on id, i.e. seed order
     assert groups["Learning"] == ["Vocabulary review", "Practice scales"]
     # overdue before today inside a group (Home renovation: fence −10, tap −4)
     assert groups["Home renovation"] == ["Repair fence", "Fix leaking tap"]
