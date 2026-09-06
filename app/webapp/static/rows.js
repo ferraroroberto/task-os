@@ -268,7 +268,7 @@ export function taskRow(t, handlers, opts) {
   if (o.selectable) {
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.className = 'trow-check';
+    box.className = 'check trow-check';
     box.checked = !!o.selected;
     box.setAttribute('aria-label', 'Select ' + t.title);
     box.addEventListener('change', function () { handlers.onToggleSelect(t.id); });
