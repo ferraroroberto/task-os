@@ -7,8 +7,9 @@
         → {"today", "plan", "due": [{root, items}], "week": [{root, items}], "counts"}
           ``plan`` = tasks committed to today (#89), ordered by plan_order,
           done ones included for the progress line; ``due`` = open tasks due
-          ≤ today grouped by root project (recurring first inside a group),
-          minus what is already in the plan; ``week`` = tomorrow … +7 days,
+          ≤ today grouped by root project (sorted by due date within each
+          group), minus what is already in the plan; ``week`` = tomorrow …
+          +7 days,
           same shape.
     GET /api/plan/candidates?person=
         → {"items", "count"} — what plan-my-day offers (#89): open overdue +
