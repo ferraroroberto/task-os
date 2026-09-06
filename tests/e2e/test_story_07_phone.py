@@ -359,7 +359,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         # tap shows the path to copy instead of navigating (story 09 walks that).
         chip = drawer.locator(".drawer-folder .chip-folder").first
         expect(chip).to_be_visible()
-        expect(chip).to_have_text("{onedrive}/house/kitchen")
+        expect(chip).to_have_text("kitchen")  # last segment; full ref lives in the title
         assert chip.evaluate("el => el.tagName") == "A"
         assert (chip.get_attribute("href") or "").startswith("taskos://open?ref=%7Bonedrive%7D")
         link_chip = drawer.locator(".drawer-links .chip-folder").first

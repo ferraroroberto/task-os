@@ -158,7 +158,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(quotes.locator(".trow-status")).to_have_value("doing")
         expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
         expect(quotes.locator(".trow-person")).to_contain_text("Sam Rivera")
-        expect(_card(page, "Kitchen").locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+        expect(_card(page, "Kitchen").locator(".trow-meta .chip-folder")).to_contain_text("kitchen")
         watering = _card(page, "Fix watering schedule drift")
         expect(watering.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
         expect(watering.locator(".trow-comments")).to_have_text("1")

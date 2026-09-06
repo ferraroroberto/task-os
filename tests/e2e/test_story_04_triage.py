@@ -135,8 +135,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         quotes = _row(page, "Get three quotes")
         expect(quotes.locator(".t-crumb")).to_have_text("Home renovation › Kitchen")
         expect(quotes.locator(".c-project")).to_have_text("Home renovation")
-        # last comment renders its folder placeholder as a chip
-        expect(quotes.locator(".c-comment .chip-folder")).to_contain_text("{onedrive}/house/kitchen/plans")
+        # last comment renders its folder placeholder as a chip, labeled with
+        # just the last path segment (the full ref lives in the title)
+        comment_folder_chip = quotes.locator(".c-comment .chip-folder")
+        expect(comment_folder_chip).to_contain_text("plans")
+        expect(comment_folder_chip).to_have_attribute("title", "{onedrive}/house/kitchen/plans")
         assert_no_horizontal_overflow(page)
         page.screenshot(path=str(shots / "story-04-triage-1-desktop.png"))
 
