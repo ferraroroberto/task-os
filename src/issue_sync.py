@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from src import clock
 from src import tasks_repo as repo
 from src.config import AppConfig
 from src.db import connect
@@ -302,7 +303,10 @@ class IssueSyncService:
         if not self.enabled or self._thread is not None:
             return
         self._stop.clear()
-        self.next_run = datetime.now() + timedelta(seconds=self.initial_delay)
+        # The clock, not `datetime.now()`: this value is displayed on the
+        # Settings card (and so on a story screenshot), never waited on —
+        # the loop's own `_stop.wait()` does the scheduling (#134).
+        self.next_run = clock.now() + timedelta(seconds=self.initial_delay)
         self._thread = threading.Thread(target=self._run, name="task-os-issues", daemon=True)
         self._thread.start()
         logger.info("ℹ️ issues: %s sync every %d min (first pass in %.0f s)", self.provider.name,
@@ -319,7 +323,7 @@ class IssueSyncService:
             return
         while not self._stop.is_set():
             self.run_now()
-            self.next_run = datetime.now() + timedelta(minutes=self.interval_minutes)
+            self.next_run = clock.now() + timedelta(minutes=self.interval_minutes)
             if self._stop.wait(self.interval_minutes * 60):
                 return
 

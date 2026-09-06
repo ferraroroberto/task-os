@@ -31,11 +31,12 @@ import logging
 import posixpath
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import timezone
 from pathlib import Path
 from typing import Dict, Iterable
 
 # Local imports
+from src import clock
 from src.no_window import NO_WINDOW
 
 logger = logging.getLogger(__name__)
@@ -228,7 +229,10 @@ class BuildInfo:
         self.asset_hashes: Dict[str, str] = compute_asset_hashes(static_dir)
         self.fleet_hash: str = fleet_hash_of(self.asset_hashes)
         self.git_sha: str = _git_short_sha(repo_root)
-        self.built_at: str = datetime.now(timezone.utc).isoformat(
+        # Through `src.clock`, not `datetime.now`, so a pinned process (the
+        # e2e instances, #134) does not stamp the run's own minute onto the
+        # build footer of every screenshot in the gallery.
+        self.built_at: str = clock.now().astimezone(timezone.utc).isoformat(
             timespec="seconds"
         )
 

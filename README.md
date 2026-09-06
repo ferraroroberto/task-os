@@ -95,7 +95,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           federated.py — concurrent, grouped, unconfigured = visible) · logger.py · static_versioning.py
 opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
-scripts/                  verify-before-ship.ps1, classify_e2e.py, gen_icons.py, import_notion.py (+ .bat),
+scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
                           email-archiver index) + e2e/ (Playwright, one story test per step)
@@ -120,7 +120,7 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
-Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider (the test harness uses all three for isolation).
+Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider, and `TASKOS_CLOCK=<ISO datetime>` pins the process clock (the test harness uses all four for isolation; nothing in normal use sets any of them).
 
 ## Data model
 
@@ -461,7 +461,7 @@ Idempotent on the Notion ids: `tasks.external_id` and `comments.external_id` (sc
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 
-The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md`.
+The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()` so two runs of one commit produce the same files; `python -m scripts.shot_determinism` runs the suite twice and proves it, and `docs/validation.md` states the three capture rules a new story inherits.
 
 ## Phone access & auth
 

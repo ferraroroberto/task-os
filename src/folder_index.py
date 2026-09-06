@@ -32,6 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from src import clock
 from src.config import AppConfig
 from src.db import db_path
 from src.placeholders import normalize_path, resolve, to_ref
@@ -98,6 +99,15 @@ class FolderIndexService:
         except OSError:
             return None
 
+    def _stamp_now(self) -> None:
+        """When *this* process finished the scan.
+
+        `reindex()` knows the moment it ran, so it says so rather than reading
+        it back off the filesystem — which also keeps the value on the clock
+        everything else in the UI uses, pinned and all (#134).
+        """
+        self.last_indexed = clock.now_iso()
+
     def _stamp_from_file(self) -> None:
         try:
             self.last_indexed = datetime.fromtimestamp(self.index_path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
@@ -146,7 +156,7 @@ class FolderIndexService:
             with self._lock:
                 self._index = fresh
             self.last_error = None
-            self._stamp_from_file()
+            self._stamp_now()
             self.last_duration_s = round(time.monotonic() - started, 2)
             logger.info("✅ folder index: %d folder(s) across %d root(s) in %.1fs → %s",
                         n, len(self.scan_roots), self.last_duration_s, self.index_path)

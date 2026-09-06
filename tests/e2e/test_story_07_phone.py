@@ -68,7 +68,7 @@ from tests.e2e._geometry import (
     assert_no_overlap,
     effective_rects,
 )
-from tests.e2e.conftest import _boot, _terminate
+from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, e2e_workdir, shot
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -90,12 +90,12 @@ def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
 
 
 @pytest.fixture(scope="module")
-def authed_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+def authed_webapp() -> Iterator[str]:
     """A seeded disposable instance whose config carries an auth token — the /login walk."""
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-authed")
-    seed_db(work / "tasks.db")
+    work = e2e_workdir("authed")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
     cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
     raw = json.loads(cfg.read_text(encoding="utf-8"))
     raw["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
@@ -129,7 +129,10 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
     pushes them apart), so the tight case would otherwise go unmeasured.
     Deleted again at the end.
     """
-    page.goto(f"{base}/")
+    # Build the row *before* the only navigation: `page.request` talks to the
+    # instance directly and needs no loaded document, and loading the app twice
+    # in a row let WebKit abort the first load's fetches mid-flight — which the
+    # `pageerror` assertion below then (intermittently) caught as a page error.
     made = page.request.post(f"{base}/api/tasks", data=json.dumps({
         "title": "Wire the moisture sensor",
         "due": (date.today() + timedelta(days=3)).isoformat(),
@@ -184,7 +187,7 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
             assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
         # the row keeps the phone's density budget (#32) with all three on it
         assert row.bounding_box()["height"] <= 96, row.bounding_box()
-        page.screenshot(path=str(shots / "story-07-phone-9-phone.png"))
+        shot(page, shots / "story-07-phone-9-phone.png")
 
         # tapping it opens the picker: on a coarse pointer that is the reveal-
         # and-click fallback (#50), since showPicker() opens nothing on touch
@@ -246,7 +249,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-07-phone-1-phone.png"))
+        shot(page, shots / "story-07-phone-1-phone.png")
 
         # 2. Quick-add from Today: the + opens the one dialog (#80) and a task
         #    due today lands in the due list.
@@ -266,7 +269,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         new_id = int(added.get_attribute("data-id"))
         detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
         assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
-        page.screenshot(path=str(shots / "story-07-phone-2-phone.png"))
+        shot(page, shots / "story-07-phone-2-phone.png")
 
         # 3. Board: one-column carousel; a swipe (scroll) moves the active column.
         page.locator("nav.tabs .tab[data-tab='board']").tap()
@@ -286,7 +289,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
         assert visible == ["doing"], visible
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-07-phone-3-phone.png"))
+        shot(page, shots / "story-07-phone-3-phone.png")
 
         # 4. Row → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
         columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
@@ -388,7 +391,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert_min_target(drawer.locator(".drawer-close"))
         page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
         expect(page.locator(".toast")).to_have_count(0)
-        page.screenshot(path=str(shots / "story-07-phone-4-phone.png"))
+        shot(page, shots / "story-07-phone-4-phone.png")
         drawer.locator(".drawer-close").tap()
         expect(drawer).to_be_hidden()
 
@@ -400,7 +403,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
-        page.screenshot(path=str(shots / "story-07-phone-5-phone.png"))
+        shot(page, shots / "story-07-phone-5-phone.png")
         assert errors == [], errors
         context.close()
 
@@ -425,7 +428,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE_LG["width"] - 1]
         assert len(visible) == 1, visible
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-07-phone-6-phone.png"))
+        shot(page, shots / "story-07-phone-6-phone.png")
         context.close()
 
         # 7. Geometry contract across the phone widths + the tablet edge.
@@ -482,7 +485,7 @@ def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright
         expect(page.locator("#loginSecret")).to_be_focused()
         assert_min_target(page.locator("#loginSubmit"))
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-07-phone-7-phone.png"))
+        shot(page, shots / "story-07-phone-7-phone.png")
         page.fill("#loginSecret", "not-the-token")
         page.locator("#loginSubmit").tap()
         expect(page.locator("#loginError")).to_have_text("wrong token or password")
@@ -511,6 +514,6 @@ def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright
         page = context.new_page()
         page.goto(f"{base}/login")
         expect(page.locator("#loginForm.card")).to_be_visible()
-        page.screenshot(path=str(shots / "story-07-phone-8-desktop.png"))
+        shot(page, shots / "story-07-phone-8-desktop.png")
     finally:
         context.close()

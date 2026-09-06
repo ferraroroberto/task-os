@@ -51,7 +51,16 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import INTERCEPT, _boot, _get, _post, _terminate
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    INTERCEPT,
+    _boot,
+    _get,
+    _post,
+    _terminate,
+    e2e_workdir,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -65,15 +74,15 @@ class FolderInstance:
 
 
 @pytest.fixture(scope="module")
-def folder_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[FolderInstance]:
+def folder_webapp() -> Iterator[FolderInstance]:
     """Seeded instance; {onedrive} = a temp tree with the seed's folders + a few more."""
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-folders")
+    work = e2e_workdir("folders")
     od = work / "od"
     for rel in ("house/kitchen/plans", "house/garden", "house/bathroom", "admin/car", "admin/school", "task-os"):
         (od / rel).mkdir(parents=True)
-    seed_db(work / "tasks.db")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
     cfg = write_test_config(
         work / "config.json",
         folder_roots=["{onedrive}"],
@@ -121,7 +130,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert chip.get_attribute("href") == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
     assert chip.get_attribute("title") == inst.od_fwd + "/house/kitchen"
     assert chip.get_attribute("target") is None                             # same tab → the OS handler
-    page.screenshot(path=str(shots / "story-09-folders-1-desktop.png"))
+    shot(page, shots / "story-09-folders-1-desktop.png")
 
     # 2. first click: the navigation is handed to the opener (intercepted here) + the one-time hint
     chip.click()
@@ -132,7 +141,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(pop).to_contain_text("Nothing opened? Install the opener")
     expect(pop.locator(".folder-pop-path")).to_have_text(inst.od_fwd + "/house/kitchen")
     expect(page.locator("#taskDrawer")).to_be_hidden()                       # the chip never opens the row
-    page.screenshot(path=str(shots / "story-09-folders-2-desktop.png"))
+    shot(page, shots / "story-09-folders-2-desktop.png")
     page.keyboard.press("Escape")
     expect(pop).to_be_hidden()
     chip.click()                                                            # second click: no hint (one-time)
@@ -155,7 +164,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(card.locator("#statusIndex")).to_contain_text("folder(s)")
     card.locator("details.opener-more summary").click()
     expect(card.locator("#openerEnv")).to_contain_text("onedrive=")
-    page.screenshot(path=str(shots / "story-09-folders-3-desktop.png"), full_page=True)
+    shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
     # 4. drawer: the Folder editor folds an absolute path onto the placeholder
     page.goto(base + "/#task/" + str(kitchen["id"]))
@@ -201,7 +210,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fadmin%2Fcar")
     expect(page.locator(".toast")).to_contain_text("Stored as {onedrive}/admin/car")
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/admin/car"
-    page.screenshot(path=str(shots / "story-09-folders-4-desktop.png"))
+    shot(page, shots / "story-09-folders-4-desktop.png")
 
     # #74 removed the resolved-path line, so a placeholder this server does not
     # know has to warn ON the chip instead - deficit tint (which has to beat
@@ -228,7 +237,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     hit = drawer.locator(".folder-picker-item")
     expect(hit).to_have_count(1)
     expect(hit.first.locator(".folder-picker-ref")).to_have_text("{onedrive}/house/kitchen/plans")
-    page.screenshot(path=str(shots / "story-09-folders-5-desktop.png"))
+    shot(page, shots / "story-09-folders-5-desktop.png")
     q.press("Enter")
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen%2Fplans")
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/house/kitchen/plans"
@@ -251,7 +260,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(ai_chip).to_be_visible()
     assert ai_chip.get_attribute("href") == ai_url
     assert ai_chip.locator("svg use").first.get_attribute("href") == "#i-bot"
-    page.screenshot(path=str(shots / "story-11-ai-links-1-desktop.png"))
+    shot(page, shots / "story-11-ai-links-1-desktop.png")
     clicks_before = len(page.evaluate("window.__taskosClicks || []"))
     ai_chip.click()                                            # fine pointer → popover, no navigation
     pop = page.locator("#folderPop")
@@ -263,7 +272,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert web_btn.get_attribute("target") == "_blank"
     resume_btn = pop.locator("a.ai-pop-resume")
     assert resume_btn.get_attribute("href") == "taskos://resume?session=session_01SeedExampleDriftFix000"
-    page.screenshot(path=str(shots / "story-11-ai-links-2-desktop.png"))
+    shot(page, shots / "story-11-ai-links-2-desktop.png")
     resume_btn.click()                                         # handed to the opener (intercepted here)
     assert page.evaluate("window.__taskosClicks")[-1] == "taskos://resume?session=session_01SeedExampleDriftFix000"
     assert len(page.evaluate("window.__taskosClicks")) == clicks_before + 1
@@ -291,7 +300,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(drawer.locator(".link-row a.chip-ai")).to_have_count(2)
     links = _get(base, f"/api/tasks/{watering['id']}/links")["items"]
     assert next(x for x in links if x["url"].startswith("https://chatgpt.com/"))["kind"] == "ai"
-    page.screenshot(path=str(shots / "story-11-ai-links-3-desktop.png"))
+    shot(page, shots / "story-11-ai-links-3-desktop.png")
     # back on the kitchen drawer so the dark shot below still shows the pick
     page.goto(base + "/#task/" + str(kitchen["id"]))
     expect(page.locator("#taskDrawer")).to_be_visible()
@@ -300,7 +309,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_timeout(200)
-    page.screenshot(path=str(shots / "story-09-folders-6-desktop.png"))
+    shot(page, shots / "story-09-folders-6-desktop.png")
     ctx.close()
 
     # 7. phone (coarse pointer): the chip shows the path to copy instead of navigating
@@ -322,7 +331,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(d.locator(".folder-pick-label")).to_be_hidden()
     assert_no_horizontal_overflow(p)
     assert p.evaluate("document.querySelector('#taskDrawer a.chip-folder').getAttribute('href')").startswith("taskos://open?ref=")
-    p.screenshot(path=str(shots / "story-09-folders-7-phone.png"))
+    shot(p, shots / "story-09-folders-7-phone.png")
 
     # (issue #77) coarse pointer: the AI chip opens the conversation directly —
     # no popover, there is no CLI to resume into on a phone. Target stubbed.
@@ -337,5 +346,5 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert popup.url == ai_url, popup.url
     popup.close()
     expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
-    p.screenshot(path=str(shots / "story-11-ai-links-4-phone.png"))
+    shot(p, shots / "story-11-ai-links-4-phone.png")
     phone.close()

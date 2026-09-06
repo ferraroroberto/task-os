@@ -39,8 +39,9 @@ Rules enforced here (plan §04):
   :func:`import_task` creates with the source's own timestamps and logs ONE
   ``imported`` row, or updates the fields that changed on a re-run.
 
-Timestamps come from :func:`now_iso` (local time, second precision, offset
-kept) so a seed or a test can pin the clock with :func:`use_clock`.
+Timestamps come from ``src.clock``'s :func:`now_iso` (local time, second
+precision, offset kept), re-exported here with :func:`use_clock` and
+:func:`today` so a seed or a test still pins the clock through ``repo``.
 
 Write hooks: every mutation ends by calling the registered write listeners
 with the task ids it touched (:func:`add_write_listener`) — the markdown
@@ -61,11 +62,14 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from collections.abc import Callable, Iterable
+from datetime import date, timedelta
 from typing import Any
 
+# Re-exported, not just used: the seed and the tests pin the clock through
+# `repo.use_clock(...)`, and `src.clock` owns the process-wide `TASKOS_CLOCK`
+# pin the e2e instances boot with (#134).
+from src.clock import now_iso, today, use_clock  # noqa: F401
 from src.dates import AnchorError, next_due, normalise_anchor
 from src.schema import (
     COMMENT_ORIGINS,
@@ -125,32 +129,6 @@ class ValidationError(RepoError):
 class CycleError(ValidationError):
     code = "cycle"
     http_status = 409
-
-
-# ----------------------------------------------------------------- clock
-
-_clock: Callable[[], datetime] = lambda: datetime.now().astimezone()  # noqa: E731
-
-
-def now_iso() -> str:
-    """Current local timestamp, ISO 8601, second precision, with offset."""
-    return _clock().isoformat(timespec="seconds")
-
-
-def today() -> date:
-    return _clock().date()
-
-
-@contextmanager
-def use_clock(fn: Callable[[], datetime]) -> Iterator[None]:
-    """Pin the repo clock (seed / tests): ``with use_clock(lambda: dt): ...``."""
-    global _clock
-    previous = _clock
-    _clock = fn
-    try:
-        yield
-    finally:
-        _clock = previous
 
 
 # ------------------------------------------------------- folder resolver

@@ -30,7 +30,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -81,7 +81,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         assert sensor["issue_ref"]["state"] == "open" and sensor["created_by"] == "sync"
         # the seeded coding task (garden-bot#12) was matched, not duplicated
         assert _get(base, "/api/tasks?type=coding&include_closed=true")["count"] == 3
-        page.screenshot(path=str(shots / "story-08-issues-1-desktop.png"))
+        shot(page, shots / "story-08-issues-1-desktop.png")
 
         # 2. Open the new task → the drawer's issue panel.
         card = todo_col.locator(f".trow[data-id='{sensor['id']}'] .trow-main")
@@ -99,7 +99,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(drawer.locator(".drawer-desc")).to_contain_text("Read the capacitive sensor")
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
-        page.screenshot(path=str(shots / "story-08-issues-2-desktop.png"))
+        shot(page, shots / "story-08-issues-2-desktop.png")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
@@ -122,7 +122,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         nested = bot.locator(f".tree-children .tree-node[data-id='{sensor['id']}']")
         expect(nested).to_be_visible()
         expect(nested.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
-        page.screenshot(path=str(shots / "story-08-issues-3-desktop.png"))
+        shot(page, shots / "story-08-issues-3-desktop.png")
 
         # 4. The issue is closed on the forge → ↻ → the task is done, the log says sync.
         inst.set_issue("example/garden-bot", 14, state="closed")
@@ -143,7 +143,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(drawer.locator(".activity-row[data-field='issue_state']").first.locator(".activity-meta")).to_contain_text("sync ·")
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
-        page.screenshot(path=str(shots / "story-08-issues-4-desktop.png"))
+        shot(page, shots / "story-08-issues-4-desktop.png")
         # …and the seeded coding task, still open on the forge, was left alone
         assert _get(base, "/api/tasks?q=watering&include_closed=true")["items"][0]["status"] == "doing"
 
@@ -157,7 +157,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         repo_input = panel.locator(".issue-create input")
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
-        page.screenshot(path=str(shots / "story-08-issues-5-desktop.png"))
+        shot(page, shots / "story-08-issues-5-desktop.png")
         repo_input.fill("example/garden-bot")
         panel.locator(".issue-create button[type='submit']").click()
         expect(page.locator(".toast-success").last).to_contain_text("Created example/garden-bot#15")
@@ -171,7 +171,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         assert forge[-1]["title"] == plain["title"] and forge[-1]["number"] == 15 and forge[-1]["state"] == "open"
         _dismiss_toasts(page)
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
-        page.screenshot(path=str(shots / "story-08-issues-6-desktop.png"))
+        shot(page, shots / "story-08-issues-6-desktop.png")
         # the code is on the Board row's meta line too (#32/#46) — linking an
         # existing task to an issue doesn't change its status, so it's still
         # wherever it was seeded (inbox), not the sync-default todo column.
@@ -195,7 +195,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(card.locator("#statusIssuesSync")).to_contain_text("2 open issue(s) · 0 new · 0 retitled · 0 reopened · 1 closed")
         expect(card.locator("#statusIssuesSync")).to_contain_text("example/garden-bot")
         expect(card.locator("#issuesSyncNow")).to_be_enabled()
-        page.screenshot(path=str(shots / "story-08-issues-7-desktop.png"))
+        shot(page, shots / "story-08-issues-7-desktop.png")
         assert errors == []
     finally:
         context.close()

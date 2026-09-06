@@ -82,7 +82,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import _get
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -170,7 +170,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         for k in COLUMNS:
             assert _col(page, k).evaluate("el => getComputedStyle(el).borderRadius") == "0px", k
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-1-desktop.png"))
+        shot(page, shots / "story-05-board-1-desktop.png")
 
         # 2. The top strip (#80): the text filter is on screen without opening
         #    anything — typing filters the board live — and the + opens the one
@@ -211,7 +211,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         allowed = {t["id"] for col in filtered.values() for t in col}
         assert shown and set(shown) <= allowed
         expect(card.locator(".filter-clear")).to_be_visible()
-        page.screenshot(path=str(shots / "story-05-board-2-desktop.png"))
+        shot(page, shots / "story-05-board-2-desktop.png")
         page.click("nav.tabs .tab[data-tab='table']")
         expect(page.locator("#tableFilters select[name='project']")).to_have_value(str(home["id"]))
         expect(page.locator("#tableFilters .filter-desc")).to_contain_text("Home renovation")
@@ -240,7 +240,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert (act["field"], act["old_value"], act["new_value"]) == ("status", "doing", "standby")
         log = _get(base, f"/api/activity?task={qid}&limit=1")["items"][0]
         assert log["field"] == "status" and log["new_value"] == "standby"
-        page.screenshot(path=str(shots / "story-05-board-3-desktop.png"))
+        shot(page, shots / "story-05-board-3-desktop.png")
 
         # 5. Row click → the drawer, activity log shows the move.
         moved.locator(".trow-main").click()
@@ -256,7 +256,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         drawer_box = drawer.bounding_box()
         first_col = _col(page, "inbox").bounding_box()
         assert drawer_box and first_col and first_col["x"] + first_col["width"] < drawer_box["x"]
-        page.screenshot(path=str(shots / "story-05-board-4-desktop.png"))
+        shot(page, shots / "story-05-board-4-desktop.png")
         drawer.locator(".drawer-close").click()
         expect(drawer).to_be_hidden()
 
@@ -295,7 +295,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         later = page.locator(".today-later")
         assert later.evaluate("el => el.open") is False              # collapsed by default
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
-        page.screenshot(path=str(shots / "story-05-board-5-desktop.png"))
+        shot(page, shots / "story-05-board-5-desktop.png")
 
         # 7. Mark a recurring task complete (the row's status select gains a
         #    `complete` option for a recurring task, issue #54) → its due
@@ -317,7 +317,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(rolled_row.locator(".trow-status")).to_have_value("todo")
         expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
         expect(due_counts).to_contain_text(f"{today['counts']['today'] - 1} due today")
-        page.screenshot(path=str(shots / "story-05-board-6-desktop.png"))
+        shot(page, shots / "story-05-board-6-desktop.png")
 
         # 7b. The same recurring task, picked "done" instead of "complete":
         #     closes for good — no further roll, off the recurring series
@@ -341,7 +341,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(_col(page, "done").locator(f".trow[data-id='{bid}']")).to_be_visible()
         expect(page.locator(".board-col-count[data-col='done']")).to_have_text("2")
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-7-desktop.png"))
+        shot(page, shots / "story-05-board-7-desktop.png")
 
         # ---------------------------------------------- § #81 bulk select
         # 9. Select mode: tick three cards across three columns, bulk-change
@@ -372,7 +372,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
         assert all(round(s["w"]) == round(s["h"]) for s in boxes[1:]), boxes
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-10-desktop.png"))
+        shot(page, shots / "story-05-board-10-desktop.png")
 
         # 10. The selection carries to the Table, checkbox column and all.
         page.click("nav.tabs .tab[data-tab='table']")
@@ -380,7 +380,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page.locator("#tableBulk .bulk-count")).to_have_attribute("aria-label", "3 selected")
         for i in ids:
             expect(page.locator(f"#tableHost .task-row[data-id='{i}'] .row-check")).to_be_checked()
-        page.screenshot(path=str(shots / "story-05-board-11-desktop.png"))
+        shot(page, shots / "story-05-board-11-desktop.png")
 
         # 11. Bulk-change the status → all three move, each with its own
         #     activity row, exactly as three single-task edits would have.
@@ -416,7 +416,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         page.locator("#tableBulk .bulk-status").select_option("todo")
         expect(page.locator(".toasts")).to_have_text(re.compile(rf"1 updated .* 1 failed .*#{ids[1]}"))
         assert _get(base, f"/api/tasks/{ids[0]}")["status"] == "todo"
-        page.screenshot(path=str(shots / "story-05-board-12-desktop.png"))
+        shot(page, shots / "story-05-board-12-desktop.png")
 
         # 14. Leaving Select mode puts the pane back exactly as it was.
         page.click("#paneTable [data-select-toggle]")
@@ -458,7 +458,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
     expect(page.locator(".toast-action").first).to_have_text("Undo (Z)")
     assert _get(base, f"/api/tasks/{rid}")["priority"] == "medium"
-    page.screenshot(path=str(shots / "story-16-keyboard-triage-1-desktop.png"))
+    shot(page, shots / "story-16-keyboard-triage-1-desktop.png")
     _clear_toasts(page)
     page.keyboard.press("z")
     expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
@@ -523,7 +523,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.keyboard.press("1")
     expect(page.locator(".toasts")).to_have_text(re.compile("2 tasks"))
     assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["inbox", "inbox"]
-    page.screenshot(path=str(shots / "story-16-keyboard-triage-2-desktop.png"))
+    shot(page, shots / "story-16-keyboard-triage-2-desktop.png")
     _clear_toasts(page)
     page.keyboard.press("z")
     expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
@@ -576,7 +576,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(11)
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
-    page.screenshot(path=str(shots / "story-16-keyboard-triage-3-desktop.png"))
+    shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
     page.keyboard.press("Escape")
     expect(page.locator("#keysHelp")).to_be_hidden()
 
@@ -585,7 +585,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.click("#themeToggle")
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
-    page.screenshot(path=str(shots / "story-16-keyboard-triage-4-desktop.png"))
+    shot(page, shots / "story-16-keyboard-triage-4-desktop.png")
     page.keyboard.press("Escape")
     page.click("#themeToggle")
 
@@ -593,7 +593,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.fill("#paletteInput", ">priority")
     expect(page.locator(".palette-item").first).to_contain_text("Cycle priority")
     expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
-    page.screenshot(path=str(shots / "story-16-keyboard-triage-5-desktop.png"))
+    shot(page, shots / "story-16-keyboard-triage-5-desktop.png")
     page.keyboard.press("Escape")
     expect(page.locator("#palette")).to_be_hidden()
 
@@ -653,7 +653,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     drift = _trow(page, f".journal-day[data-day='{iso(0)}']", "Fix watering schedule drift")
     expect(drift.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
     expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
-    page.screenshot(path=str(shots / "story-18-done-journal-1-desktop.png"))
+    shot(page, shots / "story-18-done-journal-1-desktop.png")
 
     # 4. The cancelled switch drops the muted rows (and the count follows).
     page.click(".journal-toggle .toggle")
@@ -690,7 +690,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator(".journal-end")).to_be_visible()
     expect(_trow(page, "#journalHost", "Buy a birthday gift")).to_be_visible()   # the seed's oldest closings
     page.click("#themeToggle")
-    page.screenshot(path=str(shots / "story-18-done-journal-2-desktop.png"))
+    shot(page, shots / "story-18-done-journal-2-desktop.png")
     page.click("#themeToggle")
 
     # 7. A row opens the drawer under #journal/task/<id>; closing it keeps the journal.
@@ -760,7 +760,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(dialog.locator(".confirm-body")).to_contain_text("Its 2 child tasks go with it.")
     expect(dialog.locator(".confirm-body")).to_contain_text("cannot be undone")
     expect(dialog.locator(".confirm-warn")).to_have_count(0)     # not a synced coding task
-    page.screenshot(path=str(shots / "story-19-delete-task-1-desktop.png"))
+    shot(page, shots / "story-19-delete-task-1-desktop.png")
 
     # 2. Escape is "no": the drawer stays, the task is still there.
     page.keyboard.press("Escape")
@@ -790,7 +790,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     page.locator("#tableBulk .bulk-delete").click()
     expect(dialog).to_be_visible()
     expect(dialog.locator("#confirmTitle")).to_have_text("Delete 2 tasks?")
-    page.screenshot(path=str(shots / "story-19-delete-task-2-desktop.png"))
+    shot(page, shots / "story-19-delete-task-2-desktop.png")
     dialog.locator(".confirm-danger").click()
     expect(dialog).to_be_hidden()
     expect(page.locator(".toasts")).to_contain_text("2 tasks deleted")
@@ -831,7 +831,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         heights = selects.evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 32 for h in heights), heights
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-8-phone.png"))
+        shot(page, shots / "story-05-board-8-phone.png")
 
         # 10. Board: strip of five counts + one column per screen (scroll-snap).
         page.locator("nav.tabs .tab[data-tab='board']").tap()
@@ -888,7 +888,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         # flat list, not a card: no rounded box on the column's list
         assert _col(page, "doing").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-9-phone.png"))
+        shot(page, shots / "story-05-board-9-phone.png")
 
         # Landing straight on the Board (the tab is remembered now): the nav
         # positions the carousel before the first list has loaded, so an
@@ -950,7 +950,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert all(round(s["w"]) == round(s["h"]) >= 44 for s in squares), squares
         assert bar_box["height"] < 2 * boxes[0]["h"], bar_box   # never wrapped
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-05-board-10-phone.png"))
+        shot(page, shots / "story-05-board-10-phone.png")
 
         # 12. § #102 on the phone: #journal deep-links the journal (no tab
         #     lit), the rows and the head fit the width, the pill stays.
@@ -968,7 +968,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
             "() => new Set([...document.querySelectorAll('nav.tabs .tab')]"
             ".map(e => getComputedStyle(e).backgroundColor)).size === 1"
         )
-        page.screenshot(path=str(shots / "story-18-done-journal-3-phone.png"))
+        shot(page, shots / "story-18-done-journal-3-phone.png")
         page.locator("nav.tabs .tab[data-tab='today']").tap()
         expect(page.locator("#paneJournal")).to_be_hidden()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
