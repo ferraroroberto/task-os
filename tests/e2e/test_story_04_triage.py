@@ -60,7 +60,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import _get
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -141,7 +141,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(comment_folder_chip).to_contain_text("plans")
         expect(comment_folder_chip).to_have_attribute("title", "{onedrive}/house/kitchen/plans")
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-04-triage-1-desktop.png"))
+        shot(page, shots / "story-04-triage-1-desktop.png")
 
         # 2. Change a due date inline — one click on the cell opens the date
         # picker (#107), where it used to swap the cell for a text box you had
@@ -163,7 +163,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
             "title", f"{new_due} — click to change"
         )
         assert _get(base, f"/api/tasks/{task_id}")["due"] == new_due
-        page.screenshot(path=str(shots / "story-04-triage-2-desktop.png"))
+        shot(page, shots / "story-04-triage-2-desktop.png")
 
         # 3. Open the drawer → activity shows due: old → new with actor + time.
         page.locator(f".task-row[data-id='{task_id}']").click()
@@ -181,7 +181,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         drawer_box = drawer.bounding_box()
         assert table_box and drawer_box and table_box["x"] + table_box["width"] <= drawer_box["x"] + 1
         assert drawer_box["width"] >= 400
-        page.screenshot(path=str(shots / "story-04-triage-3-desktop.png"))
+        shot(page, shots / "story-04-triage-3-desktop.png")
 
         # 4. Add a comment containing a link → chip with href, newest first.
         # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
@@ -201,7 +201,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         assert comments[-1]["origin"] == "ui" and LINK in comments[-1]["body"]
         # …and the Table's last-comment column picked it up
         expect(page.locator(f".task-row[data-id='{task_id}'] .c-comment a.chip")).to_have_attribute("href", LINK)
-        page.screenshot(path=str(shots / "story-04-triage-4-desktop.png"))
+        shot(page, shots / "story-04-triage-4-desktop.png")
         # click the chip: opens the link in a new tab (the target is stubbed —
         # the suite never depends on the network)
         context.route(LINK, lambda route: route.fulfill(status=200, content_type="text/html", body="<title>stub</title>ok"))
@@ -232,7 +232,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         quick_add.locator(".quick-add-folder").fill("{onedrive}/house")
         quick_add.locator(".quick-add-link-url").fill("https://example.com/passport-form")
         quick_add.locator(".quick-add-link-label").fill("application form")
-        page.screenshot(path=str(shots / "story-04-triage-5-desktop.png"))
+        shot(page, shots / "story-04-triage-5-desktop.png")
 
         # 6. Enter creates it with everything set and closes the dialog; the new
         #    row is focused (default filter = open).
@@ -256,7 +256,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
             ("https://example.com/passport-form", "application form")
         ]
         expect(new_row.locator(".due-btn")).to_have_attribute("title", f"{friday} — click to change")
-        page.screenshot(path=str(shots / "story-04-triage-6-desktop.png"))
+        shot(page, shots / "story-04-triage-6-desktop.png")
 
         # 7. Tree: drag it under a project (Family admin) → moved, toast, rollup.
         page.click("nav.tabs .tab[data-tab='tree']")
@@ -293,7 +293,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(nested).to_have_attribute("aria-level", "2")
         # the row's children count (the shared row's rollup) grew by one
         expect(family.locator(":scope > .tree-row .trow-kids")).to_have_text(str(kids_before + 1))
-        page.screenshot(path=str(shots / "story-04-triage-7-desktop.png"))
+        shot(page, shots / "story-04-triage-7-desktop.png")
         # a cycle is refused and surfaced as a toast, nothing changes (the
         # two-line rows push the nested one below the fold — bring both into
         # the viewport first, as a user scrolling would; a drag that starts
@@ -309,7 +309,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(moved_row.locator(".t-crumb")).to_have_text("Family admin")
         expect(moved_row.locator(".c-project")).to_have_text("Family admin")
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-04-triage-8-desktop.png"))
+        shot(page, shots / "story-04-triage-8-desktop.png")
 
         # Deep link: a fresh load of #task/<id> opens the drawer with the breadcrumb.
         page.goto(f"{base}/#task/{new_id}")
@@ -336,12 +336,12 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         dark_page = dark_ctx.new_page()
         dark_page.goto(f"{base}/?status=deferred")
         expect(dark_page.locator("#paneBoard, #paneTable, #paneToday").first).to_be_visible()
-        dark_page.screenshot(path=str(shots / "story-13-starts-snooze-5-desktop.png"))
+        shot(dark_page, shots / "story-13-starts-snooze-5-desktop.png")
         # Today in dark: My plan on top with the restored seeded plan (#89)
         dark_page.goto(f"{base}/")
         dark_page.click("nav.tabs .tab[data-tab='today']")
         expect(dark_page.locator("#paneToday .today-plan")).to_be_visible()
-        dark_page.screenshot(path=str(shots / "story-15-plan-my-day-6-desktop.png"))
+        shot(dark_page, shots / "story-15-plan-my-day-6-desktop.png")
     finally:
         dark_ctx.close()
 
@@ -371,7 +371,7 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     expect(cadence).to_have_value("weekly")
     expect(anchor).to_have_value("fri")
     page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
-    page.screenshot(path=str(shots / "story-17-recurrence-anchor-1-desktop.png"))
+    shot(page, shots / "story-17-recurrence-anchor-1-desktop.png")
 
     # Complete it: the same task stays open and its new due is a Friday,
     # strictly after both the due it had and today.
@@ -421,7 +421,7 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     expect(rows.locator(".t-title-text")).to_have_text("Sort the garage shelves")
     expect(card.locator(".filter-desc")).to_contain_text("untouched > 30 days")
     expect(card.locator(".filter-desc")).to_contain_text("1 task")
-    page.screenshot(path=str(shots / "story-04-triage-11-desktop.png"))
+    shot(page, shots / "story-04-triage-11-desktop.png")
     # the token round-trips: a fresh load of the shared URL is the same view
     page.goto(f"{base}/?updated=stale30")
     page.click("nav.tabs .tab[data-tab='table']")
@@ -459,7 +459,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
     expect(plan.locator(".plan-list .trow .trow-title")).to_have_text(
         ["Look into a standing desk", "Try the new bakery"])
-    page.screenshot(path=str(shots / "story-15-plan-my-day-1-desktop.png"))
+    shot(page, shots / "story-15-plan-my-day-1-desktop.png")
 
     # 2. Unplan both (a conscious act, activity-logged, undoable) — the plan
     #    empties and the banner appears with the candidate counts.
@@ -476,7 +476,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     # quick-add walk created a few steps back
     expect(banner.locator(".plan-banner-text")).to_have_text(
         "Plan your day — 3 overdue · 5 due today · 4 new in Inbox")
-    page.screenshot(path=str(shots / "story-15-plan-my-day-2-desktop.png"))
+    shot(page, shots / "story-15-plan-my-day-2-desktop.png")
 
     # 3. Plan mode: every candidate carries the two targets; the task planned
     #    yesterday and not finished says so — never silently re-planned.
@@ -488,7 +488,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     expect(tap_row.locator(".plan-note")).to_have_text("planned yesterday — not finished")
     tap_id = int(tap_row.get_attribute("data-id"))
     assert _get(base, f"/api/tasks/{tap_id}")["planned_on"] < today
-    page.screenshot(path=str(shots / "story-15-plan-my-day-3-desktop.png"))
+    shot(page, shots / "story-15-plan-my-day-3-desktop.png")
 
     # 4. Commit two (the standing desk, then the tap — re-committing the
     #    carry-over is the conscious act) and push one away with Later, the
@@ -517,14 +517,14 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneToday .plan-list .trow .trow-title").first).to_have_text("Fix leaking tap")
     api_plan = _get(base, "/api/today")["plan"]
     assert [t["title"] for t in api_plan["items"]] == ["Fix leaking tap", "Look into a standing desk"]
-    page.screenshot(path=str(shots / "story-15-plan-my-day-4-desktop.png"))
+    shot(page, shots / "story-15-plan-my-day-4-desktop.png")
     _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".trow-status").select_option("done")
     expect(plan.locator(".today-counts")).to_have_text("1 of 2 done")
     done_row = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
     expect(done_row).to_have_class(re.compile(r"\bis-closed\b"))
     api_plan = _get(base, "/api/today")["plan"]
     assert (api_plan["done"], api_plan["total"]) == (1, 2)
-    page.screenshot(path=str(shots / "story-15-plan-my-day-5-desktop.png"))
+    shot(page, shots / "story-15-plan-my-day-5-desktop.png")
 
     # ---- restore: the session-scoped seed serves the later stories --------
     # tap back to todo and out of the plan; the bakery back in (the seeded
@@ -583,7 +583,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(quick_add.locator(".quick-add-due")).to_have_value(due)
     expect(quick_add.locator(".quick-add-starts")).to_have_value(starts)
     quick_add.locator(".quick-add-status").select_option("todo")
-    page.screenshot(path=str(shots / "story-13-starts-snooze-1-desktop.png"))
+    shot(page, shots / "story-13-starts-snooze-1-desktop.png")
     quick_add.locator(".quick-add-input").press("Enter")
     expect(quick_add).to_be_hidden()
     expect(page.locator(".toast-success").last).to_contain_text("renew insurance")
@@ -603,7 +603,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     sleeping = _trow(page, "renew insurance", "#paneTree")
     expect(sleeping).to_be_visible()
     expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
-    page.screenshot(path=str(shots / "story-13-starts-snooze-2-desktop.png"))
+    shot(page, shots / "story-13-starts-snooze-2-desktop.png")
 
     # 3. Deferred is a visible state, not an absence: the status multi-select's
     #    pseudo-value lists exactly the sleeping tasks, and the state is the URL.
@@ -622,7 +622,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     # the list of sleeping tasks is exactly where the start day matters
     expect(rows.locator(".t-starts")).to_have_count(2)
     expect(rows.locator(".t-starts").first).to_have_text(re.compile(r"^starts \d"))
-    page.screenshot(path=str(shots / "story-13-starts-snooze-3-desktop.png"))
+    shot(page, shots / "story-13-starts-snooze-3-desktop.png")
     card.locator(".filter-clear").click()
     expect(page).to_have_url(f"{base}/")
 
@@ -637,7 +637,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     menu = row.locator(".snooze-menu")
     expect(menu).to_be_visible()
     expect(menu.locator(".snooze-opt")).to_have_count(4)   # 3 phrases + pick a date
-    page.screenshot(path=str(shots / "story-13-starts-snooze-4-desktop.png"))
+    shot(page, shots / "story-13-starts-snooze-4-desktop.png")
     menu.get_by_text("Next week", exact=True).click()
 
     next_week = (today + timedelta(days=7)).isoformat()
@@ -759,7 +759,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
         assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
         assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
-        page.screenshot(path=str(shots / "story-04-triage-9-phone.png"))
+        shot(page, shots / "story-04-triage-9-phone.png")
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
         _trow(page, "Get three quotes", "#paneTable").locator(".trow-main").tap()
@@ -779,7 +779,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         edit_box = drawer.locator(".drawer-tools .button-ghost").first.bounding_box()
         assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-04-triage-10-phone.png"))
+        shot(page, shots / "story-04-triage-10-phone.png")
         drawer.locator(".drawer-close").tap()
         expect(drawer).to_be_hidden()
         assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
@@ -802,7 +802,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(menu).to_be_visible()
         assert_min_target(menu.locator(".snooze-opt"))
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-13-starts-snooze-6-phone.png"))
+        shot(page, shots / "story-13-starts-snooze-6-phone.png")
         page.keyboard.press("Escape")
         expect(menu).to_be_hidden()
 
@@ -813,7 +813,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(sleeping).to_be_visible()
         expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-13-starts-snooze-7-phone.png"))
+        shot(page, shots / "story-13-starts-snooze-7-phone.png")
 
         # --------------------------------------------- story 15 (#89) ----
         # Today is the phone's landing tab — My plan sits on top with real
@@ -825,7 +825,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(plan.locator(".plan-list .trow")).to_have_count(2)
         assert_min_target(plan.locator(".plan-unplan"))
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-15-plan-my-day-7-phone.png"))
+        shot(page, shots / "story-15-plan-my-day-7-phone.png")
         context.close()
     finally:
         wk.close()

@@ -29,7 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -64,10 +64,18 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         #    exactly like a deferred (#87) one.
         page.goto(f"{base}/")
         expect(page.locator("#paneBoard")).to_be_visible()
+        # The blocker itself first: "no Release v0.2 row" is only evidence once
+        # the Board has actually rendered its rows. Without this the count-0
+        # assertion passes against an empty pane — which is how a blank board
+        # got committed as this story's proof shot (#134).
+        expect(_trow(page, "Write sensor driver", "#paneBoard")).to_be_visible()
         release_id = release["id"]
-        expect(page.locator(f".trow[data-id='{release_id}']")).to_have_count(0)
+        # Scoped to the Board: every pane is in the DOM from the first paint and
+        # the Tree legitimately carries this row (step 2 below). Unscoped, the
+        # assertion only ever passed because nothing had rendered yet.
+        expect(page.locator(f"#paneBoard .trow[data-id='{release_id}']")).to_have_count(0)
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-20-blocked-by-1-desktop.png"))
+        shot(page, shots / "story-20-blocked-by-1-desktop.png")
 
         # 2. Tree: still findable — the map of everything — wearing a lock and
         #    "blocked by 1" instead of any starts marker (blocked wins, #100's
@@ -78,7 +86,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(locked).to_be_visible()
         expect(locked.locator(".trow-blocked")).to_have_text("blocked by 1")
         expect(locked.locator(".trow-starts")).to_have_count(0)
-        page.screenshot(path=str(shots / "story-20-blocked-by-2-desktop.png"))
+        shot(page, shots / "story-20-blocked-by-2-desktop.png")
 
         # 3. Drawer: the Blocked by section lists the blocker, click-to-navigate,
         #    removable.
@@ -89,7 +97,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(blockers).to_have_count(1)
         expect(blockers.locator(".blocker-title")).to_have_text("Write sensor driver")
         expect(blockers.locator(".pill")).to_have_text("todo")
-        page.screenshot(path=str(shots / "story-20-blocked-by-3-desktop.png"))
+        shot(page, shots / "story-20-blocked-by-3-desktop.png")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
@@ -108,7 +116,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(rows.locator(".trow-title")).to_have_text("Release v0.2")
         expect(rows.locator(".trow-blocked")).to_have_text("blocked by 1")
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-20-blocked-by-4-desktop.png"))
+        shot(page, shots / "story-20-blocked-by-4-desktop.png")
         card = _open_filters(page, "boardFilters")
         card.locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
@@ -150,7 +158,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         sel_b = blocked_sec.locator(".blocker-form select")
         sel_b.select_option(label="Cycle A")
         expect(sel_b).to_have_value(str(a_id))
-        page.screenshot(path=str(shots / "story-20-blocked-by-5-desktop.png"))
+        shot(page, shots / "story-20-blocked-by-5-desktop.png")
         blocked_sec.locator(".blocker-form button[type='submit']").click()
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{b_id}")["blocked"] is False

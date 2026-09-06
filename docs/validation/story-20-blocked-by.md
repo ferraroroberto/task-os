@@ -27,4 +27,6 @@
 
 verified (e2e walk on the seeded instance, screenshots read back, both themes represented · full unit suite green · gate — byte-compile, ruff, 410 unit tests, 15 e2e tests — green twice in a row). **Not separately walked**: a live headed browser session against a running instance outside the automated Playwright suite, and the real phone (no phone-specific e2e leg — see the proof note above for why). Date: 2026-09-04.
 
+**2026-09-06 (#134):** shot 1 as first committed was a **blank Board** — the walk asserted "no Release v0.2 row" before the pane had rendered anything, so the absence proved nothing and the capture caught the empty frame. The step now waits for the blocker's own row to be visible first and scopes the absence to `#paneBoard` (the Tree legitimately carries that row, step 2), and the shot has been recaptured against a populated Board.
+
 **Deliberate limits (from the issue):** edges only, no ordering/critical-path view, no auto-surfaced "next action" beyond the hide itself, no cross-project rollups, no unblock notification.

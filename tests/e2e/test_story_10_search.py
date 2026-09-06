@@ -38,7 +38,17 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import FAKE_ISSUES, INTERCEPT, _boot, _get, _post, _terminate
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    FAKE_ISSUES,
+    INTERCEPT,
+    _boot,
+    _get,
+    _post,
+    _terminate,
+    e2e_workdir,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -58,17 +68,17 @@ class SearchInstance:
 
 
 @pytest.fixture(scope="module")
-def search_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[SearchInstance]:
+def search_webapp() -> Iterator[SearchInstance]:
     """Seeded instance; every index a fixture under one temp tree."""
     from tests.fixtures.emails_fixture import build_emails_db
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-search")
+    work = e2e_workdir("search")
     od = work / "od"
     for rel in ("house/kitchen/plans", "house/garden", "house/bathroom", "admin/car", "admin/school", "task-os"):
         (od / rel).mkdir(parents=True)
     build_emails_db(work / "emails.db", root=od)
-    seed_db(work / "tasks.db")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
     cfg = write_test_config(
         work / "config.json",
         folder_roots=["{onedrive}"],
@@ -160,14 +170,14 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(issue_hit.locator(".trow-meta")).to_contain_text("task #")
     expect(page.locator(".search-hit mark").first).to_be_visible()
     assert "q=kitchen" in page.url                                # ?q= keeps the query
-    page.screenshot(path=str(shots / "story-10-search-1-desktop.png"), full_page=True)
+    shot(page, shots / "story-10-search-1-desktop.png", full_page=True)
 
     # 2. open a task (the Kitchen task) from its row → the drawer beside the results
     kitchen_hit.locator(".trow-main").click()
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
-    page.screenshot(path=str(shots / "story-10-search-2-desktop.png"))
+    shot(page, shots / "story-10-search-2-desktop.png")
 
     # 3. the folder hit's title link hands the ref to the opener (intercepted here)
     page.locator(".search-group[data-kind='folders'] .search-hit").first.locator("a.search-hit-link[data-act='open']").click()
@@ -200,7 +210,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     pin.fill("passports")
     item = page.locator("#paletteList .palette-item[data-kind='task']").first
     expect(item).to_contain_text("Renew passports")
-    page.screenshot(path=str(shots / "story-10-search-4-desktop.png"))
+    shot(page, shots / "story-10-search-4-desktop.png")
     pin.press("Enter")
     expect(palette).to_be_hidden()
     expect(drawer).to_be_visible()
@@ -215,7 +225,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
     expect(cmds.first).to_contain_text("Go to Board")
     assert cmds.count() >= 6
-    page.screenshot(path=str(shots / "story-10-search-5-desktop.png"))
+    shot(page, shots / "story-10-search-5-desktop.png")
     pin.press("Enter")
     expect(palette).to_be_hidden()
     expect(page.locator("#paneBoard")).to_be_visible()
@@ -237,10 +247,10 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(p.locator(".search-group[data-kind='emails'] .search-group-count")).to_have_text(re.compile(r"^\d+ hits?$"))
     _open_group(p, "emails")
     expect(p.locator(".search-group[data-kind='emails'] .search-hit").first).to_be_visible()
-    p.screenshot(path=str(shots / "story-10-search-6-phone.png"))
+    shot(p, shots / "story-10-search-6-phone.png")
     p.locator("#paletteBtn").click()
     expect(p.locator("#palette")).to_be_visible()
     p.locator("#paletteInput").fill("water")
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Pay water bill")
-    p.screenshot(path=str(shots / "story-10-search-7-phone.png"))
+    shot(p, shots / "story-10-search-7-phone.png")
     phone.close()

@@ -28,8 +28,9 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e.conftest import shot
 
-TABS = ["Board", "Table", "Tree", "Today", "Search", "Settings"]
+TABS =["Board", "Table", "Tree", "Today", "Search", "Settings"]
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 
@@ -88,13 +89,13 @@ def test_desktop_open_toggle_persist(webapp: str, browser: Browser, shots: Path)
         app_w = page.locator("main.app").evaluate("el => el.getBoundingClientRect().width")
         assert app_w >= DESKTOP["width"] - 40, f"main.app is {app_w}px wide — not full width"
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-01-open-1-desktop.png"))
+        shot(page, shots / "story-01-open-1-desktop.png")
 
         # Toggle → dark, persisted, survives a reload.
         page.click("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         assert _stored_theme(page) == "dark"
-        page.screenshot(path=str(shots / "story-01-open-2-desktop.png"))
+        shot(page, shots / "story-01-open-2-desktop.png")
         page.reload()
         _assert_shell(page, sha)
         assert _theme(page) == "dark", "theme did not persist across reload"
@@ -141,12 +142,12 @@ def test_phone_open_pill_toggle(webapp: str, playwright: Playwright, shots: Path
         assert_no_overlap(page.locator("nav.tabs .tab"))
         assert_min_target(page.locator("#themeToggle"))
         assert_no_horizontal_overflow(page)
-        page.screenshot(path=str(shots / "story-01-open-1-phone.png"))
+        shot(page, shots / "story-01-open-1-phone.png")
 
         page.tap("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         assert _stored_theme(page) == "dark"
-        page.screenshot(path=str(shots / "story-01-open-2-phone.png"))
+        shot(page, shots / "story-01-open-2-phone.png")
         page.reload()
         assert _theme(page) == "dark"
         context.close()

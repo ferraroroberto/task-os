@@ -30,7 +30,9 @@ never ``gh``, never the network).
 
 Screenshots: ``shots`` yields ``docs/screenshots`` so a story test saves its
 numbered proof there directly (the public repo carries them; the fixture DB
-is synthetic/empty, never personal data).
+is synthetic/empty, never personal data). A story captures through ``shot()``
+— never ``page.screenshot`` — so two runs against one commit produce
+byte-identical files (#134); see the "deterministic capture" section below.
 
 ``pytest_sessionfinish`` runs the vendored leaked-browser sweep (#203) once
 every fixture — pytest-playwright's ``browser`` included — has torn down.
@@ -45,13 +47,17 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from collections.abc import Iterator
+from datetime import date, datetime
 from pathlib import Path
 from typing import IO
 
 import pytest
+from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
@@ -66,6 +72,49 @@ LOOP_FACTORY = "app.webapp.event_loop:selector_loop_factory"
 # Bounded Playwright waits: 15 s fails fast with a TimeoutError naming the
 # locator instead of stacking opaque 30 s waits (project-scaffolding#61).
 _DEFAULT_TIMEOUT_MS = int(os.environ.get("E2E_DEFAULT_TIMEOUT_MS", "15000"))
+
+# How long `settle()` gives the network to go quiet before a capture. Short on
+# purpose: the app opens no socket and polls nothing, so a page that is still
+# fetching after this has something else wrong with it.
+_SETTLE_NETWORK_MS = 5000
+
+# The session's own "now" (#134). One date for the whole run — the seed anchors
+# on it and every disposable instance pins `TASKOS_CLOCK` to it — so a task
+# touched during a story is stamped 09:00 rather than the minute the run
+# happened to reach it, and two runs of the same commit write byte-identical
+# timestamps into the gallery. The date still moves day to day (the seed's
+# relative dues have to stay believable on screen, so it is deliberately not
+# frozen to a fixed past day); the time of day no longer does. Sampling it once
+# here also keeps a run that straddles midnight self-consistent.
+E2E_ANCHOR = date.today()
+E2E_CLOCK = (datetime.combine(E2E_ANCHOR, datetime.min.time())
+             .replace(hour=9).astimezone().isoformat(timespec="seconds"))
+
+
+#: One stable working root for the whole suite (#134). `tmp_path_factory`
+#: numbers its base directory per run — `pytest-9167`, `pytest-9168`, … — and
+#: stories 09 and 10 put those absolute paths on screen, so every run rewrote
+#: those shots for no reason anyone could review. A fixed name under the same
+#: system temp root keeps the paths identical run to run. It stays under the
+#: system temp dir on purpose: a repo-local root put the SQLite file on the
+#: checkout's own drive and slowed writes enough to lose races the stories were
+#: already winning only narrowly.
+E2E_WORK_ROOT = Path(tempfile.gettempdir()) / "taskos-e2e"
+
+
+def e2e_workdir(name: str) -> Path:
+    """An empty, same-path-every-run working directory for one disposable instance.
+
+    A leftover from a previous run is removed rather than reused — a stale
+    database would make the seed refuse to fill it. Left in place afterwards:
+    each instance's `webapp.log` is the post-mortem for a story that failed.
+    """
+    work = E2E_WORK_ROOT / name
+    shutil.rmtree(work, ignore_errors=True)
+    if work.exists():   # still there → something is holding it open, say so now
+        raise RuntimeError(f"could not clear the e2e work dir {work} — is a previous instance still running?")
+    work.mkdir(parents=True, exist_ok=True)
+    return work
 
 
 def _free_tcp_port() -> int:
@@ -115,7 +164,10 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     (and no auth token → the instance is loopback-only, which is exactly what
     the browser is). Story 07 passes a temp config carrying a token to walk
     the /login page. The issue provider is forced off unless ``extra_env``
-    picks one (story 08 picks the fake).
+    picks one (story 08 picks the fake). ``TASKOS_CLOCK`` pins the instance's
+    clock to ``E2E_CLOCK`` so the timestamps a story writes — activity rows,
+    comments, ``done_at`` — land on the shot as 09:00 rather than the minute
+    the run reached them (#134).
     """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
@@ -129,6 +181,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_DB_PATH": str(db_path),
         "TASKOS_CONFIG_PATH": str(config_path),
         "TASKOS_ISSUE_PROVIDER": "none",
+        "TASKOS_CLOCK": E2E_CLOCK,
         **(extra_env or {}),
     }
     cmd = [
@@ -190,7 +243,7 @@ INTERCEPT = (
 
 
 @pytest.fixture(scope="session")
-def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+def webapp() -> Iterator[str]:
     """Base URL of the instance under test — disposable, **empty** DB by default."""
     if os.environ.get(LIVE_ENV) == "1":
         require_disposable_instance(LIVE_PORT, LIVE_ENV)
@@ -200,7 +253,7 @@ def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         yield base
         return
 
-    work = tmp_path_factory.mktemp("taskos-e2e")
+    work = e2e_workdir("empty")
     proc, base, log = _boot(work, work / "tasks.db")
     try:
         yield base
@@ -210,7 +263,7 @@ def webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
-def seeded_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+def seeded_webapp() -> Iterator[str]:
     """A second disposable instance over the **synthetic seed** (tests/fixtures/seed.py).
 
     Story tests from Step 4 on walk real data; story 01 keeps the empty
@@ -222,9 +275,9 @@ def seeded_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         pytest.skip(f"{LIVE_ENV}=1: the seeded fixture never runs against the live database")
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-seeded")
+    work = e2e_workdir("seeded")
     db = work / "tasks.db"
-    seed_db(db)
+    seed_db(db, E2E_ANCHOR)
     proc, base, log = _boot(work, db)
     try:
         yield base
@@ -244,20 +297,29 @@ class MirroredInstance:
 
 
 @pytest.fixture(scope="session")
-def mirrored_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[MirroredInstance]:
-    """A seeded disposable instance with ``mirror.dir`` / ``backup_dir`` under a temp folder."""
+def mirrored_webapp() -> Iterator[MirroredInstance]:
+    """A seeded disposable instance with ``mirror.dir`` / ``backup_dir`` under a temp folder.
+
+    The one instance that runs on the **real** clock (``TASKOS_CLOCK`` blanked).
+    The mirror's import-conflict rule is *defined* in terms of a clock that
+    advances — the DB wins when the field's latest ``activity.ts`` is later than
+    the file's recorded ``exported_at`` — so a frozen clock makes those two
+    stamps equal and the conflict story cannot happen at all. Story 06's five
+    shots are the stated exception to the byte-identical gallery (#134); every
+    other story runs pinned.
+    """
     if os.environ.get(LIVE_ENV) == "1":
         pytest.skip(f"{LIVE_ENV}=1: the mirrored fixture never runs against the live database")
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-mirror")
+    work = e2e_workdir("mirror")
     db = work / "tasks.db"
-    seed_db(db)
+    seed_db(db, E2E_ANCHOR)
     mirror_dir = work / "mirror"
     backup_dir = work / "backup"
     mirror_dir.mkdir()
     config = write_test_config(work / "config.json", dir=str(mirror_dir), backup_dir=str(backup_dir))
-    proc, base, log = _boot(work, db, config)
+    proc, base, log = _boot(work, db, config, extra_env={"TASKOS_CLOCK": ""})
     try:
         yield MirroredInstance(base, mirror_dir, backup_dir, db)
     finally:
@@ -302,7 +364,7 @@ class IssuesInstance:
 
 
 @pytest.fixture(scope="session")
-def issues_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IssuesInstance]:
+def issues_webapp() -> Iterator[IssuesInstance]:
     """A seeded disposable instance whose issue provider is the file-backed fake."""
     if os.environ.get(LIVE_ENV) == "1":
         pytest.skip(f"{LIVE_ENV}=1: the issues fixture never runs against the live database")
@@ -310,9 +372,9 @@ def issues_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IssuesIn
 
     from tests.fixtures.seed import seed_db
 
-    work = tmp_path_factory.mktemp("taskos-e2e-issues")
+    work = e2e_workdir("issues")
     db = work / "tasks.db"
-    seed_db(db)
+    seed_db(db, E2E_ANCHOR)
     forge = work / "forge.json"
     forge.write_text(json.dumps({"issues": FAKE_ISSUES, "error": None}, indent=1), encoding="utf-8")
     proc, base, log = _boot(work, db, extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)})
@@ -328,6 +390,92 @@ def shots() -> Path:
     """Where story tests save their numbered proof screenshots."""
     SHOTS_DIR.mkdir(parents=True, exist_ok=True)
     return SHOTS_DIR
+
+
+# ------------------------------------------------ deterministic capture (#134)
+# Every story shot goes through `shot()`, never `page.screenshot` directly: two
+# runs of the suite against the same commit have to produce byte-identical
+# files, or the gallery cannot tell a visual regression from capture noise.
+# Three things moved between runs before this existed — an animation still in
+# flight (the vendored nav's 1.8 s-delayed boot reveal was the loudest), a pane
+# whose rows had not been fetched or painted yet, and a scroll still gliding to
+# its target — so `settle()` closes all three and the capture itself hands
+# Playwright `animations="disabled"` (finite ones fast-forwarded to their end
+# state, infinite ones — the `.is-busy` spinner — parked at frame zero).
+
+_SETTLE_JS = """
+async () => {
+  const raf = () => new Promise(r => requestAnimationFrame(() => r()));
+  try { if (document.fonts) await document.fonts.ready; } catch (e) { /* no-op */ }
+  const pending = Array.from(document.images).filter(i => !i.complete);
+  if (pending.length) {
+    await Promise.all(pending.map(i => new Promise(r => {
+      i.addEventListener('load', r, { once: true });
+      i.addEventListener('error', r, { once: true });
+    })));
+  }
+  // Let every finite animation actually END rather than leaning on Playwright's
+  // `animations="disabled"` to seek it there. Both land on the same frame, but
+  // an animation still running keeps its element on a composited layer, and a
+  // composited edge rasterises a shade differently from a settled one — a few
+  // pixels off by 1/255 along the nav pill, enough to move the file. Infinite
+  // ones (the `.is-busy` spinner) never finish and are left to Playwright.
+  const running = document.getAnimations().filter(a => {
+    const timing = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+    return timing && timing.iterations !== Infinity && timing.endTime !== Infinity;
+  });
+  if (running.length) {
+    await Promise.race([
+      Promise.all(running.map(a => a.finished.catch(() => {}))),
+      new Promise(r => setTimeout(r, 4000)),
+    ]);
+  }
+  // One string standing for "what the next frame would paint": how much DOM
+  // there is, how tall it is, and where every scroller sits.
+  const sample = () => {
+    const parts = [window.scrollX, window.scrollY,
+                   document.documentElement.scrollHeight,
+                   document.getElementsByTagName('*').length];
+    for (const el of document.querySelectorAll('*')) {
+      if (el.scrollTop || el.scrollLeft) parts.push(el.scrollTop, el.scrollLeft);
+    }
+    return parts.join('|');
+  };
+  let previous = null, stable = 0;
+  for (let i = 0; i < 120 && stable < 3; i++) {
+    await raf();
+    const current = sample();
+    stable = current === previous ? stable + 1 : 0;
+    previous = current;
+  }
+  await raf();
+  await raf();
+}
+"""
+
+
+def settle(page: Page) -> None:
+    """Block until the page has stopped moving.
+
+    Network first (a pane that renders off a `fetch` must have its rows before
+    the shutter opens), then fonts and images, then every finite animation to
+    its end, then three consecutive animation frames in which neither the DOM
+    size nor any scroll offset changed. The network wait is bounded and
+    swallowed rather than fatal: a story that deliberately captures
+    mid-request would otherwise fail on the wait instead of on its own
+    assertion.
+    """
+    try:
+        page.wait_for_load_state("networkidle", timeout=_SETTLE_NETWORK_MS)
+    except PlaywrightTimeoutError:
+        pass
+    page.evaluate(_SETTLE_JS)
+
+
+def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
+    """Save one story proof screenshot to *path*, deterministically."""
+    settle(page)
+    page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
 
 
 @pytest.fixture(autouse=True)

@@ -4,6 +4,18 @@ Technical green is not enough. Each build step (a "Step N/13" issue) has a story
 
 Rules: screenshots come from a **synthetic / empty fixture**, never real data (this repo is public); real-data checks are walked too but their shots go on the private issue, not here. `[x]` means "walked and seen". Anything that could not be walked is written **not verified**, never as passed.
 
+## How a story shot is captured
+
+The gallery is only proof if a change in it means a change in the app, so a story shot has to be reproducible: two runs of `tests/e2e` against one commit produce the same files. Three rules, and a new story inherits all of them by following them (#134):
+
+1. **Capture through `shot(page, shots / "story-NN-<slug>-<n>-<device>.png")`**, never `page.screenshot` directly. `tests/e2e/conftest.py`'s `shot()` settles the page first — network quiet, fonts and images loaded, every finite animation finished (the vendored nav's boot reveal starts 1.8 s after load), scroll offsets and DOM size unchanged for three frames — and then captures with Playwright's `animations="disabled"`.
+2. **Never screenshot an absence without first asserting a presence.** "The blocked task is not on the Board" is only evidence once the Board has rendered its rows; asserted on its own it passes against an empty pane, which is how a blank board was once committed as story 20's proof.
+3. **Anything on screen that comes from a clock or a path must be pinned.** Every disposable instance except story 06's boots with `TASKOS_CLOCK` set to today at 09:00 (`src/clock.py`), so the activity rows, comments and build footer a story writes read the same on every run, and every instance works in a fixed directory under the system temp root rather than pytest's per-run `pytest-NNNN`. The date still moves day to day on purpose — the seed anchors relative due dates on *today* so they stay believable on screen — so re-baselining the gallery stays a deliberate act.
+
+(The build footer on a shot names the commit the gallery was captured *from* — the branch's parent — since the shots are taken before the commit that carries them. Two runs at one commit agree, which is what reproducible means here.)
+
+Check it with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism`: two full e2e runs, then a diff. It exits 0 only when no shot changed in a way a reader could see, and prints the two stated escapes every time — story 06's five shots (its instance runs on the real clock, because the mirror's import-conflict rule is *defined* by a clock that advances) and story 09's Settings shot (it shows the opener install command, which carries the instance's ephemeral port) — plus any shot that differed only by 1/255 on a handful of antialiased pixels, which is headless Chromium's rasteriser, not the app.
+
 | # | Story | Test | Result | Date |
 | --- | --- | --- | --- | --- |
 | 01 | [Open the app](validation/story-01-open.md) | `tests/e2e/test_story_01_open.py` | verified | 2026-08-17 |

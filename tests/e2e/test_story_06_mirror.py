@@ -34,7 +34,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -91,7 +91,7 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         expect(card.locator("#statusMirror")).to_contain_text(f"{n_tasks} file(s)")
         expect(card.locator("#statusBackup .status-ok")).to_have_text("enabled")
         expect(card.locator("#mirrorCardMeta")).to_have_text("both on")
-        page.screenshot(path=str(shots / "story-06-mirror-1-desktop.png"))
+        shot(page, shots / "story-06-mirror-1-desktop.png")
 
         # 2. "Open the file in an editor": change due: and append a comment line.
         old_due = _get(base, f"/api/tasks/{task_id}")["due"]
@@ -122,13 +122,13 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         newest = drawer.locator(".comment").first
         expect(newest.locator(".comment-origin")).to_have_text("md")
         expect(newest.locator(".comment-body")).to_contain_text("checked the tiles supplier")
-        page.screenshot(path=str(shots / "story-06-mirror-2-desktop.png"))
+        shot(page, shots / "story-06-mirror-2-desktop.png")
         due_row = drawer.locator(".activity-row[data-field='due']").first
         expect(due_row.locator(".activity-old")).to_have_text(old_due)
         expect(due_row.locator(".activity-new")).to_have_text("2026-12-24")
         expect(due_row.locator(".activity-meta")).to_contain_text("md ·")
         due_row.scroll_into_view_if_needed()
-        page.screenshot(path=str(shots / "story-06-mirror-3-desktop.png"))
+        shot(page, shots / "story-06-mirror-3-desktop.png")
 
         # 4. A conflicting edit: the app moves the due (a UI edit) and the file — still
         #    carrying the older export — is saved with another value right after. The DB
@@ -165,7 +165,7 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         card.locator("summary.collapse-summary").click()  # the disclosure starts collapsed
         expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
         expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
-        page.screenshot(path=str(shots / "story-06-mirror-4-desktop.png"))
+        shot(page, shots / "story-06-mirror-4-desktop.png")
         clear_btn = card.locator("#mirrorEventsClear")
         clear_btn.scroll_into_view_if_needed()
         clear_btn.click()
@@ -193,6 +193,6 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         expect(card.locator("#statusMirror .status-warn")).to_have_text("enabled · 1 file(s) skipped")
         expect(card.locator("#statusMirror")).to_contain_text(broken.name)
         expect(card.locator("#statusBackup")).to_contain_text(backup.name)
-        page.screenshot(path=str(shots / "story-06-mirror-5-desktop.png"))
+        shot(page, shots / "story-06-mirror-5-desktop.png")
     finally:
         context.close()
