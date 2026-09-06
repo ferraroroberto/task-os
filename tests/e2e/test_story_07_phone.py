@@ -22,8 +22,11 @@ allowed on screen). What a browser can prove of the story:
   overflow, ≥ 44 px targets on the nav pill + the column strip;
 - a row's three meta-line tap targets (#107) — the due chip (which opens the
   date picker), the folder and the AI conversation: none of them sharing a
-  pixel with another, all inside their own card, the row still inside the
-  ≤96px density budget, and the date's own (deliberately sub-44px) floor;
+  pixel with another (also against `.trow-main` and `.trow-status`, #110),
+  all inside their own card, the row still inside the ≤96px density budget,
+  the date's own (deliberately sub-44px) floor, the folder/AI pair's own
+  37px-tall floor (#110), and — on Tree, at 320/390/430/772 — the same trio
+  not wrapping apart onto separate meta lines;
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
   comes back and the shell loads. The non-loopback gate itself is unit-level
@@ -106,14 +109,18 @@ def authed_webapp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 
 
 def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
-    """The row's three tap targets on a phone: due chip · folder · AI (#107).
+    """The row's three tap targets on a phone: due chip · folder · AI (#107, #110).
 
     Re-planning is the most frequent thing done while reading a list, so the
     date on the row IS the picker's trigger — one tap, no drawer, no text box.
     That makes three targets on one meta line, and the contract is that no two
     of them share a pixel: before #107 the folder and the AI glyph overlapped
     by 16px (two 18px glyphs, 13px of expansion each side, 10px of column gap),
-    so a tap just right of the folder opened the conversation instead.
+    so a tap just right of the folder opened the conversation instead. Before
+    #110 the folder/AI pair's upward expansion also reached past the title/
+    meta gap into `.trow-main` — the row-open target — on every row that
+    carried either chip, at every width and tab; that check is folded in below
+    against `.trow-main`/`.trow-status` too, not just the pair against itself.
 
     The row it measures is built here rather than borrowed from the seed, and
     deliberately bare — a date, a folder, an AI link and **nothing after them**,
@@ -148,8 +155,19 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         assert skin[0] in ("rgba(0, 0, 0, 0)", "transparent") and skin[1] == "0px" and skin[2] == "0px", skin
         targets = row.locator(".trow-due, .trow-folder, .trow-ai")
         expect(targets).to_have_count(3)
-        assert_no_overlap(targets)          # the folder/AI pair included — #107's other half
-        assert_min_target(row.locator(".trow-folder, .trow-ai"))
+        # the folder/AI pair against each other (#107's other half) AND each
+        # of the three against `.trow-main` (the row-open target) and
+        # `.trow-status` (#110) — the pair not overlapping itself says
+        # nothing about whether it reaches past the title into main.
+        assert_no_overlap(row.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
+        # 44 wide (unchanged) x 37 tall, not the 44 square this pair used to
+        # hit (#110): the upward reach is now capped at the row's own 6px
+        # title/meta gap instead of reaching into `.trow-main`, and the 7px
+        # that caps back can't be bought from the bottom (already at the
+        # row's own padding bound) without growing every row that carries the
+        # chip — styles.css says why 37, not 44, is this pair's floor now.
+        for t in effective_rects(row.locator(".trow-folder, .trow-ai")):
+            assert t.effective.width >= 44 and t.effective.height >= 37, t
         # The date is the one target here that does NOT reach the fleet's 44px
         # floor, and deliberately: every side of it is bounded (styles.css says
         # by what), and buying the last 9px means a deeper card, which breaks
@@ -277,15 +295,17 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #74: on the phone the row's folder chip is its bare glyph with a full
-        # 44px tap surface - the ref ellipsized at 180px said nothing and its pill
-        # was a ~20px target - and the status select centres against the WHOLE row
-        # (title + meta), not the title line alone.
+        # #74: on the phone the row's folder chip is its bare glyph with a
+        # widened tap surface - the ref ellipsized at 180px said nothing and
+        # its pill was a ~20px target - and the status select centres against
+        # the WHOLE row (title + meta), not the title line alone. 44 wide by
+        # 37 tall, not a 44 square (#110 capped the upward reach at the row's
+        # own title/meta gap — styles.css says why).
         fchip = kitchen.locator(".trow-meta .chip-folder")
         expect(fchip).to_be_visible()
         expect(fchip.locator(".chip-label")).to_be_hidden()
         assert "{onedrive}/house/kitchen" in (fchip.get_attribute("aria-label") or "")
-        assert_min_target(fchip)
+        assert_min_target(fchip, 37.0)
         # One glyph size on the meta line: the folder reads no heavier than the
         # calendar or the repeat arrows beside it (round 2 of #74).
         sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
@@ -432,6 +452,17 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             expect(page.locator(".board-strip-btn").first).to_be_visible()
             assert_min_target(page.locator(".board-strip-btn"))
             assert_no_horizontal_overflow(page)
+            # #110: on Tree, the row's own left indent eats into the width
+            # Table/Board/Today have to spare, so a row's due/folder/AI trio
+            # can wrap apart there where it would not elsewhere — and a
+            # horizontal margin (the pair's own separation rule) does nothing
+            # once two of them land on different meta lines.
+            page.locator("nav.tabs .tab[data-tab='tree']").tap()
+            drift = page.locator(
+                "#paneTree .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Fix watering schedule drift$"))
+            )
+            expect(drift).to_be_visible()
+            assert_no_overlap(drift.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
             context.close()
     finally:
         wk.close()
