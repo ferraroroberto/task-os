@@ -1397,7 +1397,11 @@ a.chip:hover { text-decoration: underline; }
 .blocker-form .select-native { flex: 1 1 auto; min-width: 0; }
 .blocker-form .button-surface { white-space: nowrap; flex: none; }
 .comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
-.comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; }
+/* `align-content` centres the text in the two-row box instead of parking it
+   against the top edge, so the placeholder reads level with the Send button
+   beside it. `safe` keeps the first line reachable once the comment grows past
+   the box: centred overflow would push the top out of the scroll area. */
+.comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; align-content: safe center; }
 /* Send matches the Description "Edit" button (ghost tier, same metrics). */
 .comment-send { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
 .comment-list { display: flex; flex-direction: column; }
