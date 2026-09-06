@@ -977,13 +977,23 @@ a.chip:hover { text-decoration: underline; }
   }
   .trow-meta .trow-folder .chip-label,
   .trow-meta .trow-ai .chip-label { display: none; }
-  /* 44x44 measured on the live rows: the glyph is 18px, so -13px each way.
-     That leaves ~5px above the row's bottom edge - the widened target must
-     stay inside this card, never reach into the next one. */
+  /* Not -13px on every side any more (#110): a symmetric -13px top reached
+     7px past the row's 6px title/meta gap and into `.trow-main` — which is
+     the row-open target, so a tap meant for the glyph could open the task
+     instead. Top is capped at -6px, the same bound the due chip's own top
+     obeys (below). Bottom stays at -13px, its own bound — the row's own
+     bottom padding — same as before. That yields 44 wide (untouched) by
+     37 tall (18 glyph + 6 + 13), short of the 44 square this pair used to
+     hit: buying the other 7px back would mean growing the glyph's own box,
+     which grows every row that carries it (no `row-gap` slack to spend it
+     from — see the wrap rule below, which already spends what there is).
+     Two contracts, one row, same call the due chip already made below: the
+     density budget wins, and 37 is still 2x the naked 18px glyph and well
+     past WCAG 2.5.8's 24px floor. */
   .trow-meta .trow-folder::before,
-  .trow-meta .trow-ai::before { content: ""; position: absolute; inset: -13px; }
+  .trow-meta .trow-ai::before { content: ""; position: absolute; inset: -6px -13px -13px; }
   /* …which is why these two are exempt from the desktop chip-height cap: the
-     -13px inset needs the full 18px glyph box to reach the 44px floor. */
+     -13px inset needs the full 18px glyph box to reach the height above. */
   .trow-meta .trow-folder,
   .trow-meta .trow-ai { height: 18px; }
   .trow-meta .trow-folder .icon,
@@ -1020,6 +1030,28 @@ a.chip:hover { text-decoration: underline; }
      wins, because it is the one this app chose for itself. Raise the budget
      first if this is ever to become a 44px target. */
   .trow-meta button.trow-due::before { inset: -6px -4px -13px; }
+  /* The margins above only separate targets that land on the SAME meta line;
+     a narrow line can wrap one of this pair onto its own line, and a
+     horizontal margin does nothing for two rects stacked vertically (#110).
+     Each of the three targets' facing edges is -13px (bottom) or -6px (top),
+     so two of them on adjacent wrapped lines need 13 + 6 = 19px between the
+     lines to stay clear of each other whichever one wraps on top. `~` (not
+     `+`) for the due pairs: rows.js can seat priority/recurrence/starts/
+     blocked between due and folder/ai (none of them carry a `::before`, so
+     they never themselves need clearance) and the wrap can still land right
+     between due and folder/ai with one of those riding along on either side.
+     `row-gap` is one value shared by every line boundary in the container —
+     it cannot single out just the boundary that needs it — so widening it
+     also costs height on a boundary that didn't need it, whenever the row
+     wraps for some unrelated reason (an issue-ref chip, a comment count).
+     `.tree` is the only tab narrow enough (row indent eats the width the
+     other three tabs have to spare) to hit that unrelated-wrap case in the
+     seeded data, and Tree carries no ≤96px budget of its own (issue #32's
+     is a Board-row contract, story 05's own assertion) — Today/Table/Board
+     stay off this rule so their 390px density budget is never in play. */
+  .tree .trow-meta:has(.trow-due-box ~ .trow-folder),
+  .tree .trow-meta:has(.trow-due-box ~ .trow-ai),
+  .trow-meta:has(.trow-folder + .trow-ai) { row-gap: 19px; }
 }
 
 /* ------------------------------------------------------------- table */

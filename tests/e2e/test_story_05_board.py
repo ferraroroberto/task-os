@@ -856,7 +856,14 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
         # launcher-density rows (UX round 2, issue #32): every seeded row in
-        # the active column stays inside the ≤96px budget
+        # the active column stays inside the ≤96px budget. #32's own
+        # acceptance criterion names this a phone-width (390px, PHONE above)
+        # Board-row contract — not asserted at 320px (#110's geometry sweep
+        # found rows over budget there, e.g. a long title whose meta line
+        # wraps to more lines at the narrower width) and not a Tree contract
+        # either (Tree's own left indent costs it width the other tabs don't
+        # spend, so its rows run taller still — see styles.css's `.tree`
+        # wrap-clearance rule).
         heights = _col(page, "doing").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 96 for h in heights), heights
