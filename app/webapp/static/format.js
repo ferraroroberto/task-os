@@ -225,6 +225,16 @@ function shortUrl(u) {
   }
 }
 
+/** A folder ref's default label: just the last path segment (e.g.
+ *  "extraescolares" from "{onedrive}/Documentos/…/extraescolares") — the
+ *  same short-label contract shortUrl() gives web links, instead of the
+ *  full ref relying on CSS ellipsis. The full path stays in the title. */
+function shortFolderLabel(ref) {
+  const clean = String(ref || '').replace(/\/+$/, '');
+  const parts = clean.split('/');
+  return parts[parts.length - 1] || clean;
+}
+
 // ------------------------------------------------------- folder chips
 // A folder ref is a link the browser hands to the per-PC opener
 // (taskos://open?ref=…, opener/README.md). The page never resolves a ref
@@ -366,7 +376,7 @@ export function showFolderPopover(anchor, info, mode) {
 export function folderChip(ref, opts) {
   const o = opts || {};
   const info = { ref: String(ref || ''), resolved: o.resolved || null, url: o.url || null };
-  const el = chipEl('folder', o.label || info.ref, openerHref(info.ref), o.icon || null);
+  const el = chipEl('folder', o.label || shortFolderLabel(info.ref), openerHref(info.ref), o.icon || null);
   el.title = info.resolved || info.ref;
   el.dataset.ref = info.ref;
   if (info.resolved) el.dataset.resolved = info.resolved;

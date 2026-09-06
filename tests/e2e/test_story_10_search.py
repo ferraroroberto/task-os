@@ -139,7 +139,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     kitchen_hit = _task_hit(page, "Kitchen")
     expect(kitchen_hit.locator(".trow-title")).to_contain_text("Kitchen")
     expect(kitchen_hit.locator(".trow-status")).to_have_value("doing")
-    expect(kitchen_hit.locator(".trow-meta .chip-folder")).to_contain_text("{onedrive}/house/kitchen")
+    expect(kitchen_hit.locator(".trow-meta .chip-folder")).to_contain_text("kitchen")
     # folder / email / issue hits are the same row shape (#48): a title line and
     # one muted meta line, no glyphs, no buttons — the title IS the link
     folder_hit = page.locator(".search-group[data-kind='folders'] .search-hit").first
