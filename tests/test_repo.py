@@ -761,7 +761,12 @@ def test_bulk_update_surfaces_a_validation_error_per_id(conn: sqlite3.Connection
     assert {r["error"]["code"] for r in results} == {"validation_error"}
 
 
-def test_bulk_complete_rolls_recurring_and_closes_the_rest(conn: sqlite3.Connection) -> None:
+def test_bulk_complete_rolls_recurring_and_closes_the_rest(
+    conn: sqlite3.Connection, frozen: None
+) -> None:
+    # `frozen` is load-bearing, not decoration: a roll lands on the first
+    # occurrence after *both* the old due date and today, so an unpinned clock
+    # makes the expected date true only until the real today passes it.
     rolling = repo.create_task(conn, "Weekly", recurrence="weekly", due="2026-08-31", status="todo")["id"]
     oneoff = repo.create_task(conn, "One-off", due="2026-08-31", status="todo")["id"]
     results = repo.bulk_update(conn, [rolling, oneoff], actor="me", complete=True)
@@ -773,7 +778,7 @@ def test_bulk_complete_rolls_recurring_and_closes_the_rest(conn: sqlite3.Connect
     assert results[1]["task"]["status"] == "done" and results[1]["task"]["done_at"]
 
 
-def test_bulk_update_collapses_duplicate_ids(conn: sqlite3.Connection) -> None:
+def test_bulk_update_collapses_duplicate_ids(conn: sqlite3.Connection, frozen: None) -> None:
     rolling = repo.create_task(conn, "Weekly", recurrence="weekly", due="2026-08-31")["id"]
     results = repo.bulk_update(conn, [rolling, rolling, rolling], complete=True)
     assert [r["id"] for r in results] == [rolling]
