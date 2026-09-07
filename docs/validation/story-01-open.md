@@ -1,6 +1,6 @@
 # Story 01 — Open the app
 
-**Issue:** #2 (Step 1/13). **Test:** `tests/e2e/test_story_01_open.py` (3 tests: API leg, desktop leg, phone leg).
+**Issue:** #2 (Step 1/13). **Test:** `tests/e2e/test_story_01_open.py` (one test, three legs: API, desktop, phone).
 
 **Steps → expected**
 

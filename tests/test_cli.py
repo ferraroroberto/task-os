@@ -267,7 +267,7 @@ def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
 
 #: The one shape ``tasks mirror status --json`` emits, whatever the transport.
-STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "opener", "placeholders"}
+STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "capture", "opener", "placeholders"}
 
 
 def test_status_json_shape_is_identical_on_both_backends(run: Runner) -> None:
@@ -370,3 +370,19 @@ def test_rm_over_both_backends(run: Runner, monkeypatch: pytest.MonkeyPatch) -> 
     assert "delete?" not in err and "[y/N]" not in err      # --yes: no dialogue
     code, out, _ = run("rm", "3", "--yes", "--json")
     assert code == 1 and _json(out)["error"]["code"] == "not_found"
+
+
+def test_capture_status_over_both_backends(run: Runner) -> None:
+    """#98 — the poller's state reaches `tasks mirror status` identically
+    whether the app answers or the DB is opened directly, and an off poller
+    always says why."""
+    code, out, _ = run("mirror", "status", "--json")
+    assert code == 0
+    c = _json(out)["capture"]
+    assert set(c) == {"enabled", "reason", "source", "poll_minutes", "last_run",
+                      "last_result", "last_error", "next_run", "running"}
+    assert c["enabled"] is False and c["reason"] == "search.email_db not configured"
+
+    code, out, _ = run("mirror", "status")
+    assert code == 0
+    assert "capture  not configured — search.email_db not configured" in out

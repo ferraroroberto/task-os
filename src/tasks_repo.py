@@ -37,7 +37,11 @@ Rules enforced here (plan §04):
   FTS5 indexes and returns a snippet per hit;
 - an importer is idempotent on ``external_id`` (tasks, comments, people):
   :func:`import_task` creates with the source's own timestamps and logs ONE
-  ``imported`` row, or updates the fields that changed on a re-run.
+  ``imported`` row, or updates the fields that changed on a re-run;
+- a *capture* is idempotent on ``external_id`` too, but one-way:
+  :func:`capture_task` creates the task the first time a source offers it and
+  then never touches it again (#98) — an import reconciles, a capture only
+  ever lands.
 
 Timestamps come from ``src.clock``'s :func:`now_iso` (local time, second
 precision, offset kept), re-exported here with :func:`use_clock` and
@@ -901,6 +905,60 @@ def find_by_external_id(
     return _row(
         conn.execute(f"SELECT * FROM {table} WHERE external_id = ?", (external_id,)).fetchone()
     )
+
+
+def capture_task(
+    conn: sqlite3.Connection,
+    *,
+    external_id: str,
+    title: str,
+    actor: str,
+    **fields: Any,
+) -> tuple[dict[str, Any], str]:
+    """Land a task from a capture source, once → ``(task, "created" | "unchanged")``.
+
+    The rule behind every inbound channel (#98): flagged emails polled from the
+    archiver's index, a WhatsApp message the radar marks, anything later. It is
+    :func:`import_task`'s one-way twin — an import *reconciles* (a changed
+    source field lands on the task), a capture only ever **lands**:
+
+    - ``external_id`` already known → that task comes back untouched, with no
+      write and no activity row. Un-flagging the email, editing the title here,
+      moving the task on: none of it is undone by the next pass. A captured
+      task, once real, is yours.
+    - otherwise the task is created normally (``created`` activity, ``status``
+      ``inbox`` unless a caller says otherwise) and stamped with
+      ``external_id``.
+
+    The stamp is a second statement rather than a ``create_task`` field because
+    ``external_id`` is not a task *field* (it is not in ``_TASK_FIELDS``, so it
+    is not settable through the API or loggable as a change) — the same shape
+    :func:`import_task` uses. Two passes racing on one source id collide on the
+    v3 partial unique index; the loser reads the winner's row back and reports
+    ``unchanged``, so a retry can never double-create.
+    """
+    external_id = (external_id or "").strip()
+    if not external_id:
+        raise ValidationError("external_id is required to capture a task")
+    existing = find_by_external_id(conn, "tasks", external_id)
+    if existing is not None:
+        return get_task(conn, int(existing["id"])), "unchanged"
+
+    created = create_task(conn, title, actor=actor, **fields)
+    task_id = int(created["id"])
+    try:
+        conn.execute("UPDATE tasks SET external_id = ? WHERE id = ?", (external_id, task_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Another pass captured the same source id between the lookup and here.
+        conn.rollback()
+        delete_task(conn, task_id)
+        winner = find_by_external_id(conn, "tasks", external_id)
+        if winner is None:  # pragma: no cover — the index says one of us won
+            raise
+        return get_task(conn, int(winner["id"])), "unchanged"
+    _touched(task_id)
+    return get_task(conn, task_id), "created"
 
 
 def import_task(

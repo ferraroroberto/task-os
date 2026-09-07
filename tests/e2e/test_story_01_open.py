@@ -63,9 +63,21 @@ def _stored_theme(page: Page) -> str | None:
     return page.evaluate("localStorage.getItem('task-os.theme')")
 
 
+def test_story_01_open(
+    webapp: str, browser: Browser, playwright: Playwright, shots: Path,
+) -> None:
+    """The whole story in one test — the suite is capped at 15 (CLAUDE.md), so
+    a step gets one test and walks its legs in order: the API answers, the
+    desktop opens, the phone opens."""
+    _api_leg(webapp)
+    sha = _version(webapp)["git_sha"]
+    _desktop_leg(webapp, browser, shots, sha)
+    _phone_leg(webapp, playwright, shots, sha)
+
+
 # --------------------------------------------------------------- API leg
 
-def test_healthz_and_version(webapp: str) -> None:
+def _api_leg(webapp: str) -> None:
     with urllib.request.urlopen(f"{webapp}/healthz", timeout=5) as res:
         assert res.status == 200
         assert json.loads(res.read()) == {"ok": True}
@@ -77,8 +89,7 @@ def test_healthz_and_version(webapp: str) -> None:
 
 # ----------------------------------------------------------- desktop leg
 
-def test_desktop_open_toggle_persist(webapp: str, browser: Browser, shots: Path) -> None:
-    sha = _version(webapp)["git_sha"]
+def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
@@ -116,9 +127,8 @@ def test_desktop_open_toggle_persist(webapp: str, browser: Browser, shots: Path)
 
 # ------------------------------------------------------------- phone leg
 
-def test_phone_open_pill_toggle(webapp: str, playwright: Playwright, shots: Path) -> None:
+def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> None:
     """390-wide WebKit (iOS-class): bottom pill, 44px targets, light + dark."""
-    sha = _version(webapp)["git_sha"]
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named

@@ -1,0 +1,37 @@
+# Story 21 — Capture into the Inbox (#98)
+
+**Story.** Things that need action in other channels land in the Inbox with one gesture, instead of relying on you to remember and search for them. **Flag an email** in Outlook and archive it as usual: the poller reads the archiver's index — read-only, `search.email_db`, the same file search already reads — and the flagged mail becomes an Inbox task titled with its subject, described by sender · date · flag · preview, carrying the `.msg` on the existing opener chip. **Mark a WhatsApp message** in whatsapp-radar and its thin client POSTs `/api/tasks` with the message id; the same idempotency lands it in Inbox. Both are one-way: a replay creates nothing, and clearing the flag later never takes the task away — a captured task, once real, is yours. An install that cannot capture says so with the reason on the card, never a silent "nothing flagged".
+
+## Steps and expected
+
+| # | Step | Expected |
+| --- | --- | --- |
+| 1 | Settings → *Capture into Inbox* | Card reads `on`; Flagged emails = **enabled** · every 10 min · next run; Last run = "not yet"; "Check now" enabled |
+| 2 | "Check now" | Toast "Capture: 2 flagged · 2 new task(s)"; the card flips to `checked` and Last run reads `2 flagged · 2 new` |
+| 3 | Board | Both flagged emails are Inbox rows; `GET /api/tasks?status=inbox` shows `created_by = email-archiver` on each — the activity says which channel brought it in, not a person |
+| 4 | Open one drawer (dark) | Description = `From email: <sender> · <date>` + `Flag: Follow up` + the preview; **Links** carries the `.msg` on the mail-glyph chip, whose href is the `taskos://open?ref={onedrive}/…` the per-PC opener handles |
+| 5 | Check again | `{listed: 2, created: 0, unchanged: 2}` — flagging twice is not two tasks |
+| 6 | Clear every flag in the index, check again | `listed: 0`, and **both tasks are still there** — un-flagging never deletes |
+| 7 | The radar's own call: `POST /api/tasks` with `external_id`, then the identical replay | 201 with `status: inbox`, then **200** returning the same `id`; a replay whose title drifted still returns the original untouched. Inbox count 3, not 4 |
+| 8 | Phone (390×844) → Board | The captured items are ordinary Inbox rows on the one-column board — capture adds a source, not a new row type |
+| 9 | An index from an archiver that never recorded flags | Card reads `off`; the reason names the missing column — *"the email index has no flag_status column — this needs an email-archiver build that records the Outlook follow-up flag while scanning"*; "Check now" disabled; `POST /api/capture/email/run` answers 409 `capture_disabled` with that reason |
+
+## Proof
+
+- Screenshots: [1](../screenshots/story-21-capture-1-desktop.png) (card on, nothing run yet) · [2](../screenshots/story-21-capture-2-desktop.png) (after "Check now": 2 flagged · 2 new, toast) · [3](../screenshots/story-21-capture-3-desktop.png) (Board Inbox with both) · [4](../screenshots/story-21-capture-4-desktop.png) (drawer, dark — the `.msg` chip and the description) · [5](../screenshots/story-21-capture-5-phone.png) (phone Inbox) · [6](../screenshots/story-21-capture-6-desktop.png) (pre-flag archiver: the reason on screen).
+- E2e: `tests/e2e/test_story_21_capture.py` — **two** disposable instances over the synthetic archiver index (`tests/fixtures/emails_fixture.py`, `flags=True` for the walk and `flags=False` for step 9); Chromium 1440×900 light + one dark shot, then a 390-wide touch context. Never a real `emails.db`.
+- Unit: `tests/test_capture.py` (16 tests — the four not-configured reasons, the read-only guarantee proven on the file's own bytes, what one pass lands, the `.msg` ref, the description, re-runs, one-way capture under an edit, clearing the flag, the ref-not-rowid key under an index rebuild, the racing-pass guard, the batch cap, and the service's status/`run_now`) · `tests/test_api.py` (`test_external_id_makes_the_create_idempotent`, `test_a_create_without_an_external_id_is_unchanged`, `test_capture_run_is_409_with_a_reason_when_the_poller_is_off`, `test_status_carries_the_capture_state`) · `tests/test_cli.py::test_capture_status_over_both_backends`.
+
+## Result
+
+*(filled in at ship time — see the row in `docs/validation.md`.)*
+
+## What this story does **not** cover
+
+- **The archiver end of the contract.** `flag_status` / `flag_request` do not exist in `email-archiver`'s schema yet; this repo reads them and reports a precise not-configured reason until they do (step 9 is that state). The columns are that repo's own issue — until it ships, **the email half is proven only against the synthetic fixture, never against a real flagged `.msg`**.
+- **A real Outlook flag round-trip** — flagging in Outlook, archiving through the Stream Deck button, and watching the task appear. Owner's checklist.
+- **The radar end.** whatsapp-radar's `src/task_os/client.py` already posts `external_id` (their #307); step 7 walks that exact payload shape against this API, but not the radar UI that produces it.
+
+## Deliberate limits (from the issue)
+
+Two-way state is out of scope: completing the task does nothing to the email or the message. No other channels, and no AI summarisation of the source — triage (#95) categorises once it is in Inbox.

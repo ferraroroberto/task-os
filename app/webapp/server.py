@@ -12,7 +12,7 @@ Route families (each in ``app/webapp/routers/``):
                                    grouped, unconfigured = visible; /api/search/status
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
-                                   backup, folder index + opener (Step 9); POST
+                                   backup, folder index + opener (Step 9), capture (#98); POST
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
     folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
@@ -21,6 +21,8 @@ Route families (each in ``app/webapp/routers/``):
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
                                  → the issue provider (GitHub via gh): status, sync now,
                                    the drawer's issue panel, create an issue from a task
+    capture POST /api/capture/email/run → one flagged-email pass now (#98); the
+                                   poller's own state rides /api/status's `capture`
     auth    GET /login · POST /api/login|logout — the token / password →
             cookie swap (Step 7)
 
@@ -36,12 +38,14 @@ the repo's write listener + the 2 s import watcher),
 ``src.backup.BackupScheduler`` (daily 03:00 copy + a startup copy when
 today's is missing), ``src.issue_sync.IssueSyncService`` (the forge's
 open issues → coding tasks, first pass 10 s after startup then every
-``issues.sync_minutes``) and ``src.folder_index.FolderIndexService`` (startup
-reindex when the index file is missing / older than 24 h, hourly re-check).
+``issues.sync_minutes``), ``src.folder_index.FolderIndexService`` (startup
+reindex when the index file is missing / older than 24 h, hourly re-check) and
+``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
+read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
 All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
-over the last two so the search box reads the same folder index and issue
-cache the services keep warm. The lifespan also installs the repo's folder
+over the folder-index and issue-sync services so the search box reads the same
+folder index and issue cache they keep warm. The lifespan also installs the repo's folder
 resolvers (``src.placeholders``: path + ``config.web_roots`` cloud twin, #28)
 so every task payload carries ``folder_resolved`` / ``folder_url``.
 
@@ -72,7 +76,18 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
-from app.webapp.routers import auth, folders, issues, mirror, misc, people, search, tasks, views
+from app.webapp.routers import (
+    auth,
+    capture,
+    folders,
+    issues,
+    mirror,
+    misc,
+    people,
+    search,
+    tasks,
+    views,
+)
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src import placeholders
 from src import tasks_repo as repo
@@ -81,6 +96,7 @@ from src.backup import BackupScheduler
 from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
+from src.email_capture import EmailCaptureService
 from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
@@ -172,6 +188,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.backup = BackupScheduler(config)
     app.state.issues = IssueSyncService(config)
     app.state.folders = FolderIndexService(config)
+    app.state.capture = EmailCaptureService(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:
@@ -182,6 +199,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.backup.start()
     app.state.issues.start()
     app.state.folders.start()
+    app.state.capture.start()
     try:
         yield
     finally:
@@ -189,6 +207,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.backup.stop()
         app.state.issues.stop()
         app.state.folders.stop()
+        app.state.capture.stop()
         repo.set_folder_resolver(None)
         repo.set_folder_web_resolver(None)
 
@@ -226,6 +245,7 @@ def create_app() -> FastAPI:
     app.include_router(mirror.router)
     app.include_router(issues.router)
     app.include_router(folders.router)
+    app.include_router(capture.router)
     return app
 
 

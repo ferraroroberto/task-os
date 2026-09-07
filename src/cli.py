@@ -401,11 +401,12 @@ class LocalBackend:
 
         Everything else the API returns is a property of the install, not of
         the request, so it is answered for real here: the auth config, the
-        three services, and — from this PC's filesystem and registry — the
+        four services, and — from this PC's filesystem and registry — the
         opener registration and the placeholder map.
         """
         from src import opener
         from src.backup import BackupScheduler
+        from src.email_capture import EmailCaptureService
         from src.folder_index import FolderIndexService
 
         config = load_config()
@@ -426,6 +427,11 @@ class LocalBackend:
             "mirror": self._mirror_service().status(self.conn),
             "backup": BackupScheduler(config).status(),
             "folders": folders.status(),
+            # Built but never started — offline there is no poller thread, so
+            # `running` is False and `next_run` None. Both are facts about this
+            # process, not guesses; the enabled/reason pair (does this install
+            # have a flag-carrying index?) is what the caller actually asked.
+            "capture": EmailCaptureService(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }
@@ -731,7 +737,24 @@ def fmt_status(status: dict[str, Any]) -> str:
                      + (f" · last error {b['last_error']}" if b.get("last_error") else ""))
     else:
         lines.append(f"backup   not configured — {b.get('reason') or 'unknown'}")
+    lines.append(fmt_capture_status(status.get("capture") or {}))
     return "\n".join(lines)
+
+
+def fmt_capture_status(c: dict[str, Any]) -> str:
+    """The flagged-email poller's line (#98) — off always says why."""
+    if not c.get("enabled"):
+        return f"capture  not configured — {c.get('reason') or 'unknown'}"
+    r = c.get("last_result") or {}
+    line = (f"capture  enabled · flagged emails every {c.get('poll_minutes')} min"
+            f" · last run {c.get('last_run') or '-'}"
+            f" · next {c.get('next_run') or '(app not running)'}")
+    if c.get("last_run"):
+        line += (f" · {r.get('listed', 0)} flagged · {r.get('created', 0)} new"
+                 + (f" · {len(r.get('errors') or [])} error(s)" if r.get("errors") else ""))
+    if c.get("last_error"):
+        line += f" · last error {c['last_error']}"
+    return line
 
 
 def fmt_folders_status(f: dict[str, Any]) -> str:

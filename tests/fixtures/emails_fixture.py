@@ -6,7 +6,10 @@ exercised against the real DDL, never a simplification of it. Six made-up
 emails whose ``.msg`` paths live under ``root`` (a temp dir the test picks,
 usually the same tree ``{onedrive}`` points at, so ``to_ref`` folds them onto
 the placeholder). ``fts=False`` builds the pre-FTS layout (no ``emails_fts``)
-to prove the ``LIKE`` fallback.
+to prove the ``LIKE`` fallback; ``flags=False`` builds the pre-flag layout (no
+``flag_status`` / ``flag_request``) to prove capture's not-configured reason.
+Two of the six carry a follow-up flag (:data:`FLAGGED`) — the rows task-os#98's
+capture pass turns into Inbox tasks.
 
     from tests.fixtures.emails_fixture import build_emails_db
     build_emails_db(tmp / "emails.db", root=tmp / "od")
@@ -37,7 +40,7 @@ CREATE TABLE IF NOT EXISTS emails (
     date_sent    TEXT,
     body_preview TEXT,
     file_mtime   REAL    NOT NULL,
-    indexed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    indexed_at   TEXT    NOT NULL DEFAULT (datetime('now')){flag_columns}
 );
 CREATE INDEX IF NOT EXISTS idx_emails_folder ON emails(folder_path);
 CREATE TABLE IF NOT EXISTS folders (
@@ -47,6 +50,14 @@ CREATE TABLE IF NOT EXISTS folders (
     last_updated TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 """
+
+# The follow-up flag the archiver reads off each .msg while scanning
+# (MAPI PidTagFlagStatus + PidLidFlagRequest) — task-os#98's capture contract.
+# `flags=False` builds the pre-flag layout so the "no flag_status column"
+# not-configured reason is tested against a real older-archiver shape.
+_FLAG_COLUMNS = """,
+    flag_status  INTEGER NOT NULL DEFAULT 0,
+    flag_request TEXT"""
 
 _FTS_DDL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
@@ -92,12 +103,25 @@ EMAILS: list[tuple[str, str, str, str, str, str, str]] = [
      "Order 4471: capacitive soil-moisture sensor, arriving in 3-5 days."),
 ]
 
+#: Which of the six carry an Outlook follow-up flag, and its text — the two
+#: task-os#98's capture pass is expected to land. Kept beside ``EMAILS``
+#: rather than as extra tuple columns so the rows above stay readable and
+#: anything already unpacking them keeps working.
+FLAGGED: dict[str, str] = {
+    "2026-08-10 Kitchen quotes.msg": "Follow up",
+    "2026-08-14 School forms.msg": "Reply",
+}
 
-def build_emails_db(path: Path, *, root: Path, fts: bool = True, touch_files: bool = True) -> dict[str, Any]:
+
+def build_emails_db(path: Path, *, root: Path, fts: bool = True, touch_files: bool = True,
+                    flags: bool = True) -> dict[str, Any]:
     """Create the fixture index at ``path``; the ``.msg`` paths sit under ``root``.
 
     ``touch_files`` also creates the (empty) ``.msg`` files so a hit's path
-    exists on disk. Returns ``{"path", "count", "fts", "paths"}``.
+    exists on disk. ``flags=False`` omits the two flag columns — the layout an
+    archiver build older than the flag release has, which is what task-os#98's
+    capture reports as *not configured* rather than as "no flagged emails".
+    Returns ``{"path", "count", "fts", "flags", "flagged", "paths"}``.
     """
     root = Path(root)
     path = Path(path)
@@ -108,10 +132,11 @@ def build_emails_db(path: Path, *, root: Path, fts: bool = True, touch_files: bo
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     try:
-        conn.executescript(_DDL)
+        conn.executescript(_DDL.format(flag_columns=_FLAG_COLUMNS if flags else ""))
         if fts:
             conn.executescript(_FTS_DDL)
         paths: list[str] = []
+        flagged: list[str] = []
         for rel_folder, filename, subject, sender, recipients, date_sent, body in EMAILS:
             folder = (root / rel_folder)
             if touch_files:
@@ -119,10 +144,19 @@ def build_emails_db(path: Path, *, root: Path, fts: bool = True, touch_files: bo
                 (folder / filename).touch()
             fp = str(folder / filename).replace("\\", "/")
             paths.append(fp)
+            columns = "file_path, folder_path, filename, subject, sender, recipients, date_sent, body_preview, file_mtime"
+            values: tuple[Any, ...] = (
+                fp, str(folder).replace("\\", "/"), filename, subject, sender,
+                recipients, date_sent, body, 1_700_000_000.0,
+            )
+            if flags:
+                request = FLAGGED.get(filename)
+                if request is not None:
+                    flagged.append(fp)
+                columns += ", flag_status, flag_request"
+                values += (2 if request else 0, request)
             conn.execute(
-                "INSERT INTO emails(file_path, folder_path, filename, subject, sender, recipients, date_sent, body_preview, file_mtime)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
-                (fp, str(folder).replace("\\", "/"), filename, subject, sender, recipients, date_sent, body, 1_700_000_000.0),
+                f"INSERT INTO emails({columns}) VALUES ({', '.join('?' * len(values))})", values
             )
         for rel_folder in sorted({e[0] for e in EMAILS}):
             n = sum(1 for e in EMAILS if e[0] == rel_folder)
@@ -130,7 +164,8 @@ def build_emails_db(path: Path, *, root: Path, fts: bool = True, touch_files: bo
         conn.commit()
     finally:
         conn.close()
-    return {"path": str(path), "count": len(EMAILS), "fts": fts, "paths": paths}
+    return {"path": str(path), "count": len(EMAILS), "fts": fts, "flags": flags,
+            "flagged": flagged, "paths": paths}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,9 +173,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--db", required=True)
     p.add_argument("--root", required=True, help="where the fake .msg files live")
     p.add_argument("--no-fts", action="store_true", help="omit emails_fts (LIKE fallback layout)")
+    p.add_argument("--no-flags", action="store_true",
+                   help="omit flag_status/flag_request (pre-flag archiver layout)")
     args = p.parse_args(argv)
-    r = build_emails_db(Path(args.db), root=Path(args.root), fts=not args.no_fts)
-    print(f"built {r['path']}: {r['count']} email(s), fts={r['fts']}")
+    r = build_emails_db(Path(args.db), root=Path(args.root), fts=not args.no_fts,
+                        flags=not args.no_flags)
+    print(f"built {r['path']}: {r['count']} email(s), fts={r['fts']}, "
+          f"flags={r['flags']} ({len(r['flagged'])} flagged)")
     return 0
 
 

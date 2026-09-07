@@ -14,13 +14,16 @@
  *                  drawer and the palette funnel through the same call), so
  *                  it arrives as `opts.onSyncIssues` and the status arrives
  *                  through `renderIssues(status)`.
+ *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
+ *                  issue sync this card owns its own call, because nothing
+ *                  else in the app triggers a capture pass.
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
  *   Folder opener  the per-PC opener install command + the folder index
  *                  (Step 9), with "Reindex folders now".
  *
- * ONE `GET /api/status` feeds the access, mirror/backup and opener cards
+ * ONE `GET /api/status` feeds the access, mirror/backup, opener and capture cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
@@ -36,7 +39,8 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
 
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
- * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void}} opts
+ * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
+ *          onCaptured: () => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
  *            renderIssues: (status: object|null) => void, revealCard: (key: string) => void}}
  */
@@ -64,6 +68,10 @@ export function mountSettings(opts) {
     statusIssues: document.getElementById('statusIssues'),
     statusIssuesSync: document.getElementById('statusIssuesSync'),
     issuesSyncNow: document.getElementById('issuesSyncNow'),
+    captureCardMeta: document.getElementById('captureCardMeta'),
+    statusCapture: document.getElementById('statusCapture'),
+    statusCaptureRun: document.getElementById('statusCaptureRun'),
+    captureRunNow: document.getElementById('captureRunNow'),
     searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
@@ -249,6 +257,7 @@ export function mountSettings(opts) {
         const f = body.folders;
         els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       }
+      renderCapture(body.capture);
     } catch (err) {
       // An unreachable status is its own visible state, never a stale "Loading…".
       renderAccessUnknown(err.message);
@@ -257,7 +266,66 @@ export function mountSettings(opts) {
       els.statusMirrorEvents.textContent = 'unknown — ' + err.message;
       els.mirrorCardMeta.textContent = 'unknown';
       if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
+      renderCapture(null);
     }
+  }
+
+  // ------------------------------------------------------------- capture
+  /** The flagged-email poller's half of `GET /api/status` (#98). Off always
+   *  carries its reason — an unconfigured channel is a visible state, not a
+   *  quiet nothing. `null` = the status call itself failed. */
+  function renderCapture(st) {
+    if (els.captureRunNow) els.captureRunNow.disabled = !(st && st.enabled);
+    if (!els.statusCapture) return;
+    els.statusCapture.replaceChildren();
+    els.statusCaptureRun.replaceChildren();
+    els.statusCapture.classList.remove('muted');
+    els.statusCaptureRun.classList.remove('muted');
+    if (!st) {
+      els.statusCapture.textContent = 'unknown';
+      els.statusCaptureRun.textContent = '–';
+      els.captureCardMeta.textContent = 'unknown';
+      return;
+    }
+    if (!st.enabled) {
+      els.statusCapture.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
+      els.statusCaptureRun.textContent = '–';
+      els.captureCardMeta.textContent = 'off';
+      return;
+    }
+    els.statusCapture.append(
+      statusPart(st.last_error ? 'warn' : 'ok', st.last_error ? 'error' : 'enabled'),
+      ' · every ' + st.poll_minutes + ' min',
+      st.next_run ? ' · next ' + fmtTsShort(st.next_run) : ''
+    );
+    if (st.last_error) els.statusCapture.append(' · ' + st.last_error);
+    const r = st.last_result;
+    if (!st.last_run) {
+      els.statusCaptureRun.textContent = 'not yet';
+    } else {
+      els.statusCaptureRun.append(fmtTsShort(st.last_run));
+      if (r) {
+        els.statusCaptureRun.append(
+          ' · ' + r.listed + ' flagged · ' + r.created + ' new'
+          + (r.errors && r.errors.length ? ' · ' + r.errors.length + ' error(s)' : '')
+        );
+      }
+    }
+    els.captureCardMeta.textContent = st.last_error ? 'error' : (st.last_run ? 'checked' : 'on');
+  }
+
+  function wireCaptureRunNow() {
+    if (!els.captureRunNow) return;
+    els.captureRunNow.addEventListener('click', async function () {
+      els.captureRunNow.disabled = true;
+      try {
+        const r = await api('/api/capture/email/run', { method: 'POST', body: {} });
+        toast('Capture: ' + r.listed + ' flagged · ' + r.created + ' new task(s)', 'success');
+        if (r.created) opts.onCaptured();
+      } catch (err) { toast(err.message || 'Capture failed', 'error'); }
+      els.captureRunNow.disabled = false;
+      refreshStatus();
+    });
   }
 
   // ------------------------------------------------------------ issue sync
@@ -346,6 +414,7 @@ export function mountSettings(opts) {
   wireReindex();
   wireMirrorEventsClear();
   wireIssueSyncNow();
+  wireCaptureRunNow();
 
   return {
     refreshStatus: refreshStatus,
