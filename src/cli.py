@@ -408,6 +408,7 @@ class LocalBackend:
         from src import opener
         from src.backup import BackupScheduler
         from src.email_capture import EmailCaptureService
+        from src.enrich import EnrichClient
         from src.folder_index import FolderIndexService
         from src.voice import VoiceClient
 
@@ -438,6 +439,9 @@ class LocalBackend:
             # this process can establish with or without the app (#92) — the
             # same TCP probe the webapp answers with.
             "voice": VoiceClient(config).status(),
+            # Same fact, same shape, for the text model (#147): a TCP probe
+            # this process can run whether or not the app is up.
+            "enrich": EnrichClient(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }
@@ -745,6 +749,7 @@ def fmt_status(status: dict[str, Any]) -> str:
         lines.append(f"backup   not configured — {b.get('reason') or 'unknown'}")
     lines.append(fmt_capture_status(status.get("capture") or {}))
     lines.append(fmt_voice_status(status.get("voice") or {}))
+    lines.append(fmt_enrich_status(status.get("enrich") or {}))
     return "\n".join(lines)
 
 
@@ -781,6 +786,18 @@ def fmt_voice_status(v: dict[str, Any]) -> str:
         live = "live transcript off"
     return (f"voice    reachable · {serving} · {live} · {v.get('url')}"
             + (f" · checked {v['checked_at']}" if v.get("checked_at") else ""))
+
+
+def fmt_enrich_status(e: dict[str, Any]) -> str:
+    """The text model's line (#147) — which model, or why there is none.
+
+    Off is never silent: a spoken line still becomes a task, it just keeps
+    the deterministic parse, and this is where you find out that is what you
+    have been getting."""
+    if not e.get("enabled"):
+        return f"enrich   off — {e.get('reason') or 'unknown'}"
+    return (f"enrich   reachable · {e.get('model')} · {e.get('url')}"
+            + (f" · checked {e['checked_at']}" if e.get("checked_at") else ""))
 
 
 def fmt_folders_status(f: dict[str, Any]) -> str:

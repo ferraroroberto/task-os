@@ -148,7 +148,7 @@ export function createQuickAdd(dialog, opts) {
   input.addEventListener('input', function () {
     // Typing over a partial makes it yours: it stops being provisional the
     // moment you edit it, whatever the recorder does next.
-    input.classList.remove('is-dictating');
+    input.classList.remove('is-dictating', 'is-enriching');
     submit.disabled = !input.value.trim();
     window.clearTimeout(timer);
     timer = window.setTimeout(parseNow, PARSE_DEBOUNCE_MS);
@@ -264,6 +264,35 @@ export function createQuickAdd(dialog, opts) {
   // both, so a spoken line costs one round trip, not two. Partials carry no
   // parse on purpose: a due date appearing and moving while the sentence is
   // still landing is noise, so the chips and dates wait for the end.
+  // The model may replace the title and fill the description; the dates it
+  // proposes are resolved server-side from phrases it had to quote out of
+  // the transcript, so a date it invented cannot reach the form. Every
+  // failure is reported as `source: "parser"` and simply leaves the
+  // deterministic answer standing ??? losing a tidy-up must not look like a
+  // broken microphone.
+  let enrichSeq = 0;
+  async function enrich(text) {
+    const my = ++enrichSeq;
+    input.classList.add('is-enriching');
+    try {
+      const res = await api('/api/enrich', { method: 'POST', body: { text: text } });
+      if (my !== enrichSeq || !dialog.open) return;
+      if (res.source !== 'llm' || !res.title) return;   // the parser's answer stands
+      input.value = res.title;
+      submit.disabled = !res.title.trim();
+      // Only ever *fills* the description, never overwrites one you typed.
+      if (res.description && !desc.value.trim()) desc.value = res.description;
+      seq++;                            // this line is not what /api/parse saw
+      applyParse(res, res.title);
+    } catch (_) {
+      // The route answers 200 even when the model could not be reached, so
+      // this is a genuinely broken request ??? and still not worth a toast:
+      // the transcript and its parse are already on the line.
+    } finally {
+      if (my === enrichSeq) input.classList.remove('is-enriching');
+    }
+  }
+
   const voice = mountMic(mic, voiceHint, {
     onStart: function () {
       spokenPrefix = input.value;
@@ -281,6 +310,12 @@ export function createQuickAdd(dialog, opts) {
       if (line === r.text) applyParse(r.parse, line);
       else parseNow();
       input.focus();
+      // ???and then, only for a spoken line, ask the hub's light model to make
+      // a title and a description of the sentence (#147). Deliberately a
+      // second round trip rather than folded into /api/transcribe: the
+      // transcript and its parse are on screen *now*, and the tidy-up is
+      // worth ~1.5 s of waiting only because nothing is waiting on it.
+      enrich(line);
     },
     onError: function (message) {
       input.classList.remove('is-dictating');
@@ -324,6 +359,7 @@ export function createQuickAdd(dialog, opts) {
   dialog.addEventListener('close', function () {
     window.clearTimeout(timer);
     seq++;
+    enrichSeq++;                        // a late model answer has nowhere to land
     voice.cancel();                     // never leave the microphone open
     reset();
   });

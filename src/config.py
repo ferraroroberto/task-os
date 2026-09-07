@@ -119,6 +119,26 @@ class VoiceConfig:
 
 
 @dataclass(frozen=True)
+class EnrichConfig:
+    """Turning a spoken sentence into title + description (#147).
+
+    ``url``    the hub's OpenAI-shape chat endpoint. Blank = enrichment off,
+               with that as the visible reason; the transcript still lands and
+               still gets the deterministic quick-add parse.
+    ``model``  named on purpose, unlike transcription. ``agentic_light`` and
+               ``agentic_light_nothink`` are the same llama-server here and
+               both reject schema-constrained decoding (their template injects
+               a ``<think>`` prefix the grammar cannot accommodate), so the
+               JSON is asked for in the prompt and validated in
+               :mod:`src.enrich` instead.
+    """
+
+    url: str = "http://127.0.0.1:8000/v1/chat/completions"
+    model: str = "agentic_light_nothink"
+    timeout_seconds: float = 30.0
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     enabled: bool = False
     people: list[str] = field(default_factory=list)
@@ -150,6 +170,7 @@ class AppConfig:
     search: SearchConfig = field(default_factory=SearchConfig)
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
+    enrich: EnrichConfig = field(default_factory=EnrichConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -271,6 +292,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     search = _as_dict(raw.get("search"))
     capture = _as_dict(raw.get("capture"))
     voice = _as_dict(raw.get("voice"))
+    enrich = _as_dict(raw.get("enrich"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -314,6 +336,14 @@ def load_config(path: Path | None = None) -> AppConfig:
             partial_interval_seconds=_as_float(
                 voice.get("partial_interval_seconds"), VoiceConfig.partial_interval_seconds,
                 "voice.partial_interval_seconds",
+            ),
+        ),
+        enrich=EnrichConfig(
+            url=str(enrich.get("url", EnrichConfig.url) or "").strip(),
+            model=str(enrich.get("model", EnrichConfig.model) or "").strip(),
+            timeout_seconds=_as_float(
+                enrich.get("timeout_seconds"), EnrichConfig.timeout_seconds,
+                "enrich.timeout_seconds",
             ),
         ),
         team=TeamConfig(

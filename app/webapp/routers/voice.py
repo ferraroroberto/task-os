@@ -6,6 +6,9 @@
                                   not answer, 502 when it answered and refused
                                   the clip)
     POST /api/transcribe?parse=0  the same, → {text} alone
+    POST /api/enrich              {text} → the quick-add fields a light model
+                                  made of the spoken sentence, or the
+                                  deterministic parse and the reason why not
 
 ``?parse=0`` exists for the live transcript (#146): while you are still
 speaking the page re-posts its growing take every ``partial_interval_seconds``,
@@ -40,14 +43,17 @@ Voice's own status has no route of its own, for the reason capture's does not
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response
 from src import quick_add
 from src.db import get_db
+from src.enrich import enrich_line
 from src.voice import MAX_AUDIO_BYTES, VoiceError
 
 router = APIRouter(prefix="/api", tags=["voice"])
@@ -89,3 +95,43 @@ async def transcribe(
     parsed = quick_add.parse(text)
     parsed["parent"] = quick_add.resolve_parent(db, parsed["parent_ref"])
     return {"text": text, "parse": parsed}
+
+
+
+class EnrichBody(BaseModel):
+    text: str
+    today: str | None = None
+
+
+@router.post("/enrich")
+async def enrich(
+    body: EnrichBody,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> Any:
+    """The spoken sentence, split into the fields the form already has (#147).
+
+    Answers **200 whatever happens**, because there is nothing here for a
+    client to recover from: the transcript is already on the line by the time
+    this is asked, so a hub that is down, slow or answering junk means the
+    line keeps the deterministic parse — reported as ``source: "parser"``
+    with the reason — rather than an error the user reads as a broken
+    microphone. ``source`` is never omitted and never guessed: it names which
+    of the two produced what is on screen.
+
+    ``today`` pins the reference date (tests, a client in another zone), the
+    same contract ``POST /api/parse`` has.
+    """
+    today = None
+    if body.today:
+        try:
+            today = date.fromisoformat(body.today)
+        except ValueError:
+            return error_response(422, "validation_error",
+                                  f"today must be YYYY-MM-DD (got {body.today!r})")
+    client = getattr(request.app.state, "enrich", None)
+    # Blocking `urllib` again, and slower than a transcription pass at its
+    # worst — the event loop must not be the thing waiting on it.
+    out = await run_in_threadpool(enrich_line, client, body.text, today=today)
+    out["parent"] = quick_add.resolve_parent(db, out["parent_ref"])
+    return out

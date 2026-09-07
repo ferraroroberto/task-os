@@ -40,6 +40,7 @@ def write_test_config(
     transcribe_url: str = "",
     fallback_url: str = "",
     partial_interval_seconds: float | None = None,
+    enrich_url: str = "",
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
@@ -51,7 +52,9 @@ def write_test_config(
     fleet's real hub and whisper server, and a suite whose result depends on
     whether either happens to be running on the developer's machine is not a
     suite; #92/#144's tests pass fake endpoints), ``voice.partial_interval_seconds``
-    (``None`` leaves the sample's cadence; #146's tests pin it)
+    (``None`` leaves the sample's cadence; #146's tests pin it) and ``enrich.url``
+    (blank = enrichment reports not reachable; #147's tests pass a fake chat
+    endpoint)
     and, optionally, the ``placeholders`` / ``web_roots`` maps (Step 9 / #28
     tests point ``{onedrive}`` at a temp tree / a fake cloud root)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
@@ -61,6 +64,9 @@ def write_test_config(
     raw["voice"] = {"transcribe_url": transcribe_url, "fallback_url": fallback_url}
     if partial_interval_seconds is not None:
         raw["voice"]["partial_interval_seconds"] = partial_interval_seconds
+    # Blank for the same reason both voice endpoints are: a suite whose
+    # result depends on whether the fleet's hub is running is not a suite.
+    raw["enrich"] = {**raw.get("enrich", {}), "url": enrich_url}
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     if web_roots is not None:

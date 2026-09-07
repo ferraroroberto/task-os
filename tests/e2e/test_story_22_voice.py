@@ -57,6 +57,7 @@ from tests.e2e.conftest import (
     e2e_workdir,
     shot,
 )
+from tests.fixtures.chat_fake import FakeChat
 from tests.fixtures.whisper_fake import FakeWhisper
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -79,9 +80,16 @@ TITLE = "Buy a new filter for the dehumidifier"
 #: makes the live line visibly different from the final one.
 PARTIAL_HEARD = " Buy a new filter"
 PARTIAL_SPOKEN = "Buy a new filter"
+#: What the light model makes of the spoken sentence (#147). A shorter,
+#: imperative title, the rest as a description, and the due named only as a
+#: PHRASE the note actually contains ??? the model never returns a date.
+ENRICHED_TITLE = "Buy a dehumidifier filter"
+ENRICHED_DESC = "The current one needs replacing."
+
 PHONE_HEARD = "Collect the parcel tomorrow."
 PHONE_SPOKEN = "Collect the parcel tomorrow"
 PHONE_TITLE = "Collect the parcel"
+PHONE_DESC = "It is at the pickup point."
 
 #: Stands in for the microphone — a **real** `MediaStream`, because `voice.js`
 #: runs it through `createMediaStreamSource` and an AudioWorklet. A tone from
@@ -116,12 +124,14 @@ FAKE_MIC = """
 
 
 class VoiceInstance:
-    def __init__(self, base: str, whisper: FakeWhisper | None) -> None:
+    def __init__(self, base: str, whisper: FakeWhisper | None,
+                 chat: FakeChat | None = None) -> None:
         self.base = base
         self.whisper = whisper
+        self.chat = chat
 
 
-def _instance(name: str, *, transcribe_url: str) -> Iterator[str]:
+def _instance(name: str, *, transcribe_url: str, enrich_url: str = "") -> Iterator[str]:
     from tests.fixtures.seed import seed_db
 
     work = e2e_workdir(name)
@@ -129,7 +139,7 @@ def _instance(name: str, *, transcribe_url: str) -> Iterator[str]:
     seed_db(db, E2E_ANCHOR)
     cfg = write_test_config(
         work / "config.json", transcribe_url=transcribe_url,
-        partial_interval_seconds=PARTIAL_S,
+        partial_interval_seconds=PARTIAL_S, enrich_url=enrich_url,
     )
     proc, base, log = _boot(work, db, cfg)
     try:
@@ -143,9 +153,11 @@ def _instance(name: str, *, transcribe_url: str) -> Iterator[str]:
 def voice_webapp() -> Iterator[VoiceInstance]:
     """A seeded instance whose transcribe endpoint is the fake — never the
     real hub on :8000, and never the real whisper server on :8090."""
-    with FakeWhisper(text=HEARD) as whisper:
-        for base in _instance("voice", transcribe_url=whisper.url):
-            yield VoiceInstance(base, whisper)
+    with FakeWhisper(text=HEARD) as whisper, FakeChat() as chat:
+        chat.says(title=ENRICHED_TITLE, description=ENRICHED_DESC,
+                  due_phrase="next week", starts_phrase=None)
+        for base in _instance("voice", transcribe_url=whisper.url, enrich_url=chat.url):
+            yield VoiceInstance(base, whisper, chat)
 
 
 @pytest.fixture(scope="module")
@@ -236,12 +248,24 @@ def test_say_the_task(
     inst.whisper.text = HEARD
     posted_before_stop = len(inst.whisper.requests)
     mic.click()
-    expect(line).to_have_value(SPOKEN)
     expect(line).not_to_have_class(re.compile(r"is-dictating"))
     expect(dialog.locator(".quick-add-due")).to_have_value(due)
     expect(mic).not_to_have_class(re.compile(r"is-recording|is-working"))
     expect(mic).to_have_attribute("aria-pressed", "false")
     expect(mic.locator("use")).to_have_attribute("href", "#i-mic")
+    # ???and the light model then tidies the sentence (#147): a shorter title,
+    # the rest in Description. The date it named was a PHRASE out of the
+    # transcript, resolved by src/dates ??? so the Due field does not move.
+    #
+    # The raw transcript is on the line first and this replaces it; that
+    # intermediate state is not asserted here because asserting it would be a
+    # race. What it is worth proving is what happens when the model *cannot*
+    # answer ??? done a few lines below, where the answer is not transient.
+    expect(line).to_have_value(ENRICHED_TITLE)
+    expect(dialog.locator(".quick-add-desc")).to_have_value(ENRICHED_DESC)
+    expect(dialog.locator(".quick-add-due")).to_have_value(due)
+    assert inst.chat.requests[-1]["model"], "the enrichment request names a model"
+
     shot(page, shots / "story-22-voice-3-desktop.png")
 
     # The final pass is its own request, and it is the one that asked to parse.
@@ -261,11 +285,30 @@ def test_say_the_task(
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     todo = page.locator(".board-col[data-col='todo']")
-    expect(todo.locator(".trow-title", has_text=TITLE)).to_be_visible()
+    expect(todo.locator(".trow-title", has_text=ENRICHED_TITLE)).to_be_visible()
     shot(page, shots / "story-22-voice-4-desktop.png")
 
-    made = [t for t in _get(base, "/api/tasks?status=todo")["items"] if t["title"] == TITLE]
+    made = [t for t in _get(base, "/api/tasks?status=todo")["items"] if t["title"] == ENRICHED_TITLE]
     assert len(made) == 1 and made[0]["due"] == due
+
+    # The model refusing is not the microphone failing (#147). The transcript
+    # and its deterministic parse are already on the line by the time the
+    # tidy-up is asked for, so when it cannot answer they simply stand —
+    # no toast, no empty line, and no description invented from nothing.
+    inst.chat.status = 500
+    down = _open_add(page)
+    down_line = down.locator(".quick-add-input")
+    down.locator(".quick-add-mic").click()
+    expect(down.locator(".quick-add-mic")).to_have_class(re.compile(r"is-recording"))
+    expect(down_line).not_to_have_value("")
+    down.locator(".quick-add-mic").click()
+    expect(down_line).to_have_value(SPOKEN)
+    expect(down.locator(".quick-add-due")).to_have_value(due)
+    expect(down.locator(".quick-add-desc")).to_have_value("")
+    expect(page.locator(".toast-error")).to_have_count(0)
+    page.keyboard.press("Escape")
+    expect(down).to_be_hidden()
+    inst.chat.status = 200
 
     # Walking away mid-recording abandons it: the mic is released, the partial
     # in flight is aborted, and no transcript is written into a dialog that is
@@ -294,6 +337,11 @@ def test_say_the_task(
     # 5. the phone: the same gesture, through the same one endpoint — it never
     #    needs to reach the transcription server itself.
     inst.whisper.text = PHONE_HEARD
+    # The model gets its own answer for this sentence, and names the date as
+    # a phrase the note really contains — the phone leg proves the same two
+    # guards from the other end.
+    inst.chat.says(title=PHONE_TITLE, description=PHONE_DESC,
+                   due_phrase="tomorrow", starts_phrase=None)
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True)
     phone.add_init_script(FAKE_MIC)
     p: Page = phone.new_page()
@@ -306,7 +354,9 @@ def test_say_the_task(
     expect(p_dialog.locator(".quick-add-input")).to_have_value(PHONE_SPOKEN)
     shot(p, shots / "story-22-voice-5-phone.png")
     p_mic.click()
-    expect(p_dialog.locator(".quick-add-input")).to_have_value(PHONE_SPOKEN)
+    # The transcript first, then the model's tidier title over it.
+    expect(p_dialog.locator(".quick-add-input")).to_have_value(PHONE_TITLE)
+    expect(p_dialog.locator(".quick-add-desc")).to_have_value(PHONE_DESC)
     expect(p_dialog.locator(".quick-add-due")).to_have_value((E2E_ANCHOR + timedelta(days=1)).isoformat())
     p_dialog.locator(".quick-add-submit").click()
     expect(p_dialog).to_be_hidden()

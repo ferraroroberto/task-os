@@ -8,6 +8,7 @@
   "search":  { "folder_roots": ["{onedrive}/Documentos"], "email_db": "E:/automation/email-archiver/data/emails.db" },
   "capture": { "email_poll_minutes": 10 },
   "voice":   { "transcribe_url": "http://127.0.0.1:8000/v1/audio/transcriptions", "fallback_url": "http://127.0.0.1:8090/v1/audio/transcriptions", "partial_interval_seconds": 1.5 },
+  "enrich":  { "url": "http://127.0.0.1:8000/v1/chat/completions", "model": "agentic_light_nothink", "timeout_seconds": 30 },
   "team":    { "enabled": false, "people": ["Roberto Ferraro"] },
   "auth":    { "token": "", "password_hash": "" }
 }

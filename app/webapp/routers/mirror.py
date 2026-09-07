@@ -51,6 +51,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     folders = getattr(request.app.state, "folders", None)
     capture = getattr(request.app.state, "capture", None)
     voice = getattr(request.app.state, "voice", None)
+    enrich = getattr(request.app.state, "enrich", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
@@ -59,6 +60,8 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         "folders": folders.status() if folders else {"enabled": False, "reason": "folder index service not started"},
         "capture": capture.status() if capture else {"enabled": False, "reason": "capture service not started"},
         "voice": voice.status() if voice else {"enabled": False, "reason": "voice service not started"},
+        "enrich": enrich.status() if enrich
+        else {"enabled": False, "reason": "enrichment service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

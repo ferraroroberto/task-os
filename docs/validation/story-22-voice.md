@@ -75,3 +75,36 @@ Three headed walks against a disposable instance: the first two through the **re
 - **The endpoint dying mid-take.** Partials answered, then the endpoint started returning 500. The failing partials were **dropped silently** and the last good line stayed put, which is right — shouting about a dropped partial mid-sentence would be noise. The **final** pass failed loudly with the endpoint's own words (*"the hub rejected the recording (HTTP 500)"*), the button came back enabled rather than wedging, and a second take after the endpoint recovered transcribed and parsed normally (`Due 2026-09-14`).
 - **One thing that looked like a defect and was not.** A first pass at that last walk read an empty Due after the second take. The cause was the walk script, not the app: the last partial already carries the same words, so `expect(line).to_have_value(…)` was satisfied *before* the final request returned. Waiting for the recorder to leave `is-working` first showed `2026-09-14`, and an isolated two-take probe printing every `/api/transcribe` response confirmed the parse comes back with the due on both takes. Recorded because the same shape will catch the next assertion written against this screen.
 - **Determinism.** `scripts/shot_determinism.py`: **170 shots · 0 moved**. The elapsed-seconds counter this feature originally had was removed for exactly that reason — a live clock cannot be captured byte-identically, and the red stop square is what says "recording" anyway. The script's own summary printer was fixed in passing: it writes `·` and `≤`, so under the redirected stdout every gate run uses, Windows fell back to cp1252 and it crashed *after* deciding the verdict.
+
+## Live walk round 4 — the sentence becomes a title and a description (#147, 2026-09-07)
+
+Against the **real hub and the real model** (`agentic_light_nothink`), not a fixture.
+
+**The date guard, tested where it matters.** During planning the model was asked directly for *"before friday"* with today = Monday 2026-09-07 and answered `2026-09-13` — a **Sunday**. Through `POST /api/enrich`, the same sentence and the same model, live:
+
+```
+source         'llm'          model  'agentic_light_nothink'      (1.0 s)
+title          'Call plumber about leaking radiator'
+description    'I need to call the plumber about the leaking radiator in the guest
+                room before friday, and start looking into it tomorrow'
+due            '2026-09-11'   due_phrase     'before friday'      → Friday
+starts         '2026-09-08'   starts_phrase  'tomorrow'
+```
+
+The model named the *phrase*; `src/dates.py` turned it into the day. That is the whole difference between the two lines above.
+
+**Does the model actually try to invent one?** Five dateless notes, live, to find out whether the guards are theatre:
+
+| note | the model's `due_phrase` | what the app kept |
+| --- | --- | --- |
+| call the plumber about the leaking radiator in the guest room | `None` | no date |
+| urgent, sort out the car insurance renewal paperwork | **`'urgent'`** | no date |
+| buy a birthday present for my sister, she likes gardening books | `None` | no date |
+| book the dentist appointment for the kids at some point | **`'at some point'`** | no date |
+| look into replacing the bathroom extractor fan, it is noisy | `None` | no date |
+
+Twice out of five it offered something that is not a date. Both phrases *were* in the note, so the verbatim guard passed them — and `src/dates.py` refused them, which is the second guard doing the work the first cannot. Neither is redundant: the first stops a date the note never contained, the second stops words that were said but mean nothing to a calendar.
+
+**In the browser**, headed, real speech through a real `MediaStream`: the transcript landed first (`.is-enriching` visible on the line while the model worked), then the model's title replaced it — including repairing a word the transcription had truncated (`"…the dehumidity"` → `Buy a new filter for the dehumidifier`). Description stayed empty, correctly: that sentence has no detail beyond its title. Settings' **Wording** row read *reachable · agentic_light_nothink*.
+
+**The model refusing is proven in the e2e**, not just in unit tests: story 22 flips the fake chat endpoint to 500 mid-walk, records a take, and asserts the line keeps the raw transcript, the Due still fills from the deterministic parse, Description stays empty and **no error toast appears**. Losing the tidy-up has to be invisible, because the answer under it was already good.

@@ -623,10 +623,11 @@
             <span class="collapse-chevron" aria-hidden="true">›</span>
           </summary>
           <div class="collapse-body">
-            <p class="card-meta">Hold the mic on the add dialog and say the line. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
+            <p class="card-meta">Click the mic on the add dialog and talk; the words appear on the line as they are heard and settle when you click again. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
             <dl class="status-rows" id="voiceStatus" aria-live="polite">
               <div class="status-row"><dt>Transcription</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
               <div class="status-row"><dt>Endpoint</dt><dd id="statusVoiceUrl" class="muted">–</dd></div>
+              <div class="status-row"><dt>Wording</dt><dd id="statusEnrich" class="muted">Loading…</dd></div>
             </dl>
           </div>
         </details>

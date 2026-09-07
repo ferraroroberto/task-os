@@ -641,6 +641,22 @@ a.chip:hover { text-decoration: underline; }
    than italic: the line is a task title, and italics would follow it into the
    chips and the created task in the reader's head. */
 .quick-add-input.is-dictating { color: var(--muted); }
+/* The ~1.5 s while the light model is making a title and a description of the
+   sentence (#147). Nothing is blocked and nothing is at risk — the transcript
+   and its parse are already on the line — so this is a hint that something is
+   still coming, not a spinner asking you to wait: a slow accent underline that
+   simply stops. */
+.quick-add-input.is-enriching {
+  background-image: linear-gradient(90deg, var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 2px;
+  animation: quick-add-enriching 1.4s ease-in-out infinite;
+}
+@keyframes quick-add-enriching {
+  0%, 100% { background-size: 15% 2px; }
+  50% { background-size: 100% 2px; }
+}
 .quick-add-voice-hint {
   margin: 6px 0 0;
   padding: 0 4px;
@@ -1611,7 +1627,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .is-busy .icon, .quick-add-mic.is-recording { animation: none; }
+  /* `.is-enriching` keeps its underline, just still: the state still has to be
+     visible, it is the movement that is opted out of. */
+  .is-busy .icon, .quick-add-mic.is-recording, .quick-add-input.is-enriching { animation: none; }
   .task-row, .trow, .toast, .check, .quick-add-mic { transition: none; }
 }
 
