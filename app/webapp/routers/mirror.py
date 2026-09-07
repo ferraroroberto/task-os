@@ -6,6 +6,7 @@
                                folders: {enabled, roots, entries, last_indexed, indexing, …},
                                capture: {enabled, reason, source, poll_minutes, last_run,
                                last_result, last_error, next_run, running} (#98),
+                               voice: {enabled, reason, url, checked_at} (#92),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
@@ -49,6 +50,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     mirror, backup = _services(request)
     folders = getattr(request.app.state, "folders", None)
     capture = getattr(request.app.state, "capture", None)
+    voice = getattr(request.app.state, "voice", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
@@ -56,6 +58,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
         "folders": folders.status() if folders else {"enabled": False, "reason": "folder index service not started"},
         "capture": capture.status() if capture else {"enabled": False, "reason": "capture service not started"},
+        "voice": voice.status() if voice else {"enabled": False, "reason": "voice service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

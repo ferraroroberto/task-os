@@ -401,13 +401,15 @@ class LocalBackend:
 
         Everything else the API returns is a property of the install, not of
         the request, so it is answered for real here: the auth config, the
-        four services, and — from this PC's filesystem and registry — the
-        opener registration and the placeholder map.
+        four services, the voice endpoint's reachability, and — from this
+        PC's filesystem and registry — the opener registration and the
+        placeholder map.
         """
         from src import opener
         from src.backup import BackupScheduler
         from src.email_capture import EmailCaptureService
         from src.folder_index import FolderIndexService
+        from src.voice import VoiceClient
 
         config = load_config()
         folders = FolderIndexService(config)
@@ -432,6 +434,10 @@ class LocalBackend:
             # process, not guesses; the enabled/reason pair (does this install
             # have a flag-carrying index?) is what the caller actually asked.
             "capture": EmailCaptureService(config).status(),
+            # Reachability of the whisper endpoint *from this PC* is a fact
+            # this process can establish with or without the app (#92) — the
+            # same TCP probe the webapp answers with.
+            "voice": VoiceClient(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }
@@ -738,6 +744,7 @@ def fmt_status(status: dict[str, Any]) -> str:
     else:
         lines.append(f"backup   not configured — {b.get('reason') or 'unknown'}")
     lines.append(fmt_capture_status(status.get("capture") or {}))
+    lines.append(fmt_voice_status(status.get("voice") or {}))
     return "\n".join(lines)
 
 
@@ -755,6 +762,14 @@ def fmt_capture_status(c: dict[str, Any]) -> str:
     if c.get("last_error"):
         line += f" · last error {c['last_error']}"
     return line
+
+
+def fmt_voice_status(v: dict[str, Any]) -> str:
+    """The voice endpoint's line (#92) — off always says why."""
+    if not v.get("enabled"):
+        return f"voice    off — {v.get('reason') or 'unknown'}"
+    return (f"voice    reachable · {v.get('url')}"
+            + (f" · checked {v['checked_at']}" if v.get("checked_at") else ""))
 
 
 def fmt_folders_status(f: dict[str, Any]) -> str:

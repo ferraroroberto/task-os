@@ -589,6 +589,55 @@ a.chip:hover { text-decoration: underline; }
   outline: none;
 }
 .quick-add-input::placeholder { color: var(--muted); }
+/* The mic (#92) rides inside the line-1 box, on the icon-button geometry the
+   top strip's squares use, so it reads as part of the field rather than a
+   second control beside it. Recording tints it with the accent and pulses;
+   transcribing parks it muted. Disabled it stays visible and legible — the
+   reason lives in `.quick-add-voice-hint` right below, never in a tooltip
+   alone. */
+.quick-add-mic {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.quick-add-mic .icon { width: var(--icon-title); height: var(--icon-title); }
+/* Idle only. A press leaves the pointer sitting on the button, so hover is
+   true for the whole recording — without the exclusions its plain specificity
+   (0,3,0) outranks `.is-recording` (0,2,0) and the tint never appears. */
+.quick-add-mic:not(:disabled):not(.is-recording):not(.is-working):hover,
+.quick-add-mic:not(.is-recording):not(.is-working):focus-visible { color: var(--fg); background: var(--card-off); }
+/* The vendored disabled recipe (button.css): a flat card-off / line / muted
+   trio, never opacity — opacity over a solid fill blends sub-AA in one theme
+   or the other. `--line` on the glyph is what makes it read greyed next to
+   the muted `+` beside it. */
+.quick-add-mic:disabled { background: var(--card-off); color: var(--line); cursor: default; }
+.quick-add-mic.is-recording {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  animation: quick-add-mic-pulse 1.2s ease-in-out infinite;
+}
+.quick-add-mic.is-working { color: var(--accent); }
+@keyframes quick-add-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.quick-add-voice-hint {
+  margin: 6px 0 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: var(--font-caption);
+  line-height: 1.4;
+}
 .quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 0 4px; }
 .quick-add-chips:empty { display: none; }
 
@@ -1552,8 +1601,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .is-busy .icon { animation: none; }
-  .task-row, .trow, .toast, .check { transition: none; }
+  .is-busy .icon, .quick-add-mic.is-recording { animation: none; }
+  .task-row, .trow, .toast, .check, .quick-add-mic { transition: none; }
 }
 
 /* ======================================================= Step 5 surfaces */

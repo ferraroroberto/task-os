@@ -87,6 +87,19 @@ class CaptureConfig:
 
 
 @dataclass(frozen=True)
+class VoiceConfig:
+    """Voice quick-add (#92) — where a recorded phrase goes to become text.
+
+    ``whisper_url`` is the fleet's whisper-server transcription endpoint; the
+    app forwards the clip there server-side, so the phone needs nothing but
+    the HTTPS endpoint it already has. Blank = voice off, with that as the
+    visible reason in ``/api/status``, the Settings card and the mic button.
+    """
+
+    whisper_url: str = "http://127.0.0.1:8090/v1/audio/transcriptions"
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     enabled: bool = False
     people: list[str] = field(default_factory=list)
@@ -117,6 +130,7 @@ class AppConfig:
     mirror: MirrorConfig = field(default_factory=MirrorConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     capture: CaptureConfig = field(default_factory=CaptureConfig)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -216,6 +230,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         )
     search = _as_dict(raw.get("search"))
     capture = _as_dict(raw.get("capture"))
+    voice = _as_dict(raw.get("voice"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -252,6 +267,9 @@ def load_config(path: Path | None = None) -> AppConfig:
                 capture.get("email_poll_minutes"), CaptureConfig.email_poll_minutes,
                 "capture.email_poll_minutes",
             ),
+        ),
+        voice=VoiceConfig(
+            whisper_url=str(voice.get("whisper_url", VoiceConfig.whisper_url) or "").strip(),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),

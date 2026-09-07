@@ -17,13 +17,16 @@
  *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
  *                  issue sync this card owns its own call, because nothing
  *                  else in the app triggers a capture pass.
+ *   Voice          whether the fleet's whisper server is answering (#92) —
+ *                  the same status the quick-add mic reads. No button: there
+ *                  is nothing to run on demand, only somewhere to be up.
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
  *   Folder opener  the per-PC opener install command + the folder index
  *                  (Step 9), with "Reindex folders now".
  *
- * ONE `GET /api/status` feeds the access, mirror/backup, opener and capture cards
+ * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture and voice cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
@@ -72,6 +75,9 @@ export function mountSettings(opts) {
     statusCapture: document.getElementById('statusCapture'),
     statusCaptureRun: document.getElementById('statusCaptureRun'),
     captureRunNow: document.getElementById('captureRunNow'),
+    voiceCardMeta: document.getElementById('voiceCardMeta'),
+    statusVoice: document.getElementById('statusVoice'),
+    statusVoiceUrl: document.getElementById('statusVoiceUrl'),
     searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
@@ -258,6 +264,7 @@ export function mountSettings(opts) {
         els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       }
       renderCapture(body.capture);
+      renderVoice(body.voice);
     } catch (err) {
       // An unreachable status is its own visible state, never a stale "Loading…".
       renderAccessUnknown(err.message);
@@ -267,6 +274,7 @@ export function mountSettings(opts) {
       els.mirrorCardMeta.textContent = 'unknown';
       if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
       renderCapture(null);
+      renderVoice(null);
     }
   }
 
@@ -326,6 +334,36 @@ export function mountSettings(opts) {
       els.captureRunNow.disabled = false;
       refreshStatus();
     });
+  }
+
+  // --------------------------------------------------------------- voice
+  /** The whisper endpoint's half of `GET /api/status` (#92). Unreachable
+   *  always carries its reason — the same sentence the quick-add mic's hint
+   *  shows. `null` = the status call itself failed, which is "not
+   *  established", not "off". */
+  function renderVoice(st) {
+    if (!els.statusVoice) return;
+    els.statusVoice.replaceChildren();
+    els.statusVoiceUrl.replaceChildren();
+    els.statusVoice.classList.remove('muted');
+    els.statusVoiceUrl.classList.remove('muted');
+    if (!st) {
+      els.statusVoice.textContent = 'unknown';
+      els.statusVoiceUrl.textContent = '–';
+      els.voiceCardMeta.textContent = 'unknown';
+      return;
+    }
+    els.statusVoiceUrl.append(st.url ? codeEl(st.url) : 'not set');
+    if (!st.enabled) {
+      els.statusVoice.append(statusPart('off', 'not reachable'), ' — ' + (st.reason || 'unknown'));
+      els.voiceCardMeta.textContent = 'off';
+      return;
+    }
+    els.statusVoice.append(
+      statusPart('ok', 'reachable'),
+      st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
+    );
+    els.voiceCardMeta.textContent = 'on';
   }
 
   // ------------------------------------------------------------ issue sync

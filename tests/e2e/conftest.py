@@ -21,7 +21,9 @@ check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
 
 ``seeded_webapp`` boots a second disposable instance over the synthetic
 fixture (``tests/fixtures/seed.py``) for the stories that need data on
-screen (Step 4 on); ``webapp`` stays empty for story 01. ``mirrored_webapp``
+screen (Step 4 on); ``webapp`` stays empty for story 01. Story 22 boots its
+own pair over ``tests/fixtures/whisper_fake.FakeWhisper`` (never the fleet's
+real ``:8090`` — the config's ``voice.whisper_url`` is blank suite-wide). ``mirrored_webapp``
 (story 06) is a seeded instance whose ``mirror.dir`` / ``backup_dir`` are
 temp folders the test can edit and list. ``issues_webapp`` (story 08) is a
 seeded instance whose issue provider is the file-backed fake

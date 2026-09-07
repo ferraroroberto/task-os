@@ -23,6 +23,9 @@ Route families (each in ``app/webapp/routers/``):
                                    the drawer's issue panel, create an issue from a task
     capture POST /api/capture/email/run → one flagged-email pass now (#98); the
                                    poller's own state rides /api/status's `capture`
+    voice   POST /api/transcribe  → the recorded clip forwarded to the fleet's
+                                   whisper server, back as {text, parse} (#92); the
+                                   endpoint's own state rides /api/status's `voice`
     auth    GET /login · POST /api/login|logout — the token / password →
             cookie swap (Step 7)
 
@@ -42,6 +45,9 @@ open issues → coding tasks, first pass 10 s after startup then every
 reindex when the index file is missing / older than 24 h, hourly re-check) and
 ``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
 read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
+``src.voice.VoiceClient`` (``app.state.voice``) is the one exception with no
+thread to start: voice quick-add (#92) is a cached reachability probe of the
+whisper endpoint plus one forwarding POST per recording.
 All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
 over the folder-index and issue-sync services so the search box reads the same
@@ -87,6 +93,7 @@ from app.webapp.routers import (
     search,
     tasks,
     views,
+    voice,
 )
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src import placeholders
@@ -103,6 +110,7 @@ from src.logger import configure_logging
 from src.mirror import Mirror
 from src.search import build_federated
 from src.tasks_repo import RepoError
+from src.voice import VoiceClient
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +197,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.issues = IssueSyncService(config)
     app.state.folders = FolderIndexService(config)
     app.state.capture = EmailCaptureService(config)
+    # No thread and nothing to start: the voice client is a cached reachability
+    # probe plus one forwarding POST (#92).
+    app.state.voice = VoiceClient(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:
@@ -246,6 +257,7 @@ def create_app() -> FastAPI:
     app.include_router(issues.router)
     app.include_router(folders.router)
     app.include_router(capture.router)
+    app.include_router(voice.router)
     return app
 
 

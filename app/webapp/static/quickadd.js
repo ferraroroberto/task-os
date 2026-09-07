@@ -19,6 +19,11 @@
  * when a URL was given) one POST /api/tasks/{id}/links. A link that fails does
  * NOT lose the task: it is created, said so, and the link failure is its own
  * message.
+ *
+ * The mic beside line 1 (#92, behaviour in voice.js) fills that same line by
+ * voice: hold, speak, release, and the transcript lands in the input with the
+ * parse already applied — the identical preview typing it would have produced,
+ * one confirming Enter away. Nothing else about the dialog changes.
  */
 
 'use strict';
@@ -28,6 +33,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { STATUSES, linkKind, relDue } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { toast } from './toast.js';
+import { mountMic } from './voice.js';
 
 const PARSE_DEBOUNCE_MS = 180;
 const DEFAULT_STATUS = 'inbox';
@@ -51,6 +57,8 @@ export function createQuickAdd(dialog, opts) {
   const picker = dialog.querySelector('.quick-add-picker');
   const link = dialog.querySelector('.quick-add-link-url');
   const linkLabel = dialog.querySelector('.quick-add-link-label');
+  const mic = dialog.querySelector('.quick-add-mic');
+  const voiceHint = dialog.querySelector('.quick-add-voice-hint');
 
   STATUSES.forEach(function (s) {
     const o = document.createElement('option');
@@ -99,6 +107,16 @@ export function createQuickAdd(dialog, opts) {
       : '';
   }
 
+  /** Apply a parse result to the preview — the one place chips and the two
+   *  date fields are written, whether the line was typed or spoken. */
+  function applyParse(res, text) {
+    parsed = res;
+    parsed._for = text;
+    renderChips();
+    if (!touched.due) showDate(due, parsed.due, parsed.due_phrase);
+    if (!touched.starts) showDate(starts, parsed.starts, parsed.starts_phrase);
+  }
+
   async function parseNow() {
     const text = input.value.trim();
     const my = ++seq;
@@ -112,11 +130,7 @@ export function createQuickAdd(dialog, opts) {
     try {
       const res = await api('/api/parse', { method: 'POST', body: { text: text } });
       if (my !== seq) return;           // a newer keystroke superseded this parse
-      parsed = res;
-      parsed._for = text;
-      renderChips();
-      if (!touched.due) showDate(due, parsed.due, parsed.due_phrase);
-      if (!touched.starts) showDate(starts, parsed.starts, parsed.starts_phrase);
+      applyParse(res, text);
     } catch (_) {
       // Parsing is a convenience: a failed parse just means no preview.
       if (my === seq) { parsed = null; renderChips(); }
@@ -218,8 +232,25 @@ export function createQuickAdd(dialog, opts) {
     if (opts && opts.onCreated) opts.onCreated(task);
   });
 
+  // The transcript replaces line 1 and brings its own parse with it — the
+  // route returns both, so a spoken line costs one round trip, not two.
+  const voice = mountMic(mic, voiceHint, {
+    onResult: function (r) {
+      input.value = r.text;
+      submit.disabled = !r.text.trim();
+      seq++;                            // supersede any parse still in flight
+      applyParse(r.parse, r.text);
+      input.focus();
+    },
+    onError: function (message) { toast(message, 'error'); },
+    // Closing the dialog mid-recording abandons it: nothing is uploaded and
+    // no transcript arrives late into a dialog that is no longer open.
+    isLive: function () { return dialog.open; },
+  });
+
   function open() {
     if (!dialog.open) dialog.showModal();
+    voice.refresh();
     input.focus();
     input.select();
   }
@@ -250,6 +281,7 @@ export function createQuickAdd(dialog, opts) {
   dialog.addEventListener('close', function () {
     window.clearTimeout(timer);
     seq++;
+    voice.cancel();                     // never leave the microphone open
     reset();
   });
 

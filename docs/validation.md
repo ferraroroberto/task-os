@@ -42,6 +42,8 @@ Check it with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism`: two fu
 
 | 21 | [Capture into the Inbox (#98)](validation/story-21-capture.md) | `tests/e2e/test_story_21_capture.py` · `tests/test_capture.py` (16) · `tests/test_api.py` (`test_external_id_makes_the_create_idempotent`, `test_a_create_without_an_external_id_is_unchanged`, `test_capture_run_is_409_with_a_reason_when_the_poller_is_off`, `test_status_carries_the_capture_state`) · `tests/test_cli.py::test_capture_status_over_both_backends` | **partially verified** — WhatsApp half end-to-end against the radar's own payload shape; email half proven only against the synthetic fixture, because `email-archiver` does not record the flag columns yet (the not-configured state is what a real install shows today) | 2026-09-07 |
 
+| 22 | [Say the task instead of typing it (#92)](validation/story-22-voice.md) | `tests/e2e/test_story_22_voice.py` · `tests/test_voice.py` (19) · `tests/test_cli.py::test_voice_status_over_both_backends` | verified (e2e desktop light + dark and phone · unit · **live headed walk against the running whisper server**, happy path and whisper-down, which found and fixed three defects: the trailing full stop that ate the spoken due date, a 31 dB-quiet capture whisper answered with a confident hallucination, and a probe too short to tell "down" from "busy" on Windows) · **real microphone and real iPhone = owner's checklist** | 2026-09-07 |
+
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 
 ## UX rounds
@@ -72,6 +74,8 @@ Owner-feedback polish rounds after a phase closes — story-level validation (ad
 - [ ] **Second PC (Story 09):** paste the one-line install from `opener/install.txt` (or run `opener/install_opener.py`) → click a folder chip in the browser → the browser's one-time prompt → Explorer opens that PC's synced copy.
 - [ ] **Email through the opener (Story 10):** click an email hit's chip → the `.msg` opens in the mail client.
 - [ ] **Story 06:** type in a real editor window and save (the harness could only script the save).
+- [ ] **A real microphone (Story 22):** hold the mic in the add dialog on this PC and speak — every walk so far injected real speech as a real audio stream, which is not the same as a physical microphone in a real room.
+- [ ] **Voice on the real iPhone (Story 22):** the same gesture over `https://<your-host>.ts.net:8448` — iOS Safari records mp4/aac and decodes it with its own Web Audio implementation; neither has been run on the device.
 - [ ] **Real flag round-trip (Story 21):** once `email-archiver` records the flag columns — flag a mail in Outlook → archive it through the usual button → scan → the task appears in Inbox with its `.msg` chip. Until then this repo's half is proven only against the synthetic fixture.
 
 Each item's exact steps are in the story's write-up. Tick here (and in the story) when walked; the tick means "seen", not "should work".
