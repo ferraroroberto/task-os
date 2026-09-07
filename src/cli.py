@@ -770,7 +770,16 @@ def fmt_voice_status(v: dict[str, Any]) -> str:
     if not v.get("enabled"):
         return f"voice    off — {v.get('reason') or 'unknown'}"
     serving = {"hub": "hub", "fallback": "local whisper (fallback)"}.get(v.get("serving"), "unknown")
-    return (f"voice    reachable · {serving} · {v.get('url')}"
+    # The live-transcript cadence (#146): a number is "every N s", 0 is the
+    # single pass on stop. A missing key is neither, and says so.
+    interval = v.get("partial_interval_seconds")
+    if interval is None:
+        live = "live transcript unknown"
+    elif interval > 0:
+        live = f"live every {interval:g}s"
+    else:
+        live = "live transcript off"
+    return (f"voice    reachable · {serving} · {live} · {v.get('url')}"
             + (f" · checked {v['checked_at']}" if v.get("checked_at") else ""))
 
 

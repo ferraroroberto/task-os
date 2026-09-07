@@ -753,10 +753,13 @@
         </span>
         <input class="quick-add-input" type="text" enterkeyhint="done" aria-label="Task title"
                placeholder='e.g. "renew passport next friday",  "order sensor &rsaquo; garden-bot",  "#12" to nest'>
-        <!-- #92: press and hold to dictate the line above. Never a dead
-             button — when the whisper server is unreachable it stays visible,
-             disabled, and the reason is spelled out in the hint below. -->
-        <button type="button" class="quick-add-mic" aria-label="Hold to dictate" disabled>
+        <!-- #92, #146: click to dictate the line above, click again to stop —
+             the glyph becomes a stop square while recording and the words
+             appear on the line as they are heard. Never a dead button: when no
+             transcription endpoint answers it stays visible, disabled, and the
+             reason is spelled out in the hint below. -->
+        <button type="button" class="quick-add-mic" aria-label="Dictate (click to start)"
+                aria-pressed="false" disabled>
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
         </button>
       </div>

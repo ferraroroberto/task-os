@@ -21,9 +21,12 @@
  * message.
  *
  * The mic beside line 1 (#92, behaviour in voice.js) fills that same line by
- * voice: hold, speak, release, and the transcript lands in the input with the
- * parse already applied — the identical preview typing it would have produced,
- * one confirming Enter away. Nothing else about the dialog changes.
+ * voice: click to start, and the words appear **while you speak** (#146) —
+ * shown provisionally under `.is-dictating` until you click again, when the
+ * final transcript settles with the parse already applied, the identical
+ * preview typing it would have produced, one confirming Enter away. Dictation
+ * appends to whatever was already on the line rather than replacing it.
+ * Nothing else about the dialog changes.
  */
 
 'use strict';
@@ -138,6 +141,9 @@ export function createQuickAdd(dialog, opts) {
   }
 
   input.addEventListener('input', function () {
+    // Typing over a partial makes it yours: it stops being provisional the
+    // moment you edit it, whatever the recorder does next.
+    input.classList.remove('is-dictating');
     submit.disabled = !input.value.trim();
     window.clearTimeout(timer);
     timer = window.setTimeout(parseNow, PARSE_DEBOUNCE_MS);
@@ -161,6 +167,8 @@ export function createQuickAdd(dialog, opts) {
 
   function reset() {
     input.value = '';
+    input.classList.remove('is-dictating');
+    spokenPrefix = '';
     desc.value = '';
     showDate(due, '', '');
     showDate(starts, '', '');
@@ -232,17 +240,47 @@ export function createQuickAdd(dialog, opts) {
     if (opts && opts.onCreated) opts.onCreated(task);
   });
 
-  // The transcript replaces line 1 and brings its own parse with it — the
-  // route returns both, so a spoken line costs one round trip, not two.
+  // Dictation writes into line 1 *after* whatever was already typed, so
+  // pressing the mic mid-thought adds to the line instead of eating it. The
+  // prefix is fixed at the moment recording starts; every partial and the
+  // final transcript replace only the part after it.
+  let spokenPrefix = '';
+
+  function renderSpoken(text, provisional) {
+    const sep = spokenPrefix && !/\s$/.test(spokenPrefix) ? ' ' : '';
+    const line = spokenPrefix + (text ? sep + text : '');
+    input.value = line;
+    submit.disabled = !line.trim();
+    input.classList.toggle('is-dictating', !!provisional);
+    return line;
+  }
+
+  // The final transcript brings its own parse with it — the route returns
+  // both, so a spoken line costs one round trip, not two. Partials carry no
+  // parse on purpose: a due date appearing and moving while the sentence is
+  // still landing is noise, so the chips and dates wait for the end.
   const voice = mountMic(mic, voiceHint, {
-    onResult: function (r) {
-      input.value = r.text;
-      submit.disabled = !r.text.trim();
+    onStart: function () {
+      spokenPrefix = input.value;
+      window.clearTimeout(timer);
       seq++;                            // supersede any parse still in flight
-      applyParse(r.parse, r.text);
+    },
+    onPartial: function (text) { renderSpoken(text, true); },
+    onResult: function (r) {
+      const line = renderSpoken(r.text, false);
+      seq++;                            // …and any that started during the take
+      // The parse that rode back describes the *transcript*. That is the whole
+      // line only when nothing was typed before the mic was pressed; with a
+      // prefix it describes a fragment, so the line is re-parsed rather than
+      // labelled with an answer to a different question.
+      if (line === r.text) applyParse(r.parse, line);
+      else parseNow();
       input.focus();
     },
-    onError: function (message) { toast(message, 'error'); },
+    onError: function (message) {
+      input.classList.remove('is-dictating');
+      toast(message, 'error');
+    },
     // Closing the dialog mid-recording abandons it: nothing is uploaded and
     // no transcript arrives late into a dialog that is no longer open.
     isLive: function () { return dialog.open; },
