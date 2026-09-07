@@ -579,6 +579,31 @@
             </div>
           </div>
         </details>
+        <!-- Capture (#98): status from GET /api/status's `capture`,
+             ↻ = POST /api/capture/email/run. Vendored card; rows by settings.js. -->
+        <details class="card card--collapsible settings-card" id="captureCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg>
+              <h3 class="collapse-title">Capture into Inbox</h3>
+              <span class="collapse-count" id="captureCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over the archiver's index (<code>search.email_db</code>, read-only) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
+            <dl class="status-rows" id="captureStatus" aria-live="polite">
+              <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Last run</dt><dd id="statusCaptureRun" class="muted">–</dd></div>
+            </dl>
+            <div class="card-actions">
+              <button type="button" id="captureRunNow" class="button-surface" disabled>
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+                Check now
+              </button>
+            </div>
+          </div>
+        </details>
         <!-- Search (Step 10): which of the four indexes this install can query
              — from GET /api/search/status; a kind that is off says why. -->
         <details class="card card--collapsible settings-card" id="searchCard">

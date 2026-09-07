@@ -6,6 +6,7 @@
   "web_roots": {},
   "mirror":  { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" },
   "search":  { "folder_roots": ["{onedrive}/Documentos"], "email_db": "E:/automation/email-archiver/data/emails.db" },
+  "capture": { "email_poll_minutes": 10 },
   "team":    { "enabled": false, "people": ["Roberto Ferraro"] },
   "auth":    { "token": "", "password_hash": "" }
 }

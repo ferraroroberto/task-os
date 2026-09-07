@@ -1,7 +1,10 @@
 """Tasks route family — CRUD, tree, move, done, comments, links, issue, activity.
 
     GET    /api/tasks                    filtered flat list (summaries)
-    POST   /api/tasks                    create → 201
+    POST   /api/tasks                    create → 201; with an ``external_id``
+                                         (a capture source's own id, #98) the
+                                         create is idempotent — a replay gets
+                                         the same task back untouched on 200
     POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
     POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree)
@@ -59,7 +62,7 @@ import sqlite3
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.webapp.routers._helpers import resolve_actor
@@ -73,6 +76,11 @@ router = APIRouter(prefix="/api", tags=["tasks"])
 
 class TaskCreate(BaseModel):
     title: str
+    #: A capture source's own stable id for the thing this task came from
+    #: (#98) — ``email:{onedrive}/…/mail.msg``, a WhatsApp message id. Present
+    #: → the create is idempotent: the first POST makes the task (201), every
+    #: replay gets that same task back untouched (200). Absent → a plain create.
+    external_id: str | None = None
     parent_id: int | None = None
     code: str | None = None
     type: str | None = None
@@ -291,10 +299,27 @@ def list_tasks(
 
 @router.post("/tasks", status_code=201)
 def create_task(
-    body: TaskCreate, request: Request, db: sqlite3.Connection = Depends(get_db)
+    body: TaskCreate, request: Request, response: Response, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    fields = _resolve_dates(body.model_dump(exclude={"title", "actor"}, exclude_none=True))
-    return repo.create_task(db, body.title, actor=resolve_actor(request, body.actor), **fields)
+    """Create a task — idempotent when the body carries an ``external_id`` (#98).
+
+    A capture source (the email poller here, whatsapp-radar over HTTP) posts the
+    source's own id; the first call creates (**201**), a replay gets the same
+    task back **untouched** on **200**, so a retry after a timeout can never
+    make a second Inbox task. Without ``external_id`` nothing changes.
+    """
+    fields = _resolve_dates(
+        body.model_dump(exclude={"title", "actor", "external_id"}, exclude_none=True)
+    )
+    actor = resolve_actor(request, body.actor)
+    if body.external_id is None:
+        return repo.create_task(db, body.title, actor=actor, **fields)
+    task, outcome = repo.capture_task(
+        db, external_id=body.external_id, title=body.title, actor=actor, **fields
+    )
+    if outcome == "unchanged":
+        response.status_code = 200
+    return task
 
 
 @router.post("/tasks/bulk")

@@ -1010,6 +1010,9 @@ async function boot() {
   settings = mountSettings({
     onSyncIssues: syncIssues,
     onSearchStatus: function () { if (search) search.reloadStatus(); },
+    // New captured tasks land in Inbox, so the views behind Settings are stale
+    // until they reload — same follow-up an issue sync does after it creates.
+    onCaptured: function () { refreshAll(); },
   });
   // The filters are shared by every tab, so a shared URL never moves the tab
   // by itself. First visit: the phone lands on Today, the desktop on the Board.

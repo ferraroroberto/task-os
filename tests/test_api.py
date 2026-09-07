@@ -478,3 +478,56 @@ def test_done_window_over_http_orders_newest_first(seeded: TestClient) -> None:
     assert older["count"] == 1 and older["items"][0]["title"] == "Return the borrowed drill"
     bad = seeded.get("/api/tasks", params={"done_from": "last tuesday"})
     assert bad.status_code == 422 and "done_from" in bad.json()["error"]["message"]
+
+
+def test_external_id_makes_the_create_idempotent(client: TestClient) -> None:
+    """#98's WhatsApp half: whatsapp-radar POSTs a message id, so a retry after
+    a timeout must return the same task rather than making a second one."""
+    body = {
+        "title": "Bring the forms on Friday",
+        "description": "From WhatsApp: a parent",
+        "external_id": "wa:msg-4471",
+        "actor": "whatsapp-radar",
+    }
+    first = client.post("/api/tasks", json=body)
+    assert first.status_code == 201
+    task = first.json()
+    assert task["status"] == "inbox" and task["created_by"] == "whatsapp-radar"
+
+    replay = client.post("/api/tasks", json=body)
+    assert replay.status_code == 200                       # 200, not a second 201
+    assert replay.json()["id"] == task["id"]
+
+    # a replay whose fields drifted still changes nothing — capture only lands
+    drifted = client.post("/api/tasks", json={**body, "title": "Different title now"})
+    assert drifted.status_code == 200
+    assert drifted.json()["id"] == task["id"]
+    assert drifted.json()["title"] == "Bring the forms on Friday"
+
+    assert client.get("/api/tasks", params={"status": "inbox"}).json()["count"] == 1
+
+
+def test_a_create_without_an_external_id_is_unchanged(client: TestClient) -> None:
+    """The plain path keeps its old behaviour: two identical posts, two tasks."""
+    body = {"title": "Same title twice"}
+    a = client.post("/api/tasks", json=body)
+    b = client.post("/api/tasks", json=body)
+    assert (a.status_code, b.status_code) == (201, 201)
+    assert a.json()["id"] != b.json()["id"]
+    assert a.json()["external_id"] is None
+
+
+def test_capture_run_is_409_with_a_reason_when_the_poller_is_off(client: TestClient) -> None:
+    """Not-configured is a visible state, never a silent no-op (#98)."""
+    r = client.post("/api/capture/email/run")
+    assert r.status_code == 409
+    err = r.json()["error"]
+    assert err["code"] == "capture_disabled"
+    assert "search.email_db" in err["message"]
+
+
+def test_status_carries_the_capture_state(client: TestClient) -> None:
+    st = client.get("/api/status").json()
+    assert "capture" in st
+    assert st["capture"]["enabled"] is False
+    assert st["capture"]["reason"] == "search.email_db not configured"

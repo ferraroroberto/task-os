@@ -4,6 +4,8 @@
                                mirror: {enabled, dir, files, last_export, last_import,
                                errors, events, …}, backup: {enabled, dir, last_file, next_run, …},
                                folders: {enabled, roots, entries, last_indexed, indexing, …},
+                               capture: {enabled, reason, source, poll_minutes, last_run,
+                               last_result, last_error, next_run, running} (#98),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
@@ -46,12 +48,14 @@ def _services(request: Request) -> tuple[Any, Any]:
 def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     mirror, backup = _services(request)
     folders = getattr(request.app.state, "folders", None)
+    capture = getattr(request.app.state, "capture", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
         "mirror": mirror.status(db) if mirror else {"enabled": False, "reason": "mirror service not started"},
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
         "folders": folders.status() if folders else {"enabled": False, "reason": "folder index service not started"},
+        "capture": capture.status() if capture else {"enabled": False, "reason": "capture service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

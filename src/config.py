@@ -74,6 +74,19 @@ class SearchConfig:
 
 
 @dataclass(frozen=True)
+class CaptureConfig:
+    """Inbound capture (#98) — things flagged elsewhere become Inbox tasks.
+
+    The email poller reads the archiver's index through ``search.email_db``,
+    the same path the emails adapter searches — one key, one file, read-only
+    from here either way. ``email_poll_minutes`` ≤ 0 turns the poller off
+    with that as its visible reason.
+    """
+
+    email_poll_minutes: int = 10
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     enabled: bool = False
     people: list[str] = field(default_factory=list)
@@ -103,6 +116,7 @@ class AppConfig:
     web_roots: dict[str, str] = field(default_factory=dict)
     mirror: MirrorConfig = field(default_factory=MirrorConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
+    capture: CaptureConfig = field(default_factory=CaptureConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -134,6 +148,22 @@ def _as_str_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(v) for v in value]
+
+
+def _as_int(value: Any, default: int, key: str) -> int:
+    """An int from the file, or ``default`` with a warning — never a crash.
+
+    ``None`` (the key is absent) takes the default silently; a value that is
+    there but unusable is worth a line in the log, the same way an invalid
+    ``port`` is.
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.warning("⚠️ config: invalid %s %r — falling back to %d", key, value, default)
+        return default
 
 
 def _flatten_placeholders(raw: dict[str, Any]) -> dict[str, str]:
@@ -185,6 +215,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             "the backup stay off until you create it (the sample is documentation, never a folder to write into)"
         )
     search = _as_dict(raw.get("search"))
+    capture = _as_dict(raw.get("capture"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -215,6 +246,12 @@ def load_config(path: Path | None = None) -> AppConfig:
         search=SearchConfig(
             folder_roots=_as_str_list(search.get("folder_roots")),
             email_db=str(search.get("email_db", "")),
+        ),
+        capture=CaptureConfig(
+            email_poll_minutes=_as_int(
+                capture.get("email_poll_minutes"), CaptureConfig.email_poll_minutes,
+                "capture.email_poll_minutes",
+            ),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),

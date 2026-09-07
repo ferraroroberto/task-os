@@ -10,6 +10,7 @@ flowchart LR
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI)<br/>issues assigned to me"]
+    radar["whatsapp-radar · src/task_os/client.py<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
     opener["per-PC opener · opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
   end
 
@@ -17,15 +18,16 @@ flowchart LR
     authmw["src/auth.py · AuthMiddleware<br/>loopback = owner · else bearer / cookie<br/>public: /static /healthz /api/version /login"]
     misc["routers/misc<br/>/ · /healthz · /api/version<br/>/opener/opener.{cmd,ps1} (public)"]
     authr["routers/auth<br/>/login · /api/login · /api/logout<br/>access_status() → /api/status"]
-    tasksr["routers/tasks<br/>/api/tasks… (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99) · POST /api/tasks/bulk/delete (#121)<br/>/api/activity · /api/parse (quick-add)"]
+    tasksr["routers/tasks<br/>/api/tasks… (POST: external_id → idempotent capture, #98) (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99) · POST /api/tasks/bulk/delete (#121)<br/>/api/activity · /api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
     viewsr["routers/views<br/>/api/board · /api/today (+ plan group, #89)<br/>/api/plan/candidates · POST /api/plan/reorder"]
-    mirrorr["routers/mirror<br/>/api/status (+ folders · opener · placeholders)<br/>/api/mirror/export|import · GET/DELETE /api/mirror/events · /api/backup"]
+    mirrorr["routers/mirror<br/>/api/status (+ folders · capture · opener · placeholders)<br/>/api/mirror/export|import · GET/DELETE /api/mirror/events · /api/backup"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
+    capturer["routers/capture (#98)<br/>POST /api/capture/email/run"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
-    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver() · set_folder_web_resolver()"]
+    lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start() · FolderIndexService.start()<br/>· EmailCaptureService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver() · set_folder_web_resolver()"]
   end
 
   subgraph domain["Domain · src/"]
@@ -38,9 +40,10 @@ flowchart LR
     folderidx["folder_index.py<br/>FolderIndexService: roots · reindex (24 h) · search<br/>vendor/foldersearcher_core.py (verbatim)"]
     openerinfo["opener.py<br/>install.txt commands · opener.env template"]
     fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
+    capture["email_capture.py (#98)<br/>FlaggedEmailIndex: mode=ro, flag_status = 2<br/>capture_once → capture_task (external_id = email:‹ref›)<br/>one-way: a re-run never edits what it made<br/>EmailCaptureService: every capture.email_poll_minutes"]
     dates["dates.py<br/>parse_date · next_due · anchors (#112)"]
     qa["quick_add.py<br/>parse · resolve_parent"]
-    schema["schema.py<br/>MIGRATIONS v1→v10 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v11 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
@@ -67,7 +70,7 @@ flowchart LR
   end
 
   subgraph external["Other repos' data (read-only)"]
-    emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>config.search.email_db"]
+    emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>flag_status · flag_request (the archiver writes, we only read)<br/>config.search.email_db"]
   end
 
   subgraph ops["Process / proof"]
@@ -124,10 +127,18 @@ flowchart LR
   lifespan --> mirror
   lifespan --> backup
   lifespan --> issync
+  lifespan --> capture
   issync -->|"list_open_assigned · get"| issues
   issues -->|"gh subprocess"| forge
   issync -->|"create_task · update_task(actor=sync)<br/>set_issue_ref · touch_issue_ref"| repo
   cli -->|"issues sync · issue create (app down)"| issync
+  radar -->|"bearer token"| authmw
+  pwa -->|fetch| capturer
+  capturer --> capture
+  mirrorr -->|"status()"| capture
+  capture -->|"file:…?mode=ro · flag_status = 2"| emaildb
+  capture -->|"capture_task(actor=email-archiver)<br/>add_link(kind=email, url=ref)"| repo
+  capture --> placeholders
   repo -.->|"write listener → touch(ids)"| mirror
   mirror -->|"update_task(actor=md) · record_mirror_event/resolve_mirror_field"| repo
   mirror -->|"export · re-export"| mdfiles
