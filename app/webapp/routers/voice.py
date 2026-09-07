@@ -5,6 +5,10 @@
                            when the whisper server did not answer, 502 when it
                            answered and refused the clip)
 
+The one ``async def`` here reads the body off the wire and then hands the
+blocking forward to the threadpool — a transcription is the longest thing this
+app ever waits on, and it must not be waited on *by the event loop*.
+
 The body **is** the recording — no multipart, so the app needs no
 ``python-multipart`` and the browser posts its blob with one ``fetch``. The
 ``Content-Type`` header is the clip's own type and rides along to whisper
@@ -29,6 +33,7 @@ import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response
 from src import quick_add
@@ -54,8 +59,14 @@ async def transcribe(request: Request, db: sqlite3.Connection = Depends(get_db))
         )
     audio = await request.body()
     try:
-        text = client.transcribe(
-            audio, content_type=request.headers.get("content-type", "application/octet-stream"),
+        # The forward is blocking `urllib` and a cold model can take seconds
+        # (`TRANSCRIBE_TIMEOUT_S` allows two minutes). On the event loop that
+        # would freeze the *whole* app for the duration — the phone, the tray's
+        # restart probe and /healthz included — so it goes to the threadpool,
+        # which is where FastAPI already runs every `def` route in this repo.
+        text = await run_in_threadpool(
+            client.transcribe, audio,
+            content_type=request.headers.get("content-type", "application/octet-stream"),
         )
     except VoiceError as exc:
         return error_response(exc.http_status, exc.code, str(exc), exc.detail)

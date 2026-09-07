@@ -10,10 +10,11 @@
 | 2 | Press and hold it | The button tints and pulses (`.is-recording`); the microphone is open |
 | 3 | Say the line, release | Line 1 = the transcript; **Due** = next week's date, correctable; the button returns to rest. What reached the server was **16 kHz mono WAV**, converted in the browser — whisper-server decodes nothing else |
 | 4 | Enter / **Add** | An ordinary Inbox task, titled without the date phrase, due the spoken date |
-| 5 | Settings → *Voice quick-add* | `on`; Whisper server = **reachable** · checked <time>; Endpoint = the configured URL |
-| 6 | Phone (390×844), same gesture | Identical: transcript on the line, parsed due, task created. The phone talks only to this app |
-| 7 | An install with no `voice.whisper_url` | The mic is visibly disabled and *"Voice off — no voice.whisper_url in config"* sits under the field; the Settings card reads `off` with the same reason and *Endpoint: not set* |
-| 8 | Whisper server stopped, with the URL still configured | `/api/status` → `enabled: false` + the reason; the mic disabled with that reason; `POST /api/transcribe` → **503** `voice_unavailable` naming the endpoint — never a silent nothing |
+| 5 | Hold the mic, then close the dialog without releasing | The recording is **abandoned**: nothing is uploaded, and no transcript lands in a dialog that is no longer open |
+| 6 | Settings → *Voice quick-add* | `on`; Whisper server = **reachable** · checked <time>; Endpoint = the configured URL |
+| 7 | Phone (390×844), same gesture | Identical: transcript on the line, parsed due, task created. The phone talks only to this app |
+| 8 | An install with no `voice.whisper_url` | The mic is visibly disabled and *"Voice off — no voice.whisper_url in config"* sits under the field; the Settings card reads `off` with the same reason and *Endpoint: not set* |
+| 9 | Whisper server stopped, with the URL still configured | `/api/status` → `enabled: false` + the reason; the mic disabled with that reason; `POST /api/transcribe` → **503** `voice_unavailable` naming the endpoint — never a silent nothing |
 
 ## Proof
 

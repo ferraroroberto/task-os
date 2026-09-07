@@ -177,7 +177,10 @@ export async function toWav(blob) {
  * @param {HTMLButtonElement} btn   the `.quick-add-mic` button
  * @param {HTMLElement} hint        where the off-reason is spelled out
  * @param {{onResult: (r: {text: string, parse: object}) => void,
- *          onError: (message: string) => void}} opts
+ *          onError: (message: string) => void,
+ *          isLive?: () => boolean}} opts  `isLive` answers "is the surface
+ *          holding this button still open" — a recording whose dialog has
+ *          gone is dropped rather than uploaded.
  * @returns {{refresh: () => Promise<void>, cancel: () => void}}
  */
 export function mountMic(btn, hint, opts) {
@@ -187,6 +190,20 @@ export function mountMic(btn, hint, opts) {
   let held = false;         // a press is in flight (pointer or key)
   let busy = false;         // a clip is being decoded / transcribed
   let ready = false;        // the install + this browser can actually record
+  // Set by `cancel()` — the surface closed while the mic was open. Stopping
+  // the stream's tracks stops the recorder too, so its `stop` event still
+  // fires and would otherwise upload a recording the user walked away from
+  // and write the transcript into a dialog that is no longer there.
+  //
+  // The flag alone is not enough, because the two things that end a recording
+  // race: closing the dialog releases the pointer capture, so `pointercancel`
+  // can reach `stop()` (and, through it, `finish()`) *before* the dialog's own
+  // close handler calls `cancel()`. Observed, not theorised. `opts.isLive` is
+  // the caller's own answer to "is this control still on screen and wanted",
+  // and it is already false by then — so the two guards together cover either
+  // order.
+  let abandoned = false;
+  const live = opts.isLive || function () { return true; };
 
   function say(reason) {
     hint.textContent = reason ? 'Voice off — ' + reason : '';
@@ -220,6 +237,7 @@ export function mountMic(btn, hint, opts) {
   async function start() {
     if (held || busy || !ready) return;
     held = true;
+    abandoned = false;
     chunks = [];
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -252,6 +270,8 @@ export function mountMic(btn, hint, opts) {
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
     release();
     chunks = [];
+    // Nothing is uploaded for a recording that was walked away from.
+    if (abandoned || !live()) { setState(''); return; }
     if (!blob.size) { setState(''); return; }
     busy = true;
     setState('working');
@@ -316,5 +336,13 @@ export function mountMic(btn, hint, opts) {
   btn.disabled = true;
   btn.title = 'Checking the whisper server…';
   hint.hidden = true;
-  return { refresh: refresh, cancel: function () { held = false; release(); setState(''); } };
+  function cancel() {
+    abandoned = true;
+    held = false;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    release();
+    setState('');
+  }
+
+  return { refresh: refresh, cancel: cancel };
 }

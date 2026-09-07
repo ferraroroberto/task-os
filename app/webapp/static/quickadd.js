@@ -243,6 +243,9 @@ export function createQuickAdd(dialog, opts) {
       input.focus();
     },
     onError: function (message) { toast(message, 'error'); },
+    // Closing the dialog mid-recording abandons it: nothing is uploaded and
+    // no transcript arrives late into a dialog that is no longer open.
+    isLive: function () { return dialog.open; },
   });
 
   function open() {

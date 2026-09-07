@@ -226,6 +226,22 @@ def test_say_the_task(
     made = [t for t in _get(base, "/api/tasks?status=inbox")["items"] if t["title"] == TITLE]
     assert len(made) == 1 and made[0]["due"] == due
 
+    # Walking away mid-recording abandons it. Closing the dialog stops the
+    # mic's tracks, which stops the recorder too — so its `stop` event still
+    # fires, and without a guard it would upload a clip nobody asked for and
+    # write the transcript into a dialog that is no longer open.
+    posted = len(inst.whisper.requests)
+    reopened = _open_add(page)
+    reopened.locator(".quick-add-mic").hover()
+    page.mouse.down()
+    expect(reopened.locator(".quick-add-mic")).to_have_class(re.compile(r"is-recording"))
+    page.keyboard.press("Escape")
+    expect(reopened).to_be_hidden()
+    page.mouse.up()
+    page.wait_for_timeout(1500)
+    assert len(inst.whisper.requests) == posted
+    expect(page.locator("#quickAdd .quick-add-input")).to_have_value("")
+
     # Settings agrees with the button — one /api/status, two readers
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
