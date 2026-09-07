@@ -81,3 +81,17 @@ Observed = expected on both legs (2026-08-17 is a Monday, so `fri` → `2026-08-
 - [x] On screen: the transcript above, walked live in PowerShell on this build.
 - [x] Live app: `tray.bat --restart` → `/api/version` `git_sha == HEAD`, `schema_version == 2` (recorded in the PR).
 - Not verified in this step: the automatic HTTP → local fallback when the *real* `:8448` is down was proven by unit test (`test_pick_backend_falls_back_to_local_when_app_is_down`) and by the forced `--local` leg, not by stopping the live tray; no UI shows any of this yet (Step 4 brings the first task on screen).
+
+## Where a new task starts (#148, walked 2026-09-07)
+
+A task added by hand now starts in **To Do**. Inbox is the arrivals tray for what came in on its own — a flagged email, a marked WhatsApp message — so sending something you just typed there meant moving every manual task twice. One name behind it, `src/schema.py`'s `DEFAULT_STATUS`, read by `tasks_repo.create_task`, the quick-add dialog and the CLI alike, so the terminal and the UI cannot disagree about what "no status given" means.
+
+Walked headed against a disposable seeded instance, all three surfaces in one sitting:
+
+- **Quick-add:** the Status select opens on `todo`; typing *"Change the shower head"* and pressing Add put the row in the **To Do** column and **not** in Inbox (both asserted, the second only after the first had rendered — rule 2 of the capture rules).
+- **Capture:** `repo.capture_task(...)` — the very call the flagged-email poller makes — answered `outcome=created status='inbox'`, and the row appeared in the **Inbox** column. This is the guard that matters: `capture_task` names Inbox itself rather than inheriting the create default, so flipping that default cannot quietly empty the tray.
+- **CLI:** `tasks add "Descale the kettle"` → `added #53  Descale the kettle` (no status named, because it is the default) · `tasks add "Read this later" --status inbox` → `added #54  Read this later  (inbox)`.
+
+`tasks add` had **no `--status` flag at all** before this. The create default was the CLI's only status, so flipping it would have left the terminal with no way to file something for later triage; the flag was added with the change rather than after it.
+
+**One consequence, stated rather than discovered later:** [plan my day](../../README.md#plan-my-day) offers *overdue + due today + **Inbox***, so a hand-made task with no due date is no longer offered there. That is the same rule as before meeting a different default, not a regression in the rule — but it is a real narrowing of the candidate pool, and widening it to To Do would be its own change to story 15, not a side effect of this one.

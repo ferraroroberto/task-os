@@ -203,7 +203,7 @@ def test_activity_on_every_change(conn: sqlite3.Connection, frozen: None) -> Non
     tid = t["id"]
     assert _fields(t["activity"]) == [("created", None, "Renew passport")]
     repo.set_due(conn, tid, "2026-09-01", actor="me")
-    repo.set_status(conn, tid, "todo", actor="me")
+    repo.set_status(conn, tid, "doing", actor="me")   # a real move: create already made it todo
     repo.set_priority(conn, tid, "high", actor="me")
     repo.update_task(conn, tid, title="Renew passports", description="both", actor="me")
     repo.update_task(conn, tid, due="2026-09-01", actor="me")  # unchanged → no row
@@ -212,7 +212,7 @@ def test_activity_on_every_change(conn: sqlite3.Connection, frozen: None) -> Non
         ("description", "", "both"),
         ("title", "Renew passport", "Renew passports"),
         ("priority", "none", "high"),
-        ("status", "inbox", "todo"),
+        ("status", "todo", "doing"),
         ("due", None, "2026-09-01"),
         ("created", None, "Renew passport"),
     ]
@@ -328,7 +328,7 @@ def test_done_non_recurring_closes(conn: sqlite3.Connection) -> None:
     t = repo.create_task(conn, "One-off", due="2026-08-20")
     d = repo.done(conn, t["id"], actor="me")
     assert d["status"] == "done" and d["done_at"] and d["due"] == "2026-08-20"
-    assert _fields(d["activity"])[0] == ("status", "inbox", "done")
+    assert _fields(d["activity"])[0] == ("status", "todo", "done")
     assert d["id"] not in {x["id"] for x in repo.list_tasks(conn)}
     assert d["id"] in {x["id"] for x in repo.list_tasks(conn, include_closed=True)}
 
@@ -742,7 +742,7 @@ def test_bulk_update_applies_to_every_id(conn: sqlite3.Connection) -> None:
     assert all(r["ok"] for r in results)
     assert {r["task"]["status"] for r in results} == {"doing"}
     # the same activity trail a one-by-one edit would leave
-    assert _fields(repo.get_task(conn, ids[0])["activity"])[0] == ("status", "inbox", "doing")
+    assert _fields(repo.get_task(conn, ids[0])["activity"])[0] == ("status", "todo", "doing")
 
 
 def test_bulk_update_reports_the_failed_id_and_applies_the_rest(conn: sqlite3.Connection) -> None:
@@ -824,3 +824,51 @@ def test_done_window_is_local_midnight_and_newest_first(conn: sqlite3.Connection
     assert repo.set_status(conn, seeded["inbox3"], "todo")["done_at"] is None
     with pytest.raises(repo.ValidationError):
         repo.list_tasks(conn, done_from="whenever")
+
+
+def test_a_hand_made_task_starts_in_to_do(conn: sqlite3.Connection) -> None:
+    """The default is To Do, not Inbox (#148).
+
+    Inbox is the arrivals tray for what came in on its own; a task somebody
+    typed has already been triaged by the act of writing it. Every hand-driven
+    surface inherits this one default, which is what keeps the CLI and the UI
+    from disagreeing about what "no status given" means.
+    """
+    assert repo.create_task(conn, "Renew passport")["status"] == "todo"
+    assert repo.create_task(conn, "Renew passport", status="")["status"] == "todo"
+    assert repo.create_task(conn, "Renew passport", status=None)["status"] == "todo"
+    # …and saying otherwise still wins.
+    assert repo.create_task(conn, "Triage me", status="inbox")["status"] == "inbox"
+
+
+def test_a_captured_task_still_lands_in_the_inbox(conn: sqlite3.Connection) -> None:
+    """Capture names Inbox itself rather than inheriting the create default.
+
+    This is the guard that matters: flipping :data:`DEFAULT_STATUS` to ``todo``
+    must not quietly move flagged emails and marked WhatsApp messages out of
+    the tray they exist to fill. A caller with no opinion can say so as an
+    absent key, a ``None`` or a blank, and all three mean Inbox here.
+    """
+    for i, fields in enumerate([{}, {"status": None}, {"status": ""}]):
+        task, outcome = repo.capture_task(
+            conn, external_id=f"email:{i}", title="A flagged email", actor="sync", **fields,
+        )
+        assert (outcome, task["status"]) == ("created", "inbox"), fields
+    # A source that does have an opinion is still obeyed.
+    task, _ = repo.capture_task(
+        conn, external_id="email:opinion", title="Already triaged", actor="sync", status="todo",
+    )
+    assert task["status"] == "todo"
+
+
+def test_an_import_reads_a_blank_status_as_the_create_default(conn: sqlite3.Connection) -> None:
+    """``import_diff``'s "empty ≡ default" has to mean the *same* default.
+
+    It decides whether an incoming field differs from the stored row, so if it
+    kept saying "inbox" while creates said "todo", a re-import of a task with
+    no status would look like a change on every pass.
+    """
+    stored = repo.create_task(conn, "From elsewhere")
+    assert repo.import_diff(stored, status="") == {}
+    assert repo.import_diff(stored, status="todo") == {}
+    assert repo.import_diff(stored, status="inbox") == {"status": "inbox"}

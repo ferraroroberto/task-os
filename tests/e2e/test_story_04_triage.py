@@ -226,9 +226,13 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         qa.fill("renew passport next friday")
         friday = _next_friday(date.today()).isoformat()
         expect(quick_add.locator(".quick-add-due")).to_have_value(friday)
-        expect(quick_add.locator(".quick-add-status")).to_have_value("inbox")   # the default
+        # To Do is the default for a task added by hand (#148) — Inbox is for
+        # what arrives on its own, and this one is being typed.
+        expect(quick_add.locator(".quick-add-status")).to_have_value("todo")
         quick_add.locator(".quick-add-desc").fill("both passports, town hall appointment")
-        quick_add.locator(".quick-add-status").select_option("todo")
+        # Pick something the default is NOT, so this still proves the select is
+        # honoured rather than agreeing with the default by accident.
+        quick_add.locator(".quick-add-status").select_option("standby")
         quick_add.locator(".quick-add-folder").fill("{onedrive}/house")
         quick_add.locator(".quick-add-link-url").fill("https://example.com/passport-form")
         quick_add.locator(".quick-add-link-label").fill("application form")
@@ -239,7 +243,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         qa.press("Enter")
         expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
-        # the doing filter hides an inbox task — clear to see it, as a user would
+        # the doing filter hides a standby task — clear to see it, as a user would
         _open_filters(page, "tableFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
         expect(page.locator("#tableFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
@@ -249,7 +253,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         created = _get(base, f"/api/tasks/{new_id}")
         assert created["due"] == friday and created["parent_id"] is None
         # every field the dialog offered landed on the task in one go (#80)
-        assert created["status"] == "todo"
+        assert created["status"] == "standby"
         assert created["description"] == "both passports, town hall appointment"
         assert created["folder_ref"] == "{onedrive}/house"
         assert [(link_["url"], link_["label"]) for link_ in created["links"]] == [

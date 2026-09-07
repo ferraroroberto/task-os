@@ -76,7 +76,9 @@ from typing import Any
 from src.clock import now_iso, today, use_clock  # noqa: F401
 from src.dates import AnchorError, next_due, normalise_anchor
 from src.schema import (
+    CAPTURE_STATUS,
     COMMENT_ORIGINS,
+    DEFAULT_STATUS,
     ISSUE_PROVIDERS,
     LINK_KINDS,
     RECURRENCES,
@@ -426,7 +428,7 @@ def create_task(
         raise ValidationError(f"unknown task field(s): {', '.join(sorted(unknown))}")
 
     values: dict[str, Any] = {
-        "parent_id": None, "code": None, "type": "task", "status": "inbox",
+        "parent_id": None, "code": None, "type": "task", "status": DEFAULT_STATUS,
         "priority": "none", "due": None, "starts": None, "recurrence": None,
         "recurrence_anchor": None, "planned_on": None, "description": "",
         "folder_ref": None, "next_action": None, "person_id": None,
@@ -434,7 +436,7 @@ def create_task(
     values.update({k: v for k, v in fields.items() if k != "title"})
     values["title"] = title
     values["type"] = values["type"] or "task"
-    values["status"] = values["status"] or "inbox"
+    values["status"] = values["status"] or DEFAULT_STATUS
     values["priority"] = values["priority"] or "none"
     values["description"] = values["description"] or ""
     values["recurrence"] = values["recurrence"] or None
@@ -927,8 +929,9 @@ def capture_task(
       moving the task on: none of it is undone by the next pass. A captured
       task, once real, is yours.
     - otherwise the task is created normally (``created`` activity, ``status``
-      ``inbox`` unless a caller says otherwise) and stamped with
-      ``external_id``.
+      ``inbox`` unless a caller says otherwise — named here rather than
+      inherited, because :data:`DEFAULT_STATUS` is now ``todo``) and stamped
+      with ``external_id``.
 
     The stamp is a second statement rather than a ``create_task`` field because
     ``external_id`` is not a task *field* (it is not in ``_TASK_FIELDS``, so it
@@ -944,6 +947,14 @@ def capture_task(
     if existing is not None:
         return get_task(conn, int(existing["id"])), "unchanged"
 
+    # Inbox is named here rather than inherited from `create_task`'s default:
+    # that default is now "todo" (#148, what a *hand-made* task means), and the
+    # arrivals tray must not follow it. A caller that says otherwise still wins.
+    # `not fields.get(...)` rather than `setdefault`: a caller with no opinion
+    # can express it as an absent key, a `None` or a blank, and all three mean
+    # the same thing here.
+    if not fields.get("status"):
+        fields["status"] = CAPTURE_STATUS
     created = create_task(conn, title, actor=actor, **fields)
     task_id = int(created["id"])
     try:
@@ -1028,7 +1039,7 @@ def _normalise(field: str, value: Any) -> Any:
     if field == "description":
         return value or ""
     if field == "status":
-        return value or "inbox"
+        return value or DEFAULT_STATUS
     if field == "priority":
         return value or "none"
     if field == "due":

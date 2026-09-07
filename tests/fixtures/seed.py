@@ -159,7 +159,10 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         task("inbox1", "Look into a standing desk", status="inbox")
         task("inbox2", "Try the new bakery", status="inbox")
         task("inbox3", "Compare phone plans", status="inbox", due=d(12))
-        task("reading", "Reading list", type="note",
+        # Explicitly Inbox, not inherited: it belongs with the three above, and
+        # since #148 the create default is To Do. A fixture must state what it
+        # means rather than move whenever a default does.
+        task("reading", "Reading list", type="note", status="inbox",
              description="- a book on focus\n- a book on gardening\n- the garden-bot docs")
 
         # ---- deferred (#87) -----------------------------------------------

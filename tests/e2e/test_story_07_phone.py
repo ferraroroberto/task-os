@@ -265,7 +265,8 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
         added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
         expect(added).to_be_visible()
-        expect(added.locator(".trow-status")).to_have_value("inbox")   # the ONE row: status select on the line
+        # todo: the hand-made default (#148). The ONE row: status select on the line.
+        expect(added.locator(".trow-status")).to_have_value("todo")
         new_id = int(added.get_attribute("data-id"))
         detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
         assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
