@@ -32,7 +32,7 @@ most likely to break.
     docs/screenshots/story-22-voice-2-desktop.png   recording: red stop square,
                                                     the partial already on the line
     docs/screenshots/story-22-voice-3-desktop.png   stopped: the transcript + its parsed due
-    docs/screenshots/story-22-voice-4-desktop.png   the spoken task in Inbox (dark)
+    docs/screenshots/story-22-voice-4-desktop.png   the spoken task in To Do (dark)
     docs/screenshots/story-22-voice-5-phone.png     the same gesture on the phone
     docs/screenshots/story-22-voice-6-desktop.png   no endpoint: the reason on the button
     docs/screenshots/story-22-voice-7-desktop.png   no endpoint: the reason in Settings
@@ -254,16 +254,17 @@ def test_say_the_task(
     assert int.from_bytes(sent["file"][24:28], "little") == 16000
     assert int.from_bytes(sent["file"][22:24], "little") == 1
 
-    # 4. one Enter and it is a real Inbox task, with the date it was spoken with
+    # 4. one Enter and it is a real task, in **To Do** ??? a spoken task is a
+    #    hand-made one (#148); Inbox is for what arrives on its own.
     dialog.locator(".quick-add-submit").click()
     expect(dialog).to_be_hidden()
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    inbox = page.locator(".board-col[data-col='inbox']")
-    expect(inbox.locator(".trow-title", has_text=TITLE)).to_be_visible()
+    todo = page.locator(".board-col[data-col='todo']")
+    expect(todo.locator(".trow-title", has_text=TITLE)).to_be_visible()
     shot(page, shots / "story-22-voice-4-desktop.png")
 
-    made = [t for t in _get(base, "/api/tasks?status=inbox")["items"] if t["title"] == TITLE]
+    made = [t for t in _get(base, "/api/tasks?status=todo")["items"] if t["title"] == TITLE]
     assert len(made) == 1 and made[0]["due"] == due
 
     # Walking away mid-recording abandons it: the mic is released, the partial
@@ -309,7 +310,7 @@ def test_say_the_task(
     expect(p_dialog.locator(".quick-add-due")).to_have_value((E2E_ANCHOR + timedelta(days=1)).isoformat())
     p_dialog.locator(".quick-add-submit").click()
     expect(p_dialog).to_be_hidden()
-    assert any(t["title"] == PHONE_TITLE for t in _get(base, "/api/tasks?status=inbox")["items"])
+    assert any(t["title"] == PHONE_TITLE for t in _get(base, "/api/tasks?status=todo")["items"])
     phone.close()
 
     # 6. the install with no transcription endpoint: the button is visibly off,

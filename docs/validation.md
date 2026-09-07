@@ -19,7 +19,7 @@ Check it with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism`: two fu
 | # | Story | Test | Result | Date |
 | --- | --- | --- | --- | --- |
 | 01 | [Open the app](validation/story-01-open.md) | `tests/e2e/test_story_01_open.py` | verified | 2026-08-17 |
-| 02 | [Add and nest from the terminal](validation/story-02-terminal.md) | `tests/test_cli.py::test_story_02_add_nest_comment_tree_due_show` · `tests/test_api.py::test_story_02_over_http` | verified | 2026-08-17 |
+| 02 | [Add and nest from the terminal](validation/story-02-terminal.md) | `tests/test_cli.py::test_story_02_add_nest_comment_tree_due_show` · `tests/test_api.py::test_story_02_over_http` · `tests/test_repo.py::test_a_hand_made_task_starts_in_to_do` · `…::test_a_captured_task_still_lands_in_the_inbox` · `tests/test_cli.py::test_cli_add_starts_in_to_do_and_can_still_say_inbox` | verified (2026-08-17) · **re-walked 2026-09-07** for #148: a hand-made task now starts in **To Do** on all three surfaces, a captured one still lands in Inbox | 2026-09-07 |
 | 03 | [Import my Notion](validation/story-03-notion-import.md) | `tests/test_import_notion.py` | verified | 2026-08-17 |
 | 04 | [Monday triage](validation/story-04-triage.md) | `tests/e2e/test_story_04_triage.py` | verified | 2026-08-17 |
 | 05 | [Board day](validation/story-05-board.md) | `tests/e2e/test_story_05_board.py` | verified | 2026-08-17 |

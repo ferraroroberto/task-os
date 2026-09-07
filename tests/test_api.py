@@ -43,7 +43,8 @@ def test_story_02_over_http(client: TestClient) -> None:
     r = client.post("/api/tasks", json={"title": "Renew passport", "due": "2026-08-21"})
     assert r.status_code == 201
     t1 = r.json()
-    assert t1["id"] == 1 and t1["due"] == "2026-08-21" and t1["status"] == "inbox"
+    # No status given ??? To Do, the hand-made default (#148); Inbox is for what arrives.
+    assert t1["id"] == 1 and t1["due"] == "2026-08-21" and t1["status"] == "todo"
 
     t2 = client.post("/api/tasks", json={"title": "Book appointment", "parent_id": 1}).json()
     assert t2["parent_id"] == 1 and t2["breadcrumb"] == [{"id": 1, "title": "Renew passport"}]
@@ -100,7 +101,7 @@ def test_move_cycle_done_and_delete(client: TestClient) -> None:
     # depend on the day the suite runs — the arithmetic itself is test_dates')
     r = client.post("/api/tasks", json={"title": "R", "recurrence": "monthly", "due": "2099-01-31"}).json()["id"]
     rolled = client.post(f"/api/tasks/{r}/done").json()
-    assert rolled["due"] == "2099-02-28" and rolled["status"] == "inbox"
+    assert rolled["due"] == "2099-02-28" and rolled["status"] == "todo"
     d = client.post(f"/api/tasks/{b}/done", json={"actor": "x"}).json()
     assert d["status"] == "done" and d["done_at"]
     assert client.get("/api/tasks").json()["count"] == 2            # A + R (B done hidden)
@@ -492,6 +493,9 @@ def test_external_id_makes_the_create_idempotent(client: TestClient) -> None:
     first = client.post("/api/tasks", json=body)
     assert first.status_code == 201
     task = first.json()
+    # Inbox, and load-bearing since #148: the *create* default is now "todo",
+    # so a capture that inherited it would silently stop filling the tray it
+    # exists for. `capture_task` names inbox itself; this is what proves it.
     assert task["status"] == "inbox" and task["created_by"] == "whatsapp-radar"
 
     replay = client.post("/api/tasks", json=body)

@@ -60,6 +60,8 @@ def _json(text: str) -> Any:
 
 def test_story_02_add_nest_comment_tree_due_show(run: Runner) -> None:
     code, out, _ = run("add", "Renew passport", "--due", "2026-08-21")
+    # The status is printed only when it is NOT the default (#148), so a plain
+    # add still reads as one line about the task, not about its status.
     assert code == 0 and out.startswith("added #1  Renew passport  (due 2026-08-21)")
     code, out, _ = run("add", "Book appointment", "--parent", "1", "--json")
     t2 = _json(out)
@@ -174,7 +176,10 @@ def test_plan_over_both_backends(run: Runner, monkeypatch: pytest.MonkeyPatch) -
     `plan ls` shows the ordered plan with the n-of-m progress line."""
     run("add", "Pay invoices", "--due", "today")     # id 1 — candidate (due today)
     run("add", "Overdue thing", "--due", "2020-01-01")  # id 2 — candidate (overdue, listed first)
-    run("add", "Inbox idea")                         # id 3 — candidate (inbox, no due, listed last)
+    # Explicitly Inbox: since #148 a plain `add` lands in To Do, and
+    # plan-my-day offers overdue + due-today + **inbox**, so this line has
+    # to say what it is testing rather than lean on the create default.
+    run("add", "Inbox idea", "--status", "inbox")                         # id 3 — candidate (inbox, no due, listed last)
     monkeypatch.setattr("sys.stdin", io.StringIO("y\ns\ntomorrow\nn\n"))
     code, out, err = run("plan", "--json")
     assert code == 0
@@ -402,3 +407,24 @@ def test_voice_status_over_both_backends(run: Runner) -> None:
     code, out, _ = run("mirror", "status")
     assert code == 0
     assert "voice    off — no voice.transcribe_url in config" in out
+
+
+def test_cli_add_starts_in_to_do_and_can_still_say_inbox(run: Runner) -> None:
+    """The terminal and the UI agree on what "no status given" means (#148).
+
+    ``tasks add`` had no ``--status`` before this, so the create default was
+    the CLI's *only* status — flipping that default to To Do would otherwise
+    have left the terminal with no way to file something for later triage.
+    """
+    code, out, _ = run("add", "Renew passport", "--json")
+    assert code == 0 and _json(out)["status"] == "todo"
+
+    code, out, _ = run("add", "Read this later", "--status", "inbox", "--json")
+    assert code == 0 and _json(out)["status"] == "inbox"
+
+    # The line only names the status when it is not the default, so the common
+    # case stays a sentence about the task.
+    code, out, _ = run("add", "Plain one")
+    assert code == 0 and "todo" not in out
+    code, out, _ = run("add", "Triage one", "--status", "inbox")
+    assert code == 0 and "inbox" in out

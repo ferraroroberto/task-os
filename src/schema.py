@@ -90,6 +90,17 @@ logger = logging.getLogger(__name__)
 
 TASK_TYPES = ("task", "coding", "note")
 TASK_STATUSES = ("inbox", "todo", "doing", "standby", "done", "cancelled")
+#: Where a task starts when nobody said (#148). **To Do**, not Inbox: Inbox is
+#: the arrivals tray for what came in on its own — a flagged email, a marked
+#: WhatsApp message — and a task you typed or spoke has already been triaged by
+#: the act of writing it. Every hand-driven surface reads this one name
+#: (``tasks_repo.create_task``, quick-add, the CLI's own formatting), so the UI
+#: and the terminal cannot disagree about what "no status given" means.
+DEFAULT_STATUS = "todo"
+#: What a capture lands in, for the reason above. ``tasks_repo.capture_task``
+#: names it explicitly rather than inheriting :data:`DEFAULT_STATUS`, so the
+#: arrivals tray does not move when the hand-made default does.
+CAPTURE_STATUS = "inbox"
 TASK_PRIORITIES = ("high", "medium", "low", "none")
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
 LINK_KINDS = ("web", "folder", "email", "issue", "ai")
@@ -99,6 +110,14 @@ ISSUE_PROVIDERS = ("github", "gitlab")
 
 def _in(values: tuple[str, ...]) -> str:
     return ", ".join(f"'{v}'" for v in values)
+
+
+# ``tasks.status`` below still reads ``DEFAULT 'inbox'`` while the application
+# default is ``todo`` (``tasks_repo.DEFAULT_STATUS``, #148). Deliberate, and not
+# drift: **no insert path ever omits ``status``** — ``create_task`` is the only
+# writer and it always supplies one — so the column default is unreachable, and
+# changing a column default in SQLite means a whole table-rebuild migration for
+# a value nothing reads. Editing a shipped migration is forbidden in any case.
 
 
 _V1 = """

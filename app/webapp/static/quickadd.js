@@ -12,8 +12,8 @@
  * fields that used to force a second trip through the drawer (#80 round 2):
  * description, due, starts (#87), status, folder (with the shared
  * folder-index picker) and one link.
- * Everything but the title is optional and empty by default — no date, status
- * inbox — so `type · Enter` is still the whole fast path.
+ * Everything but the title is optional and sensible by default ??? no date,
+ * status To Do ??? so `type ?? Enter` is still the whole fast path.
  *
  * Submit is one POST /api/tasks with every field the form holds, then (only
  * when a URL was given) one POST /api/tasks/{id}/links. A link that fails does
@@ -39,7 +39,12 @@ import { toast } from './toast.js';
 import { mountMic } from './voice.js';
 
 const PARSE_DEBOUNCE_MS = 180;
-const DEFAULT_STATUS = 'inbox';
+// To Do, not Inbox (#148): Inbox is the arrivals tray for what came in on
+// its own, and a task you are typing here has already been triaged by the
+// act of writing it. The select still opens on this, so it stays one change
+// away ??? and the server's own default (tasks_repo.DEFAULT_STATUS) is the
+// same value, so a create that omits the field agrees with this one.
+const DEFAULT_STATUS = 'todo';
 
 /**
  * @param {HTMLDialogElement} dialog  the `#quickAdd` shell (index.html)

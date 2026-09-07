@@ -32,7 +32,7 @@ flowchart LR
   end
 
   subgraph domain["Domain · src/"]
-    repo["tasks_repo.py<br/>create/update/move/done · bulk_update (#81)<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets + plan)<br/>plan_task · plan_candidates · plan_reorder (#89)<br/>write listeners (touched ids)"]
+    repo["tasks_repo.py<br/>create/update/move/done · bulk_update (#81)<br/>DEFAULT_STATUS todo — a hand-made task (#148)<br/>capture_task names inbox itself, so the tray does not move<br/>comments · links · people<br/>issue_refs · search · activity<br/>board · today_view (buckets + plan)<br/>plan_task · plan_candidates · plan_reorder (#89)<br/>write listeners (touched ids)"]
     mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict/rejected → mirror_events (#84)"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>issue_from_task: task → new issue (route + CLI)<br/>IssueSyncService: 10 s after start, every sync_minutes"]

@@ -64,7 +64,7 @@ from typing import Any
 
 from src.config import load_config
 from src.dates import DateParseError, describe_recurrence, parse_date
-from src.schema import RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
+from src.schema import DEFAULT_STATUS, RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -533,7 +533,7 @@ def pick_backend(args: argparse.Namespace) -> HttpBackend | LocalBackend:
 def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
     bits = [f"#{t['id']}", t["title"]]
     tail = []
-    if t.get("status") and t["status"] != "inbox":
+    if t.get("status") and t["status"] != DEFAULT_STATUS:
         tail.append(t["status"])
     if t.get("priority") and t["priority"] != "none":
         tail.append(f"prio {t['priority']}")
@@ -861,6 +861,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             fields["due"] = _parse_date_arg(args.due)
         if args.starts is not None:
             fields["starts"] = _parse_date_arg(args.starts)
+        if args.status:
+            fields["status"] = args.status
         if args.priority:
             fields["priority"] = args.priority
         if args.recurrence:
@@ -1094,6 +1096,10 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--parent", help="parent task id (nesting)")
     a.add_argument("--due", help="today · tomorrow · fri · next friday · in 2 weeks · YYYY-MM-DD")
     a.add_argument("--starts", help="the day it starts mattering — hidden from the working views until then")
+    a.add_argument(
+        "--status", choices=TASK_STATUSES,
+        help=f"where it starts (default {DEFAULT_STATUS}) — `inbox` for something to triage later",
+    )
     a.add_argument("--priority", choices=TASK_PRIORITIES)
     a.add_argument("--recurrence", choices=RECURRENCES)
     a.add_argument(

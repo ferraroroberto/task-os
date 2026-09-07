@@ -140,7 +140,7 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | --- | --- |
 | `GET /api/version` | `{git_sha, built_at, asset_hash, schema_version}` — the build-identity contract the restart recipe checks |
 | `GET /api/tasks?status=&parent=&project=&due=&due_from=&due_to=&type=&person=&q=&updated_since=&updated_before=&done_on=&include_closed=&limit=` (`person` repeatable / comma-separated) | filtered flat list (summaries with `child_count`, `is_project`, `issue_ref`, `person`, `breadcrumb`, `root` = top ancestor, `last_comment`, `comment_count`, `blocked`, `blocker_count`, `blocked_by`). `status` repeatable/comma (`open` = not done/cancelled — the default) and takes the pseudo-values `deferred` ([Start dates & snooze](#start-dates--snooze)) and `blocked` ([Blocked-by dependencies](#blocked-by-dependencies)); `parent=root`; `project` = descendant-of; `due` = `today` · `week` · `overdue` · a date; `updated_since` = a date (modified on/after — the filter card's *modified* window); `updated_before` = a date (last touched strictly before — the *untouched > 30/60/90 days* stale windows compute it client-side, so the wire is a plain shareable date; any write counts as a touch, sync and mirror included, so a GitHub-synced task never looks stale); `done_on` = a date (the Board's *Done today* column); `done_from` / `done_to` = dates, an inclusive window over the closing day (the [done journal](#views)'s page — with a window the list comes back **newest closing first**) |
-| `POST /api/tasks` | create → 201 (`title` + any task field; `due`, `starts` and `planned_on` accept the natural phrases below, `""` clears). Carrying an `external_id` (a capture source's own id, see [Capture into the Inbox](#capture-into-the-inbox)) makes the create **idempotent**: first call 201, every replay **200** returning that same task untouched |
+| `POST /api/tasks` | create → 201 (`title` + any task field; `due`, `starts` and `planned_on` accept the natural phrases below, `""` clears). No `status` given → **`todo`** — see [Inbox is for what arrives](#inbox-is-for-what-arrives). Carrying an `external_id` (a capture source's own id, see [Capture into the Inbox](#capture-into-the-inbox)) makes the create **idempotent**: first call 201, every replay **200** returning that same task untouched |
 | `POST /api/tasks/bulk` `{ids, status?, due?, actor?}` | one change applied to many tasks (the Board/Table selection) → `{results: [{id, ok, task} \| {id, ok:false, error}], updated, failed}`. Every id is attempted and **200 is the partial-success code** — a bad id comes back as its own failure row rather than aborting or silently dropping the batch. `status: "complete"` rolls a recurring task's due (the row select's option, in bulk); `due` takes the natural phrases, resolved once for the request, `""`/`null` clears. Refused with 422: no `ids`, neither field, `complete` together with a `due`, or an unparseable phrase |
 | `POST /api/tasks/bulk/delete` `{ids}` | delete many tasks, subtrees included (#121) → `{results: [{id, ok, deleted} \| {id, ok:false, error}], deleted, failed}` — the same per-id contract; `deleted` counts every row that went, a ticked child whose parent was deleted first reads `ok, deleted: 0` (it went with its parent) rather than a spurious not-found |
 | `GET /api/tasks/tree?root=&include_closed=` | nested forest (`children`, `depth`); closed leaves pruned by default |
@@ -178,6 +178,7 @@ Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `G
 
 ```
 tasks add "title" [--parent N] [--due <date>] [--starts <date>] [--priority high|medium|low|none]
+                  [--status inbox|todo|doing|standby|done|cancelled]   default todo
                   [--recurrence daily|weekly|monthly|quarterly|yearly]
                   [--recurrence-anchor fri | mon,tue,wed,thu,fri | day-15 | 1-sun | last-fri]
                   [--person id|name] [--desc "…"]
@@ -424,6 +425,14 @@ One box, four indexes, results grouped by kind — full width on the PC, one col
 **Command palette** — `Ctrl+K` / `⌘K` anywhere, or the ⌘ button in the header (the vendored editor-modal shell; a full-width sheet on the phone). Type to **jump to a task** (the tasks adapter, top 8: title · breadcrumb · status; `Enter` opens it); `>` lists **commands** filtered as you type: *New task* (opens the quick-add dialog), *Go to Board / Table / Tree / Today / Search / Settings*, *Filter: status inbox|todo|doing|standby|done* / *Filter: clear* (the Table), *Sync issues*, *Reindex folders*, *Export mirror*, *Open folder of current task* (emits the drawer's `taskos://` chip click), *Toggle theme*, *Sign out*. `↑↓` move, `Enter` runs, `Esc` closes.
 
 **Terminal** — `tasks search "q" [--kind emails]` prints one block per kind (unconfigured indexes on their own line) and `--json` returns the API's shape; with the app down it builds the same adapters locally (the folder index loaded from its file, the issue cache cold — local refs only, the email index read-only).
+
+## Inbox is for what arrives
+
+A task you add by hand starts in **To Do**, not Inbox — in the quick-add dialog, from `POST /api/tasks` with no `status`, and from `tasks add`. Inbox is the arrivals tray for things that came in *on their own* (see [Capture into the Inbox](#capture-into-the-inbox)): a flagged email, a marked WhatsApp message — things you have not looked at yet. Something you typed or spoke has already been triaged by the act of writing it, so sending it to Inbox would mean moving every manual task twice.
+
+One name behind all of it — `src/schema.py`'s `DEFAULT_STATUS` — so the terminal and the UI cannot disagree about what "no status given" means. Capture names `inbox` for itself rather than inheriting that default, which is what keeps the tray filling with what it is for. To file something for later triage by hand, say so: the quick-add **Status** select, or `tasks add "…" --status inbox`.
+
+One consequence worth knowing: [plan my day](#plan-my-day) offers *overdue + due today + **Inbox***, so a hand-made task with no due date is no longer offered there. That is the same rule as before, meeting a different default.
 
 ## Capture into the Inbox
 
