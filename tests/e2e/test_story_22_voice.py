@@ -10,10 +10,11 @@
 **Nothing real is recorded and nothing real is transcribed, but everything
 between them is the shipped code.** Two things are stood in for:
 
-  * the whisper server — ``tests/fixtures/whisper_fake.FakeWhisper``, a
-    loopback endpoint speaking whisper-server's shapes. The suite must never
-    depend on the fleet's ``:8090`` being up (``tests/conftest`` blanks
-    ``voice.whisper_url`` for exactly that reason);
+  * the transcription endpoint — ``tests/fixtures/whisper_fake.FakeWhisper``,
+    a loopback server speaking the OpenAI audio shape the hub and
+    whisper-server share. The suite must never depend on the fleet's hub
+    (``:8000``) or whisper server (``:8090``) being up — ``tests/conftest``
+    blanks both ``voice`` endpoints for exactly that reason;
   * the microphone — an init script replaces ``getUserMedia`` and
     ``MediaRecorder`` with ones that hand back a canned WAV tone.
 
@@ -114,13 +115,13 @@ class VoiceInstance:
         self.whisper = whisper
 
 
-def _instance(name: str, *, whisper_url: str) -> Iterator[str]:
+def _instance(name: str, *, transcribe_url: str) -> Iterator[str]:
     from tests.fixtures.seed import seed_db
 
     work = e2e_workdir(name)
     db = work / "tasks.db"
     seed_db(db, E2E_ANCHOR)
-    cfg = write_test_config(work / "config.json", whisper_url=whisper_url)
+    cfg = write_test_config(work / "config.json", transcribe_url=transcribe_url)
     proc, base, log = _boot(work, db, cfg)
     try:
         yield base
@@ -131,16 +132,17 @@ def _instance(name: str, *, whisper_url: str) -> Iterator[str]:
 
 @pytest.fixture(scope="module")
 def voice_webapp() -> Iterator[VoiceInstance]:
-    """A seeded instance whose whisper endpoint is the fake — never :8090."""
+    """A seeded instance whose transcribe endpoint is the fake — never the
+    real hub on :8000, and never the real whisper server on :8090."""
     with FakeWhisper(text=HEARD) as whisper:
-        for base in _instance("voice", whisper_url=whisper.url):
+        for base in _instance("voice", transcribe_url=whisper.url):
             yield VoiceInstance(base, whisper)
 
 
 @pytest.fixture(scope="module")
 def voiceless_webapp() -> Iterator[VoiceInstance]:
-    """The install a fresh clone has: no ``voice.whisper_url`` at all."""
-    for base in _instance("voice-off", whisper_url=""):
+    """The install a fresh clone has: no ``voice.transcribe_url`` at all."""
+    for base in _instance("voice-off", transcribe_url=""):
         yield VoiceInstance(base, None)
 
 
@@ -177,7 +179,9 @@ def test_say_the_task(
     # The install can reach a whisper server, and says so before anything is held.
     st = _get(base, "/api/status")["voice"]
     assert st["enabled"] is True and st["reason"] is None
-    assert st["url"] == inst.whisper.url
+    # The hub is the primary, and the status says so — "parakeet or the local
+    # CPU whisper?" is answerable from this one call (#144).
+    assert st["url"] == inst.whisper.url and st["serving"] == "hub"
 
     ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
     ctx.add_init_script(FAKE_MIC)
@@ -249,6 +253,7 @@ def test_say_the_task(
     card = _open_card(page, "voiceCard")
     expect(card.locator("#voiceCardMeta")).to_have_text("on")
     expect(card.locator("#statusVoice .status-ok")).to_have_text("reachable")
+    expect(card.locator("#statusVoice")).to_contain_text("hub")
     ctx.close()
 
     # 5. the phone: the same gesture, through the same one endpoint — it never
@@ -275,7 +280,7 @@ def test_say_the_task(
     # 6. the install with no whisper server: the button is visibly off, with
     #    the reason under it — never a mic that looks live and does nothing.
     off = _get(voiceless_webapp.base, "/api/status")["voice"]
-    assert off["enabled"] is False and off["reason"] == "no voice.whisper_url in config"
+    assert off["enabled"] is False and off["reason"] == "no voice.transcribe_url in config"
 
     ctx2 = browser.new_context(viewport=DESKTOP, color_scheme="light")
     ctx2.add_init_script(FAKE_MIC)
@@ -284,7 +289,7 @@ def test_say_the_task(
     d2 = _open_add(p2)
     hint = d2.locator(".quick-add-voice-hint")
     expect(hint).to_be_visible()
-    expect(hint).to_have_text("Voice off — no voice.whisper_url in config")
+    expect(hint).to_have_text("Voice off — no voice.transcribe_url in config")
     expect(d2.locator(".quick-add-mic")).to_be_disabled()
     shot(p2, shots / "story-22-voice-6-desktop.png")
     p2.keyboard.press("Escape")
@@ -294,7 +299,7 @@ def test_say_the_task(
     card2 = _open_card(p2, "voiceCard")
     expect(card2.locator("#voiceCardMeta")).to_have_text("off")
     expect(card2.locator("#statusVoice .status-off")).to_have_text("not reachable")
-    expect(card2.locator("#statusVoice")).to_contain_text("no voice.whisper_url in config")
+    expect(card2.locator("#statusVoice")).to_contain_text("no voice.transcribe_url in config")
     expect(card2.locator("#statusVoiceUrl")).to_have_text("not set")
     shot(p2, shots / "story-22-voice-7-desktop.png")
     ctx2.close()

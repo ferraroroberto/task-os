@@ -1,8 +1,9 @@
-"""A whisper-server stand-in — the route and the shapes, none of the model (#92).
+"""A transcription-endpoint stand-in — the route and the shapes, none of the model (#92).
 
-The suite must never depend on whether the fleet's real ``127.0.0.1:8090``
-happens to be running on the machine executing it (``tests/conftest`` blanks
-``voice.whisper_url`` for exactly that reason), and it must never post audio
+Speaks the OpenAI audio shape the hub (:8000) and whisper-server (:8090) share,
+so it stands in for either. The suite must never depend on whether the fleet's
+real ones happen to be running on the machine executing it (``tests/conftest`` blanks
+both ``voice`` endpoints for exactly that reason), and it must never post audio
 anywhere real. This is the isolation the issue provider's ``src/issues/fake.py``
 gives the sync: a genuine HTTP endpoint on a loopback port, so the code under
 test does its real multipart build, its real ``urllib`` POST and its real

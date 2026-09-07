@@ -17,9 +17,11 @@
  *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
  *                  issue sync this card owns its own call, because nothing
  *                  else in the app triggers a capture pass.
- *   Voice          whether the fleet's whisper server is answering (#92) —
- *                  the same status the quick-add mic reads. No button: there
- *                  is nothing to run on demand, only somewhere to be up.
+ *   Voice          whether a transcription endpoint is answering, and which
+ *                  one (#92, #144: the hub — so parakeet — or the local
+ *                  whisper fallback). The same status the quick-add mic
+ *                  reads. No button: there is nothing to run on demand, only
+ *                  somewhere to be up.
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
@@ -359,11 +361,15 @@ export function mountSettings(opts) {
       els.voiceCardMeta.textContent = 'off';
       return;
     }
+    // Which endpoint answered matters: the hub means the fleet's transcribe
+    // role (parakeet first), the fallback means the local CPU whisper server.
+    const serving = { hub: 'hub', fallback: 'local whisper (fallback)' }[st.serving] || 'unknown';
     els.statusVoice.append(
       statusPart('ok', 'reachable'),
+      ' · ' + serving,
       st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
     );
-    els.voiceCardMeta.textContent = 'on';
+    els.voiceCardMeta.textContent = st.serving === 'fallback' ? 'fallback' : 'on';
   }
 
   // ------------------------------------------------------------ issue sync

@@ -1,21 +1,30 @@
 """Voice quick-add — a recorded phrase becomes a quick-add line, locally (#92).
 
 Hold the mic on the quick-add bar, say *"buy a new filter for the dehumidifier
-next week"*, let go: the clip goes to the fleet's whisper server and the
+next week"*, let go: the clip goes to the fleet's transcription service and the
 transcript comes back through the ordinary ``src.quick_add`` parse, so the
 chips preview is the one you would have got by typing. Nothing leaves the
-house — the audio's whole journey is browser → task-os → ``127.0.0.1:8090``.
+house — the audio's whole journey is browser → task-os → ``local-llm-hub``.
+
+**Through the hub, not around it (#144).** The primary endpoint is the hub on
+``:8000``; because the request names no model, the hub applies its
+``roles.audio.transcribe`` chain — **parakeet** on the Mac's ANE first
+(~0.2 s for a phrase), whisper behind it — and records the call in its
+observability ring. The local whisper-server is the *fallback*, tried only
+when the hub could not be reached at all. This is the fleet rule ("don't
+duplicate hub functionality in downstream apps") and it is exactly what
+``voice-transcriber`` does.
 
 **The phone never talks to whisper.** It reaches this app over the one
 Tailscale HTTPS endpoint with the cookie gate (``src.auth``) and could not
 open ``:8090`` if it tried; ``POST /api/transcribe`` forwarding server-side is
 what makes voice work off-PC at all.
 
-**WAV in, always — verified, not assumed.** whisper.cpp's ``whisper-server``
-decodes WAV and answers a bare ``400 Invalid request`` to anything else; a
-probe against the live ``:8090`` (2026-09-07) took ``200`` for a 16 kHz WAV
-and ``400`` for both browser recording formats — webm/opus (Chrome) and
-mp4/aac (iOS Safari). So ``static/voice.js`` decodes its own recording and
+**WAV in, always — verified, not assumed.** Both ends reject anything else:
+whisper.cpp's ``whisper-server`` answers a bare ``400 Invalid request``, and
+the hub answers ``400 audio conversion failed``. Probed live on 2026-09-07 —
+``200`` for a 16 kHz WAV, ``400`` for both browser recording formats,
+webm/opus (Chrome) and mp4/aac (iOS Safari), against each endpoint. So ``static/voice.js`` decodes its own recording and
 re-encodes it as 16 kHz mono PCM WAV *before* the upload, and this module is
 what the issue asked for and nothing more: a plain HTTP forward, no
 subprocess, no transcoding, no dependency. An endpoint that refuses the body
@@ -26,17 +35,18 @@ opaque failure.
 and by the CLI's offline status. It has no thread and no background work —
 only two things happen here:
 
-    probe()       a TCP connect to the endpoint's host/port, cached for
-                  :data:`PROBE_TTL_S`. Port 8090 is mutex-shared with
-                  ``automation/audio/transcribe_voice``, so a mic button
-                  rendered on every dialog open must not hammer it. "Reachable"
-                  is exactly what a connect establishes — that the port
-                  answered, not that a transcription will succeed, which
-                  reports its own failure on its own.
-    transcribe()  one multipart POST of the clip, returning the text —
-                  trimmed of the trailing full stop whisper punctuates every
-                  dictated line with, which the quick-add parse would
-                  otherwise read as part of the date phrase.
+    probe()       a TCP connect to each endpoint in turn, first answer wins,
+                  cached for :data:`PROBE_TTL_S`. Port 8090 is mutex-shared
+                  with ``automation/audio/transcribe_voice``, so a mic button
+                  rendered on every dialog open must not hammer it.
+                  "Reachable" is exactly what a connect establishes — that
+                  the port answered, not that a transcription will succeed,
+                  which reports its own failure on its own.
+    transcribe()  one multipart POST of the clip to the first endpoint that
+                  answers, returning the text — trimmed of the trailing full
+                  stop the engines punctuate every dictated line with, which
+                  the quick-add parse would otherwise read as part of the date
+                  phrase.
 
 ``status()`` is what ``GET /api/status``'s ``voice`` key, the Settings card,
 the mic button's hint and ``tasks mirror status`` all render — off always
@@ -174,72 +184,126 @@ def _text_of(payload: bytes) -> str:
     return body
 
 
+#: The two endpoints, in the order they are tried, with the names every
+#: surface uses for them.
+HUB = "hub"
+FALLBACK = "fallback"
+_LABELS = {HUB: "the hub", FALLBACK: "the local whisper server"}
+
+
+def _connect_failure(url: str) -> str | None:
+    """``None`` when *url*'s host/port accepts a connection, else why not."""
+    target = endpoint_of(url)
+    if target is None:
+        return f"not an http(s) URL: {url}"
+    host, port = target
+    try:
+        with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_S):
+            pass
+    except TimeoutError:
+        # A timeout does NOT establish which failure it is, so it must not
+        # claim to. Windows takes ~2 s to report a refusal on a dead loopback
+        # port (measured here), which is longer than a probe the UI waits on
+        # should take — so "nothing there" and "held but silent" (:8090 is
+        # mutex-shared with automation/audio/transcribe_voice) both land here,
+        # and the reason names both rather than picking one.
+        return (f"{host}:{port} did not answer within {PROBE_TIMEOUT_S:g}s — it may be down, "
+                f"or the port may be busy")
+    except OSError as exc:
+        # A refusal *is* established: there is nothing listening.
+        return f"nothing is listening on {host}:{port} ({exc.__class__.__name__}: {exc})"
+    return None
+
+
 class VoiceClient:
-    """The install's one voice endpoint: is it there, and what did it hear."""
+    """The install's voice endpoints: which one is there, and what it heard.
+
+    Two of them, primary first (#144). The primary is the **hub**, which
+    resolves the fleet's ``roles.audio.transcribe`` chain — parakeet on the
+    Mac's ANE ahead of whisper — precisely because no model is named in the
+    request; it also puts the call in the hub's observability ring. The
+    fallback is the local whisper-server, and it is reached **only** when the
+    primary could not be reached *at all*: an endpoint that answered and
+    refused the clip has told us something, and quietly asking a different
+    engine instead would turn one clear failure into two unclear ones. Same
+    rule, and the same reason, as ``voice-transcriber``'s
+    ``build_transcription_client``.
+    """
 
     def __init__(self, config: AppConfig) -> None:
-        self.url = (config.voice.whisper_url or "").strip()
+        self.primary = (config.voice.transcribe_url or "").strip()
+        self.fallback = (config.voice.fallback_url or "").strip()
         self._lock = threading.Lock()
-        #: (monotonic deadline, reachable, reason when not)
-        self._verdict: tuple[float, bool, str | None] | None = None
+        #: (monotonic deadline, reachable, reason when not, serving, url)
+        self._verdict: tuple[float, bool, str | None, str | None, str] | None = None
         self._checked_at: str | None = None
 
     # ------------------------------------------------------------- config
     @property
     def unconfigured_reason(self) -> str | None:
         """Why this install cannot do voice at all — ``None`` when it can."""
-        if not self.url:
-            return "no voice.whisper_url in config"
-        if endpoint_of(self.url) is None:
-            return f"voice.whisper_url is not an http(s) URL: {self.url}"
+        if not self.primary:
+            return "no voice.transcribe_url in config"
+        if endpoint_of(self.primary) is None:
+            return f"voice.transcribe_url is not an http(s) URL: {self.primary}"
         return None
 
-    # -------------------------------------------------------------- probe
-    def probe(self, *, force: bool = False) -> tuple[bool, str | None]:
-        """``(reachable, reason)`` — a cached TCP connect to the endpoint.
+    def targets(self) -> list[tuple[str, str]]:
+        """``[(name, url), …]`` — the endpoints to try, in order.
 
-        Never raises: an unreachable port is a state to render, not an error
-        to handle. ``force`` skips the cache (the one caller is a test).
+        The fallback is dropped silently when it is blank or unusable: it is
+        an optional second chance, not something whose absence is a failure.
+        """
+        out = [(HUB, self.primary)]
+        if self.fallback and endpoint_of(self.fallback) is not None:
+            out.append((FALLBACK, self.fallback))
+        return out
+
+    # -------------------------------------------------------------- probe
+    def probe(self, *, force: bool = False) -> tuple[bool, str | None, str | None, str]:
+        """``(reachable, reason, serving, url)`` — a cached connect per endpoint.
+
+        The first endpoint that answers wins and is the one reported. Never
+        raises: an unreachable port is a state to render, not an error to
+        handle. ``force`` skips the cache (the one caller is a test).
         """
         reason = self.unconfigured_reason
         if reason:
-            return False, reason
+            return False, reason, None, self.primary
         with self._lock:
             cached = self._verdict
             if cached and not force and time.monotonic() < cached[0]:
-                return cached[1], cached[2]
-        host, port = endpoint_of(self.url)  # type: ignore[misc]  — guarded above
-        ok, why = True, None
-        try:
-            with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_S):
-                pass
-        except TimeoutError:
-            # A timeout does NOT establish which of the two it is, so it must
-            # not claim to. Windows takes ~2 s to report a refusal on a dead
-            # loopback port (measured here), which is longer than a probe the
-            # UI waits on should take — so "nothing there" and "the port is
-            # held but silent" (8090 is mutex-shared with
-            # automation/audio/transcribe_voice) both land here, and the reason
-            # names both rather than picking one.
-            ok = False
-            why = (f"{host}:{port} did not answer within {PROBE_TIMEOUT_S:g}s — whisper may be down, "
-                   f"or the port may be busy (it is shared with the fleet's other transcriber)")
-        except OSError as exc:
-            # A refusal *is* established: there is nothing listening.
-            ok = False
-            why = f"nothing is listening on {host}:{port} ({exc.__class__.__name__}: {exc})"
+                return cached[1], cached[2], cached[3], cached[4]
+
+        why: list[str] = []
+        ok, serving, live_url = False, None, self.primary
+        for name, url in self.targets():
+            failure = _connect_failure(url)
+            if failure is None:
+                ok, serving, live_url = True, name, url
+                why = []
+                break
+            why.append(f"{_LABELS[name]}: {failure}")
+        reason_text = None if ok else " · ".join(why)
         with self._lock:
-            self._verdict = (time.monotonic() + PROBE_TTL_S, ok, why)
+            self._verdict = (time.monotonic() + PROBE_TTL_S, ok, reason_text, serving, live_url)
             self._checked_at = clock.now_iso()
-        return ok, why
+        return ok, reason_text, serving, live_url
 
     def status(self) -> dict[str, Any]:
-        """``/api/status``'s ``voice`` key — the mic button's hint, in JSON."""
-        reachable, reason = self.probe()
+        """``/api/status``'s ``voice`` key — the mic button's hint, in JSON.
+
+        ``serving`` names which endpoint answered (``hub`` · ``fallback``), so
+        "am I getting parakeet, or the local CPU whisper?" is answerable
+        without reading a log; ``url`` is that endpoint's URL, falling back to
+        the configured primary when nothing answered.
+        """
+        reachable, reason, serving, url = self.probe()
         return {
             "enabled": reachable,
             "reason": None if reachable else reason,
-            "url": self.url,
+            "url": url,
+            "serving": serving,
             "checked_at": self._checked_at,
         }
 
@@ -260,38 +324,49 @@ class VoiceClient:
             audio, filename="clip.wav", content_type=content_type,
             fields={"response_format": "json"},
         )
-        request = urllib.request.Request(self.url, data=body, method="POST")
-        request.add_header("Content-Type", header)
-        started = time.monotonic()
-        try:
-            with urllib.request.urlopen(request, timeout=TRANSCRIBE_TIMEOUT_S) as res:
-                payload = res.read()
-        except urllib.error.HTTPError as exc:
-            said = exc.read().decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
-            logger.warning("⚠️ voice: %s refused the clip — HTTP %s %s", self.url, exc.code, said)
-            raise VoiceError(
-                f"the whisper server rejected the recording (HTTP {exc.code})",
-                code="voice_rejected", http_status=502,
-                detail=f"{self.url} answered {exc.code}: {said or '(no body)'} "
-                       f"— sent {len(audio)} bytes of {content_type}",
-            ) from exc
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            # Also the "busy" case: :8090 is mutex-shared with
-            # automation/audio/transcribe_voice, so a holder that is not
-            # answering reads exactly like one that is not there. Same
-            # message, and the cached probe is what keeps this from becoming
-            # a retry hammer.
-            with self._lock:      # the endpoint just proved itself unreachable
-                self._verdict = None
-            logger.warning("⚠️ voice: %s did not answer — %s", self.url, exc)
-            raise VoiceError(
-                f"the whisper server did not answer at {self.url}",
-                code="voice_unavailable", http_status=503,
-                detail=f"{exc.__class__.__name__}: {exc}",
-            ) from exc
-        text = clean_transcript(_text_of(payload))
-        logger.info(
-            "ℹ️ voice: %d bytes of %s → %d chars in %.1f s",
-            len(audio), content_type, len(text), time.monotonic() - started,
+        unreachable: list[str] = []
+        for name, url in self.targets():
+            started = time.monotonic()
+            request = urllib.request.Request(url, data=body, method="POST")
+            request.add_header("Content-Type", header)
+            try:
+                with urllib.request.urlopen(request, timeout=TRANSCRIBE_TIMEOUT_S) as res:
+                    payload = res.read()
+                    served = res.headers.get("x-hub-served-model")
+                    served_host = res.headers.get("x-hub-served-host")
+            except urllib.error.HTTPError as exc:
+                # It answered. Whatever it said *is* the answer — asking the
+                # next endpoint instead would substitute a different engine's
+                # opinion for a failure the caller needs to see.
+                said = exc.read().decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
+                logger.warning("⚠️ voice: %s refused the clip — HTTP %s %s", url, exc.code, said)
+                raise VoiceError(
+                    f"{_LABELS[name]} rejected the recording (HTTP {exc.code})",
+                    code="voice_rejected", http_status=502,
+                    detail=f"{url} answered {exc.code}: {said or '(no body)'} "
+                           f"— sent {len(audio)} bytes of {content_type}",
+                ) from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                # Never reached at all — the one case that earns a second try
+                # somewhere else.
+                unreachable.append(f"{_LABELS[name]} ({url}): {exc.__class__.__name__}: {exc}")
+                logger.warning("⚠️ voice: %s did not answer — %s", url, exc)
+                continue
+            text = clean_transcript(_text_of(payload))
+            # The hub names what actually served the clip, which is the whole
+            # point of going through it: this line is how "parakeet or the CPU
+            # fallback?" is answered after the fact.
+            logger.info(
+                "ℹ️ voice: %d bytes of %s → %d chars in %.1f s via %s%s",
+                len(audio), content_type, len(text), time.monotonic() - started,
+                served or _LABELS[name], f"@{served_host}" if served_host else "",
+            )
+            return text
+
+        with self._lock:      # every endpoint just proved itself unreachable
+            self._verdict = None
+        raise VoiceError(
+            "no transcription endpoint answered",
+            code="voice_unavailable", http_status=503,
+            detail=" · ".join(unreachable),
         )
-        return text

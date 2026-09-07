@@ -1,11 +1,12 @@
 """Voice quick-add (#92) — the probe, the forward, and the route around them.
 
-Nothing here touches the fleet's real whisper server: every test points
-``voice.whisper_url`` at :class:`tests.fixtures.whisper_fake.FakeWhisper`, a
+Nothing here touches the fleet's real hub or whisper server: every test points
+``voice.transcribe_url`` (and, where the fallback matters,
+``voice.fallback_url``) at :class:`tests.fixtures.whisper_fake.FakeWhisper`, a
 loopback endpoint that speaks the same shapes, so the multipart build, the
 ``urllib`` POST and the response parse are all the real ones. (The suite-wide
-config blanks ``whisper_url`` entirely — see ``tests/conftest`` — so a test
-that forgets to point somewhere gets "not reachable", never the live model.)
+config blanks both endpoints — see ``tests/conftest`` — so a test that forgets
+to point somewhere gets "not reachable", never the live model.)
 """
 
 from __future__ import annotations
@@ -37,8 +38,8 @@ def wav_bytes(samples: int = 8000, rate: int = 16000) -> bytes:
     )
 
 
-def config_for(url: str) -> AppConfig:
-    return AppConfig(voice=VoiceConfig(whisper_url=url))
+def config_for(url: str, fallback: str = "") -> AppConfig:
+    return AppConfig(voice=VoiceConfig(transcribe_url=url, fallback_url=fallback))
 
 
 @pytest.fixture
@@ -115,7 +116,7 @@ def test_a_dictated_line_keeps_its_date_despite_whisper_s_full_stop() -> None:
 
 
 def test_unconfigured_reasons_are_distinct_because_the_fix_is() -> None:
-    assert VoiceClient(config_for("")).unconfigured_reason == "no voice.whisper_url in config"
+    assert VoiceClient(config_for("")).unconfigured_reason == "no voice.transcribe_url in config"
     assert "not an http(s) URL" in VoiceClient(config_for("八")).unconfigured_reason
     assert VoiceClient(config_for("http://127.0.0.1:1/x")).unconfigured_reason is None
 
@@ -138,7 +139,8 @@ def test_status_off_always_carries_the_reason() -> None:
     assert f"127.0.0.1:{dead}" in st["reason"]
 
     blank = VoiceClient(config_for("")).status()
-    assert blank == {"enabled": False, "reason": "no voice.whisper_url in config", "url": "", "checked_at": None}
+    assert blank == {"enabled": False, "reason": "no voice.transcribe_url in config",
+                     "url": "", "serving": None, "checked_at": None}
 
 
 def test_a_timed_out_probe_does_not_claim_to_know_which_failure_it_was(
@@ -290,7 +292,7 @@ def test_status_carries_the_voice_state(client: TestClient, whisper: FakeWhisper
 
     _point_at(client, "")
     off = client.get("/api/status").json()["voice"]
-    assert off["enabled"] is False and off["reason"] == "no voice.whisper_url in config"
+    assert off["enabled"] is False and off["reason"] == "no voice.transcribe_url in config"
 
 
 def test_transcribe_is_gated_like_every_other_api_route(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -302,3 +304,75 @@ def test_transcribe_is_gated_like_every_other_api_route(tmp_path: Path, monkeypa
     with TestClient(create_app(), client=("100.64.0.9", 1)) as outside:
         res = outside.post("/api/transcribe", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
     assert res.status_code == 401 and res.json()["error"]["code"] == "unauthorized"
+
+
+# ------------------------------------------------------- hub-first routing
+
+
+def _dead_url() -> str:
+    """A URL whose port nothing is listening on, right now."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{s.getsockname()[1]}/v1/audio/transcriptions"
+
+
+def test_the_hub_is_asked_first_and_no_model_is_named(whisper: FakeWhisper) -> None:
+    """Naming no model is what makes the hub apply its transcribe *role* —
+    parakeet ahead of whisper — rather than a concrete engine (#144)."""
+    with FakeWhisper(text="from the fallback") as local:
+        client = VoiceClient(config_for(whisper.url, local.url))
+        assert client.transcribe(wav_bytes()) == "buy a new filter for the dehumidifier next week"
+        assert not local.requests                       # the fallback was never asked
+    assert "model" not in whisper.requests[-1]["fields"]
+    assert whisper.requests[-1]["fields"] == {"response_format": "json"}
+
+
+def test_an_unreachable_hub_falls_back_to_the_local_whisper_server() -> None:
+    with FakeWhisper(text="from the fallback") as local:
+        client = VoiceClient(config_for(_dead_url(), local.url))
+        assert client.transcribe(wav_bytes()) == "from the fallback"
+        assert len(local.requests) == 1
+        st = client.status()
+        assert st["enabled"] is True and st["serving"] == "fallback" and st["url"] == local.url
+
+
+def test_a_hub_that_answers_and_refuses_is_never_second_guessed(whisper: FakeWhisper) -> None:
+    """The rule voice-transcriber sets: only a *transport* failure earns a
+    second endpoint. An endpoint that answered has told us something, and
+    quietly substituting another engine's opinion would hide it."""
+    with FakeWhisper(text="from the fallback") as local:
+        whisper.status, whisper.body = 400, b"audio conversion failed"
+        client = VoiceClient(config_for(whisper.url, local.url))
+        with pytest.raises(VoiceError) as exc:
+            client.transcribe(wav_bytes())
+        assert exc.value.http_status == 502 and exc.value.code == "voice_rejected"
+        assert "audio conversion failed" in exc.value.detail
+        assert not local.requests                       # never asked
+
+
+def test_both_endpoints_down_names_both() -> None:
+    client = VoiceClient(config_for(_dead_url(), _dead_url()))
+    with pytest.raises(VoiceError) as exc:
+        client.transcribe(wav_bytes())
+    assert exc.value.http_status == 503 and exc.value.code == "voice_unavailable"
+    assert "the hub" in exc.value.detail and "the local whisper server" in exc.value.detail
+
+    st = client.status()
+    assert st["enabled"] is False and st["serving"] is None
+    assert "the hub" in st["reason"] and "the local whisper server" in st["reason"]
+
+
+def test_a_blank_fallback_is_simply_no_second_chance(whisper: FakeWhisper) -> None:
+    client = VoiceClient(config_for(whisper.url, ""))
+    assert [name for name, _ in client.targets()] == ["hub"]
+    assert client.status()["serving"] == "hub"
+
+
+def test_status_names_which_endpoint_is_serving_over_http(
+    client: TestClient, whisper: FakeWhisper
+) -> None:
+    """Settings and the CLI both render this — "parakeet, or the local CPU
+    whisper?" has to be answerable without reading a log."""
+    client.app.state.voice = VoiceClient(config_for(whisper.url))
+    on = client.get("/api/status").json()["voice"]
+    assert on["enabled"] is True and on["serving"] == "hub" and on["url"] == whisper.url

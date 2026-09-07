@@ -6,7 +6,7 @@
                                folders: {enabled, roots, entries, last_indexed, indexing, …},
                                capture: {enabled, reason, source, poll_minutes, last_run,
                                last_result, last_error, next_run, running} (#98),
-                               voice: {enabled, reason, url, checked_at} (#92),
+                               voice: {enabled, reason, url, serving, checked_at} (#92),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /

@@ -6,9 +6,9 @@ that boots the app (``TestClient(create_app())``) would otherwise start the
 mirror watcher against it. This autouse session fixture writes a copy of the
 sample with both folders blanked (→ the services report "not configured")
 and points ``TASKOS_CONFIG_PATH`` at it, unless the caller already set one.
-``voice.whisper_url`` is blanked for the same reason (#92): the sample names
-the fleet's live whisper server, and no test result may depend on whether it
-happens to be running here.
+Both ``voice`` endpoints are blanked for the same reason (#92/#144): the
+sample names the fleet's live hub and whisper server, and no test result may
+depend on whether either happens to be running here.
 Tests that need a live mirror build their own config on top (see
 ``tests/test_mirror.py`` / the e2e conftest). It also forces the issue
 provider off (``TASKOS_ISSUE_PROVIDER=none``) so no test spawns ``gh``;
@@ -37,24 +37,26 @@ def write_test_config(
     placeholders: dict[str, str] | None = None,
     web_roots: dict[str, str] | None = None,
     email_db: str = "",
-    whisper_url: str = "",
+    transcribe_url: str = "",
+    fallback_url: str = "",
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
     folder index stays off — the sample points at a real synced folder),
     ``search.email_db`` (blank = the emails adapter reports not configured —
     the sample points at the real email-archiver index; Step 10 tests pass the
-    synthetic fixture), ``voice.whisper_url`` (blank = voice reports not
-    reachable — the sample points at the fleet's real ``127.0.0.1:8090``, and
-    a suite whose result depends on whether whisper happens to be running on
-    the developer's machine is not a suite; #92's tests pass a fake endpoint)
+    synthetic fixture), ``voice.transcribe_url`` / ``voice.fallback_url``
+    (both blank = voice reports not reachable — the sample points at the
+    fleet's real hub and whisper server, and a suite whose result depends on
+    whether either happens to be running on the developer's machine is not a
+    suite; #92/#144's tests pass fake endpoints)
     and, optionally, the ``placeholders`` / ``web_roots`` maps (Step 9 / #28
     tests point ``{onedrive}`` at a temp tree / a fake cloud root)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
     raw["mirror"] = {"dir": dir, "backup_dir": backup_dir}
     raw.setdefault("search", {})["folder_roots"] = list(folder_roots or [])
     raw["search"]["email_db"] = email_db
-    raw["voice"] = {"whisper_url": whisper_url}
+    raw["voice"] = {"transcribe_url": transcribe_url, "fallback_url": fallback_url}
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     if web_roots is not None:

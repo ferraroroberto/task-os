@@ -20,8 +20,8 @@
  * (`decodeAudioData`), downmixes to mono, box-filters down to 16 kHz and
  * writes a PCM WAV — ~50 lines, no dependency, identical on both engines.
  *
- * Never a dead button: every way this can fail — no `voice.whisper_url`, a
- * whisper server that is not answering, a browser with no MediaRecorder, a
+ * Never a dead button: every way this can fail — no `voice.transcribe_url`,
+ * no transcription endpoint answering, a browser with no MediaRecorder, a
  * page that is not a secure context, a denied mic permission — leaves the
  * button visible and disabled with the reason in `hint`, which is the same
  * sentence `/api/status` gives the Settings card.

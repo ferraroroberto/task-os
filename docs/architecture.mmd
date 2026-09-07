@@ -42,7 +42,7 @@ flowchart LR
     openerinfo["opener.py<br/>install.txt commands · opener.env template"]
     fedsearch["search/ (federated)<br/>federated.py: 4 groups · thread pool · 2 s each<br/>tasks_adapter (tasks_fts) · folders_adapter (index)<br/>emails_adapter (emails.db, mode=ro, bm25) · issues_adapter (refs + cache)"]
     capture["email_capture.py (#98)<br/>FlaggedEmailIndex: mode=ro, flag_status = 2<br/>capture_once → capture_task (external_id = email:‹ref›)<br/>one-way: a re-run never edits what it made<br/>EmailCaptureService: every capture.email_poll_minutes"]
-    voice["voice.py (#92)<br/>VoiceClient: cached TCP probe (15 s) · status()<br/>transcribe(): multipart forward, WAV only<br/>clean_transcript: drops whisper's trailing stop<br/>refused (502) ≠ silent (503), both said"]
+    voice["voice.py (#92, #144)<br/>VoiceClient: hub first, local whisper as fallback<br/>cached TCP probe per endpoint (15 s) · status(serving)<br/>transcribe(): multipart forward, WAV only, no model named<br/>fallback ONLY on a transport failure<br/>clean_transcript: drops the trailing full stop<br/>refused (502) ≠ nothing answered (503)"]
     dates["dates.py<br/>parse_date · next_due · anchors (#112)"]
     qa["quick_add.py<br/>parse · resolve_parent"]
     schema["schema.py<br/>MIGRATIONS v1→v11 · migrate()"]
@@ -72,7 +72,8 @@ flowchart LR
   end
 
   subgraph external["Other repos' data (read-only)"]
-    whisper["local-llm-hub · whisper-server<br/>127.0.0.1:8090 /v1/audio/transcriptions<br/>WAV only (webm/mp4 → 400)<br/>config.voice.whisper_url"]
+    hub["local-llm-hub · hub<br/>127.0.0.1:8000 /v1/audio/transcriptions<br/>no model named → roles.audio.transcribe<br/>parakeet@mac-mini-m4 first, whisper behind<br/>WAV only (webm/mp4 → 400)<br/>config.voice.transcribe_url"]
+    whisper["local-llm-hub · whisper-server<br/>127.0.0.1:8090 /v1/audio/transcriptions<br/>the fallback, transport failures only<br/>config.voice.fallback_url"]
     emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>flag_status · flag_request (the archiver writes, we only read)<br/>config.search.email_db"]
   end
 
@@ -141,7 +142,9 @@ flowchart LR
   pwa -->|"static/voice.js: mic → decode → 16 kHz mono WAV → POST"| voicer
   voicer --> voice
   voicer --> qa
-  voice -->|"multipart POST"| whisper
+  voice -->|"multipart POST (primary)"| hub
+  voice -.->|"only when the hub is unreachable"| whisper
+  hub -->|"role chain"| whisper
   mirrorr -->|"status()"| voice
   lifespan --> voice
   cli -->|"voice reachability (app down)"| voice
