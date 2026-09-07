@@ -765,10 +765,12 @@ def fmt_capture_status(c: dict[str, Any]) -> str:
 
 
 def fmt_voice_status(v: dict[str, Any]) -> str:
-    """The voice endpoint's line (#92) — off always says why."""
+    """The voice endpoints' line (#92, #144) — which one is serving, or why
+    neither is."""
     if not v.get("enabled"):
         return f"voice    off — {v.get('reason') or 'unknown'}"
-    return (f"voice    reachable · {v.get('url')}"
+    serving = {"hub": "hub", "fallback": "local whisper (fallback)"}.get(v.get("serving"), "unknown")
+    return (f"voice    reachable · {serving} · {v.get('url')}"
             + (f" · checked {v['checked_at']}" if v.get("checked_at") else ""))
 
 

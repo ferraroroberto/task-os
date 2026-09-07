@@ -90,13 +90,24 @@ class CaptureConfig:
 class VoiceConfig:
     """Voice quick-add (#92) — where a recorded phrase goes to become text.
 
-    ``whisper_url`` is the fleet's whisper-server transcription endpoint; the
-    app forwards the clip there server-side, so the phone needs nothing but
-    the HTTPS endpoint it already has. Blank = voice off, with that as the
-    visible reason in ``/api/status``, the Settings card and the mic button.
+    Two endpoints, the pattern ``voice-transcriber`` already uses (#144):
+
+    ``transcribe_url``  the **hub** (``local-llm-hub`` on :8000). No model is
+                        named in the request, so the hub applies its
+                        ``roles.audio.transcribe`` chain — parakeet on the
+                        Mac's ANE first, whisper behind it — and the call
+                        lands in its observability ring. Blank = voice off,
+                        with that as the visible reason everywhere.
+    ``fallback_url``    the local whisper-server, tried **only** when the
+                        primary could not be reached at all (the hub process
+                        is down). Blank = no fallback.
+
+    The app forwards the clip server-side either way, so the phone needs
+    nothing but the HTTPS endpoint it already has.
     """
 
-    whisper_url: str = "http://127.0.0.1:8090/v1/audio/transcriptions"
+    transcribe_url: str = "http://127.0.0.1:8000/v1/audio/transcriptions"
+    fallback_url: str = "http://127.0.0.1:8090/v1/audio/transcriptions"
 
 
 @dataclass(frozen=True)
@@ -269,7 +280,8 @@ def load_config(path: Path | None = None) -> AppConfig:
             ),
         ),
         voice=VoiceConfig(
-            whisper_url=str(voice.get("whisper_url", VoiceConfig.whisper_url) or "").strip(),
+            transcribe_url=str(voice.get("transcribe_url", VoiceConfig.transcribe_url) or "").strip(),
+            fallback_url=str(voice.get("fallback_url", VoiceConfig.fallback_url) or "").strip(),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),
