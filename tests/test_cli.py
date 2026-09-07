@@ -267,7 +267,7 @@ def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
 
 #: The one shape ``tasks mirror status --json`` emits, whatever the transport.
-STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "capture", "opener", "placeholders"}
+STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "capture", "voice", "opener", "placeholders"}
 
 
 def test_status_json_shape_is_identical_on_both_backends(run: Runner) -> None:
@@ -386,3 +386,19 @@ def test_capture_status_over_both_backends(run: Runner) -> None:
     code, out, _ = run("mirror", "status")
     assert code == 0
     assert "capture  not configured — search.email_db not configured" in out
+
+
+def test_voice_status_over_both_backends(run: Runner) -> None:
+    """#92 — whether the whisper endpoint answers is a property of this PC, so
+    the offline backend can establish it for real (unlike `https` /
+    `auth.client`, which describe a live request) and must report the same
+    shape the API does."""
+    code, out, _ = run("mirror", "status", "--json")
+    assert code == 0
+    v = _json(out)["voice"]
+    assert set(v) == {"enabled", "reason", "url", "checked_at"}
+    assert v["enabled"] is False and v["reason"] == "no voice.whisper_url in config"
+
+    code, out, _ = run("mirror", "status")
+    assert code == 0
+    assert "voice    off — no voice.whisper_url in config" in out

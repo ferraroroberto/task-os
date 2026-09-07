@@ -288,6 +288,12 @@
     <path d="M12 7v14" />
     <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
   </symbol>
+  <!-- #92 glyph (voice quick-add) -->
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none">
+    <path d="M12 19v3" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <rect x="9" y="2" width="6" height="13" rx="3" />
+  </symbol>
   <symbol id="i-keyboard" viewBox="0 0 24 24" fill="none">
     <path d="M10 8h.01" />
     <path d="M12 12h.01" />
@@ -604,6 +610,26 @@
             </div>
           </div>
         </details>
+        <!-- Voice (#92): status from GET /api/status's `voice` — a cached TCP
+             probe of the whisper endpoint. No button: there is nothing to run
+             on demand, only somewhere to be reachable. -->
+        <details class="card card--collapsible settings-card" id="voiceCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
+              <h3 class="collapse-title">Voice quick-add</h3>
+              <span class="collapse-count" id="voiceCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Hold the mic on the add dialog and say the line. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the fleet's whisper server (<code>voice.whisper_url</code>) — so the phone needs nothing but this app, and the audio never leaves the house.</p>
+            <dl class="status-rows" id="voiceStatus" aria-live="polite">
+              <div class="status-row"><dt>Whisper server</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Endpoint</dt><dd id="statusVoiceUrl" class="muted">–</dd></div>
+            </dl>
+          </div>
+        </details>
         <!-- Search (Step 10): which of the four indexes this install can query
              — from GET /api/search/status; a kind that is off says why. -->
         <details class="card card--collapsible settings-card" id="searchCard">
@@ -727,7 +753,14 @@
         </span>
         <input class="quick-add-input" type="text" enterkeyhint="done" aria-label="Task title"
                placeholder='e.g. "renew passport next friday",  "order sensor &rsaquo; garden-bot",  "#12" to nest'>
+        <!-- #92: press and hold to dictate the line above. Never a dead
+             button — when the whisper server is unreachable it stays visible,
+             disabled, and the reason is spelled out in the hint below. -->
+        <button type="button" class="quick-add-mic" aria-label="Hold to dictate" disabled>
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
+        </button>
       </div>
+      <p class="quick-add-voice-hint" aria-live="polite" hidden></p>
       <div class="quick-add-chips" aria-live="polite"></div>
 
       <div class="row row--stack">
