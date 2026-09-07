@@ -7,7 +7,7 @@
   "mirror":  { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" },
   "search":  { "folder_roots": ["{onedrive}/Documentos"], "email_db": "E:/automation/email-archiver/data/emails.db" },
   "capture": { "email_poll_minutes": 10 },
-  "voice":   { "transcribe_url": "http://127.0.0.1:8000/v1/audio/transcriptions", "fallback_url": "http://127.0.0.1:8090/v1/audio/transcriptions" },
+  "voice":   { "transcribe_url": "http://127.0.0.1:8000/v1/audio/transcriptions", "fallback_url": "http://127.0.0.1:8090/v1/audio/transcriptions", "partial_interval_seconds": 1.5 },
   "team":    { "enabled": false, "people": ["Roberto Ferraro"] },
   "auth":    { "token": "", "password_hash": "" }
 }

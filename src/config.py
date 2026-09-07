@@ -104,10 +104,18 @@ class VoiceConfig:
 
     The app forwards the clip server-side either way, so the phone needs
     nothing but the HTTPS endpoint it already has.
+
+    ``partial_interval_seconds`` is how often the page re-posts the take it has
+    accumulated so far, so the transcript appears *while* you speak (#146).
+    Every pass transcribes the whole recording again — that is what
+    ``voice-transcriber``'s rolling worker does too, and it is affordable
+    because parakeet answers a short clip in a fraction of a second. ``0``
+    turns partials off: one transcription on stop, as #92 shipped.
     """
 
     transcribe_url: str = "http://127.0.0.1:8000/v1/audio/transcriptions"
     fallback_url: str = "http://127.0.0.1:8090/v1/audio/transcriptions"
+    partial_interval_seconds: float = 1.5
 
 
 @dataclass(frozen=True)
@@ -173,6 +181,27 @@ def _as_str_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(v) for v in value]
+
+
+def _as_float(value: Any, default: float, key: str) -> float:
+    """A non-negative float from the file, or ``default`` with a warning.
+
+    Same contract as :func:`_as_int` — absent takes the default silently,
+    present-but-unusable earns a log line. A negative interval is unusable
+    rather than "off": ``0`` is the documented way to turn a cadence off, and
+    silently reading ``-1`` as that would hide a typo in the config.
+    """
+    if value is None:
+        return default
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        logger.warning("⚠️ config: invalid %s %r — falling back to %s", key, value, default)
+        return default
+    if out < 0:
+        logger.warning("⚠️ config: %s cannot be negative (%r) — falling back to %s", key, value, default)
+        return default
+    return out
 
 
 def _as_int(value: Any, default: int, key: str) -> int:
@@ -282,6 +311,10 @@ def load_config(path: Path | None = None) -> AppConfig:
         voice=VoiceConfig(
             transcribe_url=str(voice.get("transcribe_url", VoiceConfig.transcribe_url) or "").strip(),
             fallback_url=str(voice.get("fallback_url", VoiceConfig.fallback_url) or "").strip(),
+            partial_interval_seconds=_as_float(
+                voice.get("partial_interval_seconds"), VoiceConfig.partial_interval_seconds,
+                "voice.partial_interval_seconds",
+            ),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),

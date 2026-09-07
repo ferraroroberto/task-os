@@ -1,9 +1,19 @@
-"""Voice route family — a recorded phrase becomes a quick-add line (#92).
+"""Voice route family — a recorded phrase becomes a quick-add line (#92, #146).
 
-    POST /api/transcribe   the raw audio body → {text, parse: {…}} in one
-                           round trip (409 when voice is not configured, 503
-                           when the whisper server did not answer, 502 when it
-                           answered and refused the clip)
+    POST /api/transcribe          the raw audio body → {text, parse: {…}} in
+                                  one round trip (409 when voice is not
+                                  configured, 503 when the whisper server did
+                                  not answer, 502 when it answered and refused
+                                  the clip)
+    POST /api/transcribe?parse=0  the same, → {text} alone
+
+``?parse=0`` exists for the live transcript (#146): while you are still
+speaking the page re-posts its growing take every ``partial_interval_seconds``,
+and each of those passes wants the words and nothing else. Parsing a *partial*
+would be worse than wasteful — a due date appearing and moving as the sentence
+lands is noise, so the client deliberately shows none until the take is
+finished. Skipping it also keeps a per-second request off the database
+(``resolve_parent`` is the one query here).
 
 The one ``async def`` here reads the body off the wire and then hands the
 blocking forward to the threadpool — a transcription is the longest thing this
@@ -44,7 +54,11 @@ router = APIRouter(prefix="/api", tags=["voice"])
 
 
 @router.post("/transcribe")
-async def transcribe(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
+async def transcribe(
+    request: Request,
+    parse: bool = True,
+    db: sqlite3.Connection = Depends(get_db),
+) -> Any:
     client = getattr(request.app.state, "voice", None)
     if client is None:
         return error_response(409, "voice_disabled", "voice service not started")
@@ -70,6 +84,8 @@ async def transcribe(request: Request, db: sqlite3.Connection = Depends(get_db))
         )
     except VoiceError as exc:
         return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    if not parse:
+        return {"text": text}
     parsed = quick_add.parse(text)
     parsed["parent"] = quick_add.resolve_parent(db, parsed["parent_ref"])
     return {"text": text, "parse": parsed}

@@ -118,6 +118,13 @@ def _digest(path: Path) -> str:
 
 
 def main() -> int:
+    # This script's own report uses ·, ≤ and ✓. Piped or redirected — which is
+    # how the gate and every agent run it — Windows falls back to cp1252 and
+    # `print` raises `UnicodeEncodeError` *after* the verdict has been decided,
+    # turning a passing run into a traceback and a non-zero exit.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--keep", type=Path, default=None,
                     help="directory to keep both snapshots in (default: a temp dir, removed)")

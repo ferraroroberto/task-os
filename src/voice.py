@@ -233,6 +233,10 @@ class VoiceClient:
     def __init__(self, config: AppConfig) -> None:
         self.primary = (config.voice.transcribe_url or "").strip()
         self.fallback = (config.voice.fallback_url or "").strip()
+        #: How often the page re-posts its growing take (#146). Read by the
+        #: browser off ``/api/status`` rather than hardcoded there, so the
+        #: cadence is one install-level number and not two.
+        self.partial_interval = float(config.voice.partial_interval_seconds or 0.0)
         self._lock = threading.Lock()
         #: (monotonic deadline, reachable, reason when not, serving, url)
         self._verdict: tuple[float, bool, str | None, str | None, str] | None = None
@@ -297,6 +301,8 @@ class VoiceClient:
         "am I getting parakeet, or the local CPU whisper?" is answerable
         without reading a log; ``url`` is that endpoint's URL, falling back to
         the configured primary when nothing answered.
+        ``partial_interval_seconds`` is the live-transcript cadence the page
+        should use — ``0`` means "transcribe once, on stop" (#146).
         """
         reachable, reason, serving, url = self.probe()
         return {
@@ -304,6 +310,7 @@ class VoiceClient:
             "reason": None if reachable else reason,
             "url": url,
             "serving": serving,
+            "partial_interval_seconds": self.partial_interval,
             "checked_at": self._checked_at,
         }
 

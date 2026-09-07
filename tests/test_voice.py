@@ -140,7 +140,8 @@ def test_status_off_always_carries_the_reason() -> None:
 
     blank = VoiceClient(config_for("")).status()
     assert blank == {"enabled": False, "reason": "no voice.transcribe_url in config",
-                     "url": "", "serving": None, "checked_at": None}
+                     "url": "", "serving": None, "partial_interval_seconds": 1.5,
+                     "checked_at": None}
 
 
 def test_a_timed_out_probe_does_not_claim_to_know_which_failure_it_was(
@@ -376,3 +377,79 @@ def test_status_names_which_endpoint_is_serving_over_http(
     client.app.state.voice = VoiceClient(config_for(whisper.url))
     on = client.get("/api/status").json()["voice"]
     assert on["enabled"] is True and on["serving"] == "hub" and on["url"] == whisper.url
+
+
+# ------------------------------------------------------- the live transcript
+
+
+def test_a_partial_asks_for_the_words_and_nothing_else(
+    client: TestClient, whisper: FakeWhisper
+) -> None:
+    """``?parse=0`` is what the rolling pass uses while you are still speaking.
+
+    It must return the transcript alone: parsing a fragment would put a due
+    date on screen that moves as the sentence lands, and it would run
+    ``resolve_parent`` — a database query — once a second for an answer nobody
+    is shown.
+    """
+    _point_at(client, whisper.url)
+    res = client.post(
+        "/api/transcribe?parse=0", content=wav_bytes(), headers={"Content-Type": "audio/wav"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"text": "buy a new filter for the dehumidifier next week"}
+
+    # …and the default is unchanged: a request that says nothing still parses.
+    full = client.post("/api/transcribe", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
+    assert "parse" in full.json()
+
+
+def test_a_partial_reports_a_failure_the_same_way_the_final_pass_does(
+    client: TestClient
+) -> None:
+    """The client drops a failed partial silently, but the route must not
+    invent a success for it — the same code and envelope either way."""
+    _point_at(client, _dead_url())
+    res = client.post(
+        "/api/transcribe?parse=0", content=wav_bytes(), headers={"Content-Type": "audio/wav"},
+    )
+    assert res.status_code == 503 and res.json()["error"]["code"] == "voice_unavailable"
+
+
+def test_the_live_cadence_is_the_installs_number_not_the_pages(
+    client: TestClient, whisper: FakeWhisper
+) -> None:
+    """``static/voice.js`` reads the interval off ``/api/status`` instead of
+    hardcoding one, so the cadence is a single install-level fact."""
+    client.app.state.voice = VoiceClient(config_for(whisper.url))
+    assert client.get("/api/status").json()["voice"]["partial_interval_seconds"] == 1.5
+
+
+def test_a_zero_interval_turns_the_live_transcript_off_without_turning_voice_off(
+    whisper: FakeWhisper
+) -> None:
+    """``0`` is the documented way to go back to one transcription on stop.
+    It must not read as "voice is broken" anywhere."""
+    cfg = AppConfig(voice=VoiceConfig(transcribe_url=whisper.url, partial_interval_seconds=0))
+    st = VoiceClient(cfg).status()
+    assert st["partial_interval_seconds"] == 0 and st["enabled"] is True
+
+
+def test_an_unusable_interval_in_the_config_falls_back_loudly(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A typo must not silently become "live transcript off" — that would read
+    as a deliberate setting rather than a broken one."""
+    from src.config import load_config
+    from tests.conftest import write_test_config
+
+    for bad in ("soon", -1):
+        cfg_path = write_test_config(tmp_path / f"cfg-{bad}.json", partial_interval_seconds=bad)
+        with caplog.at_level("WARNING"):
+            caplog.clear()
+            cfg = load_config(cfg_path)
+        assert cfg.voice.partial_interval_seconds == 1.5, bad
+        assert any("partial_interval_seconds" in r.getMessage() for r in caplog.records), bad
+
+    good = write_test_config(tmp_path / "cfg-ok.json", partial_interval_seconds=0.75)
+    assert load_config(good).voice.partial_interval_seconds == 0.75

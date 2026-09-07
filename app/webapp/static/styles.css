@@ -611,7 +611,7 @@ a.chip:hover { text-decoration: underline; }
   transition: color 120ms ease, background-color 120ms ease;
 }
 .quick-add-mic .icon { width: var(--icon-title); height: var(--icon-title); }
-/* Idle only. A press leaves the pointer sitting on the button, so hover is
+/* Idle only. A click leaves the pointer sitting on the button, so hover is
    true for the whole recording — without the exclusions its plain specificity
    (0,3,0) outranks `.is-recording` (0,2,0) and the tint never appears. */
 .quick-add-mic:not(:disabled):not(.is-recording):not(.is-working):hover,
@@ -621,9 +621,14 @@ a.chip:hover { text-decoration: underline; }
    or the other. `--line` on the glyph is what makes it read greyed next to
    the muted `+` beside it. */
 .quick-add-mic:disabled { background: var(--card-off); color: var(--line); cursor: default; }
+/* Recording is a *state you are in*, not a keypress: the mic is a toggle
+   (#146), so this has to read from across the room and stay put until the
+   second click. The glyph itself becomes a stop square (swapped in voice.js),
+   which is what makes the button say what clicking it will do. */
 .quick-add-mic.is-recording {
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
   animation: quick-add-mic-pulse 1.2s ease-in-out infinite;
 }
 .quick-add-mic.is-working { color: var(--accent); }
@@ -631,6 +636,11 @@ a.chip:hover { text-decoration: underline; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+/* A partial transcript is provisional until the take ends — it is shown so
+   you can watch the sentence land, not so you can trust it yet. Muted rather
+   than italic: the line is a task title, and italics would follow it into the
+   chips and the created task in the reader's head. */
+.quick-add-input.is-dictating { color: var(--muted); }
 .quick-add-voice-hint {
   margin: 6px 0 0;
   padding: 0 4px;

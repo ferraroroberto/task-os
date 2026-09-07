@@ -364,9 +364,16 @@ export function mountSettings(opts) {
     // Which endpoint answered matters: the hub means the fleet's transcribe
     // role (parakeet first), the fallback means the local CPU whisper server.
     const serving = { hub: 'hub', fallback: 'local whisper (fallback)' }[st.serving] || 'unknown';
+    // The live-transcript cadence (#146). Absent is not "off": the install
+    // did not say, and saying "off" for it would be a claim nobody made.
+    const every = st.partial_interval_seconds;
+    const live = typeof every !== 'number' ? 'live transcript unknown'
+      : every > 0 ? 'live every ' + (+every.toFixed(2)) + 's'
+        : 'live transcript off';
     els.statusVoice.append(
       statusPart('ok', 'reachable'),
       ' · ' + serving,
+      ' · ' + live,
       st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
     );
     els.voiceCardMeta.textContent = st.serving === 'fallback' ? 'fallback' : 'on';

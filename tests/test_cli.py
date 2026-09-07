@@ -396,7 +396,7 @@ def test_voice_status_over_both_backends(run: Runner) -> None:
     code, out, _ = run("mirror", "status", "--json")
     assert code == 0
     v = _json(out)["voice"]
-    assert set(v) == {"enabled", "reason", "url", "serving", "checked_at"}
+    assert set(v) == {"enabled", "reason", "url", "serving", "partial_interval_seconds", "checked_at"}
     assert v["enabled"] is False and v["reason"] == "no voice.transcribe_url in config"
 
     code, out, _ = run("mirror", "status")
