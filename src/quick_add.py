@@ -41,9 +41,26 @@ from src.dates import DateParseError, parse_date
 
 _PARENT_ID_RE = re.compile(r"\s#(\d+)\s*$")
 _PARENT_TITLE_RE = re.compile(r"\s[›>]\s*(.+?)\s*$")
-_LEAD_INS = {"on", "by", "due"}
+#: Words that introduce a date phrase rather than being part of it, dropped
+#: before the phrase reaches `src.dates`. "before friday" means the task is
+#: due Friday here — a deadline, not the day before it; a task manager that
+#: quietly moved it to Thursday would be inventing a day nobody named.
+_LEAD_INS = {"on", "by", "due", "before"}
 _STARTS_LEAD_INS = {"starts", "start", "starting"}
 _MAX_DATE_WORDS = 4
+
+
+def strip_lead_in(phrase: str) -> str:
+    """A date phrase without its introducing word — ``before friday`` → ``friday``.
+
+    Shared with :mod:`src.enrich` (#147), which asks a model for "the words
+    that say when" and gets them with their preposition attached. One
+    vocabulary, so a phrase means the same thing typed and spoken.
+    """
+    words = (phrase or "").split()
+    if len(words) > 1 and words[0].lower() in _LEAD_INS:
+        return " ".join(words[1:])
+    return " ".join(words)
 
 
 def _split_parent(text: str) -> tuple[str, dict[str, Any] | None]:

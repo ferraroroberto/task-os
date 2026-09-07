@@ -80,6 +80,7 @@ export function mountSettings(opts) {
     voiceCardMeta: document.getElementById('voiceCardMeta'),
     statusVoice: document.getElementById('statusVoice'),
     statusVoiceUrl: document.getElementById('statusVoiceUrl'),
+    statusEnrich: document.getElementById('statusEnrich'),
     searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
@@ -267,6 +268,7 @@ export function mountSettings(opts) {
       }
       renderCapture(body.capture);
       renderVoice(body.voice);
+      renderEnrich(body.enrich);
     } catch (err) {
       // An unreachable status is its own visible state, never a stale "Loading…".
       renderAccessUnknown(err.message);
@@ -277,6 +279,7 @@ export function mountSettings(opts) {
       if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
       renderCapture(null);
       renderVoice(null);
+      renderEnrich(null);
     }
   }
 
@@ -377,6 +380,23 @@ export function mountSettings(opts) {
       st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
     );
     els.voiceCardMeta.textContent = st.serving === 'fallback' ? 'fallback' : 'on';
+  }
+
+  /** The light model that turns a spoken sentence into a title and a
+   *  description (#147). Off is a state with a reason, not a blank: a
+   *  spoken line still becomes a task, it just keeps the deterministic
+   *  parse ??? and this row is where you find that out. */
+  function renderEnrich(st) {
+    if (!els.statusEnrich) return;
+    els.statusEnrich.replaceChildren();
+    els.statusEnrich.classList.remove('muted');
+    if (!st) { els.statusEnrich.textContent = 'unknown'; return; }
+    if (!st.enabled) {
+      els.statusEnrich.append(statusPart('off', 'not reachable'),
+        ' ??? ' + (st.reason || 'unknown') + ' ?? the spoken line keeps the plain parse');
+      return;
+    }
+    els.statusEnrich.append(statusPart('ok', 'reachable'), ' ?? ', codeEl(st.model || 'unknown'));
   }
 
   // ------------------------------------------------------------ issue sync

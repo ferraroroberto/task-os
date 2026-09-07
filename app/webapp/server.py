@@ -45,9 +45,11 @@ open issues → coding tasks, first pass 10 s after startup then every
 reindex when the index file is missing / older than 24 h, hourly re-check) and
 ``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
 read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
-``src.voice.VoiceClient`` (``app.state.voice``) is the one exception with no
+``src.voice.VoiceClient`` (``app.state.voice``) and ``src.enrich.EnrichClient``
+(``app.state.enrich``, #147) are the exceptions with no
 thread to start: voice quick-add (#92) is a cached reachability probe of the
-whisper endpoint plus one forwarding POST per recording.
+transcription endpoint plus one forwarding POST per recording, and enrichment
+is the same shape against the hub's chat endpoint.
 All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
 over the folder-index and issue-sync services so the search box reads the same
@@ -104,6 +106,7 @@ from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
 from src.email_capture import EmailCaptureService
+from src.enrich import EnrichClient
 from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
@@ -200,6 +203,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # No thread and nothing to start: the voice client is a cached reachability
     # probe plus one forwarding POST (#92).
     app.state.voice = VoiceClient(config)
+    # Same shape, same reason (#147): a cached probe plus one POST per
+    # spoken line. Enrichment is a tidy-up on an answer that already
+    # exists, so it never has anything to keep running.
+    app.state.enrich = EnrichClient(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:
