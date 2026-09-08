@@ -442,6 +442,7 @@ class LocalBackend:
         """
         from src import opener
         from src.ai import AIClient
+        from src.archive_batch import ArchiveBatchService
         from src.backup import BackupScheduler
         from src.email_capture import EmailCaptureService
         from src.enrich import EnrichClient
@@ -479,6 +480,10 @@ class LocalBackend:
             # this process can run whether or not the app is up.
             "enrich": EnrichClient(config).status(),
             "ai": AIClient(config).status(),
+            # Whether this install can drive the archiver, and what the last run
+            # did — both read off the config and this database, so the answer is
+            # the same with the app up or down (#157). Nothing is spawned here.
+            "archive": ArchiveBatchService(config).status(self.conn),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }

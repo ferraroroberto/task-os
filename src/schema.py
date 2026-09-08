@@ -383,10 +383,67 @@ BEGIN
 END;
 """
 
+# Batch archiving of the Outlook Inbox through email-archiver (#157). One
+# ``archive_runs`` row per run of the archiver's batch CLI, one
+# ``archive_items`` row per mail that run decided on.
+#
+# The partial unique index is the point: a mail is filed **once**. Identity is
+# the Internet Message-ID (the archiver's own identity — an Outlook EntryID is
+# rewritten by the very move ``apply`` performs), and the index covers only the
+# two states in which the mail is actually filed somewhere, so a reverted mail
+# is free to be archived again by a later run while a second run over a mail
+# already filed cannot write a second row even if the archiver's index has not
+# caught up yet.
+#
+# ``candidates_json`` keeps ``plan``'s ranked list verbatim so Step 2 (#158)
+# can re-rank without re-planning and Step 3 (#159) can offer the discarded
+# folders. ``date_prefix`` is the archiver's own per-folder naming inference,
+# stored so a later move hands the same value back.
+_V14 = """
+CREATE TABLE archive_runs (
+    id           INTEGER PRIMARY KEY,
+    started_at   TEXT NOT NULL,
+    finished_at  TEXT,
+    status       TEXT NOT NULL DEFAULT 'running'
+                     CHECK (status IN ('running', 'done', 'failed')),
+    planned      INTEGER NOT NULL DEFAULT 0,
+    archived     INTEGER NOT NULL DEFAULT 0,
+    needs_review INTEGER NOT NULL DEFAULT 0,
+    failed       INTEGER NOT NULL DEFAULT 0,
+    error        TEXT
+);
+CREATE TABLE archive_items (
+    id              INTEGER PRIMARY KEY,
+    run_id          INTEGER NOT NULL REFERENCES archive_runs(id) ON DELETE CASCADE,
+    message_id      TEXT NOT NULL,
+    entry_id        TEXT,
+    subject         TEXT,
+    sender          TEXT,
+    sent_at         TEXT,
+    attachments     INTEGER NOT NULL DEFAULT 0,
+    candidates_json TEXT,
+    chosen_folder   TEXT,
+    chosen_rank     INTEGER,
+    confidence      REAL,
+    reason          TEXT,
+    date_prefix     INTEGER NOT NULL DEFAULT 0,
+    files_json      TEXT,
+    sequence        TEXT,
+    status          TEXT NOT NULL
+                        CHECK (status IN ('archived', 'needs_review', 'failed',
+                                          'reverted', 'moved')),
+    error           TEXT,
+    decided_at      TEXT
+);
+CREATE INDEX idx_archive_items_run ON archive_items(run_id, id);
+CREATE UNIQUE INDEX idx_archive_items_filed
+    ON archive_items(message_id) WHERE status IN ('archived', 'moved');
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13,
+    12: _V12, 13: _V13, 14: _V14,
 }
 
 #: The version a freshly migrated database carries.

@@ -29,6 +29,11 @@ Route families (each in ``app/webapp/routers/``):
                                    endpoint's own state rides /api/status's `voice`
     ai      GET /api/ai/suggestions · POST /api/ai/triage and individual
                                    accept/reject → staged Inbox proposals (#95)
+    archive POST /api/archive/run · GET /api/archive/runs[/{id}] · per-item
+                                   revert / move / accept → the Outlook Inbox
+                                   filed through email-archiver's batch CLI as a
+                                   subprocess (#157); the service's own state
+                                   rides /api/status's `archive`
     auth    GET /login · POST /api/login|logout — the token / password →
             cookie swap (Step 7)
 
@@ -91,6 +96,7 @@ from starlette.types import Scope
 
 from app.webapp.routers import (
     ai,
+    archive,
     auth,
     capture,
     folders,
@@ -107,6 +113,7 @@ from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src import placeholders
 from src import tasks_repo as repo
 from src.ai import AIClient
+from src.archive_batch import ArchiveBatchService
 from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
 from src.certs import cert_paths
@@ -217,6 +224,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One Anthropic-SDK client for staged triage now and generated notes later.
     # No worker of its own: a cached reachability probe plus explicit requests.
     app.state.ai = AIClient(config)
+    # No thread of its own either: a run is started on demand and drives the
+    # archiver's batch CLI in one worker thread for its lifetime (#157).
+    app.state.archive = ArchiveBatchService(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:
@@ -236,6 +246,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.issues.stop()
         app.state.folders.stop()
         app.state.capture.stop()
+        # Not a poller to stop — this waits for an archiving run that is mid-
+        # flight, so shutdown never lands between a mail's files and its move.
+        app.state.archive.stop()
         repo.set_folder_resolver(None)
         repo.set_folder_web_resolver(None)
 
@@ -276,6 +289,7 @@ def create_app() -> FastAPI:
     app.include_router(capture.router)
     app.include_router(voice.router)
     app.include_router(ai.router)
+    app.include_router(archive.router)
     return app
 
 
