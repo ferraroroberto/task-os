@@ -5,7 +5,9 @@
     GET  /api/archive/runs?limit=        → {runs, count} — latest first
     GET  /api/archive/runs/{id}          → the run with its items
     POST /api/archive/items/{id}/revert  → delete the files, mail back to Inbox
-    POST /api/archive/items/{id}/move    {folder, hint?} → re-file into that folder
+    POST /api/archive/items/{id}/move    {folder, hint?} → file into that folder
+                                           (a filed row is undone first; a
+                                           ``needs_review`` one is simply filed)
     POST /api/archive/items/{id}/accept  {hint?} → mark a reviewable row seen (no files)
 
 ``hint`` is the optional one-line note the report screen (#159) offers when you

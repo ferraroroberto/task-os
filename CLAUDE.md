@@ -33,7 +33,7 @@ Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray t
   - app/webapp/static/**/*.css
   - app/webapp/static/**/*.{js,html}
 - key views:
-  - /          (Board · Table · Tree · Today · Search · Settings tabs)
+  - /          (Board · Table (grid ⇄ tree) · Today · Archive · Search · Settings tabs)
   - /login     (sign-in card: token or password → cookie)
 
 ## Internal architecture

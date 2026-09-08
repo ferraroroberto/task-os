@@ -670,6 +670,59 @@ def test_move_reverts_then_applies_into_the_folder_you_named(
     }]
 
 
+def test_move_files_a_needs_review_mail_that_was_never_archived(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The commonest gesture on the report screen (#159): the ranking would not
+    decide, so a human names the folder — and there is nothing to undo first."""
+    filed_file = "E:\\archive\\admin\\bills\\0003 - something ambiguous.msg"
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        # one candidate, ranked too low to file on its own
+        plan=[plan_doc([mail("shy@example.invalid", subject="Something ambiguous",
+                             candidates=[candidate(FOLDER_BILLS, 0.2, date_prefix=True)])])],
+        apply=[apply_doc([apply_result("shy@example.invalid", FOLDER_BILLS,
+                                       files=[filed_file], sequence="0003")])],
+    )
+    svc = service_for(repo)
+    item = _one_archived_item(conn, svc)
+    assert item["status"] == "needs_review" and item["files"] == []
+
+    moved = svc.move(conn, item["id"], "{archive}/admin/bills", hint="bills go to the flat")
+    assert moved["status"] == "moved" and moved["files"] == [filed_file]
+    assert moved["date_prefix"] is True and moved["sequence"] == "0003"
+
+    # No revert leg at all: there was nothing on disk to undo, and inventing one
+    # would have asked the archiver to un-file a mail it never filed. The run
+    # itself filed nothing, so the move's own `apply` is the first there is.
+    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+    # …and the correction it teaches carries the hint (#158).
+    stored = archive_batch.recent_corrections(conn)
+    assert len(stored) == 1 and stored[0]["hint"] == "bills go to the flat"
+    assert stored[0]["chosen_folder"] == "E:/archive/admin/bills"
+
+
+def test_move_refuses_a_reverted_mail_and_names_why(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A reverted mail is back in the Inbox and belongs to the next run, not to
+    a second filing from a stale report row."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("undone@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[apply_doc([apply_result("undone@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
+        revert=[revert_doc([revert_result("undone@example.invalid", deleted=[ARCHIVED_FILE])])],
+    )
+    svc = service_for(repo)
+    item = _one_archived_item(conn, svc)
+    assert svc.revert(conn, item["id"])["status"] == "reverted"
+
+    with pytest.raises(ArchiveError) as caught:
+        svc.move(conn, item["id"], "{archive}/admin/bills")
+    assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
+    assert "nothing here to file" in str(caught.value)
+
+
 def test_move_refuses_a_folder_this_install_cannot_resolve(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:

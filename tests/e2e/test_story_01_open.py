@@ -30,8 +30,9 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import shot
 
-# Five destinations since #161 — the Tree is a view of the Table, not a tab.
-TABS = ["Board", "Table", "Today", "Search", "Settings"]
+# Six destinations: the Tree became a view of the Table (#161) and the slot it
+# freed went to Archive (#159).
+TABS = ["Board", "Table", "Today", "Archive", "Search", "Settings"]
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 

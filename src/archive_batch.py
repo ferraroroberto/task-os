@@ -50,7 +50,10 @@ State machine, one ``archive_items`` row per mail:
     archived      filed on disk and moved in Outlook (or already filed, per the
                   archiver's index, and recorded with the existing file)
     needs_review  left in the Inbox: the best candidate scored below
-                  ``archive.confidence_threshold``, or there was none
+                  ``archive.confidence_threshold``, or there was none. A human
+                  resolves it from the report screen (#159) — ``accept`` to
+                  leave it in the Inbox as seen, or ``move`` into any folder,
+                  which files it for the first time (no undo leg)
     failed        the archiver refused or broke on this mail; ``error`` says
                   which of its codes. Revertible when files were still written
                   (``apply`` fills ``files`` *before* the move on purpose)
@@ -399,7 +402,7 @@ class ArchiveBatchService:
         return True, None
 
     def status(self, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
-        """What ``/api/status``'s ``archive`` key, Settings (#159) and the CLI render."""
+        """What ``/api/status``'s ``archive`` key, the Archive tab (#159) and the CLI render."""
         last_run: dict[str, Any] | None = None
         own = conn is None
         c = conn or connect()
@@ -887,16 +890,47 @@ class ArchiveBatchService:
         return item
 
     @staticmethod
-    def _require_revertible(item: dict[str, Any]) -> None:
+    def _has_files_on_disk(item: dict[str, Any]) -> bool:
+        """Is there anything of this mail in the archive tree right now?
+
+        The two filed states always have files; a ``failed`` row has them
+        whenever ``apply`` got as far as writing before it broke. Everything
+        else — ``needs_review``, ``reverted`` — is a mail that is still (or
+        again) in the Inbox with nothing on disk.
+        """
+        return item["status"] in FILED_STATUSES or (
+            item["status"] == "failed" and bool(item["files"])
+        )
+
+    @classmethod
+    def _require_revertible(cls, item: dict[str, Any]) -> None:
         """Filed, or failed with files already on disk — the two undoable shapes."""
-        if item["status"] in FILED_STATUSES:
-            return
-        if item["status"] == "failed" and item["files"]:
+        if cls._has_files_on_disk(item):
             return
         raise ArchiveError(
             "archive_bad_state",
             f"archive item {item['id']} is {item['status']} and has no archived file — there is "
             "nothing to undo",
+            http_status=409,
+        )
+
+    @classmethod
+    def _require_movable(cls, item: dict[str, Any]) -> None:
+        """The shapes a human may file into a folder they picked.
+
+        Wider than :meth:`_require_revertible` on purpose: a ``needs_review``
+        mail is the one the screen (#159) most needs to move — the system was
+        not confident enough to file it, so a human names the folder. There is
+        nothing on disk to undo first, which is the only difference; every
+        other state is either already handled (filed → undo, then re-file) or
+        genuinely nothing to act on (``reverted``: the mail is back in the
+        Inbox and a fresh run owns it again).
+        """
+        if cls._has_files_on_disk(item) or item["status"] == "needs_review":
+            return
+        raise ArchiveError(
+            "archive_bad_state",
+            f"archive item {item['id']} is {item['status']} — there is nothing here to file",
             http_status=409,
         )
 
@@ -947,11 +981,17 @@ class ArchiveBatchService:
     def move(
         self, conn: sqlite3.Connection, item_id: int, folder: str, *, hint: str | None = None
     ) -> dict[str, Any]:
-        """Re-file this mail into ``folder``: undo the current filing, then apply again.
+        """File this mail into ``folder``: undo the current filing, then apply again.
 
         ``folder`` takes a folder ref or an absolute path and is resolved
         through the same placeholders ``POST /api/resolve`` uses, so the phone
         and a second PC can name a folder the way they already do everywhere.
+
+        A ``needs_review`` mail has nothing on disk, so there is no undo leg for
+        it — it is simply filed where the human said, which is how the report
+        screen (#159) resolves the rows the ranking refused to decide. Every
+        other movable row is undone first and then filed afresh; the archiver
+        owns the filenames either way.
 
         A move that lands is also the clearest correction there is, so it writes
         an ``archive_corrections`` row (#158) carrying the optional ``hint`` —
@@ -959,7 +999,8 @@ class ArchiveBatchService:
         prompt.
         """
         item = self._require(conn, item_id)
-        self._require_revertible(item)
+        self._require_movable(item)
+        filed = self._has_files_on_disk(item)
         target = placeholders.resolve(
             placeholders.to_ref(folder, self.placeholders), self.placeholders
         )
@@ -971,7 +1012,12 @@ class ArchiveBatchService:
                 http_status=422,
             )
         destination = target.path
-        if _same_folder(destination, item["chosen_folder"]):
+        # Only a mail that is actually filed there can be "already filed there".
+        # A ``needs_review`` row often carries the folder the model was not
+        # confident enough about, and filing it into exactly that folder is the
+        # commonest thing a human does on this screen — refusing it would refuse
+        # the feature.
+        if filed and _same_folder(destination, item["chosen_folder"]):
             raise ArchiveError(
                 "archive_bad_folder", "this mail is already filed in that folder", http_status=409,
             )
@@ -979,13 +1025,14 @@ class ArchiveBatchService:
 
         self._claim()
         try:
-            undo = self._revert_once(item)
-            if not undo["ok"]:
-                update_item(conn, item_id, error=undo["message"])
-                raise ArchiveError(
-                    "archive_revert_failed",
-                    f"nothing was moved: {undo['message']}", http_status=502,
-                )
+            if filed:
+                undo = self._revert_once(item)
+                if not undo["ok"]:
+                    update_item(conn, item_id, error=undo["message"])
+                    raise ArchiveError(
+                        "archive_revert_failed",
+                        f"nothing was moved: {undo['message']}", http_status=502,
+                    )
             applied = self._spawn_with_payload("apply", "--decisions", [{
                 "message_id": item["message_id"], "folder_path": destination,
                 "date_prefix": date_prefix,
@@ -995,14 +1042,19 @@ class ArchiveBatchService:
 
         entry = next((r for r in applied.get("results") or [] if isinstance(r, dict)), None)
         if entry is None:
+            # Whatever was on disk has been deleted by the undo leg (when there
+            # was one) and nothing was written, so the mail is in the Inbox
+            # either way — but a row that was never filed did not become an
+            # *undo*, and calling it one would invent a filing that never was.
+            where = "back in" if filed else "still in"
             update_item(
-                conn, item_id, status="reverted", files_json="[]",
-                error="the archiver reported no result for the move; the mail is back in the Inbox",
+                conn, item_id, status="reverted" if filed else item["status"], files_json="[]",
+                error=f"the archiver reported no result for the move; the mail is {where} the Inbox",
                 decided_at=clock.now_iso(),
             )
             raise ArchiveError(
                 "archive_move_failed",
-                "the archiver reported no result for the move — the mail is back in the Inbox",
+                f"the archiver reported no result for the move — the mail is {where} the Inbox",
                 http_status=502,
             )
         files = [str(f) for f in entry.get("files") or []]
@@ -1015,9 +1067,16 @@ class ArchiveBatchService:
             "decided_at": clock.now_iso(),
         }
         if entry.get("ok"):
+            # Where it actually came from, not where it was ranked for: a
+            # ``needs_review`` mail carries the folder the model was unsure
+            # about, and reading that back as its previous home would record a
+            # filing that never happened.
+            reason = (
+                f"moved here by hand from {item['chosen_folder'] or 'its previous folder'}"
+                if filed else "filed here by hand from the Inbox"
+            )
             moved = update_item(
-                conn, item_id, status="moved", error=None,
-                reason=f"moved here by hand from {item['chosen_folder'] or 'the Inbox'}", **common,
+                conn, item_id, status="moved", error=None, reason=reason, **common,
             )
             record_correction(conn, item, chosen_folder=destination, hint=hint)
             return moved
