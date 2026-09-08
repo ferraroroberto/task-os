@@ -440,10 +440,40 @@ CREATE UNIQUE INDEX idx_archive_items_filed
     ON archive_items(message_id) WHERE status IN ('archived', 'moved');
 """
 
+# The local model picks the folder among the archiver's candidates (#158).
+#
+# ``archive_corrections`` is the memory: one row every time a human overrules
+# the system — a ``move`` into another folder, or an ``accept`` that confirms
+# the folder a below-threshold mail was heading for. The last N rows ride the
+# next run's prompt as few-shot examples, so the same mistake is made once.
+# ``item_id`` is ON DELETE SET NULL rather than CASCADE on purpose: deleting a
+# run must not delete what it taught, and every field the prompt needs
+# (subject, sender, both folders, the hint) is copied into the row.
+#
+# ``archive_runs.agreement`` is the share of model-ranked mails filed where the
+# archiver's own suggester would have filed them. NULL is its own state — the
+# model ranked nothing this run — never 0.0, which would read as total
+# disagreement.
+_V15 = """
+CREATE TABLE archive_corrections (
+    id               INTEGER PRIMARY KEY,
+    item_id          INTEGER REFERENCES archive_items(id) ON DELETE SET NULL,
+    message_id       TEXT NOT NULL,
+    subject          TEXT,
+    sender           TEXT,
+    suggested_folder TEXT,
+    chosen_folder    TEXT,
+    hint             TEXT,
+    created_at       TEXT NOT NULL
+);
+CREATE INDEX idx_archive_corrections_item ON archive_corrections(item_id);
+ALTER TABLE archive_runs ADD COLUMN agreement REAL;
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13, 14: _V14,
+    12: _V12, 13: _V13, 14: _V14, 15: _V15,
 }
 
 #: The version a freshly migrated database carries.

@@ -47,10 +47,11 @@ flowchart LR
     voice["voice.py (#92, #144, #146)<br/>VoiceClient: hub first, local whisper as fallback<br/>cached TCP probe per endpoint (15 s) · status(serving, partial_interval)<br/>transcribe(): multipart forward, WAV only, no model named<br/>fallback ONLY on a transport failure<br/>clean_transcript: drops the trailing full stop<br/>refused (502) ≠ nothing answered (503)"]
     enrich["enrich.py (#147)<br/>EnrichClient: the hub's chat endpoint, model NAMED<br/>prompt-only JSON (response_format is a 400 here)<br/>&lt;think&gt; + code fence stripped, allow-list read<br/>a date phrase must be VERBATIM in the transcript<br/>src/dates resolves it, never the model<br/>every failure ??? quick_add.parse + source:parser"]
     ai["ai/ (#95)<br/>client.py: Anthropic-shape local hub client<br/>one in-flight request · no retries · cached reachability<br/>triage.py: bounded context + whole-response validation<br/>stage only → individual accept/reject; accept actor=ai + Todo"]
-    archive["archive_batch.py (#157)<br/>ArchiveBatchService: plan → decide → apply → rescan<br/>subprocess only, NO_WINDOW, bounded by timeout_seconds<br/>never imports the archiver; one child at a time (409)<br/>top candidate ≥ confidence_threshold, else needs_review<br/>date_prefix handed back unchanged · candidates kept verbatim<br/>revert · move (revert then apply) · accept<br/>failed rescan = done + error, never a clean run"]
+    archive["archive_batch.py (#157)<br/>ArchiveBatchService: plan → rank → apply → rescan<br/>subprocess only, NO_WINDOW, bounded by timeout_seconds<br/>never imports the archiver; one child at a time (409)<br/>confidence ≥ confidence_threshold, else needs_review<br/>date_prefix handed back unchanged · candidates kept verbatim<br/>revert · move · accept — the last two write a correction<br/>failed rescan = done + error, never a clean run"]
+    arank["archive_rank.py (#158)<br/>rank(mails, corrections, client) — pure, no DB<br/>batches of archive.batch_size · own AIClient on archive.model<br/>the model returns an INDEX, never a path, never a date<br/>prompt-only JSON + whole-batch validator (ai_invalid_response)<br/>last archive.examples corrections as few-shot lines<br/>a hub failure degrades THAT batch to the suggester's top<br/>agreement = picks equal to rank 0 (None ≠ 0.0)"]
     dates["dates.py<br/>parse_date · next_due · anchors (#112)"]
     qa["quick_add.py<br/>parse · resolve_parent · strip_lead_in"]
-    schema["schema.py<br/>MIGRATIONS v1→v14 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v15 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
@@ -68,7 +69,8 @@ flowchart LR
     s["settings.schema_version"]
     fts["tasks_fts · comments_fts<br/>(FTS5, trigger-synced)"]
     ais["ai_suggestions (v12)<br/>task_id · JSON payload<br/>pending|accepted|rejected · resolved_at<br/>one pending row per task"]
-    ar["archive_runs · archive_items (v14)<br/>one run · one row per decided mail<br/>archived|needs_review|failed|reverted|moved<br/>UNIQUE(message_id) WHERE filed — a mail is filed once"]
+    ar["archive_runs · archive_items (v14)<br/>one run · one row per decided mail<br/>archived|needs_review|failed|reverted|moved<br/>UNIQUE(message_id) WHERE filed — a mail is filed once<br/>runs.agreement (v15) — NULL = the model ranked none"]
+    acorr["archive_corrections (v15)<br/>suggested_folder → chosen_folder + hint<br/>written by move · by accept on a needs_review with a folder<br/>subject/sender COPIED, item_id ON DELETE SET NULL<br/>deleting a run never deletes what it taught"]
   end
 
   subgraph files["Synced folder · config.mirror"]
@@ -79,7 +81,7 @@ flowchart LR
   end
 
   subgraph external["Other repos' data (read-only) + one spawned CLI"]
-    hub["local-llm-hub · hub<br/>127.0.0.1:8000<br/>/v1/audio/transcriptions — NO model named<br/>→ roles.audio.transcribe: parakeet@mac-mini-m4<br/>first, whisper behind · WAV only (webm/mp4 → 400)<br/>config.voice.transcribe_url<br/>/v1/chat/completions — model NAMED (#147)<br/>config.enrich.url + config.enrich.model<br/>Anthropic /v1/messages — model NAMED (#95)<br/>config.ai.base_url + config.ai.model"]
+    hub["local-llm-hub · hub<br/>127.0.0.1:8000<br/>/v1/audio/transcriptions — NO model named<br/>→ roles.audio.transcribe: parakeet@mac-mini-m4<br/>first, whisper behind · WAV only (webm/mp4 → 400)<br/>config.voice.transcribe_url<br/>/v1/chat/completions — model NAMED (#147)<br/>config.enrich.url + config.enrich.model<br/>Anthropic /v1/messages — model NAMED (#95, #158)<br/>config.ai.base_url + config.ai.model<br/>+ config.archive.model (the folder ranking)"]
     whisper["local-llm-hub · whisper-server<br/>127.0.0.1:8090 /v1/audio/transcriptions<br/>the fallback, transport failures only<br/>config.voice.fallback_url"]
     emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>flag_status · flag_request (the archiver writes, we only read)<br/>config.search.email_db"]
     batchcli["email-archiver · main_batch.py (#53) + main_scan.py<br/>plan | apply | revert — one JSON document each<br/>exit 0 = ran (per-mail errors inside) · exit 2 = could not start<br/>owns Outlook COM, the filenames and the index<br/>config.archive.repo + config.archive.python"]
@@ -173,6 +175,9 @@ flowchart LR
   archive -->|"subprocess (NO_WINDOW, timeout, JSON on stdout)"| batchcli
   archive --> ar
   archive -->|"folder ref → absolute path (move)"| placeholders
+  archive -->|"rank(mails, corrections, client) between plan and apply"| arank
+  archive -->|"record_correction on move / accept<br/>recent_corrections → the next prompt"| acorr
+  arank -->|"one request per batch; exact JSON contract<br/>config.archive.model + archive.ai_timeout_seconds"| hub
   batchcli -.->|"main_scan --no-ui re-indexes what the run filed"| emaildb
   mirrorr -->|"status()"| archive
   lifespan --> archive

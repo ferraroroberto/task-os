@@ -38,13 +38,24 @@ class AIError(RuntimeError):
 
 
 class AIClient:
-    """Configured local-hub client with cached status and one-shot generation."""
+    """Configured local-hub client with cached status and one-shot generation.
 
-    def __init__(self, config: AppConfig) -> None:
+    ``model`` and ``timeout`` override ``ai.model`` / ``ai.timeout_seconds`` for
+    a feature that needs its own (archive ranking, #158, uses ``archive.model``
+    and ``archive.ai_timeout_seconds``: a batch of mails is a far longer request
+    than one triage, because an open-weight model emits its reasoning before the
+    answer). Each instance carries its own in-flight lock, so two features never
+    serialise each other on the hub; the endpoint and the enabled switch stay
+    one setting for the whole app.
+    """
+
+    def __init__(
+        self, config: AppConfig, *, model: str | None = None, timeout: float | None = None,
+    ) -> None:
         self.configured_enabled = bool(config.ai.enabled)
         self.base_url = (config.ai.base_url or "").strip().rstrip("/")
-        self.model = (config.ai.model or "").strip()
-        self.timeout = float(config.ai.timeout_seconds)
+        self.model = ((model if model else config.ai.model) or "").strip()
+        self.timeout = float(timeout if timeout else config.ai.timeout_seconds)
         self._lock = threading.Lock()
         self._verdict: tuple[float, bool, str | None] | None = None
         self._checked_at: str | None = None

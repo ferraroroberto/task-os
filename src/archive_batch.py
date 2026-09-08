@@ -3,9 +3,18 @@
 One gesture files the whole Inbox: every mail is written into the archive
 folder the archiver ranks best, moved to Outlook's *Archive* folder and tagged,
 and the run is recorded here so a human can review it and undo any single mail.
-This module is the backend half — the schema (v14), the service that drives the
-archiver, and the state machine the API in ``app/webapp/routers/archive.py``
-exposes. The LLM re-ranking (#158) and the screen (#159) build on it.
+This module is the backend half — the schema (v14/v15), the service that drives
+the archiver, and the state machine the API in ``app/webapp/routers/archive.py``
+exposes. The screen (#159) builds on it.
+
+**Which folder** is decided in two layers. The archiver's suggester ranks the
+candidates; the local model then picks among them (``src/archive_rank.py``,
+#158) with a confidence and a one-line reason, and every human correction is
+stored in ``archive_corrections`` and fed back into the next run's prompt. A hub
+that is down, off or answering junk degrades that batch to the suggester's own
+top candidate, with the reason on every mail in it and on the run — the run
+still completes, because a mail nobody could rank is a filing decision, not a
+broken feature.
 
 **task-os never imports the archiver.** Everything crosses a subprocess
 boundary as JSON: ``<archive.python> main_batch.py {plan|apply|revert}`` run in
@@ -70,7 +79,9 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from src import clock, placeholders
+from src import archive_rank, clock, placeholders
+from src.ai.client import AIClient
+from src.archive_rank import Pick, Ranking
 from src.config import AppConfig
 from src.db import connect
 from src.no_window import NO_WINDOW
@@ -103,8 +114,15 @@ _ITEM_COLUMNS = (
 )
 _RUN_COLUMNS = (
     "id", "started_at", "finished_at", "status", "planned", "archived",
-    "needs_review", "failed", "error",
+    "needs_review", "failed", "error", "agreement",
 )
+_CORRECTION_COLUMNS = (
+    "id", "item_id", "message_id", "subject", "sender", "suggested_folder",
+    "chosen_folder", "hint", "created_at",
+)
+#: Bound on a hint a human types on the report screen (#159) before it becomes
+#: a few-shot line in every later prompt.
+MAX_HINT_CHARS = 500
 
 
 class ArchiveError(RuntimeError):
@@ -168,7 +186,8 @@ def create_run(conn: sqlite3.Connection) -> dict[str, Any]:
 
 
 def finish_run(
-    conn: sqlite3.Connection, run_id: int, *, status: str, error: str | None = None
+    conn: sqlite3.Connection, run_id: int, *, status: str, error: str | None = None,
+    agreement: float | None = None,
 ) -> dict[str, Any]:
     """Close a run, recomputing its counters from the rows it actually wrote.
 
@@ -184,11 +203,11 @@ def finish_run(
     planned = sum(counts.values())
     conn.execute(
         "UPDATE archive_runs SET finished_at = ?, status = ?, planned = ?, archived = ?, "
-        "needs_review = ?, failed = ?, error = ? WHERE id = ?",
+        "needs_review = ?, failed = ?, error = ?, agreement = ? WHERE id = ?",
         (
             clock.now_iso(), status, planned,
             counts["archived"] + counts["moved"], counts["needs_review"],
-            counts["failed"], error, run_id,
+            counts["failed"], error, agreement, run_id,
         ),
     )
     conn.commit()
@@ -240,6 +259,55 @@ def get_item(conn: sqlite3.Connection, item_id: int) -> dict[str, Any] | None:
     return _item_dict(row) if row is not None else None
 
 
+def record_correction(
+    conn: sqlite3.Connection, item: dict[str, Any], *, chosen_folder: str,
+    hint: str | None = None,
+) -> dict[str, Any]:
+    """Remember that a human filed this mail here, not where the system said (#158).
+
+    Everything the next prompt needs is **copied**, never joined: the run and
+    its items may be deleted, the lesson stays. ``suggested_folder`` is what the
+    system had settled on — the folder it chose, or, when it chose none, the
+    archiver's own top candidate, which is the thing that was actually wrong.
+    """
+    candidates = item.get("candidates") or []
+    top = next((c for c in candidates if isinstance(c, dict)), {})
+    suggested = item.get("chosen_folder") or str(top.get("folder_path") or "") or None
+    cleaned = (hint or "").strip()[:MAX_HINT_CHARS] or None
+    cur = conn.execute(
+        "INSERT INTO archive_corrections (item_id, message_id, subject, sender, "
+        "suggested_folder, chosen_folder, hint, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (
+            item.get("id"), str(item.get("message_id") or ""), item.get("subject"),
+            item.get("sender"), suggested, chosen_folder, cleaned, clock.now_iso(),
+        ),
+    )
+    conn.commit()
+    logger.info(
+        "ℹ️ archive: learned a correction — %s → %s%s",
+        archive_rank.short_folder(str(suggested or "nothing")),
+        archive_rank.short_folder(chosen_folder), " (with a hint)" if cleaned else "",
+    )
+    row = conn.execute(
+        "SELECT * FROM archive_corrections WHERE id = ?", (int(cur.lastrowid),)
+    ).fetchone()
+    return _row(row, _CORRECTION_COLUMNS)  # type: ignore[return-value]
+
+
+def recent_corrections(conn: sqlite3.Connection, *, limit: int = 20) -> list[dict[str, Any]]:
+    """The last ``limit`` corrections, **oldest first** — the prompt's few-shot block.
+
+    Newest-first would reshuffle the whole example block every time one is
+    added; oldest-first keeps the prompt stable apart from its tail.
+    """
+    if limit <= 0:
+        return []
+    rows = conn.execute(
+        "SELECT * FROM archive_corrections ORDER BY id DESC LIMIT ?", (int(limit),)
+    ).fetchall()
+    return [_row(r, _CORRECTION_COLUMNS) for r in reversed(rows)]  # type: ignore[misc]
+
+
 def filed_message_ids(conn: sqlite3.Connection) -> set[str]:
     """Every ``message_id`` this database already has filed — the run's skip list."""
     marks = ", ".join("?" for _ in FILED_STATUSES)
@@ -262,7 +330,7 @@ class ArchiveBatchService:
     reason, never a queue that quietly reorders someone's Inbox.
     """
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, *, ai_client: Any | None = None) -> None:
         cfg = config.archive
         self.configured_enabled = bool(cfg.enabled)
         self.repo = Path(cfg.repo.strip()) if cfg.repo.strip() else None
@@ -270,6 +338,16 @@ class ArchiveBatchService:
         self.candidates = max(1, int(cfg.candidates))
         self.threshold = float(cfg.confidence_threshold)
         self.timeout = float(cfg.timeout_seconds)
+        self.batch_size = max(1, int(cfg.batch_size))
+        self.examples = max(0, int(cfg.examples))
+        # A second hub client, bound to ``archive.model``: its own in-flight
+        # lock, so an Inbox triage running at the same time does not make one
+        # of the two wait, and its own model, because filing mail and triaging
+        # tasks are different jobs.
+        self.ai = ai_client if ai_client is not None else AIClient(
+            config, model=cfg.model, timeout=cfg.ai_timeout_seconds,
+        )
+        self.model = getattr(self.ai, "model", "") or ""
         self.placeholders = dict(config.placeholders)
         self.enabled, self.reason = self._configured()
         self.last_error: str | None = None
@@ -341,6 +419,9 @@ class ArchiveBatchService:
             "candidates": self.candidates,
             "confidence_threshold": self.threshold,
             "timeout_seconds": self.timeout,
+            "model": self.model or None,
+            "batch_size": self.batch_size,
+            "examples": self.examples,
             "last_run": last_run,
             "last_error": self.last_error,
         }
@@ -554,14 +635,23 @@ class ArchiveBatchService:
         item_by_message: dict[str, int] = {}
         skipped = 0
 
+        # Which mails this run is about is settled *before* the model sees any
+        # of them: the ranking is one bounded pass over exactly the mails that
+        # will be decided, never a request per mail.
+        selected: list[dict[str, Any]] = []
         for mail in mails:
             message_id = str(mail.get("message_id") or "").strip()
             if not message_id or message_id in already_filed:
                 skipped += 1
                 continue
-            if limit is not None and len(item_by_message) >= limit:
+            if limit is not None and len(selected) >= limit:
                 break
-            decision = self._decide(mail)
+            selected.append(mail)
+        ranking = self._rank(conn, selected)
+
+        for mail in selected:
+            message_id = str(mail.get("message_id") or "").strip()
+            decision = self._decide(mail, ranking.picks.get(message_id))
             try:
                 item_id = insert_item(conn, run_id, **self._item_fields(mail, decision))
             except sqlite3.IntegrityError:
@@ -592,14 +682,43 @@ class ArchiveBatchService:
         scan_error = self._rescan_index() if decisions else None
         if scan_error:
             logger.warning("⚠️ archive: %s", scan_error)
-        return finish_run(conn, run_id, status="done", error=scan_error)
+        # Two different partial failures, both recorded rather than folded into
+        # a clean run: the model did not rank part of this Inbox, and the
+        # archiver's index has not confirmed what was filed.
+        notes = [*ranking.errors, scan_error] if scan_error else list(ranking.errors)
+        return finish_run(
+            conn, run_id, status="done", error=" · ".join(notes) or None,
+            agreement=ranking.agreement,
+        )
 
-    def _decide(self, mail: dict[str, Any]) -> dict[str, Any]:
-        """Pick this mail's destination — Step 1: the archiver's own top candidate.
+    def _rank(self, conn: sqlite3.Connection, mails: list[dict[str, Any]]) -> Ranking:
+        """Let the local model choose among the archiver's candidates (#158).
 
-        Step 2 (#158) replaces exactly this method's ranking with the local LLM's;
-        everything around it, including ``candidates_json``, is already what that
-        needs.
+        Reads the correction memory here, where the database is, and hands
+        :func:`src.archive_rank.rank` plain data — that function stays pure, and
+        a failure of the hub never reaches this method as an exception.
+        """
+        if not mails:
+            return Ranking()
+        corrections = recent_corrections(conn, limit=self.examples)
+        ranking = archive_rank.rank(
+            mails, corrections, self.ai, batch_size=self.batch_size,
+        )
+        if ranking.ranked:
+            logger.info(
+                "ℹ️ archive: the model ranked %d mail(s) with %d correction(s) in the prompt "
+                "— %.0f%% agreement with the archiver",
+                ranking.ranked, len(corrections), (ranking.agreement or 0.0) * 100,
+            )
+        return ranking
+
+    def _decide(self, mail: dict[str, Any], pick: Pick | None = None) -> dict[str, Any]:
+        """Pick this mail's destination and the state that follows from it.
+
+        Three sources, in order: the archiver's index already has the mail (then
+        nothing is decided at all), the **model** chose among the candidates
+        (#158), or the model could not be asked and the archiver's own top
+        candidate stands, with the reason saying so.
         """
         already = mail.get("already_archived")
         if already:
@@ -615,6 +734,51 @@ class ArchiveBatchService:
                 "chosen_rank": None, "confidence": None, "date_prefix": False, "files": [],
                 "reason": "the archiver ranked no folder for this mail",
             }
+        if pick is not None and pick.source == "model":
+            return self._model_decision(candidates, pick)
+        return self._suggester_decision(candidates, note=pick.reason if pick else None)
+
+    def _model_decision(self, candidates: list[dict[str, Any]], pick: Pick) -> dict[str, Any]:
+        """The local model's own choice — an index into ``candidates``, never a path."""
+        if pick.candidate is None:
+            return {
+                "status": "needs_review", "apply": False, "chosen_folder": None,
+                "chosen_rank": None, "confidence": pick.confidence, "date_prefix": False,
+                "files": [],
+                "reason": f"none of the ranked folders fits: {pick.reason}",
+            }
+        chosen = candidates[pick.candidate]
+        folder = str(chosen.get("folder_path") or "")
+        if not folder:
+            return {
+                "status": "needs_review", "apply": False, "chosen_folder": None,
+                "chosen_rank": pick.candidate, "confidence": pick.confidence,
+                "date_prefix": False, "files": [],
+                "reason": "the folder the model picked names no path",
+            }
+        confidence = float(pick.confidence or 0.0)
+        common = {
+            "chosen_folder": folder, "chosen_rank": pick.candidate, "confidence": confidence,
+            "date_prefix": bool(chosen.get("date_prefix")), "files": [],
+        }
+        if confidence < self.threshold:
+            return {
+                **common, "status": "needs_review", "apply": False,
+                "reason": f"{pick.reason} — {confidence:.2f} confidence is below the "
+                          f"{self.threshold:.2f} threshold, so it is left in the Inbox for you",
+            }
+        return {**common, "status": "archived", "apply": True, "reason": pick.reason}
+
+    def _suggester_decision(
+        self, candidates: list[dict[str, Any]], *, note: str | None = None
+    ) -> dict[str, Any]:
+        """The archiver's own top candidate — what stands when the model was not asked.
+
+        ``note`` is why the model did not decide this one (the hub was down, off
+        or answering junk). It rides the reason so the report never shows a
+        rank-0 filing as if a model had chosen it.
+        """
+        prefix = f"{note} — " if note else ""
         top = candidates[0]
         score = float(top.get("score") or 0.0)
         folder = str(top.get("folder_path") or "")
@@ -622,20 +786,20 @@ class ArchiveBatchService:
             return {
                 "status": "needs_review", "apply": False, "chosen_folder": None,
                 "chosen_rank": None, "confidence": score, "date_prefix": False, "files": [],
-                "reason": "the archiver's top candidate names no folder",
+                "reason": f"{prefix}the archiver's top candidate names no folder",
             }
         if score < self.threshold:
             return {
                 "status": "needs_review", "apply": False, "chosen_folder": folder,
                 "chosen_rank": 0, "confidence": score, "date_prefix": bool(top.get("date_prefix")),
                 "files": [],
-                "reason": f"the best folder scored {score:.2f}, below the "
+                "reason": f"{prefix}the best folder scored {score:.2f}, below the "
                           f"{self.threshold:.2f} threshold — left in the Inbox for you",
             }
         return {
             "status": "archived", "apply": True, "chosen_folder": folder, "chosen_rank": 0,
             "confidence": score, "date_prefix": bool(top.get("date_prefix")), "files": [],
-            "reason": f"the archiver's top folder at {score:.2f} ≥ the "
+            "reason": f"{prefix}the archiver's top folder at {score:.2f} ≥ the "
                       f"{self.threshold:.2f} threshold",
         }
 
@@ -780,12 +944,19 @@ class ArchiveBatchService:
             parts.append(f"{len(file_errors)} file(s) could not be deleted")
         return {"ok": False, "message": " — ".join(parts), "entry": entry}
 
-    def move(self, conn: sqlite3.Connection, item_id: int, folder: str) -> dict[str, Any]:
+    def move(
+        self, conn: sqlite3.Connection, item_id: int, folder: str, *, hint: str | None = None
+    ) -> dict[str, Any]:
         """Re-file this mail into ``folder``: undo the current filing, then apply again.
 
         ``folder`` takes a folder ref or an absolute path and is resolved
         through the same placeholders ``POST /api/resolve`` uses, so the phone
         and a second PC can name a folder the way they already do everywhere.
+
+        A move that lands is also the clearest correction there is, so it writes
+        an ``archive_corrections`` row (#158) carrying the optional ``hint`` —
+        the one-line note the report screen (#159) offers — into every later
+        prompt.
         """
         item = self._require(conn, item_id)
         self._require_revertible(item)
@@ -844,10 +1015,12 @@ class ArchiveBatchService:
             "decided_at": clock.now_iso(),
         }
         if entry.get("ok"):
-            return update_item(
+            moved = update_item(
                 conn, item_id, status="moved", error=None,
                 reason=f"moved here by hand from {item['chosen_folder'] or 'the Inbox'}", **common,
             )
+            record_correction(conn, item, chosen_folder=destination, hint=hint)
+            return moved
         message = self._apply_error_message(entry.get("error"), files)
         update_item(conn, item_id, status="failed", error=message, **common)
         raise ArchiveError("archive_move_failed", message, http_status=502)
@@ -869,13 +1042,22 @@ class ArchiveBatchService:
                 return bool(candidate.get("date_prefix"))
         return bool(item.get("date_prefix"))
 
-    def accept(self, conn: sqlite3.Connection, item_id: int) -> dict[str, Any]:
+    def accept(
+        self, conn: sqlite3.Connection, item_id: int, *, hint: str | None = None
+    ) -> dict[str, Any]:
         """Mark a row reviewed — no file moves, nothing written to Outlook.
 
         Only the two rows that ask for a human (``needs_review``, ``failed``)
         can be accepted: an ``archived`` row is finished, not reviewed, and
         answering 409 there keeps "I have seen this" from silently meaning two
         different things on the screen (#159).
+
+        Accepting a ``needs_review`` mail that *had* a folder is the other half
+        of the correction memory (#158): the system was not confident enough to
+        file it and a human said that folder was right after all, which is a
+        worked example exactly as a ``move`` is. A ``failed`` row teaches
+        nothing about folders — the archiver broke, the ranking did not — and
+        neither does a mail no folder was ever ranked for, so neither writes one.
         """
         item = self._require(conn, item_id)
         if item["status"] not in REVIEWABLE_STATUSES:
@@ -884,11 +1066,15 @@ class ArchiveBatchService:
                 f"archive item {item_id} is {item['status']}, which needs no review",
                 http_status=409,
             )
-        return update_item(conn, item_id, decided_at=clock.now_iso())
+        accepted = update_item(conn, item_id, decided_at=clock.now_iso())
+        if item["status"] == "needs_review" and item["chosen_folder"]:
+            record_correction(conn, item, chosen_folder=item["chosen_folder"], hint=hint)
+        return accepted
 
 
 __all__ = [
     "FILED_STATUSES",
+    "MAX_HINT_CHARS",
     "REVIEWABLE_STATUSES",
     "SUPPORTED_SCHEMA_VERSION",
     "ArchiveBatchService",
@@ -901,5 +1087,7 @@ __all__ = [
     "insert_item",
     "list_items",
     "list_runs",
+    "recent_corrections",
+    "record_correction",
     "update_item",
 ]
