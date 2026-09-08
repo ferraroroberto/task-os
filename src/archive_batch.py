@@ -484,7 +484,7 @@ class ArchiveBatchService:
         return None
 
     # ---------------------------------------------------------------- runs
-    def _begin(self) -> int:
+    def _begin(self) -> dict[str, Any]:
         """Claim the archiver and open a run row, or refuse with the reason."""
         if not self.enabled:
             raise ArchiveError("archive_disabled", self.reason or "batch archiving is off", http_status=409)
@@ -497,7 +497,7 @@ class ArchiveBatchService:
         try:
             conn = connect()
             try:
-                return int(create_run(conn)["id"])
+                return create_run(conn)
             finally:
                 conn.close()
         except BaseException:
@@ -510,9 +510,9 @@ class ArchiveBatchService:
         The API answers 202 with this: a full-Inbox run walks every mail over
         COM and takes minutes, which is not a request to hold open.
         """
-        run_id = self._begin()
+        run = self._begin()
         thread = threading.Thread(
-            target=self._drive, args=(run_id, limit), name="task-os-archive", daemon=True,
+            target=self._drive, args=(int(run["id"]), limit), name="task-os-archive", daemon=True,
         )
         try:
             thread.start()
@@ -520,15 +520,11 @@ class ArchiveBatchService:
             self._lock.release()
             raise
         self._thread = thread
-        conn = connect()
-        try:
-            return get_run(conn, run_id)  # type: ignore[return-value]
-        finally:
-            conn.close()
+        return run
 
     def run_now(self, *, limit: int | None = None) -> dict[str, Any]:
         """The same run, synchronously — the deterministic path for tests and the CLI."""
-        return self._drive(self._begin(), limit)
+        return self._drive(int(self._begin()["id"]), limit)
 
     def _drive(self, run_id: int, limit: int | None) -> dict[str, Any]:
         """Plan → decide → apply → rescan, then close the run. Never raises."""

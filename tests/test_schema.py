@@ -12,7 +12,7 @@ from src import schema
 
 EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
-    "ai_suggestions",
+    "ai_suggestions", "archive_runs", "archive_items",
     "tasks_fts", "comments_fts", "mirror_state", "mirror_events", "task_blocks",
 }
 
@@ -37,7 +37,8 @@ def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
         assert schema.current_version(conn) == 14
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
-        assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
+        assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
+                "idx_archive_items_filed"} <= idx
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     finally:
         conn.close()
