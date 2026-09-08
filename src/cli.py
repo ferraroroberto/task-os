@@ -241,6 +241,15 @@ class HttpBackend:
     def folders_search(self, q: str) -> dict[str, Any]:
         return self._call("GET", "/api/folders/search?" + urllib.parse.urlencode({"q": q}))
 
+    def triage(self) -> list[dict[str, Any]]:
+        return self._call("POST", "/api/ai/triage", {})["items"]
+
+    def accept_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        return self._call("POST", f"/api/ai/suggestions/{suggestion_id}/accept")
+
+    def reject_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        return self._call("POST", f"/api/ai/suggestions/{suggestion_id}/reject")
+
 
 class LocalBackend:
     """Opens the database directly — the app-down path."""
@@ -260,6 +269,7 @@ class LocalBackend:
         self._touched: set[int] = set()
         self._repo.add_write_listener(self._on_write)
         self._mirror: Any = None
+        self._ai: Any = None
 
     def _on_write(self, ids: list[int]) -> None:
         self._touched.update(ids)
@@ -375,6 +385,31 @@ class LocalBackend:
     def people(self) -> list[dict[str, Any]]:
         return self._wrap(self._repo.list_people)
 
+    def _ai_client(self) -> Any:
+        if self._ai is None:
+            from src.ai import AIClient
+
+            self._ai = AIClient(load_config())
+        return self._ai
+
+    def triage(self) -> list[dict[str, Any]]:
+        from src.ai import AIError, generate_suggestions
+
+        try:
+            return generate_suggestions(self.conn, self._ai_client())
+        except AIError as exc:
+            raise CliError(str(exc), code=exc.code, detail=exc.detail) from exc
+
+    def accept_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        from src.ai import accept_suggestion
+
+        return self._wrap(accept_suggestion, suggestion_id)
+
+    def reject_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        from src.ai import reject_suggestion
+
+        return self._wrap(reject_suggestion, suggestion_id)
+
     def mirror_export(self) -> dict[str, Any]:
         mirror = self._mirror_service()
         if not mirror.enabled:
@@ -406,6 +441,7 @@ class LocalBackend:
         placeholder map.
         """
         from src import opener
+        from src.ai import AIClient
         from src.backup import BackupScheduler
         from src.email_capture import EmailCaptureService
         from src.enrich import EnrichClient
@@ -442,6 +478,7 @@ class LocalBackend:
             # Same fact, same shape, for the text model (#147): a TCP probe
             # this process can run whether or not the app is up.
             "enrich": EnrichClient(config).status(),
+            "ai": AIClient(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }
@@ -711,6 +748,23 @@ def fmt_people(items: list[dict[str, Any]]) -> str:
                      + f"  ({p.get('open_tasks', 0)} open)" for p in items)
 
 
+def fmt_suggestion(item: dict[str, Any]) -> str:
+    """One staged Inbox proposal in the same terse shape as the Board strip."""
+    fields: list[str] = []
+    if item.get("parent"):
+        fields.append("→ " + item["parent"]["title"])
+    if item.get("priority"):
+        fields.append(str(item["priority"]))
+    fields.append("due: " + (item.get("due") or "none"))
+    if item.get("person"):
+        fields.append(str(item["person"]["name"]))
+    return (
+        f"#{item['task_id']} {item.get('task_title') or ''}\n  "
+        + " · ".join(fields)
+        + f"\n  {item['reason']}"
+    )
+
+
 def fmt_issues_status(st: dict[str, Any]) -> str:
     provider = st.get("provider") or "none"
     if not st.get("enabled"):
@@ -750,6 +804,7 @@ def fmt_status(status: dict[str, Any]) -> str:
     lines.append(fmt_capture_status(status.get("capture") or {}))
     lines.append(fmt_voice_status(status.get("voice") or {}))
     lines.append(fmt_enrich_status(status.get("enrich") or {}))
+    lines.append(fmt_ai_status(status.get("ai") or {}))
     return "\n".join(lines)
 
 
@@ -798,6 +853,14 @@ def fmt_enrich_status(e: dict[str, Any]) -> str:
         return f"enrich   off — {e.get('reason') or 'unknown'}"
     return (f"enrich   reachable · {e.get('model')} · {e.get('url')}"
             + (f" · checked {e['checked_at']}" if e.get("checked_at") else ""))
+
+
+def fmt_ai_status(ai: dict[str, Any]) -> str:
+    """The shared local AI client's state — disabled and down stay distinct."""
+    if not ai.get("enabled"):
+        return f"ai       off — {ai.get('reason') or 'unknown'}"
+    return (f"ai       reachable · {ai.get('model') or 'model unknown'}"
+            + (f" · checked {ai['checked_at']}" if ai.get("checked_at") else ""))
 
 
 def fmt_folders_status(f: dict[str, Any]) -> str:
@@ -1042,6 +1105,46 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "people":
         items = backend.people()
         return items, fmt_people(items)
+    if cmd == "triage":
+        items = backend.triage()
+        # JSON is the automation surface: stage and expose the exact rows,
+        # never stop a pipe to ask a question.
+        if getattr(args, "json", False):
+            return {"items": items}, ""
+        accepted: list[int] = []
+        rejected: list[int] = []
+        pending: list[int] = []
+        print(
+            f"{len(items)} staged suggestion(s) — [y] accept · [n] reject · "
+            "[q] leave the rest pending",
+            file=sys.stderr,
+        )
+        for index, item in enumerate(items):
+            print(fmt_suggestion(item), file=sys.stderr)
+            print("  accept and move to Todo? [y/n/q] ", file=sys.stderr)
+            try:
+                answer = input().strip().lower()
+            except EOFError:
+                answer = "q"
+            if answer == "q":
+                pending.extend(int(rest["id"]) for rest in items[index:])
+                break
+            if answer in ("y", "yes"):
+                backend.accept_suggestion(int(item["id"]))
+                accepted.append(int(item["id"]))
+            else:
+                backend.reject_suggestion(int(item["id"]))
+                rejected.append(int(item["id"]))
+        result = {
+            "items": items,
+            "accepted": accepted,
+            "rejected": rejected,
+            "pending": pending,
+        }
+        return result, (
+            f"triage: {len(accepted)} accepted · {len(rejected)} rejected · "
+            f"{len(pending)} pending"
+        )
     if cmd == "mirror":
         if args.action == "export":
             r = backend.mirror_export()
@@ -1196,6 +1299,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="one index only (default: all four)")
 
     sub.add_parser("people", parents=[common], help="list people")
+
+    sub.add_parser(
+        "triage", parents=[common],
+        help="stage AI suggestions for Inbox tasks and accept/reject them one by one",
+    )
 
     mi = sub.add_parser("mirror", parents=[common], help="markdown mirror: export · import · status")
     mi.add_argument("action", choices=("export", "import", "status"), nargs="?", default="status",

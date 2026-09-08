@@ -58,6 +58,47 @@ def _json(text: str) -> Any:
     return json.loads(text)
 
 
+class _TriageBackend:
+    name = "fake"
+
+    def __init__(self) -> None:
+        self.accepted: list[int] = []
+        self.rejected: list[int] = []
+
+    def triage(self) -> list[dict[str, Any]]:
+        return [{
+            "id": 7, "task_id": 3, "task_title": "Sort receipts",
+            "parent": {"id": 1, "title": "Home"}, "priority": "medium",
+            "due": None, "person": None, "reason": "Routine home administration.",
+        }]
+
+    def accept_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        self.accepted.append(suggestion_id)
+        return {"task": {"id": 3, "status": "todo"}}
+
+    def reject_suggestion(self, suggestion_id: int) -> dict[str, Any]:
+        self.rejected.append(suggestion_id)
+        return {"id": suggestion_id, "status": "rejected"}
+
+
+def test_triage_json_stages_without_prompting(capsys: pytest.CaptureFixture) -> None:
+    backend = _TriageBackend()
+    assert cli.main(["triage", "--json"], backend=backend) == 0  # type: ignore[arg-type]
+    captured = capsys.readouterr()
+    assert _json(captured.out)["items"][0]["task_id"] == 3
+    assert backend.accepted == [] and backend.rejected == []
+
+
+def test_triage_prompts_and_accepts(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    backend = _TriageBackend()
+    monkeypatch.setattr("builtins.input", lambda: "y")
+    assert cli.main(["triage"], backend=backend) == 0  # type: ignore[arg-type]
+    captured = capsys.readouterr()
+    assert "accept and move to Todo" in captured.err
+    assert captured.out.strip() == "triage: 1 accepted · 0 rejected · 0 pending"
+    assert backend.accepted == [7]
+
+
 def test_story_02_add_nest_comment_tree_due_show(run: Runner) -> None:
     code, out, _ = run("add", "Renew passport", "--due", "2026-08-21")
     # The status is printed only when it is NOT the default (#148), so a plain
@@ -273,7 +314,7 @@ def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
 #: The one shape ``tasks mirror status --json`` emits, whatever the transport.
 STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "capture", "voice",
-               "enrich", "opener", "placeholders"}
+               "enrich", "ai", "opener", "placeholders"}
 
 
 def test_status_json_shape_is_identical_on_both_backends(run: Runner) -> None:

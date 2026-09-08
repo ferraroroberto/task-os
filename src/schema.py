@@ -345,9 +345,27 @@ CREATE INDEX idx_task_blocks_blocked ON task_blocks(blocked_id);
 CREATE INDEX idx_task_blocks_blocker ON task_blocks(blocker_id);
 """
 
+# Staged AI suggestions (#95). A resolved row is durable history; only one
+# pending row may exist for a task, and a new triage run replaces that row.
+_V12 = """
+CREATE TABLE ai_suggestions (
+    id          INTEGER PRIMARY KEY,
+    task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    payload     TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'accepted', 'rejected')),
+    created_at  TEXT NOT NULL,
+    resolved_at TEXT
+);
+CREATE UNIQUE INDEX idx_ai_suggestions_pending
+    ON ai_suggestions(task_id) WHERE status = 'pending';
+CREATE INDEX idx_ai_suggestions_task ON ai_suggestions(task_id, id DESC);
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
+    12: _V12,
 }
 
 #: The version a freshly migrated database carries.

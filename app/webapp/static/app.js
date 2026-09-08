@@ -115,6 +115,9 @@ const state = {
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
+  ai: { enabled: false, reason: 'Checking local AI…' },
+  aiSuggestions: {},  // task id → one pending staged suggestion (#95)
+  triaging: false,
   // The done journal (#102): its own list (closed tasks in a window of whole
   // weeks ending today, newest closing first), never merged into `items`.
   // `older` is null until the probe answered — unknown, not "no".
@@ -173,6 +176,23 @@ function noMatchCard(iconName, message) {
 // ------------------------------------------------------------------ data
 async function loadPeople() {
   try { state.people = (await api('/api/people')).items || []; } catch (_) { state.people = []; }
+}
+
+function indexSuggestions(items) {
+  const indexed = {};
+  (items || []).forEach(function (item) { indexed[item.task_id] = item; });
+  state.aiSuggestions = indexed;
+}
+
+async function loadAI() {
+  try {
+    const results = await Promise.all([api('/api/status'), api('/api/ai/suggestions')]);
+    state.ai = results[0].ai || { enabled: false, reason: 'AI status unavailable' };
+    indexSuggestions(results[1].items);
+  } catch (err) {
+    state.ai = { enabled: false, reason: 'AI status unavailable' };
+    indexSuggestions([]);
+  }
 }
 
 function flattenProjects(forest) {
@@ -286,6 +306,55 @@ async function refreshAll() {
   } catch (err) {
     els.homeHeadStatus.textContent = 'Server unreachable';
     toast(err.message || 'Could not load tasks', 'error');
+  }
+}
+
+async function triageInbox() {
+  if (state.triaging) return;
+  state.triaging = true;
+  renderBoardPane();
+  try {
+    const result = await api('/api/ai/triage', { method: 'POST', body: {} });
+    indexSuggestions(result.items);
+    toast('AI triage: ' + result.items.length + ' suggestion(s) staged', 'success');
+  } catch (err) {
+    toast(err.message || 'AI triage failed', 'error');
+    try {
+      const status = await api('/api/status');
+      state.ai = status.ai || state.ai;
+    } catch (_) { /* the triage error is already visible */ }
+    throw err;
+  } finally {
+    state.triaging = false;
+    renderBoardPane();
+  }
+}
+
+async function acceptAISuggestion(suggestionId) {
+  try {
+    const result = await api('/api/ai/suggestions/' + suggestionId + '/accept', {
+      method: 'POST', body: {},
+    });
+    delete state.aiSuggestions[result.suggestion.task_id];
+    await refreshAll();
+    toast('Suggestion accepted — moved to Todo', 'success');
+  } catch (err) {
+    toast(err.message || 'Could not accept the suggestion', 'error');
+    throw err;
+  }
+}
+
+async function rejectAISuggestion(suggestionId) {
+  try {
+    const result = await api('/api/ai/suggestions/' + suggestionId + '/reject', {
+      method: 'POST', body: {},
+    });
+    delete state.aiSuggestions[result.task_id];
+    renderBoardPane();
+    toast('Suggestion rejected', 'success');
+  } catch (err) {
+    toast(err.message || 'Could not reject the suggestion', 'error');
+    throw err;
   }
 }
 
@@ -592,10 +661,18 @@ function selectOpts() {
 
 function renderBoardPane() {
   if (!board) {
-    board = mountBoard({ onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect });
+    board = mountBoard({
+      onOpen: openTask, onPatch: patchTask, onStatus: setStatus,
+      onToggleSelect: selectHandlers.onToggleSelect,
+      onTriage: triageInbox,
+      onAcceptSuggestion: acceptAISuggestion,
+      onRejectSuggestion: rejectAISuggestion,
+    });
   }
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
-  board.render(state.items, state.filters, selectOpts());
+  board.render(state.items, state.filters, Object.assign({
+    ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
+  }, selectOpts()));
 }
 
 function renderTodayPane() {
@@ -1078,7 +1155,8 @@ async function boot() {
   fetchVersion();
   settings.refreshStatus();
   await loadPeople();
-  await Promise.all([refreshAll(), fetchIssuesStatus()]);
+  await Promise.all([refreshAll(), fetchIssuesStatus(), loadAI()]);
+  if (state.total) renderBoardPane();
   onHashChange();
 }
 

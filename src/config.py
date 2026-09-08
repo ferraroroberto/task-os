@@ -139,6 +139,22 @@ class EnrichConfig:
 
 
 @dataclass(frozen=True)
+class AIConfig:
+    """Staged AI inbox triage (#95) through the local LLM hub.
+
+    ``enabled`` is the explicit off switch. ``base_url`` is the hub root used
+    by the Anthropic SDK; ``model`` is deliberately configuration, never a
+    client constant, because the hub's model catalogue changes independently
+    of task-os.
+    """
+
+    enabled: bool = True
+    base_url: str = "http://127.0.0.1:8000"
+    model: str = "claude_haiku"
+    timeout_seconds: float = 30.0
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     enabled: bool = False
     people: list[str] = field(default_factory=list)
@@ -171,6 +187,7 @@ class AppConfig:
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     enrich: EnrichConfig = field(default_factory=EnrichConfig)
+    ai: AIConfig = field(default_factory=AIConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -293,6 +310,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     capture = _as_dict(raw.get("capture"))
     voice = _as_dict(raw.get("voice"))
     enrich = _as_dict(raw.get("enrich"))
+    ai = _as_dict(raw.get("ai"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -344,6 +362,15 @@ def load_config(path: Path | None = None) -> AppConfig:
             timeout_seconds=_as_float(
                 enrich.get("timeout_seconds"), EnrichConfig.timeout_seconds,
                 "enrich.timeout_seconds",
+            ),
+        ),
+        ai=AIConfig(
+            enabled=bool(ai.get("enabled", AIConfig.enabled)),
+            base_url=str(ai.get("base_url", AIConfig.base_url) or "").strip(),
+            model=str(ai.get("model", AIConfig.model) or "").strip(),
+            timeout_seconds=_as_float(
+                ai.get("timeout_seconds"), AIConfig.timeout_seconds,
+                "ai.timeout_seconds",
             ),
         ),
         team=TeamConfig(

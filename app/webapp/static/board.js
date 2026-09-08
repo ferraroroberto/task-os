@@ -22,6 +22,7 @@
 'use strict';
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
+import { icon } from './_vendored/icons/icons.js';
 import { sortItems, taskRow } from './rows.js';
 
 export const BOARD_COLUMNS = [
@@ -81,6 +82,7 @@ export function mountBoard(handlers) {
   const counts = {};
   const titles = {};
   const empties = {};
+  let inboxTriage = null;
   BOARD_COLUMNS.forEach(function (col) {
     const section = document.createElement('section');
     section.className = 'board-col';
@@ -96,6 +98,10 @@ export function mountBoard(handlers) {
     n.dataset.col = col.key;
     n.textContent = '0';
     h.appendChild(n);
+    if (col.key === 'inbox') {
+      inboxTriage = triageButton(handlers);
+      h.appendChild(inboxTriage);
+    }
     if (col.key === 'done') {
       // the reading surface behind this column (#102) — a link, not a tab
       const link = document.createElement('a');
@@ -126,6 +132,12 @@ export function mountBoard(handlers) {
   });
   el.appendChild(columns);
 
+  // Column headings are hidden in the phone carousel. Keep the same action
+  // immediately under its tab strip when Inbox is the visible column.
+  const phoneTriage = triageButton(handlers);
+  phoneTriage.classList.add('board-triage-phone');
+  el.insertBefore(phoneTriage, columns);
+
   function visibleKeys() {
     return BOARD_COLUMNS.map(function (c) { return c.key; }).filter(function (k) { return !sections[k].hidden; });
   }
@@ -152,6 +164,7 @@ export function mountBoard(handlers) {
       stripBtns[col.key].classList.toggle('active', active);
       stripBtns[col.key].setAttribute('aria-selected', active ? 'true' : 'false');
     });
+    phoneTriage.hidden = currentCol !== 'inbox';
   }
   function nearestColumnKey() {
     const keys = visibleKeys();
@@ -201,6 +214,7 @@ export function mountBoard(handlers) {
         lists[col.key].appendChild(buildRow(t, handlers, {
           selectable: !!o.selectable,
           selected: o.isSelected ? o.isSelected(t.id) : false,
+          suggestion: o.suggestions ? o.suggestions[t.id] : null,
         }));
       });
       empties[col.key].hidden = rows.length > 0;
@@ -215,6 +229,18 @@ export function mountBoard(handlers) {
     // can never yank a carousel the reader has swiped.
     if (!positioned) showColumn(currentCol, false);
     else syncStrip();
+    const ai = o.ai || {};
+    const inboxCount = byStatus.inbox.length;
+    [inboxTriage, phoneTriage].forEach(function (button) {
+      if (!button) return;
+      button.disabled = !ai.enabled || inboxCount === 0 || !!o.triaging;
+      button.dataset.state = o.triaging ? 'loading' : ai.enabled ? 'ready' : 'error';
+      button.title = o.triaging ? 'Generating suggestions…'
+        : !ai.enabled ? (ai.reason || 'AI triage unavailable')
+          : inboxCount === 0 ? 'Inbox is empty' : 'Stage AI suggestions for every Inbox task';
+      button.querySelector('span').textContent = o.triaging ? 'Triaging…'
+        : !ai.enabled ? (ai.configured ? 'AI unavailable' : 'Triage off') : 'Triage';
+    });
   }
 
   return {
@@ -235,6 +261,7 @@ function buildRow(t, handlers, opts) {
     draggable: !o.selectable, selectable: o.selectable, selected: o.selected,
   });
   if (o.selectable) return li;
+  if (o.suggestion) li.appendChild(suggestionStrip(o.suggestion, handlers));
   li.addEventListener('dragstart', function (ev) {
     ev.dataTransfer.setData('text/plain', String(t.id));
     ev.dataTransfer.effectAllowed = 'move';
@@ -242,6 +269,51 @@ function buildRow(t, handlers, opts) {
   });
   li.addEventListener('dragend', function () { li.classList.remove('is-dragging'); });
   return li;
+}
+
+function triageButton(handlers) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'button-ghost board-triage hit-target';
+  button.innerHTML = icon('bot') + '<span>Triage</span>';
+  button.addEventListener('click', function () {
+    Promise.resolve(handlers.onTriage()).catch(function () { /* caller toasts */ });
+  });
+  return button;
+}
+
+function suggestionStrip(suggestion, handlers) {
+  const strip = document.createElement('div');
+  strip.className = 'ai-suggestion';
+  strip.title = suggestion.reason;
+  const summary = document.createElement('span');
+  summary.className = 'ai-suggestion-summary';
+  const bits = [
+    '→ ' + (suggestion.parent ? suggestion.parent.title : 'top level'),
+    suggestion.priority,
+    'due: ' + (suggestion.due || 'none'),
+    suggestion.person ? suggestion.person.name : 'unassigned',
+  ];
+  summary.textContent = bits.join(' · ');
+  const actions = document.createElement('span');
+  actions.className = 'ai-suggestion-actions';
+  [['check', 'Accept suggestion', handlers.onAcceptSuggestion],
+    ['x', 'Reject suggestion', handlers.onRejectSuggestion]].forEach(function (entry) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'button-ghost ai-suggestion-action';
+    button.setAttribute('aria-label', entry[1] + ' for ' + suggestion.task_title);
+    button.title = entry[1];
+    button.innerHTML = icon(entry[0]);
+    button.addEventListener('click', function (event) {
+      event.stopPropagation();
+      button.disabled = true;
+      Promise.resolve(entry[2](suggestion.id)).catch(function () { button.disabled = false; });
+    });
+    actions.appendChild(button);
+  });
+  strip.append(summary, actions);
+  return strip;
 }
 
 function wireDropTarget(section, status, handlers) {
