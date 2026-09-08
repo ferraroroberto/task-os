@@ -16,7 +16,9 @@
  * the views never drift.
  *
  * Every tab is its own module and this file is the wiring: board.js ·
- * table.js · tree.js · today.js · search.js · settings.js (issue #37 — the
+ * table.js · tree.js · today.js · search.js · archive.js (the batch-archiving
+ * run and its report, #159 — the one tab that is not a rendering of the task
+ * list) · settings.js (issue #37 — the
  * Settings cards used to live here) · journal.js (the done journal, #102 —
  * `#journal`, a pane without a tab: reached from the palette and the Board's
  * Done column, left by pressing any tab). What stays is what more than one
@@ -34,6 +36,7 @@ import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { api, qs } from './api.js';
+import { mountArchive } from './archive.js';
 import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
@@ -119,6 +122,10 @@ const state = {
   tableView: 'table',  // which host the Table pane shows: 'table' | 'tree' (#161)
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
+  // /api/status's `archive` block (#159) — the Archive tab renders it in full
+  // and the Board's Inbox header reads the last run's "needs you" count off it.
+  // `null` = not established yet (or the status call failed), never "off".
+  archive: null,
   aiSuggestions: {},  // task id → one pending staged suggestion (#95)
   triaging: false,
   // The done journal (#102): its own list (closed tasks in a window of whole
@@ -132,6 +139,7 @@ let drawer = null;
 let board = null;
 let search = null;
 let settings = null;
+let archive = null;       // the Archive pane (#159) — the batch run + its report
 let palette = null;
 let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
@@ -192,13 +200,19 @@ function indexSuggestions(items) {
   state.aiSuggestions = indexed;
 }
 
-async function loadAI() {
+/** The one `GET /api/status` the Board needs at boot: the local AI's state
+ *  (the Triage button) and the archiver's (the Inbox header's "needs you"
+ *  link, #159). The Archive pane re-reads the same block for itself and
+ *  publishes it back here, so both paths tell one story. */
+async function loadStatus() {
   try {
     const results = await Promise.all([api('/api/status'), api('/api/ai/suggestions')]);
     state.ai = results[0].ai || { enabled: false, reason: 'AI status unavailable' };
+    state.archive = results[0].archive || null;
     indexSuggestions(results[1].items);
   } catch (err) {
     state.ai = { enabled: false, reason: 'AI status unavailable' };
+    state.archive = null;
     indexSuggestions([]);
   }
 }
@@ -675,11 +689,15 @@ function renderBoardPane() {
       onTriage: triageInbox,
       onAcceptSuggestion: acceptAISuggestion,
       onRejectSuggestion: rejectAISuggestion,
+      onOpenArchive: function () { nav.setTab('archive'); },
     });
   }
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   board.render(state.items, state.filters, Object.assign({
     ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
+    // Mail the last run could not file is waiting behind the Archive tab, not
+    // in this column — the count is a pointer, never a task row (#159).
+    archiveNeedsYou: archiveNeedsYou(),
   }, selectOpts()));
 }
 
@@ -1051,6 +1069,21 @@ function openFolderOfCurrentTask() {
   chip.click();
 }
 
+/** How many mails the last archiving run left for a human (#159), or why the
+ *  tab has nothing to show. `null` state = not established, never "off". */
+function archiveNeedsYou() {
+  const last = state.archive && state.archive.last_run;
+  return last ? Number(last.needs_review || 0) : 0;
+}
+
+function archiveHint() {
+  if (!state.archive) return 'archiver state unknown';
+  if (!state.archive.configured) return state.archive.reason || 'not configured';
+  if (state.archive.running) return 'a run is in progress';
+  const needs = archiveNeedsYou();
+  return needs ? needs + ' mail(s) from the last run need you' : 'file the Outlook Inbox in one run';
+}
+
 /** The palette's command list — built per open so hints reflect the moment. */
 function paletteCommands() {
   const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
@@ -1071,6 +1104,7 @@ function paletteCommands() {
     { id: 'go-table', label: 'Go to Table', icon: 'table', run: goView('table') },
     { id: 'go-tree', label: 'Table → Tree view', icon: 'list-tree', run: goView('tree') },
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
+    { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: go('archive') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
     { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
@@ -1155,6 +1189,14 @@ async function boot() {
     // until they reload — same follow-up an issue sync does after it creates.
     onCaptured: function () { refreshAll(); },
   });
+  // The Archive pane (#159), mounted here for the same reason: a stored
+  // `archive` tab fires the nav's onChange straight into it.
+  archive = mountArchive({
+    onStatus: function (st) { state.archive = st; if (state.total) renderBoardPane(); },
+    // A run files mail and a review action re-files one — neither touches a
+    // task, so only the archiver's own state is re-read here.
+    onChanged: function () { if (state.total) renderBoardPane(); },
+  });
   // The filters are shared by every tab, so a shared URL never moves the tab
   // by itself. First visit: the phone lands on Today, the desktop on the Board.
   const f = state.filters;
@@ -1187,6 +1229,7 @@ async function boot() {
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
       if (tab === 'board' && board) board.show();
       if (tab === 'settings') { settings.refreshStatus(); fetchIssuesStatus(); settings.refreshSearchStatus(); }
+      if (tab === 'archive') archive.refresh();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
     },
@@ -1233,7 +1276,7 @@ async function boot() {
   fetchVersion();
   settings.refreshStatus();
   await loadPeople();
-  await Promise.all([refreshAll(), fetchIssuesStatus(), loadAI()]);
+  await Promise.all([refreshAll(), fetchIssuesStatus(), loadStatus()]);
   if (state.total) renderBoardPane();
   onHashChange();
 }

@@ -17,6 +17,11 @@
  *
  * `render(items, filters)` takes the shared filtered list: the status pills
  * pick which columns show (none pressed = all), `sort` orders every column.
+ *
+ * Two things in the Inbox column head are about mail rather than tasks: the AI
+ * triage action (#95) and a quiet pointer at the Archive tab carrying what the
+ * last archiving run left undecided (#159). Neither is a row and neither is
+ * derived from the list — both arrive through `render`'s options.
  */
 
 'use strict';
@@ -82,6 +87,7 @@ export function mountBoard(handlers) {
   const titles = {};
   const empties = {};
   let inboxTriage = null;
+  let archiveLink = null;
   BOARD_COLUMNS.forEach(function (col) {
     const section = document.createElement('section');
     section.className = 'board-col';
@@ -98,6 +104,12 @@ export function mountBoard(handlers) {
     n.textContent = '0';
     h.appendChild(n);
     if (col.key === 'inbox') {
+      // Mail the last archiving run left undecided (#159). It is NOT in this
+      // column — nothing about the Outlook Inbox is knowable from here without
+      // a run — so this is a pointer to the Archive tab and nothing else,
+      // hidden entirely while the last run left nobody anything to do.
+      archiveLink = archiveNeedsLink(handlers);
+      h.appendChild(archiveLink);
       inboxTriage = triageButton(handlers);
       h.appendChild(inboxTriage);
     }
@@ -228,6 +240,12 @@ export function mountBoard(handlers) {
     // can never yank a carousel the reader has swiped.
     if (!positioned) showColumn(currentCol, false);
     else syncStrip();
+    if (archiveLink) {
+      const waiting = Number(o.archiveNeedsYou || 0);
+      archiveLink.hidden = waiting === 0;
+      archiveLink.textContent = waiting + ' mail(s) need you';
+      archiveLink.title = 'Archive — mails the last run could not file';
+    }
     const ai = o.ai || {};
     const inboxCount = byStatus.inbox.length;
     [inboxTriage, phoneTriage].forEach(function (button) {
@@ -268,6 +286,21 @@ function buildRow(t, handlers, opts) {
   });
   li.addEventListener('dragend', function () { li.classList.remove('is-dragging'); });
   return li;
+}
+
+/** The Inbox column's pointer at the Archive tab (#159): how many mails the
+ *  last run left for a human. A count, not a card — the number of mails still
+ *  waiting in Outlook is not knowable without running a plan, so this claims
+ *  only what a finished run actually recorded. */
+function archiveNeedsLink(handlers) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'board-col-link board-archive-link';
+  button.hidden = true;
+  button.addEventListener('click', function () {
+    if (handlers.onOpenArchive) handlers.onOpenArchive();
+  });
+  return button;
 }
 
 function triageButton(handlers) {

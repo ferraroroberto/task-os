@@ -305,6 +305,13 @@
     <path d="M8 12h.01" />
     <rect width="20" height="16" x="2" y="4" rx="2" />
   </symbol>
+  <!-- #159 glyph (the Archive tab) — pasted verbatim from lucide-static's
+       archive.svg; it is not in the scaffold's sprite. -->
+  <symbol id="i-archive" viewBox="0 0 24 24" fill="none">
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+    <path d="M10 12h4" />
+  </symbol>
 </svg>
 
   <!-- Body-level nav, sibling of <main class="app"> — never nested inside it
@@ -325,6 +332,13 @@
             role="tab" aria-selected="false" aria-controls="paneToday" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
       <span class="tab-label">Today</span>
+    </button>
+    <!-- #159: the batch-archiving report. A destination, not a Settings card —
+         it is where the run is started and where every filed mail is reviewed. -->
+    <button id="tabArchive" type="button" class="tab" data-tab="archive"
+            role="tab" aria-selected="false" aria-controls="paneArchive" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
+      <span class="tab-label">Archive</span>
     </button>
     <button id="tabSearch" type="button" class="tab" data-tab="search"
             role="tab" aria-selected="false" aria-controls="paneSearch" tabindex="-1">
@@ -458,6 +472,45 @@
              "Later this week" collapsed below (today.js). The phone's
              landing tab. -->
         <div id="todayHost" data-empty="tasks"></div>
+      </div>
+    </section>
+    <!-- Archive (#159): one button files the whole Outlook Inbox through
+         email-archiver (#157), the local model picks the folder (#158), and
+         this pane is where the run is read and corrected. Read-mostly over the
+         Step 1 API — no domain rule lives here; the rows come back from
+         GET /api/archive/runs/{id} and the four review actions are POSTs. -->
+    <section id="paneArchive" class="pane" role="tabpanel" aria-labelledby="tabArchive" aria-label="Archive" hidden>
+      <div class="pane-body">
+        <div class="card archive-head">
+          <div class="archive-actions">
+            <button type="button" id="archiveRun" class="button-surface archive-run" disabled>
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
+              <span id="archiveRunLabel">Archive Inbox now</span>
+            </button>
+            <!-- The bound that makes a first run safe: trust in something that
+                 moves your mail is built on an undo you have seen, so start
+                 with one mail. Empty = the whole Inbox. -->
+            <label class="archive-limit">
+              <span class="archive-limit-text">First</span>
+              <input id="archiveLimit" class="input-native archive-limit-input" type="number"
+                     min="1" max="1000" step="1" inputmode="numeric" placeholder="all"
+                     aria-label="How many mails at most this run (empty = all)">
+              <span class="archive-limit-text">mails</span>
+            </label>
+            <span id="archiveProgress" class="archive-progress muted" aria-live="polite"></span>
+          </div>
+          <dl class="status-rows" id="archiveStatus" aria-live="polite">
+            <div class="status-row"><dt>Archiver</dt><dd id="statusArchive" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Last run</dt><dd id="statusArchiveRun" class="muted">–</dd></div>
+            <div class="status-row"><dt>Recent runs</dt><dd id="statusArchiveRecent" class="muted">–</dd></div>
+          </dl>
+        </div>
+        <div class="pane-top archive-runbar">
+          <label class="archive-runbar-label" for="archiveRunPick">Run</label>
+          <select id="archiveRunPick" class="select-native archive-run-pick"></select>
+          <button type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
+        </div>
+        <div id="archiveHost" class="archive-host"></div>
       </div>
     </section>
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>

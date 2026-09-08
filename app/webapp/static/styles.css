@@ -2254,3 +2254,149 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* The Done column's link to it — quiet, at the far end of the sticky title. */
 .board-col-link { margin-left: auto; color: var(--muted); font-size: var(--font-caption); font-weight: 400; text-decoration: none; }
 .board-col-link:hover, .board-col-link:focus-visible { color: var(--accent); text-decoration: underline; }
+
+/* ---- Archive tab (#159) — the batch run and its report. Full-width like
+   every other PC-first pane: the head card carries the one button, the bound
+   that makes a first run safe and the service's own state; the report is the
+   shared `.task-table` grid on a wide screen and stacked cards under 768 px,
+   where nine columns do not fit and the actions are the point. Tokens only —
+   the state words reuse the Settings card's `.status-ok/-warn/-off`. ---- */
+.archive-head { display: grid; gap: var(--space-sm); }
+.archive-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
+.archive-run { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-h); }
+.archive-run .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.archive-limit { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--font-caption); }
+.archive-limit-input { width: 5.5rem; min-height: var(--control-h); }
+/* Its own line: it is the one thing here that changes while you watch, and a
+   growing sentence must not push the button and the bound around. */
+.archive-progress { flex: 1 1 100%; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.archive-progress:empty { display: none; }
+.archive-head .status-row { grid-template-columns: 7rem minmax(0, 1fr); }
+
+/* The run picker sits on the same strip shape every other pane uses. */
+.archive-runbar { justify-content: flex-start; flex-wrap: wrap; }
+.archive-runbar-label { color: var(--muted); font-size: var(--font-caption); }
+.archive-run-pick { min-height: var(--control-h); max-width: min(100%, 26rem); }
+.archive-runbar .button-ghost { margin-left: auto; }
+
+/* ---- the report grid ---- */
+.archive-table-wrap { padding: 0; overflow: hidden; }
+.archive-table { font-size: var(--font-caption); }
+.archive-table td { vertical-align: top; }
+/* Every one-line cell is capped so the nine columns still fit a 1440 desktop
+   without the actions — the point of the screen — sliding off the right edge;
+   the full value is the title, and narrower windows scroll in `.table-scroll`. */
+.archive-subject { display: block; font-weight: 600; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-text { display: block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-dest { display: block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Three lines on the grid, the whole sentence in the title: a reason is worth
+   reading, not worth pushing every other column off the screen. */
+.archive-reason {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+}
+.archive-reason-error { color: var(--danger); }
+.archive-confidence { font-variant-numeric: tabular-nums; }
+.archive-files .chip { max-width: 9rem; }
+.archive-state { font-weight: 600; white-space: nowrap; }
+/* Enough room per column that a long reason or a wrapped action pair cannot
+   squeeze a neighbour to one word a line; the shared `.table-scroll` takes the
+   overflow the way the Table pane's grid already does. */
+.c-subject { min-width: 10rem; }
+.c-why { min-width: 13rem; }
+.c-act { min-width: 13.5rem; }
+
+/* ---- the per-row actions (both drawings) ---- */
+.archive-row-actions { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px; }
+.archive-action { display: inline-flex; align-items: center; gap: 4px; min-height: var(--control-h); font-size: var(--font-caption); }
+.archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.archive-move-toggle.is-on { color: var(--accent); border-color: var(--accent-border-soft); }
+/* The panel is a full-width row under the mail's own (grid) or the block under
+   the card's menu (phone) — never a widget inside the last cell, which pushed
+   that column out and squeezed every other one. */
+.archive-move-row > td { padding: 0 10px 10px; border-top: 0; }
+.archive-move-body {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  /* a reading width, not the whole 1440 — the score at the far end of a
+     screen-wide row is a scan nobody wants to make */
+  max-width: 52rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-off);
+  white-space: normal;
+}
+.archive-cands { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 220px; overflow: auto; }
+.archive-cand {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  min-height: var(--row-sm);
+  padding: 4px 8px;
+  text-align: left;
+  font-size: var(--font-caption);
+}
+.archive-cand:hover { background: var(--accent-soft); border-color: var(--accent-border-soft); }
+.archive-cand-name { font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-cand-path { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-cand-score { color: var(--muted); font-variant-numeric: tabular-nums; }
+.archive-move-none { margin: 0; font-size: var(--font-caption); }
+.archive-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.archive-other-input, .archive-hint { min-width: 0; min-height: var(--control-h); font-size: var(--font-caption); }
+.archive-other-go { white-space: nowrap; min-height: var(--control-h); }
+.archive-picker { margin: 0; }
+
+/* ---- the phone drawing: one card per mail, actions behind its own menu ---- */
+.archive-cards { display: grid; gap: var(--gap); }
+.archive-card { display: grid; gap: 6px; }
+.archive-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
+.archive-card-head .archive-subject { max-width: none; }
+.archive-card-meta, .archive-card-why { margin: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--font-caption); }
+.archive-card-dest .archive-dest { max-width: none; }
+.archive-card-why .archive-reason { max-width: none; }
+.archive-menu > .archive-menu-summary {
+  min-height: var(--row-sm);
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  font-size: var(--font-label);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.archive-menu-summary::-webkit-details-marker { display: none; }
+.archive-menu > .archive-row-actions { padding-top: 6px; }
+@media (max-width: 520px) {
+  .archive-other { grid-template-columns: minmax(0, 1fr); }
+}
+/* Every control here is pressed with a thumb on the phone — the design
+   system's 44px floor, not the 36px desktop control height. */
+@media (pointer: coarse) {
+  .archive-run,
+  .archive-limit-input,
+  .archive-run-pick,
+  .archive-action,
+  .archive-other-input,
+  .archive-other-go,
+  .archive-hint,
+  .archive-runbar .button-ghost { min-height: var(--row-sm); }
+}
+
+/* The Inbox column's pointer at this tab: a quiet button wearing the same
+   clothes as the Done column's `journal` link. */
+button.board-archive-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.board-archive-link + .board-triage { margin-left: var(--space-sm); }
