@@ -12,7 +12,8 @@
  * → blocked by (#100: the open blockers, a Move-to-style picker to add one,
  * remove per row) → comments
  * newest-first with URLs as clickable chips + composer (Ctrl+Enter sends,
- * origin=ui) → activity log (field old → new · actor · time) → children
+ * origin=ui) — each row carries the Links pair, a pencil (edit the body in
+ * place; the author, time and origin stay) and a trash (asks first) → activity log (field old → new · actor · time) → children
  * (click to navigate, add child) → issue panel: the linked issue (provider
  * glyph, repo#N link, state, labels from the last sync, last synced, unlink)
  * or — for a plain task — "Create issue…" (repo from the last-seen list or
@@ -53,6 +54,7 @@ export function createDrawer(el, opts) {
   let descEditing = false;
   let pickerOpen = false;  // the folder-index picker under the Folder field
   let editingLinkId = null;
+  let editingCommentId = null;  // the comment whose body sits in the inline editor (#155)
 
   function section(name, title, iconName) {
     const s = document.createElement('section');
@@ -605,10 +607,36 @@ export function createDrawer(el, opts) {
       origin.className = 'comment-origin';
       origin.textContent = c.origin;
       meta.append(who, when, origin);
-      const bodyEl = document.createElement('div');
-      bodyEl.className = 'comment-body';
-      bodyEl.appendChild(linkify(c.body));
-      row.append(meta, bodyEl);
+      // Two icons and no more (#155) — the Links row's pair, same borderless
+      // chip-height button. An edit rewrites the text only: author, time and
+      // origin stay, so the meta line above never changes under it.
+      const actions = document.createElement('div');
+      actions.className = 'comment-actions';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'link-rm';
+      edit.setAttribute('aria-label', 'Edit comment by ' + c.author);
+      edit.title = 'Edit';
+      edit.innerHTML = icon('pencil');
+      edit.addEventListener('click', function () { editingCommentId = c.id; render(); });
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'link-rm';
+      rm.setAttribute('aria-label', 'Delete comment by ' + c.author);
+      rm.title = 'Delete';
+      rm.innerHTML = icon('trash-2');
+      rm.addEventListener('click', function () { deleteComment(t, c); });
+      actions.append(edit, rm);
+      meta.appendChild(actions);
+      row.appendChild(meta);
+      if (editingCommentId === c.id) {
+        row.appendChild(commentEditor(t, c));
+      } else {
+        const bodyEl = document.createElement('div');
+        bodyEl.className = 'comment-body';
+        bodyEl.appendChild(linkify(c.body));
+        row.appendChild(bodyEl);
+      }
       clist.appendChild(row);
     });
     if (!ordered.length) {
@@ -729,6 +757,81 @@ export function createDrawer(el, opts) {
     del.addEventListener('click', function () { deleteCurrent(t); });
     foot.appendChild(del);
     return foot;
+  }
+
+  /** The pencil's inline editor: the body as a textarea + Save / Cancel (#155). */
+  function commentEditor(t, c) {
+    const wrap = document.createElement('div');
+    wrap.className = 'comment-edit-wrap';
+    const ta = document.createElement('textarea');
+    ta.className = 'input-native comment-edit';
+    ta.rows = 3;
+    ta.value = c.body;
+    ta.setAttribute('aria-label', 'Edit comment by ' + c.author);
+    const cancel = function () { editingCommentId = null; render(); };
+    const save = async function () {
+      const v = ta.value.trim();
+      if (!v) { toast('A comment cannot be empty', 'error'); ta.focus(); return; }
+      if (v === c.body) { cancel(); return; }
+      try {
+        await api('/api/tasks/' + t.id + '/comments/' + c.id, { method: 'PATCH', body: { body: v } });
+        // only now: a failed save leaves the editor open with the text still in
+        // it, so a rejected or dropped request never eats what was typed
+        editingCommentId = null;
+        await refresh();
+        opts.onChanged();
+      } catch (err) {
+        toast(err.message || 'Edit failed', 'error');
+      }
+    };
+    ta.addEventListener('keydown', function (ev) {
+      // stopPropagation for the same reason the link-label editor does it: the
+      // handlers below re-render the drawer synchronously and detach this
+      // textarea, so app.js's document-level Escape would no longer see a field
+      // owning the key and would close the drawer on top of the cancelled edit.
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); ev.stopPropagation(); save(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancel(); }
+    });
+    const bar = document.createElement('div');
+    bar.className = 'comment-edit-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'button-tint';
+    saveBtn.textContent = 'Save';
+    saveBtn.title = 'Ctrl+Enter';
+    saveBtn.addEventListener('click', save);
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'button-ghost';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', cancel);
+    bar.append(saveBtn, cancelBtn);
+    wrap.append(ta, bar);
+    requestAnimationFrame(function () {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+    return wrap;
+  }
+
+  /** The trash: asks first, as Delete task does — there is no undo (#155). */
+  async function deleteComment(t, c) {
+    const preview = c.body.length > 80 ? c.body.slice(0, 80).trim() + '…' : c.body;
+    const ok = await confirmDialog({
+      title: 'Delete this comment?',
+      lines: ['"' + preview + '"', 'This cannot be undone.'],
+      action: 'Delete',
+    });
+    if (!ok || !current || current.id !== t.id) return;
+    try {
+      await api('/api/tasks/' + t.id + '/comments/' + c.id, { method: 'DELETE' });
+      await refresh();
+      opts.onChanged();
+      toast('Comment deleted', 'success');
+    } catch (err) {
+      toast(err.message || 'Delete failed', 'error');
+      await refresh();
+    }
   }
 
   async function deleteCurrent(t) {
@@ -1086,6 +1189,7 @@ export function createDrawer(el, opts) {
       descEditing = false;
       pickerOpen = false;
       editingLinkId = null;
+      editingCommentId = null;
       try {
         const data = await api('/api/tasks/' + id);
         current = data;

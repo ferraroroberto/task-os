@@ -15,6 +15,8 @@
     POST   /api/tasks/{id}/done          complete (recurring → roll due)
     GET    /api/tasks/{id}/comments      thread order
     POST   /api/tasks/{id}/comments      {body, origin?, author?} → 201
+    PATCH  /api/tasks/{id}/comments/{cid} {body} — text only; author/ts/origin stay
+    DELETE /api/tasks/{id}/comments/{cid}
     GET    /api/tasks/{id}/links
     POST   /api/tasks/{id}/links         {url, label?, kind?} → 201
     PATCH  /api/tasks/{id}/links/{lid}   {label} rename
@@ -161,6 +163,11 @@ class CommentBody(BaseModel):
     body: str
     origin: str = "ui"
     author: str | None = None
+
+
+class CommentEditBody(BaseModel):
+    #: An edit corrects the text only — author / ts / origin stay as they were.
+    body: str
 
 
 class LinkBody(BaseModel):
@@ -432,6 +439,21 @@ def add_comment(
     return repo.add_comment(
         db, task_id, body.body, author=resolve_actor(request, body.author), origin=body.origin
     )
+
+
+@router.patch("/tasks/{task_id}/comments/{comment_id}")
+def update_comment(
+    task_id: int, comment_id: int, body: CommentEditBody, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    return repo.update_comment(db, task_id, comment_id, body.body)
+
+
+@router.delete("/tasks/{task_id}/comments/{comment_id}")
+def delete_comment(
+    task_id: int, comment_id: int, db: sqlite3.Connection = Depends(get_db)
+) -> dict[str, Any]:
+    repo.delete_comment(db, task_id, comment_id)
+    return {"id": comment_id, "deleted": 1}
 
 
 # ----------------------------------------------------------------- links

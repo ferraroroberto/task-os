@@ -1434,13 +1434,38 @@ def list_comments(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]
     )
 
 
-def delete_comment(conn: sqlite3.Connection, comment_id: int) -> None:
-    row = conn.execute("SELECT task_id FROM comments WHERE id = ?", (comment_id,)).fetchone()
-    if row is None:
-        raise NotFound(f"comment {comment_id} not found")
-    conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
+def update_comment(
+    conn: sqlite3.Connection, task_id: int, comment_id: int, body: str
+) -> dict[str, Any]:
+    """Rewrite one comment's body in place (#155).
+
+    Author, ``ts`` and ``origin`` are deliberately kept: the row stays whose it
+    was and keeps saying where it came from — an edit corrects the text, it does
+    not re-attribute the comment. ``comments_au`` re-indexes ``comments_fts``,
+    so search follows the new words; ``_touched`` re-exports the markdown file,
+    so a stale mirror copy cannot resurrect the old line on the next import.
+    """
+    body = (body or "").strip()
+    if not body:
+        raise ValidationError("comment body is required")
+    cur = conn.execute(
+        "UPDATE comments SET body = ? WHERE id = ? AND task_id = ?", (body, comment_id, task_id)
+    )
     conn.commit()
-    _touched(row["task_id"])
+    if cur.rowcount == 0:
+        raise NotFound(f"comment {comment_id} on task {task_id} not found")
+    _touched(task_id)
+    return _row(conn.execute("SELECT * FROM comments WHERE id = ?", (comment_id,)).fetchone())  # type: ignore[return-value]
+
+
+def delete_comment(conn: sqlite3.Connection, task_id: int, comment_id: int) -> None:
+    cur = conn.execute(
+        "DELETE FROM comments WHERE id = ? AND task_id = ?", (comment_id, task_id)
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        raise NotFound(f"comment {comment_id} on task {task_id} not found")
+    _touched(task_id)
 
 
 # ----------------------------------------------------------- mirror events

@@ -1485,6 +1485,13 @@ a.chip:hover { text-decoration: underline; }
 .comment:first-child { border-top: 0; }
 .comment-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--font-caption); margin-bottom: 2px; }
 .comment-meta strong { color: var(--fg); }
+/* Pencil + trash park at the right end of the meta line (#155) — the Links
+   row's borderless chip-height button, whose ::before carries the 44px hit
+   rect; `margin-left: auto` is the only thing this pair adds. */
+.comment-actions { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+.comment-edit-wrap { display: flex; flex-direction: column; gap: 6px; }
+.comment-edit { height: auto; min-height: 66px; padding: 8px 10px; resize: vertical; font-family: inherit; }
+.comment-edit-actions { display: flex; gap: 6px; }
 .comment-origin { border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 0 6px; font-size: 0.7rem; }
 .comment-body { font-size: var(--font-label); white-space: pre-wrap; overflow-wrap: anywhere; }
 .comment-body .chip { white-space: nowrap; margin: 1px 0; }

@@ -272,6 +272,34 @@ def test_parse_splits_both_dates(client: TestClient) -> None:
     assert (r["starts"], r["starts_phrase"]) == ("2026-10-01", "starts oct 1")
 
 
+def test_comment_edit_and_delete_routes(client: TestClient) -> None:
+    """#155 — the drawer's pencil and trash, over HTTP."""
+    t = client.post("/api/tasks", json={"title": "Chat"}).json()["id"]
+    other = client.post("/api/tasks", json={"title": "Elsewhere"}).json()["id"]
+    c = client.post(f"/api/tasks/{t}/comments", json={"body": "sent new emial"}).json()
+
+    ed = client.patch(f"/api/tasks/{t}/comments/{c['id']}", json={"body": "sent new email"})
+    assert ed.status_code == 200 and ed.json()["body"] == "sent new email"
+    assert ed.json()["origin"] == c["origin"] and ed.json()["author"] == c["author"]
+    assert client.get(f"/api/tasks/{t}").json()["comments"][0]["body"] == "sent new email"
+    # the FTS index follows the edit: the new words hit, the old ones no longer do
+    def task_hits(q: str) -> int:
+        groups = client.get(f"/api/search?q={q}").json()["groups"]
+        return int(next(g for g in groups if g["kind"] == "tasks")["count"])
+
+    assert task_hits("email") == 1 and task_hits("emial") == 0
+
+    assert client.patch(f"/api/tasks/{t}/comments/{c['id']}", json={"body": " "}).status_code == 422
+    assert client.patch(f"/api/tasks/{other}/comments/{c['id']}", json={"body": "x"}).status_code == 404
+    assert client.delete(f"/api/tasks/{other}/comments/{c['id']}").status_code == 404
+    assert client.get(f"/api/tasks/{t}").json()["comments"]  # nothing landed on a 404
+
+    rm = client.delete(f"/api/tasks/{t}/comments/{c['id']}")
+    assert rm.status_code == 200 and rm.json() == {"id": c["id"], "deleted": 1}
+    assert client.get(f"/api/tasks/{t}").json()["comments"] == []
+    assert client.delete(f"/api/tasks/{t}/comments/{c['id']}").status_code == 404
+
+
 def test_links_issue_and_people(seeded: TestClient) -> None:
     t = seeded.post("/api/tasks", json={"title": "Linky"}).json()["id"]
     lk = seeded.post(f"/api/tasks/{t}/links", json={"url": "https://example.com", "kind": "web"})

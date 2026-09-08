@@ -547,6 +547,32 @@ def test_comments_thread_order_and_origin(conn: sqlite3.Connection) -> None:
         repo.add_comment(conn, 999, "x")
 
 
+def test_comment_edit_keeps_attribution_and_delete_is_task_scoped(conn: sqlite3.Connection) -> None:
+    """#155 — an edit corrects the text only; both writes are scoped to the task."""
+    t = repo.create_task(conn, "Talk")
+    other = repo.create_task(conn, "Elsewhere")
+    with repo.use_clock(lambda: datetime(2026, 8, 17, 9, 0).astimezone()):
+        c = repo.add_comment(conn, t["id"], "recieved reply", author="a", origin="cli")
+
+    edited = repo.update_comment(conn, t["id"], c["id"], "  received reply + answered  ")
+    assert edited["body"] == "received reply + answered"          # trimmed
+    assert (edited["author"], edited["ts"], edited["origin"]) == (c["author"], c["ts"], c["origin"])
+    assert [x["body"] for x in repo.list_comments(conn, t["id"])] == ["received reply + answered"]
+
+    with pytest.raises(repo.ValidationError):
+        repo.update_comment(conn, t["id"], c["id"], "   ")
+    with pytest.raises(repo.NotFound):                            # right id, wrong task
+        repo.update_comment(conn, other["id"], c["id"], "hijack")
+    with pytest.raises(repo.NotFound):
+        repo.delete_comment(conn, other["id"], c["id"])
+    assert repo.list_comments(conn, t["id"])                      # neither write landed
+
+    repo.delete_comment(conn, t["id"], c["id"])
+    assert repo.list_comments(conn, t["id"]) == []
+    with pytest.raises(repo.NotFound):
+        repo.delete_comment(conn, t["id"], c["id"])
+
+
 def test_last_comment_follows_thread_order_not_max_id(conn: sqlite3.Connection) -> None:
     """A historical import (``add_comment(..., ts=...)`` — the path the Notion
     importer and ``Mirror._apply_comments`` use) can land a newer id with an
@@ -724,8 +750,10 @@ def test_fts_follows_updates_and_deletes(conn: sqlite3.Connection) -> None:
     assert not repo.search(conn, "alpha") and repo.search(conn, "beta")
     c = repo.add_comment(conn, t["id"], "unique gamma word")
     assert repo.search(conn, "gamma")[0]["matched_in"] == "comment"
-    repo.delete_comment(conn, c["id"])
-    assert not repo.search(conn, "gamma")
+    repo.update_comment(conn, t["id"], c["id"], "unique delta word")
+    assert not repo.search(conn, "gamma") and repo.search(conn, "delta")[0]["matched_in"] == "comment"
+    repo.delete_comment(conn, t["id"], c["id"])
+    assert not repo.search(conn, "delta")
     repo.delete_task(conn, t["id"])
     assert not repo.search(conn, "beta")
 
