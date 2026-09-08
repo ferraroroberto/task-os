@@ -29,7 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import _get, shot, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -80,9 +80,8 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         # 2. Tree: still findable — the map of everything — wearing a lock and
         #    "blocked by 1" instead of any starts marker (blocked wins, #100's
         #    explicit precedence over #87's deferred clock).
-        page.click("nav.tabs .tab[data-tab='tree']")
-        expect(page.locator("#paneTree")).to_be_visible()
-        locked = _trow(page, "Release v0.2", "#paneTree")
+        tree_view(page)
+        locked = _trow(page, "Release v0.2", "#paneTable #treeHost")
         expect(locked).to_be_visible()
         expect(locked.locator(".trow-blocked")).to_have_text("blocked by 1")
         expect(locked.locator(".trow-starts")).to_have_count(0)

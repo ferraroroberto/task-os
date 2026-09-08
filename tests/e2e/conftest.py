@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import IO
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Locator, Page, expect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from tests.conftest import write_test_config
@@ -478,6 +478,40 @@ def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
     page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
+
+
+def _press(page: Page, target: Locator) -> None:
+    """Tap on a touch context, click otherwise — the gesture a real user makes."""
+    if page.evaluate("() => 'ontouchstart' in window"):
+        target.tap()
+    else:
+        target.click()
+
+
+def _table_pane_view(page: Page, view: str, host: str) -> None:
+    """Put the Table pane on one of its two drawings (#161).
+
+    The Tree stopped being a nav destination when it became the Table pane's
+    second view: reaching it is *tab, then toggle*, and it is the strip's
+    segmented control that switches — never a `data-tab='tree'` click, which
+    no longer matches anything.
+    """
+    _press(page, page.locator("nav.tabs .tab[data-tab='table']"))
+    expect(page.locator("#paneTable")).to_be_visible()
+    seg = page.locator(f"#tableViewToggle .view-seg[data-view='{view}']")
+    _press(page, seg)
+    expect(seg).to_have_attribute("aria-pressed", "true")
+    expect(page.locator(host)).to_be_visible()
+
+
+def tree_view(page: Page) -> None:
+    """Open the Table tab on its Tree view; the outline is on screen after."""
+    _table_pane_view(page, "tree", "#paneTable #treeHost")
+
+
+def table_view(page: Page) -> None:
+    """Open the Table tab on its grid/rows view — the other half of the pair."""
+    _table_pane_view(page, "table", "#paneTable #tableHost")
 
 
 @pytest.fixture(autouse=True)

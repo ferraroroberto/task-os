@@ -60,7 +60,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import _get, shot, table_view, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -263,9 +263,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(new_row.locator(".due-btn")).to_have_attribute("title", f"{friday} — click to change")
         shot(page, shots / "story-04-triage-6-desktop.png")
 
-        # 7. Tree: drag it under a project (Family admin) → moved, toast, rollup.
-        page.click("nav.tabs .tab[data-tab='tree']")
-        expect(page.locator("#paneTree")).to_be_visible()
+        # 7. Tree (the Table pane's second view, #161): drag it under a project
+        #    (Family admin) → moved, toast, rollup.
+        tree_view(page)
         family = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Family admin")).first
         family_id = int(family.get_attribute("data-id"))
         kids_before = int(family.locator(":scope > .tree-row .trow-kids").inner_text())
@@ -308,8 +308,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{family_id}")["parent_id"] is None
 
-        # 8. Back in the Table the breadcrumb is there.
-        page.click("nav.tabs .tab[data-tab='table']")
+        # 8. Back on the Table's grid view the breadcrumb is there.
+        table_view(page)
         moved_row = page.locator(f".task-row[data-id='{new_id}']")
         expect(moved_row.locator(".t-crumb")).to_have_text("Family admin")
         expect(moved_row.locator(".c-project")).to_have_text("Family admin")
@@ -604,15 +604,27 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
         expect(page.locator(pane)).to_be_visible()
         expect(page.locator(pane).get_by_text("renew insurance", exact=True)).to_have_count(0)
     # …but the Tree still has it, wearing the marker that says why it is quiet
-    page.click("nav.tabs .tab[data-tab='tree']")
-    sleeping = _trow(page, "renew insurance", "#paneTree")
+    # (the Table pane's second view since #161 — one pane, two drawings)
+    tree_view(page)
+    sleeping = _trow(page, "renew insurance", "#paneTable #treeHost")
     expect(sleeping).to_be_visible()
     expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
     shot(page, shots / "story-13-starts-snooze-2-desktop.png")
+    # the view is remembered: a reload comes back on the tree, not the grid (#161)
+    page.reload()
+    expect(page.locator("#paneTable #treeHost .tree")).to_be_visible()
+    expect(page.locator("#paneTable #tableHost")).to_be_hidden()
+    # …and a tab a pre-#161 build stored as `tree` lands in the same place
+    # rather than dropping the user back on the default tab
+    page.evaluate("() => { localStorage.setItem('task-os.tab', 'tree');"
+                  " localStorage.removeItem('task-os.tableView'); }")
+    page.reload()
+    expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "table")
+    expect(page.locator("#paneTable #treeHost .tree")).to_be_visible()
 
     # 3. Deferred is a visible state, not an absence: the status multi-select's
     #    pseudo-value lists exactly the sleeping tasks, and the state is the URL.
-    page.click("nav.tabs .tab[data-tab='table']")
+    table_view(page)
     card = _open_filters(page, "tableFilters")
     status_sel = card.locator(".msel[data-name='status']")
     status_sel.locator("summary.msel-summary").click()
@@ -709,9 +721,11 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         expect(watering.locator(".trow-due")).to_be_visible()
         expect(watering.locator(".trow-status")).to_have_value("todo")
         assert_no_horizontal_overflow(page)
-        # the top strip (#80): the text filter and the + sit side by side, both
-        # at the touch floor, with effective rectangles that never overlap
-        strip = page.locator("#paneTable .filter-q, #paneTable .quick-add-btn")
+        # the top strip (#80): the text filter, the view toggle's two halves
+        # (#161) and the + sit side by side, all at the touch floor, with
+        # effective rectangles that never overlap — the segmented pair joins on
+        # a shared hairline, so its halves touch without their hit rects doing
+        strip = page.locator("#paneTable .filter-q, #paneTable .view-seg, #paneTable .quick-add-btn")
         assert_min_target(strip)
         assert_no_overlap(strip)
         page.locator("#paneTable .quick-add-btn").tap()
