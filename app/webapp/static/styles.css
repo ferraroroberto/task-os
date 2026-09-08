@@ -1708,12 +1708,60 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-empty .empty-state-icon { width: 20px; height: 20px; }
 .board-empty .empty-state-message { font-size: var(--font-caption); }
 
+/* AI Inbox triage (#95): one quiet action per Inbox surface, then one staged
+   strip inside the row. The two adjacent decision controls use real 44px
+   geometry; invisible hit-area expansion would make them overlap. */
+.board-triage {
+  margin-left: auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-caption);
+}
+.board-triage .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.board-triage[data-state="loading"] { color: var(--accent); }
+.board-triage-phone {
+  display: flex;
+  width: calc(100% - 8px);
+  height: var(--row-sm);
+  justify-content: center;
+  margin: 4px;
+}
+.ai-suggestion {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--accent-border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+.ai-suggestion-summary { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.ai-suggestion-actions { display: grid; grid-template-columns: repeat(2, 44px); }
+.ai-suggestion-action {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-color: transparent;
+}
+.ai-suggestion-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
+
 /* Desktop / wide: all columns side by side using the full width, equal
    widths, each scrolling on its own under a sticky header with the count.
    Flat regions, not cards (#32): a vertical 1px hairline between columns is
    the only separation. */
 @media (min-width: 1024px) {
   .board-strip { display: none; }
+  .board-triage-phone { display: none; }
   .board-columns {
     display: grid;
     grid-auto-flow: column;

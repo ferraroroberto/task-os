@@ -631,6 +631,25 @@
             </dl>
           </div>
         </details>
+        <!-- AI Inbox triage (#95): staged suggestions only; accepting one is
+             the explicit write and moves the task from Inbox to Todo. -->
+        <details class="card card--collapsible settings-card" id="aiCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg>
+              <h3 class="collapse-title">AI Inbox triage</h3>
+              <span class="collapse-count" id="aiCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Triage sends Inbox task text, the project tree and people to the local LLM hub in one bounded request. Suggestions stay staged until you accept or reject each one; nothing is auto-applied.</p>
+            <dl class="status-rows" aria-live="polite">
+              <div class="status-row"><dt>Local AI</dt><dd id="statusAI" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
+            </dl>
+          </div>
+        </details>
         <!-- Search (Step 10): which of the four indexes this install can query
              — from GET /api/search/status; a kind that is off says why. -->
         <details class="card card--collapsible settings-card" id="searchCard">

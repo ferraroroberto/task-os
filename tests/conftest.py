@@ -41,6 +41,9 @@ def write_test_config(
     fallback_url: str = "",
     partial_interval_seconds: float | None = None,
     enrich_url: str = "",
+    ai_enabled: bool = False,
+    ai_base_url: str | None = None,
+    ai_model: str | None = None,
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
@@ -67,6 +70,11 @@ def write_test_config(
     # Blank for the same reason both voice endpoints are: a suite whose
     # result depends on whether the fleet's hub is running is not a suite.
     raw["enrich"] = {**raw.get("enrich", {}), "url": enrich_url}
+    raw["ai"] = {**raw.get("ai", {}), "enabled": ai_enabled}
+    if ai_base_url is not None:
+        raw["ai"]["base_url"] = ai_base_url
+    if ai_model is not None:
+        raw["ai"]["model"] = ai_model
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     if web_roots is not None:

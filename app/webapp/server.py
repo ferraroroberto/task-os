@@ -12,7 +12,8 @@ Route families (each in ``app/webapp/routers/``):
                                    grouped, unconfigured = visible; /api/search/status
     views   /api/board · /api/today → the Board's five buckets · Today grouped by project
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
-                                   backup, folder index + opener (Step 9), capture (#98); POST
+                                   backup, folder index + opener (Step 9), capture (#98),
+                                   local AI (#95); POST
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
     folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
@@ -26,6 +27,8 @@ Route families (each in ``app/webapp/routers/``):
     voice   POST /api/transcribe  → the recorded clip forwarded to the fleet's
                                    whisper server, back as {text, parse} (#92); the
                                    endpoint's own state rides /api/status's `voice`
+    ai      GET /api/ai/suggestions · POST /api/ai/triage and individual
+                                   accept/reject → staged Inbox proposals (#95)
     auth    GET /login · POST /api/login|logout — the token / password →
             cookie swap (Step 7)
 
@@ -45,11 +48,13 @@ open issues → coding tasks, first pass 10 s after startup then every
 reindex when the index file is missing / older than 24 h, hourly re-check) and
 ``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
 read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
-``src.voice.VoiceClient`` (``app.state.voice``) and ``src.enrich.EnrichClient``
-(``app.state.enrich``, #147) are the exceptions with no
+``src.voice.VoiceClient`` (``app.state.voice``), ``src.enrich.EnrichClient``
+(``app.state.enrich``, #147) and ``src.ai.AIClient`` (``app.state.ai``, #95)
+are the exceptions with no
 thread to start: voice quick-add (#92) is a cached reachability probe of the
 transcription endpoint plus one forwarding POST per recording, and enrichment
-is the same shape against the hub's chat endpoint.
+is the same shape against the hub's chat endpoint. AI triage makes one bounded
+Anthropic-shape request and stages its validated answer for explicit review.
 All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
 over the folder-index and issue-sync services so the search box reads the same
@@ -85,6 +90,7 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from app.webapp.routers import (
+    ai,
     auth,
     capture,
     folders,
@@ -100,6 +106,7 @@ from app.webapp.routers import (
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src import placeholders
 from src import tasks_repo as repo
+from src.ai import AIClient
 from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
 from src.certs import cert_paths
@@ -207,6 +214,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # spoken line. Enrichment is a tidy-up on an answer that already
     # exists, so it never has anything to keep running.
     app.state.enrich = EnrichClient(config)
+    # One Anthropic-SDK client for staged triage now and generated notes later.
+    # No worker of its own: a cached reachability probe plus explicit requests.
+    app.state.ai = AIClient(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:
@@ -265,6 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(folders.router)
     app.include_router(capture.router)
     app.include_router(voice.router)
+    app.include_router(ai.router)
     return app
 
 

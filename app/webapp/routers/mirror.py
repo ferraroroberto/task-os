@@ -7,11 +7,13 @@
                                capture: {enabled, reason, source, poll_minutes, last_run,
                                last_result, last_error, next_run, running} (#98),
                                voice: {enabled, reason, url, serving, checked_at} (#92),
+                               ai: {enabled, reason, model, checked_at} (#95),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
                               auth part comes from routers/auth.access_status; the
-                              folder index + opener parts are Step 9)
+                              folder index + opener parts are Step 9; the AI state
+                              drives both Board and Settings)
     POST /api/mirror/export   full export now → {tasks, written, removed}
     POST /api/mirror/import   one watcher pass now → {checked, imported, errors}
     GET  /api/mirror/events   every standing import conflict/rejection, most recent first
@@ -52,6 +54,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     capture = getattr(request.app.state, "capture", None)
     voice = getattr(request.app.state, "voice", None)
     enrich = getattr(request.app.state, "enrich", None)
+    ai = getattr(request.app.state, "ai", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
@@ -62,6 +65,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         "voice": voice.status() if voice else {"enabled": False, "reason": "voice service not started"},
         "enrich": enrich.status() if enrich
         else {"enabled": False, "reason": "enrichment service not started"},
+        "ai": ai.status() if ai else {"enabled": False, "reason": "AI service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

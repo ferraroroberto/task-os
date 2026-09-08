@@ -22,13 +22,15 @@
  *                  whisper fallback). The same status the quick-add mic
  *                  reads. No button: there is nothing to run on demand, only
  *                  somewhere to be up.
+ *   AI             whether the local hub used by staged Inbox triage is
+ *                  enabled and reachable, plus the configured model (#95).
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
  *   Folder opener  the per-PC opener install command + the folder index
  *                  (Step 9), with "Reindex folders now".
  *
- * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture and voice cards
+ * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, voice and AI cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
@@ -81,6 +83,9 @@ export function mountSettings(opts) {
     statusVoice: document.getElementById('statusVoice'),
     statusVoiceUrl: document.getElementById('statusVoiceUrl'),
     statusEnrich: document.getElementById('statusEnrich'),
+    aiCardMeta: document.getElementById('aiCardMeta'),
+    statusAI: document.getElementById('statusAI'),
+    statusAIModel: document.getElementById('statusAIModel'),
     searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
@@ -269,6 +274,7 @@ export function mountSettings(opts) {
       renderCapture(body.capture);
       renderVoice(body.voice);
       renderEnrich(body.enrich);
+      renderAI(body.ai);
     } catch (err) {
       // An unreachable status is its own visible state, never a stale "Loading…".
       renderAccessUnknown(err.message);
@@ -280,6 +286,7 @@ export function mountSettings(opts) {
       renderCapture(null);
       renderVoice(null);
       renderEnrich(null);
+      renderAI(null);
     }
   }
 
@@ -397,6 +404,33 @@ export function mountSettings(opts) {
       return;
     }
     els.statusEnrich.append(statusPart('ok', 'reachable'), ' ?? ', codeEl(st.model || 'unknown'));
+  }
+
+  // --------------------------------------------------------- AI triage
+  function renderAI(st) {
+    if (!els.statusAI) return;
+    els.statusAI.replaceChildren();
+    els.statusAIModel.replaceChildren();
+    els.statusAI.classList.remove('muted');
+    els.statusAIModel.classList.remove('muted');
+    if (!st) {
+      els.statusAI.textContent = 'unknown';
+      els.statusAIModel.textContent = '–';
+      els.aiCardMeta.textContent = 'unknown';
+      return;
+    }
+    els.statusAIModel.append(st.model ? codeEl(st.model) : 'not set');
+    if (!st.enabled) {
+      const label = st.configured ? 'not reachable' : 'off';
+      els.statusAI.append(statusPart('off', label), ' — ' + (st.reason || 'unknown'));
+      els.aiCardMeta.textContent = st.configured ? 'unavailable' : 'off';
+      return;
+    }
+    els.statusAI.append(
+      statusPart('ok', 'reachable'),
+      st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
+    );
+    els.aiCardMeta.textContent = 'on';
   }
 
   // ------------------------------------------------------------ issue sync
