@@ -481,6 +481,32 @@ a.chip:hover { text-decoration: underline; }
    the Table's 30px cell button, which has no neighbour.) */
 .strip-square::before { inset: 0; }
 
+/* --------------------------------------- the Table pane's view toggle (#161) */
+/* The grid and the outliner are two drawings of ONE filtered list, so they
+   share one pane, one strip and one filter card — a segmented pair in the
+   strip, not a second nav destination. Both halves are .strip-square, so the
+   control is exactly the square the Select toggle and the + beside it are, at
+   every width (36px fine pointer, 44px touch — the one geometry above). The
+   pair joins by squaring the inner corners and dropping the second half's left
+   hairline: no negative margin, because two overlapping 44px hit rects is what
+   design.md's adjacent-cluster rule forbids, and the shared edge is already one
+   visible line. */
+.view-toggle { flex: none; display: inline-flex; align-items: center; }
+.view-seg:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.view-seg:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: transparent;
+}
+/* Engaged wears the accent-soft tint the Select toggle wears when it is on —
+   one "this is the state you are in" tone across the whole strip. */
+.view-seg[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border-soft);
+  color: var(--accent);
+}
+.view-seg:last-child[aria-pressed="true"] { border-left-color: transparent; }
+
 /* ------------------------------------------------- select mode (#81) */
 /* The Select toggle sits beside the +, same geometry. Once tasks are ticked
    the bulk bar takes the whole strip over — the toggle, the + and the text

@@ -41,7 +41,9 @@ const PRIORITIES = ['none', 'low', 'medium', 'high'];
 const STATUS_KEYS = [['1', 'inbox'], ['2', 'todo'], ['3', 'standby']];
 /** A task row in a view whose rows are action targets. */
 const ROW = '.trow[data-id], tr.task-row[data-id]';
-const NOT_A_TARGET = '#paneTree';
+/** The Tree keeps its own ↑↓→← outline walk, so its rows take no action key.
+ *  It is a host inside the Table pane since #161, not a pane of its own. */
+const NOT_A_TARGET = '#treeHost';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
 const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .msel, .folder-picker, .toast, .bulk-bar';
 

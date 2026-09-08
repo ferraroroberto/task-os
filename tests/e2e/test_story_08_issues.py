@@ -30,7 +30,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import _get, shot, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -103,9 +103,9 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
-        # 3. Tree: nest it under the garden-bot project (drag), the chip travels with it.
-        page.click("nav.tabs .tab[data-tab='tree']")
-        expect(page.locator("#paneTree")).to_be_visible()
+        # 3. Tree (the Table pane's second view, #161): nest it under the
+        #    garden-bot project (drag), the chip travels with it.
+        tree_view(page)
         bot = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Side project: garden-bot")).first
         bot_id = int(bot.get_attribute("data-id"))
         for pid in page.locator(".tree-node[aria-level='1'][aria-expanded='true']").evaluate_all("els => els.map(e => e.dataset.id)"):

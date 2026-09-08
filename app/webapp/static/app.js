@@ -1,6 +1,6 @@
 /* task-os — app bootstrap and the one place state lives.
  *
- * Nav + theme (Step 1); the views — Board, Table, Tree, Today — are
+ * Nav + theme (Step 1); the views — Board, Table (grid or tree, #161), Today — are
  * renderings of ONE shared list (`state.items`, /api/tasks under the shared
  * filter state) drawn with the ONE task row (rows.js) and edited through the
  * ONE filter card (filters.js) that every tab mounts (issue #46): status ·
@@ -58,6 +58,10 @@ import { renderTree } from './tree.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
+// Which of the Table pane's two drawings is on screen (#161) — `table` (the
+// grid) or `tree` (the outliner that used to own a nav slot). Remembered so an
+// installed PWA reopens in the view you left it in.
+const TABLE_VIEW_KEY = 'task-os.tableView';
 const PHONE_TABLE_MQ = '(max-width: 767px)';
 // Deep links into the Settings pane: hash → the card settings.js opens.
 const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search' };
@@ -79,15 +83,13 @@ const els = {
   boardFilters: document.getElementById('boardFilters'),
   boardFilterText: document.getElementById('boardFilterText'),
   boardBulk: document.getElementById('boardBulk'),
-  treeBulk: document.getElementById('treeBulk'),
   todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
   tableFilters: document.getElementById('tableFilters'),
   tableFilterText: document.getElementById('tableFilterText'),
   tableBulk: document.getElementById('tableBulk'),
+  tableViewToggle: document.getElementById('tableViewToggle'),
   tableHost: document.getElementById('tableHost'),
-  treeFilters: document.getElementById('treeFilters'),
-  treeFilterText: document.getElementById('treeFilterText'),
   treeHost: document.getElementById('treeHost'),
   todayFilters: document.getElementById('todayFilters'),
   todayFilterText: document.getElementById('todayFilterText'),
@@ -114,6 +116,7 @@ const state = {
   planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
+  tableView: 'table',  // which host the Table pane shows: 'table' | 'tree' (#161)
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
   aiSuggestions: {},  // task id → one pending staged suggestion (#95)
@@ -133,7 +136,7 @@ let palette = null;
 let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
-const bulkBars = [];      // one per pane strip (Board · Table · Tree · Today), all over one selection (#81)
+const bulkBars = [];      // one per pane strip (Board · Table · Today), all over one selection (#81)
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -159,11 +162,16 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText', 'treeFilters', 'treeFilterText',
+  // The Table pane owns two hosts (#161) and only the one on screen ever holds
+  // content — here too, or the pane would carry the prompt twice.
+  (state.tableView === 'tree' ? els.tableHost : els.treeHost).replaceChildren();
+  ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText',
     'todayFilters', 'todayFilterText', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
+  // …and nothing to draw two ways: an empty list is the same prompt either way
+  els.tableViewToggle.hidden = true;
 }
 
 function noMatchCard(iconName, message) {
@@ -584,7 +592,7 @@ function renderFilters() {
   // [tab, the card's host, the top strip that holds the text input (#80) —
   // Search has none: its own box owns the text]
   [['board', els.boardFilters, els.boardFilterText], ['table', els.tableFilters, els.tableFilterText],
-    ['tree', els.treeFilters, els.treeFilterText], ['today', els.todayFilters, els.todayFilterText],
+    ['today', els.todayFilters, els.todayFilterText],
     ['search', els.searchFilters, null], ['journal', els.journalFilters, els.journalFilterText]]
     .forEach(function (pair) {
       const host = pair[1];
@@ -608,8 +616,7 @@ function renderAll() {
   renderFilters();
   renderSelectMode();
   renderBoardPane();
-  renderTable();
-  renderTreePane();
+  renderTablePane();
   renderTodayPane();
   if (search) search.refilter();
 }
@@ -627,7 +634,8 @@ function renderSelectMode() {
     btn.hidden = busy;
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) { btn.hidden = busy; });
-  [els.boardFilterText, els.tableFilterText, els.treeFilterText, els.todayFilterText].forEach(function (host) {
+  els.tableViewToggle.hidden = busy;
+  [els.boardFilterText, els.tableFilterText, els.todayFilterText].forEach(function (host) {
     if (host) host.classList.toggle('is-superseded', busy);
   });
   bulkBars.forEach(function (bar) { bar.render(); });
@@ -683,7 +691,58 @@ function renderTodayPane() {
   }, Object.assign({ sort: state.filters.sort, plan: state.plan, planMode: state.planMode }, selectOpts()));
 }
 
-function renderTable() {
+/** The Table pane draws the one filtered list two ways (#161) — the grid and
+ *  the outliner that used to be its own tab. Only the host on screen is
+ *  rendered and the other is emptied, so a query scoped to the pane never
+ *  finds rows nobody can see. Both read the state already loaded: switching
+ *  views re-renders, it never refetches. */
+function renderTablePane() {
+  if (state.tableView === 'tree') {
+    els.tableHost.replaceChildren();
+    renderTreeView();
+  } else {
+    els.treeHost.replaceChildren();
+    renderTableGridView();
+  }
+}
+
+/** The toggle's pressed state and which host is on screen — chrome, kept apart
+ *  from the render above so the true-empty path (which renders no rows at all,
+ *  just the first-task prompt in both hosts) still shows the chosen one. */
+function applyTableView() {
+  const tree = state.tableView === 'tree';
+  els.tableHost.hidden = tree;
+  els.treeHost.hidden = !tree;
+  els.tableViewToggle.querySelectorAll('[data-view]').forEach(function (btn) {
+    btn.setAttribute('aria-pressed', btn.dataset.view === state.tableView ? 'true' : 'false');
+  });
+}
+
+/** Switch the Table pane's view (the toggle, the palette). */
+function setTableView(view) {
+  const next = view === 'tree' ? 'tree' : 'table';
+  const changed = next !== state.tableView;
+  state.tableView = next;
+  try { localStorage.setItem(TABLE_VIEW_KEY, next); } catch (_) { /* private mode */ }
+  applyTableView();
+  if (!changed) return;
+  // Only the host on screen ever holds content, so the one just revealed has
+  // to be filled: the rows, or — on a still-empty install, reachable here
+  // through the palette while the toggle itself is hidden — the first-task
+  // prompt. `total === null` is "not read yet", where the pending refresh
+  // renders; never a silently blank pane.
+  if (state.total) renderTablePane();
+  else if (state.total === 0) renderNoTasks();
+}
+
+function wireTableView() {
+  els.tableViewToggle.querySelectorAll('[data-view]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setTableView(btn.dataset.view); });
+  });
+  applyTableView();
+}
+
+function renderTableGridView() {
   const items = viewItems();
   if (!items.length) {
     els.tableHost.replaceChildren(noMatchCard('list-filter', 'No tasks match these filters'));
@@ -695,7 +754,7 @@ function renderTable() {
     Object.assign({ phone: phone }, selectOpts()));
 }
 
-function renderTreePane() {
+function renderTreeView() {
   // The Tree is the map of everything, so a deferred (#87) or blocked (#100)
   // task stays on it — with the marker saying why the working views are
   // quiet about it.
@@ -849,9 +908,11 @@ function focusRow(task) {
   // The new row in whichever surface is showing; the drawer stays closed so
   // the eye lands on the row, not a panel.
   const tab = nav.getTab();
-  const hosts = { table: els.tableHost, tree: els.treeHost, board: els.boardHost, today: els.todayHost };
+  // The Table pane's host is whichever of its two views is up (#161).
+  const tableHost = state.tableView === 'tree' ? els.treeHost : els.tableHost;
+  const hosts = { table: tableHost, board: els.boardHost, today: els.todayHost };
   let host = hosts[tab];
-  if (!host) { nav.setTab('table'); host = els.tableHost; }
+  if (!host) { nav.setTab('table'); host = tableHost; }
   const target = host.querySelector('.trow[data-id="' + task.id + '"] .trow-main, .task-row[data-id="' + task.id + '"]');
   if (target) {
     target.tabIndex = 0;
@@ -866,7 +927,7 @@ function wireSelectMode() {
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () { selection.setActive(!selection.isActive()); });
   });
-  [els.boardBulk, els.tableBulk, els.treeBulk, els.todayBulk].forEach(function (host) {
+  [els.boardBulk, els.tableBulk, els.todayBulk].forEach(function (host) {
     if (!host) return;
     bulkBars.push(mountBulkBar(host, {
       onApply: bulkApply,
@@ -993,6 +1054,9 @@ function openFolderOfCurrentTask() {
 /** The palette's command list — built per open so hints reflect the moment. */
 function paletteCommands() {
   const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
+  // The Table pane's two views (#161): land on the tab AND on the drawing asked
+  // for, so the palette reaches the tree the way the removed tab used to.
+  const goView = function (view) { return function () { nav.setTab('table'); setTableView(view); }; };
   const cmds = [
     { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
       if (quickAdd) quickAdd.open();
@@ -1004,8 +1068,8 @@ function paletteCommands() {
     // you can actually go right now.
     ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
-    { id: 'go-table', label: 'Go to Table', icon: 'table', run: go('table') },
-    { id: 'go-tree', label: 'Go to Tree', icon: 'list-tree', run: go('tree') },
+    { id: 'go-table', label: 'Go to Table', icon: 'table', run: goView('table') },
+    { id: 'go-tree', label: 'Table → Tree view', icon: 'list-tree', run: goView('tree') },
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
@@ -1099,6 +1163,19 @@ async function boot() {
   // link, or the last tab was Search); otherwise it is the filter card's text.
   let storedTab = null;
   try { storedTab = localStorage.getItem(TAB_KEY); } catch (_) { /* private mode */ }
+  // A stored `tree` tab predates #161, when the Tree became a view of the Table
+  // rather than a nav destination. Carry it over instead of dropping the user
+  // on the default tab: same place, same drawing, one slot fewer in the pill.
+  if (storedTab === 'tree') {
+    storedTab = 'table';
+    try {
+      localStorage.setItem(TAB_KEY, 'table');
+      localStorage.setItem(TABLE_VIEW_KEY, 'tree');
+    } catch (_) { /* private mode */ }
+  }
+  try {
+    state.tableView = localStorage.getItem(TABLE_VIEW_KEY) === 'tree' ? 'tree' : 'table';
+  } catch (_) { /* private mode */ }
   const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search');
   let searchQ = '';
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
@@ -1117,6 +1194,7 @@ async function boot() {
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
   wireQuickAdd();
   wireSelectMode();
+  wireTableView();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
     currentTaskId: function () { return drawer.currentId(); },
@@ -1150,7 +1228,7 @@ async function boot() {
   window.addEventListener('popstate', onHashChange);
   // The Table flips between the grid and the shared rows at the phone breakpoint.
   const phoneMq = window.matchMedia(PHONE_TABLE_MQ);
-  if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTable(); });
+  if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTablePane(); });
   wireIssueSync();
   fetchVersion();
   settings.refreshStatus();

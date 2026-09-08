@@ -1,6 +1,6 @@
 /* task-os — the Settings tab: what this install is and what it can reach.
  *
- * One module per tab, like Board · Table · Tree · Today · Search:
+ * One module per view, like Board · Table · Tree · Today · Search:
  * `mountSettings(opts)` looks up the pane's cards once, wires their controls
  * and returns the handle the bootstrap calls when something it owns changes.
  * Every card is the vendored disclosure (issue #46) whose summary carries a

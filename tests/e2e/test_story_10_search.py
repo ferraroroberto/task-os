@@ -224,12 +224,27 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     pin.fill(">go to")
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
     expect(cmds.first).to_contain_text("Go to Board")
-    assert cmds.count() >= 6
+    # one per nav destination — five since #161 folded the Tree into the Table
+    assert cmds.count() >= 5
     shot(page, shots / "story-10-search-5-desktop.png")
     pin.press("Enter")
     expect(palette).to_be_hidden()
     expect(page.locator("#paneBoard")).to_be_visible()
     expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "board")
+    # 5b. …and the Tree, which stopped being a destination when it became the
+    #     Table's second view (#161): one command lands on the tab AND the view.
+    page.locator("#paletteBtn").click()
+    expect(palette).to_be_visible()
+    pin.fill(">tree view")
+    expect(cmds.first).to_contain_text("Table → Tree view")
+    pin.press("Enter")
+    expect(palette).to_be_hidden()
+    expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "table")
+    expect(page.locator("#paneTable #treeHost .tree")).to_be_visible()
+    expect(page.locator("#tableViewToggle .view-seg[data-view='tree']")).to_have_attribute(
+        "aria-pressed", "true"
+    )
+    expect(page.locator("#paneTable #tableHost")).to_be_hidden()
     # a "not configured" state renders as a visible row, never a blank: ask for a kind that is off
     # (the disposable instance has all four on — prove it through the API contract instead)
     off = _get(base, "/api/search?q=kitchen&kinds=tasks")

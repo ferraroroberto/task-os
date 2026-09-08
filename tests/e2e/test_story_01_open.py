@@ -30,7 +30,8 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import shot
 
-TABS =["Board", "Table", "Tree", "Today", "Search", "Settings"]
+# Five destinations since #161 — the Tree is a view of the Table, not a tab.
+TABS = ["Board", "Table", "Today", "Search", "Settings"]
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 
@@ -115,6 +116,16 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         page.click("nav.tabs .tab[data-tab='table']")
         expect(page.locator("#paneTable")).to_be_visible()
         expect(page.locator("#paneTable .empty-state-message")).to_have_text("Add your first task")
+        # The Table's view toggle is hidden while there is nothing to draw, but
+        # the palette can still switch the view (#161) — and the host it
+        # reveals carries the same prompt, never a blank pane.
+        expect(page.locator("#tableViewToggle")).to_be_hidden()
+        page.click("#paletteBtn")
+        page.fill("#paletteInput", ">tree view")
+        page.keyboard.press("Enter")
+        expect(page.locator("#paneTable #treeHost .empty-state-message")).to_have_text("Add your first task")
+        expect(page.locator("#paneTable .empty-state-message")).to_have_count(1)
+        page.evaluate("() => localStorage.removeItem('task-os.tableView')")
         page.reload()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
         page.click("nav.tabs .tab[data-tab='board']")

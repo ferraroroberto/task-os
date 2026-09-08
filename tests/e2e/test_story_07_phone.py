@@ -68,7 +68,7 @@ from tests.e2e._geometry import (
     assert_no_overlap,
     effective_rects,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, e2e_workdir, shot
+from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, e2e_workdir, shot, tree_view
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -461,9 +461,10 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             # can wrap apart there where it would not elsewhere — and a
             # horizontal margin (the pair's own separation rule) does nothing
             # once two of them land on different meta lines.
-            page.locator("nav.tabs .tab[data-tab='tree']").tap()
+            tree_view(page)
             drift = page.locator(
-                "#paneTree .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Fix watering schedule drift$"))
+                "#paneTable #treeHost .trow",
+                has=page.locator(".trow-title", has_text=re.compile(r"^Fix watering schedule drift$")),
             )
             expect(drift).to_be_visible()
             assert_no_overlap(drift.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
