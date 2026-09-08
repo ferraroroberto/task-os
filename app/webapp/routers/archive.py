@@ -5,8 +5,14 @@
     GET  /api/archive/runs?limit=        → {runs, count} — latest first
     GET  /api/archive/runs/{id}          → the run with its items
     POST /api/archive/items/{id}/revert  → delete the files, mail back to Inbox
-    POST /api/archive/items/{id}/move    {folder} → re-file into that folder
-    POST /api/archive/items/{id}/accept  → mark a reviewable row seen (no files)
+    POST /api/archive/items/{id}/move    {folder, hint?} → re-file into that folder
+    POST /api/archive/items/{id}/accept  {hint?} → mark a reviewable row seen (no files)
+
+``hint`` is the optional one-line note the report screen (#159) offers when you
+overrule the ranking ("bills from this sender always go to the flat"). It is
+stored on the ``archive_corrections`` row the action writes (#158) and ridden
+into every later prompt as a few-shot example, so a correction explained once
+does not have to be repeated.
 
 ``limit`` is the one knob beyond the run itself: *at most this many mails this
 run*, in the archiver's own plan order. It exists so a first run against a real
@@ -36,7 +42,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response
-from src.archive_batch import ArchiveError, get_run, list_items, list_runs
+from src.archive_batch import MAX_HINT_CHARS, ArchiveError, get_run, list_items, list_runs
 from src.db import get_db
 
 router = APIRouter(prefix="/api/archive", tags=["archive"])
@@ -48,6 +54,11 @@ class RunBody(BaseModel):
 
 class MoveBody(BaseModel):
     folder: str = Field(min_length=1)
+    hint: str | None = Field(default=None, max_length=MAX_HINT_CHARS)
+
+
+class AcceptBody(BaseModel):
+    hint: str | None = Field(default=None, max_length=MAX_HINT_CHARS)
 
 
 def _service(request: Request) -> Any:
@@ -114,19 +125,20 @@ async def archive_item_move(
     if service is None or not service.enabled:
         return _unavailable(service)
     try:
-        return await run_in_threadpool(service.move, db, item_id, body.folder)
+        return await run_in_threadpool(service.move, db, item_id, body.folder, hint=body.hint)
     except ArchiveError as exc:
         return error_response(exc.http_status, exc.code, str(exc), exc.detail)
 
 
 @router.post("/items/{item_id}/accept")
 def archive_item_accept(
-    item_id: int, request: Request, db: sqlite3.Connection = Depends(get_db)
+    item_id: int, request: Request, body: AcceptBody | None = None,
+    db: sqlite3.Connection = Depends(get_db),
 ) -> Any:
     service = _service(request)
     if service is None:
         return _unavailable(service)
     try:
-        return service.accept(db, item_id)
+        return service.accept(db, item_id, hint=body.hint if body else None)
     except ArchiveError as exc:
         return error_response(exc.http_status, exc.code, str(exc), exc.detail)

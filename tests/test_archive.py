@@ -22,8 +22,9 @@ from fastapi.testclient import TestClient
 
 from src import archive_batch
 from src import db as dbmod
+from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService, ArchiveError
-from src.config import AppConfig, ArchiveConfig
+from src.config import AIConfig, AppConfig, ArchiveConfig
 from tests.conftest import write_test_config
 from tests.fixtures.archiver_fake import (
     FOLDER_BILLS,
@@ -39,6 +40,7 @@ from tests.fixtures.archiver_fake import (
     revert_doc,
     revert_result,
 )
+from tests.test_archive_rank import FakeHub, pick_for, picks_doc
 
 ARCHIVED_FILE = "E:\\archive\\house\\heating\\0042 - boiler service.msg"
 OLDER_FILE = "E:\\archive\\house\\heating\\0011 - an older thread.msg"
@@ -53,15 +55,25 @@ def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sqlite3.Co
     c.close()
 
 
-def service_for(repo: Path, **archive_kwargs: object) -> ArchiveBatchService:
-    """A service wired to the fake checkout, spawned with this interpreter."""
+def service_for(
+    repo: Path, *, ai: object | None = None, **archive_kwargs: object
+) -> ArchiveBatchService:
+    """A service wired to the fake checkout, spawned with this interpreter.
+
+    ``ai`` defaults to a **real** ``AIClient`` over a config with AI switched
+    off: no test process may reach the machine's live hub, and the honest
+    stand-in for "the model did not answer" is the client's own classified
+    ``ai_disabled``, not a mock. The #158 tests pass :class:`FakeHub` instead.
+    """
     defaults: dict[str, object] = {
         "enabled": True, "repo": str(repo), "python": sys.executable, "timeout_seconds": 60.0,
     }
-    return ArchiveBatchService(AppConfig(
+    config = AppConfig(
+        ai=AIConfig(enabled=False),
         archive=ArchiveConfig(**{**defaults, **archive_kwargs}),  # type: ignore[arg-type]
         placeholders={"archive": "E:/archive"},
-    ))
+    )
+    return ArchiveBatchService(config, ai_client=ai if ai is not None else AIClient(config))
 
 
 # ------------------------------------------------------------------- state
@@ -130,7 +142,10 @@ def test_a_run_files_reviews_and_records_every_mail(
     )
     run = service_for(repo).run_now()
 
-    assert run["status"] == "done" and run["error"] is None
+    # With no model reachable the archiver's own ranking stands — and the run
+    # says so rather than presenting a fallback as a considered decision (#158).
+    assert run["status"] == "done" and "ai_disabled" in run["error"]
+    assert run["agreement"] is None
     assert (run["planned"], run["archived"], run["needs_review"], run["failed"]) == (3, 2, 1, 0)
 
     items = {i["message_id"]: i for i in archive_batch.list_items(conn, run["id"])}
@@ -138,6 +153,7 @@ def test_a_run_files_reviews_and_records_every_mail(
     assert filed["status"] == "archived" and filed["chosen_folder"] == FOLDER_HOUSE
     assert filed["files"] == [ARCHIVED_FILE] and filed["sequence"] == "0042"
     assert filed["confidence"] == pytest.approx(0.91) and "0.70 threshold" in filed["reason"]
+    assert "could not rank this batch" in filed["reason"]
     # ``candidates`` is kept verbatim so #158 can re-rank without re-planning.
     assert [c["folder_path"] for c in filed["candidates"]] == [FOLDER_HOUSE, FOLDER_BILLS]
 
@@ -251,6 +267,247 @@ def test_an_apply_failure_with_nothing_written_is_not_revertible(
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, item["id"])
     assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
+
+
+# --------------------------------------------------- the ranking (#158)
+
+
+def test_the_ranking_gets_its_own_client_model_and_request_bound(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Not ``ai.model``, not ``ai.timeout_seconds``, and not triage's lock.
+
+    Ranking a batch of mails is a long request next to one triage, and the two
+    features may want different models — so the archive service builds a second
+    client of its own rather than sharing the app's.
+    """
+    repo = build_fake_archiver(tmp_path / "archiver")
+    config = AppConfig(
+        ai=AIConfig(enabled=True, model="the_triage_model", timeout_seconds=30.0),
+        archive=ArchiveConfig(
+            enabled=True, repo=str(repo), python=sys.executable,
+            model="the_archive_model", ai_timeout_seconds=175.0,
+        ),
+    )
+    svc = ArchiveBatchService(config)
+    triage_client = AIClient(config)
+
+    assert svc.ai.model == "the_archive_model" and svc.ai.timeout == pytest.approx(175.0)
+    assert triage_client.model == "the_triage_model"
+    # Separate in-flight locks: a triage in progress must not make an archiving
+    # run wait, or the other way round.
+    assert svc.ai._request_lock is not triage_client._request_lock
+
+    status = svc.status(conn)
+    assert status["model"] == "the_archive_model"
+    assert (status["batch_size"], status["examples"]) == (8, 20)
+
+
+def _two_candidate_mail(message_id: str, subject: str = "Boiler service") -> dict:
+    """One mail the archiver ranks house-first and bills-second."""
+    return mail(message_id, subject=subject, candidates=[
+        candidate(FOLDER_HOUSE, 0.9), candidate(FOLDER_BILLS, 0.4, date_prefix=True),
+    ])
+
+
+def test_the_model_picks_among_the_candidates_and_the_run_records_it(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The pick is an index; the folder, the naming form and the state follow from it."""
+    moved_file = "E:\\archive\\admin\\bills\\0007 - boiler service.msg"
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            _two_candidate_mail("override@example.invalid"),
+            _two_candidate_mail("agreed@example.invalid", subject="Radiator"),
+        ])],
+        apply=[apply_doc([
+            apply_result("override@example.invalid", FOLDER_BILLS, files=[moved_file],
+                         sequence="0007"),
+            apply_result("agreed@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+        ])],
+    )
+    hub = FakeHub(picks_doc(
+        {"message_id": "override@example.invalid", "candidate": 1, "confidence": 0.88,
+         "reason": "this is a bill, not a repair thread"},
+        pick_for("agreed@example.invalid", 0, 0.95),
+    ))
+    run = service_for(repo, ai=hub).run_now()
+
+    assert run["status"] == "done" and run["error"] is None
+    # One of the two went where the archiver would have put it.
+    assert run["agreement"] == pytest.approx(0.5)
+
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, run["id"])}
+    overridden = items["override@example.invalid"]
+    assert overridden["status"] == "archived" and overridden["chosen_folder"] == FOLDER_BILLS
+    assert overridden["chosen_rank"] == 1 and overridden["confidence"] == pytest.approx(0.88)
+    # The report shows the model's own words, not a score comparison.
+    assert overridden["reason"] == "this is a bill, not a repair thread"
+    # And the destination candidate's own naming form went back to the archiver.
+    assert overridden["date_prefix"] is True
+
+    applied = [c for c in calls(repo) if c["verb"] == "apply"][0]["payload"]
+    assert {d["message_id"]: d["folder_path"] for d in applied} == {
+        "override@example.invalid": FOLDER_BILLS, "agreed@example.invalid": FOLDER_HOUSE,
+    }
+
+
+@pytest.mark.parametrize(
+    ("pick", "expected_folder", "expected_reason"),
+    [
+        (
+            {"message_id": "unsure@example.invalid", "candidate": 0, "confidence": 0.4,
+             "reason": "could be either folder"},
+            FOLDER_HOUSE, "below the 0.70 threshold",
+        ),
+        (
+            {"message_id": "unsure@example.invalid", "candidate": None, "confidence": 0.1,
+             "reason": "nothing here matches this topic"},
+            None, "none of the ranked folders fits",
+        ),
+    ],
+)
+def test_an_unsure_pick_leaves_the_mail_in_the_inbox(
+    conn: sqlite3.Connection, tmp_path: Path, pick: dict,
+    expected_folder: str | None, expected_reason: str,
+) -> None:
+    """Below the threshold, or nothing fits: the mail is *needs you*, never guessed at."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("unsure@example.invalid")])],
+    )
+    run = service_for(repo, ai=FakeHub(picks_doc(pick))).run_now()
+
+    item = archive_batch.list_items(conn, run["id"])[0]
+    assert item["status"] == "needs_review" and item["files"] == []
+    assert item["chosen_folder"] == expected_folder
+    assert expected_reason in item["reason"]
+    # Nothing was filed, so the archiver was never asked to apply anything.
+    assert [c["verb"] for c in calls(repo)] == ["plan"]
+
+
+def test_an_unusable_answer_files_by_the_archiver_and_names_the_failure(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A model that answers junk must not stop the run — nor pass for a decision."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("junk@example.invalid")])],
+        apply=[apply_doc([apply_result("junk@example.invalid", FOLDER_HOUSE,
+                                       files=[ARCHIVED_FILE])])],
+    )
+    hub = FakeHub(picks_doc({"message_id": "junk@example.invalid", "candidate": 9,
+                             "confidence": 0.9, "reason": "out of range"}))
+    run = service_for(repo, ai=hub).run_now()
+
+    assert run["status"] == "done" and run["archived"] == 1
+    assert "ai_invalid_response" in run["error"] and "outside its 2 candidates" in run["error"]
+    assert run["agreement"] is None
+
+    item = archive_batch.list_items(conn, run["id"])[0]
+    assert item["chosen_folder"] == FOLDER_HOUSE and item["chosen_rank"] == 0
+    assert "could not rank this batch" in item["reason"]
+
+
+def test_a_move_teaches_the_next_run_and_the_prompt_carries_it(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The whole point of the memory: correct it once, see it in the next prompt."""
+    moved_file = "E:\\archive\\admin\\bills\\0007 - boiler service.msg"
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[
+            plan_doc([_two_candidate_mail("first@example.invalid")]),
+            plan_doc([_two_candidate_mail("second@example.invalid", subject="Another bill")]),
+        ],
+        apply=[
+            apply_doc([apply_result("first@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])]),
+            apply_doc([apply_result("first@example.invalid", FOLDER_BILLS, files=[moved_file],
+                                    sequence="0007")]),
+            apply_doc([apply_result("second@example.invalid", FOLDER_BILLS, files=[moved_file],
+                                    sequence="0008")]),
+        ],
+        revert=[revert_doc([revert_result("first@example.invalid", deleted=[ARCHIVED_FILE])])],
+    )
+    hub = FakeHub(
+        picks_doc(pick_for("first@example.invalid", 0, 0.9)),
+        picks_doc(pick_for("second@example.invalid", 1, 0.9)),
+    )
+    svc = service_for(repo, ai=hub)
+    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+
+    svc.move(conn, item["id"], "{archive}/admin/bills", hint="bills from this sender go to admin")
+
+    stored = archive_batch.recent_corrections(conn)
+    assert len(stored) == 1
+    assert stored[0]["suggested_folder"] == FOLDER_HOUSE
+    assert stored[0]["chosen_folder"] == "E:/archive/admin/bills"
+    assert stored[0]["hint"] == "bills from this sender go to admin"
+    assert stored[0]["item_id"] == item["id"] and stored[0]["subject"] == "Boiler service"
+
+    svc.run_now()
+    assert "bills from this sender go to admin" in hub.prompts[1]
+    assert "chosen archive/admin/bills" in hub.prompts[1]
+    # …and the first run could not have carried it — it did not exist yet.
+    assert json.loads(hub.prompts[0])["corrections"] == []
+
+
+def test_accepting_a_below_threshold_mail_is_a_correction_too(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """"You were right, just unsure" is a worked example exactly as a move is.
+
+    A ``failed`` row is not: the archiver broke, the ranking did not.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            _two_candidate_mail("shy@example.invalid"),
+            mail("broken@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        ])],
+        apply=[apply_doc([apply_result(
+            "broken@example.invalid", FOLDER_HOUSE, ok=False,
+            error={"code": "not_in_inbox", "message": "no mail with this Message-ID is in the Inbox"},
+        )])],
+    )
+    hub = FakeHub(picks_doc(
+        {"message_id": "shy@example.invalid", "candidate": 0, "confidence": 0.5,
+         "reason": "probably the heating thread"},
+        pick_for("broken@example.invalid", 0, 0.95),
+    ))
+    svc = service_for(repo, ai=hub)
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+
+    svc.accept(conn, items["shy@example.invalid"]["id"], hint="always the heating folder")
+    svc.accept(conn, items["broken@example.invalid"]["id"])
+
+    stored = archive_batch.recent_corrections(conn)
+    assert len(stored) == 1 and stored[0]["message_id"] == "shy@example.invalid"
+    assert stored[0]["suggested_folder"] == stored[0]["chosen_folder"] == FOLDER_HOUSE
+    assert stored[0]["hint"] == "always the heating folder"
+
+
+def test_the_prompt_carries_only_the_last_configured_number_of_examples(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A growing memory must never grow the prompt without bound."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("m@example.invalid")])],
+        apply=[apply_doc([apply_result("m@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
+    )
+    for n in range(5):
+        archive_batch.record_correction(
+            conn, {"id": None, "message_id": f"old{n}@example.invalid", "subject": f"Older {n}",
+                   "sender": "someone@example.invalid", "chosen_folder": FOLDER_HOUSE,
+                   "candidates": []},
+            chosen_folder=FOLDER_BILLS,
+        )
+    hub = FakeHub(picks_doc(pick_for("m@example.invalid", 0)))
+    service_for(repo, ai=hub, examples=2).run_now()
+
+    carried = json.loads(hub.prompts[0])["corrections"]
+    assert len(carried) == 2
+    # Oldest-first within the window, so the block only ever grows at its tail.
+    assert ['Older 3' in c for c in carried] == [True, False]
 
 
 # ------------------------------------------------------------ the failures
@@ -560,6 +817,28 @@ def test_a_bounded_first_run_rides_the_body_or_the_query(
         assert refused.status_code == 422
 
 
+def test_the_hint_rides_the_accept_body_into_the_correction(api: TestClient) -> None:
+    """What the report screen (#159) sends when you explain a correction (#158)."""
+    run = _finished_run(api)
+    unsure = next(i for i in run["items"] if i["status"] == "needs_review")
+
+    accepted = api.post(
+        f"/api/archive/items/{unsure['id']}/accept", json={"hint": "utility mail goes here"},
+    )
+    assert accepted.status_code == 200 and accepted.json()["decided_at"]
+
+    conn = dbmod.connect()
+    try:
+        stored = archive_batch.recent_corrections(conn)
+    finally:
+        conn.close()
+    assert len(stored) == 1 and stored[0]["hint"] == "utility mail goes here"
+    assert stored[0]["chosen_folder"] == FOLDER_BILLS
+
+    # Still optional: the body may be absent altogether, as it was before #158.
+    assert api.post(f"/api/archive/items/{unsure['id']}/accept").status_code == 200
+
+
 def test_an_unconfigured_install_says_so_everywhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -589,4 +868,11 @@ def test_the_sample_config_never_arms_the_real_archiver() -> None:
     assert raw["archive"]["enabled"] is False
     assert set(raw["archive"]) == {
         "enabled", "repo", "python", "candidates", "confidence_threshold", "timeout_seconds",
+        "model", "batch_size", "examples", "ai_timeout_seconds",
     }
+    # The ranking's own model and its own request bound, never ai.model /
+    # ai.timeout_seconds: two features, two jobs, two very different request
+    # lengths (#158).
+    assert raw["archive"]["model"] == "claude_haiku"
+    assert (raw["archive"]["batch_size"], raw["archive"]["examples"]) == (8, 20)
+    assert raw["archive"]["ai_timeout_seconds"] == 180

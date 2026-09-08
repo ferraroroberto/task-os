@@ -12,7 +12,7 @@ from src import schema
 
 EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
-    "ai_suggestions", "archive_runs", "archive_items",
+    "ai_suggestions", "archive_runs", "archive_items", "archive_corrections",
     "tasks_fts", "comments_fts", "mirror_state", "mirror_events", "task_blocks",
 }
 
@@ -31,10 +31,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 14
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 15
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 14
+        assert schema.current_version(conn) == 15
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
@@ -49,13 +49,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 14
-        assert schema.migrate(conn) == 14
+        assert schema.migrate(conn) == 15
+        assert schema.migrate(conn) == 15
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -69,10 +69,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 14
+        assert schema.current_version(conn) == 15
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -92,7 +92,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -137,7 +137,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -199,7 +199,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -225,8 +225,10 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         conn.execute("DROP TRIGGER tasks_reject_retired_doing_update")
         # Same reason for everything v13 and later added: the marker is about to
         # be rewound to 12, so the file has to look like a v12 file or the
-        # replayed migrations collide with their own tables (#157's v14).
-        conn.executescript("DROP TABLE archive_items; DROP TABLE archive_runs;")
+        # replayed migrations collide with their own tables (#157's v14, #158's v15).
+        conn.executescript(
+            "DROP TABLE archive_corrections; DROP TABLE archive_items; DROP TABLE archive_runs;"
+        )
         conn.execute("PRAGMA ignore_check_constraints = ON")
         conn.execute("UPDATE settings SET value = '12' WHERE key = 'schema_version'")
         conn.execute(
@@ -247,7 +249,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
     finally:
         conn.close()
 
-    assert dbmod.init_db() == 14
+    assert dbmod.init_db() == 15
     conn = dbmod.connect()
     try:
         task = conn.execute(
@@ -261,6 +263,6 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
             )
-        assert schema.migrate(conn) == 14
+        assert schema.migrate(conn) == 15
     finally:
         conn.close()

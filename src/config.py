@@ -178,6 +178,24 @@ class ArchiveConfig:
                  sample**: no checkout without its own config — a fresh clone,
                  a worktree, the disposable e2e instance — may drive the real
                  Outlook.
+
+    The ranking (#158) reaches the same hub ``ai.base_url`` names, with its own
+    model: ``model`` is deliberately not ``ai.model``, because triage and
+    archiving are different jobs and may want different models — and a second
+    :class:`~src.ai.client.AIClient` bound to it means the triage lock and this
+    one never serialise each other. ``batch_size`` is the mails per hub
+    request, ``examples`` the stored corrections carried as few-shot lines.
+    ``ai_timeout_seconds`` is that request's own bound: ranking a batch is
+    minutes-scale work next to a triage (measured 29–64 s for 7 mails), so the
+    30 s of ``ai.timeout_seconds`` would classify a working model as a dead hub.
+
+    The default model is ``claude_haiku`` on measurement, not on taste: over
+    three live runs of the same 7-mail Inbox it answered validly 3/3 (29–60 s),
+    while ``agentic_light_nothink`` answered 2/3 — an open-weight model emits
+    its reasoning as output tokens and sometimes never reaches the JSON — and
+    plain ``agentic_light`` never finished reasoning inside any sane budget.
+    Both remain one config edit away for an install that wants to stay
+    entirely local.
     """
 
     enabled: bool = False
@@ -186,6 +204,10 @@ class ArchiveConfig:
     candidates: int = 10
     confidence_threshold: float = 0.7
     timeout_seconds: float = 600.0
+    model: str = "claude_haiku"
+    batch_size: int = 8
+    examples: int = 20
+    ai_timeout_seconds: float = 180.0
 
 
 @dataclass(frozen=True)
@@ -423,6 +445,17 @@ def load_config(path: Path | None = None) -> AppConfig:
             timeout_seconds=_as_float(
                 archive.get("timeout_seconds"), ArchiveConfig.timeout_seconds,
                 "archive.timeout_seconds",
+            ),
+            model=str(archive.get("model", ArchiveConfig.model) or "").strip(),
+            batch_size=_as_int(
+                archive.get("batch_size"), ArchiveConfig.batch_size, "archive.batch_size",
+            ),
+            examples=_as_int(
+                archive.get("examples"), ArchiveConfig.examples, "archive.examples",
+            ),
+            ai_timeout_seconds=_as_float(
+                archive.get("ai_timeout_seconds"), ArchiveConfig.ai_timeout_seconds,
+                "archive.ai_timeout_seconds",
             ),
         ),
         team=TeamConfig(
