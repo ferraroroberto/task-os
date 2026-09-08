@@ -44,6 +44,7 @@ def write_test_config(
     ai_enabled: bool = False,
     ai_base_url: str | None = None,
     ai_model: str | None = None,
+    archive: dict | None = None,
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
@@ -57,7 +58,10 @@ def write_test_config(
     suite; #92/#144's tests pass fake endpoints), ``voice.partial_interval_seconds``
     (``None`` leaves the sample's cadence; #146's tests pin it) and ``enrich.url``
     (blank = enrichment reports not reachable; #147's tests pass a fake chat
-    endpoint)
+    endpoint), ``archive`` (the whole block; ``None`` forces ``enabled: false``
+    — the sample names a real email-archiver checkout, and a test that spawned
+    it would drive this machine's Outlook, so #157's tests pass a block pointing
+    at ``tests/fixtures/archiver_fake``)
     and, optionally, the ``placeholders`` / ``web_roots`` maps (Step 9 / #28
     tests point ``{onedrive}`` at a temp tree / a fake cloud root)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
@@ -75,6 +79,13 @@ def write_test_config(
         raw["ai"]["base_url"] = ai_base_url
     if ai_model is not None:
         raw["ai"]["model"] = ai_model
+    # ``archive.enabled`` is false in the sample and stays false unless a test
+    # passes its own block pointing at the **fake** archiver
+    # (``tests/fixtures/archiver_fake``): no test process may ever spawn the real
+    # email-archiver, which would drive this machine's Outlook (#157).
+    raw["archive"] = {**raw.get("archive", {}), **(archive or {})}
+    if archive is None:
+        raw["archive"]["enabled"] = False
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     if web_roots is not None:

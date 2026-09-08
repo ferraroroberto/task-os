@@ -6,7 +6,7 @@ layer       = "working-web"
 icon        = "✅"
 port        = ":8448"
 tag         = ["→", "GitHub"]
-description = "<b>task-os</b> — one master task list: nested tasks that become projects, comments + activity log, folder links that open on any PC (taskos:// opener), GitHub/GitLab issues as tasks, folder-index + federated search, capture into Inbox (flagged emails from email-archiver's index, read-only; WhatsApp messages pushed by whatsapp-radar), voice quick-add (click the mic and the words appear as you speak; the app forwards the clip to the fleet's local-llm-hub, parakeet first, then a light model splits the sentence into a title and a description), a markdown mirror (edit tasks as .md files) + nightly backup. PC-first PWA, phone via Tailscale."
+description = "<b>task-os</b> — one master task list: nested tasks that become projects, comments + activity log, folder links that open on any PC (taskos:// opener), GitHub/GitLab issues as tasks, folder-index + federated search, capture into Inbox (flagged emails from email-archiver's index, read-only; WhatsApp messages pushed by whatsapp-radar), batch-archiving the whole Outlook Inbox by driving email-archiver's headless batch CLI as a subprocess (one run recorded per mail, any mail undoable), voice quick-add (click the mic and the words appear as you speak; the app forwards the clip to the fleet's local-llm-hub, parakeet first, then a light model splits the sentence into a title and a description), a markdown mirror (edit tasks as .md files) + nightly backup. PC-first PWA, phone via Tailscale."
 
 # Vendored byte-for-byte from project-scaffolding (and the two fleet reference
 # apps for the modules the scaffold does not ship yet). sha = the source repo

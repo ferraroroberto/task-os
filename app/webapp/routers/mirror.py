@@ -8,6 +8,9 @@
                                last_result, last_error, next_run, running} (#98),
                                voice: {enabled, reason, url, serving, checked_at} (#92),
                                ai: {enabled, reason, model, checked_at} (#95),
+                               archive: {configured, reason, running, repo, candidates,
+                               confidence_threshold, timeout_seconds, last_run,
+                               last_error} (#157),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
@@ -55,6 +58,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     voice = getattr(request.app.state, "voice", None)
     enrich = getattr(request.app.state, "enrich", None)
     ai = getattr(request.app.state, "ai", None)
+    archive = getattr(request.app.state, "archive", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
@@ -66,6 +70,8 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         "enrich": enrich.status() if enrich
         else {"enabled": False, "reason": "enrichment service not started"},
         "ai": ai.status() if ai else {"enabled": False, "reason": "AI service not started"},
+        "archive": archive.status(db) if archive
+        else {"configured": False, "reason": "archive service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

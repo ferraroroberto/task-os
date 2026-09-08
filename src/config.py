@@ -155,6 +155,40 @@ class AIConfig:
 
 
 @dataclass(frozen=True)
+class ArchiveConfig:
+    """Batch archiving of the Outlook Inbox through email-archiver (#157).
+
+    task-os never imports the archiver: it spawns that repo's ``main_batch.py``
+    in the archiver's own venv and reads one JSON document back, so a hung
+    Outlook COM call is a timed-out child rather than a blocked webapp.
+
+    ``repo``     the email-archiver checkout. Blank = the feature is off, with
+                 that as the visible reason. Deliberately **not** derived from
+                 ``search.email_db``: the index may legitimately live elsewhere.
+    ``python``   the interpreter to spawn it with. Blank = ``<repo>/.venv/
+                 Scripts/python.exe`` on Windows, ``<repo>/.venv/bin/python``
+                 elsewhere — the archiver's own venv, never task-os's.
+    ``candidates``            ranked folders ``plan`` reports per mail.
+    ``confidence_threshold``  a mail whose best candidate scores below this
+                 stays in the Inbox as *needs you* (the archiver blends its
+                 score into [0, 1]).
+    ``timeout_seconds``       bound on one child; a full-Inbox ``plan`` walks
+                 every mail over COM, so this is minutes, not seconds.
+    ``enabled``  the explicit off switch, and **false in the committed
+                 sample**: no checkout without its own config — a fresh clone,
+                 a worktree, the disposable e2e instance — may drive the real
+                 Outlook.
+    """
+
+    enabled: bool = False
+    repo: str = ""
+    python: str = ""
+    candidates: int = 10
+    confidence_threshold: float = 0.7
+    timeout_seconds: float = 600.0
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     enabled: bool = False
     people: list[str] = field(default_factory=list)
@@ -188,6 +222,7 @@ class AppConfig:
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     enrich: EnrichConfig = field(default_factory=EnrichConfig)
     ai: AIConfig = field(default_factory=AIConfig)
+    archive: ArchiveConfig = field(default_factory=ArchiveConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -311,6 +346,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     voice = _as_dict(raw.get("voice"))
     enrich = _as_dict(raw.get("enrich"))
     ai = _as_dict(raw.get("ai"))
+    archive = _as_dict(raw.get("archive"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -371,6 +407,22 @@ def load_config(path: Path | None = None) -> AppConfig:
             timeout_seconds=_as_float(
                 ai.get("timeout_seconds"), AIConfig.timeout_seconds,
                 "ai.timeout_seconds",
+            ),
+        ),
+        archive=ArchiveConfig(
+            enabled=bool(archive.get("enabled", ArchiveConfig.enabled)),
+            repo=str(archive.get("repo", "") or "").strip(),
+            python=str(archive.get("python", "") or "").strip(),
+            candidates=_as_int(
+                archive.get("candidates"), ArchiveConfig.candidates, "archive.candidates",
+            ),
+            confidence_threshold=_as_float(
+                archive.get("confidence_threshold"), ArchiveConfig.confidence_threshold,
+                "archive.confidence_threshold",
+            ),
+            timeout_seconds=_as_float(
+                archive.get("timeout_seconds"), ArchiveConfig.timeout_seconds,
+                "archive.timeout_seconds",
             ),
         ),
         team=TeamConfig(
