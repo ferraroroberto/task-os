@@ -1489,9 +1489,22 @@ a.chip:hover { text-decoration: underline; }
    row's borderless chip-height button, whose ::before carries the 44px hit
    rect; `margin-left: auto` is the only thing this pair adds. */
 .comment-actions { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
-.comment-edit-wrap { display: flex; flex-direction: column; gap: 6px; }
-.comment-edit { height: auto; min-height: 66px; padding: 8px 10px; resize: vertical; font-family: inherit; }
-.comment-edit-actions { display: flex; gap: 6px; }
+/* The inline editor is the composer, re-pointed at an existing body: it wears
+   `.comment-composer` + `.comment-input` + `.comment-send` and adds only what
+   the composer has no need for — a hairline of air under the meta line, and a
+   textarea allowed to shrink now that TWO buttons share its row (without
+   `min-width: 0` a flex item never goes below its intrinsic width, and a
+   textarea's is ~20 columns, which overflows a 390px phone). Save is the
+   composer's Send button in the accent tint — colour only, never
+   `.button-tint`, whose 48px/13px/700 block recipe is for a full-width
+   primary and towered over the thread it lives in (#155). */
+.comment-edit-wrap { margin: 4px 0 0; }
+.comment-edit { min-width: 0; }
+.comment-edit-save {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border-soft);
+}
 .comment-origin { border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 0 6px; font-size: 0.7rem; }
 .comment-body { font-size: var(--font-label); white-space: pre-wrap; overflow-wrap: anywhere; }
 .comment-body .chip { white-space: nowrap; margin: 1px 0; }
