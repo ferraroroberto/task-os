@@ -74,7 +74,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(todo_col.locator(".trow", has=page.locator(".trow-code", has_text="garden-bot#14")).locator(".chip-issue")).to_have_count(0)
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(todo_before + 2))
         api_todo = _get(base, "/api/tasks?status=todo")["items"]
-        new = {t["code"]: t for t in api_todo if t.get("issue_ref")}
+        new = {t["code"]: t for t in api_todo if t.get("issue_ref") and t["code"] in {"garden-bot#14", "home-dashboard#3"}}
         assert set(new) == {"garden-bot#14", "home-dashboard#3"}
         sensor = new["garden-bot#14"]
         assert sensor["type"] == "coding" and sensor["title"] == "Add soil-moisture sensor to the loop"
@@ -145,7 +145,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
         shot(page, shots / "story-08-issues-4-desktop.png")
         # …and the seeded coding task, still open on the forge, was left alone
-        assert _get(base, "/api/tasks?q=watering&include_closed=true")["items"][0]["status"] == "doing"
+        assert _get(base, "/api/tasks?q=watering&include_closed=true")["items"][0]["status"] == "todo"
 
         # 5. "Create issue" on a plain task → it turns coding with the new number.
         plain = _get(base, "/api/tasks?q=standing%20desk")["items"][0]

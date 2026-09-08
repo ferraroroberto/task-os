@@ -106,7 +106,7 @@ export function mountBulkBar(host, handlers) {
 
   const exit = document.createElement('button');
   exit.type = 'button';
-  // the same class stack the strip's + and Select toggle wear, so all five
+  // the same class stack the strip's + and Select toggle wear, so all four
   // squares are one control by construction, not by two rules agreeing
   exit.className = 'button-surface strip-square bulk-exit';
   exit.title = 'Leave select mode';

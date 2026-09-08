@@ -73,7 +73,7 @@ from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, e2e_workdir, shot
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
 DESKTOP = {"width": 1440, "height": 900}
-COLUMNS = ["inbox", "todo", "doing", "standby", "done"]
+COLUMNS = ["inbox", "todo", "standby", "done"]
 E2E_TOKEN = "e2e-story-07-token"
 # E2E_HEADED=1 shows the WebKit window — the headed walk of the same story.
 HEADLESS = os.environ.get("E2E_HEADED", "") != "1"
@@ -278,17 +278,17 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         columns = page.locator(".board-columns")
         assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
         strip = page.locator(".board-strip-btn")
-        expect(strip).to_have_count(5)
+        expect(strip).to_have_count(4)
         assert_min_target(strip)
         assert_no_overlap(strip)
         # the Board opens on Todo (the working column); exactly one column in view
         visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
         assert visible == ["todo"], visible
-        # swipe left (a scroll of one column width) → Doing becomes the active column
+        # swipe left (a scroll of one column width) → Standby becomes the active column
         columns.evaluate("el => el.scrollBy({left: el.clientWidth, behavior: 'auto'})")
-        expect(page.locator(".board-strip-btn[data-col='doing']")).to_have_class(re.compile(r"\bactive\b"))
+        expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
         visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
-        assert visible == ["doing"], visible
+        assert visible == ["standby"], visible
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-07-phone-3-phone.png")
 

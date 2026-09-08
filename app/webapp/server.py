@@ -10,7 +10,7 @@ Route families (each in ``app/webapp/routers/``):
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=&kinds=&limit= → federated: tasks · folders · emails · issues,
                                    grouped, unconfigured = visible; /api/search/status
-    views   /api/board · /api/today → the Board's five buckets · Today grouped by project
+    views   /api/board · /api/today → the Board's four buckets · Today grouped by project
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
                                    backup, folder index + opener (Step 9), capture (#98),
                                    local AI (#95); POST

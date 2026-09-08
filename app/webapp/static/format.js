@@ -10,7 +10,7 @@
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 
-export const STATUSES = ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'];
+export const STATUSES = ['inbox', 'todo', 'standby', 'done', 'cancelled'];
 export const PRIORITIES = ['high', 'medium', 'low', 'none'];
 export const RECURRENCES = ['', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
 

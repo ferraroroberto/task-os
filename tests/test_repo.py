@@ -203,7 +203,7 @@ def test_activity_on_every_change(conn: sqlite3.Connection, frozen: None) -> Non
     tid = t["id"]
     assert _fields(t["activity"]) == [("created", None, "Renew passport")]
     repo.set_due(conn, tid, "2026-09-01", actor="me")
-    repo.set_status(conn, tid, "doing", actor="me")   # a real move: create already made it todo
+    repo.set_status(conn, tid, "standby", actor="me")   # a real move: create already made it todo
     repo.set_priority(conn, tid, "high", actor="me")
     repo.update_task(conn, tid, title="Renew passports", description="both", actor="me")
     repo.update_task(conn, tid, due="2026-09-01", actor="me")  # unchanged → no row
@@ -212,7 +212,7 @@ def test_activity_on_every_change(conn: sqlite3.Connection, frozen: None) -> Non
         ("description", "", "both"),
         ("title", "Renew passport", "Renew passports"),
         ("priority", "none", "high"),
-        ("status", "todo", "doing"),
+        ("status", "todo", "standby"),
         ("due", None, "2026-09-01"),
         ("created", None, "Renew passport"),
     ]
@@ -228,6 +228,8 @@ def test_validation_errors(conn: sqlite3.Connection) -> None:
         repo.create_task(conn, "   ")
     with pytest.raises(repo.ValidationError):
         repo.create_task(conn, "x", status="later")
+    with pytest.raises(repo.ValidationError, match="status must be one of"):
+        repo.create_task(conn, "x", status="doing")
     with pytest.raises(repo.ValidationError):
         repo.create_task(conn, "x", due="next friday")   # repo takes ISO only
     with pytest.raises(repo.ValidationError):
@@ -399,10 +401,10 @@ def test_deferred_hidden_from_lists_but_never_from_tree_or_search(
 
 def test_deferred_intersects_with_a_status_filter(conn: sqlite3.Connection, frozen: None) -> None:
     repo.create_task(conn, "Sleeping todo", status="todo", starts="2026-09-06")
-    repo.create_task(conn, "Sleeping doing", status="doing", starts="2026-09-06")
-    repo.create_task(conn, "Awake doing", status="doing")
-    got = repo.list_tasks(conn, status=["doing"], deferred="only")
-    assert [t["title"] for t in got] == ["Sleeping doing"]
+    repo.create_task(conn, "Sleeping standby", status="standby", starts="2026-09-06")
+    repo.create_task(conn, "Awake standby", status="standby")
+    got = repo.list_tasks(conn, status=["standby"], deferred="only")
+    assert [t["title"] for t in got] == ["Sleeping standby"]
 
 
 def test_updated_before_is_a_strict_stale_boundary(conn: sqlite3.Connection) -> None:
@@ -424,7 +426,8 @@ def test_updated_before_is_a_strict_stale_boundary(conn: sqlite3.Connection) -> 
         assert titles(updated_before="2026-07-01") == set()   # touched ON the boundary: not yet stale
         # composes with the other filters like any WHERE clause
         assert titles(updated_before="2026-07-18", status=["todo"]) == {"Dormant"}
-        assert titles(updated_before="2026-07-18", status=["doing"]) == set()
+        with pytest.raises(repo.ValidationError):
+            titles(updated_before="2026-07-18", status=["doing"])
         # ANY write is a touch — the task leaves the window the moment it moves
         repo.set_priority(conn, old["id"], "high", actor="x")
         assert titles(updated_before="2026-07-18") == set()
@@ -737,12 +740,12 @@ def test_dates_stay_iso_and_clock_pinned(conn: sqlite3.Connection, frozen: None)
 
 def test_bulk_update_applies_to_every_id(conn: sqlite3.Connection) -> None:
     ids = [repo.create_task(conn, f"T{n}")["id"] for n in range(3)]
-    results = repo.bulk_update(conn, ids, actor="me", status="doing")
+    results = repo.bulk_update(conn, ids, actor="me", status="standby")
     assert [r["id"] for r in results] == ids
     assert all(r["ok"] for r in results)
-    assert {r["task"]["status"] for r in results} == {"doing"}
+    assert {r["task"]["status"] for r in results} == {"standby"}
     # the same activity trail a one-by-one edit would leave
-    assert _fields(repo.get_task(conn, ids[0])["activity"])[0] == ("status", "todo", "doing")
+    assert _fields(repo.get_task(conn, ids[0])["activity"])[0] == ("status", "todo", "standby")
 
 
 def test_bulk_update_reports_the_failed_id_and_applies_the_rest(conn: sqlite3.Connection) -> None:

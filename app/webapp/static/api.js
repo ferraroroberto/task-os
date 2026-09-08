@@ -23,7 +23,7 @@ export class ApiError extends Error {
 }
 
 /**
- * @param {string} path      e.g. '/api/tasks?status=doing'
+ * @param {string} path      e.g. '/api/tasks?status=todo'
  * @param {{method?: string, body?: any}} [opts]
  * @returns {Promise<any>}
  */

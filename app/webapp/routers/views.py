@@ -1,7 +1,7 @@
 """View routes — the pre-bucketed shapes the Board and Today tabs render.
 
     GET /api/board?project=&person=&q=
-        → {"today", "columns": {inbox, todo, doing, standby, done: [summary…]}}
+        → {"today", "columns": {inbox, todo, standby, done: [summary…]}}
           ``done`` = completed on the current local day only.
     GET /api/today?person=
         → {"today", "plan", "due": [{root, items}], "week": [{root, items}], "counts"}

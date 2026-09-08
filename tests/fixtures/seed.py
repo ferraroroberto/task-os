@@ -99,12 +99,12 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
             return t["id"]
 
         # ---- project 1: Home renovation (depth 3) -----------------------
-        home = task("home", "Home renovation", status="doing", priority="high",
+        home = task("home", "Home renovation", status="todo", priority="high",
                     description="Everything about the house works, room by room.",
                     folder_ref="{onedrive}/house")
-        kitchen = task("kitchen", "Kitchen", parent_id=home, status="doing", priority="high",
+        kitchen = task("kitchen", "Kitchen", parent_id=home, status="todo", priority="high",
                        folder_ref="{onedrive}/house/kitchen")
-        task("quotes", "Get three quotes", parent_id=kitchen, status="doing", due=d(3), person_id=sam)
+        task("quotes", "Get three quotes", parent_id=kitchen, status="todo", due=d(3), person_id=sam)
         task("worktop", "Choose worktop material", parent_id=kitchen, status="todo", due=d(10))
         task("installer", "Book installer", parent_id=kitchen, status="todo", due=d(21), person_id=alex)
         bathroom = task("bathroom", "Bathroom", parent_id=home, status="todo")
@@ -117,7 +117,7 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         # ---- project 2: Family admin (depth 3, recurring) --------------
         family = task("family", "Family admin", status="todo", priority="medium",
                       description="Renewals, bills, forms.")
-        passports = task("passports", "Renew passports", parent_id=family, status="doing", due=d(4), priority="high")
+        passports = task("passports", "Renew passports", parent_id=family, status="todo", due=d(4), priority="high")
         task("appointment", "Book appointment", parent_id=passports, status="todo", due=d(1))
         task("photos", "Collect photos", parent_id=passports, status="done", due=d(-2))
         task("school", "School enrolment forms", parent_id=family, status="todo", due=d(0), priority="high", person_id=jordan)
@@ -127,10 +127,10 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         task("dentist", "Dentist check-up", parent_id=family, status="todo", due=d(0), recurrence="quarterly")
 
         # ---- project 3: Side project garden-bot (coding) ---------------
-        bot = task("bot", "Side project: garden-bot", status="doing", priority="medium",
+        bot = task("bot", "Side project: garden-bot", status="todo", priority="medium",
                    description="A tiny watering controller for the balcony.",
                    folder_ref="{user}/code/garden-bot")
-        watering = task("watering", "Fix watering schedule drift", parent_id=bot, status="doing", due=d(2), priority="high")
+        watering = task("watering", "Fix watering schedule drift", parent_id=bot, status="todo", due=d(2), priority="high")
         sensor = task("sensor", "Add moisture sensor", parent_id=bot, status="todo", due=d(20))
         task("order", "Order sensor", parent_id=sensor, status="done", due=d(-5))
         task("driver", "Write sensor driver", parent_id=sensor, status="todo", due=d(18))
@@ -141,7 +141,7 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
 
         # ---- project 4: Learning (recurring daily/weekly) --------------
         learning = task("learning", "Learning", status="todo", priority="low")
-        spanish = task("spanish", "Spanish", parent_id=learning, status="doing")
+        spanish = task("spanish", "Spanish", parent_id=learning, status="todo")
         task("lesson", "Lesson 12: past tense", parent_id=spanish, status="todo", due=d(2))
         task("vocab", "Vocabulary review", parent_id=spanish, status="todo", due=d(0), recurrence="weekly")
         piano = task("piano", "Piano", parent_id=learning, status="todo")

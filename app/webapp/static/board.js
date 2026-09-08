@@ -1,6 +1,6 @@
 /* task-os — the Board tab: the status columns over the shared list.
  *
- * Inbox · Todo · Doing · Standby · Done — the first four are the open
+ * Inbox · Todo · Standby · Done — the first three are the open
  * statuses; Done shows the tasks completed on the current local day (older
  * done tasks never show unless the filter card's "done" pill is pressed,
  * which turns the column into plain Done). Ported from the fleet launcher's
@@ -28,7 +28,6 @@ import { sortItems, taskRow } from './rows.js';
 export const BOARD_COLUMNS = [
   { key: 'inbox', label: 'Inbox', short: 'Inbox', empty: 'Inbox is empty' },
   { key: 'todo', label: 'Todo', short: 'Todo', empty: 'Nothing queued' },
-  { key: 'doing', label: 'Doing', short: 'Doing', empty: 'Nothing in progress' },
   { key: 'standby', label: 'Standby', short: 'Standby', empty: 'Nothing on standby' },
   { key: 'done', label: 'Done today', short: 'Done', empty: 'Nothing done today yet' },
 ];
@@ -197,7 +196,7 @@ export function mountBoard(handlers) {
     stripBtns.done.title = wantsDone ? 'Done' : 'Done today';
     // Only a REAL status pill narrows which columns show — a pseudo-value
     // ticked alone (`deferred` #87, `blocked` #100) is not a column key, so
-    // treating it as one hid every column instead of leaving all five up and
+    // treating it as one hid every column instead of leaving all four up and
     // letting the (already server-filtered) items land in their own status.
     const realStatuses = f.status.filter(function (s) {
       return BOARD_COLUMNS.some(function (c) { return c.key === s; });

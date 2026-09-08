@@ -2,7 +2,7 @@
  *
  * Board, Table, Tree, Today and Search are renderings of the same list, so
  * they read one filter state — this module owns its shape, its URL encoding
- * (`?status=doing&project=12&person=3,5&sort=updated` is the same shareable
+ * (`?status=todo&project=12&person=3,5&sort=updated` is the same shareable
  * view on every tab) and the card that edits it:
  *
  *   <input class="filter-q">          the live text filter, always visible in

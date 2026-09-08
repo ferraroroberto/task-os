@@ -785,7 +785,7 @@ export function createDrawer(el, opts) {
       head.className = 'issue-head';
       head.appendChild(issueChip(ref));
       const stPill = document.createElement('span');
-      stPill.className = 'pill issue-state pill-' + (ref.state === 'closed' ? 'done' : (ref.state === 'open' ? 'doing' : 'inbox'));
+      stPill.className = 'pill issue-state pill-' + (ref.state === 'closed' ? 'done' : (ref.state === 'open' ? 'open' : 'inbox'));
       stPill.textContent = ref.state || 'state unknown';
       head.appendChild(stPill);
       const labels = document.createElement('span');

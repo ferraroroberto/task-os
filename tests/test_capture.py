@@ -174,12 +174,12 @@ def test_capture_is_one_way_a_later_pass_never_undoes_your_edits(
     capture_once(conn, index)
     task = next(t for t in repo.list_tasks(conn, status=["inbox"])
                 if t["title"].startswith("Kitchen quotes"))
-    repo.update_task(conn, task["id"], actor="me", status="doing", title="Chase the worktop quote")
+    repo.update_task(conn, task["id"], actor="me", status="standby", title="Chase the worktop quote")
 
     capture_once(conn, index)
 
     after = repo.get_task(conn, task["id"])
-    assert after["status"] == "doing"
+    assert after["status"] == "standby"
     assert after["title"] == "Chase the worktop quote"
 
 

@@ -89,7 +89,7 @@ import sqlite3
 logger = logging.getLogger(__name__)
 
 TASK_TYPES = ("task", "coding", "note")
-TASK_STATUSES = ("inbox", "todo", "doing", "standby", "done", "cancelled")
+TASK_STATUSES = ("inbox", "todo", "standby", "done", "cancelled")
 #: Where a task starts when nobody said (#148). **To Do**, not Inbox: Inbox is
 #: the arrivals tray for what came in on its own — a flagged email, a marked
 #: WhatsApp message — and a task you typed or spoke has already been triaged by
@@ -362,10 +362,31 @@ CREATE UNIQUE INDEX idx_ai_suggestions_pending
 CREATE INDEX idx_ai_suggestions_task ON ai_suggestions(task_id, id DESC);
 """
 
+# Retire the Doing stage. Existing rows are moved into Todo before the
+# application stops accepting the old value (#153). SQLite cannot alter the
+# CHECK on an existing table safely because tasks has cascading child tables,
+# so the migration also installs a guard trigger for already-created tables;
+# fresh databases get the narrower CHECK from the current TASK_STATUSES tuple.
+_V13 = """
+UPDATE tasks SET status = 'todo' WHERE status = 'doing';
+CREATE TRIGGER IF NOT EXISTS tasks_reject_retired_doing
+BEFORE INSERT ON tasks
+WHEN NEW.status = 'doing'
+BEGIN
+    SELECT RAISE(ABORT, 'status doing is retired');
+END;
+CREATE TRIGGER IF NOT EXISTS tasks_reject_retired_doing_update
+BEFORE UPDATE OF status ON tasks
+WHEN NEW.status = 'doing'
+BEGIN
+    SELECT RAISE(ABORT, 'status doing is retired');
+END;
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12,
+    12: _V12, 13: _V13,
 }
 
 #: The version a freshly migrated database carries.

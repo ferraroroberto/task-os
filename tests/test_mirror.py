@@ -208,12 +208,12 @@ def test_import_natural_due_phrase_and_person_by_name(env, mirror: Mirror) -> No
     mirror.export_task(conn, tid)
     text = path.read_text(encoding="utf-8")
     text = text.replace("\ndue: null\n", "\ndue: 2026-09-01\n").replace("\nperson: null\n", "\nperson: Alex Chen\n")
-    text = text.replace("\nstatus: todo\n", "\nstatus: doing\n").replace("\npriority: none\n", "\npriority: high\n")
+    text = text.replace("\nstatus: todo\n", "\nstatus: standby\n").replace("\npriority: none\n", "\npriority: high\n")
     _touch(path, text)
     res = mirror.import_tick(conn)["imported"][0]
     task = repo.get_task(conn, tid)
     assert task["due"] == "2026-09-01" and task["person"]["name"] == "Alex Chen"
-    assert task["status"] == "doing" and task["priority"] == "high"
+    assert task["status"] == "standby" and task["priority"] == "high"
     assert set(res["applied"]) == {"due", "person", "status", "priority"}
     assert {a["actor"] for a in task["activity"][:4]} == {"md"}
 

@@ -8,7 +8,7 @@ Not a numbered build step — a feature issue validated story-style. The automat
 
 | # | Step | Expected | Shot |
 | --- | --- | --- | --- |
-| 1 | Seeded Table, `status:doing` — the garden-bot task carries an `ai` link | The row's chips cell shows the **bot chip** (`drift-fix session`), href = the conversation URL | [1-desktop](../screenshots/story-11-ai-links-1-desktop.png) |
+| 1 | Seeded Table, `status:todo` — the garden-bot task carries an `ai` link | The row's chips cell shows the **bot chip** (`drift-fix session`), href = the conversation URL | [1-desktop](../screenshots/story-11-ai-links-1-desktop.png) |
 | 2 | Click the chip (fine pointer) | No navigation, no drawer — the popover: **Open conversation** (new tab) + **Resume in CLI on this PC** (`taskos://resume?session=…`, shown because the URL is a `claude.ai/code/session_…`) | [2-desktop](../screenshots/story-11-ai-links-2-desktop.png) |
 | 3 | Click *Resume in CLI* | The `taskos://` URL is handed to the OS (intercepted in the test; live hand-off proven below); popover closes | — |
 | 4 | Drawer → Links; paste `https://chatgpt.com/c/…` with no kind | The row wears the bot chip too; the API stored `kind: "ai"` (inferred); the delete button is borderless at the chip's height with the 44px hit rect on `::before` | [3-desktop](../screenshots/story-11-ai-links-3-desktop.png) |

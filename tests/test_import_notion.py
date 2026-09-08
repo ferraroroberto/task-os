@@ -61,7 +61,7 @@ def _by_ext(conn: sqlite3.Connection, n: int) -> dict:
     ("status", "priority", "expected"),
     [
         ("not started", None, "todo"),
-        ("In progress", None, "doing"),
+        ("In progress", None, "todo"),
         ("Done", None, "done"),
         (None, None, "todo"),
         (None, "inbox", "inbox"),
@@ -131,7 +131,7 @@ def test_map_export_covers_every_rule(export: dict) -> None:
     assert [c.author for c in door.comments] == ["Sam Rivera", "notion"]  # no display_name → "notion"
 
     sailing = mapped[P[5]]
-    assert (sailing.status, sailing.priority, sailing.recurrence) == ("doing", "none", "quarterly")
+    assert (sailing.status, sailing.priority, sailing.recurrence) == ("todo", "none", "quarterly")
 
     picnic = mapped[P[6]]
     assert picnic.person[1] == "Sam Rivera"
@@ -152,7 +152,7 @@ def test_map_export_covers_every_rule(export: dict) -> None:
 
     summary = imp.summarize(mapped.values())
     assert summary["pages"] == 8
-    assert summary["status"] == {"todo": 5, "doing": 1, "done": 1, "inbox": 1}
+    assert summary["status"] == {"todo": 6, "done": 1, "inbox": 1}
     assert summary["priority"] == {"none": 5, "high": 1, "low": 1, "medium": 1}
     assert summary["recurrence"] == {"none": 4, "weekly": 1, "quarterly": 1, "daily": 1, "yearly": 1}
     assert summary["comments_total"] == 6 and summary["longest_thread"] == 3

@@ -25,7 +25,7 @@ Unit legs: `tests/test_repo.py::test_bulk_*` (every id attempted; a bad id in th
 
 Chrome against a disposable seeded instance (never the live `:8448`), light and dark:
 
-- Select mode on the Board, three cards ticked across inbox/todo/doing, carried intact to the Table (checkbox column, same three ticked, both bars agreeing).
+- Select mode on the Board, three cards ticked across inbox/todo/standby, carried intact to the Table (checkbox column, same three ticked, both bars agreeing).
 - Bulk status applied to all three; bulk `in 2 weeks` applied to two — both confirmed against `/api/tasks/{id}`, not just on screen.
 - **Partial failure walked, not assumed**: a ticked task was deleted through the API behind the app's back and the batch then run — `1 updated · 1 failed (#36: task 36 not found)`, with the survivor updated.
 - Two defects found and fixed during the walk, both invisible to the unit tests: every tick was re-rendering all four views (which destroyed the checkbox the keyboard was on, so a keyboard user lost their place after the first tick) — a membership change now updates the affected rows in place, and only a mode change rebuilds; and Escape was swallowed while focus sat on a row checkbox, because the drawer's guard treated any `input` as a text field.

@@ -1,6 +1,6 @@
 """Story 04 — Monday triage (Step 4/13, issue #5).
 
-    Table filtered status:doing → click the due cell → the date picker opens
+    Table filtered status:todo → click the due cell → the date picker opens
     and the pick lands → the activity log
     shows old → new with time → open a drawer → add a comment containing a
     link → the link is a clickable chip → the + opens the quick-add dialog
@@ -22,7 +22,7 @@ then the drawer at 390×844 (WebKit, touch) with the geometry checks:
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
 
 UX round 3 (issue #46): the filter state is ONE card shared by every tab and
-lives in the URL (``?status=doing`` is the same view on the Board, Table,
+lives in the URL (``?status=todo`` is the same view on the Board, Table,
 Tree, Today), so a shared URL no longer moves the tab by itself — the story
 opens the Table explicitly. On the phone the Table renders the ONE shared
 task row (``.trow``) instead of a card-ified grid.
@@ -112,25 +112,26 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         page = context.new_page()
         page.add_init_script(_RECORD_SHOW_PICKER)
 
-        # 1. Table filtered status:doing — via the URL, the shareable view. The
+        # 1. Table filtered status:todo — via the URL, the shareable view. The
         #    filter is shared by every tab (UX round 3), so the URL never moves
         #    the tab by itself: open the Table, the query survives the switch.
-        page.goto(f"{base}/?status=doing")
+        todo_count = _get(base, "/api/tasks?status=todo")["count"]
+        page.goto(f"{base}/?status=todo")
         page.click("nav.tabs .tab[data-tab='table']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
-        expect(page).to_have_url(f"{base}/?status=doing")
+        expect(page).to_have_url(f"{base}/?status=todo")
         card = _open_filters(page, "tableFilters")
         # status is a multi-select (#48): the summary reads the one status picked
         status_sel = card.locator(".msel[data-name='status']")
-        expect(status_sel.locator(".msel-text")).to_have_text("doing")
+        expect(status_sel.locator(".msel-text")).to_have_text("todo")
         expect(status_sel.locator("input[name='status']:checked")).to_have_count(1)
-        expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
-        expect(card.locator(".filter-desc")).to_contain_text("doing")
+        expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
+        expect(card.locator(".filter-desc")).to_contain_text("todo")
         rows = page.locator(".task-row")
-        expect(rows).to_have_count(7)  # the seed's seven `doing` tasks
-        expect(card.locator(".filter-desc")).to_contain_text("7 tasks")
+        expect(rows).to_have_count(todo_count)
+        expect(card.locator(".filter-desc")).to_contain_text(f"{todo_count} tasks")
         statuses = page.locator(".task-row .trow-status").evaluate_all("els => els.map(e => e.value)")
-        assert set(statuses) == {"doing"}
+        assert set(statuses) == {"todo"}
         # breadcrumb under a nested title, project = top ancestor
         quotes = _row(page, "Get three quotes")
         expect(quotes.locator(".t-crumb")).to_have_text("Home renovation › Kitchen")
@@ -169,7 +170,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         page.locator(f".task-row[data-id='{task_id}']").click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
-        expect(page).to_have_url(f"{base}/?status=doing#task/{task_id}")
+        expect(page).to_have_url(f"{base}/?status=todo#task/{task_id}")
         expect(drawer.locator("#drawerTitle")).to_have_value("Get three quotes")
         first_act = drawer.locator(".activity-row").first
         expect(first_act).to_have_attribute("data-field", "due")
@@ -243,7 +244,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         qa.press("Enter")
         expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
-        # the doing filter hides a standby task — clear to see it, as a user would
+        # the todo filter hides a standby task — clear to see it, as a user would
         _open_filters(page, "tableFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
         expect(page.locator("#tableFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
@@ -695,18 +696,18 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
             color_scheme="light",
         )
         page = context.new_page()
-        page.goto(f"{base}/?status=doing")
+        page.goto(f"{base}/?status=todo")
         page.locator("nav.tabs .tab[data-tab='table']").tap()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
         rows = page.locator("#paneTable .table-rows .trow")
-        expect(rows).to_have_count(7)
+        expect(rows).to_have_count(_get(base, "/api/tasks?status=todo")["count"])
         # phone: the grid is not rendered at all — the Table is the ONE shared
         # row (title + status select, the meta line with the project under it)
         expect(page.locator(".task-table")).to_have_count(0)
         watering = _trow(page, "Fix watering schedule drift", "#paneTable")
         expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
         expect(watering.locator(".trow-due")).to_be_visible()
-        expect(watering.locator(".trow-status")).to_have_value("doing")
+        expect(watering.locator(".trow-status")).to_have_value("todo")
         assert_no_horizontal_overflow(page)
         # the top strip (#80): the text filter and the + sit side by side, both
         # at the touch floor, with effective rectangles that never overlap
@@ -718,18 +719,18 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         assert_min_target(page.locator("#quickAdd .quick-add-input"))
         page.keyboard.press("Escape")
         expect(page.locator("#quickAdd")).to_be_hidden()
-        # the shared filter card: the status multi-select holds the six statuses,
+        # the shared filter card: the status multi-select holds the five statuses,
         # the URL's one checked; on the phone the controls sit two per line,
         # equal widths (#48)
         card = _open_filters(page, "tableFilters")
         status_sel = card.locator(".msel[data-name='status']")
         status_sel.locator("summary.msel-summary").click()
-        # six statuses + `deferred` (#87) + `blocked` (#100), the pseudo-values
+        # five statuses + `deferred` (#87) + `blocked` (#100), the pseudo-values
         # that show the sleeping and the locked tasks the working views leave out
-        expect(status_sel.locator("input[name='status']")).to_have_count(8)
+        expect(status_sel.locator("input[name='status']")).to_have_count(7)
         expect(status_sel.locator("input[name='status'][value='deferred']")).to_have_count(1)
         expect(status_sel.locator("input[name='status'][value='blocked']")).to_have_count(1)
-        expect(status_sel.locator("input[name='status'][value='doing']")).to_be_checked()
+        expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
         page.keyboard.press("Escape")
         boxes = card.locator(".filter-row > .filter-select, .filter-row > .msel").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.width)]; })")
@@ -792,7 +793,7 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         # The snooze control is a real touch target on the phone — this is the
         # device where "not today" is most often decided — and its popover
         # never pushes the page sideways.
-        page.goto(f"{base}/")          # drop the story's ?status=doing first
+        page.goto(f"{base}/")          # drop the story's ?status=todo first
         page.locator("nav.tabs .tab[data-tab='today']").tap()
         expect(page.locator("#paneToday")).to_be_visible()
         today_row = page.locator("#paneToday .today-group .trow.has-snooze").first
