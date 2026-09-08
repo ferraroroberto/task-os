@@ -15,7 +15,7 @@ nothing (not even the migration).
 
 Mapping (Notion → task-os):
 
-    status   not started → todo · In progress → doing · Done → done (+done_at =
+    status   not started → todo · In progress → todo · Done → done (+done_at =
              last_edited_time) · null → todo, or inbox when priority = inbox
     priority high/medium/low → same · backlog → none · inbox → none · null → none
     recurrent daily/weekly/monthly → same · three months → quarterly · yearly → yearly
@@ -71,7 +71,7 @@ PAGE_SIZE = 100
 RETRIES = 4
 MAX_DEPTH = 3
 
-STATUS_MAP = {"not started": "todo", "in progress": "doing", "done": "done"}
+STATUS_MAP = {"not started": "todo", "in progress": "todo", "done": "done"}
 PRIORITY_MAP = {"high": "high", "medium": "medium", "low": "low", "backlog": "none", "inbox": "none"}
 RECURRENCE_MAP = {
     "daily": "daily", "weekly": "weekly", "monthly": "monthly",

@@ -31,10 +31,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 12
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 13
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 12
+        assert schema.current_version(conn) == 13
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due"} <= idx
@@ -48,13 +48,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 12
-        assert schema.migrate(conn) == 12
+        assert schema.migrate(conn) == 13
+        assert schema.migrate(conn) == 13
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 12
+    assert dbmod.init_db() == 13
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -68,10 +68,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 12
+    assert dbmod.init_db() == 13
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 12
+        assert schema.current_version(conn) == 13
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -91,7 +91,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 12
+    assert dbmod.init_db() == 13
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -136,7 +136,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 12
+    assert dbmod.init_db() == 13
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -161,6 +161,10 @@ def test_check_constraints_reject_bad_enums(_temp_db: Path) -> None:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('x', 'later', 't', 't')"
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('x', 'doing', 't', 't')"
             )
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
@@ -194,7 +198,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 12
+    assert dbmod.init_db() == 13
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -204,5 +208,54 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
             3: "2026-07-01T08:00:00+02:00",   # done: as it was
             4: None,
         }
+    finally:
+        conn.close()
+
+
+def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db: Path) -> None:
+    """A v12 database's retired Doing rows become Todo and keep their data."""
+    dbmod.init_db()
+    conn = dbmod.connect()
+    try:
+        # The current schema has the v13 guard already. Drop it while building
+        # the fixture so this connection can represent a pre-v13 database
+        # containing the value that the migration must retire.
+        conn.execute("DROP TRIGGER tasks_reject_retired_doing")
+        conn.execute("DROP TRIGGER tasks_reject_retired_doing_update")
+        conn.execute("PRAGMA ignore_check_constraints = ON")
+        conn.execute("UPDATE settings SET value = '12' WHERE key = 'schema_version'")
+        conn.execute(
+            "INSERT INTO tasks(id, title, status, priority, created_at, updated_at)"
+            " VALUES (1, 'In progress task', 'doing', 'high', 'created', 'updated')"
+        )
+        conn.execute(
+            "INSERT INTO links(task_id, url, kind) VALUES (1, 'https://example.com', 'web')"
+        )
+        conn.execute(
+            "INSERT INTO comments(task_id, ts, body) VALUES (1, 'commented', 'Keep this')"
+        )
+        conn.execute(
+            "INSERT INTO activity(task_id, ts, field, old_value, new_value)"
+            " VALUES (1, 'changed', 'title', 'old', 'In progress task')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert dbmod.init_db() == 13
+    conn = dbmod.connect()
+    try:
+        task = conn.execute(
+            "SELECT title, status, priority, created_at, updated_at FROM tasks WHERE id = 1"
+        ).fetchone()
+        assert tuple(task) == ("In progress task", "todo", "high", "created", "updated")
+        assert conn.execute("SELECT COUNT(*) FROM links WHERE task_id = 1").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM comments WHERE task_id = 1").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM activity WHERE task_id = 1").fetchone()[0] == 1
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
+            )
+        assert schema.migrate(conn) == 13
     finally:
         conn.close()

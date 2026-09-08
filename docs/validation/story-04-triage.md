@@ -4,12 +4,12 @@
 
 **Steps → expected**
 
-1. Open `/?status=doing` → the Table tab is active with the `doing` chip pressed; only `doing` rows (7 in the seed); nested titles show their breadcrumb (`Home renovation › Kitchen` under *Get three quotes*), the project column is the top ancestor, the last comment renders its `{onedrive}/…` reference as a folder chip; no horizontal page scroll.
+1. Open `/?status=todo` → the Table tab is active with the `todo` chip pressed; only `todo` rows are shown; nested titles show their breadcrumb (`Home renovation › Kitchen` under *Get three quotes*), the project column is the top ancestor, the last comment renders its `{onedrive}/…` reference as a folder chip; no horizontal page scroll.
 2. Click the due cell of *Get three quotes*, type `in 2 weeks`, Enter → the cell shows the new date (ISO in the tooltip); `GET /api/tasks/{id}` confirms it.
 3. Click the row → the drawer opens as a **right-hand panel** (≥ 400 px, the table stays fully visible to its left); the URL gains `#task/{id}`; the activity log's first row reads `due <old> → <new>` with actor and time.
 4. Type a comment containing `https://example.com/passport-office`, Ctrl+Enter → it appears first (newest first) with `origin = ui`; the URL is an `<a target=_blank rel=noopener>` chip; the Table's *last comment* cell shows the same chip; clicking the chip opens the link in a new tab.
 5. Quick-add: type `renew passport next friday` → a date chip appears under the bar with next Friday's ISO date and the phrase `(next friday)`.
-6. Enter → toast `Added #N renew passport`; the task exists with that due and no parent (the `doing` filter hides an inbox task; **Clear** shows it and returns to the default `/` view).
+6. Enter → toast `Added #N renew passport`; the task exists with that due and no parent (the `todo` filter hides a standby task; **Clear** shows it and returns to the default `/` view).
 7. Tree tab → collapse the four projects (state persists in `localStorage`) → drag *renew passport* onto *Family admin* → toast `Moved "renew passport" under Family admin`; the API shows `parent_id = Family admin`, an activity row `parent ∅ → id`; expanding *Family admin* shows the node nested at level 2 with the rollup updated. Dragging *Family admin* onto its own child is refused with a toast naming the cycle; nothing changes.
 8. Table tab → the row *renew passport* now carries the breadcrumb `Family admin` and project `Family admin`. A fresh load of `/#task/N` opens the drawer with the clickable breadcrumb.
 9. Phone (390 wide, touch): the table renders as stacked cards (no header row, secondary columns hidden), no horizontal overflow, quick-add / filter chips / status selects / due buttons ≥ 44 px, non-overlapping.
@@ -19,7 +19,7 @@
 
 | Step | Desktop |
 | --- | --- |
-| 1 Table `status:doing` | [story-04-triage-1-desktop.png](../screenshots/story-04-triage-1-desktop.png) |
+| 1 Table `status:todo` | [story-04-triage-1-desktop.png](../screenshots/story-04-triage-1-desktop.png) |
 | 2 inline due edit | [story-04-triage-2-desktop.png](../screenshots/story-04-triage-2-desktop.png) |
 | 3 drawer + activity old → new | [story-04-triage-3-desktop.png](../screenshots/story-04-triage-3-desktop.png) |
 | 4 comment with link chip | [story-04-triage-4-desktop.png](../screenshots/story-04-triage-4-desktop.png) |

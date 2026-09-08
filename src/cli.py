@@ -3,7 +3,7 @@
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
               [--recurrence weekly [--recurrence-anchor fri]] [--person "Sam"]
               [--desc "..."]
-    tasks ls [--status todo,doing|open|all] [--project N] [--due today|week|overdue]
+    tasks ls [--status todo,standby|open|all] [--project N] [--due today|week|overdue]
              [--deferred] [--blocked] [--updated-before <date|30d>]
     tasks show N
     tasks tree [N]

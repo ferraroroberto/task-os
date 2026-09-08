@@ -1821,7 +1821,7 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
 
 # ------------------------------------------------------------------ views
 
-BOARD_COLUMNS = ("inbox", "todo", "doing", "standby", "done")
+BOARD_COLUMNS = ("inbox", "todo", "standby", "done")
 
 
 def board(
@@ -1831,9 +1831,9 @@ def board(
     person_id: int | None = None,
     q: str | None = None,
 ) -> dict[str, Any]:
-    """The Board's five buckets: ``inbox · todo · doing · standby · done``.
+    """The Board's four buckets: ``inbox · todo · standby · done``.
 
-    The first four are the open statuses; ``done`` holds only tasks completed
+    The first three are the open statuses; ``done`` holds only tasks completed
     **today** (``done_at`` on the current local calendar day — an older done
     task never shows, and the boundary is local midnight, not UTC). Items are
     the same enriched summaries :func:`list_tasks` returns, in its order

@@ -3,7 +3,7 @@
  * Triage speed without a mouse: with a row focused (Board · Table · Today ·
  * the Search tab's task hits) one key does the thing —
  *
- *   e  complete   1-4 status   t/w due tomorrow / next week
+ *   e  complete   1-3 status   t/w due tomorrow / next week
  *   s  snooze     p   priority cycle          z undo     ? this list
  *
  * and with tasks ticked (Select mode, #81) the same key does it to the whole
@@ -38,7 +38,7 @@ import { ACTION_TTL_MS, toast } from './toast.js';
 
 /** Ascending, wrapping at the top — one press always moves, `none` included. */
 const PRIORITIES = ['none', 'low', 'medium', 'high'];
-const STATUS_KEYS = [['1', 'inbox'], ['2', 'todo'], ['3', 'doing'], ['4', 'standby']];
+const STATUS_KEYS = [['1', 'inbox'], ['2', 'todo'], ['3', 'standby']];
 /** A task row in a view whose rows are action targets. */
 const ROW = '.trow[data-id], tr.task-row[data-id]';
 const NOT_A_TARGET = '#paneTree';

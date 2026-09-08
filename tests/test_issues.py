@@ -111,14 +111,14 @@ def test_sync_title_change_lands_on_the_task(conn, fake: FakeProvider) -> None:
 def test_sync_closed_issue_marks_task_done_with_sync_activity(conn, fake: FakeProvider) -> None:
     sync_once(conn, fake)
     task = repo.list_tasks(conn, q="soil-moisture")[0]
-    repo.update_task(conn, task["id"], actor="me", status="doing")
+    repo.update_task(conn, task["id"], actor="me", status="standby")
     _set(fake, number=14, state="closed")
     r = sync_once(conn, fake)
     assert (r.listed, r.checked, r.closed, r.closed_ids) == (1, 1, 1, [task["id"]])
     t = repo.get_task(conn, task["id"])
     assert t["status"] == "done" and t["done_at"] and t["issue_ref"]["state"] == "closed"
     acts = _activity(conn, task["id"])
-    assert ("status", "doing", "done", SYNC_ACTOR) in acts[:2]
+    assert ("status", "standby", "done", SYNC_ACTOR) in acts[:2]
     assert ("issue_state", "open", "closed", SYNC_ACTOR) in acts[:2]
     # closed refs are not polled again; nothing changes on the next pass
     r2 = sync_once(conn, fake)

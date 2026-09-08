@@ -35,7 +35,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 12
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 13
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -169,7 +169,7 @@ def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     assert seeded.get("/api/tasks?parent=root").json()["count"] >= 8
     assert seeded.get("/api/tasks?parent=2").json()["count"] == 3
     assert seeded.get("/api/tasks?type=coding").json()["items"][0]["issue_ref"]["number"] == 12
-    assert seeded.get("/api/tasks?status=todo,doing&due_from=2026-08-17&due_to=2026-08-19").json()["count"] >= 3
+    assert seeded.get("/api/tasks?status=todo&due_from=2026-08-17&due_to=2026-08-19").json()["count"] >= 3
     assert seeded.get("/api/tasks?person=1").json()["count"] == 2  # Sam: quotes + plumber
     assert seeded.get("/api/tasks?limit=5").json()["count"] == 5
     sub = seeded.get("/api/tasks/tree?root=20").json()["items"]
@@ -250,7 +250,7 @@ def test_starts_accepts_phrases_and_the_deferred_filter(client: TestClient) -> N
     assert only["count"] == 1 and only["items"][0]["starts"] == soon.isoformat()
     # it intersects with a real status rather than replacing it
     assert client.get("/api/tasks?status=deferred,todo").json()["count"] == 1
-    assert client.get("/api/tasks?status=deferred,doing").json()["count"] == 0
+    assert client.get("/api/tasks?status=deferred,standby").json()["count"] == 0
 
     # clearing wakes it, and every change is in the log
     assert client.patch(f"/api/tasks/{t['id']}", json={"starts": ""}).json()["starts"] is None
@@ -319,7 +319,7 @@ def test_links_issue_and_people(seeded: TestClient) -> None:
 
 
 def test_list_items_carry_breadcrumb_root_and_last_comment(seeded: TestClient) -> None:
-    items = seeded.get("/api/tasks?status=doing").json()["items"]
+    items = seeded.get("/api/tasks?status=todo").json()["items"]
     by_title = {t["title"]: t for t in items}
     quotes = by_title["Get three quotes"]
     assert [b["title"] for b in quotes["breadcrumb"]] == ["Home renovation", "Kitchen"]
@@ -346,6 +346,13 @@ def test_natural_due_on_create_and_update(client: TestClient) -> None:
     assert cleared.status_code == 200 and cleared.json()["due"] is None
     log = [a for a in cleared.json()["activity"] if a["field"] == "due"]
     assert log[0]["old_value"] and log[0]["new_value"] is None
+
+
+def test_retired_doing_status_is_rejected_by_api(client: TestClient) -> None:
+    assert client.post("/api/tasks", json={"title": "Legacy", "status": "doing"}).status_code == 422
+    task = client.post("/api/tasks", json={"title": "Current"}).json()
+    assert client.patch(f"/api/tasks/{task['id']}", json={"status": "doing"}).status_code == 422
+    assert client.get("/api/tasks?status=doing").status_code == 422
 
 
 def test_parse_endpoint(seeded: TestClient) -> None:
@@ -375,11 +382,11 @@ def _mk(client: TestClient, title: str, **fields: object) -> int:
 
 def test_bulk_status_and_due_across_a_selection(client: TestClient) -> None:
     ids = [_mk(client, f"T{n}") for n in range(3)]
-    r = client.post("/api/tasks/bulk", json={"ids": ids, "status": "doing"})
+    r = client.post("/api/tasks/bulk", json={"ids": ids, "status": "standby"})
     assert r.status_code == 200
     body = r.json()
     assert body["updated"] == 3 and body["failed"] == 0
-    assert {x["task"]["status"] for x in body["results"]} == {"doing"}
+    assert {x["task"]["status"] for x in body["results"]} == {"standby"}
     # a natural phrase is resolved once, for the whole selection
     r = client.post("/api/tasks/bulk", json={"ids": ids, "due": "2026-09-01"})
     assert {x["task"]["due"] for x in r.json()["results"]} == {"2026-09-01"}

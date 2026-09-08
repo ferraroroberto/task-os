@@ -145,7 +145,7 @@ def test_the_request_names_a_model_and_pins_today(chat: FakeChat) -> None:
 
 def test_only_the_keys_the_form_has_are_read(chat: FakeChat) -> None:
     chat.says(title="Call the plumber", description="", due_phrase=None,
-              starts_phrase=None, priority="high", status="doing", assignee="me")
+              starts_phrase=None, priority="high", status="standby", assignee="me")
     got = EnrichClient(config_for(chat.url)).fields(NOTE, today=TODAY)
     assert set(got) == {"title", "description", "due_phrase", "starts_phrase"}
 

@@ -1,10 +1,10 @@
 """Story 05 — Board day (Step 5/13, issue #6).
 
-    Board tab: five columns visible at once on the laptop → the top strip's
+    Board tab: four columns visible at once on the laptop → the top strip's
     text filter narrows the board without opening any disclosure and the +
     opens the quick-add dialog (#80) → project chip
     filters to one project (shared with the Table, encoded in the URL) → drag
-    a row doing → standby → the counts update and the activity log has the
+    a row todo → standby → the counts update and the activity log has the
     row → Today tab lists due / overdue grouped by project, sorted by due
     then priority within a group → mark a recurring task complete → its due
     rolls a cadence forward and it
@@ -86,7 +86,7 @@ from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
-COLUMNS = ["inbox", "todo", "doing", "standby", "done"]
+COLUMNS = ["inbox", "todo", "standby", "done"]
 
 
 def _trow(page: Page, scope: str, title: str):
@@ -131,18 +131,18 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
 
-        # 1. Board is the desktop landing tab; five columns side by side, full width.
+        # 1. Board is the desktop landing tab; four columns side by side, full width.
         page.goto(f"{base}/")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         cols = page.locator(".board-col")
-        expect(cols).to_have_count(5)
+        expect(cols).to_have_count(4)
         assert cols.evaluate_all("els => els.map(e => e.dataset.col)") == COLUMNS
-        boxes = [cols.nth(i).bounding_box() for i in range(5)]
+        boxes = [cols.nth(i).bounding_box() for i in range(4)]
         assert all(b and b["width"] > 200 for b in boxes), boxes
         for a, b in zip(boxes, boxes[1:], strict=False):
             assert a["x"] + a["width"] <= b["x"] + 1, (a, b)   # left to right, no overlap
-        assert abs(boxes[0]["y"] - boxes[4]["y"]) < 2                # one row
-        assert boxes[4]["x"] + boxes[4]["width"] > DESKTOP["width"] - 40  # uses the full width
+        assert abs(boxes[0]["y"] - boxes[3]["y"]) < 2                # one row
+        assert boxes[3]["x"] + boxes[3]["width"] > DESKTOP["width"] - 40  # uses the full width
         api = _get(base, "/api/board")["columns"]
         counts = _counts(page)
         assert counts == {k: len(api[k]) for k in COLUMNS}, counts
@@ -155,7 +155,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         # (story 04 may already have edited "Get three quotes" in this session's
         # seeded instance — the checks below use rows it leaves alone)
         quotes = _card(page, "Get three quotes")
-        expect(quotes.locator(".trow-status")).to_have_value("doing")
+        expect(quotes.locator(".trow-status")).to_have_value("todo")
         expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
         expect(quotes.locator(".trow-person")).to_contain_text("Sam Rivera")
         expect(_card(page, "Kitchen").locator(".trow-meta .chip-folder")).to_contain_text("kitchen")
@@ -199,7 +199,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
 
         # 3. Project filter → only that project's descendants; the URL carries it;
         #    the Table's card shows the same selection (one shared state).
-        home = next(t for t in api["doing"] if t["title"] == "Home renovation")
+        home = next(t for t in api["todo"] if t["title"] == "Home renovation")
         card = _open_filters(page, "boardFilters")
         card.locator("select[name='project']").select_option(str(home["id"]))
         expect(page).to_have_url(f"{base}/?project={home['id']}")
@@ -221,10 +221,10 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(page).to_have_url(f"{base}/")
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"])))
 
-        # 4. Drag a row doing → standby: PATCH status, counts update, activity row.
+        # 4. Drag a row todo → standby: PATCH status, counts update, activity row.
         quotes = _card(page, "Get three quotes")
         qid = int(quotes.get_attribute("data-id"))
-        assert quotes.evaluate("el => el.closest('.board-col').dataset.col") == "doing"
+        assert quotes.evaluate("el => el.closest('.board-col').dataset.col") == "todo"
         # both ends in the viewport first (a page that scrolls under the
         # pointer mid-drag would pick up whichever row slides under it)
         _col(page, "standby").scroll_into_view_if_needed()
@@ -232,12 +232,12 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         moved = _col(page, "standby").locator(f".trow[data-id='{qid}']")
         expect(moved).to_be_visible()
         expect(moved.locator(".trow-status")).to_have_value("standby")
-        expect(page.locator(".board-col-count[data-col='doing']")).to_have_text(str(len(api["doing"]) - 1))
+        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"]) - 1))
         expect(page.locator(".board-col-count[data-col='standby']")).to_have_text(str(len(api["standby"]) + 1))
         detail = _get(base, f"/api/tasks/{qid}")
         assert detail["status"] == "standby"
         act = detail["activity"][0]
-        assert (act["field"], act["old_value"], act["new_value"]) == ("status", "doing", "standby")
+        assert (act["field"], act["old_value"], act["new_value"]) == ("status", "todo", "standby")
         log = _get(base, f"/api/activity?task={qid}&limit=1")["items"][0]
         assert log["field"] == "status" and log["new_value"] == "standby"
         shot(page, shots / "story-05-board-3-desktop.png")
@@ -250,7 +250,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         expect(drawer.locator("#drawerTitle")).to_have_value("Get three quotes")
         first_act = drawer.locator(".activity-row").first
         expect(first_act).to_have_attribute("data-field", "status")
-        expect(first_act.locator(".activity-old")).to_have_text("doing")
+        expect(first_act.locator(".activity-old")).to_have_text("todo")
         expect(first_act.locator(".activity-new")).to_have_text("standby")
         # side panel: the columns stay visible to its left
         drawer_box = drawer.bounding_box()
@@ -513,11 +513,11 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     # 20. With tasks ticked the same key acts on the set — and the undo puts
     #     each task's OWN prior status back, not one shared value.
     page.click("#paneBoard [data-select-toggle]")
-    picks = ["Write README", "Fix watering schedule drift"]        # todo · doing
+    picks = ["Write README", "Garden"]                          # todo · standby
     for title in picks:
         _card(page, title).locator(".trow-check").check()
     ids = [int(_card(page, t).get_attribute("data-id")) for t in picks]
-    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "doing"]
+    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "standby"]
     page.evaluate(f"document.querySelector('.trow[data-id=\"{ids[0]}\"] .trow-main').focus()")
     _clear_toasts(page)
     page.keyboard.press("1")
@@ -527,7 +527,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     _clear_toasts(page)
     page.keyboard.press("z")
     expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
-    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "doing"]
+    assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "standby"]
     # the ticks survive a keyed action (several keys, one set), so Escape is
     # what leaves Select mode — the toggle is hidden while the bar is up
     expect(page.locator(f"#paneBoard .trow[data-id='{ids[0]}']")).to_have_class(re.compile("is-selected"))
@@ -540,7 +540,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     trow = page.locator(f"#tableHost .task-row[data-id='{rid}']")
     trow.focus()
     _clear_toasts(page)
-    page.keyboard.press("4")
+    page.keyboard.press("3")
     expect(page.locator(".toasts")).to_have_text(re.compile("Status standby"))
     assert _get(base, f"/api/tasks/{rid}")["status"] == "standby"
     _clear_toasts(page)
@@ -572,8 +572,8 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     #     palette lists the same keys, which is where they are discovered.
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
-    # 9 actions + Z + ?, then the five "getting around" keys
-    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(11)
+    # 8 actions + Z + ?, then the five "getting around" keys
+    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(10)
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
@@ -614,7 +614,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     today = date.today()
     iso = lambda days_ago: (today - timedelta(days=days_ago)).isoformat()  # noqa: E731
     watering = _get(base, "/api/tasks?q=watering%20schedule")["items"][0]
-    assert watering["status"] == "doing", watering["status"]     # the keyboard walk put it back
+    assert watering["status"] == "todo", watering["status"]       # the keyboard walk put it back
 
     # 1. The Done column's head links to the journal: no tab lit, #journal in the URL.
     _clear_toasts(page)
@@ -719,8 +719,8 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneJournal")).to_be_hidden()
 
     # leave the coding task as the seed had it (the phone leg reads Today)
-    page.evaluate(f"fetch('/api/tasks/{watering['id']}', {{method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{status: 'doing'}})}})")
-    page.wait_for_function(f"() => fetch('/api/tasks/{watering['id']}').then(r => r.json()).then(t => t.status === 'doing')")
+    page.evaluate(f"fetch('/api/tasks/{watering['id']}', {{method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{status: 'todo'}})}})")
+    page.wait_for_function(f"() => fetch('/api/tasks/{watering['id']}').then(r => r.json()).then(t => t.status === 'todo')")
 
 
 # ------------------------------------------------------------- phone leg
@@ -833,11 +833,11 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-8-phone.png")
 
-        # 10. Board: strip of five counts + one column per screen (scroll-snap).
+        # 10. Board: strip of four counts + one column per screen (scroll-snap).
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("#paneBoard")).to_be_visible()
         strip = page.locator(".board-strip-btn")
-        expect(strip).to_have_count(5)
+        expect(strip).to_have_count(4)
         assert_min_target(strip)
         assert_no_overlap(strip)
         columns = page.locator(".board-columns")
@@ -849,10 +849,10 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
         assert len(visible) == 1, visible
         # tap the strip → the carousel scrolls to that column and marks it active
-        page.locator(".board-strip-btn[data-col='doing']").tap()
-        expect(page.locator(".board-strip-btn[data-col='doing']")).to_have_class(re.compile(r"\bactive\b"))
+        page.locator(".board-strip-btn[data-col='standby']").tap()
+        expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
         page.wait_for_function(
-            "() => Math.abs(document.querySelector(\".board-col[data-col='doing']\").getBoundingClientRect().left"
+            "() => Math.abs(document.querySelector(\".board-col[data-col='standby']\").getBoundingClientRect().left"
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
         # launcher-density rows (UX round 2, issue #32): every seeded row in
@@ -864,13 +864,13 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         # either (Tree's own left indent costs it width the other tabs don't
         # spend, so its rows run taller still — see styles.css's `.tree`
         # wrap-clearance rule).
-        heights = _col(page, "doing").locator(".trow").evaluate_all(
+        heights = _col(page, "standby").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 96 for h in heights), heights
         # touch fallback for the drag: the row's compact status select —
         # right-aligned, ≤32px tall, auto width, its centre on the card's own
         # centre (title + meta) since #74 (UX rounds 1–3, issues #27/#32/#46)
-        first_item = _col(page, "doing").locator(".trow").first
+        first_item = _col(page, "standby").locator(".trow").first
         row_select = first_item.locator(".trow-status")
         expect(row_select).to_be_visible()
         sel_box = row_select.bounding_box()
@@ -886,7 +886,7 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
         assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
         # flat list, not a card: no rounded box on the column's list
-        assert _col(page, "doing").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
+        assert _col(page, "standby").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-9-phone.png")
 
@@ -921,13 +921,13 @@ def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: 
         assert_no_overlap(page.locator("#paneBoard .pane-top button"))
 
         page.locator("#paneBoard [data-select-toggle]").tap()
-        checks = _col(page, "doing").locator(".trow-check")
+        checks = _col(page, "standby").locator(".trow-check")
         expect(checks.first).to_be_visible()
-        assert_min_target(_col(page, "doing").locator(".trow"))
+        assert_min_target(_col(page, "standby").locator(".trow"))
         assert_no_overlap(checks)
         # a tap on the card body ticks it instead of opening the drawer
-        _col(page, "doing").locator(".trow").first.locator(".trow-main").tap()
-        expect(_col(page, "doing").locator(".trow.is-selected")).to_have_count(1)
+        _col(page, "standby").locator(".trow").first.locator(".trow-main").tap()
+        expect(_col(page, "standby").locator(".trow.is-selected")).to_have_count(1)
         expect(page.locator("#taskDrawer")).to_be_hidden()
         bar = page.locator("#boardBulk")
         expect(bar).to_be_visible()

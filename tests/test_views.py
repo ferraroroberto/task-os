@@ -44,8 +44,8 @@ def test_board_buckets_open_statuses_and_hides_old_done(conn: sqlite3.Connection
     with _at(2026, 8, 17):
         b = repo.board(conn)
     assert b["today"] == "2026-08-17"
-    assert list(b["columns"]) == ["inbox", "todo", "doing", "standby", "done"]
-    for key in ("inbox", "todo", "doing", "standby"):
+    assert list(b["columns"]) == ["inbox", "todo", "standby", "done"]
+    for key in ("inbox", "todo", "standby"):
         assert b["columns"][key], key
         assert {t["status"] for t in b["columns"][key]} == {key}
     # the seed's done tasks were completed ~30 days ago → never in "Done today"
@@ -53,7 +53,7 @@ def test_board_buckets_open_statuses_and_hides_old_done(conn: sqlite3.Connection
     # cancelled never shows anywhere
     assert not any(t["status"] == "cancelled" for col in b["columns"].values() for t in col)
     # enriched like list_tasks: root + last_comment present on a nested card
-    quotes = next(t for t in b["columns"]["doing"] if t["id"] == seeded["quotes"])
+    quotes = next(t for t in b["columns"]["todo"] if t["id"] == seeded["quotes"])
     assert quotes["root"]["title"] == "Home renovation" and quotes["last_comment"]
 
 
@@ -77,9 +77,9 @@ def test_board_status_change_moves_the_card(conn: sqlite3.Connection, seeded: di
         repo.set_status(conn, seeded["quotes"], "standby", actor="me")
         b = repo.board(conn)
     assert seeded["quotes"] in [t["id"] for t in b["columns"]["standby"]]
-    assert seeded["quotes"] not in [t["id"] for t in b["columns"]["doing"]]
+    assert seeded["quotes"] not in [t["id"] for t in b["columns"]["todo"]]
     act = repo.list_activity(conn, seeded["quotes"])[0]
-    assert (act["field"], act["old_value"], act["new_value"]) == ("status", "doing", "standby")
+    assert (act["field"], act["old_value"], act["new_value"]) == ("status", "todo", "standby")
 
 
 def test_board_project_and_person_filters(conn: sqlite3.Connection, seeded: dict) -> None:
@@ -160,8 +160,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 def test_routes_shape(client: TestClient) -> None:
     b = client.get("/api/board").json()
-    assert set(b["columns"]) == {"inbox", "todo", "doing", "standby", "done"}
-    home = next(t for t in b["columns"]["doing"] if t["title"] == "Home renovation")
+    assert set(b["columns"]) == {"inbox", "todo", "standby", "done"}
+    home = next(t for t in b["columns"]["todo"] if t["title"] == "Home renovation")
     filtered = client.get(f"/api/board?project={home['id']}").json()
     assert all(t["root"]["id"] == home["id"] for col in filtered["columns"].values() for t in col)
     t = client.get("/api/today").json()

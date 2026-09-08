@@ -120,7 +120,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
     ctx.add_init_script(INTERCEPT)
     page: Page = ctx.new_page()
-    page.goto(base + "/?status=doing,todo,standby&project=" + str(kitchen["parent_id"]))
+    page.goto(base + "/?status=todo,standby&project=" + str(kitchen["parent_id"]))
     page.get_by_role("tab", name="Table").click()
 
     # 1. the chip: taskos:// href + resolved-path tooltip
@@ -253,7 +253,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     )
     assert watering["ai_url"] == ai_url                       # the summary carries it
     assert watering["ai_label"] == "drift-fix session"
-    page.goto(base + "/?status=doing")
+    page.goto(base + "/?status=todo")
     page.get_by_role("tab", name="Table").click()
     wrow = page.locator(f".task-row[data-id='{watering['id']}']")
     ai_chip = wrow.locator("a.chip-ai")

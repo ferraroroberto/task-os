@@ -111,7 +111,7 @@ def test_tasks_adapter_hits_on_seed(seeded_db: Path) -> None:
     assert [h.title for h in hits][:2] == ["Kitchen", "Get three quotes"]
     top = hits[0].to_dict()
     assert top["url"] == "#task/2" and top["ref"] == "2" and top["task_id"] == 2 and top["matched_in"] == "title"
-    assert top["snippet"] == "[Kitchen]" and "Home renovation" in top["subtitle"] and "doing" in top["subtitle"]
+    assert top["snippet"] == "[Kitchen]" and "Home renovation" in top["subtitle"] and "todo" in top["subtitle"]
     quotes = hits[1].to_dict()
     assert quotes["matched_in"] == "comment" and "[kitchen]" in quotes["snippet"]
     assert quotes["breadcrumb"][-1]["title"] == "Kitchen"

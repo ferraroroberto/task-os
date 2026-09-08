@@ -42,7 +42,7 @@ import {
   BLOCKED, DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters,
   listParams, mountFilters,
 } from './filters.js';
-import { fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
+import { STATUSES, fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
@@ -1012,7 +1012,7 @@ function paletteCommands() {
     { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
     ...(keys && !keys.hasTarget() ? keys.commands() : []),
   ];
-  ['inbox', 'todo', 'doing', 'standby', 'done', 'cancelled'].forEach(function (st) {
+  STATUSES.forEach(function (st) {
     cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
       onFilterChange(Object.assign({}, state.filters, { status: [st] }));
     } });
