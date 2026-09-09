@@ -129,6 +129,16 @@ export function mountArchive(opts) {
     return n + ' ' + word + (n === 1 ? '' : 's');
   }
 
+  /** `09/09 01:03` — the head's compact stamp: the locale's own day/month
+   *  order, no year, and a 24-hour clock, because `9/9/26, 1:03 AM` is 30px of
+   *  a line that has none to spare. The whole reading stays in the row title. */
+  function stampShort(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return fmtTsShort(iso);
+    return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })
+      + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  }
+
   function renderHead() {
     drawHead();
     titleHeadRows();
@@ -179,8 +189,9 @@ export function mountArchive(opts) {
     els.lastRun.replaceChildren();
     els.lastRun.classList.remove('muted');
     if (!last) { els.lastRun.textContent = 'never'; return; }
+    const at = last.finished_at || last.started_at;
     els.lastRun.append(
-      fmtTsShort(last.finished_at || last.started_at), ' · ',
+      narrow() ? stampShort(at) : fmtTsShort(at), ' · ',
       statusPart(last.status === 'failed' ? 'warn' : last.status === 'running' ? 'warn' : 'ok', last.status),
       ' · ' + (narrow() ? outcomes(last) : counts(last))
     );
