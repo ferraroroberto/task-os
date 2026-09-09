@@ -48,6 +48,10 @@ const RUNS_LIMIT = 20;
 //: minutes-scale over COM; this is only how often the counters move.
 const POLL_MS = 1500;
 const PHONE_MQ = '(max-width: 767px)';
+//: Narrower than the grid→cards switch: the width at which the head's label
+//: column, the long status wording and a full absolute path stop fitting on a
+//: line (#168). The CSS phone block keys on the same 600px.
+const NARROW_MQ = '(max-width: 600px)';
 //: The two states a human can still say "seen" about (the API's own
 //: REVIEWABLE_STATUSES — accept answers 409 on anything else).
 const REVIEWABLE = ['needs_review', 'failed'];
@@ -83,10 +87,16 @@ export function mountArchive(opts) {
     status: document.getElementById('statusArchive'),
     lastRun: document.getElementById('statusArchiveRun'),
     recent: document.getElementById('statusArchiveRecent'),
+    recentLabel: document.getElementById('archiveRecentLabel'),
     pick: document.getElementById('archiveRunPick'),
     acceptAll: document.getElementById('archiveAcceptAll'),
     host: document.getElementById('archiveHost'),
   };
+
+  const narrowMq = window.matchMedia(NARROW_MQ);
+  /** One line per reading, one word per label: this width has no room for the
+   *  head's full sentences, and a wrapped status row costs three lines. */
+  function narrow() { return narrowMq.matches; }
 
   let status = null;    // GET /api/status → archive; null = the call itself failed
   let runs = [];        // the picker's list, latest first
@@ -113,11 +123,23 @@ export function mountArchive(opts) {
     return c;
   }
 
+  /** `3 runs`, `1 run` — the head's short wording says the number and the noun,
+   *  never `run(s)`, which reads as an unfinished sentence on a phone. */
+  function plural(n, word) {
+    return n + ' ' + word + (n === 1 ? '' : 's');
+  }
+
+  function renderHead() {
+    drawHead();
+    titleHeadRows();
+  }
+
   /** The service's own state. Off always carries its reason; a failed status
    *  call is "unknown", which is not the same as "off". */
-  function renderHead() {
+  function drawHead() {
     els.status.replaceChildren();
     els.status.classList.remove('muted');
+    els.recentLabel.textContent = narrow() ? 'Recent' : 'Recent runs';
     if (!status) {
       // The status call itself failed: unknown, which is not "off" — and the
       // rows below it must say so too rather than keep a stale reading.
@@ -133,11 +155,18 @@ export function mountArchive(opts) {
       els.run.disabled = true;
       els.limit.disabled = true;
     } else {
-      els.status.append(
-        statusPart(status.last_error ? 'warn' : 'ok', status.running ? 'running' : 'ready'),
-        ' · model ', codeEl(status.model || 'none'),
-        ' · batches of ' + status.batch_size + ' · ' + status.examples + ' corrections remembered'
-      );
+      els.status.append(statusPart(status.last_error ? 'warn' : 'ok', status.running ? 'running' : 'ready'));
+      if (narrow()) {
+        els.status.append(
+          ' · ' + (status.model || 'no model')
+          + ' · ' + status.batch_size + '/batch · ' + status.examples + ' remembered'
+        );
+      } else {
+        els.status.append(
+          ' · model ', codeEl(status.model || 'none'),
+          ' · batches of ' + status.batch_size + ' · ' + status.examples + ' corrections remembered'
+        );
+      }
       if (status.last_error) els.status.append(' · last error: ' + status.last_error);
       els.run.disabled = busy || !!status.running;
       els.limit.disabled = els.run.disabled;
@@ -153,23 +182,36 @@ export function mountArchive(opts) {
     els.lastRun.append(
       fmtTsShort(last.finished_at || last.started_at), ' · ',
       statusPart(last.status === 'failed' ? 'warn' : last.status === 'running' ? 'warn' : 'ok', last.status),
-      ' · ' + counts(last)
+      ' · ' + (narrow() ? outcomes(last) : counts(last))
     );
     if (last.agreement != null) {
-      els.lastRun.append(' · model agreed with the suggester on ' + pct(last.agreement));
+      els.lastRun.append(narrow()
+        ? ' · ' + pct(last.agreement) + ' agreed'
+        : ' · model agreed with the suggester on ' + pct(last.agreement));
     }
     if (last.error) els.lastRun.append(' · ' + last.error);
   }
 
   function counts(r) {
-    return (r.planned || 0) + ' mail(s) · ' + (r.archived || 0) + ' filed · '
-      + (r.needs_review || 0) + ' need you · ' + (r.failed || 0) + ' failed';
+    return (r.planned || 0) + ' mail(s) · ' + outcomes(r);
+  }
+
+  /** What the run did with the mails, without restating how many there were —
+   *  the three outcomes add up to the plan. */
+  function outcomes(r) {
+    return (r.archived || 0) + ' filed · ' + (r.needs_review || 0) + ' need you · '
+      + (r.failed || 0) + ' failed';
   }
 
   /** What the runs on the picker add up to. Derived from the run rows on
    *  screen and named as such — never presented as an all-time accept rate,
    *  which nothing here measures. */
   function renderRecent() {
+    drawRecent();
+    titleHeadRows();
+  }
+
+  function drawRecent() {
     els.recent.replaceChildren();
     els.recent.classList.remove('muted');
     const done = runs.filter(function (r) { return r.status !== 'running'; });
@@ -177,6 +219,13 @@ export function mountArchive(opts) {
     const total = done.reduce(function (a, r) { return a + (r.planned || 0); }, 0);
     const filed = done.reduce(function (a, r) { return a + (r.archived || 0); }, 0);
     const review = done.reduce(function (a, r) { return a + (r.needs_review || 0); }, 0);
+    if (narrow()) {
+      els.recent.append(
+        plural(done.length, 'run') + ' · ' + plural(total, 'mail') + ' · ' + filed + ' filed'
+      );
+      if (total) els.recent.append(' · ' + pct(filed / total) + ' straight away');
+      return;
+    }
     els.recent.append(
       done.length + ' run(s) · ' + total + ' mail(s) · ' + filed + ' filed · ' + review + ' needed you'
     );
@@ -217,10 +266,19 @@ export function mountArchive(opts) {
     return parts.slice(-3).join(' › ') || String(path || '');
   }
 
+  /** A row that asked for a human and got one. The API keeps its status — the
+   *  mail really is still `needs_review` where it sits — but the screen must
+   *  not keep asking: a decided row shows what it is and offers nothing, which
+   *  is what makes the bulk button's count and the rows agree (#168). */
+  function isDecided(item) {
+    return REVIEWABLE.indexOf(item.status) >= 0 && !!item.decided_at;
+  }
+
   function stateChip(item) {
     const s = document.createElement('span');
-    s.className = 'archive-state status-' + (STATE_TONE[item.status] || 'off');
-    s.textContent = STATE_WORDS[item.status] || item.status;
+    const reviewed = item.status === 'needs_review' && item.decided_at;
+    s.className = 'archive-state status-' + (reviewed ? 'off' : STATE_TONE[item.status] || 'off');
+    s.textContent = reviewed ? 'reviewed' : STATE_WORDS[item.status] || item.status;
     if (item.decided_at) s.title = 'reviewed ' + fmtTsShort(item.decided_at);
     return s;
   }
@@ -272,12 +330,25 @@ export function mountArchive(opts) {
     return el;
   }
 
+  //: An absolute Windows / UNC / POSIX path sitting inside a sentence. Used to
+  //: fold one out of a reason at phone width, where a 90-character path is the
+  //: whole card and pushes everything else off the right edge.
+  const PATH_IN_TEXT = /(?:[A-Za-z]:[\\/]|\\\\)[^\s"'<>|]+|(?:\/[^\s"'<>|/]+){4,}/g;
+
+  function shortenPaths(text) {
+    return String(text).replace(PATH_IN_TEXT, function (found) {
+      const parts = found.split(/[\\/]+/).filter(Boolean);
+      return parts.length > 3 ? '… ' + parts.slice(-3).join(' › ') : found;
+    });
+  }
+
   function reasonEl(item) {
     const el = document.createElement('span');
     el.className = 'archive-reason';
     const text = item.error ? (item.reason ? item.reason + ' · ' + item.error : item.error)
       : (item.reason || '');
-    el.textContent = text || '–';
+    // The full sentence is always the title — the fold is what is on screen.
+    el.textContent = (narrow() ? shortenPaths(text) : text) || '–';
     el.title = text;
     if (item.error) el.classList.add('archive-reason-error');
     return el;
@@ -288,7 +359,7 @@ export function mountArchive(opts) {
   }
 
   function canMove(item) {
-    return isFiled(item) || item.status === 'needs_review';
+    return isFiled(item) || (item.status === 'needs_review' && !item.decided_at);
   }
 
   // ------------------------------------------------------------- actions
@@ -398,8 +469,9 @@ export function mountArchive(opts) {
     toggle.addEventListener('click', function () {
       const open = body.hidden;
       body.hidden = !open;
+      // The engaged look is the shared `[aria-expanded="true"]` tint (#168) —
+      // no second state class to keep in step with the attribute.
       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      toggle.classList.toggle('is-on', open);
       if (hooks && hooks.onToggle) hooks.onToggle(open);
     });
 
@@ -464,6 +536,12 @@ export function mountArchive(opts) {
     pickBtn.className = 'button-ghost folder-pick';
     pickBtn.setAttribute('aria-expanded', 'false');
     pickBtn.innerHTML = icon('search') + '<span class="folder-pick-label">Pick from index</span>';
+    // The field and its picker are one group so the phone can draw them as one
+    // box with the glyph inside the right edge (`display: contents` dissolves
+    // the group again on a wide screen, where they are two controls on a row).
+    const fieldGroup = document.createElement('div');
+    fieldGroup.className = 'archive-other-field';
+    fieldGroup.append(field, pickBtn);
     const go = document.createElement('button');
     go.type = 'button';
     go.className = 'button-surface archive-other-go';
@@ -473,7 +551,7 @@ export function mountArchive(opts) {
       if (!typed) { toast('Name a folder first', 'error'); return; }
       runAction(go, function () { return moveItem(item, typed, hint.value.trim(), false); });
     });
-    other.append(field, pickBtn, go);
+    other.append(fieldGroup, go);
     body.appendChild(other);
 
     const picker = document.createElement('div');
@@ -506,7 +584,7 @@ export function mountArchive(opts) {
   function actionsFor(item, hooks) {
     const wrap = document.createElement('div');
     wrap.className = 'archive-row-actions';
-    if (REVIEWABLE.indexOf(item.status) >= 0) {
+    if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
       wrap.appendChild(actionButton('check', 'Accept', function () { return acceptItem(item, null); }));
     }
     let body = null;
@@ -518,15 +596,18 @@ export function mountArchive(opts) {
     if (isFiled(item)) {
       wrap.appendChild(actionButton('rotate-ccw', 'Revert', function () { return revertItem(item); }));
     }
-    if (!wrap.childElementCount) {
+    const controls = wrap.childElementCount > 0;
+    if (!controls) {
       const none = document.createElement('span');
       none.className = 'muted';
       // A reverted mail is back in the Inbox and free to be filed by the next
-      // run; there is deliberately nothing to press here.
-      none.textContent = item.status === 'reverted' ? 'back in the Inbox' : '–';
+      // run; a decided one has already had its human. Nothing to press, said
+      // out loud rather than left as an empty cell.
+      none.textContent = item.status === 'reverted' ? 'back in the Inbox'
+        : isDecided(item) ? 'nothing left to do' : '–';
       wrap.appendChild(none);
     }
-    return { el: wrap, body: body };
+    return { el: wrap, body: body, controls: controls };
   }
 
   // -------------------------------------------------------- the two drawings
@@ -639,16 +720,37 @@ export function mountArchive(opts) {
       why.className = 'archive-card-why muted';
       why.appendChild(reasonEl(item));
 
-      const menu = document.createElement('details');
-      menu.className = 'archive-menu';
-      const summary = document.createElement('summary');
-      summary.className = 'archive-menu-summary';
-      summary.textContent = 'Review';
+      // *Review* is the fourth review level, so it wears the same button as
+      // the three behind it (#168) — a disclosure, not a link, and not a
+      // `<summary>` whose shape nothing else on the row shares.
       const actions = actionsFor(item);
-      menu.append(summary, actions.el);
-      if (actions.body) menu.appendChild(actions.body);
+      let foot = actions.el;
+      if (actions.controls) {
+        const menu = document.createElement('div');
+        menu.className = 'archive-menu';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'button-ghost archive-action archive-menu-toggle';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.innerHTML = icon('eye');
+        const label = document.createElement('span');
+        label.textContent = 'Review';
+        toggle.appendChild(label);
+        const body = document.createElement('div');
+        body.className = 'archive-menu-body';
+        body.hidden = true;
+        body.appendChild(actions.el);
+        if (actions.body) body.appendChild(actions.body);
+        toggle.addEventListener('click', function () {
+          const open = body.hidden;
+          body.hidden = !open;
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        menu.append(toggle, body);
+        foot = menu;
+      }
 
-      card.append(head, meta, dest, why, menu);
+      card.append(head, meta, dest, why, foot);
       list.appendChild(card);
     });
     return list;
@@ -680,7 +782,12 @@ export function mountArchive(opts) {
       return REVIEWABLE.indexOf(i.status) >= 0 && !i.decided_at;
     });
     els.acceptAll.hidden = pending.length === 0;
-    els.acceptAll.textContent = 'Accept all ' + pending.length + ' that need you';
+    // The count is the rows that still offer *Accept*, and now nothing else:
+    // a decided row stopped offering it above, so the button and the report
+    // can no longer disagree.
+    els.acceptAll.textContent = narrow()
+      ? 'Accept all (' + pending.length + ')'
+      : 'Accept all ' + pending.length + ' that need you';
     els.acceptAll.dataset.ids = pending.map(function (i) { return i.id; }).join(',');
   }
 
@@ -722,6 +829,16 @@ export function mountArchive(opts) {
       toast(err.message || 'Could not read that run', 'error');
     }
     renderReport();
+  }
+
+  /** The narrow head draws one line per reading and ellipsizes what does not
+   *  fit, so the whole reading has to stay reachable somewhere — the title,
+   *  never nowhere. Called after every head render, once the text is in. */
+  function titleHeadRows() {
+    [els.status, els.lastRun, els.recent].forEach(function (el) {
+      if (narrow()) el.title = el.textContent;
+      else el.removeAttribute('title');
+    });
   }
 
   /** Everything this pane shows, in one pass — after an action, after a run. */
@@ -842,6 +959,16 @@ export function mountArchive(opts) {
   });
   const phoneMq = window.matchMedia(PHONE_MQ);
   if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { renderReport(); });
+  // The head's wording, the reasons and the bulk label are width-dependent too
+  // (#168) — a rotation must re-draw them, not leave the phone reading the
+  // desktop's sentences.
+  if (narrowMq.addEventListener) {
+    narrowMq.addEventListener('change', function () {
+      renderHead();
+      renderRecent();
+      renderReport();
+    });
+  }
 
   return { refresh: refresh, refreshStatus: refreshStatus };
 }
