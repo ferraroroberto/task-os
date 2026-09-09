@@ -37,8 +37,10 @@ validation record links to:
     docs/screenshots/story-24-archive-4-desktop.png   the report: filed · needs you · failed
     docs/screenshots/story-24-archive-5-desktop.png   filing a needs-you mail, hint typed
     docs/screenshots/story-24-archive-6-desktop.png   after the review round (dark)
-    docs/screenshots/story-24-archive-7-phone.png     the report as cards
-    docs/screenshots/story-24-archive-8-phone.png     one card's review menu (dark)
+    docs/screenshots/story-24-archive-7-phone.png     the report as cards (the #168 head,
+                                                      picker, bulk button and reviewed row)
+    docs/screenshots/story-24-archive-8-phone.png     one card's review menu and its
+                                                      *File it…* panel (dark)
     docs/screenshots/story-24-archive-9-desktop.png   Settings' archiving card after the run
     docs/screenshots/story-24-archive-9-phone.png     the same card at 390 (dark)
 """
@@ -46,6 +48,7 @@ validation record links to:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -56,7 +59,11 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
+from tests.e2e._geometry import (
+    assert_min_target,
+    assert_no_horizontal_overflow,
+    assert_no_overlap,
+)
 from tests.e2e.conftest import (
     INTERCEPT,
     _boot,
@@ -91,10 +98,20 @@ BILLS = "E:\\archive\\admin\\bills"
 HOUSE_FILE = "E:\\archive\\house\\heating\\0042 - boiler service.msg"
 BILLS_FILE = "E:\\archive\\admin\\bills\\0007 - something ambiguous.msg"
 STUCK_FILE = "E:\\archive\\house\\heating\\0043 - roof survey.msg"
+# Deep enough that the reason it appears in is wider than a 390px card, which
+# is what the phone's last-three-components fold is for (#168).
+UNREACHABLE = "E:\\archive\\house\\heating\\2026\\surveys\\pending"
+MEMBERSHIPS = "E:\\archive\\admin\\renewals"
 
 FILED_ID = "boiler@example.invalid"
 UNSURE_ID = "ambiguous@example.invalid"
 STUCK_ID = "roof@example.invalid"
+#: Two more mails the ranking would not decide (#168): one gets accepted on the
+#: desktop leg, so the phone shows a **reviewed** row that offers nothing; the
+#: other is left open, so the phone also shows a live *File it…* and a bulk
+#: button whose count is the rows that really do still offer *Accept*.
+REVIEWED_ID = "renewal@example.invalid"
+OPEN_ID = "invoice@example.invalid"
 
 #: Long enough that the running state is observable from the page and from a
 #: second POST, short enough that the story stays a few seconds.
@@ -130,13 +147,20 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
             # the archiver wrote the file and then could not move the mail
             mail(STUCK_ID, subject="Roof survey report", sender="survey@example.invalid",
                  attachments=1, candidates=[candidate(HOUSE, 0.88)]),
+            # under the threshold as well — reviewed by hand on the desktop leg
+            mail(REVIEWED_ID, subject="Membership renewal", sender="member@example.invalid",
+                 candidates=[candidate(MEMBERSHIPS, 0.29), candidate(BILLS, 0.21)]),
+            # …and one left open, so the phone has something to file
+            mail(OPEN_ID, subject="Service invoice", sender="billing@example.invalid",
+                 candidates=[candidate(BILLS, 0.34), candidate(HOUSE, 0.22)]),
         ])],
         apply=[
             apply_doc([
                 apply_result(FILED_ID, HOUSE, files=[HOUSE_FILE]),
                 apply_result(STUCK_ID, HOUSE, ok=False, files=[STUCK_FILE], sequence="0043",
                              error={"code": "move_failed",
-                                    "message": "the mail could not be moved to Archive"}),
+                                    "message": "the mail could not be moved to Archive — "
+                                               f"{UNREACHABLE} is not reachable"}),
             ]),
             # every later apply is the story's own filing of the unsure mail
             apply_doc([apply_result(UNSURE_ID, BILLS, files=[BILLS_FILE], sequence="0007")]),
@@ -192,6 +216,35 @@ def _row(page: Page, message_id: str, items: list[dict]):
 
 def _items(base: str, run_id: int) -> list[dict]:
     return _get(base, f"/api/archive/runs/{run_id}")["items"]
+
+
+#: One caption line at this width, with room for the row's own leading. A
+#: status row taller than this has wrapped, which is the thing #168 removed.
+_ONE_LINE_PX = 24.0
+
+
+def _box(locator) -> dict[str, float]:
+    """The rendered box of the one element *locator* matches; missing fails loud."""
+    box = locator.bounding_box()
+    if box is None:
+        raise AssertionError(f"{locator} has no box — it is not rendered")
+    return box
+
+
+def _mid_y(box: dict[str, float]) -> float:
+    return box["y"] + box["height"] / 2
+
+
+def _pin_scroller(page: Page) -> None:
+    """Park the report's own scroller at its left edge, and prove it stayed.
+
+    The nine columns fit 1440 with only a few pixels of slack, so focusing a
+    control inside the panel can nudge the scroller — enough to reframe a shot
+    between two runs of one commit (rule 3 in `docs/validation.md`).
+    """
+    scroller = page.locator("#paneArchive .table-scroll")
+    scroller.evaluate("el => { el.scrollLeft = 0; }")
+    assert scroller.evaluate("el => el.scrollLeft") == 0
 
 
 def _confirm(page: Page, action: str) -> None:
@@ -274,14 +327,15 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # 5. It finishes on its own and the report fills in: one filed, one that
     #    needs a human, one the archiver broke on.
     expect(pane.locator("#archiveRun")).to_be_enabled(timeout=30000)
-    expect(pane.locator(".archive-row")).to_have_count(3)
+    expect(pane.locator(".archive-row")).to_have_count(5)
     run_id = _get(base, "/api/archive/runs")["runs"][0]["id"]
     items = _items(base, run_id)
     assert {i["message_id"]: i["status"] for i in items} == {
         FILED_ID: "archived", UNSURE_ID: "needs_review", STUCK_ID: "failed",
+        REVIEWED_ID: "needs_review", OPEN_ID: "needs_review",
     }
     expect(pane.locator("#statusArchiveRun")).to_contain_text(
-        "3 mail(s) · 1 filed · 1 need you · 1 failed"
+        "5 mail(s) · 1 filed · 3 need you · 1 failed"
     )
     filed_row, filed_item = _row(page, FILED_ID, items)
     expect(filed_row.locator(".archive-state")).to_have_text("filed")
@@ -295,8 +349,13 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # An `archived` row is finished, not reviewed: the API answers 409 on
     # accept, so the screen does not offer it.
     expect(filed_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
-    expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 2 that need you")
+    # The bulk button's N is the rows that really do offer *Accept*, not a
+    # second count that drifts from them (#168).
+    offering = page.locator(".archive-row-actions .archive-action", has_text="Accept")
+    expect(offering).to_have_count(4)
+    expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 4 that need you")
     dismiss_toasts(page)
+    _pin_scroller(page)
     shot(page, shots / "story-24-archive-4-desktop.png")
 
     # 6. The mail the ranking would not decide: open its menu, the candidates it
@@ -313,6 +372,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(cands.first.locator(".archive-cand-path")).to_have_text("archive › admin › bills")
     panel.locator(".archive-hint").fill("anything from this sender belongs with the bills")
     dismiss_toasts(page)
+    _pin_scroller(page)
     shot(page, shots / "story-24-archive-5-desktop.png")
     cands.first.click()
     _confirm(page, "File it")
@@ -328,8 +388,21 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # 7. Accept the row the archiver broke on — "I have seen this", no file moved
     stuck_row.locator(".archive-action", has_text="Accept").click()
-    expect(page.locator("#archiveAcceptAll")).to_be_hidden()
+    expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 2 that need you")
     assert next(i for i in _items(base, run_id) if i["message_id"] == STUCK_ID)["decided_at"]
+
+    # 7b. A `needs_review` row that has had its human stops asking for one
+    #     (#168): it reads *reviewed*, offers neither *Accept* nor *File it…*,
+    #     and the bulk count follows the rows down instead of drifting from
+    #     them — the run with three *needs you* rows used to say *Accept all 2*.
+    reviewed_row, reviewed_item = _row(page, REVIEWED_ID, items)
+    expect(reviewed_row.locator(".archive-state")).to_have_text("needs you")
+    reviewed_row.locator(".archive-action", has_text="Accept").click()
+    reviewed_row = page.locator(f".archive-row[data-id='{reviewed_item['id']}']")
+    expect(reviewed_row.locator(".archive-state")).to_have_text("reviewed")
+    expect(reviewed_row.locator(".c-act")).to_have_text("nothing left to do")
+    expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 1 that need you")
+    expect(page.locator(".archive-row-actions .archive-action", has_text="Accept")).to_have_count(1)
 
     # 8. Undo the one the run filed: the files go, the mail is back in the Inbox
     page.emulate_media(color_scheme="dark")
@@ -348,6 +421,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
         "back in the Inbox"
     )
     dismiss_toasts(page)
+    _pin_scroller(page)
     shot(page, shots / "story-24-archive-6-desktop.png")
 
     # 9. The Board's Inbox header points at what the run left for a human, and
@@ -357,7 +431,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     page.evaluate("document.documentElement.dataset.theme = 'light'")
     page.get_by_role("tab", name="Board").click()
     link = page.locator(".board-col[data-col='inbox'] .board-archive-link")
-    expect(link).to_have_text("1 mail(s) need you")
+    expect(link).to_have_text("3 mail(s) need you")
     link.click()
     expect(page.locator("#paneArchive")).to_be_visible()
     page.get_by_role("tab", name="Board").click()
@@ -378,7 +452,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(acard.locator("#statusArchiveModel")).to_contain_text("per batch")
     expect(acard.locator("#statusArchiveThreshold")).to_contain_text("70%")
     expect(acard.locator("#statusArchiveLast")).to_contain_text(
-        "3 mail(s) · 1 filed · 1 need you · 1 failed"
+        "5 mail(s) · 1 filed · 3 need you · 1 failed"
     )
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
@@ -395,21 +469,104 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("nav.tabs .tab")).to_have_count(6)
     p.get_by_role("tab", name="Archive").tap()
     expect(p.locator("#paneArchive")).to_be_visible()
-    expect(p.locator(".archive-card")).to_have_count(3)
+    expect(p.locator(".archive-card")).to_have_count(5)
     expect(p.locator(".archive-table")).to_have_count(0)
-    shot(p, shots / "story-24-archive-7-phone.png")
 
+    # 10a. The head is one line, and the three readings are one line each — no
+    #      label column, short wording, and the bound compact beside the button
+    #      that grew into what it left (#168).
+    head_run, head_limit = _box(p.locator("#archiveRun")), _box(p.locator(".archive-limit"))
+    assert abs(_mid_y(head_run) - _mid_y(head_limit)) < 6, "the head wrapped onto two lines"
+    assert head_run["width"] > head_limit["width"], "the button did not take the free width"
+    expect(p.locator("#statusArchive")).to_contain_text("/batch")
+    expect(p.locator("#archiveRecentLabel")).to_have_text("Recent")
+    # `09/09 09:00`, not `9/9/26, 9:00 AM` — no year, a 24-hour clock, and the
+    # day still in the locale's own order (the date moves, so the shape is what
+    # is asserted).
+    expect(p.locator("#statusArchiveRun")).to_have_text(
+        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 1 filed")
+    )
+    for index in range(3):
+        row = _box(p.locator("#paneArchive .archive-head .status-row").nth(index))
+        assert row["height"] < _ONE_LINE_PX, f"status row {index} wraps ({row['height']}px)"
+
+    # 10b. The picker reaches the right edge and the bulk button is a full-width
+    #      one under it, counting exactly the rows that still offer *Accept*.
+    bar = _box(p.locator(".archive-runbar"))
+    pick = _box(p.locator("#archiveRunPick"))
+    assert pick["x"] + pick["width"] >= bar["x"] + bar["width"] - 1, "the picker stops short"
+    bulk = p.locator("#archiveAcceptAll")
+    expect(bulk).to_have_text("Accept all (1)")
+    assert abs(_box(bulk)["width"] - bar["width"]) < 1, "the bulk button is not full width"
+    assert_min_target(bulk)
+
+    # 10c. …and the row that already had its human says so and asks nothing.
+    reviewed_card = p.locator(f".archive-card[data-id='{reviewed_item['id']}']")
+    expect(reviewed_card.locator(".archive-state")).to_have_text("reviewed")
+    expect(reviewed_card.locator(".archive-menu-toggle")).to_have_count(0)
+    expect(reviewed_card).to_contain_text("nothing left to do")
     assert_no_horizontal_overflow(p)
     assert_min_target(p.locator("#archiveRun"))
     assert_min_target(p.locator("#archiveLimit"))
+    shot(p, shots / "story-24-archive-7-phone.png")
 
+    # 10d. The long path the archiver failed on is folded to its last three
+    #      components on screen, with the whole sentence still in the title —
+    #      an absolute path is what used to push the pane sideways.
+    stuck_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, STUCK_ID)}']")
+    reason = stuck_card.locator(".archive-reason")
+    expect(reason).to_contain_text("… 2026 › surveys › pending")
+    assert UNREACHABLE in (reason.get_attribute("title") or "")
+
+    # 10e. Open one review menu: *Review* is the same button as the three it
+    #      hides, and the *File it…* panel is a phone panel — two-line
+    #      candidates, one full-width field with the glyph inside it, a
+    #      full-width *Archive here*, every control on its own line at the same
+    #      height, nothing overlapping, nothing pushing the pane sideways.
     p.emulate_media(color_scheme="dark")
     p.evaluate("document.documentElement.dataset.theme = 'dark'")
-    stuck_card = p.locator(f".archive-card[data-id='{_stuck_id(base, run_id)}']")
-    stuck_card.locator(".archive-menu-summary").tap()
-    expect(stuck_card.locator(".archive-move-toggle")).to_be_visible()
-    # Everything in an open review menu is pressed with a thumb here.
-    assert_min_target(stuck_card.locator(".archive-action"))
+    open_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, OPEN_ID)}']")
+    open_card.locator(".archive-menu-toggle").tap()
+    expect(open_card.locator(".archive-move-toggle")).to_be_visible()
+    assert_min_target(open_card.locator(".archive-action"))
+    shapes = open_card.locator(".archive-action").evaluate_all(
+        "els => els.map(el => ({tag: el.tagName, height: Math.round(el.offsetHeight),"
+        " font: getComputedStyle(el).fontSize, pad: getComputedStyle(el).padding}))"
+    )
+    assert len(shapes) == 3, shapes                          # Review · Accept · File it…
+    assert {s["tag"] for s in shapes} == {"BUTTON"}, shapes   # no link-styled <summary>
+    for key in ("height", "font", "pad"):
+        assert len({s[key] for s in shapes}) == 1, f"row actions differ in {key}: {shapes}"
+    open_card.locator(".archive-move-toggle").tap()
+    panel = open_card.locator(".archive-move-body")
+    expect(panel).to_be_visible()
+    cand = panel.locator(".archive-cand").first
+    name, path = _box(cand.locator(".archive-cand-name")), _box(cand.locator(".archive-cand-path"))
+    assert path["y"] >= name["y"] + name["height"] - 1, "the candidate is still one line"
+    assert abs(_mid_y(name) - _mid_y(_box(cand.locator(".archive-cand-score")))) < 4
+    field = _box(panel.locator(".archive-other-field"))
+    go = _box(panel.locator(".archive-other-go"))
+    body = _box(panel)
+    assert field["width"] > body["width"] - 20 and go["width"] > body["width"] - 20
+    assert go["y"] >= field["y"] + field["height"] - 1, "*Archive here* is not on its own line"
+    assert abs(_box(panel.locator(".archive-hint"))["height"] - field["height"]) < 1
+    assert_min_target(panel.locator(".archive-other-field"))
+    assert_min_target(panel.locator(".archive-other-field .folder-pick"))
+    assert_min_target(panel.locator(".archive-other-go"))
+    assert_min_target(panel.locator(".archive-hint"))
+    assert_min_target(panel.locator(".archive-cand"))
+    assert_no_overlap([
+        panel.locator(".archive-other-field"),
+        panel.locator(".archive-other-go"),
+        panel.locator(".archive-hint"),
+    ])
+    assert_no_horizontal_overflow(p)
+    # The panel is what this shot is for, so put it on screen and check it got
+    # there — clear of the floating pill, which owns the last ~90px (rule 3 in
+    # docs/validation.md: a position is asserted, never assumed).
+    panel.evaluate("el => el.scrollIntoView({block: 'center'})")
+    seat = _box(panel)
+    assert seat["y"] >= 0 and seat["y"] + seat["height"] <= PHONE["height"] - 90, seat
     shot(p, shots / "story-24-archive-8-phone.png")
 
     # 10b. The Settings card is the same five rows in a 390-wide column, and the
@@ -454,8 +611,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     all — the picker is the whole record. (`limit`, the bound that makes a
     #     first real run safe, is proven over the API in tests/test_archive.py.)
     listed = _get(base, "/api/archive/runs")
-    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 3
+    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 5
 
 
-def _stuck_id(base: str, run_id: int) -> int:
-    return next(i["id"] for i in _items(base, run_id) if i["message_id"] == STUCK_ID)
+def _item_id(base: str, run_id: int, message_id: str) -> int:
+    return next(i["id"] for i in _items(base, run_id) if i["message_id"] == message_id)
