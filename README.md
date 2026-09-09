@@ -599,7 +599,7 @@ Idempotent on the Notion ids: `tasks.external_id` and `comments.external_id` (sc
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 
-The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()` so two runs of one commit produce the same files; `python -m scripts.shot_determinism` runs the suite twice and proves it, and `docs/validation.md` states the three capture rules a new story inherits.
+The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()` so two runs of one commit produce the same files; `python -m scripts.shot_determinism` runs the suite twice and proves it, and `docs/validation.md` states the four capture rules a new story inherits.
 
 ## Phone access & auth
 

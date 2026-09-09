@@ -57,3 +57,7 @@ Verified: e2e on the disposable instance (desktop light + dark and phone light +
 - The tab never edits a file name or the archive tree: the archiver owns both.
 - *N mail(s) need you* on the Board reports what the **last run** recorded. How many mails are sitting in Outlook right now is not knowable without running a plan, and the screen does not pretend otherwise.
 - A run's counters are frozen when it closes, so reviewing rows afterwards does not rewrite them — the run is a record of what happened, not a live tally.
+
+## Capture fix — 2026-09-09 (#166): the report shots no longer photograph the toast clock
+
+`scripts/shot_determinism.py` caught `story-24-archive-6-desktop.png` moving by **74974 px, worst channel delta 225** between two runs of one commit. The diff is the toast stack: the run's own *Archive run done · 3 mail(s) · 1 filed · 1 need you · 1 failed* toast is the longest line in it, and whether it is still there when the shutter opens depends on how long the run took to reach the shot — its 4.5 s `setTimeout` is wall clock, which `TASKOS_CLOCK` does not pin. When it survives, the stack is wider and every toast under it sits lower; when it has gone, the whole panel reflows. Shots 4, 5 and 6 all sit inside that window, so all three now call `dismiss_toasts(page)` first — the toasts were never the proof here, the report table is. The gallery images for those three no longer carry a toast stack.

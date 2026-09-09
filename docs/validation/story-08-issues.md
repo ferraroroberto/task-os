@@ -40,3 +40,17 @@
 - [x] On screen (real provider): the headed walk in the table above — the owner's real open issues appeared as coding tasks in Inbox after one ↻, a probe issue created **from a task** with the real `gh issue create`, closed on GitHub, and marked done by the next sync with actor `sync`.
 - [x] Live app: not restarted from this worktree by design — the orchestrator restarts after the squash-merge; the live sync starts 10 s after that restart and creates the coding tasks in the real database then.
 - Not verified in this step: the 10-minute scheduler tick was not waited for (unit-tested with a short interval; the startup pass was observed); a reopened issue on the real forge (unit-tested against the fake only); the phone rendering of the issue panel (no phone-specific markup was added — the drawer sheet is the Step 4 one); GitLab (Step 11).
+
+---
+
+## Capture fix — 2026-09-09 (#166): the drawer shots are taken from a proven position
+
+`scripts/shot_determinism.py` reported `story-08-issues-5-desktop.png` as **moved** on one of three back-to-back full-suite invocations — 143288 px, worst channel delta 224, bbox `(989, 79, 1412, 887)` — while the two other invocations on the same tree came back `0 moved`. The gallery gate was therefore not reliably green, which is the one thing it exists to guarantee.
+
+**What the pixels said.** The bbox is the drawer's own scroller, top to bottom, and the delta is 224 on every shifted pixel — the fingerprint of this drawer's content moving vertically, not of the rasteriser. Captured deliberately short of the bottom, the same drawer reproduces the same fingerprint and scales with the shortfall: 1 px short → 32053 px moved, 8 px → 80087, 18 px → 111518, 40 px → 164517 px with the bbox `(990, 79, 1412, 887)` the report names. The reported 143288 px sits at **≈28 px short**. So the flaky run photographed the pane roughly 28 px above the bottom the story asked for.
+
+**Why the capture allowed it.** The story parked the drawer with a single `drawer.scrollTop = drawer.scrollHeight` and then called `shot()`. That assignment is clamped against whatever the content height is at that instant, and `settle()` cannot audit it afterwards: it waits for every scroller's *offset* to stop moving, and an offset left short of the end is perfectly still. Whatever moved the pane after the assignment — Chromium re-anchors a scroller when content changes around it — the shutter opened on it and the file was accepted.
+
+**Proof.** With the pane nudged 28 px back once, five frames after it first reaches the end (a scratch run, not a suite member): the shipped pattern captured `scrollTop 483` and produced a file differing from the calm one by **142089 px, worst channel delta 224** — the reported flake, to within 0.8 %. The same nudge through `scroll_to_bottom()` captured `scrollTop 511`, at the end, and its file was indistinguishable from the calm one. With no nudge, the two patterns produce byte-identical files.
+
+**Result — 2026-09-09: verified.** All four drawer captures in this story now go through `tests/e2e/conftest.py`'s `scroll_to_bottom()` (settle → scroll → settle → accept only at the end with an unmoved height, else scroll again), and `docs/validation.md`'s capture rules carry it as rule 3. `scripts/shot_determinism` came back `0 moved` on three consecutive invocations.
