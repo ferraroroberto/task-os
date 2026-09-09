@@ -48,6 +48,7 @@ validation record links to:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -479,6 +480,12 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert head_run["width"] > head_limit["width"], "the button did not take the free width"
     expect(p.locator("#statusArchive")).to_contain_text("/batch")
     expect(p.locator("#archiveRecentLabel")).to_have_text("Recent")
+    # `09/09 09:00`, not `9/9/26, 9:00 AM` — no year, a 24-hour clock, and the
+    # day still in the locale's own order (the date moves, so the shape is what
+    # is asserted).
+    expect(p.locator("#statusArchiveRun")).to_have_text(
+        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 1 filed")
+    )
     for index in range(3):
         row = _box(p.locator("#paneArchive .archive-head .status-row").nth(index))
         assert row["height"] < _ONE_LINE_PX, f"status row {index} wraps ({row['height']}px)"

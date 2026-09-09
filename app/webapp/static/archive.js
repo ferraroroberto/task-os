@@ -135,8 +135,20 @@ export function mountArchive(opts) {
   function stampShort(iso) {
     const d = new Date(iso);
     if (isNaN(d)) return fmtTsShort(iso);
-    return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })
-      + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    // The locale decides the order and the separator; the padding is ours,
+    // because ICU resolves a day+month-only skeleton to whichever pattern the
+    // locale has and can hand back `9/9` where `09/09` was asked for.
+    const day = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: '2-digit' })
+      .formatToParts(d)
+      .map(function (part) {
+        return part.type === 'literal' ? part.value : String(part.value).padStart(2, '0');
+      })
+      .join('');
+    return day + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
   }
 
   function renderHead() {
