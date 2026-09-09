@@ -30,19 +30,9 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get, shot, tree_view
+from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
-
-
-def _dismiss_toasts(page) -> None:
-    """Close the stacked toasts so a proof shot shows the panel behind them."""
-    for btn in page.locator(".toast-close").all():
-        try:
-            btn.click(timeout=1000)
-        except Exception:  # noqa: BLE001 — a toast that expired mid-loop is fine
-            pass
-    expect(page.locator(".toast")).to_have_count(0)
 
 
 def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -> None:
@@ -97,8 +87,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(panel.locator(".issue-meta")).to_contain_text("github · last synced")
         expect(panel.locator(".issue-unlink")).to_be_visible()
         expect(drawer.locator(".drawer-desc")).to_contain_text("Read the capacitive sensor")
-        _dismiss_toasts(page)
-        drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        dismiss_toasts(page)
+        scroll_to_bottom(page, drawer)
         shot(page, shots / "story-08-issues-2-desktop.png")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
@@ -141,8 +131,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(row.locator(".activity-new")).to_have_text("done")
         expect(row.locator(".activity-meta")).to_contain_text("sync ·")
         expect(drawer.locator(".activity-row[data-field='issue_state']").first.locator(".activity-meta")).to_contain_text("sync ·")
-        _dismiss_toasts(page)
-        drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        dismiss_toasts(page)
+        scroll_to_bottom(page, drawer)
         shot(page, shots / "story-08-issues-4-desktop.png")
         # …and the seeded coding task, still open on the forge, was left alone
         assert _get(base, "/api/tasks?q=watering&include_closed=true")["items"][0]["status"] == "todo"
@@ -155,8 +145,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(panel.locator(".issue-create")).to_be_visible()
         expect(panel.locator(".issue-link")).to_be_visible()
         repo_input = panel.locator(".issue-create input")
-        _dismiss_toasts(page)
-        drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        dismiss_toasts(page)
+        scroll_to_bottom(page, drawer)
         shot(page, shots / "story-08-issues-5-desktop.png")
         repo_input.fill("example/garden-bot")
         panel.locator(".issue-create button[type='submit']").click()
@@ -169,8 +159,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         assert [link["kind"] for link in linked["links"]] == ["issue"]
         forge = inst.issues()
         assert forge[-1]["title"] == plain["title"] and forge[-1]["number"] == 15 and forge[-1]["state"] == "open"
-        _dismiss_toasts(page)
-        drawer.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        dismiss_toasts(page)
+        scroll_to_bottom(page, drawer)
         shot(page, shots / "story-08-issues-6-desktop.png")
         # the code is on the Board row's meta line too (#32/#46) — linking an
         # existing task to an issue doesn't change its status, so it's still

@@ -53,7 +53,15 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
-from tests.e2e.conftest import INTERCEPT, _boot, _get, _terminate, e2e_workdir, shot
+from tests.e2e.conftest import (
+    INTERCEPT,
+    _boot,
+    _get,
+    _terminate,
+    dismiss_toasts,
+    e2e_workdir,
+    shot,
+)
 from tests.fixtures.archiver_fake import (
     apply_doc,
     apply_result,
@@ -284,6 +292,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # accept, so the screen does not offer it.
     expect(filed_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 2 that need you")
+    dismiss_toasts(page)
     shot(page, shots / "story-24-archive-4-desktop.png")
 
     # 6. The mail the ranking would not decide: open its menu, the candidates it
@@ -299,6 +308,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(cands).to_have_count(2)
     expect(cands.first.locator(".archive-cand-path")).to_have_text("archive › admin › bills")
     panel.locator(".archive-hint").fill("anything from this sender belongs with the bills")
+    dismiss_toasts(page)
     shot(page, shots / "story-24-archive-5-desktop.png")
     cands.first.click()
     _confirm(page, "File it")
@@ -333,6 +343,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(page.locator(f".archive-row[data-id='{filed_item['id']}'] .c-act")).to_have_text(
         "back in the Inbox"
     )
+    dismiss_toasts(page)
     shot(page, shots / "story-24-archive-6-desktop.png")
 
     # 9. The Board's Inbox header points at what the run left for a human, and

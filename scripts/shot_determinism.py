@@ -96,15 +96,28 @@ def _visible_difference(a: Path, b: Path) -> str | None:
 
 
 def _run_suite(label: str) -> None:
+    """One full `tests/e2e` pass, with pytest's own report kept.
+
+    The child's output is captured rather than inherited: `CREATE_NO_WINDOW`
+    gives it no console of its own, so an inherited stream reaches nothing a
+    reader ever sees, and a suite that failed inside this script used to say
+    only "pytest exit 1" — a red gate with the reason thrown away, which is
+    how the diagnosis of #166 lost half a day. Success prints the tail (the
+    counts and timing), failure prints the whole report before exiting.
+    """
     env = {**os.environ, "PYTHONUTF8": "1"}
     print(f"\n=== {label}: running tests/e2e ===", flush=True)
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/e2e", "-q"],
-        cwd=str(REPO_ROOT), env=env,
+        cwd=str(REPO_ROOT), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )
+    report = ((result.stdout or "") + (result.stderr or "")).rstrip()
     if result.returncode != 0:
+        print(report, flush=True)
         sys.exit(f"❌ {label} failed (pytest exit {result.returncode}) — fix the suite first")
+    print("\n".join(report.splitlines()[-3:]), flush=True)
 
 
 def _snapshot(into: Path) -> None:

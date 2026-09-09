@@ -404,6 +404,9 @@ def shots() -> Path:
 # its target — so `settle()` closes all three and the capture itself hands
 # Playwright `animations="disabled"` (finite ones fast-forwarded to their end
 # state, infinite ones — the `.is-busy` spinner — parked at frame zero).
+# A fourth one is `scroll_to_bottom()`'s (#166): a story that puts a pane
+# somewhere before capturing it has to *check* it got there, because `settle()`
+# waits for a scroll offset to stop moving and a wrong offset does not move.
 
 _SETTLE_JS = """
 async () => {
@@ -478,6 +481,75 @@ def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
     page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
+
+
+def dismiss_toasts(page: Page) -> None:
+    """Clear the toast stack so the shot behind it is not a shot of the clock.
+
+    A toast dies on a wall-clock timer (`toast.js`: 4.5 s, 10 s with an
+    action) that no fixture pins — `TASKOS_CLOCK` moves the *app's* now, not
+    `setTimeout`. So a capture taken while one is near its end is a coin toss
+    on how long the run took to get there, and the whole stack reflows when
+    the longest line leaves it (#166: story 24's dark report shot moved by
+    74974 px between two runs of one commit for exactly that reason). A story
+    that means to show a toast captures it while it is young, right after the
+    action that raised it; every other shot clears the stack first.
+    """
+    for close in page.locator(".toast-close").all():
+        try:
+            close.click(timeout=1000)
+        except Exception:  # noqa: BLE001 — a toast that expired mid-loop is fine
+            pass
+    expect(page.locator(".toast")).to_have_count(0)
+
+
+#: How many settle → scroll → settle rounds `scroll_to_bottom` will spend
+#: waiting for a pane to stop growing under it. Each round costs one `settle()`,
+#: so this is a bound on a hang, not a budget anyone should need to spend: a
+#: pane that is still growing after this many rounds is growing on a timer, and
+#: that is the story's bug, not the capture's.
+_SCROLL_ATTEMPTS = 5
+
+
+def scroll_to_bottom(page: Page, target: Locator) -> None:
+    """Park *target* at the end of its own scroll — and prove it stayed there.
+
+    Scrolling a pane and capturing it is not the same as capturing a pane that
+    is *at* the bottom (#166). ``el.scrollTop = el.scrollHeight`` is one
+    assignment against whatever the content height happens to be at that
+    instant; if the pane is still growing — a panel that appends to itself off
+    a `fetch`, a control that sizes itself on the next animation frame — the
+    browser clamps the assignment to the shorter height and the extra content
+    then arrives *below* the fold. `settle()` cannot catch it afterwards: it
+    watches each scroller's *offset*, which by then is perfectly stable, at
+    whichever fraction of the way down the race left it. The shot is then a
+    coin toss between two positions, and on a busy machine the coin lands both
+    ways — which is exactly how this reached the gallery gate.
+
+    So: settle first, so nothing is mid-flight when the assignment happens;
+    scroll; settle again; and accept the position only once the scroller is
+    genuinely at its end *and* its content height did not move while we
+    settled. Otherwise scroll again against the height it has now.
+    """
+    measure = """el => {
+      el.scrollTop = el.scrollHeight;
+      return [el.scrollHeight, el.clientHeight, el.scrollTop];
+    }"""
+    read = "el => [el.scrollHeight, el.clientHeight, el.scrollTop]"
+    for _ in range(_SCROLL_ATTEMPTS):
+        settle(page)
+        height, _, _ = target.evaluate(measure)
+        settle(page)
+        after_height, client, top = target.evaluate(read)
+        # `scrollTop` is fractional on a fractional layout, so "at the end" is
+        # a pixel of slack, not equality.
+        if after_height == height and abs(after_height - client - top) <= 1:
+            return
+    raise AssertionError(
+        f"{target} never settled at the end of its scroll: after {_SCROLL_ATTEMPTS} rounds it "
+        f"still reports scrollHeight={after_height} clientHeight={client} scrollTop={top}. "
+        "Something is growing the pane on a timer — capturing it would be a coin toss."
+    )
 
 
 def _press(page: Page, target: Locator) -> None:
