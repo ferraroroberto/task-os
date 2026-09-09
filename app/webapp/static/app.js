@@ -1188,6 +1188,11 @@ async function boot() {
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.
     onCaptured: function () { refreshAll(); },
+    // A run started from the Settings card is the Archive tab's run: hand it to
+    // that pane, which re-reads the service, picks the live run up and resumes
+    // polling it — and refreshes the Board's "needs you" line off the same block.
+    onArchiveRun: function () { if (archive) archive.refresh(); },
+    onOpenArchive: function () { nav.setTab('archive'); },
   });
   // The Archive pane (#159), mounted here for the same reason: a stored
   // `archive` tab fires the nav's onChange straight into it.

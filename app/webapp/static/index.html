@@ -654,6 +654,36 @@
             </div>
           </div>
         </details>
+        <!-- Batch email archiving (#157–#159): status from GET /api/status's
+             `archive`, ▷ = POST /api/archive/run over the whole Inbox. The card
+             is read-only apart from that button — the report, the bound and the
+             review actions all live on the Archive tab (#167). -->
+        <details class="card card--collapsible settings-card" id="archiveCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
+              <h3 class="collapse-title">Batch email archiving</h3>
+              <span class="collapse-count" id="archiveCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">What is left in the Inbox once the flagged mail is a task: the archiver (<code>archive.repo</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you on the Archive tab, where every run can also be undone.</p>
+            <dl class="status-rows" aria-live="polite">
+              <div class="status-row"><dt>Archiver</dt><dd id="statusArchiveRepo" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Model</dt><dd id="statusArchiveModel" class="muted">–</dd></div>
+              <div class="status-row"><dt>Threshold</dt><dd id="statusArchiveThreshold" class="muted">–</dd></div>
+              <div class="status-row"><dt>Last run</dt><dd id="statusArchiveLast" class="muted">–</dd></div>
+              <div class="status-row"><dt>Report</dt><dd><button type="button" id="archiveOpenTab" class="button-surface">Open the Archive tab</button></dd></div>
+            </dl>
+            <div class="card-actions">
+              <button type="button" id="archiveRunNow" class="button-surface" disabled>
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
+                Run now
+              </button>
+            </div>
+          </div>
+        </details>
         <!-- Voice (#92): status from GET /api/status's `voice` — a cached TCP
              probe of the whisper endpoint. No button: there is nothing to run
              on demand, only somewhere to be reachable. -->

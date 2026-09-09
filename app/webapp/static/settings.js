@@ -17,6 +17,9 @@
  *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
  *                  issue sync this card owns its own call, because nothing
  *                  else in the app triggers a capture pass.
+ *   Archive        the batch archiver (#157–#159): what it is configured with,
+ *                  what the last run did, "Run now" over the whole Inbox and
+ *                  the way to the tab that owns the report (#167).
  *   Voice          whether a transcription endpoint is answering, and which
  *                  one (#92, #144: the hub — so parakeet — or the local
  *                  whisper fallback). The same status the quick-add mic
@@ -30,7 +33,7 @@
  *   Folder opener  the per-PC opener install command + the folder index
  *                  (Step 9), with "Reindex folders now".
  *
- * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, voice and AI cards
+ * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, archive, voice and AI cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
@@ -47,7 +50,8 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
  * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
- *          onCaptured: () => void}} opts
+ *          onCaptured: () => void, onArchiveRun: () => void,
+ *          onOpenArchive: () => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
  *            renderIssues: (status: object|null) => void, revealCard: (key: string) => void}}
  */
@@ -79,6 +83,13 @@ export function mountSettings(opts) {
     statusCapture: document.getElementById('statusCapture'),
     statusCaptureRun: document.getElementById('statusCaptureRun'),
     captureRunNow: document.getElementById('captureRunNow'),
+    archiveCardMeta: document.getElementById('archiveCardMeta'),
+    statusArchiveRepo: document.getElementById('statusArchiveRepo'),
+    statusArchiveModel: document.getElementById('statusArchiveModel'),
+    statusArchiveThreshold: document.getElementById('statusArchiveThreshold'),
+    statusArchiveLast: document.getElementById('statusArchiveLast'),
+    archiveRunNow: document.getElementById('archiveRunNow'),
+    archiveOpenTab: document.getElementById('archiveOpenTab'),
     voiceCardMeta: document.getElementById('voiceCardMeta'),
     statusVoice: document.getElementById('statusVoice'),
     statusVoiceUrl: document.getElementById('statusVoiceUrl'),
@@ -272,6 +283,7 @@ export function mountSettings(opts) {
         els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       }
       renderCapture(body.capture);
+      renderArchive(body.archive);
       renderVoice(body.voice);
       renderEnrich(body.enrich);
       renderAI(body.ai);
@@ -284,6 +296,7 @@ export function mountSettings(opts) {
       els.mirrorCardMeta.textContent = 'unknown';
       if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
       renderCapture(null);
+      renderArchive(null);
       renderVoice(null);
       renderEnrich(null);
       renderAI(null);
@@ -344,6 +357,111 @@ export function mountSettings(opts) {
         if (r.created) opts.onCaptured();
       } catch (err) { toast(err.message || 'Capture failed', 'error'); }
       els.captureRunNow.disabled = false;
+      refreshStatus();
+    });
+  }
+
+  // ------------------------------------------------------------- archive
+  //: While a run is in flight the card re-reads the service on this cadence,
+  //: so "running" resolves into the run's own counts on its own. The chain
+  //: only exists while `running` is true, so it ends with the run.
+  const ARCHIVE_POLL_MS = 2000;
+  let archivePoll = 0;
+
+  /** The batch archiver's half of `GET /api/status` (#157–#159, #167). The
+   *  Archive tab owns the report and the review actions; this card is what
+   *  the install is configured with and what the last run did. Not configured
+   *  always carries its reason; `null` = the status call itself failed, which
+   *  is "unknown" and not the same as "off". */
+  function renderArchive(st) {
+    if (els.archiveRunNow) els.archiveRunNow.disabled = !st || !st.configured || !!st.running;
+    if (!els.statusArchiveRepo) return;
+    const rows = [els.statusArchiveRepo, els.statusArchiveModel,
+      els.statusArchiveThreshold, els.statusArchiveLast];
+    rows.forEach(function (el) { el.replaceChildren(); el.classList.remove('muted'); });
+    if (!st) {
+      rows.forEach(function (el) { el.textContent = 'unknown'; });
+      els.archiveCardMeta.textContent = 'unknown';
+      stopArchivePoll();
+      return;
+    }
+    if (!st.configured) {
+      els.statusArchiveRepo.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
+      els.statusArchiveModel.textContent = '–';
+      els.statusArchiveThreshold.textContent = '–';
+      els.statusArchiveLast.textContent = '–';
+      els.archiveCardMeta.textContent = 'off';
+      stopArchivePoll();
+      return;
+    }
+    els.statusArchiveRepo.append(
+      statusPart(st.last_error ? 'warn' : 'ok', st.running ? 'running' : 'ready'),
+      ' · ', codeEl(st.repo || 'unknown')
+    );
+    if (st.last_error) els.statusArchiveRepo.append(' · last error: ' + st.last_error);
+    els.statusArchiveModel.append(
+      codeEl(st.model || 'none'),
+      ' · ' + st.batch_size + ' per batch · ' + st.examples + ' examples'
+    );
+    els.statusArchiveThreshold.append(
+      pct(st.confidence_threshold),
+      ' · ' + (st.candidates == null ? '?' : st.candidates) + ' folder(s) ranked per mail'
+    );
+    renderArchiveRun(st.last_run);
+    els.archiveCardMeta.textContent = archiveWord(st);
+    if (st.running) startArchivePoll(); else stopArchivePoll();
+  }
+
+  function renderArchiveRun(last) {
+    if (!last) { els.statusArchiveLast.textContent = 'never'; return; }
+    els.statusArchiveLast.append(
+      fmtTsShort(last.finished_at || last.started_at), ' · ',
+      statusPart(last.status === 'done' ? 'ok' : 'warn', last.status),
+      ' · ' + (last.planned || 0) + ' mail(s) · ' + (last.archived || 0) + ' filed · '
+      + (last.needs_review || 0) + ' need you · ' + (last.failed || 0) + ' failed'
+    );
+    if (last.agreement != null) {
+      els.statusArchiveLast.append(' · model agreed with the suggester on ' + pct(last.agreement));
+    }
+    if (last.error) els.statusArchiveLast.append(' · ' + last.error);
+  }
+
+  /** The one word in the card header. `agreement` is the only rate the status
+   *  block carries, so it is the one reported — an accept rate would be a
+   *  number nobody here measures. */
+  function archiveWord(st) {
+    if (st.running) return 'running';
+    const last = st.last_run;
+    if (st.last_error || (last && last.status === 'failed')) return 'error';
+    if (last && last.agreement != null) return pct(last.agreement) + ' agreed';
+    return 'on';
+  }
+
+  function startArchivePoll() {
+    if (archivePoll) return;
+    archivePoll = window.setTimeout(function () { archivePoll = 0; refreshStatus(); }, ARCHIVE_POLL_MS);
+  }
+
+  function stopArchivePoll() {
+    if (archivePoll) { window.clearTimeout(archivePoll); archivePoll = 0; }
+  }
+
+  function wireArchiveCard() {
+    if (els.archiveOpenTab) {
+      els.archiveOpenTab.addEventListener('click', function () { opts.onOpenArchive(); });
+    }
+    if (!els.archiveRunNow) return;
+    els.archiveRunNow.addEventListener('click', async function () {
+      els.archiveRunNow.disabled = true;
+      try {
+        await api('/api/archive/run', { method: 'POST', body: {} });
+        toast('Archiving the Inbox — the report fills in on the Archive tab', 'success');
+        opts.onArchiveRun();
+      } catch (err) {
+        // 409 archive_in_flight is the honest answer to a second press, and the
+        // API's own sentence is better than anything invented here.
+        toast(err.message || 'Could not start the run', 'error');
+      }
       refreshStatus();
     });
   }
@@ -520,6 +638,7 @@ export function mountSettings(opts) {
   wireMirrorEventsClear();
   wireIssueSyncNow();
   wireCaptureRunNow();
+  wireArchiveCard();
 
   return {
     refreshStatus: refreshStatus,
@@ -541,4 +660,9 @@ function codeEl(text) {
   const c = document.createElement('code');
   c.textContent = text;
   return c;
+}
+
+/** A 0–1 ratio as whole percent — the same reading the Archive tab gives it. */
+function pct(value) {
+  return Math.round(Number(value) * 100) + '%';
 }

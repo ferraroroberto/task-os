@@ -112,8 +112,23 @@ def test_status_carries_the_configured_state_and_the_last_run(
     assert status["running"] is False and status["last_run"] is None
     assert status["confidence_threshold"] == 0.55
 
+    # Every key the Settings card reads (#167) — the card renders "unknown"
+    # for a key it cannot find, so a rename here has to be seen here.
+    assert set(status) >= {
+        "configured", "reason", "running", "repo", "candidates", "confidence_threshold",
+        "model", "batch_size", "examples", "last_run", "last_error",
+    }
+    assert status["repo"] == str(repo) and status["last_error"] is None
+    assert status["candidates"] > 0 and isinstance(status["model"], str)
+
     svc.run_now()
-    assert svc.status(conn)["last_run"]["status"] == "done"
+    last = svc.status(conn)["last_run"]
+    assert last["status"] == "done"
+    # …and of the run row too: the card's Last run line is built from these.
+    assert set(last) >= {
+        "id", "status", "started_at", "finished_at", "planned", "archived",
+        "needs_review", "failed", "agreement", "error",
+    }
 
 
 # --------------------------------------------------------------------- run
