@@ -72,8 +72,19 @@
       var params = new URLSearchParams(location.search);
       var next = params.get('next') || '/';
       // Only a same-origin path is an acceptable destination — never an
-      // absolute URL someone pasted into ?next=.
-      if (!/^\/(?!\/)/.test(next)) next = '/';
+      // absolute URL someone pasted into ?next=. Resolve it with the URL
+      // parser rather than pattern-matching the string: the parser is what
+      // location.replace() below will use, so the check and the navigation
+      // read the value the same way instead of two ways that can disagree.
+      // The server only ever builds this parameter from a path + query
+      // (src/auth.py's redirect), so re-emitting pathname+search+hash keeps
+      // every legitimate destination byte-identical.
+      try {
+        var dest = new URL(next, location.href);
+        next = dest.origin === location.origin ? dest.pathname + dest.search + dest.hash : '/';
+      } catch (_) {
+        next = '/';
+      }
 
       function fail(msg) {
         err.textContent = msg;

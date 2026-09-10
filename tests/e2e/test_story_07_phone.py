@@ -57,6 +57,7 @@ import re
 from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
@@ -510,6 +511,25 @@ def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright
         context.close()
     finally:
         wk.close()
+    # The destination carried in ?next= is caller-supplied, so signing in may
+    # only ever land on a path of *this* origin. The page settles that with the
+    # URL parser rather than a string pattern, because the parser is what the
+    # navigation itself uses — these are the shapes the two readings disagreed
+    # on, and each one must come out on `base`.
+    for payload in ("/\\host.invalid", "/\t/host.invalid", "/\n/host.invalid",
+                    "/\r/host.invalid", "//host.invalid", "https://host.invalid/x"):
+        context = browser.new_context(viewport=DESKTOP, color_scheme="light")
+        try:
+            page = context.new_page()
+            page.goto(f"{base}/login?next={quote(payload, safe='')}")
+            expect(page.locator("#loginForm.card")).to_be_visible()
+            page.fill("#loginSecret", E2E_TOKEN)
+            page.locator("#loginSubmit").click()
+            expect(page.locator("nav.tabs .tab.active")).to_be_visible()
+            assert page.url.startswith(f"{base}/"), (payload, page.url)
+        finally:
+            context.close()
+
     # desktop shot of the same page
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
