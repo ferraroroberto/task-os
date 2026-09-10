@@ -319,6 +319,12 @@ export function mountArchive(opts) {
     return el;
   }
 
+  //: The archiver's own naming: `NNN - <name>` or `YYYY-MM-DD - NNN - <name>`
+  //: ahead of the readable part. Worth keeping in the desktop table (it sorts
+  //: the folder by date), least useful on a 390px chip (#173) — the full name
+  //: stays in the chip's `title` either way.
+  const FILE_NAME_PREFIX = /^(?:\d{4}-\d{2}-\d{2} - )?\d+ - /;
+
   /** The archived files as opener chips — the same per-PC `taskos://` link
    *  every folder chip in the app carries, so a `.msg` opens in the mail
    *  client on whichever PC is looking. */
@@ -332,7 +338,8 @@ export function mountArchive(opts) {
     }
     item.files.forEach(function (path) {
       const name = String(path).split(/[\\/]+/).pop();
-      el.appendChild(folderChip(path, { label: name, icon: /\.msg$/i.test(name) ? 'mail' : 'file-text' }));
+      const label = narrow() ? name.replace(FILE_NAME_PREFIX, '') : name;
+      el.appendChild(folderChip(path, { label: label, icon: /\.msg$/i.test(name) ? 'mail' : 'file-text' }));
     });
     return el;
   }

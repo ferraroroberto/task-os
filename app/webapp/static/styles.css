@@ -2387,7 +2387,14 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; font-size: var(--font-caption); }
 .archive-card-dest .archive-dest { min-width: 0; max-width: 100%; }
 .archive-card-why .archive-reason { max-width: none; overflow-wrap: anywhere; }
-.archive-card .archive-files .chip { max-width: 100%; }
+/* A file chip is `.archive-files`' own flex item, which — like any flex item —
+   defaults to an `auto` min-width, so a name longer than the card widened the
+   row and the card together instead of being cut (#173). `min-width: 0` on
+   the row lets it shrink to the card's width; each chip then ellipsizes at
+   its own edge and the next one wraps to its own line, rather than the whole
+   row stretching to fit its longest chip. */
+.archive-card .archive-files { min-width: 0; }
+.archive-card .archive-files .chip { max-width: 100%; min-width: 0; overflow: hidden; }
 .archive-menu-body { padding-top: 6px; }
 @media (max-width: 520px) {
   .archive-other { grid-template-columns: minmax(0, 1fr); }
