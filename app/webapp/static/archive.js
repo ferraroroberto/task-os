@@ -12,14 +12,18 @@
  *   POST /api/archive/items/{id}/accept  {hint?}          "I have seen this"
  *   POST /api/archive/items/{id}/move    {folder, hint?}  file it where I say
  *   POST /api/archive/items/{id}/revert                   undo this one mail
+ *   POST /api/archive/items/{id}/retry                    finish a refused move
  *
- * The four review levels the report offers per row are exactly the API's, and
+ * The five review levels the report offers per row are exactly the API's, and
  * which of them a row gets is decided by that row's own state, never by taste:
  * *accept* only reaches a row that asks for a human (`needs_review`, `failed` —
  * an `archived` row is finished, not reviewed, and the API answers 409 there),
  * *revert* only reaches a row with files on disk, and *move* reaches both those
  * and a `needs_review` mail still sitting in the Inbox — filing it for the
- * first time is the commonest thing anyone does on this screen. A control that
+ * first time is the commonest thing anyone does on this screen. *Retry* (#174)
+ * reaches exactly one shape: a `failed` mail whose files were written before
+ * Outlook refused the move, which is the only row where re-sending the same
+ * decision finishes something instead of filing it twice. A control that
  * would 409 is not rendered; a row that genuinely offers nothing says so.
  *
  * The discarded candidates come straight off the row (`candidates`, kept
@@ -392,6 +396,14 @@ export function mountArchive(opts) {
     return isFiled(item) || (item.status === 'needs_review' && !item.decided_at);
   }
 
+  /** A move Outlook refused *after* the file was written (#174) — the one row
+   *  where sending the same decision again finishes the mail rather than filing
+   *  it a second time. Deliberately not gated on `decided_at`: saying "I have
+   *  seen this" does not take the mail out of the Inbox, so the offer stands. */
+  function canRetry(item) {
+    return item.status === 'failed' && item.files.length > 0 && !!item.chosen_folder;
+  }
+
   // ------------------------------------------------------------- actions
   function actionButton(glyph, label, handler) {
     const b = document.createElement('button');
@@ -455,6 +467,14 @@ export function mountArchive(opts) {
     if (hint) body.hint = hint;
     await api('/api/archive/items/' + item.id + '/move', { method: 'POST', body: body });
     toast('Filed under ' + shortFolder(ref), 'success');
+  }
+
+  /** One tap, no confirmation: this is the recovery gesture the row's own error
+   *  text asks for, it deletes nothing, and it only ever finishes the filing the
+   *  run already decided on. */
+  function retryItem(item) {
+    return api('/api/archive/items/' + item.id + '/retry', { method: 'POST', body: {} })
+      .then(function () { toast('Filed — the mail has left the Inbox', 'success'); });
   }
 
   async function revertItem(item) {
@@ -622,6 +642,11 @@ export function mountArchive(opts) {
       const panel = movePanel(item, hooks);
       wrap.appendChild(panel.toggle);
       body = panel.body;
+    }
+    // Finish it before offering to undo it: on the one row that has both, the
+    // mail is still in the Inbox and getting it out is what was meant to happen.
+    if (canRetry(item)) {
+      wrap.appendChild(actionButton('refresh-cw', 'Retry', function () { return retryItem(item); }));
     }
     if (isFiled(item)) {
       wrap.appendChild(actionButton('rotate-ccw', 'Revert', function () { return revertItem(item); }));

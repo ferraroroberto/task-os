@@ -44,6 +44,9 @@ from tests.test_archive_rank import FakeHub, pick_for, picks_doc
 
 ARCHIVED_FILE = "E:\\archive\\house\\heating\\0042 - boiler service.msg"
 OLDER_FILE = "E:\\archive\\house\\heating\\0011 - an older thread.msg"
+#: Where those two files live, in the form the folder of an archived file is read
+#: back as — the separators the archiver reports are normalised, nothing else.
+OLDER_FOLDER = "E:/archive/house/heating"
 
 
 @pytest.fixture
@@ -146,14 +149,26 @@ def _three_mail_plan() -> dict:
     ])
 
 
+#: What the archiver answers for the third mail of ``_three_mail_plan``: its file
+#: is already on disk, so nothing is written, the existing file comes back with
+#: ``reused`` and no sequence number is allocated (email-archiver#59).
+def _reused_result() -> dict:
+    return apply_result(
+        "filed@example.invalid", OLDER_FOLDER, files=[OLDER_FILE], sequence="",
+        reused=True, move_via="refetched",
+    )
+
+
 def test_a_run_files_reviews_and_records_every_mail(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     repo = build_fake_archiver(
         tmp_path / "archiver",
         plan=[_three_mail_plan()],
-        apply=[apply_doc([apply_result("confident@example.invalid", FOLDER_HOUSE,
-                                       files=[ARCHIVED_FILE])])],
+        apply=[apply_doc([
+            apply_result("confident@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+            _reused_result(),
+        ])],
     )
     run = service_for(repo).run_now()
 
@@ -176,17 +191,28 @@ def test_a_run_files_reviews_and_records_every_mail(
     assert unsure["status"] == "needs_review" and unsure["files"] == []
     assert "below the 0.70 threshold" in unsure["reason"]
 
+    # A mail whose file is on disk *and* which is still in the Inbox is finished
+    # rather than recorded as done (#174): the folder is the one its file lives
+    # in, nothing was ranked, and the file it already had is what it keeps.
     already = items["filed@example.invalid"]
     assert already["status"] == "archived" and already["files"] == [OLDER_FILE]
-    assert already["chosen_folder"] is None and "already has this mail filed" in already["reason"]
+    assert already["chosen_folder"] == OLDER_FOLDER and already["chosen_rank"] is None
+    assert already["confidence"] is None
+    assert "finished a mail already on disk" in already["reason"]
+    # A reuse allocates no sequence number, and the row says so rather than
+    # inventing one.
+    assert already["sequence"] is None
 
-    # Only the one confident mail was ever offered to ``apply`` — and its
-    # ``date_prefix`` went back exactly as the archiver inferred it.
+    # Both went to ``apply``, each with the naming form the archiver itself
+    # inferred — the confident mail's candidate, and nothing at all for a folder
+    # the plan never ranked.
     applied = [c for c in calls(repo) if c["verb"] == "apply"]
-    assert applied[0]["payload"] == [{
-        "message_id": "confident@example.invalid", "folder_path": FOLDER_HOUSE,
-        "date_prefix": True,
-    }]
+    assert applied[0]["payload"] == [
+        {"message_id": "confident@example.invalid", "folder_path": FOLDER_HOUSE,
+         "date_prefix": True},
+        {"message_id": "filed@example.invalid", "folder_path": OLDER_FOLDER,
+         "date_prefix": False},
+    ]
     assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
 
 
@@ -197,8 +223,10 @@ def test_a_second_run_over_the_same_message_id_writes_nothing(
     repo = build_fake_archiver(
         tmp_path / "archiver",
         plan=[_three_mail_plan(), _three_mail_plan()],
-        apply=[apply_doc([apply_result("confident@example.invalid", FOLDER_HOUSE,
-                                       files=[ARCHIVED_FILE])])],
+        apply=[apply_doc([
+            apply_result("confident@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+            _reused_result(),
+        ])],
     )
     svc = service_for(repo)
     svc.run_now()
@@ -282,6 +310,55 @@ def test_an_apply_failure_with_nothing_written_is_not_revertible(
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, item["id"])
     assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
+
+
+def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Naming no file is not "the file is gone".
+
+    A finish (#174) is answered for a row that was inserted already knowing
+    where its ``.msg`` is; blanking that on an answer which simply omits
+    ``files`` would make a mail that *is* on disk look unrevertible.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("terse@example.invalid", already_archived=OLDER_FILE, in_inbox=True),
+        ])],
+        apply=[apply_doc([apply_result(
+            "terse@example.invalid", OLDER_FOLDER, files=[], sequence="", reused=True,
+        )])],
+    )
+    svc = service_for(repo)
+    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
+    # …and it is still undoable, which is the thing blanking it would have cost.
+    svc._require_revertible(item)
+
+
+@pytest.mark.parametrize("in_inbox", [None, False])
+def test_a_mail_on_disk_not_stated_in_the_inbox_stays_a_no_op(
+    conn: sqlite3.Connection, tmp_path: Path, in_inbox: bool | None
+) -> None:
+    """``in_inbox`` is additive, so anything but a literal true keeps the old shape.
+
+    An older archiver states nothing at all; a false would say the mail is
+    properly filed and gone. Finishing either would send a decision for a mail
+    that is not in the Inbox — which is how a mail gets filed a second time.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("gone@example.invalid", already_archived=OLDER_FILE, in_inbox=in_inbox),
+        ])],
+    )
+    item = archive_batch.list_items(conn, service_for(repo).run_now()["id"])[0]
+    assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
+    assert item["chosen_folder"] is None
+    assert "already has this mail filed" in item["reason"]
+    # Nothing beyond the plan reached Outlook: nothing written, nothing moved.
+    assert [c["verb"] for c in calls(repo)] == ["plan"]
 
 
 # --------------------------------------------------- the ranking (#158)
@@ -586,7 +663,7 @@ def test_a_failed_rescan_leaves_the_run_done_and_says_so(
     assert "index rescan exited with code 3" in run["error"]
 
 
-# ------------------------------------------------------- revert · move · accept
+# --------------------------------------------- revert · move · accept · retry
 
 
 def _one_archived_item(conn: sqlite3.Connection, svc: ArchiveBatchService) -> dict:
@@ -776,6 +853,120 @@ def test_accept_marks_a_reviewable_row_and_refuses_a_finished_one(
     assert caught.value.http_status == 409 and "needs no review" in str(caught.value)
 
 
+def _stuck_then_finished(tmp_path: Path, *, second: dict) -> Path:
+    """A fake whose ``apply`` refuses the move once and then answers ``second``."""
+    return build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("stuck@example.invalid", subject="Roof survey",
+                             candidates=[candidate(FOLDER_HOUSE, 0.9, date_prefix=True)])])],
+        apply=[
+            apply_doc([apply_result(
+                "stuck@example.invalid", FOLDER_HOUSE, ok=False, files=[ARCHIVED_FILE],
+                sequence="0042",
+                error={"code": "move_failed",
+                       "message": "the operation cannot be performed because the message has "
+                                  "been changed"},
+            )]),
+            apply_doc([second]),
+        ],
+    )
+
+
+def test_retry_finishes_a_move_outlook_refused_and_keeps_what_is_on_disk(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The whole point of #174: the file was written, only the move was refused.
+
+    The archiver's remedy is the *same* decision again — it writes nothing,
+    reuses the file and finishes the move — so nothing is re-decided here and
+    the row keeps the sequence number the first attempt allocated (a reuse
+    allocates none).
+    """
+    repo = _stuck_then_finished(tmp_path, second=apply_result(
+        "stuck@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE], sequence="",
+        reused=True, move_via="saved_retry",
+    ))
+    svc = service_for(repo)
+    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    assert item["status"] == "failed" and item["files"] == [ARCHIVED_FILE]
+    assert item["sequence"] == "0042" and item["decided_at"] is None
+    assert "move_failed" in item["error"]
+
+    finished = svc.retry(conn, item["id"])
+    assert finished["status"] == "archived" and finished["files"] == [ARCHIVED_FILE]
+    assert finished["error"] is None and finished["decided_at"]
+    assert finished["sequence"] == "0042"
+
+    # The same message, the same folder, the same naming form — a retry is a
+    # re-send, never a second decision.
+    assert [c["verb"] for c in calls(repo)] == ["plan", "apply", "apply"]
+    assert calls(repo)[-1]["payload"] == [{
+        "message_id": "stuck@example.invalid", "folder_path": FOLDER_HOUSE, "date_prefix": True,
+    }]
+
+
+def test_a_retry_refused_again_keeps_the_row_failed_with_the_newer_reason(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The second message is the useful one — it names the remedy that is left."""
+    repo = _stuck_then_finished(tmp_path, second=apply_result(
+        "stuck@example.invalid", FOLDER_HOUSE, ok=False, files=[ARCHIVED_FILE], sequence="0042",
+        error={"code": "move_failed",
+               "message": "Outlook itself is holding this item — restart Outlook, then apply "
+                          "the same decision again"},
+    ))
+    svc = service_for(repo)
+    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+
+    with pytest.raises(ArchiveError) as caught:
+        svc.retry(conn, item["id"])
+    assert caught.value.http_status == 502 and caught.value.code == "archive_retry_failed"
+
+    still = archive_batch.get_item(conn, item["id"])
+    assert still["status"] == "failed" and still["files"] == [ARCHIVED_FILE]
+    assert "restart Outlook" in still["error"] and still["decided_at"] is None
+    # Still on disk and still in the Inbox, so it is still offered a retry.
+    assert still["chosen_folder"] == FOLDER_HOUSE
+
+
+def test_retry_refuses_every_row_with_nothing_half_done(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Filed, never-filed and failed-before-anything-was-written: three 409s.
+
+    A retry only ever *finishes* something. On any other row it would either
+    file a mail twice or re-send a decision no file backs, so it is refused by
+    the service before a child is spawned at all.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("done@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("shy@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.2)]),
+            mail("nowhere@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        ])],
+        apply=[apply_doc([
+            apply_result("done@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+            apply_result("nowhere@example.invalid", FOLDER_HOUSE, ok=False, error={
+                "code": "not_in_inbox", "message": "no mail with this Message-ID is in the Inbox",
+            }),
+        ])],
+    )
+    svc = service_for(repo)
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    assert items["done@example.invalid"]["status"] == "archived"
+    assert items["shy@example.invalid"]["status"] == "needs_review"
+    assert items["nowhere@example.invalid"]["status"] == "failed"
+    assert items["nowhere@example.invalid"]["files"] == []
+
+    for message_id in ("done@example.invalid", "shy@example.invalid", "nowhere@example.invalid"):
+        with pytest.raises(ArchiveError) as caught:
+            svc.retry(conn, items[message_id]["id"])
+        assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
+        assert "already on disk" in str(caught.value)
+    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+
+
 # --------------------------------------------------------------------- API
 
 
@@ -854,6 +1045,47 @@ def test_the_item_routes_revert_and_review(api: TestClient) -> None:
 
     missing = api.post("/api/archive/items/999/revert")
     assert missing.status_code == 404
+
+
+def test_the_retry_route_finishes_a_stuck_mail_and_refuses_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`POST /api/archive/items/{id}/retry` — the whole route, over the app (#174)."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("api-stuck@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("api-unsure@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.1)]),
+        ])],
+        apply=[
+            apply_doc([apply_result(
+                "api-stuck@example.invalid", FOLDER_HOUSE, ok=False, files=[ARCHIVED_FILE],
+                error={"code": "move_failed", "message": "the message has been changed"},
+            )]),
+            apply_doc([apply_result(
+                "api-stuck@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE], sequence="",
+                reused=True, move_via="saved_retry",
+            )]),
+        ],
+    )
+    with client_for(tmp_path, monkeypatch, repo) as client:
+        run = _finished_run(client)
+        stuck = next(i for i in run["items"] if i["status"] == "failed")
+        unsure = next(i for i in run["items"] if i["status"] == "needs_review")
+
+        finished = client.post(f"/api/archive/items/{stuck['id']}/retry")
+        assert finished.status_code == 200
+        body = finished.json()
+        assert body["status"] == "archived" and body["files"] == [ARCHIVED_FILE]
+        assert body["error"] is None and body["decided_at"]
+
+        # It is finished now, so the screen stops offering it — and the API
+        # agrees, through the one envelope.
+        again = client.post(f"/api/archive/items/{stuck['id']}/retry")
+        assert again.status_code == 409 and again.json()["error"]["code"] == "archive_bad_state"
+        refused = client.post(f"/api/archive/items/{unsure['id']}/retry")
+        assert refused.status_code == 409 and refused.json()["error"]["code"] == "archive_bad_state"
+        assert client.post("/api/archive/items/999/retry").status_code == 404
 
 
 @pytest.mark.parametrize("spell", ["body", "query"])

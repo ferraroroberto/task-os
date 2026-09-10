@@ -9,6 +9,8 @@
                                            (a filed row is undone first; a
                                            ``needs_review`` one is simply filed)
     POST /api/archive/items/{id}/accept  {hint?} → mark a reviewable row seen (no files)
+    POST /api/archive/items/{id}/retry   → re-send the same decision, finishing a
+                                           ``failed`` mail whose files are on disk
 
 ``hint`` is the optional one-line note the report screen (#159) offers when you
 overrule the ranking ("bills from this sender always go to the flat"). It is
@@ -128,6 +130,20 @@ async def archive_item_move(
         return _unavailable(service)
     try:
         return await run_in_threadpool(service.move, db, item_id, body.folder, hint=body.hint)
+    except ArchiveError as exc:
+        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+
+
+@router.post("/items/{item_id}/retry")
+async def archive_item_retry(
+    item_id: int, request: Request, db: sqlite3.Connection = Depends(get_db)
+) -> Any:
+    """Finish a mail the archiver wrote but could not move (#174) — no body."""
+    service = _service(request)
+    if service is None or not service.enabled:
+        return _unavailable(service)
+    try:
+        return await run_in_threadpool(service.retry, db, item_id)
     except ArchiveError as exc:
         return error_response(exc.http_status, exc.code, str(exc), exc.detail)
 

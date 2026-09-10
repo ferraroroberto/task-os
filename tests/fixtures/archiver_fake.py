@@ -51,8 +51,18 @@ def mail(
     candidates: list[dict[str, Any]] | None = None,
     already_archived: str | None = None,
     attachments: int = 0,
+    in_inbox: bool | None = True,
 ) -> dict[str, Any]:
-    return {
+    """One ``plan`` mail.
+
+    ``in_inbox`` is what today's archiver states on every mail it reports
+    (email-archiver#59): always ``True``, because ``plan`` enumerates the Inbox,
+    and the fact that separates an ``already_archived`` mail *still sitting in
+    the Inbox* from one that is properly filed and gone. ``None`` omits the key
+    altogether — the document an **older** archiver produces, which is the case
+    a defensive reader has to keep the old no-op for.
+    """
+    doc = {
         "message_id": message_id,
         "entry_id": f"ENTRY-{message_id}",
         "subject": subject,
@@ -65,6 +75,9 @@ def mail(
         "already_archived": already_archived,
         "candidates": list(candidates or []),
     }
+    if in_inbox is not None:
+        doc["in_inbox"] = in_inbox
+    return doc
 
 
 def plan_doc(mails: list[dict[str, Any]], *, skipped: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -94,7 +107,17 @@ def apply_result(
     files: list[str] | None = None,
     error: dict[str, str] | None = None,
     sequence: str = "0042",
+    reused: bool = False,
+    move_via: str = "original",
 ) -> dict[str, Any]:
+    """One ``apply`` result.
+
+    ``reused`` and ``move_via`` arrived with email-archiver#59 and are what a
+    *finish* looks like from the outside: ``reused: true`` with the existing
+    file listed and an **empty** ``sequence_number`` (none was allocated),
+    because nothing was written. ``move_via`` names which of the three move
+    paths finished it — ``refetched`` · ``saved_retry`` · ``original``.
+    """
     return {
         "message_id": message_id,
         "folder_path": folder,
@@ -104,6 +127,8 @@ def apply_result(
         "entry_id": f"MOVED-{message_id}" if ok else "",
         "moved": ok,
         "categorized": ok,
+        "reused": reused,
+        "move_via": move_via if ok else None,
         "error": error,
     }
 
@@ -237,6 +262,10 @@ def build_fake_archiver(
 
     Each verb takes a **list** of documents, one per call in order (the last one
     repeats), so a test can drive a move — revert, then apply — through one fake.
+    That is also how a **retry** is driven (#174): an ``apply`` list whose first
+    document answers ``move_failed`` with the files already written and whose
+    next one answers ``ok`` with ``reused: true``, which is exactly the pair the
+    archiver produces when the same decision is sent a second time.
     """
     root.mkdir(parents=True, exist_ok=True)
     if with_batch:
