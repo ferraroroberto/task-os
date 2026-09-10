@@ -312,6 +312,31 @@ def test_an_apply_failure_with_nothing_written_is_not_revertible(
     assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
 
 
+def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Naming no file is not "the file is gone".
+
+    A finish (#174) is answered for a row that was inserted already knowing
+    where its ``.msg`` is; blanking that on an answer which simply omits
+    ``files`` would make a mail that *is* on disk look unrevertible.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("terse@example.invalid", already_archived=OLDER_FILE, in_inbox=True),
+        ])],
+        apply=[apply_doc([apply_result(
+            "terse@example.invalid", OLDER_FOLDER, files=[], sequence="", reused=True,
+        )])],
+    )
+    svc = service_for(repo)
+    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
+    # …and it is still undoable, which is the thing blanking it would have cost.
+    svc._require_revertible(item)
+
+
 @pytest.mark.parametrize("in_inbox", [None, False])
 def test_a_mail_on_disk_not_stated_in_the_inbox_stays_a_no_op(
     conn: sqlite3.Connection, tmp_path: Path, in_inbox: bool | None

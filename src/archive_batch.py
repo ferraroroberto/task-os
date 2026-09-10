@@ -869,6 +869,15 @@ class ArchiveBatchService:
                 logger.warning("⚠️ archive: apply reported a mail this run never decided on")
                 continue
             files = [str(f) for f in entry.get("files") or []]
+            if not files:
+                # Naming no file is not "the file is gone". A reuse (#174) is
+                # answered for a row that was inserted already knowing where its
+                # ``.msg`` is, and overwriting that with an empty list would make
+                # a mail that *is* on disk look unrevertible. What the archiver
+                # does not say leaves the row's own value alone — the same rule
+                # :meth:`retry` reads its answer by.
+                known = get_item(conn, item_id)
+                files = list(known["files"]) if known else []
             error = entry.get("error") or None
             if entry.get("ok"):
                 update_item(
