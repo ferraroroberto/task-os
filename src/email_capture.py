@@ -32,7 +32,10 @@ it to :func:`~src.tasks_repo.capture_task`, keyed on
 if the index is ever rebuilt, while the folded ref (``email:{onedrive}/…``) is
 stable across a rebuild and portable to a second PC. A mail *moved* inside the
 archive changes its ref and so captures once more; archiving is a one-time
-gesture, so that is rare and visible rather than silent drift.
+gesture, so that is rare and visible rather than silent drift. A *renumber* is
+not that case: the archiver renames a whole folder's files to keep its
+sequence contiguous (email-archiver#61), and :func:`rename_ref` carries the
+link and the capture key onto the new name, so nothing is captured twice.
 
 Capture is one-way by construction. Clearing the flag later does not delete or
 close the task, and nothing here ever writes back to the mail — see
@@ -84,6 +87,31 @@ BATCH_LIMIT = 200
 def external_id_for(ref: str) -> str:
     """The capture key for an email ref — ``email:{onedrive}/house/mail.msg``."""
     return EXTERNAL_ID_PREFIX + ref
+
+
+def rename_ref(
+    conn: Any, old_ref: str, new_ref: str, *, dry_run: bool = False
+) -> dict[str, int]:
+    """An archived ``.msg`` was renamed — its link and its capture key follow it.
+
+    The archiver renumbers a folder after a batch ``apply`` / ``revert`` so its
+    ``NNN`` prefixes stay contiguous (email-archiver#61), which renames files
+    task-os is holding the ref of in exactly the two places this module put
+    them: the ``links(kind='email')`` row the drawer draws its chip from, and
+    the ``external_id`` the capture is keyed on. Healing both from the
+    archiver's map is what keeps the chip openable and keeps *capture lands
+    once* true — an un-healed key means the next poll sees an unknown ref and
+    lands the same mail a second time.
+
+    One ref, both places, counted separately: ``{"links": n, "tasks": n}``.
+    ``dry_run`` counts without writing.
+    """
+    return {
+        "links": repo.rename_link_url(conn, old_ref, new_ref, kind="email", dry_run=dry_run),
+        "tasks": repo.rename_external_id(
+            conn, external_id_for(old_ref), external_id_for(new_ref), dry_run=dry_run,
+        ),
+    }
 
 
 @dataclass
@@ -349,5 +377,5 @@ class EmailCaptureService:
 __all__ = [
     "BATCH_LIMIT", "CAPTURE_ACTOR", "EXTERNAL_ID_PREFIX", "FLAG_COLUMN", "FLAG_FOLLOWUP",
     "INITIAL_DELAY_S", "CaptureResult", "EmailCaptureService", "FlaggedEmailIndex",
-    "capture_once", "external_id_for",
+    "capture_once", "external_id_for", "rename_ref",
 ]

@@ -68,6 +68,13 @@ index on ``message_id`` covers exactly those — a mail cannot be filed twice,
 whatever the archiver's index believes, and a reverted mail is free to be
 archived again.
 
+Both verbs that disturb a folder's numbering also ask the archiver to repair it
+(``--renumber``, ``archive.renumber``, email-archiver#61) — and the archiver
+heals only its own index, so every path it renames is healed here from the map
+it returns: :func:`apply_renumber_map` rewrites ``archive_items.files_json``,
+the email link's ref and the captured task's ``external_id``. Asking for the
+repair without healing would be strictly worse than not asking.
+
 Idempotency is the Internet Message-ID throughout (never an Outlook EntryID,
 which the ``apply`` move itself rewrites). A second run over a mail this
 database has already filed writes **nothing**: no row, no child call for it.
@@ -85,7 +92,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from src import archive_rank, clock, placeholders
+from src import archive_rank, clock, email_capture, placeholders
 from src.ai.client import AIClient
 from src.archive_rank import Pick, Ranking
 from src.config import AppConfig
@@ -182,6 +189,20 @@ def _folder_of(path: str) -> str:
     return head
 
 
+def _last_component(folder: str) -> str:
+    """The folder's own name — what the reason line names it by."""
+    return archive_rank.short_folder(folder, 1)
+
+
+def _folder_key(folder: str) -> str:
+    """One folder path in the form two spellings of it can be compared by.
+
+    The archiver reports backslashes and this app resolves refs to forward
+    slashes, so a raw comparison would call one folder two.
+    """
+    return placeholders.normalize_path(folder).casefold()
+
+
 def _loads(raw: Any, default: Any) -> Any:
     if not raw:
         return default
@@ -190,6 +211,158 @@ def _loads(raw: Any, default: Any) -> Any:
     except ValueError:
         logger.warning("⚠️ archive: unreadable JSON column — falling back to %r", default)
         return default
+
+
+# ------------------------------------------------------------- renumbering
+# The archiver re-sequences a folder after the two verbs that disturb it, so
+# its ``NNN`` prefixes stay contiguous and in sent-date order
+# (email-archiver#61) — ``revert`` leaves a hole, ``apply`` always allocates
+# ``max + 1``. That renames files **this** database holds paths to, and the
+# archiver heals only its own index: "the consumer must heal its stored paths
+# from the map" is its contract, and this is that heal. Three places store a
+# ``.msg`` path here — ``archive_items.files_json``, an email link's ref and a
+# captured task's ``external_id`` — and all three follow the map or a revert
+# deletes the wrong file, a chip goes dead and the next capture poll lands the
+# same mail again under its new name.
+#
+# The map is **additive** on the archiver's side (no ``schema_version`` bump),
+# so a build without it simply reports nothing and every reader below treats
+# absence as "nothing moved" rather than as an error.
+
+
+def renumber_pairs(entries: Any) -> list[tuple[str, str]]:
+    """Every ``old → new`` rename in one folder's map entries, read defensively.
+
+    An entry is ``{"from", "to", "message_id", "attachments": [[old, new], …]}``
+    and only bundles that actually changed appear. ``from``/``to`` are ``None``
+    for a bundle carrying no ``.msg`` at all (its files are all attachments), so
+    a pair is taken only when both sides name something; anything else shaped
+    unexpectedly is skipped rather than guessed at.
+    """
+    pairs: list[tuple[str, str]] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        old, new = entry.get("from"), entry.get("to")
+        if old and new:
+            pairs.append((str(old), str(new)))
+        for attachment in entry.get("attachments") or []:
+            if isinstance(attachment, (list, tuple)) and len(attachment) == 2 and all(attachment):
+                pairs.append((str(attachment[0]), str(attachment[1])))
+    return pairs
+
+
+def renumbered_folders(doc: Any) -> dict[str, list[Any]]:
+    """One verb document's ``renumbered`` map — ``{}`` when it carries none.
+
+    A folder the archiver could **not** renumber is never an empty list in here
+    (an empty list means "already in order"): it is named under
+    ``renumber_refused`` with a reason, which is logged rather than folded into
+    the quiet path — "nothing to do" and "this folder was left alone" are two
+    different facts, and only the second one may leave a stored path stale.
+    """
+    if not isinstance(doc, dict):
+        return {}
+    for refused in doc.get("renumber_refused") or []:
+        if isinstance(refused, dict):
+            logger.warning(
+                "⚠️ archive: the archiver refused to renumber %s — %s",
+                _last_component(str(refused.get("folder_path") or "an unnamed folder")),
+                refused.get("reason") or "no reason given",
+            )
+    mapping = doc.get("renumbered")
+    if not isinstance(mapping, dict):
+        return {}
+    return {str(k): v for k, v in mapping.items() if isinstance(v, list)}
+
+
+def _rename_index(doc: Any) -> dict[str, str]:
+    """``{normalised old path: the new path, verbatim}`` over a whole document.
+
+    Keyed on the normalised, case-folded path because the archiver reports
+    Windows paths with backslashes and a stored one may have been normalised on
+    the way in; the **value** is kept exactly as the archiver wrote it, which is
+    the form a fresh ``apply`` would have stored.
+    """
+    index: dict[str, str] = {}
+    for entries in renumbered_folders(doc).values():
+        for old, new in renumber_pairs(entries):
+            index[placeholders.normalize_path(old).casefold()] = new
+    return index
+
+
+def _rename_files(files: list[str], index: dict[str, str]) -> list[str]:
+    """A result's own ``files`` list through the map — the archiver's own caveat.
+
+    An ``apply --renumber`` result reports each mail's files under the names it
+    **wrote** them with, and the renumber that ran afterwards may already have
+    moved some of them. So the map applies to the same document's results
+    before they are stored, or ``files_json`` records a name that no longer
+    exists and a later ``revert`` is handed it.
+    """
+    return [index.get(placeholders.normalize_path(f).casefold(), f) for f in files]
+
+
+def apply_renumber_map(
+    conn: sqlite3.Connection,
+    folder: str,
+    entries: Any,
+    *,
+    placeholders_map: Any = None,
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Heal every stored path one folder's renumber renamed; the counts per table.
+
+    ``entries`` is that folder's list from the ``renumbered`` map. Returns
+    ``{"renames", "items", "links", "tasks"}`` — the renames the map describes,
+    then the rows actually rewritten in each of the three places. ``dry_run``
+    computes exactly the same counts and writes nothing, which is what
+    ``scripts/apply_renumber_map.py --dry-run`` previews against the live
+    database before it is asked to touch it.
+
+    **Idempotent by construction**: a pair whose old path is no longer stored
+    anywhere matches nothing, so re-running a map is a no-op and a heal
+    interrupted half-way is finished simply by running it again.
+    """
+    pairs = renumber_pairs(entries)
+    counts = {"renames": len(pairs), "items": 0, "links": 0, "tasks": 0}
+    if not pairs:
+        return counts
+    renames = {placeholders.normalize_path(old).casefold(): new for old, new in pairs}
+
+    for row in conn.execute(
+        "SELECT id, files_json FROM archive_items WHERE files_json IS NOT NULL"
+    ).fetchall():
+        files = [str(f) for f in _loads(row["files_json"], [])]
+        healed = _rename_files(files, renames)
+        if healed == files:
+            continue
+        counts["items"] += 1
+        if not dry_run:
+            conn.execute(
+                "UPDATE archive_items SET files_json = ? WHERE id = ?",
+                (json.dumps(healed, ensure_ascii=False), int(row["id"])),
+            )
+
+    known = dict(placeholders_map or {})
+    for old, new in pairs:
+        moved = email_capture.rename_ref(
+            conn,
+            placeholders.to_ref(placeholders.normalize_path(old), known),
+            placeholders.to_ref(placeholders.normalize_path(new), known),
+            dry_run=dry_run,
+        )
+        counts["links"] += moved["links"]
+        counts["tasks"] += moved["tasks"]
+
+    if not dry_run:
+        conn.commit()
+    logger.info(
+        "ℹ️ archive: %s %d renamed file(s) in %s — %d item(s), %d link(s), %d captured task(s)",
+        "would heal" if dry_run else "healed", counts["renames"], _last_component(folder),
+        counts["items"], counts["links"], counts["tasks"],
+    )
+    return counts
 
 
 def create_run(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -357,6 +530,7 @@ class ArchiveBatchService:
         self.timeout = float(cfg.timeout_seconds)
         self.batch_size = max(1, int(cfg.batch_size))
         self.examples = max(0, int(cfg.examples))
+        self.renumber = bool(cfg.renumber)
         # A second hub client, bound to ``archive.model``: its own in-flight
         # lock, so an Inbox triage running at the same time does not make one
         # of the two wait, and its own model, because filing mail and triaging
@@ -549,12 +723,18 @@ class ArchiveBatchService:
         The file carries archive paths, and an archive path carries the mail's
         subject — so it lives for exactly one child call and is removed in a
         ``finally``, never left in the temp folder for something else to read.
+
+        Both verbs are also the two that leave a folder's numbering ragged, so
+        both are asked to repair it (``--renumber``, ``archive.renumber``) — and
+        every path the repair renames is healed here from the map it returns.
+        Asking for it without healing would be worse than not asking.
         """
         handle, path = tempfile.mkstemp(prefix=f"taskos-archive-{verb}-", suffix=".json")
         try:
             with os.fdopen(handle, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh, ensure_ascii=False)
-            return self._spawn_batch([verb, flag, path], verb=verb)
+            args = [verb, flag, path, "--renumber"] if self.renumber else [verb, flag, path]
+            return self._spawn_batch(args, verb=verb)
         finally:
             try:
                 os.unlink(path)
@@ -696,6 +876,16 @@ class ArchiveBatchService:
         if decisions:
             result = self._spawn_with_payload("apply", "--decisions", decisions)
             self._record_apply(conn, result, item_by_message)
+            # Which mail is why a folder was re-sequenced: the first this run
+            # filed into it. A second mail into the same folder rode the same
+            # single renumber, so naming them all would report one repair
+            # several times over.
+            triggers: dict[str, int] = {}
+            for decision in decisions:
+                item_id = item_by_message.get(str(decision["message_id"]))
+                if item_id is not None:
+                    triggers.setdefault(_folder_key(str(decision["folder_path"])), item_id)
+            self._heal_renumber(conn, result, triggers)
         scan_error = self._rescan_index() if decisions else None
         if scan_error:
             logger.warning("⚠️ archive: %s", scan_error)
@@ -860,7 +1050,14 @@ class ArchiveBatchService:
     def _record_apply(
         self, conn: sqlite3.Connection, result: dict[str, Any], item_by_message: dict[str, int]
     ) -> None:
-        """Fold one ``apply`` document back onto the rows it belongs to."""
+        """Fold one ``apply`` document back onto the rows it belongs to.
+
+        The document's own ``files`` are read **through** its renumber map: with
+        ``--renumber`` they name what each mail was written as, before the
+        re-sequencing that ran after it (email-archiver#61), and storing those
+        would record a path that no longer exists.
+        """
+        renames = _rename_index(result)
         for entry in result.get("results") or []:
             if not isinstance(entry, dict):
                 continue
@@ -868,7 +1065,7 @@ class ArchiveBatchService:
             if item_id is None:
                 logger.warning("⚠️ archive: apply reported a mail this run never decided on")
                 continue
-            files = [str(f) for f in entry.get("files") or []]
+            files = _rename_files([str(f) for f in entry.get("files") or []], renames)
             if not files:
                 # Naming no file is not "the file is gone". A reuse (#174) is
                 # answered for a row that was inserted already knowing where its
@@ -877,7 +1074,10 @@ class ArchiveBatchService:
                 # does not say leaves the row's own value alone — the same rule
                 # :meth:`retry` reads its answer by.
                 known = get_item(conn, item_id)
-                files = list(known["files"]) if known else []
+                # Through the map as well: the file the row already knew about
+                # is in the folder that was just re-sequenced, so it may be
+                # exactly one of the ones that moved.
+                files = _rename_files(list(known["files"]), renames) if known else []
             error = entry.get("error") or None
             if entry.get("ok"):
                 update_item(
@@ -898,6 +1098,40 @@ class ArchiveBatchService:
                 entry_id=str(entry.get("entry_id") or "") or None, error=message,
             )
             logger.warning("⚠️ archive: a mail did not file — %s", message)
+
+    def _heal_renumber(
+        self, conn: sqlite3.Connection, doc: Any, triggers: dict[str, int] | None = None
+    ) -> None:
+        """Apply one verb's ``renumbered`` map to every path this database stores.
+
+        ``triggers`` maps a folder to the item whose filing (or undoing) is why
+        that folder was re-sequenced, so the report can say so: the row gets
+        ``· renumbered N file(s) in <folder>`` appended to its reason. A folder
+        with no trigger — one the same run touched through another mail — is
+        still healed; it just has nobody to attribute it to.
+
+        Runs after the item's own update, never before: ``move`` writes the
+        reason, and appending to it first would only have it overwritten.
+        """
+        for folder, entries in renumbered_folders(doc).items():
+            counts = apply_renumber_map(
+                conn, folder, entries, placeholders_map=self.placeholders,
+            )
+            item_id = (triggers or {}).get(_folder_key(folder))
+            if counts["renames"] and item_id is not None:
+                self._note_renumber(conn, item_id, folder, counts["renames"])
+
+    @staticmethod
+    def _note_renumber(conn: sqlite3.Connection, item_id: int, folder: str, count: int) -> None:
+        """Append the renumbering to the item's reason — the screen's own breadcrumb."""
+        item = get_item(conn, item_id)
+        if item is None:  # pragma: no cover - the row was just written
+            return
+        note = f" · renumbered {count} file(s) in {_last_component(folder)}"
+        reason = str(item["reason"] or "")
+        if note in reason:
+            return
+        update_item(conn, item_id, reason=reason + note)
 
     @staticmethod
     def _log_finish(entry: dict[str, Any]) -> None:
@@ -1011,22 +1245,42 @@ class ArchiveBatchService:
             # revert, and re-running it is safe (a file already gone comes back
             # as ``missing``, not as an error).
             update_item(conn, item_id, error=result["message"])
+            # The verb still completed — a per-mail failure is reported *inside*
+            # a successful run — so it may have renumbered anyway. A map that
+            # describes the disk is healed whether or not this mail's undo went
+            # through; dropping it on the error path is how a stale path
+            # survives.
+            self._heal_renumber(conn, result["doc"])
             raise ArchiveError("archive_revert_failed", result["message"], http_status=502)
-        return update_item(
+        reverted = update_item(
             conn, item_id, status="reverted", files_json="[]", error=None,
             decided_at=clock.now_iso(),
         )
+        # The undo left a hole in the folder's numbering and the archiver closed
+        # it, which renamed files belonging to the *other* mails in there —
+        # never this one, whose files are now gone.
+        self._heal_renumber(conn, result["doc"], {_folder_key(item["chosen_folder"] or ""): item_id})
+        return get_item(conn, item_id) or reverted
 
     def _revert_once(self, item: dict[str, Any]) -> dict[str, Any]:
-        """One ``revert`` child call for one item → ``{ok, message, entry}``."""
+        """One ``revert`` child call for one item → ``{ok, message, entry, doc}``.
+
+        The whole document rides back, not only this mail's entry: the
+        renumbering that closed the hole this undo left is reported per
+        *folder*, and healing it is the caller's step (:meth:`_heal_renumber`)
+        because only the caller has the connection.
+        """
         doc = self._spawn_with_payload(
             "revert", "--items", [{"message_id": item["message_id"], "files": item["files"]}]
         )
         entry = next((r for r in doc.get("results") or [] if isinstance(r, dict)), None)
         if entry is None:
-            return {"ok": False, "message": "the archiver reported no result for this mail", "entry": None}
+            return {
+                "ok": False, "message": "the archiver reported no result for this mail",
+                "entry": None, "doc": doc,
+            }
         if entry.get("ok"):
-            return {"ok": True, "message": "", "entry": entry}
+            return {"ok": True, "message": "", "entry": entry, "doc": doc}
         error = entry.get("error") or {}
         code = str(error.get("code", "")) if isinstance(error, dict) else ""
         message = str(error.get("message", "")) if isinstance(error, dict) else ""
@@ -1039,7 +1293,7 @@ class ArchiveBatchService:
             parts.append(f"{len(refused)} file(s) refused as outside the archive roots")
         if file_errors:
             parts.append(f"{len(file_errors)} file(s) could not be deleted")
-        return {"ok": False, "message": " — ".join(parts), "entry": entry}
+        return {"ok": False, "message": " — ".join(parts), "entry": entry, "doc": doc}
 
     def move(
         self, conn: sqlite3.Connection, item_id: int, folder: str, *, hint: str | None = None
@@ -1087,11 +1341,13 @@ class ArchiveBatchService:
         date_prefix = self._date_prefix_for(item, destination)
 
         self._claim()
+        undo: dict[str, Any] | None = None
         try:
             if filed:
                 undo = self._revert_once(item)
                 if not undo["ok"]:
                     update_item(conn, item_id, error=undo["message"])
+                    self._heal_renumber(conn, undo["doc"])
                     raise ArchiveError(
                         "archive_revert_failed",
                         f"nothing was moved: {undo['message']}", http_status=502,
@@ -1120,7 +1376,7 @@ class ArchiveBatchService:
                 f"the archiver reported no result for the move — the mail is {where} the Inbox",
                 http_status=502,
             )
-        files = [str(f) for f in entry.get("files") or []]
+        files = _rename_files([str(f) for f in entry.get("files") or []], _rename_index(applied))
         common = {
             "chosen_folder": destination, "chosen_rank": None, "confidence": None,
             "date_prefix": int(bool(date_prefix)),
@@ -1142,9 +1398,21 @@ class ArchiveBatchService:
                 conn, item_id, status="moved", error=None, reason=reason, **common,
             )
             record_correction(conn, item, chosen_folder=destination, hint=hint)
-            return moved
+            # Both legs can have re-sequenced a folder — the one the mail left
+            # (the undo closed its hole) and the one it landed in — and this
+            # item is what triggered each. Healed after the row is written, so
+            # the reason the note is appended to is the final one.
+            if undo is not None:
+                self._heal_renumber(
+                    conn, undo["doc"], {_folder_key(item["chosen_folder"] or ""): item_id},
+                )
+            self._heal_renumber(conn, applied, {_folder_key(destination): item_id})
+            return get_item(conn, item_id) or moved
         message = self._apply_error_message(entry.get("error"), files)
         update_item(conn, item_id, status="failed", error=message, **common)
+        if undo is not None:
+            self._heal_renumber(conn, undo["doc"])
+        self._heal_renumber(conn, applied)
         raise ArchiveError("archive_move_failed", message, http_status=502)
 
     @staticmethod
@@ -1215,21 +1483,29 @@ class ArchiveBatchService:
         # comes back with a new file and a new number. Whichever happened, what
         # the archiver says now wins over what the row remembered — and what it
         # does not say leaves the row's own value alone.
-        files = [str(f) for f in entry.get("files") or []] or list(item["files"])
+        renames = _rename_index(applied)
+        files = _rename_files(
+            [str(f) for f in entry.get("files") or []] or list(item["files"]), renames,
+        )
         if entry.get("ok"):
             self._log_finish(entry)
-            return update_item(
+            finished = update_item(
                 conn, item_id, status="archived",
                 files_json=json.dumps(files, ensure_ascii=False),
                 sequence=str(entry.get("sequence_number") or "") or item["sequence"],
                 entry_id=str(entry.get("entry_id") or "") or item["entry_id"],
                 error=None, decided_at=clock.now_iso(),
             )
+            self._heal_renumber(
+                conn, applied, {_folder_key(str(item["chosen_folder"] or "")): item_id},
+            )
+            return get_item(conn, item_id) or finished
         message = self._apply_error_message(entry.get("error"), files)
         update_item(
             conn, item_id, status="failed",
             files_json=json.dumps(files, ensure_ascii=False), error=message,
         )
+        self._heal_renumber(conn, applied)
         logger.warning("⚠️ archive: the retry did not finish item %d — %s", item_id, message)
         raise ArchiveError("archive_retry_failed", message, http_status=502)
 
@@ -1287,6 +1563,7 @@ __all__ = [
     "SUPPORTED_SCHEMA_VERSION",
     "ArchiveBatchService",
     "ArchiveError",
+    "apply_renumber_map",
     "create_run",
     "filed_message_ids",
     "finish_run",
@@ -1297,5 +1574,7 @@ __all__ = [
     "list_runs",
     "recent_corrections",
     "record_correction",
+    "renumber_pairs",
+    "renumbered_folders",
     "update_item",
 ]

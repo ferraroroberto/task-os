@@ -1571,6 +1571,77 @@ def remove_link(conn: sqlite3.Connection, task_id: int, link_id: int) -> None:
     _touched(task_id)
 
 
+def rename_link_url(
+    conn: sqlite3.Connection, old_url: str, new_url: str, *, kind: str, dry_run: bool = False
+) -> int:
+    """Every ``kind`` link pointing at ``old_url`` now points at ``new_url``; how many.
+
+    The one write that exists because a link's *target* moved rather than
+    because anyone edited the task — the archiver renumbering a folder renames
+    the ``.msg`` an email link holds the ref of (#176), and a chip pointing at
+    a file that is no longer there is a dead chip. Identity only: no activity
+    row, because the log records what a human or a channel did to a task and a
+    file being renamed on disk is neither. The write listeners *are* notified —
+    the mirror renders the link, so its markdown is now stale.
+
+    ``dry_run`` counts the rows it would rewrite and writes nothing.
+    """
+    old_url, new_url = (old_url or "").strip(), (new_url or "").strip()
+    if not old_url or not new_url or old_url == new_url:
+        return 0
+    rows = conn.execute(
+        "SELECT id, task_id FROM links WHERE kind = ? AND url = ?", (kind, old_url)
+    ).fetchall()
+    if not rows or dry_run:
+        return len(rows)
+    conn.execute("UPDATE links SET url = ? WHERE kind = ? AND url = ?", (new_url, kind, old_url))
+    conn.commit()
+    _touched(*[int(r["task_id"]) for r in rows])
+    return len(rows)
+
+
+def rename_external_id(
+    conn: sqlite3.Connection, old_external_id: str, new_external_id: str, *, dry_run: bool = False
+) -> int:
+    """Re-key the task captured under ``old_external_id``; how many rows moved.
+
+    The capture key is derived from the source's own identity — for a flagged
+    email, the folded path of its ``.msg`` (:mod:`src.email_capture`) — so a
+    source that renames the thing it offered leaves this database keyed on a
+    name nothing will ever present again, and the next poll captures the same
+    mail a second time. Re-keying is what keeps *capture lands once* true
+    across such a rename; nothing about the task itself changes.
+
+    A collision is possible and is **not** an error to raise: the new key may
+    already belong to a task a poll captured before the heal ran. The v3
+    partial unique index refuses it, and this says so in the log and returns 0
+    rather than merging two tasks nobody asked it to merge.
+    """
+    old_external_id, new_external_id = (old_external_id or "").strip(), (new_external_id or "").strip()
+    if not old_external_id or not new_external_id or old_external_id == new_external_id:
+        return 0
+    rows = conn.execute(
+        "SELECT id FROM tasks WHERE external_id = ?", (old_external_id,)
+    ).fetchall()
+    if not rows or dry_run:
+        return len(rows)
+    try:
+        conn.execute(
+            "UPDATE tasks SET external_id = ? WHERE external_id = ?",
+            (new_external_id, old_external_id),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        logger.warning(
+            "⚠️ repo: task %s already carries the new capture key — left on the old one",
+            ", ".join(f"#{int(r['id'])}" for r in rows),
+        )
+        return 0
+    _touched(*[int(r["id"]) for r in rows])
+    return len(rows)
+
+
 def rename_link(conn: sqlite3.Connection, task_id: int, link_id: int, label: str | None) -> dict[str, Any]:
     label = (label or "").strip() or None
     cur = conn.execute(
