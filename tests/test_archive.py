@@ -1092,6 +1092,46 @@ def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
     assert sent == [{"message_id": "second@example.invalid", "files": [OLDER_RENUMBERED]}]
 
 
+def test_a_map_is_healed_even_when_the_mail_itself_failed(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A per-mail failure rides *inside* a completed verb — the map still applies.
+
+    The archiver renumbers after its own work whether or not one mail's undo
+    went through, so the names on disk have moved either way. Dropping the map
+    on the error path is exactly how a stale path survives the one code that
+    was written to prevent it.
+    """
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("stuck@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("neighbour@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        ])],
+        apply=[apply_doc([
+            apply_result("stuck@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+            apply_result("neighbour@example.invalid", FOLDER_HOUSE, files=[OLDER_FILE]),
+        ])],
+        revert=[revert_doc(
+            [revert_result("stuck@example.invalid", ok=False, error={
+                "code": "not_in_archive_folder", "message": "no mail with this Message-ID is there",
+            })],
+            renumbered_map=renumbered(
+                FOLDER_HOUSE, old=OLDER_FILE, new=OLDER_RENUMBERED,
+                message_id="neighbour@example.invalid",
+            ),
+        )],
+    )
+    svc = service_for(repo_dir)
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    with pytest.raises(ArchiveError) as caught:
+        svc.revert(conn, items["stuck@example.invalid"]["id"])
+    assert caught.value.code == "archive_revert_failed"
+
+    stayed = archive_batch.get_item(conn, items["neighbour@example.invalid"]["id"])
+    assert stayed["files"] == [OLDER_RENUMBERED]
+
+
 def test_renumbering_off_asks_for_nothing_and_a_document_without_a_map_changes_nothing(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:

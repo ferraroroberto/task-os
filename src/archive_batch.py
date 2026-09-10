@@ -1242,6 +1242,12 @@ class ArchiveBatchService:
             # revert, and re-running it is safe (a file already gone comes back
             # as ``missing``, not as an error).
             update_item(conn, item_id, error=result["message"])
+            # The verb still completed — a per-mail failure is reported *inside*
+            # a successful run — so it may have renumbered anyway. A map that
+            # describes the disk is healed whether or not this mail's undo went
+            # through; dropping it on the error path is how a stale path
+            # survives.
+            self._heal_renumber(conn, result["doc"])
             raise ArchiveError("archive_revert_failed", result["message"], http_status=502)
         reverted = update_item(
             conn, item_id, status="reverted", files_json="[]", error=None,
@@ -1338,6 +1344,7 @@ class ArchiveBatchService:
                 undo = self._revert_once(item)
                 if not undo["ok"]:
                     update_item(conn, item_id, error=undo["message"])
+                    self._heal_renumber(conn, undo["doc"])
                     raise ArchiveError(
                         "archive_revert_failed",
                         f"nothing was moved: {undo['message']}", http_status=502,
@@ -1400,6 +1407,9 @@ class ArchiveBatchService:
             return get_item(conn, item_id) or moved
         message = self._apply_error_message(entry.get("error"), files)
         update_item(conn, item_id, status="failed", error=message, **common)
+        if undo is not None:
+            self._heal_renumber(conn, undo["doc"])
+        self._heal_renumber(conn, applied)
         raise ArchiveError("archive_move_failed", message, http_status=502)
 
     @staticmethod
@@ -1492,6 +1502,7 @@ class ArchiveBatchService:
             conn, item_id, status="failed",
             files_json=json.dumps(files, ensure_ascii=False), error=message,
         )
+        self._heal_renumber(conn, applied)
         logger.warning("⚠️ archive: the retry did not finish item %d — %s", item_id, message)
         raise ArchiveError("archive_retry_failed", message, http_status=502)
 
