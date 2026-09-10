@@ -17,12 +17,12 @@ narrow and both reported on every run:
 
 * `ALLOWED_TO_DIFFER` — the named files whose *content* genuinely cannot be
   pinned, each with the reason;
-* `RASTER_*` — a shot that differs only by 1/255 on a handful of pixels along
-  antialiased edges. Headless Chromium does not rasterise a card border or the
-  nav pill's frosted edge bit-identically every time; the affected files change
-  from run to run, so no per-file allowlist can express it. Nothing a reader
-  can see fits under this: real UI movement shifts whole glyphs and edges, tens
-  or hundreds of levels at a time.
+* `RASTER_*` — a shot that differs only by up to `RASTER_MAX_DELTA`/255 on a
+  handful of pixels along antialiased edges. Headless Chromium does not
+  rasterise a card border or the nav pill's frosted edge bit-identically every
+  time; the affected files change from run to run, so no per-file allowlist
+  can express it. Nothing a reader can see fits under this: real UI movement
+  shifts whole glyphs and edges, tens or hundreds of levels at a time.
 
 Anything else moving is a determinism regression — the story that writes it
 captured something still in flight, and the fix belongs in that story or in
@@ -32,6 +32,26 @@ The two runs happen minutes apart on one day, which is the property that
 matters: the seed is anchored on *today* on purpose (relative due dates have to
 stay believable on screen), so the gallery does move day to day. That drift is
 expected and re-baselining is a deliberate act; capture noise is neither.
+
+Known open flake (#170, status: unreproduced this session): under the
+heaviest load observed on 2026-09-09, all four of story 22's desktop shots
+moved together at once — 5380-8981 px, worst channel delta 247, common bbox
+the Board behind the add dialog (present even in the one shot with no dialog
+open). That is real content movement, not the rasteriser, and it has not
+recurred since. #170 tried to reproduce it with a harness scoped to
+`test_story_22_voice.py` alone, run back to back under 12-15 concurrent
+CPU-bound busy-loops on a 16-core host (`--keep` equivalent): ten attempts,
+zero repeats of the board-wide mover. One attempt did turn up a much smaller,
+unrelated raster excursion — 28 px at delta 14 on the phone nav's search icon
+— under 13 concurrent burners; at 15 burners the disposable webapp itself
+missed its 20 s healthz boot deadline, so raw CPU starvation this severe
+produces a different failure (a boot timeout), not a silent content shift.
+That rules out plain CPU contention as a match for what was observed and
+leaves the real trigger (disk I/O? memory pressure? a specific concurrent
+process?) still unknown. Reproduce with:
+`& .\.venv\Scripts\python.exe -m scripts.shot_determinism --keep <dir>` in a
+loop under whatever load actually shows up next, then diff `run-1` vs `run-2`
+of the four `story-22-voice-*-desktop.png` files.
 """
 
 from __future__ import annotations
@@ -72,7 +92,18 @@ ALLOWED_TO_DIFFER = {
 #: much on any channel. Measured on this suite — a real run lands well under
 #: 200 pixels at delta 1; the smallest genuine content change measured (one
 #: digit of a timestamp) was 35 pixels at delta 210.
-RASTER_MAX_DELTA = 1
+#:
+#: Decision (#170): raised from 1 to 2. On this host, twelve back-to-back
+#: invocations turned up small antialiased-edge movers — story 22/23/24 shots,
+#: none of them a real content change — measuring *exactly* delta 2 on a
+#: handful of pixels, and the same shots pass as delta-1 raster noise on the
+#: very next invocation. That means delta 1 sat one level below this
+#: rasteriser's actual noise floor, so the gate reported a green tree as red
+#: several times out of twelve. Delta 2 still leaves ~100x headroom below the
+#: smallest genuine change ever measured here (35 px at delta 210) and two
+#: orders of magnitude below a real regression (delta 224-225), so it costs
+#: essentially no discriminating power.
+RASTER_MAX_DELTA = 2
 RASTER_MAX_PIXELS = 500
 
 
