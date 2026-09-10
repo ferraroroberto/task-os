@@ -1074,7 +1074,10 @@ class ArchiveBatchService:
                 # does not say leaves the row's own value alone — the same rule
                 # :meth:`retry` reads its answer by.
                 known = get_item(conn, item_id)
-                files = list(known["files"]) if known else []
+                # Through the map as well: the file the row already knew about
+                # is in the folder that was just re-sequenced, so it may be
+                # exactly one of the ones that moved.
+                files = _rename_files(list(known["files"]), renames) if known else []
             error = entry.get("error") or None
             if entry.get("ok"):
                 update_item(

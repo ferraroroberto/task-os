@@ -322,20 +322,28 @@ def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
 
     A finish (#174) is answered for a row that was inserted already knowing
     where its ``.msg`` is; blanking that on an answer which simply omits
-    ``files`` would make a mail that *is* on disk look unrevertible.
+    ``files`` would make a mail that *is* on disk look unrevertible. The name
+    the row kept still goes through the renumber map (#176): it sits in the
+    folder that was just re-sequenced, so it may be one of the files that moved.
     """
     repo = build_fake_archiver(
         tmp_path / "archiver",
         plan=[plan_doc([
             mail("terse@example.invalid", already_archived=OLDER_FILE, in_inbox=True),
         ])],
-        apply=[apply_doc([apply_result(
-            "terse@example.invalid", OLDER_FOLDER, files=[], sequence="", reused=True,
-        )])],
+        apply=[apply_doc(
+            [apply_result(
+                "terse@example.invalid", OLDER_FOLDER, files=[], sequence="", reused=True,
+            )],
+            renumbered_map=renumbered(
+                OLDER_FOLDER, old=OLDER_FILE, new=OLDER_RENUMBERED,
+                message_id="terse@example.invalid",
+            ),
+        )],
     )
     svc = service_for(repo)
     item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
-    assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
+    assert item["status"] == "archived" and item["files"] == [OLDER_RENUMBERED]
     # …and it is still undoable, which is the thing blanking it would have cost.
     svc._require_revertible(item)
 
