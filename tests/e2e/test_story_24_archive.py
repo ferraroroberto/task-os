@@ -134,6 +134,10 @@ LONG_FILE = ("E:\\archive\\house\\heating\\2026-09-08 - 0006 - "
 LONG_ATT_1 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - enrolment-form.pdf"
 LONG_ATT_2 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - payment-schedule.docx"
 LONG_ATT_3 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - club-timetable.pdf"
+#: A fourth attachment (#178) — five files total, so the desktop table's cap
+#: (four shown, a "+1 more" chip standing in for the rest) and the row's
+#: consequent second line of chips both have something real to prove against.
+LONG_ATT_4 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - medical-form.pdf"
 
 #: Long enough that the running state is observable from the page and from a
 #: second POST, short enough that the story stays a few seconds.
@@ -179,7 +183,7 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
             # attachments beside it (#173) — the phone card this reproduces
             # sideways scroll on.
             mail(LONG_ID, subject="School enrolment forms for the autumn term",
-                 sender="school@example.invalid", attachments=3,
+                 sender="school@example.invalid", attachments=4,
                  candidates=[candidate(HOUSE, 0.93, date_prefix=True)]),
             # its `.msg` is already in the archiver's index and the mail is
             # still in the Inbox — the run finishes it rather than calling it
@@ -194,7 +198,8 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
                              error={"code": "move_failed",
                                     "message": "the mail could not be moved to Archive — "
                                                f"{UNREACHABLE} is not reachable"}),
-                apply_result(LONG_ID, HOUSE, files=[LONG_FILE, LONG_ATT_1, LONG_ATT_2, LONG_ATT_3],
+                apply_result(LONG_ID, HOUSE,
+                             files=[LONG_FILE, LONG_ATT_1, LONG_ATT_2, LONG_ATT_3, LONG_ATT_4],
                              sequence="0006"),
                 # nothing written, the existing file handed back, no sequence
                 # allocated — what finishing a mail already on disk looks like
@@ -389,12 +394,40 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     )
     long_row, long_item = _row(page, LONG_ID, items)
     expect(long_row.locator(".archive-state")).to_have_text("filed")
+    # Five files on this mail: the desktop table caps the chip stack at four
+    # and folds the rest behind a "+1 more" chip rather than showing every
+    # one (#178) — the phone card, checked further down, still shows all five.
     expect(long_row.locator(".archive-files a.chip")).to_have_count(4)
+    expect(long_row.locator(".archive-files-more")).to_have_text("+1 more")
     # Desktop keeps the full name, date prefix and all (#173) — the phone-only
     # trim is a card-width concession, not a change to what the desktop shows.
     expect(long_row.locator(".archive-files a.chip").first).to_have_text(
         "2026-09-08 - 0006 - School enrolment forms for the autumn term and the after-school club.msg"
     )
+
+    # 5c. The "+1 more" chip expands the rest in place, one click, no
+    #     re-render — and once all five chips are on screen the file column
+    #     wraps onto a second line, taller than every other cell in the row.
+    #     That used to read as the row's other cells having drifted to the
+    #     top; centred vertical alignment (#178) keeps them level with it.
+    long_row.locator(".archive-files-more").click()
+    expect(long_row.locator(".archive-files a.chip")).to_have_count(5)
+    expect(long_row.locator(".archive-files-more")).to_have_count(0)
+    subject_box = _box(long_row.locator(".c-subject > *"))
+    files_box = _box(long_row.locator(".c-files > *"))
+    assert files_box["height"] > subject_box["height"] + 4, (
+        "five expanded chips did not wrap onto a second line — "
+        f"the centring check below would prove nothing ({files_box} vs {subject_box})"
+    )
+    assert abs(_mid_y(subject_box) - _mid_y(files_box)) < 2, (
+        f"the file-chip cell is not vertically centred on the row ({files_box} vs {subject_box})"
+    )
+    for col in (".c-sent", ".c-conf", ".c-state", ".c-act"):
+        box = _box(long_row.locator(f"{col} > *"))
+        assert abs(_mid_y(subject_box) - _mid_y(box)) < 2, (
+            f"{col} is not vertically centred on the row ({box} vs subject {subject_box})"
+        )
+
     stuck_row, _ = _row(page, STUCK_ID, items)
     expect(stuck_row.locator(".archive-state")).to_have_text("failed")
     expect(stuck_row.locator(".archive-reason")).to_contain_text("move_failed")
@@ -558,11 +591,14 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #        than widening the card and scrolling the pane sideways — the
     #        defect #168 fixed for the subject/path/reason columns, now for
     #        the file chips too.
+    # The phone card carries all five files (#178 caps the desktop table only —
+    # a card already has room to grow, and #173 already made every chip wrap
+    # to its own line rather than widen the card).
     long_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, LONG_ID)}']")
     long_chips = long_card.locator(".archive-files .chip")
-    expect(long_chips).to_have_count(4)
+    expect(long_chips).to_have_count(5)
     card_box = _box(long_card)
-    for chip_index in range(4):
+    for chip_index in range(5):
         chip_box = _box(long_chips.nth(chip_index))
         assert chip_box["x"] + chip_box["width"] <= card_box["x"] + card_box["width"] + 1, (
             f"chip {chip_index} runs past the card's right edge ({chip_box} vs {card_box})"

@@ -2287,7 +2287,10 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* ---- the report grid ---- */
 .archive-table-wrap { padding: 0; overflow: hidden; }
 .archive-table { font-size: var(--font-caption); }
-.archive-table td { vertical-align: top; }
+/* Centred, not top-aligned: the file-chip cell is the one column whose
+   content can wrap to more than one line (#178) — a five-file row taller than
+   its neighbours must not read as the other cells having drifted upward. */
+.archive-table td { vertical-align: middle; }
 /* Every one-line cell is capped so the nine columns still fit a 1440 desktop
    without the actions — the point of the screen — sliding off the right edge;
    the full value is the title, and narrower windows scroll in `.table-scroll`. */
@@ -2306,6 +2309,12 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-reason-error { color: var(--danger); }
 .archive-confidence { font-variant-numeric: tabular-nums; }
 .archive-files .chip { max-width: 9rem; }
+/* The desktop cap's own chip (#178): same pill, a button rather than a link,
+   quiet until hovered — expanding it is not a destination. */
+.archive-files-more { cursor: pointer; font: inherit; color: var(--muted); }
+.archive-files-more:hover, .archive-files-more:focus-visible {
+  color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft);
+}
 .archive-state { font-weight: 600; white-space: nowrap; }
 /* Enough room per column that a long reason or a wrapped action pair cannot
    squeeze a neighbour to one word a line; the shared `.table-scroll` takes the
@@ -2315,7 +2324,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .c-act { min-width: 13.5rem; }
 
 /* ---- the per-row actions (both drawings) ---- */
-.archive-row-actions { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px; }
+.archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .archive-action { display: inline-flex; align-items: center; gap: 4px; min-height: var(--control-h); font-size: var(--font-caption); }
 .archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
