@@ -51,6 +51,7 @@ lifespan like the issue sync — first pass shortly after startup, then every
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import threading
 from collections.abc import Mapping
@@ -78,10 +79,32 @@ FLAG_FOLLOWUP = 2
 FLAG_COLUMN = "flag_status"
 EXTERNAL_ID_PREFIX = "email:"
 INITIAL_DELAY_S = 15.0
+#: Real-second override for `INITIAL_DELAY_S`. `TASKOS_CLOCK` pins every
+#: timestamp this service *writes*, but the first automatic pass is scheduled
+#: off a real `threading.Event.wait()`, not the pinned clock — so a disposable
+#: e2e instance that enables capture (story 24's archive fixture) could have
+#: its own background tick land mid-story, racing the manual "Check now" step
+#: and rewriting `last_result`/`next_run` under a shot the story never touched
+#: (#170: story-24-archive-9-desktop.png moved between two runs of one commit
+#: for exactly this reason). Nothing in production sets this; the e2e suite's
+#: `_boot()` sets it past any story's real runtime, the same way unit tests
+#: already pass `initial_delay=999` directly.
+DELAY_ENV = "TASKOS_CAPTURE_DELAY_S"
 DESCRIPTION_MAX = 10_000
 #: One pass never lands more than this, so a first run against a large archive
 #: cannot flood Inbox in one go; the rest arrive on the following passes.
 BATCH_LIMIT = 200
+
+
+def _default_initial_delay() -> float:
+    """`INITIAL_DELAY_S`, unless `DELAY_ENV` overrides it (see its docstring)."""
+    raw = os.environ.get(DELAY_ENV, "").strip()
+    if not raw:
+        return INITIAL_DELAY_S
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{DELAY_ENV}={raw!r} is not a number") from exc
 
 
 def external_id_for(ref: str) -> str:
@@ -287,13 +310,13 @@ class EmailCaptureService:
     """The in-app poller + status holder (one per process, on ``app.state.capture``)."""
 
     def __init__(self, config: AppConfig, index: FlaggedEmailIndex | None = None, *,
-                 interval_minutes: int | None = None, initial_delay: float = INITIAL_DELAY_S) -> None:
+                 interval_minutes: int | None = None, initial_delay: float | None = None) -> None:
         self.index = index if index is not None else FlaggedEmailIndex(
             config.search.email_db, config.placeholders
         )
         minutes = config.capture.email_poll_minutes if interval_minutes is None else interval_minutes
         self.interval_minutes = int(minutes)
-        self.initial_delay = initial_delay
+        self.initial_delay = _default_initial_delay() if initial_delay is None else initial_delay
         if self.interval_minutes <= 0:
             self.enabled, self.reason = False, "capture.email_poll_minutes is 0 — the poller is off"
         else:

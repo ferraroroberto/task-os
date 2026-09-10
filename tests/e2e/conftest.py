@@ -169,7 +169,14 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     picks one (story 08 picks the fake). ``TASKOS_CLOCK`` pins the instance's
     clock to ``E2E_CLOCK`` so the timestamps a story writes — activity rows,
     comments, ``done_at`` — land on the shot as 09:00 rather than the minute
-    the run reached them (#134).
+    the run reached them (#134). ``TASKOS_CAPTURE_DELAY_S`` pins the capture
+    poller's *own* first automatic pass to an hour out: `TASKOS_CLOCK` only
+    pins the timestamps that poller writes, not the real
+    `threading.Event.wait()` that decides when it writes one, so a story that
+    enables capture (story 24's archive fixture) could otherwise have that
+    real 15 s timer land mid-story and rewrite a status card a shot already
+    framed (#170: story-24-archive-9-desktop.png moved between two runs of one
+    commit for exactly that reason).
     """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
@@ -184,6 +191,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_CONFIG_PATH": str(config_path),
         "TASKOS_ISSUE_PROVIDER": "none",
         "TASKOS_CLOCK": E2E_CLOCK,
+        "TASKOS_CAPTURE_DELAY_S": "3600",
         **(extra_env or {}),
     }
     cmd = [
