@@ -7,7 +7,10 @@
     (#158), the report appears row by row, and each row offers the review level
     its own state allows — *accept* what needed a human, *file / move* into a
     ranked candidate or any other folder with a one-line hint, *revert* a mail
-    back into the Inbox (#159). Settings carries the same block as a card of
+    back into the Inbox, *retry* the one whose file was written before Outlook
+    refused the move (#159, #174 — a mail the archiver's index already has and
+    the Inbox still holds is finished by the run itself). Settings carries the
+    same block as a card of
     its own, so the Settings tab stays the one complete picture of what this
     install can do — and can start a run without leaving it (#167).
 
@@ -43,6 +46,8 @@ validation record links to:
                                                       *File it…* panel (dark)
     docs/screenshots/story-24-archive-9-desktop.png   Settings' archiving card after the run
     docs/screenshots/story-24-archive-9-phone.png     the same card at 390 (dark)
+    docs/screenshots/story-24-archive-10-phone.png    *Retry* on the mail whose move was
+                                                      refused, in its review menu (dark)
 """
 
 from __future__ import annotations
@@ -106,6 +111,12 @@ MEMBERSHIPS = "E:\\archive\\admin\\renewals"
 FILED_ID = "boiler@example.invalid"
 UNSURE_ID = "ambiguous@example.invalid"
 STUCK_ID = "roof@example.invalid"
+#: A mail the archiver's index already has **and** which is still sitting in the
+#: Inbox — what a refused move leaves behind on every later plan (#174). The run
+#: finishes it instead of recording it as done: nothing is written, the file it
+#: already has is reused, and the mail finally leaves the Inbox.
+REUSED_ID = "insurance@example.invalid"
+REUSED_FILE = "E:\\archive\\admin\\renewals\\0031 - insurance policy.msg"
 #: Two more mails the ranking would not decide (#168): one gets accepted on the
 #: desktop leg, so the phone shows a **reviewed** row that offers nothing; the
 #: other is left open, so the phone also shows a live *File it…* and a bulk
@@ -170,6 +181,11 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
             mail(LONG_ID, subject="School enrolment forms for the autumn term",
                  sender="school@example.invalid", attachments=3,
                  candidates=[candidate(HOUSE, 0.93, date_prefix=True)]),
+            # its `.msg` is already in the archiver's index and the mail is
+            # still in the Inbox — the run finishes it rather than calling it
+            # done (#174)
+            mail(REUSED_ID, subject="Insurance policy renewal",
+                 sender="insurer@example.invalid", already_archived=REUSED_FILE, in_inbox=True),
         ])],
         apply=[
             apply_doc([
@@ -180,9 +196,17 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
                                                f"{UNREACHABLE} is not reachable"}),
                 apply_result(LONG_ID, HOUSE, files=[LONG_FILE, LONG_ATT_1, LONG_ATT_2, LONG_ATT_3],
                              sequence="0006"),
+                # nothing written, the existing file handed back, no sequence
+                # allocated — what finishing a mail already on disk looks like
+                apply_result(REUSED_ID, MEMBERSHIPS, files=[REUSED_FILE], sequence="",
+                             reused=True, move_via="refetched"),
             ]),
-            # every later apply is the story's own filing of the unsure mail
+            # the story's own filing of the unsure mail…
             apply_doc([apply_result(UNSURE_ID, BILLS, files=[BILLS_FILE], sequence="0007")]),
+            # …and then the phone's *Retry* on the mail the move was refused
+            # for: the same decision, the same file, finished this time
+            apply_doc([apply_result(STUCK_ID, HOUSE, files=[STUCK_FILE], sequence="",
+                                    reused=True, move_via="saved_retry")]),
         ],
         revert=[revert_doc([revert_result(FILED_ID, deleted=[HOUSE_FILE])])],
         sleep=CHILD_SLEEP_S,
@@ -346,15 +370,16 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # 5. It finishes on its own and the report fills in: two filed, one that
     #    needs a human, one the archiver broke on.
     expect(pane.locator("#archiveRun")).to_be_enabled(timeout=30000)
-    expect(pane.locator(".archive-row")).to_have_count(6)
+    expect(pane.locator(".archive-row")).to_have_count(7)
     run_id = _get(base, "/api/archive/runs")["runs"][0]["id"]
     items = _items(base, run_id)
     assert {i["message_id"]: i["status"] for i in items} == {
         FILED_ID: "archived", UNSURE_ID: "needs_review", STUCK_ID: "failed",
         REVIEWED_ID: "needs_review", OPEN_ID: "needs_review", LONG_ID: "archived",
+        REUSED_ID: "archived",
     }
     expect(pane.locator("#statusArchiveRun")).to_contain_text(
-        "6 mail(s) · 2 filed · 3 need you · 1 failed"
+        "7 mail(s) · 3 filed · 3 need you · 1 failed"
     )
     filed_row, filed_item = _row(page, FILED_ID, items)
     expect(filed_row.locator(".archive-state")).to_have_text("filed")
@@ -373,9 +398,33 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     stuck_row, _ = _row(page, STUCK_ID, items)
     expect(stuck_row.locator(".archive-state")).to_have_text("failed")
     expect(stuck_row.locator(".archive-reason")).to_contain_text("move_failed")
+    # …and, because the file was written before the move was refused, it is the
+    # one row that can be *finished* rather than only undone (#174). No other
+    # row offers it: a retry re-sends a decision, which anywhere else would file
+    # a mail twice.
+    expect(stuck_row.locator(".archive-action", has_text="Retry")).to_have_count(1)
+    expect(stuck_row.locator(".archive-action", has_text="Revert")).to_have_count(1)
+    expect(page.locator(".archive-row-actions .archive-action", has_text="Retry")).to_have_count(1)
+
+    # 5b. The mail whose `.msg` the archiver's index already had, still sitting
+    #     in the Inbox: the run finished it — the folder is the one its file
+    #     lives in, nothing was ranked and nothing was written.
+    reused_row, reused_item = _row(page, REUSED_ID, items)
+    expect(reused_row.locator(".archive-state")).to_have_text("filed")
+    expect(reused_row.locator(".archive-dest")).to_have_text("archive › admin › renewals")
+    expect(reused_row.locator(".archive-reason")).to_contain_text("finished a mail already on disk")
+    expect(reused_row.locator(".archive-files a.chip")).to_have_count(1)
+    assert reused_item["files"] == [REUSED_FILE] and reused_item["chosen_rank"] is None
+    # A reuse allocates no sequence number, and the row says so.
+    assert reused_item["sequence"] is None
+    assert {
+        "message_id": REUSED_ID, "folder_path": "E:/archive/admin/renewals", "date_prefix": False,
+    } in [c for c in calls(inst.repo) if c["verb"] == "apply"][0]["payload"]
+
     # An `archived` row is finished, not reviewed: the API answers 409 on
     # accept, so the screen does not offer it.
     expect(filed_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
+    expect(reused_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
     # The bulk button's N is the rows that really do offer *Accept*, not a
     # second count that drifts from them (#168).
     offering = page.locator(".archive-row-actions .archive-action", has_text="Accept")
@@ -417,6 +466,11 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     stuck_row.locator(".archive-action", has_text="Accept").click()
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 2 that need you")
     assert next(i for i in _items(base, run_id) if i["message_id"] == STUCK_ID)["decided_at"]
+    # Seeing it is not finishing it: the mail is still in the Inbox, so the
+    # offer to finish it stands and the error text stays on screen until a
+    # retry actually succeeds (#174).
+    expect(stuck_row.locator(".archive-action", has_text="Retry")).to_have_count(1)
+    expect(stuck_row.locator(".archive-reason")).to_contain_text("move_failed")
 
     # 7b. A `needs_review` row that has had its human stops asking for one
     #     (#168): it reads *reviewed*, offers neither *Accept* nor *File it…*,
@@ -479,7 +533,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(acard.locator("#statusArchiveModel")).to_contain_text("per batch")
     expect(acard.locator("#statusArchiveThreshold")).to_contain_text("70%")
     expect(acard.locator("#statusArchiveLast")).to_contain_text(
-        "6 mail(s) · 2 filed · 3 need you · 1 failed"
+        "7 mail(s) · 3 filed · 3 need you · 1 failed"
     )
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
@@ -496,7 +550,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("nav.tabs .tab")).to_have_count(6)
     p.get_by_role("tab", name="Archive").tap()
     expect(p.locator("#paneArchive")).to_be_visible()
-    expect(p.locator(".archive-card")).to_have_count(6)
+    expect(p.locator(".archive-card")).to_have_count(7)
     expect(p.locator(".archive-table")).to_have_count(0)
 
     # 10a-1. The long `.msg` name with three attachments beside it (#173):
@@ -527,7 +581,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # day still in the locale's own order (the date moves, so the shape is what
     # is asserted).
     expect(p.locator("#statusArchiveRun")).to_have_text(
-        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 2 filed")
+        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 3 filed")
     )
     for index in range(3):
         row = _box(p.locator("#paneArchive .archive-head .status-row").nth(index))
@@ -612,6 +666,51 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert seat["y"] >= 0 and seat["y"] + seat["height"] <= PHONE["height"] - 90, seat
     shot(p, shots / "story-24-archive-8-phone.png")
 
+    # 10f. The mail the archiver wrote and could not move, on the phone (#174).
+    #      Its menu offers *Retry* in the same `.archive-action` shape as the
+    #      rest — *Accept* is gone because it was accepted on the desktop leg,
+    #      and being seen is not being finished. One tap and it is filed: the
+    #      file it already had is reused, the error text goes, and the mail has
+    #      left the Inbox.
+    open_card.locator(".archive-menu-toggle").tap()      # close the one before it
+    expect(open_card.locator(".archive-move-toggle")).to_be_hidden()
+    stuck_card.locator(".archive-menu-toggle").tap()
+    retry = stuck_card.locator(".archive-action", has_text="Retry")
+    expect(retry).to_be_visible()
+    stuck_shapes = stuck_card.locator(".archive-action").evaluate_all(
+        "els => els.map(el => ({tag: el.tagName, text: el.textContent.trim(),"
+        " height: Math.round(el.offsetHeight), font: getComputedStyle(el).fontSize,"
+        " pad: getComputedStyle(el).padding}))"
+    )
+    # Review · Move to… · Retry · Revert — no *Accept* on a row already seen.
+    assert [s["text"] for s in stuck_shapes] == [
+        "Review", "Move to…", "Retry", "Revert",
+    ], stuck_shapes
+    assert {s["tag"] for s in stuck_shapes} == {"BUTTON"}, stuck_shapes
+    for key in ("height", "font", "pad"):
+        assert len({s[key] for s in stuck_shapes}) == 1, f"row actions differ in {key}: {stuck_shapes}"
+    assert_min_target(retry)
+    assert_no_horizontal_overflow(p)
+    retry.scroll_into_view_if_needed()
+    seat = _box(stuck_card)
+    assert seat["y"] >= 0, seat
+    dismiss_toasts(p)
+    shot(p, shots / "story-24-archive-10-phone.png")
+
+    retry.tap()
+    expect(stuck_card.locator(".archive-state")).to_have_text("filed")
+    expect(stuck_card.locator(".archive-reason")).not_to_contain_text("move_failed")
+    done = next(i for i in _items(base, run_id) if i["message_id"] == STUCK_ID)
+    assert done["status"] == "archived" and done["error"] is None
+    # Nothing was written and nothing re-decided: the same message, the same
+    # folder, the same naming form — and the sequence the first attempt
+    # allocated survives a reuse that allocates none.
+    assert done["files"] == [STUCK_FILE] and done["sequence"] == "0043"
+    assert calls(inst.repo)[-1] == {
+        "verb": "apply", "argv": calls(inst.repo)[-1]["argv"],
+        "payload": [{"message_id": STUCK_ID, "folder_path": HOUSE, "date_prefix": False}],
+    }
+
     # 10b. The Settings card is the same five rows in a 390-wide column, and the
     #      two things it can do are still thumb-sized there (#167).
     p.locator("nav.tabs .tab[data-tab='settings']").tap()
@@ -620,7 +719,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(pcard).to_have_attribute("open", "")
     expect(pcard.locator(".status-row")).to_have_count(5)
     expect(pcard.locator("#archiveCardMeta")).to_have_text("on")
-    expect(pcard.locator("#statusArchiveLast")).to_contain_text("2 filed")
+    expect(pcard.locator("#statusArchiveLast")).to_contain_text("3 filed")
     assert_no_horizontal_overflow(p)
     dismiss_toasts(p)
     # Full page, as story 09's Settings shot is: the pane is taller than 844 px
@@ -654,7 +753,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     all — the picker is the whole record. (`limit`, the bound that makes a
     #     first real run safe, is proven over the API in tests/test_archive.py.)
     listed = _get(base, "/api/archive/runs")
-    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 6
+    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 7
 
 
 def _item_id(base: str, run_id: int, message_id: str) -> int:

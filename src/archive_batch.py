@@ -56,7 +56,10 @@ State machine, one ``archive_items`` row per mail:
                   which files it for the first time (no undo leg)
     failed        the archiver refused or broke on this mail; ``error`` says
                   which of its codes. Revertible when files were still written
-                  (``apply`` fills ``files`` *before* the move on purpose)
+                  (``apply`` fills ``files`` *before* the move on purpose) — and
+                  ``retry``-able for exactly that reason (#174): the same
+                  decision goes back to ``apply``, which reuses the file it has
+                  already written and finishes the move Outlook refused
     reverted      the files are gone and the mail is back in the Inbox
     moved         re-filed into a folder a human picked
 
@@ -166,6 +169,17 @@ def _same_folder(a: str | None, b: str | None) -> bool:
     if not a or not b:
         return False
     return placeholders.normalize_path(a).casefold() == placeholders.normalize_path(b).casefold()
+
+
+def _folder_of(path: str) -> str:
+    """The folder an archived file sits in — either separator, whatever the host.
+
+    ``os.path.dirname`` splits on ``\\`` only on Windows, and the archiver reports
+    Windows paths wherever this runs, so the split is done by hand rather than by
+    a function whose answer depends on the platform reading it.
+    """
+    head, _, _ = str(path).replace("\\", "/").rstrip("/").rpartition("/")
+    return head
 
 
 def _loads(raw: Any, default: Any) -> Any:
@@ -725,6 +739,24 @@ class ArchiveBatchService:
         """
         already = mail.get("already_archived")
         if already:
+            # A mail whose file is on disk **and** which is still sitting in the
+            # Inbox is the shape a refused move leaves behind (email-archiver#59):
+            # recording it as done would leave it in the Inbox forever. ``apply``
+            # finishes it — it writes nothing, moves the mail and tags it — so the
+            # decision goes back with the folder the file already lives in.
+            #
+            # ``in_inbox`` is additive: a plan that does not state it comes from
+            # an older archiver whose ``apply`` would file the mail a second
+            # time, so anything but a literal ``True`` keeps the old no-op.
+            if mail.get("in_inbox") is True:
+                folder = _folder_of(str(already))
+                return {
+                    "status": "archived", "apply": True, "chosen_folder": folder,
+                    "chosen_rank": None, "confidence": None,
+                    "date_prefix": self._date_prefix_for(mail, folder), "files": [already],
+                    "reason": "finished a mail already on disk — its file is reused, "
+                              "nothing is written",
+                }
             return {
                 "status": "archived", "apply": False, "chosen_folder": None, "chosen_rank": None,
                 "confidence": None, "date_prefix": False, "files": [already],
@@ -844,6 +876,7 @@ class ArchiveBatchService:
                     sequence=str(entry.get("sequence_number") or "") or None,
                     entry_id=str(entry.get("entry_id") or "") or None, error=None,
                 )
+                self._log_finish(entry)
                 continue
             # ``files`` is filled in before the move, so a failure here can still
             # have written to disk — recorded as such, because that is exactly
@@ -856,6 +889,27 @@ class ArchiveBatchService:
                 entry_id=str(entry.get("entry_id") or "") or None, error=message,
             )
             logger.warning("⚠️ archive: a mail did not file — %s", message)
+
+    @staticmethod
+    def _log_finish(entry: dict[str, Any]) -> None:
+        """Breadcrumb for the two additive ``apply`` fields (email-archiver#59).
+
+        Neither is stored — they describe *how* one child call went, not the
+        state of the mail — but which of them applied is the first thing anyone
+        asks when a stuck mail finally leaves the Inbox, so the log has to be
+        able to answer it. Read by name and defensively: an older archiver
+        states neither and this stays quiet rather than inventing a path.
+        """
+        if entry.get("reused"):
+            logger.info(
+                "ℹ️ archive: %s was finished from the file already on disk (moved via %s)",
+                entry.get("message_id"), entry.get("move_via") or "an unnamed path",
+            )
+        elif entry.get("move_via") in ("refetched", "saved_retry"):
+            logger.info(
+                "ℹ️ archive: %s needed the archiver's %s path to move",
+                entry.get("message_id"), entry.get("move_via"),
+            )
 
     @staticmethod
     def _apply_error_message(error: Any, files: list[str]) -> str:
@@ -1083,6 +1137,92 @@ class ArchiveBatchService:
         message = self._apply_error_message(entry.get("error"), files)
         update_item(conn, item_id, status="failed", error=message, **common)
         raise ArchiveError("archive_move_failed", message, http_status=502)
+
+    @staticmethod
+    def _require_retryable(item: dict[str, Any]) -> None:
+        """The one shape a retry finishes: refused *after* the files were written.
+
+        Two distinct refusals, because the fix differs: a row in any other state
+        has nothing half-done to finish, and a ``failed`` row that never reached
+        disk has no folder to send back — re-deciding that one is a *run*'s job,
+        not a retry's.
+        """
+        if item["status"] != "failed" or not item["files"]:
+            raise ArchiveError(
+                "archive_bad_state",
+                f"archive item {item['id']} is {item['status']} with no archived file — a retry "
+                "only finishes a mail whose files are already on disk",
+                http_status=409,
+            )
+        if not item["chosen_folder"]:
+            raise ArchiveError(
+                "archive_bad_state",
+                f"archive item {item['id']} has files but no folder to retry into — file it by "
+                "hand instead",
+                http_status=409,
+            )
+
+    def retry(self, conn: sqlite3.Connection, item_id: int) -> dict[str, Any]:
+        """Send a refused move back to the archiver, unchanged (#174).
+
+        The shape this exists for: ``apply`` wrote the ``.msg`` and then Outlook
+        refused the move (``move_failed``), so the files are on disk and the mail
+        is still in the Inbox — and every later ``plan`` reports it
+        ``already_archived``, so no run would ever pick it up again. The remedy
+        the archiver names is *apply the same decision again*
+        (email-archiver#59): it writes nothing, reuses the existing file, moves
+        the mail and tags it.
+
+        So nothing is re-decided here. The **same** message, folder and naming
+        form go back, and on ``ok`` the row becomes ``archived`` keeping the
+        files and sequence it already had — a reused apply allocates no new
+        sequence number and reports the existing file, and neither is a reason to
+        forget what the row knows. A second refusal leaves the row ``failed``
+        with the archiver's new message, which is the one that says whether
+        restarting Outlook is what is left to try.
+        """
+        item = self._require(conn, item_id)
+        self._require_retryable(item)
+        self._claim()
+        try:
+            applied = self._spawn_with_payload("apply", "--decisions", [{
+                "message_id": item["message_id"], "folder_path": item["chosen_folder"],
+                "date_prefix": bool(item["date_prefix"]),
+            }])
+        finally:
+            self._lock.release()
+
+        entry = next((r for r in applied.get("results") or [] if isinstance(r, dict)), None)
+        if entry is None:
+            # Nothing was asked of Outlook that could have half-succeeded: the
+            # row keeps its files and its state, and only the reason changes.
+            message = ("the archiver reported no result for the retry — the files are still on "
+                       "disk and the mail is still in the Inbox")
+            update_item(conn, item_id, error=message)
+            raise ArchiveError("archive_retry_failed", message, http_status=502)
+
+        # Read back defensively: a reuse reports the existing file and an empty
+        # sequence, but an index row whose file had gone is archived for real and
+        # comes back with a new file and a new number. Whichever happened, what
+        # the archiver says now wins over what the row remembered — and what it
+        # does not say leaves the row's own value alone.
+        files = [str(f) for f in entry.get("files") or []] or list(item["files"])
+        if entry.get("ok"):
+            self._log_finish(entry)
+            return update_item(
+                conn, item_id, status="archived",
+                files_json=json.dumps(files, ensure_ascii=False),
+                sequence=str(entry.get("sequence_number") or "") or item["sequence"],
+                entry_id=str(entry.get("entry_id") or "") or item["entry_id"],
+                error=None, decided_at=clock.now_iso(),
+            )
+        message = self._apply_error_message(entry.get("error"), files)
+        update_item(
+            conn, item_id, status="failed",
+            files_json=json.dumps(files, ensure_ascii=False), error=message,
+        )
+        logger.warning("⚠️ archive: the retry did not finish item %d — %s", item_id, message)
+        raise ArchiveError("archive_retry_failed", message, http_status=502)
 
     @staticmethod
     def _date_prefix_for(item: dict[str, Any], destination: str) -> bool:

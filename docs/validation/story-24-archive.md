@@ -12,22 +12,23 @@ This record also carries the on-screen half of **story 21** (capture into the In
 | 2 | Board → open a captured task | it is an Inbox task created by `email-archiver`, carrying the `.msg` chip whose href is the per-PC `taskos://open?ref=…` link |
 | 3 | Open the **Archive** tab before any run | `ready`, the ranking model named, the *first N mails* bound empty (= the whole Inbox), *Last run: never*, and an empty state saying so — never a blank pane |
 | 4 | Press **Archive Inbox now** | the button disables and reads *Archiving…*; a second run is refused with 409 `archive_in_flight` — one Outlook, one run at a time |
-| 5 | The run finishes | the head counts `3 mail(s) · 1 filed · 1 need you · 1 failed`, a toast says the same, and the report draws one row per mail with destination (last three path components, full path on hover), the `.msg` as an opener chip, confidence, the reason and the state |
-| 6 | Look at what each row offers | `archived` → *Move to…* + *Revert*, **no Accept** (a filed mail is finished, not reviewed — the API answers 409); `needs_review` → *Accept* + *File it…*; `failed` with files → all three; `reverted` → nothing, and the row says *back in the Inbox* |
+| 5 | The run finishes | the head counts `7 mail(s) · 3 filed · 3 need you · 1 failed`, a toast says the same, and the report draws one row per mail with destination (last three path components, full path on hover), the `.msg` as an opener chip, confidence, the reason and the state |
+| 6 | Look at what each row offers | `archived` → *Move to…* + *Revert*, **no Accept** (a filed mail is finished, not reviewed — the API answers 409); `needs_review` → *Accept* + *File it…*; `failed` with files → all of those plus **Retry** (#174), the only row that offers it; `reverted` → nothing, and the row says *back in the Inbox* |
 | 7 | Open the `needs_review` row's **File it…** | the candidates the run already ranked are listed with their scores (no re-plan — they are stored on the row), *Other folder…* offers the same index picker the drawer uses, and there is one optional hint field |
 | 8 | Type a hint and press a candidate | the vendored confirm names the mail and the folder; on confirm the row becomes *moved by you*, its reason reads *filed here by hand from the Inbox*, and the archiver was asked to **file** it — no undo leg, because nothing was on disk |
-| 9 | **Accept** the failed row | `decided_at` is stamped, no file moves, and the *Accept all N that need you* bar disappears once nothing is left |
+| 9 | **Accept** the failed row | `decided_at` is stamped, no file moves, and the *Accept all N that need you* bar disappears once nothing is left. Seeing it is not finishing it: the mail is still in the Inbox, so *Retry* stays offered and the error text stays on screen (#174) |
 | 10 | **Revert** the filed row | the confirm warns the file is deleted, not binned; on confirm the archiver is sent exactly that mail's files, the row becomes `reverted` and its files empty |
 | 11 | Board | the Inbox header carries *N mail(s) need you* pointing at the tab — the count the **run** recorded, never a guess about what is still in Outlook |
 | 12 | Command palette → *Go to Archive* | lands on the tab, like every other destination |
 | 13 | Phone (390×844) | six entries in the bottom pill; the report degrades to one card per mail with the actions behind each row's *Review* |
 | 14 | An install without the archiver | the head says *not configured* with the reason, the button and the bound are disabled, and the report area says the same — never a dead press |
 | 15 | Settings → *Batch email archiving* (#167) | one card among the others: header word `on`, then *Archiver* `ready` + the checkout, *Model* + batch size + remembered corrections, *Threshold* + the candidate count, *Last run* with the same counts the tab's head shows, and *Report* → **Open the Archive tab**, which lands on it |
+| 16b | The `failed` row's **Retry**, on the phone (#174) | its review menu offers *Review* · *Move to…* · *Retry* · *Revert* in the one `.archive-action` shape (no *Accept*: it was seen on the desktop leg); one tap re-sends the same decision — same message, same folder, same naming form — the row becomes `filed`, the error text goes, the file and the sequence it already had are kept and no new file is written |
 | 16 | Press **Run now** on that card | a run starts over the whole Inbox, the header word becomes `running` and the button goes out; a press that arrives while one is going gets the API's own *one Outlook, one run at a time* as a toast, not a console error; the card polls itself back out of `running` when the run lands |
 
 ## Proof
 
-- **Screenshots:** [1](../screenshots/story-24-archive-1-desktop.png) (Capture card after *Check now*) · [2](../screenshots/story-24-archive-2-desktop.png) (the captured task's `.msg` chip in the drawer) · [3](../screenshots/story-24-archive-3-desktop.png) (Archive tab, nothing run yet) · [4](../screenshots/story-24-archive-4-desktop.png) (the report: filed · needs you · failed) · [5](../screenshots/story-24-archive-5-desktop.png) (filing a needs-you mail — candidates, other folder, hint typed) · [6](../screenshots/story-24-archive-6-desktop.png) (dark, after the review round: reverted · moved by you · failed-and-seen) · [7](../screenshots/story-24-archive-7-phone.png) (the report as cards) · [8](../screenshots/story-24-archive-8-phone.png) (one card's review menu, dark) · [9 desktop](../screenshots/story-24-archive-9-desktop.png) (Settings' *Batch email archiving* card after the run) · [9 phone](../screenshots/story-24-archive-9-phone.png) (the same card at 390, dark, full page).
+- **Screenshots:** [1](../screenshots/story-24-archive-1-desktop.png) (Capture card after *Check now*) · [2](../screenshots/story-24-archive-2-desktop.png) (the captured task's `.msg` chip in the drawer) · [3](../screenshots/story-24-archive-3-desktop.png) (Archive tab, nothing run yet) · [4](../screenshots/story-24-archive-4-desktop.png) (the report: filed · needs you · failed) · [5](../screenshots/story-24-archive-5-desktop.png) (filing a needs-you mail — candidates, other folder, hint typed) · [6](../screenshots/story-24-archive-6-desktop.png) (dark, after the review round: reverted · moved by you · failed-and-seen) · [7](../screenshots/story-24-archive-7-phone.png) (the report as cards) · [8](../screenshots/story-24-archive-8-phone.png) (one card's review menu, dark) · [9 desktop](../screenshots/story-24-archive-9-desktop.png) (Settings' *Batch email archiving* card after the run) · [9 phone](../screenshots/story-24-archive-9-phone.png) (the same card at 390, dark, full page) · [10 phone](../screenshots/story-24-archive-10-phone.png) (**Retry** in the failed row's review menu, dark, #174).
 - **E2e:** `tests/e2e/test_story_24_archive.py` — one disposable instance over the synthetic archiver index (`tests/fixtures/emails_fixture.py`) **and** the fake archiver checkout (`tests/fixtures/archiver_fake.build_fake_archiver`: a real `main_batch.py` with canned JSON answers, so the argv, the temp decisions file, the UTF-8 decode, the exit codes and the timeout all run for real, with no Outlook anywhere). `archive.enabled` is true only in that instance's temp config; `tests/test_archive.py::test_the_sample_config_never_arms_the_real_archiver` keeps the committed sample off, so a fresh clone, a worktree and the gate itself can never drive this machine's Outlook.
 - **Unit/API:** `tests/test_archive.py` — the run state machine, the two-layer folder decision, the correction memory, the four classified failures, and (new for #159) `test_move_files_a_needs_review_mail_that_was_never_archived` and `test_move_refuses_a_reverted_mail_and_names_why`. `tests/test_capture.py` + `tests/test_api.py` keep story 21's off-screen half: the re-run that creates nothing, the un-flagged mail whose task stays, the folded `.msg` ref as `external_id`, the WhatsApp replay, and the *not configured* reason a pre-flag archiver produces.
 
@@ -79,3 +80,45 @@ First real use on a phone; the owner's point-by-point list and everything it cha
 The run this story drives grows two more `needs_review` mails — one accepted on the desktop leg, one left open — so both new states are on screen and the count can be checked against the rows on either side of a review. That is what the phone leg now asserts, in geometry rather than by eye: the head on one line (the run button and the bound sharing a `y`), the three status readings at one line each, the picker's right edge on the bar's right edge, a full-width *Accept all (N)* whose N equals the rows still offering *Accept*, one tag / height / font size across every action in an open review menu, and the *File it…* panel's two-line candidates, equal-height full-width controls and 44 px targets. Shot 8 is captured with the panel deliberately scrolled to the middle of the viewport and **checked it got there**, clear of the floating pill (rule 3).
 
 One thing the state change is worth spelling out: a `needs_review` row that has been accepted keeps that status in the database — the mail really is still sitting in the Inbox — but the screen stops offering *Accept* and *File it…* on it and reads **reviewed**. Nothing is lost: the mail is still in the Inbox and the next run owns it. What is gained is that the bulk button's count and the rows can no longer disagree, which is the bug the owner reported.
+
+## Finishing a refused move — 2026-09-10 (#174): the loop closes
+
+The first whole-Inbox run (#4, 13 real mails) produced the two states this story
+had never had to answer for. A mail whose `.msg` `apply` wrote **before** Outlook
+refused the move stayed `failed` with its files on disk, offering only *Revert* —
+and because its file is in the archiver's index, every later `plan` reports it
+`already_archived`, so no run would ever pick it up again. It could not leave the
+Inbox at all except by hand.
+
+email-archiver#59 made `apply` safe to repeat, and this story now walks both
+halves of the answer on the same instance:
+
+- **The run finishes what is already on disk.** A `plan` mail carrying
+  `already_archived` **and** `in_inbox: true` goes through `apply` with the folder
+  its file lives in, instead of being recorded as done. The fake archiver answers
+  it exactly as the real one does — `reused: true`, the existing file handed back,
+  an **empty** `sequence_number`, because nothing was written — and the row reads
+  *finished a mail already on disk*, with no rank, no confidence and no new file.
+  `in_inbox` is additive, so a plan that does not state it (an older archiver) or
+  states it false keeps the old no-op; both are unit-tested.
+- **A refused move is one tap from done.** *Retry* re-sends the **same** decision
+  — same message, same folder, same naming form, nothing re-ranked — and the row
+  becomes `archived` keeping the files and the sequence number the first attempt
+  allocated. There is deliberately no confirmation: it deletes nothing and it only
+  ever completes the filing the run already decided on, which is what the row's
+  own error text asks for. A second refusal keeps the row `failed` with the
+  archiver's **newer** message, which is the one that says whether restarting
+  Outlook is what is left to try.
+
+*Retry* is drawn on exactly one shape — `failed`, with files, with a folder —
+because anywhere else re-sending a decision would file a mail twice; the service
+refuses every other row with `409 archive_bad_state` before a child is spawned at
+all, and the screen draws no control the API would refuse. It is **not** gated on
+`decided_at`: accepting a `failed` row says "I have seen this", which does not take
+the mail out of the Inbox.
+
+The desktop leg shoots the *Retry* button in the run's own report (shot 4) and the
+phone leg opens the failed card's review menu, checks the four buttons share one
+tag, height, font size and padding, shoots it (shot 10) and taps it — so the
+gesture is proven on the rendering it was reported from. The suite did not grow:
+16 tests across 13 files, one story test per step.
