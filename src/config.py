@@ -178,6 +178,13 @@ class ArchiveConfig:
                  sample**: no checkout without its own config — a fresh clone,
                  a worktree, the disposable e2e instance — may drive the real
                  Outlook.
+    ``renumber`` ask the archiver to re-sequence every folder an ``apply`` or a
+                 ``revert`` disturbed, so its ``NNN`` prefixes stay contiguous
+                 and in sent-date order (email-archiver#61). On by default: the
+                 renaming is the archiver's own repair of a folder *this* app's
+                 filing broke, and every path it renames is healed here from
+                 the map it returns (:func:`~src.archive_batch.apply_renumber_map`).
+                 Off leaves both verbs behaving exactly as they did.
 
     The ranking (#158) reaches the same hub ``ai.base_url`` names, with its own
     model: ``model`` is deliberately not ``ai.model``, because triage and
@@ -208,6 +215,7 @@ class ArchiveConfig:
     batch_size: int = 8
     examples: int = 20
     ai_timeout_seconds: float = 180.0
+    renumber: bool = True
 
 
 @dataclass(frozen=True)
@@ -457,6 +465,7 @@ def load_config(path: Path | None = None) -> AppConfig:
                 archive.get("ai_timeout_seconds"), ArchiveConfig.ai_timeout_seconds,
                 "archive.ai_timeout_seconds",
             ),
+            renumber=bool(archive.get("renumber", ArchiveConfig.renumber)),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),

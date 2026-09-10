@@ -20,8 +20,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src import archive_batch
+from scripts import apply_renumber_map as apply_map
+from src import archive_batch, email_capture, placeholders
 from src import db as dbmod
+from src import tasks_repo as repo
 from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService, ArchiveError
 from src.config import AIConfig, AppConfig, ArchiveConfig
@@ -37,6 +39,7 @@ from tests.fixtures.archiver_fake import (
     error_doc,
     mail,
     plan_doc,
+    renumbered,
     revert_doc,
     revert_result,
 )
@@ -967,6 +970,218 @@ def test_retry_refuses_every_row_with_nothing_half_done(
     assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
 
 
+# ------------------------------------------------------------- renumbering
+
+
+#: What the archiver renames :data:`ARCHIVED_FILE` to when it closes a gap in
+#: front of it, and the attachment that travels with it — a bundle is a number
+#: and every file carrying it, so both move together or neither does.
+RENUMBERED_FILE = "E:\\archive\\house\\heating\\0002 - boiler service.msg"
+ATTACHMENT_FILE = "E:\\archive\\house\\heating\\0042 - report.pdf"
+RENUMBERED_ATTACHMENT = "E:\\archive\\house\\heating\\0002 - report.pdf"
+OLDER_RENUMBERED = "E:\\archive\\house\\heating\\0001 - an older thread.msg"
+
+
+def _capture_the_email(conn: sqlite3.Connection, path: str) -> dict:
+    """The task a flagged mail at ``path`` leaves behind — the link and the key.
+
+    Built through the same two calls :mod:`src.email_capture` makes, so the
+    heal is tested against what capture actually stores rather than against a
+    hand-written row.
+    """
+    ref = placeholders.to_ref(placeholders.normalize_path(path), {"archive": "E:/archive"})
+    task, outcome = repo.capture_task(
+        conn, external_id=email_capture.external_id_for(ref), title="Boiler service",
+        actor=email_capture.CAPTURE_ACTOR,
+    )
+    assert outcome == "created"
+    repo.add_link(conn, task["id"], ref, label=ref.rsplit("/", 1)[-1], kind="email")
+    return task
+
+
+def test_an_apply_that_renumbers_heals_every_path_this_database_stores(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The archiver renames, task-os follows — in all three places at once.
+
+    ``apply --renumber`` re-sequences the folder it just wrote into, and its own
+    ``files`` name what the mail was written as *before* that. So the row, the
+    link chip and the capture key must all end up on the new name, and the next
+    capture poll must recognise the mail rather than land it a second time.
+    """
+    captured = _capture_the_email(conn, ARCHIVED_FILE)
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("boiler@example.invalid", subject="Boiler service",
+                             candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[apply_doc(
+            # the pre-renumber names, exactly as the archiver reports them
+            [apply_result("boiler@example.invalid", FOLDER_HOUSE,
+                          files=[ARCHIVED_FILE, ATTACHMENT_FILE])],
+            renumbered_map=renumbered(
+                FOLDER_HOUSE, old=ARCHIVED_FILE, new=RENUMBERED_FILE,
+                message_id="boiler@example.invalid",
+                attachments=[[ATTACHMENT_FILE, RENUMBERED_ATTACHMENT]],
+            ),
+        )],
+    )
+    svc = service_for(repo_dir)
+    item = _one_archived_item(conn, svc)
+
+    # The flag actually went out on the command line…
+    assert "--renumber" in [c for c in calls(repo_dir) if c["verb"] == "apply"][0]["argv"]
+    # …the row carries the names on disk now, not the ones apply reported…
+    assert item["files"] == [RENUMBERED_FILE, RENUMBERED_ATTACHMENT]
+    assert item["reason"].endswith(" · renumbered 2 file(s) in heating")
+
+    # …the link chip opens the renamed file…
+    link = repo.list_links(conn, captured["id"])[0]
+    assert link["url"] == "{archive}/house/heating/0002 - boiler service.msg"
+    # …and the capture key moved with it, so a second poll lands nothing.
+    again, outcome = repo.capture_task(
+        conn, external_id=link["url"] and email_capture.external_id_for(link["url"]),
+        title="Boiler service", actor=email_capture.CAPTURE_ACTOR,
+    )
+    assert outcome == "unchanged" and again["id"] == captured["id"]
+    assert conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
+
+
+def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The mail that stays behind is renamed, and its own revert must find it.
+
+    A ``revert`` leaves a hole and the archiver closes it, which renumbers the
+    *other* mails in that folder. Without the heal the second undo would hand
+    the archiver a path that no longer exists — the failure this whole issue is
+    about.
+    """
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("first@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("second@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        ])],
+        apply=[apply_doc([
+            apply_result("first@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+            apply_result("second@example.invalid", FOLDER_HOUSE, files=[OLDER_FILE]),
+        ])],
+        revert=[
+            revert_doc(
+                [revert_result("first@example.invalid", deleted=[ARCHIVED_FILE])],
+                renumbered_map=renumbered(
+                    FOLDER_HOUSE, old=OLDER_FILE, new=OLDER_RENUMBERED,
+                    message_id="second@example.invalid",
+                ),
+            ),
+            revert_doc([revert_result("second@example.invalid", deleted=[OLDER_RENUMBERED])]),
+        ],
+    )
+    svc = service_for(repo_dir)
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+
+    undone = svc.revert(conn, items["first@example.invalid"]["id"])
+    assert undone["status"] == "reverted" and undone["files"] == []
+    assert undone["reason"].endswith(" · renumbered 1 file(s) in heating")
+    # The mail still filed there followed the rename.
+    stayed = archive_batch.get_item(conn, items["second@example.invalid"]["id"])
+    assert stayed["files"] == [OLDER_RENUMBERED]
+
+    svc.revert(conn, stayed["id"])
+    sent = [c for c in calls(repo_dir) if c["verb"] == "revert"][-1]["payload"]
+    assert sent == [{"message_id": "second@example.invalid", "files": [OLDER_RENUMBERED]}]
+
+
+def test_renumbering_off_asks_for_nothing_and_a_document_without_a_map_changes_nothing(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """``archive.renumber: false`` and an archiver too old to renumber: one shape.
+
+    Neither is an error and neither may heal anything — a missing ``renumbered``
+    key is what every build before email-archiver#61 prints, so absence has to
+    read as "nothing moved", never as a reason to guess.
+    """
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("quiet@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[apply_doc([apply_result("quiet@example.invalid", FOLDER_HOUSE,
+                                       files=[ARCHIVED_FILE])])],
+    )
+    svc = service_for(repo_dir, renumber=False)
+    item = _one_archived_item(conn, svc)
+    assert "--renumber" not in [c for c in calls(repo_dir) if c["verb"] == "apply"][0]["argv"]
+    assert item["files"] == [ARCHIVED_FILE]
+    assert "renumbered" not in (item["reason"] or "")
+
+
+def test_a_folder_the_archiver_refused_to_renumber_is_said_out_loud(
+    conn: sqlite3.Connection, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An empty map means *already in order*; a refusal is a different fact.
+
+    Only the second one can leave a stored path stale, so it is logged rather
+    than folded into the quiet path — and neither of them writes a note onto a
+    row that had nothing renamed.
+    """
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("tidy@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[apply_doc(
+            [apply_result("tidy@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])],
+            renumbered_map={FOLDER_HOUSE: []},
+            refused=[{"folder_path": FOLDER_BILLS, "reason": "outside the archive roots"}],
+        )],
+    )
+    svc = service_for(repo_dir)
+    with caplog.at_level("WARNING"):
+        item = _one_archived_item(conn, svc)
+    assert item["files"] == [ARCHIVED_FILE] and "renumbered" not in (item["reason"] or "")
+    assert "refused to renumber bills" in caplog.text
+
+
+def test_a_saved_map_heals_the_same_way_and_a_dry_run_writes_nothing(
+    conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``scripts/apply_renumber_map.py`` — the out-of-band repair, previewable.
+
+    Same three rewrites as an in-run heal, driven from a map file the archiver's
+    own ``renumber`` verb printed; ``--dry-run`` reports the identical counts and
+    leaves every row exactly as it was.
+    """
+    monkeypatch.setenv(
+        "TASKOS_CONFIG_PATH",
+        str(write_test_config(tmp_path / "config.json", placeholders={"archive": "E:/archive"})),
+    )
+    captured = _capture_the_email(conn, ARCHIVED_FILE)
+    item_id = archive_batch.insert_item(
+        conn, archive_batch.create_run(conn)["id"], message_id="saved@example.invalid",
+        subject="Boiler service", status="archived",
+        files_json=json.dumps([ARCHIVED_FILE, ATTACHMENT_FILE]),
+    )
+    map_file = tmp_path / "renumber-heal.json"
+    map_file.write_text(json.dumps(renumbered(
+        FOLDER_HOUSE, old=ARCHIVED_FILE, new=RENUMBERED_FILE,
+        attachments=[[ATTACHMENT_FILE, RENUMBERED_ATTACHMENT]],
+    )), encoding="utf-8")
+
+    assert apply_map.main([str(map_file), "--dry-run"]) == 0
+    preview = capsys.readouterr().out
+    assert "would rewrite 1 archive item(s), 1 link(s) and 1 captured task(s)" in preview
+    assert archive_batch.get_item(conn, item_id)["files"] == [ARCHIVED_FILE, ATTACHMENT_FILE]
+
+    assert apply_map.main([str(map_file)]) == 0
+    assert "rewrote 1 archive item(s), 1 link(s) and 1 captured task(s)" in capsys.readouterr().out
+    assert archive_batch.get_item(conn, item_id)["files"] == [
+        RENUMBERED_FILE, RENUMBERED_ATTACHMENT,
+    ]
+    assert repo.list_links(conn, captured["id"])[0]["url"].endswith("0002 - boiler service.msg")
+
+    # And again: a pair whose old name is stored nowhere matches nothing.
+    assert apply_map.main([str(map_file)]) == 0
+    assert "rewrote 0 archive item(s), 0 link(s) and 0 captured task(s)" in capsys.readouterr().out
+
+
 # --------------------------------------------------------------------- API
 
 
@@ -1168,8 +1383,11 @@ def test_the_sample_config_never_arms_the_real_archiver() -> None:
     assert raw["archive"]["enabled"] is False
     assert set(raw["archive"]) == {
         "enabled", "repo", "python", "candidates", "confidence_threshold", "timeout_seconds",
-        "model", "batch_size", "examples", "ai_timeout_seconds",
+        "model", "batch_size", "examples", "ai_timeout_seconds", "renumber",
     }
+    # On by default: the renaming is the archiver's repair of a folder this
+    # app's own filing left ragged, and every path it renames is healed here.
+    assert raw["archive"]["renumber"] is True
     # The ranking's own model and its own request bound, never ai.model /
     # ai.timeout_seconds: two features, two jobs, two very different request
     # lengths (#158).

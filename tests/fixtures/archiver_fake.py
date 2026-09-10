@@ -133,9 +133,43 @@ def apply_result(
     }
 
 
-def apply_doc(results: list[dict[str, Any]]) -> dict[str, Any]:
-    applied = sum(1 for r in results if r["ok"])
+def renumbered(
+    folder: str,
+    *,
+    old: str | None = None,
+    new: str | None = None,
+    message_id: str = "renumbered@example.invalid",
+    attachments: list[list[str]] | None = None,
+) -> dict[str, Any]:
+    """One folder's ``renumbered`` map with a single changed bundle in it.
+
+    The archiver's shape verbatim (email-archiver#61): ``from``/``to`` are the
+    ``.msg``'s old and new names and are ``None`` for a bundle that has none,
+    ``attachments`` pairs each attachment's old name with its new one, and only
+    bundles that actually moved appear at all.
+    """
     return {
+        folder: [{
+            "from": old, "to": new, "message_id": message_id,
+            "attachments": [list(a) for a in attachments or []],
+        }],
+    }
+
+
+def apply_doc(
+    results: list[dict[str, Any]],
+    *,
+    renumbered_map: dict[str, Any] | None = None,
+    refused: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """One ``apply`` document; ``renumbered_map`` is what ``--renumber`` adds to it.
+
+    Additive on the archiver's side — no ``schema_version`` bump — so a
+    document without either key is exactly what a build predating the flag
+    prints, which is the case the reader has to keep quiet about.
+    """
+    applied = sum(1 for r in results if r["ok"])
+    doc = {
         "verb": "apply",
         "schema_version": SCHEMA_VERSION,
         "generated_at": "2026-09-01T10:01:00+02:00",
@@ -144,6 +178,11 @@ def apply_doc(results: list[dict[str, Any]]) -> dict[str, Any]:
         "counts": {"requested": len(results), "applied": applied, "failed": len(results) - applied},
         "results": results,
     }
+    if renumbered_map is not None:
+        doc["renumbered"] = renumbered_map
+    if refused is not None:
+        doc["renumber_refused"] = refused
+    return doc
 
 
 def revert_result(
@@ -164,9 +203,15 @@ def revert_result(
     }
 
 
-def revert_doc(results: list[dict[str, Any]]) -> dict[str, Any]:
+def revert_doc(
+    results: list[dict[str, Any]],
+    *,
+    renumbered_map: dict[str, Any] | None = None,
+    refused: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """One ``revert`` document — ``--renumber`` closes the hole the undo left."""
     reverted = sum(1 for r in results if r["ok"])
-    return {
+    doc = {
         "verb": "revert",
         "schema_version": SCHEMA_VERSION,
         "generated_at": "2026-09-01T10:02:00+02:00",
@@ -175,6 +220,11 @@ def revert_doc(results: list[dict[str, Any]]) -> dict[str, Any]:
         "counts": {"requested": len(results), "reverted": reverted, "failed": len(results) - reverted},
         "results": results,
     }
+    if renumbered_map is not None:
+        doc["renumbered"] = renumbered_map
+    if refused is not None:
+        doc["renumber_refused"] = refused
+    return doc
 
 
 def error_doc(verb: str, code: str, message: str) -> dict[str, Any]:
@@ -204,7 +254,9 @@ def main():
     sub = parser.add_subparsers(dest="verb", required=True)
     p = sub.add_parser("plan"); p.add_argument("--candidates", type=int, default=10)
     a = sub.add_parser("apply"); a.add_argument("--decisions", required=True)
+    a.add_argument("--renumber", action="store_true")
     r = sub.add_parser("revert"); r.add_argument("--items", required=True)
+    r.add_argument("--renumber", action="store_true")
     args = parser.parse_args()
 
     responses = _load("_responses.json")
@@ -291,5 +343,6 @@ def calls(root: Path) -> list[dict[str, Any]]:
 
 __all__ = [
     "FOLDER_BILLS", "FOLDER_HOUSE", "apply_doc", "apply_result", "build_fake_archiver",
-    "calls", "candidate", "error_doc", "mail", "plan_doc", "revert_doc", "revert_result",
+    "calls", "candidate", "error_doc", "mail", "plan_doc", "renumbered", "revert_doc",
+    "revert_result",
 ]
