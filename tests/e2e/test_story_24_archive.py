@@ -112,6 +112,17 @@ STUCK_ID = "roof@example.invalid"
 #: button whose count is the rows that really do still offer *Accept*.
 REVIEWED_ID = "renewal@example.invalid"
 OPEN_ID = "invoice@example.invalid"
+#: A filed mail whose `.msg` name alone is ~90 characters, with three
+#: attachment files beside it — the phone card #173 fixes: on the school
+#: mail's real card the `.msg` chip ran past the card's right edge and the
+#: pane scrolled sideways, exactly what the run below reproduces before the
+#: fix (and stays clean after it).
+LONG_ID = "school-enrolment@example.invalid"
+LONG_FILE = ("E:\\archive\\house\\heating\\2026-09-08 - 0006 - "
+             "School enrolment forms for the autumn term and the after-school club.msg")
+LONG_ATT_1 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - enrolment-form.pdf"
+LONG_ATT_2 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - payment-schedule.docx"
+LONG_ATT_3 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - club-timetable.pdf"
 
 #: Long enough that the running state is observable from the page and from a
 #: second POST, short enough that the story stays a few seconds.
@@ -153,6 +164,12 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
             # …and one left open, so the phone has something to file
             mail(OPEN_ID, subject="Service invoice", sender="billing@example.invalid",
                  candidates=[candidate(BILLS, 0.34), candidate(HOUSE, 0.22)]),
+            # over the threshold, filed with a long `.msg` name and three
+            # attachments beside it (#173) — the phone card this reproduces
+            # sideways scroll on.
+            mail(LONG_ID, subject="School enrolment forms for the autumn term",
+                 sender="school@example.invalid", attachments=3,
+                 candidates=[candidate(HOUSE, 0.93, date_prefix=True)]),
         ])],
         apply=[
             apply_doc([
@@ -161,6 +178,8 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
                              error={"code": "move_failed",
                                     "message": "the mail could not be moved to Archive — "
                                                f"{UNREACHABLE} is not reachable"}),
+                apply_result(LONG_ID, HOUSE, files=[LONG_FILE, LONG_ATT_1, LONG_ATT_2, LONG_ATT_3],
+                             sequence="0006"),
             ]),
             # every later apply is the story's own filing of the unsure mail
             apply_doc([apply_result(UNSURE_ID, BILLS, files=[BILLS_FILE], sequence="0007")]),
@@ -324,24 +343,32 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(pane.locator("#archiveRunLabel")).to_have_text("Archiving…")
     assert _post_status(base, "/api/archive/run", {}) == 409
 
-    # 5. It finishes on its own and the report fills in: one filed, one that
+    # 5. It finishes on its own and the report fills in: two filed, one that
     #    needs a human, one the archiver broke on.
     expect(pane.locator("#archiveRun")).to_be_enabled(timeout=30000)
-    expect(pane.locator(".archive-row")).to_have_count(5)
+    expect(pane.locator(".archive-row")).to_have_count(6)
     run_id = _get(base, "/api/archive/runs")["runs"][0]["id"]
     items = _items(base, run_id)
     assert {i["message_id"]: i["status"] for i in items} == {
         FILED_ID: "archived", UNSURE_ID: "needs_review", STUCK_ID: "failed",
-        REVIEWED_ID: "needs_review", OPEN_ID: "needs_review",
+        REVIEWED_ID: "needs_review", OPEN_ID: "needs_review", LONG_ID: "archived",
     }
     expect(pane.locator("#statusArchiveRun")).to_contain_text(
-        "5 mail(s) · 1 filed · 3 need you · 1 failed"
+        "6 mail(s) · 2 filed · 3 need you · 1 failed"
     )
     filed_row, filed_item = _row(page, FILED_ID, items)
     expect(filed_row.locator(".archive-state")).to_have_text("filed")
     expect(filed_row.locator(".archive-dest")).to_have_text("archive › house › heating")
     expect(filed_row.locator(".archive-files a.chip")).to_have_attribute(
         "href", "taskos://open?ref=" + "E%3A%5Carchive%5Chouse%5Cheating%5C0042%20-%20boiler%20service.msg"
+    )
+    long_row, long_item = _row(page, LONG_ID, items)
+    expect(long_row.locator(".archive-state")).to_have_text("filed")
+    expect(long_row.locator(".archive-files a.chip")).to_have_count(4)
+    # Desktop keeps the full name, date prefix and all (#173) — the phone-only
+    # trim is a card-width concession, not a change to what the desktop shows.
+    expect(long_row.locator(".archive-files a.chip").first).to_have_text(
+        "2026-09-08 - 0006 - School enrolment forms for the autumn term and the after-school club.msg"
     )
     stuck_row, _ = _row(page, STUCK_ID, items)
     expect(stuck_row.locator(".archive-state")).to_have_text("failed")
@@ -452,7 +479,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(acard.locator("#statusArchiveModel")).to_contain_text("per batch")
     expect(acard.locator("#statusArchiveThreshold")).to_contain_text("70%")
     expect(acard.locator("#statusArchiveLast")).to_contain_text(
-        "5 mail(s) · 1 filed · 3 need you · 1 failed"
+        "6 mail(s) · 2 filed · 3 need you · 1 failed"
     )
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
@@ -469,8 +496,24 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("nav.tabs .tab")).to_have_count(6)
     p.get_by_role("tab", name="Archive").tap()
     expect(p.locator("#paneArchive")).to_be_visible()
-    expect(p.locator(".archive-card")).to_have_count(5)
+    expect(p.locator(".archive-card")).to_have_count(6)
     expect(p.locator(".archive-table")).to_have_count(0)
+
+    # 10a-1. The long `.msg` name with three attachments beside it (#173):
+    #        every chip stays inside the card, cut with an ellipsis, rather
+    #        than widening the card and scrolling the pane sideways — the
+    #        defect #168 fixed for the subject/path/reason columns, now for
+    #        the file chips too.
+    long_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, LONG_ID)}']")
+    long_chips = long_card.locator(".archive-files .chip")
+    expect(long_chips).to_have_count(4)
+    card_box = _box(long_card)
+    for chip_index in range(4):
+        chip_box = _box(long_chips.nth(chip_index))
+        assert chip_box["x"] + chip_box["width"] <= card_box["x"] + card_box["width"] + 1, (
+            f"chip {chip_index} runs past the card's right edge ({chip_box} vs {card_box})"
+        )
+    assert_no_horizontal_overflow(p)
 
     # 10a. The head is one line, and the three readings are one line each — no
     #      label column, short wording, and the bound compact beside the button
@@ -484,7 +527,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # day still in the locale's own order (the date moves, so the shape is what
     # is asserted).
     expect(p.locator("#statusArchiveRun")).to_have_text(
-        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 1 filed")
+        re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 2 filed")
     )
     for index in range(3):
         row = _box(p.locator("#paneArchive .archive-head .status-row").nth(index))
@@ -577,7 +620,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(pcard).to_have_attribute("open", "")
     expect(pcard.locator(".status-row")).to_have_count(5)
     expect(pcard.locator("#archiveCardMeta")).to_have_text("on")
-    expect(pcard.locator("#statusArchiveLast")).to_contain_text("1 filed")
+    expect(pcard.locator("#statusArchiveLast")).to_contain_text("2 filed")
     assert_no_horizontal_overflow(p)
     dismiss_toasts(p)
     # Full page, as story 09's Settings shot is: the pane is taller than 844 px
@@ -611,7 +654,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     all — the picker is the whole record. (`limit`, the bound that makes a
     #     first real run safe, is proven over the API in tests/test_archive.py.)
     listed = _get(base, "/api/archive/runs")
-    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 5
+    assert listed["count"] == 2 and listed["runs"][1]["planned"] == 6
 
 
 def _item_id(base: str, run_id: int, message_id: str) -> int:
