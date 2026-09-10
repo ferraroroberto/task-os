@@ -73,6 +73,11 @@ const STATE_TONE = {
   archived: 'ok', moved: 'ok', needs_review: 'warn', failed: 'warn', reverted: 'off',
 };
 const MAX_HINT = 500;
+//: The desktop table caps a row's file chips so five real files (and their
+//: attachments) cannot force a subject/state row several lines tall (#178);
+//: the phone card keeps showing every file — its own width already wraps
+//: each chip to its own line (#173) and a card has room to grow.
+const FILES_CAP = 4;
 
 /**
  * Wire the Archive pane once and hand back the bootstrap's handle.
@@ -331,8 +336,11 @@ export function mountArchive(opts) {
 
   /** The archived files as opener chips — the same per-PC `taskos://` link
    *  every folder chip in the app carries, so a `.msg` opens in the mail
-   *  client on whichever PC is looking. */
-  function filesEl(item) {
+   *  client on whichever PC is looking. `opts.cap` (the desktop table only)
+   *  shows at most `FILES_CAP` and folds the rest behind a *+N more* chip
+   *  that expands them in place, one click, no re-render (#178). */
+  function filesEl(item, opts) {
+    const cap = (opts || {}).cap;
     const el = document.createElement('span');
     el.className = 'archive-files folder-chips';
     if (!item.files.length) {
@@ -340,11 +348,27 @@ export function mountArchive(opts) {
       el.textContent = item.attachments ? '– (' + item.attachments + ' attachment(s))' : '–';
       return el;
     }
-    item.files.forEach(function (path) {
+    function chipFor(path) {
       const name = String(path).split(/[\\/]+/).pop();
       const label = narrow() ? name.replace(FILE_NAME_PREFIX, '') : name;
-      el.appendChild(folderChip(path, { label: label, icon: /\.msg$/i.test(name) ? 'mail' : 'file-text' }));
-    });
+      return folderChip(path, { label: label, icon: /\.msg$/i.test(name) ? 'mail' : 'file-text' });
+    }
+    const shown = cap ? item.files.slice(0, FILES_CAP) : item.files;
+    const rest = cap ? item.files.slice(FILES_CAP) : [];
+    shown.forEach(function (path) { el.appendChild(chipFor(path)); });
+    if (rest.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'chip archive-files-more';
+      more.textContent = '+' + rest.length + ' more';
+      more.title = rest.length + ' more file(s)';
+      more.addEventListener('click', function (ev) {
+        ev.stopPropagation();          // a plain expand, not a row-level action
+        rest.forEach(function (path) { el.insertBefore(chipFor(path), more); });
+        more.remove();
+      });
+      el.appendChild(more);
+    }
     return el;
   }
 
@@ -704,7 +728,7 @@ export function mountArchive(opts) {
         cell('c-sender', textEl(item.sender || '–')),
         cell('c-sent', textEl(item.sent_at ? fmtTsShort(item.sent_at) : '–')),
         cell('c-dest', destinationEl(item)),
-        cell('c-files', filesEl(item)),
+        cell('c-files', filesEl(item, { cap: true })),
         cell('c-conf', confidenceEl(item)),
         cell('c-why', reasonEl(item)),
         cell('c-state', stateChip(item)),
