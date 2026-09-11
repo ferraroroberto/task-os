@@ -27,8 +27,8 @@
 
 'use strict';
 
-import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
+import { collapsibleCard } from './collapsible.js';
 import { escapeHtml, folderChip } from './format.js';
 import { matchesFilters } from './filters.js';
 import { sortItems, taskRow } from './rows.js';
@@ -131,34 +131,13 @@ export function mountSearch(box, host, opts) {
 
   /** One collapsible group (vendored disclosure), remembered open / closed per kind. */
   function groupCard(k, countText) {
-    const card = document.createElement('details');
-    card.className = 'card card--collapsible search-group';
+    const card = collapsibleCard({
+      className: 'search-group', icon: k.icon, title: k.label,
+      count: countText, countClass: 'search-group-count', bodyClass: 'search-body',
+    }).card;
     card.dataset.kind = k.kind;
     card.open = !!openState[k.kind];
     card.addEventListener('toggle', function () { openState[k.kind] = card.open; saveOpen(openState); });
-    const summary = document.createElement('summary');
-    summary.className = 'collapse-summary';
-    const main = document.createElement('span');
-    main.className = 'collapse-main';
-    main.innerHTML = icon(k.icon);
-    const h = document.createElement('h3');
-    h.className = 'collapse-title';
-    h.textContent = k.label;
-    main.appendChild(h);
-    const count = document.createElement('span');
-    count.className = 'collapse-count search-group-count';
-    count.textContent = countText || '';
-    main.appendChild(count);
-    summary.appendChild(main);
-    const chev = document.createElement('span');
-    chev.className = 'collapse-chevron';
-    chev.setAttribute('aria-hidden', 'true');
-    chev.textContent = '›';
-    summary.appendChild(chev);
-    card.appendChild(summary);
-    const body = document.createElement('div');
-    body.className = 'collapse-body search-body';
-    card.appendChild(body);
     return card;
   }
 

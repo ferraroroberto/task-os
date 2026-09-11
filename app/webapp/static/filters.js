@@ -24,7 +24,7 @@
 
 'use strict';
 
-import { icon } from './_vendored/icons/icons.js';
+import { collapsibleCard } from './collapsible.js';
 import { STATUSES, todayISO } from './format.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
@@ -349,36 +349,17 @@ export function mountFilters(host, opts) {
 
     host.replaceChildren();
     host.hidden = false;
-    const card = document.createElement('details');
-    card.className = 'card card--collapsible filter-card';
+    const bits = describeFilters(filters, { projects: o.projects, people: o.people, hide: opts.hide });
+    if (o.count != null) bits.push(o.count + ' ' + (opts.countLabel || (o.count === 1 ? 'task' : 'tasks')));
+    const parts = collapsibleCard({
+      className: 'filter-card', icon: 'list-filter', title: 'Filters',
+      count: bits.join(' · '), countClass: 'filter-desc', bodyClass: 'filter-body',
+    });
+    const card = parts.card;
+    const body = parts.body;
     card.open = open;
     card.addEventListener('toggle', function () { open = card.open; if (!open) openMenu = null; });
 
-    const summary = document.createElement('summary');
-    summary.className = 'collapse-summary';
-    const main = document.createElement('span');
-    main.className = 'collapse-main';
-    main.innerHTML = icon('list-filter');
-    const h = document.createElement('h3');
-    h.className = 'collapse-title';
-    h.textContent = 'Filters';
-    main.appendChild(h);
-    const desc = document.createElement('span');
-    desc.className = 'collapse-count filter-desc';
-    const bits = describeFilters(filters, { projects: o.projects, people: o.people, hide: opts.hide });
-    if (o.count != null) bits.push(o.count + ' ' + (opts.countLabel || (o.count === 1 ? 'task' : 'tasks')));
-    desc.textContent = bits.join(' · ');
-    main.appendChild(desc);
-    summary.appendChild(main);
-    const chev = document.createElement('span');
-    chev.className = 'collapse-chevron';
-    chev.setAttribute('aria-hidden', 'true');
-    chev.textContent = '›';
-    summary.appendChild(chev);
-    card.appendChild(summary);
-
-    const body = document.createElement('div');
-    body.className = 'collapse-body filter-body';
     const row = document.createElement('div');
     row.className = 'filter-row';
     function change(name) {
@@ -417,7 +398,6 @@ export function mountFilters(host, opts) {
       row.appendChild(clear);
     }
     body.appendChild(row);
-    card.appendChild(body);
     host.appendChild(card);
   }
 

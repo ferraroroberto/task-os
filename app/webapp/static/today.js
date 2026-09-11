@@ -31,6 +31,7 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
+import { collapsibleCard } from './collapsible.js';
 import { fmtDay, relDue, todayISO } from './format.js';
 import { compareItems, rowList, taskRow } from './rows.js';
 import { snoozeButton } from './snooze.js';
@@ -155,37 +156,16 @@ export function renderToday(host, items, handlers, opts) {
   host.appendChild(section);
 
   // Later this week — a flat disclosure (vendored markup, hairline instead of a card box).
-  const later = document.createElement('details');
-  later.className = 'card card--collapsible disclosure-flat today-later';
-  const summary = document.createElement('summary');
-  summary.className = 'collapse-summary';
-  const main = document.createElement('span');
-  main.className = 'collapse-main';
-  main.innerHTML = icon('calendar-days');
-  const st = document.createElement('h3');
-  st.className = 'collapse-title';
-  st.textContent = 'Later this week';
-  main.appendChild(st);
-  const sc = document.createElement('span');
-  sc.className = 'collapse-count';
-  sc.textContent = counts.week + (counts.week === 1 ? ' task' : ' tasks');
-  main.appendChild(sc);
-  summary.appendChild(main);
-  const chev = document.createElement('span');
-  chev.className = 'collapse-chevron';
-  chev.setAttribute('aria-hidden', 'true');
-  chev.textContent = '›';
-  summary.appendChild(chev);
-  later.appendChild(summary);
-  const body = document.createElement('div');
-  body.className = 'collapse-body';
+  const later = collapsibleCard({
+    className: 'disclosure-flat today-later', icon: 'calendar-days', title: 'Later this week',
+    count: counts.week + (counts.week === 1 ? ' task' : ' tasks'),
+  });
   if (!data.week.length) {
-    body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
+    later.body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
   } else {
-    data.week.forEach(function (g) { body.appendChild(buildGroup(g, handlers, o)); });
+    data.week.forEach(function (g) { later.body.appendChild(buildGroup(g, handlers, o)); });
   }
-  later.appendChild(body);
-  host.appendChild(later);
+  host.appendChild(later.card);
 }
 
 // ------------------------------------------------------------ My plan (#89)
