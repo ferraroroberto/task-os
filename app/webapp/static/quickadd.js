@@ -12,8 +12,8 @@
  * fields that used to force a second trip through the drawer (#80 round 2):
  * description, due, starts (#87), status, folder (with the shared
  * folder-index picker) and one link.
- * Everything but the title is optional and sensible by default ??? no date,
- * status To Do ??? so `type ?? Enter` is still the whole fast path.
+ * Everything but the title is optional and sensible by default — no date,
+ * status To Do — so `type · Enter` is still the whole fast path.
  *
  * Submit is one POST /api/tasks with every field the form holds, then (only
  * when a URL was given) one POST /api/tasks/{id}/links. A link that fails does
@@ -42,7 +42,7 @@ const PARSE_DEBOUNCE_MS = 180;
 // To Do, not Inbox (#148): Inbox is the arrivals tray for what came in on
 // its own, and a task you are typing here has already been triaged by the
 // act of writing it. The select still opens on this, so it stays one change
-// away ??? and the server's own default (tasks_repo.DEFAULT_STATUS) is the
+// away — and the server's own default (tasks_repo.DEFAULT_STATUS) is the
 // same value, so a create that omits the field agrees with this one.
 const DEFAULT_STATUS = 'todo';
 
@@ -79,7 +79,7 @@ export function createQuickAdd(dialog, opts) {
   let parsed = null;
   let timer = 0;
   let seq = 0;
-  // Once a date is set by hand the parser stops writing it ??? one flag per
+  // Once a date is set by hand the parser stops writing it — one flag per
   // field, so correcting the due never freezes the start date too (#87).
   const touched = { due: false, starts: false };
 
@@ -268,7 +268,7 @@ export function createQuickAdd(dialog, opts) {
   // proposes are resolved server-side from phrases it had to quote out of
   // the transcript, so a date it invented cannot reach the form. Every
   // failure is reported as `source: "parser"` and simply leaves the
-  // deterministic answer standing ??? losing a tidy-up must not look like a
+  // deterministic answer standing — losing a tidy-up must not look like a
   // broken microphone.
   let enrichSeq = 0;
   async function enrich(text) {
@@ -286,7 +286,7 @@ export function createQuickAdd(dialog, opts) {
       applyParse(res, res.title);
     } catch (_) {
       // The route answers 200 even when the model could not be reached, so
-      // this is a genuinely broken request ??? and still not worth a toast:
+      // this is a genuinely broken request — and still not worth a toast:
       // the transcript and its parse are already on the line.
     } finally {
       if (my === enrichSeq) input.classList.remove('is-enriching');
@@ -310,7 +310,7 @@ export function createQuickAdd(dialog, opts) {
       if (line === r.text) applyParse(r.parse, line);
       else parseNow();
       input.focus();
-      // ???and then, only for a spoken line, ask the hub's light model to make
+      // …and then, only for a spoken line, ask the hub's light model to make
       // a title and a description of the sentence (#147). Deliberately a
       // second round trip rather than folded into /api/transcribe: the
       // transcript and its parse are on screen *now*, and the tidy-up is

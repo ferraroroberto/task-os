@@ -510,7 +510,7 @@ export function mountSettings(opts) {
   /** The light model that turns a spoken sentence into a title and a
    *  description (#147). Off is a state with a reason, not a blank: a
    *  spoken line still becomes a task, it just keeps the deterministic
-   *  parse ??? and this row is where you find that out. */
+   *  parse — and this row is where you find that out. */
   function renderEnrich(st) {
     if (!els.statusEnrich) return;
     els.statusEnrich.replaceChildren();
@@ -518,10 +518,10 @@ export function mountSettings(opts) {
     if (!st) { els.statusEnrich.textContent = 'unknown'; return; }
     if (!st.enabled) {
       els.statusEnrich.append(statusPart('off', 'not reachable'),
-        ' ??? ' + (st.reason || 'unknown') + ' ?? the spoken line keeps the plain parse');
+        ' — ' + (st.reason || 'unknown') + ' · the spoken line keeps the plain parse');
       return;
     }
-    els.statusEnrich.append(statusPart('ok', 'reachable'), ' ?? ', codeEl(st.model || 'unknown'));
+    els.statusEnrich.append(statusPart('ok', 'reachable'), ' · ', codeEl(st.model || 'unknown'));
   }
 
   // --------------------------------------------------------- AI triage
