@@ -1435,10 +1435,13 @@ a.chip:hover { text-decoration: underline; }
 .markdown a { color: var(--accent); }
 /* The remove button is borderless and chip-height (#77 — the 34px bordered
    square dwarfed the link pill); its ::before restores the 44px hit rect, so
-   the ROW keeps a 34px floor: 34 + the 10px gap = 44px pitch and the expanded
-   rects of stacked rows never overlap (design.md "Touch targets"). */
+   the ROW floor is one --row-sm pitch less the 10px gap = 34px, and the
+   expanded rects of stacked rows never overlap (design.md "Touch targets").
+   Written as that subtraction rather than a bare 34px: design.md's list-row
+   wants the rows scale "via var(--row-*) or a calc() derivation, never an ad
+   hoc literal", and the pitch is the whole reason for the number. */
 .drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
 .link-rm {
   width: 26px;
   height: 26px;
@@ -1476,9 +1479,10 @@ a.chip:hover { text-decoration: underline; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
 /* Blocked by (#100) — same row/form shape as Links: a flat list of removable
-   rows, then a Move-to-style picker to add one. */
+   rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
+   the-gap floor. */
 .drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.blocker-row { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.blocker-row { display: flex; align-items: center; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
 .blocker-title {
   flex: 1 1 auto;
   min-width: 0;
