@@ -76,20 +76,29 @@ tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           event_loop.py, manager.py (adopt-or-spawn uvicorn; cert --check → --ssl-* when a cert exists)
 app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout) · tasks
-                          (/api/tasks…, /api/activity) · people · search · views (/api/board, /api/today)
+                          (/api/tasks…, /api/activity) · people · views (/api/board, /api/today)
                           · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,
                           GET/DELETE /api/mirror/events, /api/backup) · folders (/api/resolve, /api/folders/search, /api/folders/reindex)
                           · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
+                          · capture (/api/capture/email/run — one flagged-email pass now; 409 + the reason when the poller is off)
+                          · voice (/api/transcribe — audio → a quick-add line, /api/enrich — the transcript → title + description)
                           · ai (/api/ai/triage, staged suggestion list + individual accept/reject)
                           · archive (/api/archive/run, /api/archive/runs[/{id}], per-item revert|move|accept|retry)
                           · search (/api/search — federated, /api/search/status)
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
                           table.js, tree.js, today.js, drawer.js, quickadd.js, search.js (the Search tab),
+                          rows.js (the one task row), filters.js (the one filter card), journal.js (the done journal),
+                          selection.js + bulkbar.js (the one selection + its bulk actions), keys.js (the one keymap), snooze.js,
+                          confirm.js, folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
                           archive.js (the Archive tab: the batch run + its report, retry a refused move), settings.js (the Settings tab),
                           palette.js (Ctrl+K), format.js, api.js, toast.js, manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
+                          voice.py (voice quick-add: the hub transcribes, local whisper only as fallback) · enrich.py (the
+                          spoken sentence → title + description through the hub's light model; dates stay src/dates.py's)
+                          clock.py (the one process clock, pinned by TASKOS_CLOCK) · runtime_data.py (resolves where the SQLite
+                          file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract · github.py via gh · fake.py for tests) · issue_sync.py (sync pass + scheduler)
@@ -108,7 +117,8 @@ scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determin
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
                           email-archiver index) + e2e/ (Playwright, one story test per step)
-docs/                     validation.md (the story record) + screenshots/ + architecture.mmd
+docs/                     validation.md (the story index + phase gates) + validation/ (each story's and UX round's full
+                          write-up) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
 data/                     tasks.db, folder_index.txt, logs, avatars, backups — gitignored, never committed
