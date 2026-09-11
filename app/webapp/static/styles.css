@@ -275,7 +275,12 @@ html, body {
    with the accent and draws a check when ticked.
    The element stays a real <input type=checkbox> — `appearance: none` takes
    only the paint, so the label pairing, Space, :checked and the form value
-   are still the platform's. */
+   are still the platform's.
+   /design-sync's `no-native-checkbox` contract FAILs on this and is wrong to
+   (#191): it reads every checkbox as a boolean setting owed the switch, but
+   design.md's Base UI table maps Checkbox to shadcn's *Checkbox*, a component
+   of its own, and warns against hand-rolling a primitive the platform already
+   gets right. Settled — re-skin, don't replace. */
 .check {
   appearance: none;
   -webkit-appearance: none;
