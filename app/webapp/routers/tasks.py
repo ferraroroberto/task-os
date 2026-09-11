@@ -279,7 +279,10 @@ def list_tasks(
                     raise repo.ValidationError(f"person must be an id, got {p!r}") from exc
     parent_id: int | str | None = None
     if parent is not None:
-        parent_id = "root" if parent in ("root", "none", "null", "") else int(parent)
+        try:
+            parent_id = "root" if parent in ("root", "none", "null", "") else int(parent)
+        except ValueError as exc:
+            raise repo.ValidationError(f"parent must be an id or 'root', got {parent!r}") from exc
     items = repo.list_tasks(
         db,
         status=statuses or None,
