@@ -1849,7 +1849,10 @@ def _fts_query(q: str) -> str:
     """Turn free text into a safe FTS5 query: each word a prefix term, ANDed.
 
     Quotes every token so punctuation (``#``, ``-``, ``:``) can't break the
-    MATCH grammar; a trailing ``*`` makes ``pass`` hit ``passport``.
+    MATCH grammar; a trailing ``*`` makes ``pass`` hit ``passport``. The twin
+    of ``src.search.base.fts_query``, kept here because importing that package
+    would pull its adapters — which import this module — into every import of
+    this one; a test pins the two together.
     """
     tokens = [t.replace('"', '""') for t in q.split() if t.strip()]
     return " ".join(f'"{t}"*' for t in tokens)

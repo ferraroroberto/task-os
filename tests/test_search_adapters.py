@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import db as dbmod
+from src import tasks_repo as repo
 from src.config import load_config
 from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
@@ -93,6 +94,10 @@ def _issues(tmp_path: Path, extra: list[dict[str, Any]] | None = None) -> IssueS
 def test_helpers_fts_query_and_marks() -> None:
     assert fts_query('kitchen "quo:tes" x') == '"kitchen"* "\"\"quo:tes\"\""* "x"*'
     assert fts_query("   ") == ""
+    assert fts_query("x ab", min_prefix=2) == '"x" "ab"*'      # the emails adapter's form
+    # tasks_repo keeps its own copy (see fts_query's docstring): same answer.
+    for q in ('kitchen "quo:tes" x', "   ", "#12 a-b c:d", "pass port"):
+        assert repo._fts_query(q) == fts_query(q)
     assert mark_terms("The Kitchen kit", "kit kitchen") == "The [Kitchen] [kit]"     # longest first, no nesting
     assert mark_terms("plain", "") == "plain" and mark_terms("", "x") == ""
     assert parse_kinds(None) == list(KINDS) and parse_kinds("emails, tasks,bogus") == ["tasks", "emails"]
