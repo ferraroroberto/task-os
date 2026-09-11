@@ -107,6 +107,18 @@ def test_scheduler_disabled_reason_and_failed_run_is_a_status(tmp_path: Path, mo
     assert s2.status()["last_error"] == s2.last_error
 
 
+def test_a_failed_day_is_not_retried_every_tick(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Today's file stays missing after a failure; the retry waits for next_run."""
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "missing.db"))
+    s = BackupScheduler(load_config(write_test_config(tmp_path / "c.json", backup_dir=str(tmp_path / "b"))))
+    now = datetime.now()
+    assert s.due_now(now)
+    assert s.run_now() is None and s.last_error
+    assert not s.due_now(now)  # today already tried — the 30 s tick must not retry it
+    s.next_run = now.replace(microsecond=0)
+    assert s.due_now(now)  # the schedule still gets its try
+
+
 def test_scheduler_thread_starts_and_stops(db: Path, tmp_path: Path) -> None:
     s = BackupScheduler(load_config(write_test_config(tmp_path / "c.json", backup_dir=str(tmp_path / "b"))))
     s.start()
