@@ -43,7 +43,7 @@ def test_story_02_over_http(client: TestClient) -> None:
     r = client.post("/api/tasks", json={"title": "Renew passport", "due": "2026-08-21"})
     assert r.status_code == 201
     t1 = r.json()
-    # No status given ??? To Do, the hand-made default (#148); Inbox is for what arrives.
+    # No status given → To Do, the hand-made default (#148); Inbox is for what arrives.
     assert t1["id"] == 1 and t1["due"] == "2026-08-21" and t1["status"] == "todo"
 
     t2 = client.post("/api/tasks", json={"title": "Book appointment", "parent_id": 1}).json()
