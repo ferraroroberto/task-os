@@ -77,6 +77,7 @@ from src.clock import now_iso, today, use_clock  # noqa: F401
 from src.dates import AnchorError, next_due, normalise_anchor
 from src.schema import (
     CAPTURE_STATUS,
+    CLOSED_STATUSES,
     COMMENT_ORIGINS,
     DEFAULT_STATUS,
     ISSUE_PROVIDERS,
@@ -102,8 +103,9 @@ _TASK_FIELDS = (
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
 DATE_FIELDS = ("due", "starts", "planned_on")
 _TASK_COLUMNS = ("id", *_TASK_FIELDS, "created_by", "created_at", "updated_at", "done_at")
-#: The two statuses a task leaves the working views in — both stamp ``done_at`` (#102).
-CLOSED_STATUSES = ("done", "cancelled")
+#: :data:`CLOSED_STATUSES` as the body of a SQL ``IN (…)`` — built from the
+#: tuple so no query restates the pair.
+_CLOSED_SQL = ", ".join(f"'{s}'" for s in CLOSED_STATUSES)
 _ENUMS: dict[str, tuple[str, ...]] = {
     "type": TASK_TYPES,
     "status": TASK_STATUSES,
@@ -345,7 +347,7 @@ def _currently_blocked_ids(conn: sqlite3.Connection) -> set[int]:
     :func:`list_tasks` filters on (#100)."""
     rows = conn.execute(
         "SELECT DISTINCT tb.blocked_id FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
-        " WHERE t.status NOT IN ('done', 'cancelled')"
+        f" WHERE t.status NOT IN ({_CLOSED_SQL})"
     ).fetchall()
     return {r["blocked_id"] for r in rows}
 
@@ -1188,14 +1190,14 @@ def list_tasks(
     if status:
         values = [status] if isinstance(status, str) else list(status)
         if values == ["open"]:
-            where.append("t.status NOT IN ('done', 'cancelled')")
+            where.append(f"t.status NOT IN ({_CLOSED_SQL})")
         else:
             for v in values:
                 _validate_enum("status", v)
             where.append(f"t.status IN ({', '.join('?' * len(values))})")
             args.extend(values)
     elif not include_closed:
-        where.append("t.status NOT IN ('done', 'cancelled')")
+        where.append(f"t.status NOT IN ({_CLOSED_SQL})")
 
     if parent_id is not None:
         if parent_id == "root":
@@ -1373,7 +1375,7 @@ def tree(
             node["children"] = build(row["id"], depth + 1)
             node["child_count"] = len(by_parent.get(row["id"], []))
             node["is_project"] = node["child_count"] > 0
-            closed = row["status"] in ("done", "cancelled")
+            closed = row["status"] in CLOSED_STATUSES
             if closed and not include_closed and not node["children"]:
                 continue
             out.append(node)
@@ -1802,7 +1804,7 @@ def create_person(
 def get_person(conn: sqlite3.Connection, person_id: int) -> dict[str, Any]:
     p = _require_person(conn, person_id)
     n = conn.execute(
-        "SELECT COUNT(*) FROM tasks WHERE person_id = ? AND status NOT IN ('done','cancelled')",
+        f"SELECT COUNT(*) FROM tasks WHERE person_id = ? AND status NOT IN ({_CLOSED_SQL})",
         (person_id,),
     ).fetchone()[0]
     p["open_tasks"] = int(n)
@@ -2017,7 +2019,7 @@ def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dic
         "today": iso,
         "plan": {
             "items": plan_rows,
-            "done": sum(1 for it in plan_rows if it["status"] in ("done", "cancelled")),
+            "done": sum(1 for it in plan_rows if it["status"] in CLOSED_STATUSES),
             "total": len(plan_rows),
         },
         "due": _group_by_root(due),

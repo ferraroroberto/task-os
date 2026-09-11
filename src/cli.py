@@ -64,7 +64,7 @@ from typing import Any
 
 from src.config import load_config
 from src.dates import DateParseError, describe_recurrence, parse_date
-from src.schema import DEFAULT_STATUS, RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
+from src.schema import CLOSED_STATUSES, DEFAULT_STATUS, RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -660,7 +660,7 @@ def fmt_plan(plan: dict[str, Any]) -> str:
         return "(nothing planned today — `tasks plan` to pick)"
     lines = [f"My plan — {plan.get('done', 0)} of {plan.get('total', len(items))} done"]
     for n, t in enumerate(items, start=1):
-        mark = "x" if t.get("status") in ("done", "cancelled") else " "
+        mark = "x" if t.get("status") in CLOSED_STATUSES else " "
         lines.append(f"  {n}. [{mark}] {_fmt_task_line(t)}")
     return "\n".join(lines)
 
@@ -682,7 +682,7 @@ def fmt_show(t: dict[str, Any]) -> str:
         lines.append(f"  next: {t['next_action']}")
     if t.get("blocked_by"):
         lines.append("  blocked by: " + ", ".join(
-            f"#{b['id']} {b['title']}" + ("" if b["status"] not in ("done", "cancelled") else f" ({b['status']})")
+            f"#{b['id']} {b['title']}" + ("" if b["status"] not in CLOSED_STATUSES else f" ({b['status']})")
             for b in t["blocked_by"]
         ))
     lines.append(f"  created {t['created_at']} by {t.get('created_by') or '-'} · updated {t['updated_at']}"
