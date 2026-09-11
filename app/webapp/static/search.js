@@ -398,8 +398,6 @@ export function mountSearch(box, host, opts) {
     setQuery(q) { input.value = q || ''; clearTimeout(timer); run(input.value); },
     getQuery() { return input.value.trim(); },
     focus() { input.focus(); input.select(); },
-    /** Kept for the caller: rows carry no per-task actions any more (#48). */
-    refreshActions() { /* no-op */ },
     /** The shared filters changed: re-apply them to the task hits. */
     refilter() { if (last) render(last); },
     reloadStatus: loadStatus,
