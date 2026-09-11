@@ -920,3 +920,40 @@ def test_an_import_reads_a_blank_status_as_the_create_default(conn: sqlite3.Conn
     assert repo.import_diff(stored, status="") == {}
     assert repo.import_diff(stored, status="todo") == {}
     assert repo.import_diff(stored, status="inbox") == {"status": "inbox"}
+
+
+def test_list_tasks_costs_the_same_queries_whatever_the_row_count(tmp_path: Path) -> None:
+    """The list path prefetches, so its query count is a property of the page,
+    not of its length (#186).
+
+    ``_summary`` used to issue five lookups per row while ``_enrich_list``,
+    right beside it, argued the opposite case in its own docstring — one module
+    answering the same question two ways. This pins the answer: ten times the
+    rows, the same number of queries.
+    """
+
+    class Counting(sqlite3.Connection):
+        n = 0
+
+        def execute(self, *args: object, **kwargs: object):  # type: ignore[override]
+            type(self).n += 1
+            return super().execute(*args, **kwargs)
+
+    def queries_for(rows: int) -> int:
+        path = tmp_path / f"count-{rows}.db"
+        dbmod.init_db(path)
+        setup = dbmod.connect(path)
+        person = repo.create_person(setup, "Assignee")["id"]
+        for i in range(rows):
+            task = repo.create_task(setup, f"Task {i}", person_id=person)
+            repo.add_link(setup, task["id"], "https://example.invalid/ai", kind="ai")
+        setup.close()
+        counting = sqlite3.connect(path, factory=Counting)
+        counting.row_factory = sqlite3.Row
+        Counting.n = 0
+        items = repo.list_tasks(counting, include_closed=True)
+        counting.close()
+        assert len(items) == rows
+        return Counting.n
+
+    assert queries_for(3) == queries_for(30)
