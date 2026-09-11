@@ -191,8 +191,12 @@ FALLBACK = "fallback"
 _LABELS = {HUB: "the hub", FALLBACK: "the local whisper server"}
 
 
-def _connect_failure(url: str) -> str | None:
-    """``None`` when *url*'s host/port accepts a connection, else why not."""
+def connect_failure(url: str) -> str | None:
+    """``None`` when *url*'s host/port accepts a connection, else why not.
+
+    :mod:`src.enrich` probes its endpoint with this too — same connect, same
+    three distinct answers.
+    """
     target = endpoint_of(url)
     if target is None:
         return f"not an http(s) URL: {url}"
@@ -282,7 +286,7 @@ class VoiceClient:
         why: list[str] = []
         ok, serving, live_url = False, None, self.primary
         for name, url in self.targets():
-            failure = _connect_failure(url)
+            failure = connect_failure(url)
             if failure is None:
                 ok, serving, live_url = True, name, url
                 why = []

@@ -56,7 +56,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import socket
 import threading
 import time
 import urllib.error
@@ -67,15 +66,14 @@ from typing import Any
 from src import clock, quick_add
 from src.config import AppConfig
 from src.dates import DateParseError, parse_date
-from src.voice import endpoint_of
+from src.voice import connect_failure, endpoint_of
 
 logger = logging.getLogger(__name__)
 
-#: Same shape and reasoning as ``src.voice``'s probe: a cached TCP connect, so
-#: opening the dialog repeatedly costs one connect and starting the hub shows
-#: up on the next open.
+#: Same shape and reasoning as ``src.voice``'s probe — whose connect this
+#: reuses, timeout included: a cached TCP connect, so opening the dialog
+#: repeatedly costs one connect and starting the hub shows up on the next open.
 PROBE_TTL_S = 15.0
-PROBE_TIMEOUT_S = 1.5
 #: Warm this is ~1.5 s; a cold model load took 4.4 s in the probe. Generous
 #: enough for a cold one, short enough that a wedged hub does not hold the
 #: dialog's "tidying…" state for a minute.
@@ -181,23 +179,6 @@ def resolve_phrase(phrase: Any, transcript: str, today: date) -> tuple[str | Non
     return d.isoformat(), cleaned
 
 
-def _connect_failure(url: str) -> str | None:
-    """``None`` when *url*'s host/port accepts a connection, else why not."""
-    target = endpoint_of(url)
-    if target is None:
-        return f"not an http(s) URL: {url}"
-    host, port = target
-    try:
-        with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_S):
-            pass
-    except TimeoutError:
-        return (f"{host}:{port} did not answer within {PROBE_TIMEOUT_S:g}s — it may be down, "
-                f"or the port may be busy")
-    except OSError as exc:
-        return f"nothing is listening on {host}:{port} ({exc.__class__.__name__}: {exc})"
-    return None
-
-
 class EnrichClient:
     """The install's text model: whether it is there, and what it made of a line.
 
@@ -236,7 +217,7 @@ class EnrichClient:
             cached = self._verdict
             if cached and not force and time.monotonic() < cached[0]:
                 return cached[1], cached[2]
-        failure = _connect_failure(self.url)
+        failure = connect_failure(self.url)
         with self._lock:
             self._verdict = (time.monotonic() + PROBE_TTL_S, failure is None, failure)
             self._checked_at = clock.now_iso()
