@@ -157,7 +157,6 @@ export function mountSettings(opts) {
   // half of the fix, with an inline preview (inspect) and a Clear action.
   async function renderMirrorEventsRow(m) {
     const dd = els.statusMirrorEvents;
-    if (!dd) return;
     dd.replaceChildren();
     dd.classList.remove('muted');
     if (!m || !m.enabled) {
@@ -183,7 +182,6 @@ export function mountSettings(opts) {
   }
 
   function wireMirrorEventsClear() {
-    if (!els.mirrorEventsClear) return;
     els.mirrorEventsClear.addEventListener('click', async function () {
       els.mirrorEventsClear.disabled = true;
       try {
@@ -251,7 +249,6 @@ export function mountSettings(opts) {
   }
 
   function wireReindex() {
-    if (!els.reindexBtn) return;
     els.reindexBtn.addEventListener('click', async function () {
       els.reindexBtn.disabled = true;
       try {
@@ -267,7 +264,6 @@ export function mountSettings(opts) {
   // auth, Step 7), the mirror / backup card (Step 6) and the opener card (Step 9).
   // The card headers carry a state word (on · synced · indexed · off), never a count.
   async function refreshStatus() {
-    if (!els.statusMirror) return;
     try {
       const body = await api('/api/status');
       renderAccessCard(body);
@@ -276,12 +272,10 @@ export function mountSettings(opts) {
       renderMirrorEventsRow(body.mirror).catch(function () {});
       const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
       els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
-      if (els.folderCard) {
-        renderOpener(body.opener);
-        renderIndexRow(els.statusIndex, body.folders);
-        const f = body.folders;
-        els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
-      }
+      renderOpener(body.opener);
+      renderIndexRow(els.statusIndex, body.folders);
+      const f = body.folders;
+      els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       renderCapture(body.capture);
       renderArchive(body.archive);
       renderVoice(body.voice);
@@ -294,7 +288,8 @@ export function mountSettings(opts) {
       els.statusBackup.textContent = 'unknown — ' + err.message;
       els.statusMirrorEvents.textContent = 'unknown — ' + err.message;
       els.mirrorCardMeta.textContent = 'unknown';
-      if (els.statusOpener) { els.statusOpener.textContent = 'unknown — ' + err.message; els.statusIndex.textContent = 'unknown — ' + err.message; }
+      els.statusOpener.textContent = 'unknown — ' + err.message;
+      els.statusIndex.textContent = 'unknown — ' + err.message;
       renderCapture(null);
       renderArchive(null);
       renderVoice(null);
@@ -308,8 +303,7 @@ export function mountSettings(opts) {
    *  carries its reason — an unconfigured channel is a visible state, not a
    *  quiet nothing. `null` = the status call itself failed. */
   function renderCapture(st) {
-    if (els.captureRunNow) els.captureRunNow.disabled = !(st && st.enabled);
-    if (!els.statusCapture) return;
+    els.captureRunNow.disabled = !(st && st.enabled);
     els.statusCapture.replaceChildren();
     els.statusCaptureRun.replaceChildren();
     els.statusCapture.classList.remove('muted');
@@ -348,7 +342,6 @@ export function mountSettings(opts) {
   }
 
   function wireCaptureRunNow() {
-    if (!els.captureRunNow) return;
     els.captureRunNow.addEventListener('click', async function () {
       els.captureRunNow.disabled = true;
       try {
@@ -374,8 +367,7 @@ export function mountSettings(opts) {
    *  always carries its reason; `null` = the status call itself failed, which
    *  is "unknown" and not the same as "off". */
   function renderArchive(st) {
-    if (els.archiveRunNow) els.archiveRunNow.disabled = !st || !st.configured || !!st.running;
-    if (!els.statusArchiveRepo) return;
+    els.archiveRunNow.disabled = !st || !st.configured || !!st.running;
     const rows = [els.statusArchiveRepo, els.statusArchiveModel,
       els.statusArchiveThreshold, els.statusArchiveLast];
     rows.forEach(function (el) { el.replaceChildren(); el.classList.remove('muted'); });
@@ -447,10 +439,7 @@ export function mountSettings(opts) {
   }
 
   function wireArchiveCard() {
-    if (els.archiveOpenTab) {
-      els.archiveOpenTab.addEventListener('click', function () { opts.onOpenArchive(); });
-    }
-    if (!els.archiveRunNow) return;
+    els.archiveOpenTab.addEventListener('click', function () { opts.onOpenArchive(); });
     els.archiveRunNow.addEventListener('click', async function () {
       els.archiveRunNow.disabled = true;
       try {
@@ -472,7 +461,6 @@ export function mountSettings(opts) {
    *  shows. `null` = the status call itself failed, which is "not
    *  established", not "off". */
   function renderVoice(st) {
-    if (!els.statusVoice) return;
     els.statusVoice.replaceChildren();
     els.statusVoiceUrl.replaceChildren();
     els.statusVoice.classList.remove('muted');
@@ -512,7 +500,6 @@ export function mountSettings(opts) {
    *  spoken line still becomes a task, it just keeps the deterministic
    *  parse — and this row is where you find that out. */
   function renderEnrich(st) {
-    if (!els.statusEnrich) return;
     els.statusEnrich.replaceChildren();
     els.statusEnrich.classList.remove('muted');
     if (!st) { els.statusEnrich.textContent = 'unknown'; return; }
@@ -526,7 +513,6 @@ export function mountSettings(opts) {
 
   // --------------------------------------------------------- AI triage
   function renderAI(st) {
-    if (!els.statusAI) return;
     els.statusAI.replaceChildren();
     els.statusAIModel.replaceChildren();
     els.statusAI.classList.remove('muted');
@@ -556,8 +542,7 @@ export function mountSettings(opts) {
    *  the sync call itself stay with the bootstrap (they are not this tab's). */
   function renderIssues(st) {
     const configured = !!(st && st.enabled);
-    if (els.issuesSyncNow) els.issuesSyncNow.disabled = !configured;
-    if (!els.statusIssues) return;
+    els.issuesSyncNow.disabled = !configured;
     els.statusIssues.replaceChildren();
     els.statusIssuesSync.replaceChildren();
     els.statusIssues.classList.remove('muted');
@@ -594,19 +579,17 @@ export function mountSettings(opts) {
   }
 
   function wireIssueSyncNow() {
-    if (els.issuesSyncNow) els.issuesSyncNow.addEventListener('click', function () { opts.onSyncIssues().catch(function () {}); });
+    els.issuesSyncNow.addEventListener('click', function () { opts.onSyncIssues().catch(function () {}); });
   }
 
   // ---------------------------------------------------------- search card
   /** Which indexes this install can query (GET /api/search/status). */
   async function refreshSearchStatus() {
-    if (!els.searchCard) return;
     let adapters = null;
     try { adapters = (await api('/api/search/status')).adapters || []; } catch (err) { adapters = null; }
     let on = 0;
     Object.keys(SEARCH_KIND_ROWS).forEach(function (kind) {
       const dd = document.getElementById(SEARCH_KIND_ROWS[kind]);
-      if (!dd) return;
       dd.replaceChildren();
       dd.classList.remove('muted');
       const a = adapters && adapters.find(function (x) { return x.kind === kind; });
@@ -629,7 +612,7 @@ export function mountSettings(opts) {
   function revealCard(key) {
     const card = DEEP_LINK_CARDS[key];
     if (!card) return;
-    if ('open' in card) card.open = true;
+    card.open = true;
     card.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
