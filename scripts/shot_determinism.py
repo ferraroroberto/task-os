@@ -68,6 +68,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
+from src.no_window import NO_WINDOW
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
 
@@ -142,7 +144,7 @@ def _run_suite(label: str) -> None:
         [sys.executable, "-m", "pytest", "tests/e2e", "-q"],
         cwd=str(REPO_ROOT), env=env, capture_output=True, text=True,
         encoding="utf-8", errors="replace",
-        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        creationflags=NO_WINDOW,
     )
     report = ((result.stdout or "") + (result.stderr or "")).rstrip()
     if result.returncode != 0:
