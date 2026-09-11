@@ -1248,7 +1248,8 @@ a.chip:hover { text-decoration: underline; }
 .due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
 .due-pick-btn:hover { color: var(--accent); }
 /* hidden by default — the calendar button opens it (showPicker() or the
-   coarse-pointer fallback in dueinput.js), same pattern as .field-due-picker. */
+   coarse-pointer fallback in dueinput.js). The drawer's Due/Starts rows wear
+   it too, revealed at their own control height (.field-due-row below). */
 .due-date { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .due-date.is-visible { position: static; width: auto; height: 30px; opacity: 1; pointer-events: auto; }
 
@@ -1406,8 +1407,7 @@ a.chip:hover { text-decoration: underline; }
 .field-due-row .field-control { flex: 1 1 auto; }
 .field-due-btn { width: var(--control-h); height: var(--control-h); border-radius: var(--radius-md); color: var(--muted); }
 .field-due-btn:hover { color: var(--accent); }
-.field-due-picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.field-due-picker.is-visible { position: static; width: auto; height: var(--control-h); opacity: 1; pointer-events: auto; }
+.field-due-row .due-date.is-visible { height: var(--control-h); }
 /* Section headings: the app's title font (vendored card-title metrics) with
    the section glyph — never uppercase (#46). */
 .drawer-section { padding: 14px 0 6px; }

@@ -1,11 +1,12 @@
 /* task-os — the due-date picker, in one place.
  *
  * `duePicker()` is the calendar button + the hidden `<input type="date">` it
- * opens. Four callers wear it: the bulk-action bar's strip square (#81), the
+ * opens. Five callers wear it: the bulk-action bar's strip square (#81), the
  * snooze menu's "Pick a date…" (#87), the Table's due cell and the task row's
- * due chip (#107) — the last two because clicking a date should open a
- * calendar, not a text box you then type into. Typing a phrase (`tomorrow`,
- * `fri`, `in 2 weeks`) is still how the drawer and quick-add take a date;
+ * due chip (#107) — those two because clicking a date should open a
+ * calendar, not a text box you then type into — and the drawer's Due and
+ * Starts fields, beside their text box. Typing a phrase (`tomorrow`, `fri`,
+ * `in 2 weeks`) is still how the drawer and quick-add take a date;
  * `src/dates.py` owns that vocabulary server-side either way.
  *
  * The reason the picker is a shared function is the coarse-pointer branch

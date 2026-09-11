@@ -28,6 +28,7 @@
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
 import { confirmDialog } from './confirm.js';
+import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, RECURRENCES, aiChip, anchorOptions, chipFor, fmtTs, isDeferred, issueChip,
   linkKind, linkify, providerIcon, relDue, renderMarkdown, statusPill,
@@ -200,7 +201,8 @@ export function createDrawer(el, opts) {
    *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO
    *  (issue #46). Both dates the drawer edits go through this one builder —
    *  **Due** and, beside it, **Starts** (#87) — so they cannot drift into
-   *  behaving differently, and the coarse-pointer branch below lives once.
+   *  behaving differently — and the calendar is `duePicker()`'s, so the
+   *  coarse-pointer branch (#50) lives once for the whole app.
    * @param {object} t
    * @param {string} field   the task field this edits ('due' | 'starts')
    * @param {string} label   the field label
@@ -222,18 +224,6 @@ export function createDrawer(el, opts) {
     input.value = value;
     input.placeholder = 'tomorrow · fri · 2026-09-01';
     input.setAttribute('aria-label', label);
-    const picker = document.createElement('input');
-    picker.type = 'date';
-    picker.className = 'field-due-picker';
-    picker.tabIndex = -1;
-    picker.setAttribute('aria-hidden', 'true');
-    picker.value = value;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-btn field-due-btn';
-    btn.title = 'Pick a date';
-    btn.setAttribute('aria-label', 'Pick a ' + label.toLowerCase() + ' date');
-    btn.innerHTML = icon('calendar-days');
     function commit(v) {
       if (v === value) return;
       patch(Object.fromEntries([[field, v === '' ? null : v]]));
@@ -243,22 +233,13 @@ export function createDrawer(el, opts) {
       if (ev.key === 'Escape') { input.value = value; input.blur(); }
     });
     input.addEventListener('blur', function () { commit(input.value.trim()); });
-    btn.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      // Touch/coarse-pointer WebKit reports showPicker() as a function and
-      // calling it never throws, but it opens nothing — the exception-based
-      // fallback below never runs (issue #50). Coarse pointers skip straight
-      // to the fallback, which does open the native picker there.
-      const coarse = window.matchMedia('(pointer: coarse)').matches;
-      if (!coarse) {
-        try { if (typeof picker.showPicker === 'function') { picker.showPicker(); return; } } catch (_) { /* fall through */ }
-      }
-      picker.classList.add('is-visible');
-      picker.focus();
-      picker.click();
+    const pick = duePicker({
+      className: 'icon-btn field-due-btn',     // the drawer's control-height square
+      value: value,
+      ariaLabel: 'Pick a ' + label.toLowerCase() + ' date',
+      onPick: commit,
     });
-    picker.addEventListener('change', function () { commit(picker.value); });
-    row.append(input, btn, picker);
+    row.append(input, pick.button, pick.picker);
     wrap.append(l, row);
     return wrap;
   }
