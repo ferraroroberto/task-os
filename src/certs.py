@@ -101,14 +101,24 @@ def ensure_cert_fresh(python: str | None = None) -> bool:
     return True
 
 
-def uvicorn_ssl_args() -> list[str]:
-    """CLI flags for the pair, ``[]`` when serving plain HTTP (logged loudly)."""
+def uvicorn_ssl_kwargs() -> dict[str, str]:
+    """``uvicorn.run`` keyword arguments for the pair, ``{}`` when serving
+    plain HTTP (logged loudly) — ``launcher.py webapp``'s in-process spawn."""
     pair = cert_paths()
     if pair is None:
         logger.warning(
             "⚠️ https: no %s — serving PLAIN HTTP; run scripts/gen_tailscale_cert.py for the tailnet cert",
             CERT_DIR,
         )
-        return []
+        return {}
     cert, key = pair
-    return ["--ssl-keyfile", str(key), "--ssl-certfile", str(cert)]
+    return {"ssl_certfile": str(cert), "ssl_keyfile": str(key)}
+
+
+def uvicorn_ssl_args() -> list[str]:
+    """The same decision as :func:`uvicorn_ssl_kwargs`, as uvicorn CLI flags —
+    ``WebappManager``'s subprocess spawn under the tray."""
+    ssl = uvicorn_ssl_kwargs()
+    if not ssl:
+        return []
+    return ["--ssl-keyfile", ssl["ssl_keyfile"], "--ssl-certfile", ssl["ssl_certfile"]]
