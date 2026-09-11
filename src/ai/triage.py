@@ -125,43 +125,33 @@ def assemble_context(
     return tasks, context
 
 
+def _invalid(detail: str) -> AIError:
+    """The one error a rejected suggestions document raises; only ``detail`` varies."""
+    return AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502, detail=detail)
+
+
 def _validate_response(
     conn: sqlite3.Connection, raw: str, expected_ids: set[int],
 ) -> list[dict[str, Any]]:
     try:
         decoded = json.loads(_json_text(raw))
     except ValueError as exc:
-        raise AIError(
-            "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-            detail=f"invalid JSON: {exc}",
-        ) from exc
+        raise _invalid(f"invalid JSON: {exc}") from exc
     suggestions = decoded.get("suggestions") if isinstance(decoded, dict) else None
     if not isinstance(decoded, dict) or set(decoded) != {"suggestions"}:
-        raise AIError(
-            "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-            detail="response must contain exactly the suggestions key",
-        )
+        raise _invalid("response must contain exactly the suggestions key")
     if not isinstance(suggestions, list):
-        raise AIError(
-            "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-            detail="suggestions is not a list",
-        )
+        raise _invalid("suggestions is not a list")
     if any(
         not isinstance(item, dict)
         or not isinstance(item.get("task_id"), int)
         or isinstance(item.get("task_id"), bool)
         for item in suggestions
     ):
-        raise AIError(
-            "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-            detail="every suggestion must carry an integer task_id",
-        )
+        raise _invalid("every suggestion must carry an integer task_id")
     task_ids = [item["task_id"] for item in suggestions]
     if set(task_ids) != expected_ids or len(task_ids) != len(expected_ids):
-        raise AIError(
-            "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-            detail="response task ids do not exactly match the request",
-        )
+        raise _invalid("response task ids do not exactly match the request")
     project_ids = {int(row["id"]) for row in _project_rows(conn)}
     person_ids = {int(row[0]) for row in conn.execute("SELECT id FROM people").fetchall()}
     parent_by_id = {
@@ -172,10 +162,7 @@ def _validate_response(
     for item in suggestions:
         expected_keys = {"task_id"} | ALLOWED_FIELDS
         if set(item) != expected_keys:
-            raise AIError(
-                "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                detail="every suggestion must contain exactly the documented keys",
-            )
+            raise _invalid("every suggestion must contain exactly the documented keys")
         task_id = int(item["task_id"])
         parent_id = item.get("parent_id")
         person_id = item.get("person_id")
@@ -186,41 +173,31 @@ def _validate_response(
             not isinstance(parent_id, int) or isinstance(parent_id, bool)
             or parent_id not in project_ids or parent_id == task_id
         ):
-            raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                          detail=f"invalid parent_id for task {task_id}")
+            raise _invalid(f"invalid parent_id for task {task_id}")
         cursor = parent_id
         seen: set[int] = set()
         while cursor is not None and cursor not in seen:
             if cursor == task_id:
-                raise AIError(
-                    "ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                    detail=f"parent_id would create a cycle for task {task_id}",
-                )
+                raise _invalid(f"parent_id would create a cycle for task {task_id}")
             seen.add(cursor)
             cursor = parent_by_id.get(cursor)
         if person_id is not None and (
             not isinstance(person_id, int) or isinstance(person_id, bool) or person_id not in person_ids
         ):
-            raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                          detail=f"invalid person_id for task {task_id}")
+            raise _invalid(f"invalid person_id for task {task_id}")
         if priority not in ALLOWED_PRIORITIES:
-            raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                          detail=f"invalid priority for task {task_id}")
+            raise _invalid(f"invalid priority for task {task_id}")
         if due is not None:
             if not isinstance(due, str):
-                raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                              detail=f"invalid due date for task {task_id}")
+                raise _invalid(f"invalid due date for task {task_id}")
             try:
                 parsed_due = date.fromisoformat(due)
             except ValueError as exc:
-                raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                              detail=f"invalid due date for task {task_id}") from exc
+                raise _invalid(f"invalid due date for task {task_id}") from exc
             if parsed_due.isoformat() != due:
-                raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                              detail=f"invalid due date for task {task_id}")
+                raise _invalid(f"invalid due date for task {task_id}")
         if not isinstance(reason, str) or not reason.strip():
-            raise AIError("ai_invalid_response", "AI returned invalid suggestions", http_status=502,
-                          detail=f"missing reason for task {task_id}")
+            raise _invalid(f"missing reason for task {task_id}")
         valid.append({
             "task_id": task_id,
             "parent_id": parent_id,
