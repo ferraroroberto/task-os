@@ -91,7 +91,8 @@ app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tok
                           selection.js + bulkbar.js (the one selection + its bulk actions), keys.js (the one keymap), snooze.js,
                           confirm.js, folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
                           archive.js (the Archive tab: the batch run + its report, retry a refused move), settings.js (the Settings tab),
-                          palette.js (Ctrl+K), format.js, api.js, toast.js, manifest, icons/, _vendored/
+                          palette.js (Ctrl+K), format.js, api.js, toast.js, collapsible.js (the runtime disclosure cards),
+                          manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
