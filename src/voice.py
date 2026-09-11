@@ -60,15 +60,16 @@ import logging
 import socket
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
+import requests
+
 from src import clock
 from src.config import AppConfig
+from src.pooled_http import pooled_request
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +134,11 @@ def build_multipart(
     """``(body, content_type_header)`` for one ``multipart/form-data`` upload.
 
     Hand-rolled on purpose: the whole outbound need is one file part plus a
-    couple of scalars, and the app has no HTTP client dependency to add one
-    for (``urllib`` is what every other outbound call here uses).
+    couple of scalars. ``requests`` arrived later (#185, for the keep-alive
+    session in :mod:`src.pooled_http`) and could build this with ``files=``,
+    but the body is built **once** and posted to each endpoint in turn, and
+    the tests read these exact bytes back — so the swap would buy nothing and
+    cost the assertions.
     """
     boundary = "taskos-" + uuid.uuid4().hex
     sep = f"--{boundary}\r\n".encode()
@@ -338,32 +342,38 @@ class VoiceClient:
         unreachable: list[str] = []
         for name, url in self.targets():
             started = time.monotonic()
-            request = urllib.request.Request(url, data=body, method="POST")
-            request.add_header("Content-Type", header)
             try:
-                with urllib.request.urlopen(request, timeout=TRANSCRIBE_TIMEOUT_S) as res:
-                    payload = res.read()
-                    served = res.headers.get("x-hub-served-model")
-                    served_host = res.headers.get("x-hub-served-host")
-            except urllib.error.HTTPError as exc:
-                # It answered. Whatever it said *is* the answer — asking the
-                # next endpoint instead would substitute a different engine's
-                # opinion for a failure the caller needs to see.
-                said = exc.read().decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
-                logger.warning("⚠️ voice: %s refused the clip — HTTP %s %s", url, exc.code, said)
-                raise VoiceError(
-                    f"{_LABELS[name]} rejected the recording (HTTP {exc.code})",
-                    code="voice_rejected", http_status=502,
-                    detail=f"{url} answered {exc.code}: {said or '(no body)'} "
-                           f"— sent {len(audio)} bytes of {content_type}",
-                ) from exc
-            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                res = pooled_request(
+                    "POST", url, timeout=TRANSCRIBE_TIMEOUT_S,
+                    data=body, headers={"Content-Type": header},
+                )
+            except requests.exceptions.RequestException as exc:
                 # Never reached at all — the one case that earns a second try
-                # somewhere else.
+                # somewhere else. `requests` collapses urllib's URLError, the
+                # socket timeout and the bare OSError into this one tree, so
+                # "nobody answered" stays exactly one branch.
                 unreachable.append(f"{_LABELS[name]} ({url}): {exc.__class__.__name__}: {exc}")
                 logger.warning("⚠️ voice: %s did not answer — %s", url, exc)
                 continue
-            text = clean_transcript(_text_of(payload))
+            if res.status_code >= 400:
+                # It answered. Whatever it said *is* the answer — asking the
+                # next endpoint instead would substitute a different engine's
+                # opinion for a failure the caller needs to see. (`requests`
+                # returns a 4xx rather than raising, so this is a branch where
+                # urllib had an `except`; the rule it encodes is unchanged.)
+                said = res.content.decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
+                logger.warning(
+                    "⚠️ voice: %s refused the clip — HTTP %s %s", url, res.status_code, said
+                )
+                raise VoiceError(
+                    f"{_LABELS[name]} rejected the recording (HTTP {res.status_code})",
+                    code="voice_rejected", http_status=502,
+                    detail=f"{url} answered {res.status_code}: {said or '(no body)'} "
+                           f"— sent {len(audio)} bytes of {content_type}",
+                )
+            served = res.headers.get("x-hub-served-model")
+            served_host = res.headers.get("x-hub-served-host")
+            text = clean_transcript(_text_of(res.content))
             # The hub names what actually served the clip, which is the whole
             # point of going through it: this line is how "parakeet or the CPU
             # fallback?" is answered after the fact.

@@ -168,9 +168,16 @@ def test_every_way_the_answer_can_be_useless_is_one_error(chat: FakeChat) -> Non
 
     chat.content = json.dumps({"title": "ok"})
     chat.status = 500
+    assert client.probe()[0] is True
     with pytest.raises(EnrichError) as exc:
         client.fields(NOTE, today=TODAY)
     assert "500" in str(exc.value)
+    # It answered, so it is reachable and the cached verdict stands — only
+    # silence disproves that, and does drop it (the test below). The two
+    # conditions kept their two branches when the POST moved to the pooled
+    # session (#185); this is what would notice if they collapsed into one.
+    chat.stop()
+    assert client.probe()[0] is True                # the cache, not a re-ask
 
 
 def test_an_unreachable_endpoint_says_so_rather_than_hanging_the_verdict() -> None:

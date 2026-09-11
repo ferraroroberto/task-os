@@ -183,6 +183,22 @@ def test_transcribe_posts_the_clip_and_returns_what_was_heard(whisper: FakeWhisp
     assert sent["fields"]["response_format"] == "json"
 
 
+def test_repeated_posts_share_one_connection(whisper: FakeWhisper) -> None:
+    """#185: the live-transcript pass re-posts the growing take every
+    ``partial_interval_seconds`` (1.5 s) for the whole dictation, so a minute of
+    speech is ~40 posts. A fresh socket per post is a fresh ``TIME_WAIT``
+    ephemeral port per post — the exact loop shape the fleet's port-exhaustion
+    gotcha names, and why these go through ``src.pooled_http``'s keep-alive
+    session rather than a bare ``urlopen``.
+    """
+    client = VoiceClient(config_for(whisper.url))
+    for _ in range(5):
+        assert client.transcribe(wav_bytes(16))
+    peers = {r["peer"] for r in whisper.requests}
+    assert len(whisper.requests) == 5
+    assert len(peers) == 1, f"5 posts opened {len(peers)} connections, not 1: {peers}"
+
+
 def test_a_refusal_and_a_silence_are_different_errors(whisper: FakeWhisper) -> None:
     """The fix differs: a 400 means the body was wrong, an unanswered port
     means whisper is not up. Collapsing them would hide both."""

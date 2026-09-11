@@ -58,14 +58,15 @@ import logging
 import re
 import threading
 import time
-import urllib.error
-import urllib.request
 from datetime import date
 from typing import Any
+
+import requests
 
 from src import clock, quick_add
 from src.config import AppConfig
 from src.dates import DateParseError, parse_date
+from src.pooled_http import pooled_request
 from src.voice import connect_failure, endpoint_of
 
 logger = logging.getLogger(__name__)
@@ -259,22 +260,30 @@ class EnrichClient:
                 {"role": "user", "content": note},
             ],
         }).encode("utf-8")
-        request = urllib.request.Request(self.url, data=payload, method="POST")
-        request.add_header("Content-Type", "application/json")
         started = time.monotonic()
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as res:
-                body = res.read()
-                served = res.headers.get("x-hub-served-model")
-        except urllib.error.HTTPError as exc:
-            said = exc.read().decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
-            raise EnrichError(f"the model refused the request (HTTP {exc.code}): "
-                              f"{said or '(no body)'}") from exc
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            res = pooled_request(
+                "POST", self.url, timeout=self.timeout,
+                data=payload, headers={"Content-Type": "application/json"},
+            )
+        except requests.exceptions.RequestException as exc:
+            # Nothing answered. `requests` collapses urllib's URLError, the
+            # socket timeout and the bare OSError into this one tree, so this
+            # stays the single "did not answer" branch — the one that drops
+            # the cached verdict, because only silence disproves it.
             with self._lock:            # it just proved itself unreachable
                 self._verdict = None
             raise EnrichError(f"{self.url} did not answer — "
                               f"{exc.__class__.__name__}: {exc}") from exc
+        if res.status_code >= 400:
+            # It answered, so the verdict stands: reachable, and refusing.
+            # (`requests` returns a 4xx rather than raising — the branch moved,
+            # the two distinct messages did not.)
+            said = res.content.decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
+            raise EnrichError(f"the model refused the request (HTTP {res.status_code}): "
+                              f"{said or '(no body)'}")
+        body = res.content
+        served = res.headers.get("x-hub-served-model")
 
         try:
             content = json.loads(body)["choices"][0]["message"]["content"]

@@ -13,6 +13,11 @@ Pillow>=10.0
 cryptography>=42
 # AI inbox triage talks to local-llm-hub through its Anthropic-compatible API.
 anthropic>=0.64
+# src/pooled_http.py (vendored) — the keep-alive session voice + enrich post
+# through. Already present as a pytest-base-url transitive; named here because
+# the *runtime* depends on it, and a test-only dependency's disappearance must
+# not take the mic with it.
+requests>=2.32
 
 # --- dev / verification gate ----------------------------------------------
 pytest>=8.0
