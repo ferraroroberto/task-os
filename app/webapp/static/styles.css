@@ -2110,7 +2110,9 @@ kbd {
   padding: 0 5px;
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  /* the sub-sm radius, spelled the one way: half of --radius-sm, as .check
+     derives it, so 4px is never a second hand-picked corner. */
+  border-radius: calc(var(--radius-sm) / 2);
   background: var(--card-off);
   color: var(--muted);
   font: inherit;
