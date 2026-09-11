@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -87,6 +88,28 @@ def test_error_envelope_is_consistent(client: TestClient) -> None:
     assert ok_date.status_code == 201 and len(ok_date.json()["due"]) == 10
     bad_date = client.post("/api/tasks", json={"title": "x", "due": "someday"})
     assert bad_date.status_code == 422 and bad_date.json()["error"]["code"] == "validation_error"
+
+
+def test_a_service_that_is_off_or_missing_answers_409_with_a_reason(client: TestClient) -> None:
+    """One 409 for every background service's run route: its own reason when
+    it is off, a sentence of ours when the lifespan built none or it gave no
+    reason — never a null message."""
+    state = client.app.state
+    real = {name: getattr(state, name) for name in ("capture", "mirror", "backup")}
+    state.capture = SimpleNamespace(enabled=False, reason="capture.email_poll_minutes is 0")
+    state.mirror = None
+    state.backup = SimpleNamespace(enabled=False, reason="")
+    try:
+        for url, body in (
+            ("/api/capture/email/run", {"code": "capture_disabled", "message": "capture.email_poll_minutes is 0"}),
+            ("/api/mirror/export", {"code": "mirror_disabled", "message": "mirror service not started"}),
+            ("/api/backup", {"code": "backup_disabled", "message": "backup is off"}),
+        ):
+            r = client.post(url)
+            assert (r.status_code, r.json()) == (409, {"error": body}), url
+    finally:
+        for name, service in real.items():   # the lifespan stops these on the way out
+            setattr(state, name, service)
 
 
 def test_move_cycle_done_and_delete(client: TestClient) -> None:

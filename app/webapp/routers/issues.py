@@ -28,7 +28,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from app.webapp.routers._helpers import error_response, resolve_actor
+from app.webapp.routers._helpers import error_response, resolve_actor, service_unavailable
 from src import tasks_repo as repo
 from src.db import get_db
 from src.issue_sync import issue_from_task
@@ -67,8 +67,7 @@ def issues_status(request: Request, db: sqlite3.Connection = Depends(get_db)) ->
 def issues_sync(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
     service = _service(request)
     if service is None or not service.enabled:
-        reason = service.reason if service else "issue service not started"
-        return error_response(409, "issues_disabled", reason)
+        return service_unavailable(service, "issues_disabled", "issue")
     result = service.run_now(db)
     if result is None:
         return error_response(502, "provider_error", service.last_error or "sync failed",

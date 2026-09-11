@@ -45,7 +45,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, service_unavailable
 from src.archive_batch import MAX_HINT_CHARS, ArchiveError, get_run, list_items, list_runs
 from src.db import get_db
 
@@ -69,11 +69,6 @@ def _service(request: Request) -> Any:
     return getattr(request.app.state, "archive", None)
 
 
-def _unavailable(service: Any) -> JSONResponse:
-    reason = service.reason if service else "archive service not started"
-    return error_response(409, "archive_disabled", reason or "batch archiving is off")
-
-
 @router.post("/run", status_code=202)
 def archive_run(
     request: Request,
@@ -83,7 +78,7 @@ def archive_run(
     """Start a run and answer immediately — a full Inbox takes minutes over COM."""
     service = _service(request)
     if service is None or not service.enabled:
-        return _unavailable(service)
+        return service_unavailable(service, "archive_disabled", "archive")
     try:
         run = service.start_run(limit=(body.limit if body and body.limit else limit))
     except ArchiveError as exc:
@@ -114,7 +109,7 @@ async def archive_item_revert(
 ) -> Any:
     service = _service(request)
     if service is None or not service.enabled:
-        return _unavailable(service)
+        return service_unavailable(service, "archive_disabled", "archive")
     try:
         return await run_in_threadpool(service.revert, db, item_id)
     except ArchiveError as exc:
@@ -127,7 +122,7 @@ async def archive_item_move(
 ) -> Any:
     service = _service(request)
     if service is None or not service.enabled:
-        return _unavailable(service)
+        return service_unavailable(service, "archive_disabled", "archive")
     try:
         return await run_in_threadpool(service.move, db, item_id, body.folder, hint=body.hint)
     except ArchiveError as exc:
@@ -141,7 +136,7 @@ async def archive_item_retry(
     """Finish a mail the archiver wrote but could not move (#174) — no body."""
     service = _service(request)
     if service is None or not service.enabled:
-        return _unavailable(service)
+        return service_unavailable(service, "archive_disabled", "archive")
     try:
         return await run_in_threadpool(service.retry, db, item_id)
     except ArchiveError as exc:
@@ -155,7 +150,7 @@ def archive_item_accept(
 ) -> Any:
     service = _service(request)
     if service is None:
-        return _unavailable(service)
+        return service_unavailable(service, "archive_disabled", "archive")
     try:
         return service.accept(db, item_id, hint=body.hint if body else None)
     except ArchiveError as exc:

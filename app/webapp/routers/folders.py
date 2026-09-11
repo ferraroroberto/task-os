@@ -34,7 +34,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, service_unavailable
 from src import placeholders
 
 router = APIRouter(prefix="/api", tags=["folders"])
@@ -64,8 +64,7 @@ def folders_search(
 ) -> Any:
     svc = _service(request)
     if svc is None or not svc.enabled:
-        reason = svc.reason if svc else "folder index service not started"
-        return error_response(409, "folders_disabled", reason)
+        return service_unavailable(svc, "folders_disabled", "folder index")
     items = svc.search(q, limit=limit)
     return {"q": q, "items": items, "count": len(items), "indexing": svc.indexing, "entries": svc.status()["entries"]}
 
@@ -74,8 +73,7 @@ def folders_search(
 def folders_reindex(request: Request) -> Any:
     svc = _service(request)
     if svc is None or not svc.enabled:
-        reason = svc.reason if svc else "folder index service not started"
-        return error_response(409, "folders_disabled", reason)
+        return service_unavailable(svc, "folders_disabled", "folder index")
     try:
         return svc.reindex()
     except Exception as exc:  # noqa: BLE001 — surfaced as the envelope, logged by the service
