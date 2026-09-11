@@ -1389,6 +1389,11 @@ class ArchiveBatchService:
                 error=f"the archiver reported no result for the move; the mail is {where} the Inbox",
                 decided_at=clock.now_iso(),
             )
+            # Both verbs completed, so both maps describe the disk — the undo
+            # renumbered the folder the mail left whatever the apply said.
+            if undo is not None:
+                self._heal_renumber(conn, undo["doc"])
+            self._heal_renumber(conn, applied)
             raise ArchiveError(
                 "archive_move_failed",
                 f"the archiver reported no result for the move — the mail is {where} the Inbox",

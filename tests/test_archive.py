@@ -1169,6 +1169,56 @@ def test_a_map_is_healed_even_when_the_mail_itself_failed(
     assert stayed["files"] == [OLDER_RENUMBERED]
 
 
+def test_a_move_that_gets_no_result_still_heals_both_legs_maps(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """#193: the undo leg renumbered the old folder whatever the apply leg said.
+
+    An ``apply`` that completes with no entry for the mail is the one exit from
+    ``move`` that used to drop the maps — leaving the neighbours' rows naming
+    files the undo had renamed.
+    """
+    bills_file = "E:\\archive\\admin\\bills\\0009 - a bystander.msg"
+    bills_renumbered = "E:\\archive\\admin\\bills\\0008 - a bystander.msg"
+    repo_dir = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([
+            mail("moving@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("neighbour@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+            mail("bystander@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.9)]),
+        ])],
+        apply=[
+            apply_doc([
+                apply_result("moving@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+                apply_result("neighbour@example.invalid", FOLDER_HOUSE, files=[OLDER_FILE]),
+                apply_result("bystander@example.invalid", FOLDER_BILLS, files=[bills_file]),
+            ]),
+            apply_doc([], renumbered_map=renumbered(
+                FOLDER_BILLS, old=bills_file, new=bills_renumbered,
+                message_id="bystander@example.invalid",
+            )),
+        ],
+        revert=[revert_doc(
+            [revert_result("moving@example.invalid", deleted=[ARCHIVED_FILE])],
+            renumbered_map=renumbered(
+                FOLDER_HOUSE, old=OLDER_FILE, new=OLDER_RENUMBERED,
+                message_id="neighbour@example.invalid",
+            ),
+        )],
+    )
+    svc = service_for(repo_dir)
+    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    with pytest.raises(ArchiveError) as caught:
+        svc.move(conn, items["moving@example.invalid"]["id"], "{archive}/admin/bills")
+    assert caught.value.code == "archive_move_failed"
+
+    assert archive_batch.get_item(conn, items["moving@example.invalid"]["id"])["status"] == "reverted"
+    neighbour = archive_batch.get_item(conn, items["neighbour@example.invalid"]["id"])
+    assert neighbour["files"] == [OLDER_RENUMBERED]
+    bystander = archive_batch.get_item(conn, items["bystander@example.invalid"]["id"])
+    assert bystander["files"] == [bills_renumbered]
+
+
 def test_renumbering_off_asks_for_nothing_and_a_document_without_a_map_changes_nothing(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
