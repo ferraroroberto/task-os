@@ -89,6 +89,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -146,6 +147,25 @@ class ArchiveError(RuntimeError):
         self.code = code
         self.http_status = http_status
         self.detail = detail
+
+
+@dataclass(frozen=True)
+class Decision:
+    """One mail's filing decision — what the run loop acts on and its row records.
+
+    Every branch of :meth:`ArchiveBatchService._decide` states what happens to
+    the mail and why; the rest defaults to *nothing chosen, nothing handed to
+    the archiver's* ``apply`` — so a branch sets only what differs.
+    """
+
+    status: str                       # "archived" | "needs_review"
+    reason: str
+    apply: bool = False               # hand it to the archiver's ``apply``
+    chosen_folder: str | None = None
+    chosen_rank: int | None = None
+    confidence: float | None = None
+    date_prefix: bool = False
+    files: tuple[str, ...] = ()
 
 
 # --------------------------------------------------------------- persistence
@@ -858,15 +878,15 @@ class ArchiveBatchService:
                 skipped += 1
                 continue
             item_by_message[message_id] = item_id
-            if decision["status"] == "archived":
+            if decision.status == "archived":
                 already_filed.add(message_id)
-            if decision["apply"]:
+            if decision.apply:
                 decisions.append({
                     "message_id": message_id,
-                    "folder_path": decision["chosen_folder"],
+                    "folder_path": decision.chosen_folder,
                     # Handed straight back, unchanged: the archiver inferred the
                     # naming form this folder uses, and it owns that rule.
-                    "date_prefix": decision["date_prefix"],
+                    "date_prefix": decision.date_prefix,
                 })
 
         logger.info(
@@ -919,7 +939,7 @@ class ArchiveBatchService:
             )
         return ranking
 
-    def _decide(self, mail: dict[str, Any], pick: Pick | None = None) -> dict[str, Any]:
+    def _decide(self, mail: dict[str, Any], pick: Pick | None = None) -> Decision:
         """Pick this mail's destination and the state that follows from it.
 
         Three sources, in order: the archiver's index already has the mail (then
@@ -940,63 +960,53 @@ class ArchiveBatchService:
             # time, so anything but a literal ``True`` keeps the old no-op.
             if mail.get("in_inbox") is True:
                 folder = _folder_of(str(already))
-                return {
-                    "status": "archived", "apply": True, "chosen_folder": folder,
-                    "chosen_rank": None, "confidence": None,
-                    "date_prefix": self._date_prefix_for(mail, folder), "files": [already],
-                    "reason": "finished a mail already on disk — its file is reused, "
-                              "nothing is written",
-                }
-            return {
-                "status": "archived", "apply": False, "chosen_folder": None, "chosen_rank": None,
-                "confidence": None, "date_prefix": False, "files": [already],
-                "reason": "the archiver's index already has this mail filed — nothing was written",
-            }
+                return Decision(
+                    status="archived", apply=True, chosen_folder=folder,
+                    date_prefix=self._date_prefix_for(mail, folder), files=(already,),
+                    reason="finished a mail already on disk — its file is reused, "
+                           "nothing is written",
+                )
+            return Decision(
+                status="archived", files=(already,),
+                reason="the archiver's index already has this mail filed — nothing was written",
+            )
         candidates = [c for c in mail.get("candidates") or [] if isinstance(c, dict)]
         if not candidates:
-            return {
-                "status": "needs_review", "apply": False, "chosen_folder": None,
-                "chosen_rank": None, "confidence": None, "date_prefix": False, "files": [],
-                "reason": "the archiver ranked no folder for this mail",
-            }
+            return Decision(status="needs_review", reason="the archiver ranked no folder for this mail")
         if pick is not None and pick.source == "model":
             return self._model_decision(candidates, pick)
         return self._suggester_decision(candidates, note=pick.reason if pick else None)
 
-    def _model_decision(self, candidates: list[dict[str, Any]], pick: Pick) -> dict[str, Any]:
+    def _model_decision(self, candidates: list[dict[str, Any]], pick: Pick) -> Decision:
         """The local model's own choice — an index into ``candidates``, never a path."""
         if pick.candidate is None:
-            return {
-                "status": "needs_review", "apply": False, "chosen_folder": None,
-                "chosen_rank": None, "confidence": pick.confidence, "date_prefix": False,
-                "files": [],
-                "reason": f"none of the ranked folders fits: {pick.reason}",
-            }
+            return Decision(
+                status="needs_review", confidence=pick.confidence,
+                reason=f"none of the ranked folders fits: {pick.reason}",
+            )
         chosen = candidates[pick.candidate]
         folder = str(chosen.get("folder_path") or "")
         if not folder:
-            return {
-                "status": "needs_review", "apply": False, "chosen_folder": None,
-                "chosen_rank": pick.candidate, "confidence": pick.confidence,
-                "date_prefix": False, "files": [],
-                "reason": "the folder the model picked names no path",
-            }
+            return Decision(
+                status="needs_review", chosen_rank=pick.candidate, confidence=pick.confidence,
+                reason="the folder the model picked names no path",
+            )
         confidence = float(pick.confidence or 0.0)
-        common = {
-            "chosen_folder": folder, "chosen_rank": pick.candidate, "confidence": confidence,
-            "date_prefix": bool(chosen.get("date_prefix")), "files": [],
-        }
+        filed = Decision(
+            status="archived", apply=True, chosen_folder=folder, chosen_rank=pick.candidate,
+            confidence=confidence, date_prefix=bool(chosen.get("date_prefix")), reason=pick.reason,
+        )
         if confidence < self.threshold:
-            return {
-                **common, "status": "needs_review", "apply": False,
-                "reason": f"{pick.reason} — {confidence:.2f} confidence is below the "
-                          f"{self.threshold:.2f} threshold, so it is left in the Inbox for you",
-            }
-        return {**common, "status": "archived", "apply": True, "reason": pick.reason}
+            return replace(
+                filed, status="needs_review", apply=False,
+                reason=f"{pick.reason} — {confidence:.2f} confidence is below the "
+                       f"{self.threshold:.2f} threshold, so it is left in the Inbox for you",
+            )
+        return filed
 
     def _suggester_decision(
         self, candidates: list[dict[str, Any]], *, note: str | None = None
-    ) -> dict[str, Any]:
+    ) -> Decision:
         """The archiver's own top candidate — what stands when the model was not asked.
 
         ``note`` is why the model did not decide this one (the hub was down, off
@@ -1008,28 +1018,26 @@ class ArchiveBatchService:
         score = float(top.get("score") or 0.0)
         folder = str(top.get("folder_path") or "")
         if not folder:
-            return {
-                "status": "needs_review", "apply": False, "chosen_folder": None,
-                "chosen_rank": None, "confidence": score, "date_prefix": False, "files": [],
-                "reason": f"{prefix}the archiver's top candidate names no folder",
-            }
+            return Decision(
+                status="needs_review", confidence=score,
+                reason=f"{prefix}the archiver's top candidate names no folder",
+            )
+        filed = Decision(
+            status="archived", apply=True, chosen_folder=folder, chosen_rank=0, confidence=score,
+            date_prefix=bool(top.get("date_prefix")),
+            reason=f"{prefix}the archiver's top folder at {score:.2f} ≥ the "
+                   f"{self.threshold:.2f} threshold",
+        )
         if score < self.threshold:
-            return {
-                "status": "needs_review", "apply": False, "chosen_folder": folder,
-                "chosen_rank": 0, "confidence": score, "date_prefix": bool(top.get("date_prefix")),
-                "files": [],
-                "reason": f"{prefix}the best folder scored {score:.2f}, below the "
-                          f"{self.threshold:.2f} threshold — left in the Inbox for you",
-            }
-        return {
-            "status": "archived", "apply": True, "chosen_folder": folder, "chosen_rank": 0,
-            "confidence": score, "date_prefix": bool(top.get("date_prefix")), "files": [],
-            "reason": f"{prefix}the archiver's top folder at {score:.2f} ≥ the "
-                      f"{self.threshold:.2f} threshold",
-        }
+            return replace(
+                filed, status="needs_review", apply=False,
+                reason=f"{prefix}the best folder scored {score:.2f}, below the "
+                       f"{self.threshold:.2f} threshold — left in the Inbox for you",
+            )
+        return filed
 
     @staticmethod
-    def _item_fields(mail: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    def _item_fields(mail: dict[str, Any], decision: Decision) -> dict[str, Any]:
         return {
             "message_id": str(mail.get("message_id") or ""),
             "entry_id": str(mail.get("entry_id") or "") or None,
@@ -1038,13 +1046,13 @@ class ArchiveBatchService:
             "sent_at": str(mail.get("date_sent") or "") or None,
             "attachments": int(mail.get("attachment_count") or 0),
             "candidates_json": json.dumps(mail.get("candidates") or [], ensure_ascii=False),
-            "chosen_folder": decision["chosen_folder"],
-            "chosen_rank": decision["chosen_rank"],
-            "confidence": decision["confidence"],
-            "reason": decision["reason"],
-            "date_prefix": int(bool(decision["date_prefix"])),
-            "files_json": json.dumps(decision["files"], ensure_ascii=False),
-            "status": decision["status"],
+            "chosen_folder": decision.chosen_folder,
+            "chosen_rank": decision.chosen_rank,
+            "confidence": decision.confidence,
+            "reason": decision.reason,
+            "date_prefix": int(bool(decision.date_prefix)),
+            "files_json": json.dumps(list(decision.files), ensure_ascii=False),
+            "status": decision.status,
         }
 
     def _record_apply(
