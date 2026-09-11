@@ -935,6 +935,132 @@ def _resolve_person(backend: HttpBackend | LocalBackend, text: str | None) -> in
     return int(matches[0]["id"])
 
 
+def _plan_dialogue(backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    """``tasks plan`` without ``ls`` — y/n/s over each candidate, then today's plan."""
+    # Interactive plan-my-day pass (#89). The dialogue goes to stderr so
+    # stdout stays clean for --json (and for piping the final plan).
+    say = lambda text: print(text, file=sys.stderr)  # noqa: E731
+    today_iso = date.today().isoformat()
+    cands = backend.plan_candidates()
+    planned: list[int] = []
+    snoozed: list[int] = []
+    skipped: list[int] = []
+    if cands:
+        say(f"{len(cands)} candidate(s) — [y] plan today · [n] skip · [s] snooze · [q] quit")
+    else:
+        say("no candidates — nothing overdue, due today or in the inbox")
+    for t in cands:
+        note = ""
+        if t.get("planned_on") and t["planned_on"] < today_iso:
+            note = f"   <- planned {t['planned_on']}, not finished"
+        say(_fmt_task_line(t) + note)
+        say("  plan today? [y/n/s/q] ")
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            answer = "q"
+        if answer == "q":
+            break
+        if answer == "y":
+            backend.plan(t["id"], today_iso)
+            planned.append(t["id"])
+        elif answer == "s":
+            say("  until (tomorrow · this weekend · next week · a date): ")
+            try:
+                phrase = input().strip()
+            except EOFError:
+                phrase = ""
+            iso = None
+            if phrase:
+                try:
+                    iso = _parse_date_arg(phrase)
+                except CliError as exc:
+                    say(f"  {exc} — skipped")
+            if iso:
+                backend.starts(t["id"], iso)
+                snoozed.append(t["id"])
+            else:
+                skipped.append(t["id"])
+        else:
+            skipped.append(t["id"])
+    plan = backend.today_view()["plan"]
+    payload = {"planned": planned, "snoozed": snoozed, "skipped": skipped, "plan": plan}
+    return payload, fmt_plan(plan)
+
+
+def _rm_dialogue(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    """``tasks rm`` / ``delete`` — the [y/N] confirmation (skipped by ``--yes``), then the delete."""
+    # Delete with a confirmation that names what goes (#121). The
+    # dialogue is on stderr — stdout stays clean for --json — and a
+    # refusal is an error, so a script that forgot --yes fails loud
+    # instead of half-working.
+    t = backend.show(args.id)
+    n = int(t.get("descendant_count") or 0)
+    ref = t.get("issue_ref") or {}
+    if not args.yes:
+        say = lambda text: print(text, file=sys.stderr)  # noqa: E731
+        say(_fmt_task_line(t))
+        if n:
+            say(f"  and its {n} child task{'s' if n != 1 else ''}")
+        if ref.get("state") == "open":
+            say(f"  synced coding task: the next issue sync recreates it while "
+                f"{ref.get('repo')}#{ref.get('number')} stays open — unlink it first, or close the issue")
+        say("  delete? This cannot be undone. [y/N] ")
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in ("y", "yes"):
+            raise CliError(f"#{args.id} not deleted", code="cancelled")
+    r = backend.delete(args.id)
+    gone = int(r.get("deleted") or 1)
+    tail = f" ({gone} tasks)" if gone > 1 else ""
+    return r, f"#{r['id']} deleted{tail}"
+
+
+def _triage_dialogue(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    """``tasks triage`` — y/n/q over each staged AI suggestion; ``--json`` never asks."""
+    items = backend.triage()
+    # JSON is the automation surface: stage and expose the exact rows,
+    # never stop a pipe to ask a question.
+    if getattr(args, "json", False):
+        return {"items": items}, ""
+    accepted: list[int] = []
+    rejected: list[int] = []
+    pending: list[int] = []
+    print(
+        f"{len(items)} staged suggestion(s) — [y] accept · [n] reject · "
+        "[q] leave the rest pending",
+        file=sys.stderr,
+    )
+    for index, item in enumerate(items):
+        print(fmt_suggestion(item), file=sys.stderr)
+        print("  accept and move to Todo? [y/n/q] ", file=sys.stderr)
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            answer = "q"
+        if answer == "q":
+            pending.extend(int(rest["id"]) for rest in items[index:])
+            break
+        if answer in ("y", "yes"):
+            backend.accept_suggestion(int(item["id"]))
+            accepted.append(int(item["id"]))
+        else:
+            backend.reject_suggestion(int(item["id"]))
+            rejected.append(int(item["id"]))
+    result = {
+        "items": items,
+        "accepted": accepted,
+        "rejected": rejected,
+        "pending": pending,
+    }
+    return result, (
+        f"triage: {len(accepted)} accepted · {len(rejected)} rejected · "
+        f"{len(pending)} pending"
+    )
+
+
 def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
     """Execute one command → (json payload, human text)."""
     cmd = "rm" if args.command == "delete" else args.command   # `delete` is rm's alias
@@ -1017,82 +1143,9 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         if args.action == "ls":
             plan = backend.today_view()["plan"]
             return plan, fmt_plan(plan)
-        # Interactive plan-my-day pass (#89). The dialogue goes to stderr so
-        # stdout stays clean for --json (and for piping the final plan).
-        say = lambda text: print(text, file=sys.stderr)  # noqa: E731
-        today_iso = date.today().isoformat()
-        cands = backend.plan_candidates()
-        planned: list[int] = []
-        snoozed: list[int] = []
-        skipped: list[int] = []
-        if cands:
-            say(f"{len(cands)} candidate(s) — [y] plan today · [n] skip · [s] snooze · [q] quit")
-        else:
-            say("no candidates — nothing overdue, due today or in the inbox")
-        for t in cands:
-            note = ""
-            if t.get("planned_on") and t["planned_on"] < today_iso:
-                note = f"   <- planned {t['planned_on']}, not finished"
-            say(_fmt_task_line(t) + note)
-            say("  plan today? [y/n/s/q] ")
-            try:
-                answer = input().strip().lower()
-            except EOFError:
-                answer = "q"
-            if answer == "q":
-                break
-            if answer == "y":
-                backend.plan(t["id"], today_iso)
-                planned.append(t["id"])
-            elif answer == "s":
-                say("  until (tomorrow · this weekend · next week · a date): ")
-                try:
-                    phrase = input().strip()
-                except EOFError:
-                    phrase = ""
-                iso = None
-                if phrase:
-                    try:
-                        iso = _parse_date_arg(phrase)
-                    except CliError as exc:
-                        say(f"  {exc} — skipped")
-                if iso:
-                    backend.starts(t["id"], iso)
-                    snoozed.append(t["id"])
-                else:
-                    skipped.append(t["id"])
-            else:
-                skipped.append(t["id"])
-        plan = backend.today_view()["plan"]
-        payload = {"planned": planned, "snoozed": snoozed, "skipped": skipped, "plan": plan}
-        return payload, fmt_plan(plan)
+        return _plan_dialogue(backend)
     if cmd == "rm":
-        # Delete with a confirmation that names what goes (#121). The
-        # dialogue is on stderr — stdout stays clean for --json — and a
-        # refusal is an error, so a script that forgot --yes fails loud
-        # instead of half-working.
-        t = backend.show(args.id)
-        n = int(t.get("descendant_count") or 0)
-        ref = t.get("issue_ref") or {}
-        if not args.yes:
-            say = lambda text: print(text, file=sys.stderr)  # noqa: E731
-            say(_fmt_task_line(t))
-            if n:
-                say(f"  and its {n} child task{'s' if n != 1 else ''}")
-            if ref.get("state") == "open":
-                say(f"  synced coding task: the next issue sync recreates it while "
-                    f"{ref.get('repo')}#{ref.get('number')} stays open — unlink it first, or close the issue")
-            say("  delete? This cannot be undone. [y/N] ")
-            try:
-                answer = input().strip().lower()
-            except EOFError:
-                answer = ""
-            if answer not in ("y", "yes"):
-                raise CliError(f"#{args.id} not deleted", code="cancelled")
-        r = backend.delete(args.id)
-        gone = int(r.get("deleted") or 1)
-        tail = f" ({gone} tasks)" if gone > 1 else ""
-        return r, f"#{r['id']} deleted{tail}"
+        return _rm_dialogue(args, backend)
     if cmd == "move":
         t = backend.move(args.id, _parent_arg(args.parent))
         where = _crumb(t) or "top level"
@@ -1111,45 +1164,7 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         items = backend.people()
         return items, fmt_people(items)
     if cmd == "triage":
-        items = backend.triage()
-        # JSON is the automation surface: stage and expose the exact rows,
-        # never stop a pipe to ask a question.
-        if getattr(args, "json", False):
-            return {"items": items}, ""
-        accepted: list[int] = []
-        rejected: list[int] = []
-        pending: list[int] = []
-        print(
-            f"{len(items)} staged suggestion(s) — [y] accept · [n] reject · "
-            "[q] leave the rest pending",
-            file=sys.stderr,
-        )
-        for index, item in enumerate(items):
-            print(fmt_suggestion(item), file=sys.stderr)
-            print("  accept and move to Todo? [y/n/q] ", file=sys.stderr)
-            try:
-                answer = input().strip().lower()
-            except EOFError:
-                answer = "q"
-            if answer == "q":
-                pending.extend(int(rest["id"]) for rest in items[index:])
-                break
-            if answer in ("y", "yes"):
-                backend.accept_suggestion(int(item["id"]))
-                accepted.append(int(item["id"]))
-            else:
-                backend.reject_suggestion(int(item["id"]))
-                rejected.append(int(item["id"]))
-        result = {
-            "items": items,
-            "accepted": accepted,
-            "rejected": rejected,
-            "pending": pending,
-        }
-        return result, (
-            f"triage: {len(accepted)} accepted · {len(rejected)} rejected · "
-            f"{len(pending)} pending"
-        )
+        return _triage_dialogue(args, backend)
     if cmd == "mirror":
         if args.action == "export":
             r = backend.mirror_export()
