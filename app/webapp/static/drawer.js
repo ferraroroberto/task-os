@@ -400,6 +400,31 @@ export function createDrawer(el, opts) {
     el.appendChild(folderSection(t));
 
     // ---- description
+    el.appendChild(descriptionSection(t));
+
+    // ---- links
+    el.appendChild(linksSection(t));
+
+    // ---- blocked by (#100)
+    el.appendChild(blockedBySection(t));
+
+    // ---- comments (newest first) + composer
+    el.appendChild(commentsSection(t));
+
+    // ---- activity
+    el.appendChild(activitySection(t));
+
+    // ---- children
+    el.appendChild(childrenSection(t));
+
+    // ---- issue panel
+    el.appendChild(renderIssuePanel(t));
+
+    // ---- delete (#121): the one destructive control, last and quiet
+    el.appendChild(renderDeleteFoot(t));
+  }
+
+  function descriptionSection(t) {
     const desc = section('description', 'Description', 'file-text');
     const descTools = document.createElement('div');
     descTools.className = 'drawer-tools';
@@ -441,9 +466,10 @@ export function createDrawer(el, opts) {
       toggle.addEventListener('click', function () { descEditing = true; render(); el.querySelector('.drawer-desc-edit').focus(); });
     }
     desc.appendChild(body);
-    el.appendChild(desc);
+    return desc;
+  }
 
-    // ---- links
+  function linksSection(t) {
     const links = section('links', 'Links', 'link');
     const linkList = document.createElement('div');
     linkList.className = 'drawer-links';
@@ -548,12 +574,10 @@ export function createDrawer(el, opts) {
       } catch (err) { toast(err.message, 'error'); }
     });
     links.appendChild(linkForm);
-    el.appendChild(links);
+    return links;
+  }
 
-    // ---- blocked by (#100)
-    el.appendChild(blockedBySection(t));
-
-    // ---- comments (newest first) + composer
+  function commentsSection(t) {
     const comments = section('comments', 'Comments', 'message-square');
     const composer = document.createElement('form');
     composer.className = 'comment-composer';
@@ -646,9 +670,10 @@ export function createDrawer(el, opts) {
       clist.appendChild(none);
     }
     comments.appendChild(clist);
-    el.appendChild(comments);
+    return comments;
+  }
 
-    // ---- activity
+  function activitySection(t) {
     const activity = section('activity', 'Activity', 'activity');
     const alist = document.createElement('div');
     alist.className = 'activity-list';
@@ -683,9 +708,10 @@ export function createDrawer(el, opts) {
       alist.appendChild(row);
     });
     activity.appendChild(alist);
-    el.appendChild(activity);
+    return activity;
+  }
 
-    // ---- children
+  function childrenSection(t) {
     const children = section('children', 'Children', 'corner-down-right');
     const kids = document.createElement('div');
     kids.className = 'children-list';
@@ -733,13 +759,7 @@ export function createDrawer(el, opts) {
       } catch (err) { toast(err.message, 'error'); }
     });
     children.appendChild(addChild);
-    el.appendChild(children);
-
-    // ---- issue panel
-    el.appendChild(renderIssuePanel(t));
-
-    // ---- delete (#121): the one destructive control, last and quiet
-    el.appendChild(renderDeleteFoot(t));
+    return children;
   }
 
   /** A `Delete task` at the foot, away from the status select. The dialog
