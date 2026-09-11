@@ -82,7 +82,7 @@ PARTIAL_HEARD = " Buy a new filter"
 PARTIAL_SPOKEN = "Buy a new filter"
 #: What the light model makes of the spoken sentence (#147). A shorter,
 #: imperative title, the rest as a description, and the due named only as a
-#: PHRASE the note actually contains ??? the model never returns a date.
+#: PHRASE the note actually contains — the model never returns a date.
 ENRICHED_TITLE = "Buy a dehumidifier filter"
 ENRICHED_DESC = "The current one needs replacing."
 
@@ -253,14 +253,14 @@ def test_say_the_task(
     expect(mic).not_to_have_class(re.compile(r"is-recording|is-working"))
     expect(mic).to_have_attribute("aria-pressed", "false")
     expect(mic.locator("use")).to_have_attribute("href", "#i-mic")
-    # ???and the light model then tidies the sentence (#147): a shorter title,
+    # …and the light model then tidies the sentence (#147): a shorter title,
     # the rest in Description. The date it named was a PHRASE out of the
-    # transcript, resolved by src/dates ??? so the Due field does not move.
+    # transcript, resolved by src/dates — so the Due field does not move.
     #
     # The raw transcript is on the line first and this replaces it; that
     # intermediate state is not asserted here because asserting it would be a
     # race. What it is worth proving is what happens when the model *cannot*
-    # answer ??? done a few lines below, where the answer is not transient.
+    # answer — done a few lines below, where the answer is not transient.
     expect(line).to_have_value(ENRICHED_TITLE)
     expect(dialog.locator(".quick-add-desc")).to_have_value(ENRICHED_DESC)
     expect(dialog.locator(".quick-add-due")).to_have_value(due)
@@ -278,7 +278,7 @@ def test_say_the_task(
     assert int.from_bytes(sent["file"][24:28], "little") == 16000
     assert int.from_bytes(sent["file"][22:24], "little") == 1
 
-    # 4. one Enter and it is a real task, in **To Do** ??? a spoken task is a
+    # 4. one Enter and it is a real task, in **To Do** — a spoken task is a
     #    hand-made one (#148); Inbox is for what arrives on its own.
     dialog.locator(".quick-add-submit").click()
     expect(dialog).to_be_hidden()
