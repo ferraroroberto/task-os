@@ -82,13 +82,24 @@ def terms(q: str) -> list[str]:
     return [t for t in (q or "").split() if t.strip()]
 
 
-def fts_query(q: str) -> str:
-    """Free text → a safe FTS5 MATCH string: every word a quoted prefix term, ANDed.
+def fts_query(q: str, *, min_prefix: int = 1) -> str:
+    """Free text → a safe FTS5 MATCH string: every word a quoted term, ANDed.
 
-    Same recipe as ``src.tasks_repo._fts_query`` — quotes defuse ``#``, ``-``,
-    ``:`` and friends; the trailing ``*`` makes ``pass`` hit ``passport``.
+    Quotes defuse ``#``, ``-``, ``:`` and friends; the trailing ``*`` makes
+    ``pass`` hit ``passport`` — on words of at least ``min_prefix`` characters,
+    a shorter one matching exactly (the emails adapter's choice, see there).
+
+    ``src.tasks_repo._fts_query`` is the one copy this does not replace: the
+    domain layer importing this package would load its ``__init__`` — the
+    federated layer and every adapter, which import ``tasks_repo`` back — on
+    every import of ``tasks_repo``. ``tests/test_search_adapters.py`` pins the
+    two to the same answer instead.
     """
-    return " ".join('"' + t.replace('"', '""') + '"*' for t in terms(q))
+    out = []
+    for t in terms(q):
+        quoted = '"' + t.replace('"', '""') + '"'
+        out.append(quoted + "*" if len(t) >= min_prefix else quoted)
+    return " ".join(out)
 
 
 def mark_terms(text: str, q: str) -> str:

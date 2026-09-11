@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from src.placeholders import normalize_path, opener_url, to_ref
-from src.search.base import Hit, mark_terms, terms
+from src.search.base import Hit, fts_query, mark_terms, terms
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +43,15 @@ __all__ = ["EmailsAdapter", "email_db_uri"]
 FTS_TABLE = "emails_fts"
 BM25_WEIGHTS = "10.0, 3.0, 3.0, 1.0"        # subject, sender, recipients, body_preview
 _LIKE_COLUMNS = ("subject", "sender", "recipients", "body_preview")
+#: A prefix ``*`` from two characters on: a one-letter prefix scans a fifth of
+#: a large index (measured 0.5 s on 18 k rows), while an exact one-letter token
+#: is cheap and just as useful.
+MIN_PREFIX = 2
 
 
 def email_db_uri(path: str | Path) -> str:
     """``file:///E:/…/emails.db?mode=ro`` — the read-only URI :func:`sqlite3.connect` takes with ``uri=True``."""
     return Path(path).resolve().as_uri() + "?mode=ro"
-
-
-def _fts_query(q: str) -> str:
-    """Words as quoted terms, ANDed; a prefix ``*`` from two characters on
-    (a one-letter prefix scans a fifth of a large index — measured 0.5 s on
-    18 k rows — an exact one-letter token is cheap and just as useful)."""
-    out = []
-    for t in terms(q):
-        quoted = '"' + t.replace('"', '""') + '"'
-        out.append(quoted + "*" if len(t) >= 2 else quoted)
-    return " ".join(out)
 
 
 class EmailsAdapter:
@@ -126,7 +119,7 @@ class EmailsAdapter:
                    snippet({FTS_TABLE}, 3, '[', ']', '…', 14) AS s_body
               FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH ? ORDER BY rank LIMIT ?
             """,
-            (_fts_query(q), int(limit)),
+            (fts_query(q, min_prefix=MIN_PREFIX), int(limit)),
         ).fetchall()
         if not rows:
             return []
