@@ -38,7 +38,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, service_unavailable
 from app.webapp.routers.auth import access_status
 from src import opener, tasks_repo
 from src.db import get_db
@@ -81,8 +81,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
 def mirror_export(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
     mirror, _ = _services(request)
     if mirror is None or not mirror.enabled:
-        reason = mirror.reason if mirror else "mirror service not started"
-        return error_response(409, "mirror_disabled", reason)
+        return service_unavailable(mirror, "mirror_disabled", "mirror")
     return mirror.export_all(db)
 
 
@@ -90,8 +89,7 @@ def mirror_export(request: Request, db: sqlite3.Connection = Depends(get_db)) ->
 def mirror_import(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
     mirror, _ = _services(request)
     if mirror is None or not mirror.enabled:
-        reason = mirror.reason if mirror else "mirror service not started"
-        return error_response(409, "mirror_disabled", reason)
+        return service_unavailable(mirror, "mirror_disabled", "mirror")
     return mirror.import_tick(db)
 
 
@@ -109,8 +107,7 @@ def mirror_events_clear(db: sqlite3.Connection = Depends(get_db)) -> Any:
 def backup_now(request: Request) -> Any:
     _, backup = _services(request)
     if backup is None or not backup.enabled:
-        reason = backup.reason if backup else "backup service not started"
-        return error_response(409, "backup_disabled", reason)
+        return service_unavailable(backup, "backup_disabled", "backup")
     target = backup.run_now()
     if target is None:
         return error_response(500, "backup_failed", backup.last_error or "backup failed")

@@ -42,3 +42,16 @@ def error_response(status: int, code: str, message: str, detail: Any = None) -> 
     if detail is not None:
         body["error"]["detail"] = detail
     return JSONResponse(body, status_code=status)
+
+
+def service_unavailable(service: Any, code: str, name: str) -> JSONResponse:
+    """The 409 for a background service that is off — or was never started.
+
+    ``service`` is what the lifespan put on ``app.state`` (``None`` when it
+    built none); its own ``reason`` says which of its failures applies. A
+    missing service, and a blank reason, are worded here — the message is
+    never null.
+    """
+    if service is None:
+        return error_response(409, code, f"{name} service not started")
+    return error_response(409, code, service.reason or f"{name} is off")

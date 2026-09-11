@@ -20,7 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, service_unavailable
 
 router = APIRouter(prefix="/api", tags=["capture"])
 
@@ -29,8 +29,7 @@ router = APIRouter(prefix="/api", tags=["capture"])
 def capture_email_run(request: Request) -> Any:
     service = getattr(request.app.state, "capture", None)
     if service is None or not service.enabled:
-        reason = service.reason if service else "capture service not started"
-        return error_response(409, "capture_disabled", reason)
+        return service_unavailable(service, "capture_disabled", "capture")
     result = service.run_now()
     if result is None:
         return error_response(500, "capture_failed", service.last_error or "capture pass failed")
