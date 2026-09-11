@@ -99,6 +99,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           federated.py — concurrent, grouped, unconfigured = visible) · ai/ (Anthropic-compatible hub client +
                           staged Inbox triage validation/application) · email_capture.py (flagged mail → Inbox, read-only)
                           archive_batch.py (the archiver's batch CLI as a subprocess: plan → decide → apply → rescan)
+                          archive_renumber.py (heals stored .msg paths from the archiver's renumber map)
                           archive_rank.py (the local model picks the folder among the candidates + the correction memory)
                           logger.py · static_versioning.py
 opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell

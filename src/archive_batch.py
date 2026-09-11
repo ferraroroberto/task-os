@@ -70,10 +70,11 @@ archived again.
 
 Both verbs that disturb a folder's numbering also ask the archiver to repair it
 (``--renumber``, ``archive.renumber``, email-archiver#61) — and the archiver
-heals only its own index, so every path it renames is healed here from the map
-it returns: :func:`apply_renumber_map` rewrites ``archive_items.files_json``,
-the email link's ref and the captured task's ``external_id``. Asking for the
-repair without healing would be strictly worse than not asking.
+heals only its own index, so every path it renames is healed from the map it
+returns — by :func:`~src.archive_renumber.apply_renumber_map`, which rewrites
+``archive_items.files_json``, the email link's ref and the captured task's
+``external_id``. Asking for the repair without healing would be strictly worse
+than not asking.
 
 Idempotency is the Internet Message-ID throughout (never an Outlook EntryID,
 which the ``apply`` move itself rewrites). A second run over a mail this
@@ -101,7 +102,6 @@ from src.archive_renumber import (
     _rename_files,
     _rename_index,
     apply_renumber_map,
-    renumber_pairs,
     renumbered_folders,
 )
 from src.config import AppConfig
@@ -1405,7 +1405,6 @@ __all__ = [
     "SUPPORTED_SCHEMA_VERSION",
     "ArchiveBatchService",
     "ArchiveError",
-    "apply_renumber_map",
     "create_run",
     "filed_message_ids",
     "finish_run",
@@ -1416,7 +1415,5 @@ __all__ = [
     "list_runs",
     "recent_corrections",
     "record_correction",
-    "renumber_pairs",
-    "renumbered_folders",
     "update_item",
 ]
