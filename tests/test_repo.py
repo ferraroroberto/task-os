@@ -115,6 +115,32 @@ def test_move_and_cycle_guard(conn: sqlite3.Connection, seeded: dict) -> None:
     assert len(repo.list_activity(conn, quotes)) == n
 
 
+def test_would_cycle_is_exactly_the_verdict_move_enforces(
+    conn: sqlite3.Connection, seeded: dict
+) -> None:
+    """``would_cycle`` is now the single copy of the parent-cycle rule (#185),
+    read by ``move`` and by ``src.ai.triage``'s response validator. Its two
+    phrasings — "is the proposed parent below me?" (a descendants CTE) and
+    "am I above the proposed parent?" (the ancestor walk triage used to do for
+    itself) — are only the same question if the direction is right, so assert
+    it against ``move`` itself over every ordered pair in the seeded tree
+    rather than against a hand-picked example.
+    """
+    ids = [int(r["id"]) for r in conn.execute("SELECT id FROM tasks ORDER BY id")]
+    assert len(ids) >= 40
+    for task_id in ids:
+        original_parent = repo.get_task(conn, task_id)["parent_id"]
+        for parent_id in [*ids, None]:
+            predicted = repo.would_cycle(conn, task_id, parent_id)
+            try:
+                repo.move(conn, task_id, parent_id)
+            except repo.CycleError:
+                assert predicted is True, f"move refused {task_id}->{parent_id}, would_cycle did not"
+            else:
+                assert predicted is False, f"move allowed {task_id}->{parent_id}, would_cycle refused"
+                repo.move(conn, task_id, original_parent)       # put it back for the next pair
+
+
 # ---------------------------------------------------------- blocked-by (#100)
 
 def test_seeded_blocked_pair(conn: sqlite3.Connection, seeded: dict) -> None:

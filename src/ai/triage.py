@@ -154,10 +154,6 @@ def _validate_response(
         raise _invalid("response task ids do not exactly match the request")
     project_ids = {int(row["id"]) for row in _project_rows(conn)}
     person_ids = {int(row[0]) for row in conn.execute("SELECT id FROM people").fetchall()}
-    parent_by_id = {
-        int(row["id"]): row["parent_id"]
-        for row in conn.execute("SELECT id, parent_id FROM tasks").fetchall()
-    }
     valid: list[dict[str, Any]] = []
     for item in suggestions:
         expected_keys = {"task_id"} | ALLOWED_FIELDS
@@ -174,13 +170,11 @@ def _validate_response(
             or parent_id not in project_ids or parent_id == task_id
         ):
             raise _invalid(f"invalid parent_id for task {task_id}")
-        cursor = parent_id
-        seen: set[int] = set()
-        while cursor is not None and cursor not in seen:
-            if cursor == task_id:
-                raise _invalid(f"parent_id would create a cycle for task {task_id}")
-            seen.add(cursor)
-            cursor = parent_by_id.get(cursor)
+        # The cycle rule belongs to tasks_repo, which is what would enforce it
+        # anyway when accept_suggestion calls update_task — a suggestion that
+        # could only ever be rejected is not worth storing and showing.
+        if repo.would_cycle(conn, task_id, parent_id):
+            raise _invalid(f"parent_id would create a cycle for task {task_id}")
         if person_id is not None and (
             not isinstance(person_id, int) or isinstance(person_id, bool) or person_id not in person_ids
         ):

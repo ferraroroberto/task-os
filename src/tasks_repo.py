@@ -690,6 +690,29 @@ def bulk_update(
     return results
 
 
+def would_cycle(
+    conn: sqlite3.Connection, task_id: int, new_parent_id: int | None
+) -> bool:
+    """Would parenting ``task_id`` under ``new_parent_id`` close a loop?
+
+    The parent-cycle rule itself, with no side effects and nothing to log, so
+    a caller that only wants to *reject* a proposal — :func:`move` before it
+    writes, ``src.ai.triage`` before it stores a suggestion it would later
+    hand to :func:`move` — asks the same question of the same tree instead of
+    walking ``parent_id`` for itself. ``None`` (root) can never cycle.
+
+    "Is the proposed parent one of my descendants?" and "am I one of the
+    proposed parent's ancestors?" are the same question on an acyclic tree,
+    and this tree is acyclic because this function is the only gate onto it.
+    """
+    if new_parent_id is None:
+        return False
+    new_parent_id = int(new_parent_id)
+    if new_parent_id == task_id:
+        return True
+    return new_parent_id in _descendant_ids(conn, task_id)
+
+
 def move(
     conn: sqlite3.Connection,
     task_id: int,
@@ -705,10 +728,12 @@ def move(
     current = _require_task(conn, task_id)
     if new_parent_id is not None:
         new_parent_id = int(new_parent_id)
+        # Self and descendant stay two messages: "you picked yourself" and
+        # "you picked something below you" have different fixes.
         if new_parent_id == task_id:
             raise CycleError(f"task {task_id} cannot be its own parent")
         _require_task(conn, new_parent_id)
-        if new_parent_id in _descendant_ids(conn, task_id):
+        if would_cycle(conn, task_id, new_parent_id):
             raise CycleError(
                 f"task {new_parent_id} is a descendant of task {task_id} — that would be a cycle"
             )
