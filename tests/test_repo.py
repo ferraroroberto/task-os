@@ -140,6 +140,23 @@ def test_seeded_blocked_pair(conn: sqlite3.Connection, seeded: dict) -> None:
     assert release_node["blocked"] is True and release_node["blocker_count"] == 1
 
 
+def test_the_tree_and_a_task_agree_on_its_blockers(conn: sqlite3.Connection, seeded: dict) -> None:
+    """The tree's prefetched blocked-by keys are the ones the task itself
+    carries — same blockers, same order, same derived facts — however the
+    edges were added (the newest, lowest id here goes in last)."""
+    release = seeded["release"]
+    low, high = sorted((seeded["quotes"], seeded["worktop"]))
+    repo.add_blocker(conn, release, high)
+    repo.add_blocker(conn, release, low)
+    repo.set_status(conn, low, "done")
+    task = repo.get_task(conn, release)
+    node = repo.tree(conn, release)[0]
+    keys = ("blocked_by", "blocked", "blocker_count")
+    assert {k: node[k] for k in keys} == {k: task[k] for k in keys}
+    assert [b["id"] for b in node["blocked_by"]] == sorted([seeded["driver"], low, high])
+    assert node["blocker_count"] == 2                     # the closed one no longer counts
+
+
 def test_add_blocker_refuses_self_and_cycle(conn: sqlite3.Connection, seeded: dict) -> None:
     quotes, worktop = seeded["quotes"], seeded["worktop"]
     with pytest.raises(repo.CycleError):

@@ -350,6 +350,30 @@ def _currently_blocked_ids(conn: sqlite3.Connection) -> set[int]:
     return {r["blocked_id"] for r in rows}
 
 
+def _blocker_rows(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]]:
+    """``task_id``'s blockers — id/title/status, ordered by id."""
+    return _rows(
+        conn.execute(
+            "SELECT t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
+            " WHERE tb.blocked_id = ? ORDER BY t.id",
+            (task_id,),
+        ).fetchall()
+    )
+
+
+def _blocked_fields(blocked_by: list[dict[str, Any]]) -> dict[str, Any]:
+    """The blocked-by keys every task shape carries (#100), from its blockers.
+
+    The blockers themselves (id/title/status, for the drawer's list and the
+    mirror export) plus the two derived facts every list view wants without
+    walking edges itself — ``blocked`` (any blocker still open) and
+    ``blocker_count`` (how many of them). One place for what "an open blocker"
+    means: :func:`_summary` and :func:`tree` both read it from here.
+    """
+    open_blockers = [b for b in blocked_by if b["status"] not in CLOSED_STATUSES]
+    return {"blocked_by": blocked_by, "blocked": bool(open_blockers), "blocker_count": len(open_blockers)}
+
+
 def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
     """A task row plus the cheap derived bits every list view wants."""
     out = dict(row)
@@ -391,21 +415,7 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
     ).fetchone()
     out["ai_url"] = ai["url"] if ai else None
     out["ai_label"] = (ai["label"] if ai else None) or None
-    # blocked-by dependencies (#100): the blockers themselves (id/title/status,
-    # for the drawer's list and the mirror export) plus the two derived facts
-    # every list view wants without walking edges itself — blocked (any
-    # blocker still open) and blocker_count (how many of them).
-    blockers = _rows(
-        conn.execute(
-            "SELECT t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
-            " WHERE tb.blocked_id = ? ORDER BY t.id",
-            (row["id"],),
-        ).fetchall()
-    )
-    out["blocked_by"] = blockers
-    open_blockers = [b for b in blockers if b["status"] not in CLOSED_STATUSES]
-    out["blocked"] = bool(open_blockers)
-    out["blocker_count"] = len(open_blockers)
+    out.update(_blocked_fields(_blocker_rows(conn, row["id"])))
     return out
 
 
@@ -718,13 +728,7 @@ def move(
 def list_blockers(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]]:
     """``task_id``'s blockers — id/title/status, ordered by id."""
     _require_task(conn, task_id)
-    return _rows(
-        conn.execute(
-            "SELECT t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
-            " WHERE tb.blocked_id = ? ORDER BY t.id",
-            (task_id,),
-        ).fetchall()
-    )
+    return _blocker_rows(conn, task_id)
 
 
 def add_blocker(
@@ -1345,18 +1349,19 @@ def tree(
         all_by_id[r["id"]] = dict(r)
     refs = {r["task_id"]: dict(r) for r in conn.execute("SELECT * FROM issue_refs").fetchall()}
     # blocked-by (#100), prefetched like issue_refs above: one query for the
-    # whole tree rather than a per-node lookup.
+    # whole tree rather than a per-node lookup. Ordered by blocker id, the
+    # order :func:`_blocker_rows` gives every other task shape.
     blockers_by: dict[int, list[int]] = {}
-    for r in conn.execute("SELECT blocker_id, blocked_id FROM task_blocks").fetchall():
+    for r in conn.execute(
+        "SELECT blocker_id, blocked_id FROM task_blocks ORDER BY blocked_id, blocker_id"
+    ).fetchall():
         blockers_by.setdefault(r["blocked_id"], []).append(r["blocker_id"])
 
     def blocked_fields(task_id: int) -> dict[str, Any]:
-        blocked_by = [
+        return _blocked_fields([
             {"id": bid, "title": all_by_id[bid]["title"], "status": all_by_id[bid]["status"]}
             for bid in blockers_by.get(task_id, []) if bid in all_by_id
-        ]
-        open_blockers = [b for b in blocked_by if b["status"] not in CLOSED_STATUSES]
-        return {"blocked_by": blocked_by, "blocked": bool(open_blockers), "blocker_count": len(open_blockers)}
+        ])
 
     def build(pid: int | None, depth: int) -> list[dict[str, Any]]:
         out = []
