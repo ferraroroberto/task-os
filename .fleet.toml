@@ -38,7 +38,8 @@ runtime_data   = { src = "src/runtime_data.py",                        sha = "34
 foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sha = "799d746dad501595ae5a6c2fd5b521413e032c5c", dest = "src/vendor/foldersearcher_core.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
-# app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop, verbatim)
+# app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop; code
+#   verbatim, only the docstring's issue/port/path references re-pointed at this repo)
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
 #   BuildInfo/stamp_html/stamp_js; only the no_window import path adapted)
 
