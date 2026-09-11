@@ -773,6 +773,35 @@ def test_move_reverts_then_applies_into_the_folder_you_named(
     }]
 
 
+def test_a_move_whose_refile_fails_records_the_undo_it_already_did(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The undo leg has deleted the files and returned the mail to the Inbox;
+    a row still claiming ``archived`` would keep every later run from filing it."""
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[plan_doc([mail("lost@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[
+            apply_doc([apply_result("lost@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])]),
+            error_doc("apply", "outlook_unavailable", "Outlook went away"),
+        ],
+        revert=[revert_doc([revert_result("lost@example.invalid", deleted=[ARCHIVED_FILE])])],
+    )
+    svc = service_for(repo)
+    item = _one_archived_item(conn, svc)
+    assert "lost@example.invalid" in archive_batch.filed_message_ids(conn)
+
+    with pytest.raises(ArchiveError) as caught:
+        svc.move(conn, item["id"], "{archive}/admin/bills")
+    assert caught.value.code == "archive_outlook_unavailable"
+
+    after = archive_batch.get_item(conn, item["id"])
+    assert after["status"] == "reverted" and after["files"] == []
+    assert "back in the Inbox" in after["error"] and "Outlook went away" in after["error"]
+    assert "lost@example.invalid" not in archive_batch.filed_message_ids(conn)
+    assert not svc.running
+
+
 def test_move_files_a_needs_review_mail_that_was_never_archived(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:

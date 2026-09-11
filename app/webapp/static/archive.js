@@ -861,6 +861,9 @@ export function mountArchive(opts) {
       return REVIEWABLE.indexOf(i.status) >= 0 && !i.decided_at;
     });
     els.acceptAll.hidden = pending.length === 0;
+    // A static button: `runAction` disabled it, and nothing but this redraw
+    // gives it back — a cancelled confirm would otherwise leave it dead.
+    els.acceptAll.disabled = busy;
     // The count is the rows that still offer *Accept*, and now nothing else:
     // a decided row stopped offering it above, so the button and the report
     // can no longer disagree.
@@ -1000,6 +1003,8 @@ export function mountArchive(opts) {
       // API's own sentence is better than anything invented here.
       els.progress.textContent = '';
       toast(err.message || 'Could not start the run', 'error');
+      // Released before the redraw, which re-reads it for the button's state.
+      busy = false;
       await refreshStatus();
     } finally {
       busy = false;

@@ -518,6 +518,18 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 1 that need you")
     expect(page.locator(".archive-row-actions .archive-action", has_text="Accept")).to_have_count(1)
 
+    # 7c. Cancelling the bulk confirmation hands the button back (#187): it is a
+    #     static element, and only the report's redraw re-enables it — it used
+    #     to stay dead until a page reload.
+    bulk = page.locator("#archiveAcceptAll")
+    bulk.click()
+    dialog = page.locator("#confirmDialog")
+    expect(dialog).to_be_visible()
+    dialog.locator(".detail-close").click()
+    expect(dialog).to_be_hidden()
+    expect(bulk).to_be_enabled()
+    expect(bulk).to_have_text("Accept all 1 that need you")
+
     # 8. Undo the one the run filed: the files go, the mail is back in the Inbox
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")

@@ -101,6 +101,8 @@ class BackupScheduler:
         self.last_file: str | None = None
         self.last_error: str | None = None
         self.next_run: datetime | None = None
+        # the day run_now last tried, success or failure — a failed day waits for next_run
+        self._attempted: date | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         if not self.enabled:
@@ -131,6 +133,7 @@ class BackupScheduler:
         """One backup (also the scheduler's tick body); errors are recorded, never raised past here."""
         if self.dir is None:
             return None
+        self._attempted = date.today()
         try:
             target = run_backup(self.source or db_path(), self.dir, keep=self.keep)
         except Exception as exc:  # noqa: BLE001 — a failed backup is a status, not a crash
@@ -143,11 +146,17 @@ class BackupScheduler:
         return target
 
     def due_now(self, now: datetime | None = None) -> bool:
-        """Today's file is missing, or the scheduled time has passed since the last run."""
+        """Today's file is missing and today was not tried yet, or the scheduled time has passed.
+
+        A failed attempt (a disconnected or read-only sync folder) leaves today's
+        file missing; without the attempted-day check the 30 s tick would retry
+        it — and log a failure — forever. It waits for ``next_run`` instead.
+        """
         if self.dir is None:
             return False
         now = now or datetime.now()
-        if not (self.dir / backup_name(now.date())).exists():
+        today = now.date()
+        if not (self.dir / backup_name(today)).exists() and self._attempted != today:
             return True
         return self.next_run is not None and now >= self.next_run
 

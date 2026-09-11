@@ -1352,10 +1352,28 @@ class ArchiveBatchService:
                         "archive_revert_failed",
                         f"nothing was moved: {undo['message']}", http_status=502,
                     )
-            applied = self._spawn_with_payload("apply", "--decisions", [{
-                "message_id": item["message_id"], "folder_path": destination,
-                "date_prefix": date_prefix,
-            }])
+            try:
+                applied = self._spawn_with_payload("apply", "--decisions", [{
+                    "message_id": item["message_id"], "folder_path": destination,
+                    "date_prefix": date_prefix,
+                }])
+            except Exception as exc:
+                # The undo leg already deleted the files and sent the mail back
+                # to the Inbox. Leaving the row ``archived`` would name files
+                # that no longer exist — and ``filed_message_ids`` would then
+                # keep every later run from filing this mail again.
+                if undo is not None:
+                    logger.warning(
+                        "⚠️ archive: item %s was undone but its re-file failed — %s", item_id, exc,
+                    )
+                    update_item(
+                        conn, item_id, status="reverted", files_json="[]",
+                        error=f"the move was undone but the re-file failed, so the mail is back "
+                        f"in the Inbox: {exc}",
+                        decided_at=clock.now_iso(),
+                    )
+                    self._heal_renumber(conn, undo["doc"])
+                raise
         finally:
             self._lock.release()
 

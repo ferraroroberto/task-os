@@ -123,6 +123,9 @@ def test_a_phrase_that_is_said_but_is_not_a_date_yields_no_date() -> None:
     assert resolve_phrase("Before Friday.", NOTE, TODAY)[0] == "2026-09-11"
     for junk in (None, 42, "", "   ", {"date": "friday"}):
         assert resolve_phrase(junk, NOTE, TODAY) == (None, None), junk
+    # `parse_date` answers None (not an error) for its no-date literals; a note
+    # that says "none" hands the model exactly that word to point at.
+    assert resolve_phrase("none", "none of the radiators work", TODAY) == (None, None)
 
 
 # ------------------------------------------------------------------- client

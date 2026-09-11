@@ -171,11 +171,14 @@ def resolve_phrase(phrase: Any, transcript: str, today: date) -> tuple[str | Non
         # `strip_lead_in` is quick_add's, not a second copy: asked for "the
         # words that say when", a model answers with the preposition attached
         # ("before friday"), which is exactly what a typed line does too.
-        return parse_date(quick_add.strip_lead_in(cleaned), today=today).isoformat(), cleaned
+        d = parse_date(quick_add.strip_lead_in(cleaned), today=today)
     except DateParseError:
         # The words were said but they are not a date this app understands.
         # No date is the honest answer; the words stay in the title.
         return None, None
+    if d is None:  # "none" / "clear" — the no-date literals, not a date phrase
+        return None, None
+    return d.isoformat(), cleaned
 
 
 def _connect_failure(url: str) -> str | None:

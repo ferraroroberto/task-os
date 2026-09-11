@@ -168,6 +168,10 @@ def test_list_filters_tree_and_search_on_seed(seeded: TestClient) -> None:
     assert [t["title"] for t in items] == ["Plant tomatoes", "Garden"]
     assert seeded.get("/api/tasks?parent=root").json()["count"] >= 8
     assert seeded.get("/api/tasks?parent=2").json()["count"] == 3
+    # a bad id is a classified 422 on both id parameters, never a 500
+    for bad in ("parent=abc", "person=abc"):
+        r = seeded.get(f"/api/tasks?{bad}")
+        assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error", bad
     assert seeded.get("/api/tasks?type=coding").json()["items"][0]["issue_ref"]["number"] == 12
     assert seeded.get("/api/tasks?status=todo&due_from=2026-08-17&due_to=2026-08-19").json()["count"] >= 3
     assert seeded.get("/api/tasks?person=1").json()["count"] == 2  # Sam: quotes + plumber
