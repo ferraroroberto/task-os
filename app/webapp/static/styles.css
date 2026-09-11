@@ -334,7 +334,7 @@ html, body {
 .chip-label { overflow: hidden; text-overflow: ellipsis; }
 a.chip { color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
-.chip-date, .chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
+.chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 /* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
    link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
@@ -2054,22 +2054,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-body { padding: 0 14px 8px; }
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
-.search-hit:not(.trow) {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  gap: 2px 10px;
-  align-items: start;
-  padding: 8px 0;
-  border-top: 1px solid var(--line-muted);
-  cursor: pointer;
-  outline: none;
-}
 .search-hit:first-child { border-top: 0; }
 .search-hit:hover, .search-hit.is-active { background: var(--card-2); }
-.search-hit:not(.trow):focus-visible { box-shadow: inset 2px 0 0 var(--accent); }
-.search-hit-icon { width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
-.search-hit-main { min-width: 0; display: grid; gap: 2px; }
-.search-hit-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.95rem; font-weight: 600; overflow-wrap: anywhere; }
 /* The title IS the link: plain text in the row's title style, no chip box, no glyph. */
 .search-hit-link .icon { display: none; }
 .search-hit-link, a.chip.search-hit-link {
@@ -2091,12 +2077,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .search-hit-link:hover { text-decoration: underline; }
 .search-hit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; max-width: 100%; }
-.search-hit-sub { color: var(--muted); font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit-snippet { font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
-.search-hit-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.search-hit-actions .button-ghost { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; font-size: var(--font-caption); white-space: nowrap; text-decoration: none; }
-.search-hit-actions .button-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 .search-off, .search-none, .search-err { margin: 0; padding: 10px 0; font-size: var(--font-caption); }
 .search-off a { color: var(--accent); }
 .search-err { color: var(--danger); }
@@ -2163,9 +2145,6 @@ kbd {
   }
   .palette-card { border-radius: 0 0 var(--radius) var(--radius); }
   .palette-list { max-height: 60vh; }
-  .search-hit:not(.trow) { grid-template-columns: 20px minmax(0, 1fr); }
-  .search-hit-actions { grid-column: 2; justify-content: flex-start; }
-  .search-hit-actions .button-ghost { min-height: 36px; }
 }
 
 /* ------------------------------------------------- keyboard actions (#99) */
