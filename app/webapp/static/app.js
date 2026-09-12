@@ -1178,7 +1178,6 @@ async function boot() {
     onStatus: setStatus,
     issues: function () { return state.issues; },
     onSyncIssues: syncIssues,
-    onToggle: function () { if (search) search.refreshActions(); },
   });
   // The Settings pane owns its own cards (settings.js); mounted before the nav
   // because restoring the stored tab can fire onChange straight into it.
