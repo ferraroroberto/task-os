@@ -1,7 +1,7 @@
 """A chat-endpoint stand-in — the route and the shapes, none of the model (#147).
 
 Speaks the OpenAI chat-completions shape the hub exposes on ``:8000``, so
-:class:`src.enrich.EnrichClient` does its real JSON build, its real ``urllib``
+:class:`src.enrich.EnrichClient` does its real JSON build, its real pooled
 POST and its real answer parse against a loopback port — only the model is
 imaginary. Same isolation, and the same reason, as
 ``tests.fixtures.whisper_fake.FakeWhisper``: the suite must never depend on
@@ -19,11 +19,18 @@ of these tests is what happens to a reply that is *not* clean JSON, so it is
 never wrapped or tidied on the way out. ``status`` / ``body`` / ``content``
 are settable between calls so one test can walk the endpoint answering,
 refusing and going away.
+
+**``stop()`` closes the connections it is still serving**, for the same reason
+``FakeWhisper.stop()`` does: ``src.enrich`` posts through
+``src.pooled_http``'s keep-alive session (#185), so closing only the listening
+socket would leave a handler thread answering the socket the pool kept — the
+endpoint would look *up* after the test had taken it away.
 """
 
 from __future__ import annotations
 
 import json
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -46,10 +53,20 @@ class FakeChat:
         #: anything — the breadcrumb that answers "which model actually ran".
         self.served_model = served_model
         self.requests: list[dict[str, Any]] = []
+        #: The sockets currently being served, so stop() can close them.
+        self._live: set[socket.socket] = set()
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
+
+            def setup(self) -> None:
+                super().setup()
+                fake._live.add(self.connection)
+
+            def finish(self) -> None:
+                fake._live.discard(self.connection)
+                super().finish()
 
             def do_POST(self) -> None:            # noqa: N802 — BaseHTTPRequestHandler's name
                 length = int(self.headers.get("Content-Length", "0") or 0)
@@ -93,8 +110,17 @@ class FakeChat:
         return f"http://127.0.0.1:{self.port}{CHAT_PATH}"
 
     def stop(self) -> None:
+        """Gone: the listener closed *and* every connection still open dropped."""
         self._server.shutdown()
         self._server.server_close()
+        for sock in list(self._live):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:              # already dead — nothing left to close
+                pass
+            finally:
+                sock.close()
+        self._live.clear()
         self._thread.join(timeout=5)
 
     def __enter__(self) -> FakeChat:

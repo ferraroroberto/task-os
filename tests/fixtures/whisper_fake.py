@@ -6,7 +6,7 @@ real ones happen to be running on the machine executing it (``tests/conftest`` b
 both ``voice`` endpoints for exactly that reason), and it must never post audio
 anywhere real. This is the isolation the issue provider's ``src/issues/fake.py``
 gives the sync: a genuine HTTP endpoint on a loopback port, so the code under
-test does its real multipart build, its real ``urllib`` POST and its real
+test does its real multipart build, its real pooled POST and its real
 response parse — only the model is imaginary.
 
     with FakeWhisper(text="buy a filter next week") as whisper:
@@ -16,11 +16,19 @@ response parse — only the model is imaginary.
 
 ``status`` / ``text`` / ``body`` are settable between calls so one test can
 walk the endpoint answering, refusing and going away.
+
+**``stop()`` closes the connections it is still serving**, not just the
+listening socket. ``src.pooled_http`` holds keep-alive sockets open between
+posts (#185) and this handler speaks HTTP/1.1, so a bare ``shutdown()`` leaves
+a handler thread happily answering the socket the pool kept — the endpoint
+would look *up* to the code under test after the test had taken it away. A
+real endpoint going away closes its connections; so does this one.
 """
 
 from __future__ import annotations
 
 import json
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -76,16 +84,31 @@ class FakeWhisper:
         #: plain-text ``Invalid request``, not JSON — see src/voice.py).
         self.body = body
         self.requests: list[dict[str, Any]] = []
+        #: The sockets currently being served, so stop() can close them.
+        self._live: set[socket.socket] = set()
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
 
+            def setup(self) -> None:
+                super().setup()
+                fake._live.add(self.connection)
+
+            def finish(self) -> None:
+                fake._live.discard(self.connection)
+                super().finish()
+
             def do_POST(self) -> None:            # noqa: N802 — BaseHTTPRequestHandler's name
                 length = int(self.headers.get("Content-Length", "0") or 0)
                 raw = self.rfile.read(length)
                 content_type = self.headers.get("Content-Type", "")
-                record = {"path": self.path, "content_type": content_type, "length": length}
+                record = {
+                    "path": self.path, "content_type": content_type, "length": length,
+                    #: The client's (host, port) — two posts over one keep-alive
+                    #: connection share it, two fresh connections do not (#185).
+                    "peer": self.client_address,
+                }
                 record.update(parse_multipart(raw, content_type))
                 fake.requests.append(record)
                 if fake.body is not None:
@@ -114,8 +137,17 @@ class FakeWhisper:
         return f"http://127.0.0.1:{self.port}{INFERENCE_PATH}"
 
     def stop(self) -> None:
+        """Gone: the listener closed *and* every connection still open dropped."""
         self._server.shutdown()
         self._server.server_close()
+        for sock in list(self._live):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:              # already dead — nothing left to close
+                pass
+            finally:
+                sock.close()
+        self._live.clear()
         self._thread.join(timeout=5)
 
     def __enter__(self) -> FakeWhisper:
