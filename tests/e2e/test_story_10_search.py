@@ -4,10 +4,10 @@
     groups, Tasks · Folders · Emails · Issues (task hits are the ONE shared
     row; folder / email / issue hits are the same row shape, the title IS
     the link, no buttons — #48) → open a task from its row → the drawer
-    the drawer → create a task from a folder hit → it appears with the folder
-    chip → Ctrl+K → type a word → Enter opens the task → `>` lists the
-    commands → "Go to Board" switches the tab. On the phone the same box and
-    the palette as a full-width sheet.
+    beside the results → a folder hit's title hands its ref to the opener →
+    ↓ ↓ Enter walks the rows → Ctrl+K → type a word → Enter opens the task →
+    `>` lists the commands → "Go to Board" switches the tab. On the phone the
+    same box and the palette as a full-width sheet.
 
 Walks the story against a **disposable seeded instance** whose four indexes
 are all fixtures: ``{onedrive}`` → a temp tree (the folder index scans it),
@@ -19,11 +19,15 @@ validation record links to:
 
     docs/screenshots/story-10-search-1-desktop.png   "kitchen": four groups, full width
     docs/screenshots/story-10-search-2-desktop.png   drawer open beside the results
-    docs/screenshots/story-10-search-3-desktop.png   task created from a folder hit (folder chip in the drawer)
     docs/screenshots/story-10-search-4-desktop.png   Ctrl+K: jump to a task
     docs/screenshots/story-10-search-5-desktop.png   Ctrl+K: > commands (dark)
     docs/screenshots/story-10-search-6-phone.png     phone: results
     docs/screenshots/story-10-search-7-phone.png     phone: the palette sheet
+
+A shot number is the step it belongs to, so the set skips 3: that step used
+to be "New task on a folder hit", which #48 removed along with the per-hit
+buttons. Step 3 is still walked (the opener hand-off and the ↓ ↓ Enter
+keyboard leg) — it just has nothing left worth a picture.
 """
 
 from __future__ import annotations
