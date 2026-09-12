@@ -102,6 +102,7 @@ function Get-TranscriptMatch {
         $fs = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open,
             [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
         try {
+            $sr = $null
             $sr = [System.IO.StreamReader]::new($fs, [System.Text.Encoding]::UTF8)
             $tail = ''
             while (($n = $sr.Read($buf, 0, $buf.Length)) -gt 0) {
@@ -115,7 +116,13 @@ function Get-TranscriptMatch {
                 $tail = if ($chunk.Length -gt $overlap) { $chunk.Substring($chunk.Length - $overlap) }
                         else { $chunk }
             }
-        } finally { $fs.Dispose() }
+        } finally {
+            # the reader owns the stream once it is built, and Dispose is
+            # idempotent - so disposing both also covers the StreamReader
+            # constructor throwing, where only the stream exists
+            if ($null -ne $sr) { $sr.Dispose() }
+            $fs.Dispose()
+        }
     } catch {
         # unreadable (locked, vanished mid-scan) - it simply is not the hit
         return $found
