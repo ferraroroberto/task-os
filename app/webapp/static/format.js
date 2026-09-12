@@ -1,8 +1,10 @@
 /* task-os — formatting helpers shared by the Table, Tree and drawer.
  *
  * Relative dates, timestamps, link chips (URLs / folder placeholders /
- * repo#N inside comment bodies) and a deliberately small markdown renderer
- * for descriptions. Everything escapes text before it touches innerHTML.
+ * repo#N inside comment bodies), the small parts a status row is built from
+ * (`statusPart` · `codeEl` · `pct`, shared by the Settings cards and the
+ * Archive tab) and a deliberately small markdown renderer for descriptions.
+ * Everything escapes text before it touches innerHTML.
  */
 
 'use strict';
@@ -610,6 +612,27 @@ export function statusPill(status) {
   el.className = 'pill pill-' + (status || 'inbox');
   el.textContent = status || 'inbox';
   return el;
+}
+
+/** The one coloured word a status row leads with — `ok` · `warn` · `off`.
+ *  Text, never innerHTML: the reason that follows it is a server string. */
+export function statusPart(state, text) {
+  const s = document.createElement('span');
+  s.className = 'status-' + state;
+  s.textContent = text;
+  return s;
+}
+
+/** A configured value (a path, a model id, a repo) inside a status line. */
+export function codeEl(text) {
+  const c = document.createElement('code');
+  c.textContent = text;
+  return c;
+}
+
+/** A 0–1 ratio as whole percent, for every reading that shows one. */
+export function pct(value) {
+  return Math.round(Number(value) * 100) + '%';
 }
 
 export function priorityLabel(p) {
