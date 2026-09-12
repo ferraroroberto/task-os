@@ -150,7 +150,7 @@ const GETTING_AROUND = [
   ['Tab', 'move between rows'],
   ['Enter', 'open the focused task'],
   ['Space', 'tick the row while Select mode is on'],
-  ['Ctrl K', 'the command palette (⌘K on a Mac)'],
+  ['Ctrl K', 'the command palette (Cmd K on a Mac)'],
   ['Esc', 'close the drawer, then leave Select mode'],
 ];
 
