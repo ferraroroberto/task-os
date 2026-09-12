@@ -22,12 +22,17 @@ from src import archive_rank, email_capture, placeholders
 logger = logging.getLogger(__name__)
 
 
-def _last_component(folder: str) -> str:
+def last_component(folder: str) -> str:
     """The folder's own name — what the reason line names it by."""
     return archive_rank.short_folder(folder, 1)
 
 
-def _loads(raw: Any, default: Any) -> Any:
+def loads(raw: Any, default: Any) -> Any:
+    """One JSON column's value, or ``default`` when it is empty or unreadable.
+
+    A row whose JSON a past bug left unparseable still renders — as the empty
+    list its column means — with the warning saying which column it was.
+    """
     if not raw:
         return default
     try:
@@ -91,7 +96,7 @@ def renumbered_folders(doc: Any) -> dict[str, list[Any]]:
         if isinstance(refused, dict):
             logger.warning(
                 "⚠️ archive: the archiver refused to renumber %s — %s",
-                _last_component(str(refused.get("folder_path") or "an unnamed folder")),
+                last_component(str(refused.get("folder_path") or "an unnamed folder")),
                 refused.get("reason") or "no reason given",
             )
     mapping = doc.get("renumbered")
@@ -100,7 +105,7 @@ def renumbered_folders(doc: Any) -> dict[str, list[Any]]:
     return {str(k): v for k, v in mapping.items() if isinstance(v, list)}
 
 
-def _rename_index(doc: Any) -> dict[str, str]:
+def rename_index(doc: Any) -> dict[str, str]:
     """``{normalised old path: the new path, verbatim}`` over a whole document.
 
     Keyed on the normalised, case-folded path because the archiver reports
@@ -115,7 +120,7 @@ def _rename_index(doc: Any) -> dict[str, str]:
     return index
 
 
-def _rename_files(files: list[str], index: dict[str, str]) -> list[str]:
+def rename_files(files: list[str], index: dict[str, str]) -> list[str]:
     """A result's own ``files`` list through the map — the archiver's own caveat.
 
     An ``apply --renumber`` result reports each mail's files under the names it
@@ -157,8 +162,8 @@ def apply_renumber_map(
     for row in conn.execute(
         "SELECT id, files_json FROM archive_items WHERE files_json IS NOT NULL"
     ).fetchall():
-        files = [str(f) for f in _loads(row["files_json"], [])]
-        healed = _rename_files(files, renames)
+        files = [str(f) for f in loads(row["files_json"], [])]
+        healed = rename_files(files, renames)
         if healed == files:
             continue
         counts["items"] += 1
@@ -183,7 +188,7 @@ def apply_renumber_map(
         conn.commit()
     logger.info(
         "ℹ️ archive: %s %d renamed file(s) in %s — %d item(s), %d link(s), %d captured task(s)",
-        "would heal" if dry_run else "healed", counts["renames"], _last_component(folder),
+        "would heal" if dry_run else "healed", counts["renames"], last_component(folder),
         counts["items"], counts["links"], counts["tasks"],
     )
     return counts

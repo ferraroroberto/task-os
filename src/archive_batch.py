@@ -98,11 +98,11 @@ from src import archive_rank, clock, placeholders
 from src.ai.client import AIClient
 from src.archive_rank import Pick, Ranking
 from src.archive_renumber import (
-    _last_component,
-    _loads,
-    _rename_files,
-    _rename_index,
     apply_renumber_map,
+    last_component,
+    loads,
+    rename_files,
+    rename_index,
     renumbered_folders,
 )
 from src.config import AppConfig
@@ -189,8 +189,8 @@ def _row(row: sqlite3.Row | None, columns: tuple[str, ...]) -> dict[str, Any] | 
 def _item_dict(row: sqlite3.Row) -> dict[str, Any]:
     """One item row as the API renders it: JSON columns parsed, flags real bools."""
     item = dict(_row(row, _ITEM_COLUMNS) or {})
-    item["candidates"] = _loads(item.pop("candidates_json"), [])
-    item["files"] = _loads(item.pop("files_json"), [])
+    item["candidates"] = loads(item.pop("candidates_json"), [])
+    item["files"] = loads(item.pop("files_json"), [])
     item["date_prefix"] = bool(item["date_prefix"])
     return item
 
@@ -907,7 +907,7 @@ class ArchiveBatchService:
         re-sequencing that ran after it (email-archiver#61), and storing those
         would record a path that no longer exists.
         """
-        renames = _rename_index(result)
+        renames = rename_index(result)
         for entry in result.get("results") or []:
             if not isinstance(entry, dict):
                 continue
@@ -915,7 +915,7 @@ class ArchiveBatchService:
             if item_id is None:
                 logger.warning("⚠️ archive: apply reported a mail this run never decided on")
                 continue
-            files = _rename_files([str(f) for f in entry.get("files") or []], renames)
+            files = rename_files([str(f) for f in entry.get("files") or []], renames)
             if not files:
                 # Naming no file is not "the file is gone". A reuse (#174) is
                 # answered for a row that was inserted already knowing where its
@@ -927,7 +927,7 @@ class ArchiveBatchService:
                 # Through the map as well: the file the row already knew about
                 # is in the folder that was just re-sequenced, so it may be
                 # exactly one of the ones that moved.
-                files = _rename_files(list(known["files"]), renames) if known else []
+                files = rename_files(list(known["files"]), renames) if known else []
             error = entry.get("error") or None
             if entry.get("ok"):
                 update_item(
@@ -977,7 +977,7 @@ class ArchiveBatchService:
         item = get_item(conn, item_id)
         if item is None:  # pragma: no cover - the row was just written
             return
-        note = f" · renumbered {count} file(s) in {_last_component(folder)}"
+        note = f" · renumbered {count} file(s) in {last_component(folder)}"
         reason = str(item["reason"] or "")
         if note in reason:
             return
@@ -1249,7 +1249,7 @@ class ArchiveBatchService:
                 f"the archiver reported no result for the move — the mail is {where} the Inbox",
                 http_status=502,
             )
-        files = _rename_files([str(f) for f in entry.get("files") or []], _rename_index(applied))
+        files = rename_files([str(f) for f in entry.get("files") or []], rename_index(applied))
         common = {
             "chosen_folder": destination, "chosen_rank": None, "confidence": None,
             "date_prefix": int(bool(date_prefix)),
@@ -1356,8 +1356,8 @@ class ArchiveBatchService:
         # comes back with a new file and a new number. Whichever happened, what
         # the archiver says now wins over what the row remembered — and what it
         # does not say leaves the row's own value alone.
-        renames = _rename_index(applied)
-        files = _rename_files(
+        renames = rename_index(applied)
+        files = rename_files(
             [str(f) for f in entry.get("files") or []] or list(item["files"]), renames,
         )
         if entry.get("ok"):
