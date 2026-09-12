@@ -25,3 +25,20 @@ Unit legs: `tests/test_schema.py::test_v5_rebuild_keeps_links_and_accepts_ai_kin
 - Real phone tap: **owner's checklist** (validated on the issue before merge).
 
 Result: **verified** (e2e + unit + real-data dry-run + live-instance walk + real terminal spawn) · real phone = owner's checklist. Date: 2026-08-26.
+
+## Correction — the terminal spawn was never one tab (2026-09-12, #227)
+
+The 2026-08-26 spawn walk above read the *process chain* and stopped there, so it recorded a pass over a launch that was broken three ways at once. `;` is Windows Terminal's own new-tab delimiter and it splits on one **before** the quoting of the argument is considered, so the `;`-separated `-Command` arrived as three tabs: a bare prompt carrying only the first echo, a tab that tried to run `Write-Host` as an executable (`0x80070002`), and the real `claude` — which, being the third chunk, never saw `-d` and so resumed in `system32` rather than the repo. Separately the transcript scan sorted *after* it filtered, which blocks the pipeline: `Select-Object -First 1` could not short-circuit the filter, so every transcript on the PC was read on every resume (~170 s, and twice over on a miss). The lesson for this record: a process chain is not a tab count, and "the feature launched" is not "the feature worked".
+
+Re-walked on this PC against the #227 build, non-dry, real transcript store (12,431 transcripts / 4.5 GB):
+
+| # | Action | Observed |
+|---|---|---|
+| 1 | Dry run, `taskos://resume?session=<a real session id>` | `resume: <that session's local uuid> in <the repo it ran in>` in **1.96 s** (was ~170 s), and the new `resume-exec:` line showing `wt -d <that repo> powershell -NoProfile -NoExit -EncodedCommand <base64>` — no bare `;` anywhere in it |
+| 2 | Non-dry launch — children of `WindowsTerminal.exe` | **one** shell child (`powershell.exe … -EncodedCommand …`) beside wt's own `OpenConsole.exe`; pre-fix this was three |
+| 3 | The tab itself (window captured and read in session, not committed) | one tab in the tab bar; the `in <that repo> — the first paint of a long session can take a minute...` notice printed *inside* it; Claude Code resumed on that repo and its statusline showed that repo and its branch — **not** `system32`; no `0x80070002` tab |
+| 4 | Marker precedence on real data | the newest transcript on the PC (this very session's) merely *mentions* the id; the owning transcript still won |
+
+The probe terminal was closed afterwards. The worst case — no owner anywhere in the store — is now a single full traversal, measured at 9–25 s on this corpus depending on page-cache state, against the ~5–6 minutes two traversals used to cost.
+
+Result: **verified** (one-tab spawn + repo cwd + both echoes + timing, all observed). Date: 2026-09-12.

@@ -76,14 +76,70 @@ if ($Url.Contains('"')) {
     exit 3
 }
 
+# Does this transcript carry the session id, and in which shape? 2 = the
+# session-url marker (this is the owning transcript), 1 = a bare mention,
+# 0 = neither.
+#
+# Reading the bytes here rather than shelling out to Select-String -Quiet: for a
+# pure "does this file contain the literal" test a raw read measured ~7x faster
+# on this PC's corpus, and one pass answers both questions instead of two. Read
+# in chunks with an overlap the length of the longest needle so a match
+# straddling a chunk boundary is still seen - the largest transcript on this PC
+# is 61 MB and pulling one whole into a string would materialise twice that.
+# FileShare ReadWrite because a live session holds its own transcript open.
+#
+# The read buffer is allocated once and reused: a fresh 1 MB char[] per file
+# costs 25 GB of allocation churn across this PC's 12k transcripts, and cutting
+# it took a full no-hit traversal from 12.1 s to 7.6 s (measured, #227).
+$script:TranscriptBuf = $null
+function Get-TranscriptMatch {
+    param([string]$Path, [string]$Marker, [string]$Bare)
+    if ($null -eq $script:TranscriptBuf) { $script:TranscriptBuf = [char[]]::new(1048576) }
+    $buf = $script:TranscriptBuf
+    $overlap = $Marker.Length - 1
+    $found = 0
+    try {
+        $fs = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $sr = $null
+            $sr = [System.IO.StreamReader]::new($fs, [System.Text.Encoding]::UTF8)
+            $tail = ''
+            while (($n = $sr.Read($buf, 0, $buf.Length)) -gt 0) {
+                $chunk = $tail + [string]::new($buf, 0, $n)
+                # the marker embeds the bare id, so the cheap test rules out both
+                # - which is the answer for all but a handful of files
+                if ($chunk.Contains($Bare)) {
+                    if ($chunk.Contains($Marker)) { return 2 }
+                    $found = 1
+                }
+                $tail = if ($chunk.Length -gt $overlap) { $chunk.Substring($chunk.Length - $overlap) }
+                        else { $chunk }
+            }
+        } finally {
+            # the reader owns the stream once it is built, and Dispose is
+            # idempotent - so disposing both also covers the StreamReader
+            # constructor throwing, where only the stream exists
+            if ($null -ne $sr) { $sr.Dispose() }
+            $fs.Dispose()
+        }
+    } catch {
+        # unreadable (locked, vanished mid-scan) - it simply is not the hit
+        return $found
+    }
+    return $found
+}
+
 # taskos://resume?session=<session_01…> — reopen a Claude Code session in a
 # terminal on THIS PC (#77). The web session id is embedded in the local
 # transcript (.jsonl) Claude Code wrote, so one recursive search maps it to the
 # local session uuid and the project folder it ran in. Unknown here (another
 # PC's session, pruned transcripts) -> open the conversation on the web instead.
-# Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>" /
-# "resume-web: <url>" instead of launching; TASKOS_OPENER_PROJECTS overrides
-# the transcript root (default %USERPROFILE%\.claude\projects).
+# Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>"
+# plus "resume-exec: <argv>" / "resume-web: <url>" instead of launching;
+# TASKOS_OPENER_PROJECTS overrides the transcript root (default
+# %USERPROFILE%\.claude\projects); TASKOS_OPENER_WT=1/0 forces the Windows
+# Terminal branch on or off instead of probing for wt.
 # Browsers normalise the custom scheme to taskos://resume/?session=… (slash
 # before the query) — accept both, like opener.cmd does for open/?ref=.
 if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
@@ -92,20 +148,28 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
                 else { Join-Path $env:USERPROFILE '.claude\projects' }
     $hit = $null
     if (Test-Path -LiteralPath $projects) {
-        $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue
+        # Newest first, and stop at the first owner. The marker sits near the top
+        # of a transcript (the line Claude Code writes when the session is
+        # bridged), so the owning file is normally the first or second one read.
+        # The old shape filtered *then* sorted, and Sort-Object blocks the
+        # pipeline - so Select-Object -First 1 could not stop the upstream filter
+        # and every one of this PC's 12k transcripts was read on every resume
+        # (~170 s), twice over on a miss (#227).
+        $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
         # A transcript that merely MENTIONS another session's id (a grep result,
         # a handoff note) must not shadow the owner: the owner carries the id in
         # its own session-url field. Only when no transcript carries that marker
-        # fall back to a bare-id match (older transcript shapes).
+        # fall back to a bare-id match (older transcript shapes) - recorded as we
+        # pass it, so a miss costs one traversal rather than two.
         $marker = '"url":"https://claude.ai/code/' + $id + '"'
-        $hit = $files |
-            Where-Object { Select-String -LiteralPath $_.FullName -Pattern $marker -SimpleMatch -Quiet } |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($null -eq $hit) {
-            $hit = $files |
-                Where-Object { Select-String -LiteralPath $_.FullName -Pattern $id -SimpleMatch -Quiet } |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $bareHit = $null
+        foreach ($f in $files) {
+            $m = Get-TranscriptMatch -Path $f.FullName -Marker $marker -Bare $id
+            if ($m -eq 2) { $hit = $f; break }
+            if ($m -eq 1 -and $null -eq $bareHit) { $bareHit = $f }
         }
+        if ($null -eq $hit) { $hit = $bareHit }
     }
     if ($null -eq $hit) {
         $web = "https://claude.ai/code/$id"
@@ -122,18 +186,43 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
         $raw = $line.Matches[0].Groups[1].Value -replace '\\\\', '\'
         if (Test-Path -LiteralPath $raw) { $dir = $raw }
     }
-    if ($env:TASKOS_OPENER_DRYRUN) { "resume: $uuid in $dir"; exit 0 }
+    # Echo before claude starts: a long transcript takes a while to first
+    # paint, and a silent black window reads as a failure. Single-quote the
+    # only interpolated path so a quote in it cannot end the string.
+    $shown = $dir -replace "'", "''"
+    $inner = "Write-Host 'task-os opener - resuming $uuid' -ForegroundColor Cyan; Write-Host 'in $shown - the first paint of a long session can take a minute...'; claude --resume $uuid"
+    # Hand that to the terminal as one base64 token. `;` is Windows Terminal's
+    # own new-tab delimiter and wt splits on one *before* it considers the
+    # quoting of the argument, so a `;`-separated -Command turned one resume
+    # into three tabs: a bare prompt, a tab that tried to run `Write-Host` as an
+    # executable (0x80070002), and a `claude` that never saw -d and so started
+    # in system32 (#227). The base64 alphabet contains no `;`, nothing can
+    # split, and -NoExit still applies.
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($inner))
+    # -d is the one part of the tab's directory wt reads off its command line,
+    # so escape a `;` there too rather than trust that no repo path carries one.
+    $wtDir = $dir -replace ';', '\;'
+    # TASKOS_OPENER_WT (tests) forces the branch either way; otherwise ask.
+    $useWt = if ($env:TASKOS_OPENER_WT) { $env:TASKOS_OPENER_WT -eq '1' }
+             else { [bool](Get-Command wt -ErrorAction SilentlyContinue) }
+    $argv = if ($useWt) { @('-d', $wtDir, 'powershell', '-NoProfile', '-NoExit', '-EncodedCommand', $encoded) }
+            else { @('-NoProfile', '-NoExit', '-EncodedCommand', $encoded) }
+    if ($env:TASKOS_OPENER_DRYRUN) {
+        "resume: $uuid in $dir"
+        # the argv too: TASKOS_OPENER_DRYRUN used to return before the launch
+        # code, which is why the three-tab shape shipped with green tests
+        $exe = if ($useWt) { 'wt' } else { "powershell -WorkingDirectory $dir" }
+        "resume-exec: $exe $($argv -join ' ')"
+        exit 0
+    }
     # Never let the resumed session inherit a nested-run marker: launched from
     # inside another Claude session (an agent, a launcher-hosted shell), the
     # marker would silently turn transcript saving OFF in the resumed session.
     Remove-Item Env:CLAUDE_CODE_CHILD_SESSION -ErrorAction SilentlyContinue
-    # Echo before claude starts: a long transcript takes a while to first
-    # paint, and a silent black window reads as a failure.
-    $inner = "Write-Host 'task-os opener - resuming $uuid' -ForegroundColor Cyan; Write-Host 'in $dir - the first paint of a long session can take a minute...'; claude --resume $uuid"
-    if (Get-Command wt -ErrorAction SilentlyContinue) {
-        Start-Process wt -ArgumentList '-d', $dir, 'powershell', '-NoProfile', '-NoExit', '-Command', $inner
+    if ($useWt) {
+        Start-Process wt -ArgumentList $argv
     } else {
-        Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoProfile', '-NoExit', '-Command', $inner
+        Start-Process powershell -WorkingDirectory $dir -ArgumentList $argv
     }
     exit 0
 }
