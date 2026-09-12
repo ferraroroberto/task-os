@@ -10,7 +10,9 @@
  * The menu is the `<details>` disclosure the filter card's multi-select already
  * uses (shadcn Select/Popover shape: a summary that opens a grouped list,
  * Escape closes, a click outside closes), so the app has one popover idiom
- * rather than a bespoke one per feature. `Pick a date…` hands off to
+ * rather than a bespoke one per feature — and one implementation of it too:
+ * the close-on-outside half lives in popover.js, registered per family rather
+ * than re-wired here (#191). `Pick a date…` hands off to
  * `duePicker()` from dueinput.js — the calendar button with the coarse-pointer
  * branch — instead of hand-rolling a third native-picker call site.
  */
@@ -19,6 +21,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
+import { closeOnOutside } from './popover.js';
 
 /** [phrase sent to the API, what the button says]. */
 export const SNOOZE_OPTIONS = [
@@ -26,22 +29,6 @@ export const SNOOZE_OPTIONS = [
   ['this weekend', 'This weekend'],
   ['next week', 'Next week'],
 ];
-
-let wired = false;
-
-/** One document-level listener closes any open menu — never one per row. */
-function wireOutside() {
-  if (wired) return;
-  wired = true;
-  document.addEventListener('click', function (ev) {
-    document.querySelectorAll('.snooze[open]').forEach(function (d) {
-      if (!d.contains(ev.target)) d.open = false;
-    });
-  });
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') document.querySelectorAll('.snooze[open]').forEach(function (d) { d.open = false; });
-  });
-}
 
 /**
  * The four options as a menu, with no trigger attached.
@@ -92,7 +79,7 @@ export function snoozeMenu(t, onPick) {
  * @returns {HTMLElement} a `<details class="snooze">`
  */
 export function snoozeButton(t, onSnooze) {
-  wireOutside();
+  closeOnOutside('.snooze');
   const d = document.createElement('details');
   d.className = 'snooze';
   d.dataset.id = String(t.id);

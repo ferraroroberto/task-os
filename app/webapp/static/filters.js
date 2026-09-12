@@ -26,6 +26,7 @@
 
 import { collapsibleCard } from './collapsible.js';
 import { STATUSES, todayISO } from './format.js';
+import { closeOnOutside } from './popover.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due' };
@@ -215,19 +216,6 @@ function selectEl(name, label, values, current, onChange) {
   return sel;
 }
 
-// One document listener closes any open multi-select on an outside click / Escape.
-let outsideWired = false;
-function wireOutside() {
-  if (outsideWired) return;
-  outsideWired = true;
-  document.addEventListener('click', function (ev) {
-    document.querySelectorAll('.msel[open]').forEach(function (d) { if (!d.contains(ev.target)) d.open = false; });
-  });
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') document.querySelectorAll('.msel[open]').forEach(function (d) { d.open = false; });
-  });
-}
-
 /**
  * A multi-select: a select-looking summary that opens a checklist. One click
  * per option, several allowed; the summary reads `none` / the one label /
@@ -240,7 +228,7 @@ function wireOutside() {
  * @param {{none: string, many: string, open?: boolean}} texts  many = the plural noun ("people", "statuses")
  */
 export function multiSelect(name, label, values, selected, onChange, texts) {
-  wireOutside();
+  closeOnOutside('.msel');
   const d = document.createElement('details');
   d.className = 'msel' + (selected.length ? ' has-value' : '');
   d.dataset.name = name;
