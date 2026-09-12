@@ -22,7 +22,8 @@ Three hermetic checks, no browser and no app:
   --check-tree`` only ever compares the files a run *rewrote*, so a shot
   frozen at its checkout mtime compares against nothing at all. That is how
   story 17's shots 2 and 3 sat in the gallery from the day they landed
-  (``e8ccc86``) while shot 1 beside them was regenerated eight times.
+  (``e8ccc86``) while shot 1 beside them was rewritten by seven later
+  commits.
 
 Hand-captured evidence is legitimate and stays: a real-Chrome ``taskos://``
 click, an editor window beside the app, a state a retired walk used to reach.
@@ -87,7 +88,11 @@ MANUAL_SHOTS = {
 #: Whole families that are manual by construction, so a new member needs no
 #: edit here. `ux-round-*` records a design round: the shots are the judgement
 #: being recorded, taken at the width and theme the owner reported, and the
-#: tests each round adds live in the story files under their own names.
+#: tests each round adds live in the story files under their own names. The
+#: cost is deliberate and is the loosest thing here: a new `ux-round-*` shot
+#: lands unguarded. That is right for a family where no member is ever
+#: automated and wrong for anything else, so a story shot never belongs in a
+#: prefix — it goes in MANUAL_SHOTS above, one line, one reason.
 MANUAL_PREFIXES = {
     "ux-round-": "design-round records — hand-captured judgement shots, not story proof",
 }
