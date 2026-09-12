@@ -42,7 +42,7 @@
 'use strict';
 
 import { api } from './api.js';
-import { copyText, fmtTsShort } from './format.js';
+import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
 
 const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
@@ -629,23 +629,4 @@ export function mountSettings(opts) {
     renderIssues: renderIssues,
     revealCard: revealCard,
   };
-}
-
-// ------------------------------------------------------------------ bits
-function statusPart(state, text) {
-  const s = document.createElement('span');
-  s.className = 'status-' + state;
-  s.textContent = text;
-  return s;
-}
-
-function codeEl(text) {
-  const c = document.createElement('code');
-  c.textContent = text;
-  return c;
-}
-
-/** A 0–1 ratio as whole percent — the same reading the Archive tab gives it. */
-function pct(value) {
-  return Math.round(Number(value) * 100) + '%';
 }

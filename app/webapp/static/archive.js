@@ -44,7 +44,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
-import { fmtTsShort, folderChip } from './format.js';
+import { codeEl, fmtTsShort, folderChip, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
 
 const RUNS_LIMIT = 20;
@@ -119,19 +119,6 @@ export function mountArchive(opts) {
   let busy = false;     // a run or a review action is in flight
 
   // ------------------------------------------------------------- the head
-  function statusPart(tone, text) {
-    const s = document.createElement('span');
-    s.className = 'status-' + tone;
-    s.textContent = text;
-    return s;
-  }
-
-  function codeEl(text) {
-    const c = document.createElement('code');
-    c.textContent = text;
-    return c;
-  }
-
   /** `3 runs`, `1 run` — the head's short wording says the number and the noun,
    *  never `run(s)`, which reads as an unfinished sentence on a phone. */
   function plural(n, word) {
@@ -262,10 +249,6 @@ export function mountArchive(opts) {
       done.length + ' run(s) · ' + total + ' mail(s) · ' + filed + ' filed · ' + review + ' needed you'
     );
     if (total) els.recent.append(' (' + pct(filed / total) + ' filed straight away)');
-  }
-
-  function pct(value) {
-    return Math.round(Number(value) * 100) + '%';
   }
 
   // --------------------------------------------------------- the run picker
