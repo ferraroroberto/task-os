@@ -38,6 +38,7 @@ from datetime import date
 from typing import Any
 
 from src.dates import DateParseError, parse_date
+from src.schema import CLOSED_SQL
 
 _PARENT_ID_RE = re.compile(r"\s#(\d+)\s*$")
 _PARENT_TITLE_RE = re.compile(r"\s[›>]\s*(.+?)\s*$")
@@ -150,12 +151,12 @@ def resolve_parent(conn: sqlite3.Connection, ref: dict[str, Any] | None) -> dict
     if not needle:
         return None
     rows = conn.execute(
-        """
+        f"""
         SELECT t.id, t.title,
                (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) AS kids
           FROM tasks t
          WHERE t.title LIKE ? COLLATE NOCASE
-           AND t.status NOT IN ('done', 'cancelled')
+           AND t.status NOT IN ({CLOSED_SQL})
          ORDER BY (t.title = ? COLLATE NOCASE) DESC, kids > 0 DESC, t.id DESC
          LIMIT 1
         """,

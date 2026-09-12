@@ -13,6 +13,7 @@ from typing import Any
 from src import clock
 from src import tasks_repo as repo
 from src.ai.client import AIClient, AIError
+from src.schema import CLOSED_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ def _project_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """The bounded set of open project nodes the model is allowed to name."""
     return conn.execute(
         "SELECT p.id, p.parent_id, p.title FROM tasks p "
-        "WHERE p.status NOT IN ('done', 'cancelled') "
+        f"WHERE p.status NOT IN ({CLOSED_SQL}) "
         "AND EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = p.id) "
         "ORDER BY p.id LIMIT ?",
         (MAX_PROJECT_NODES,),

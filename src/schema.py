@@ -94,6 +94,10 @@ TASK_STATUSES = ("inbox", "todo", "standby", "done", "cancelled")
 #: (#102). Here beside the enum rather than in ``tasks_repo`` so the CLI's
 #: formatters read it without importing the domain module on the HTTP path.
 CLOSED_STATUSES = ("done", "cancelled")
+#: :data:`CLOSED_STATUSES` as the body of a SQL ``IN (…)``, built from the tuple
+#: so no query anywhere restates the pair. Lives beside the tuple rather than in
+#: one consumer, because four modules ask this same question in SQL.
+CLOSED_SQL = ", ".join(f"'{s}'" for s in CLOSED_STATUSES)
 #: Where a task starts when nobody said (#148). **To Do**, not Inbox: Inbox is
 #: the arrivals tray for what came in on its own — a flagged email, a marked
 #: WhatsApp message — and a task you typed or spoke has already been triaged by
