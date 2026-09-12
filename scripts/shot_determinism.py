@@ -17,12 +17,15 @@ narrow and both reported on every run:
 
 * `ALLOWED_TO_DIFFER` — the named files whose *content* genuinely cannot be
   pinned, each with the reason;
-* `RASTER_*` — a shot that differs only by up to `RASTER_MAX_DELTA`/255 on a
-  handful of pixels along antialiased edges. Headless Chromium does not
-  rasterise a card border or the nav pill's frosted edge bit-identically every
-  time; the affected files change from run to run, so no per-file allowlist
-  can express it. Nothing a reader can see fits under this: real UI movement
-  shifts whole glyphs and edges, tens or hundreds of levels at a time.
+* `RASTER_*` / `GLYPH_*` — a shot that differs only as this rasteriser
+  differs from itself: many pixels off by `RASTER_MAX_DELTA`/255 or less along
+  antialiased edges, or at most `GLYPH_MAX_PIXELS` off by `GLYPH_MAX_DELTA` or
+  less, which is one icon stroke landing on the other side of a sub-pixel.
+  Headless Chromium does not rasterise a card border, the nav pill's frosted
+  edge or a phone-scale glyph bit-identically every time; the affected files
+  change from run to run, so no per-file allowlist can express it. Nothing a
+  reader can see fits under either: real UI movement shifts whole glyphs and
+  edges, two hundred levels at a time.
 
 Anything else moving is a determinism regression — the story that writes it
 captured something still in flight, and the fix belongs in that story or in
@@ -131,6 +134,31 @@ ALLOWED_TO_DIFFER = {
 RASTER_MAX_DELTA = 2
 RASTER_MAX_PIXELS = 500
 
+#: The second raster band: one antialiased **glyph edge**, not a scatter of
+#: pixels. Same escape, different shape — a handful of pixels off by a lot,
+#: rather than many off by a little.
+#:
+#: Decision (#225). Measured twice on 2026-09-12, in two unrelated
+#: invocations, at *identical* numbers: `story-22-voice-5-phone.png`, 28 px,
+#: worst channel delta 14, bbox (1000, 1690, 1014, 1703) — a 14x13 px box
+#: around the phone nav's search icon at device scale factor 3. #170 recorded
+#: the same magnitude and the same subject ("28 px at delta 14 on the phone
+#: nav's search icon") three days earlier, under artificial CPU load. Repeating
+#: to the pixel is not noise: that glyph rasterises into one of exactly two
+#: stable states and which one is a coin toss. #170 spent a session failing to pin down why and
+#: stays open for it; leaving the gate to flip red on it about one run in three
+#: would teach every future reader to re-run a red gallery gate, which is the
+#: one habit that makes this whole gate worthless.
+#:
+#: Bounded hard on both axes: 64 px is at most one glyph edge at DSF 3, and
+#: delta 24 is 8.75x below the smallest *genuine* change ever measured on this
+#: suite (35 px at delta 210, one digit of a timestamp) and roughly ten times
+#: below a real regression (224-225). A difference that fits inside this is a
+#: sub-pixel shift of something the size of an icon stroke; a reader cannot see
+#: it, and neither can any story that asserts on the page rather than the file.
+GLYPH_MAX_DELTA = 24
+GLYPH_MAX_PIXELS = 64
+
 
 def _visible_difference(a: Path, b: Path) -> str | None:
     """``None`` when the two files differ only as the rasteriser does, else why."""
@@ -147,6 +175,8 @@ def _visible_difference(a: Path, b: Path) -> str | None:
     moved = sum(histogram[1:])
     worst = max(level for level, count in enumerate(histogram) if count)
     if worst <= RASTER_MAX_DELTA and moved <= RASTER_MAX_PIXELS:
+        return None
+    if worst <= GLYPH_MAX_DELTA and moved <= GLYPH_MAX_PIXELS:
         return None
     return f"{moved} px, worst channel delta {worst}, bbox {diff.getbbox()}"
 
@@ -241,7 +271,8 @@ def _check_against_gallery() -> int:
           f"{len(raster)} raster-noise only · {len(allowed)} on the stated allowlist · "
           f"{len(moved)} drifted · {len(untracked)} not in the gallery yet")
     for name in raster:
-        print(f"  raster:  {name} (≤{RASTER_MAX_DELTA}/255 on ≤{RASTER_MAX_PIXELS} px)")
+        print(f"  raster:  {name} (≤{RASTER_MAX_DELTA}/255 on ≤{RASTER_MAX_PIXELS} px, "
+              f"or ≤{GLYPH_MAX_DELTA}/255 on ≤{GLYPH_MAX_PIXELS})")
     for name in allowed:
         print(f"  allowed: {name} — {ALLOWED_TO_DIFFER[name]}")
     for rel in untracked:
@@ -329,7 +360,8 @@ def main() -> int:
     print(f"\n{len(names)} shots · {len(identical)} byte-identical · {len(raster)} raster-noise only · "
           f"{len(allowed)} on the stated allowlist · {len(moved)} moved")
     for name in raster:
-        print(f"  raster:  {name} (≤{RASTER_MAX_DELTA}/255 on ≤{RASTER_MAX_PIXELS} px)")
+        print(f"  raster:  {name} (≤{RASTER_MAX_DELTA}/255 on ≤{RASTER_MAX_PIXELS} px, "
+              f"or ≤{GLYPH_MAX_DELTA}/255 on ≤{GLYPH_MAX_PIXELS})")
     for name in allowed:
         print(f"  allowed: {name} — {ALLOWED_TO_DIFFER[name]}")
     for name, why in moved:
