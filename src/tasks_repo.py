@@ -374,17 +374,89 @@ def _blocked_fields(blocked_by: list[dict[str, Any]]) -> dict[str, Any]:
     return {"blocked_by": blocked_by, "blocked": bool(open_blockers), "blocker_count": len(open_blockers)}
 
 
-def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
-    """A task row plus the cheap derived bits every list view wants."""
+def _summary_lookups(conn: sqlite3.Connection, ids: list[int]) -> dict[str, Any]:
+    """The five row-scoped lookups :func:`_summary` needs, fetched once for a
+    whole page of task ids — five queries for the page instead of five per row,
+    the strategy :func:`_enrich_list` and :func:`tree` already use (#186)."""
+    marks = ", ".join("?" * len(ids))
+    children: dict[int, int] = {
+        r["parent_id"]: int(r["n"])
+        for r in conn.execute(
+            f"SELECT parent_id, COUNT(*) AS n FROM tasks WHERE parent_id IN ({marks}) GROUP BY parent_id",
+            ids,
+        ).fetchall()
+    }
+    refs: dict[int, dict[str, Any]] = {
+        r["task_id"]: dict(r)
+        for r in conn.execute(f"SELECT * FROM issue_refs WHERE task_id IN ({marks})", ids).fetchall()
+    }
+    folder_urls: dict[int, str] = {}
+    for r in conn.execute(
+        f"SELECT task_id, url FROM links WHERE task_id IN ({marks}) AND kind = 'folder'"
+        " AND (url LIKE 'http://%' OR url LIKE 'https://%') ORDER BY task_id, id",
+        ids,
+    ).fetchall():
+        folder_urls.setdefault(r["task_id"], r["url"])  # ORDER BY id ⇒ the first link wins
+    ai_links: dict[int, dict[str, Any]] = {}
+    for r in conn.execute(
+        f"SELECT task_id, url, label FROM links WHERE task_id IN ({marks}) AND kind = 'ai' ORDER BY task_id, id",
+        ids,
+    ).fetchall():
+        ai_links.setdefault(r["task_id"], {"url": r["url"], "label": r["label"]})
+    blockers: dict[int, list[dict[str, Any]]] = {}
+    for r in conn.execute(
+        "SELECT tb.blocked_id, t.id, t.title, t.status FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
+        f" WHERE tb.blocked_id IN ({marks}) ORDER BY tb.blocked_id, t.id",
+        ids,
+    ).fetchall():
+        blockers.setdefault(r["blocked_id"], []).append(
+            {"id": r["id"], "title": r["title"], "status": r["status"]}
+        )
+    return {
+        "children": children,
+        "refs": refs,
+        "folder_urls": folder_urls,
+        "ai_links": ai_links,
+        "blockers": blockers,
+    }
+
+
+def _summaries(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """:func:`_summary` for a whole page of task rows.
+
+    Same shape per row; the five row-scoped lookups come from
+    :func:`_summary_lookups` instead of being re-queried per row, so a list
+    view costs a fixed number of queries rather than five per row (#186). The
+    people lookup is keyed on the rows' ``person_id`` set, so it runs only
+    when some row is assigned.
+    """
+    if not rows:
+        return []
+    pre = _summary_lookups(conn, [int(r["id"]) for r in rows])
+    person_ids = sorted({int(r["person_id"]) for r in rows if r.get("person_id") is not None})
+    people: dict[int, dict[str, Any]] = {}
+    if person_ids:
+        people = {
+            r["id"]: dict(r)
+            for r in conn.execute(
+                f"SELECT id, name FROM people WHERE id IN ({', '.join('?' * len(person_ids))})",
+                person_ids,
+            ).fetchall()
+        }
+    return [_summary_from(row, pre, people) for row in rows]
+
+
+def _summary_from(
+    row: dict[str, Any], pre: dict[str, Any], people: dict[int, dict[str, Any]]
+) -> dict[str, Any]:
+    """One row's summary, read out of the prefetched maps. The two folder
+    resolvers stay per-row: they are caller-supplied callbacks, not queries."""
     out = dict(row)
-    n = conn.execute("SELECT COUNT(*) FROM tasks WHERE parent_id = ?", (row["id"],)).fetchone()[0]
-    out["child_count"] = int(n)
+    out["child_count"] = pre["children"].get(row["id"], 0)
     out["is_project"] = out["child_count"] > 0
-    ref = conn.execute("SELECT * FROM issue_refs WHERE task_id = ?", (row["id"],)).fetchone()
-    out["issue_ref"] = _row(ref)
+    out["issue_ref"] = pre["refs"].get(row["id"])
     if row.get("person_id") is not None:
-        p = conn.execute("SELECT id, name FROM people WHERE id = ?", (row["person_id"],)).fetchone()
-        out["person"] = _row(p)
+        out["person"] = people.get(row["person_id"])
     else:
         out["person"] = None
     ref = row.get("folder_ref")
@@ -396,12 +468,7 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
                 out["folder_resolved"] = _folder_resolver(str(ref))
             except Exception:  # noqa: BLE001 — a resolver bug never breaks a list
                 logger.exception("⚠️ folder resolver failed for %r", ref)
-        link = conn.execute(
-            "SELECT url FROM links WHERE task_id = ? AND kind = 'folder'"
-            " AND (url LIKE 'http://%' OR url LIKE 'https://%') ORDER BY id LIMIT 1",
-            (row["id"],),
-        ).fetchone()
-        out["folder_url"] = link["url"] if link else None
+        out["folder_url"] = pre["folder_urls"].get(row["id"])
         if out["folder_url"] is None and _folder_web_resolver is not None:
             try:
                 out["folder_url"] = _folder_web_resolver(str(ref))
@@ -409,14 +476,16 @@ def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
                 logger.exception("⚠️ folder web resolver failed for %r", ref)
     # The AI-conversation chip on the row (#77): first links(kind=ai), same
     # shape as folder_url — the UI never scans a task's links list-side.
-    ai = conn.execute(
-        "SELECT url, label FROM links WHERE task_id = ? AND kind = 'ai' ORDER BY id LIMIT 1",
-        (row["id"],),
-    ).fetchone()
+    ai = pre["ai_links"].get(row["id"])
     out["ai_url"] = ai["url"] if ai else None
     out["ai_label"] = (ai["label"] if ai else None) or None
-    out.update(_blocked_fields(_blocker_rows(conn, row["id"])))
+    out.update(_blocked_fields(pre["blockers"].get(row["id"], [])))
     return out
+
+
+def _summary(conn: sqlite3.Connection, row: dict[str, Any]) -> dict[str, Any]:
+    """A task row plus the cheap derived bits every list view wants."""
+    return _summaries(conn, [row])[0]
 
 
 # ------------------------------------------------------------------ tasks
@@ -1084,12 +1153,15 @@ def get_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     # with it, so a confirmation can name the count (#121)
     out["descendant_count"] = len(_descendant_ids(conn, task_id))
     out["breadcrumb"] = _ancestors(conn, task_id)
-    out["children"] = [
-        _summary(conn, dict(r))
-        for r in conn.execute(
-            "SELECT * FROM tasks WHERE parent_id = ? ORDER BY id", (task_id,)
-        ).fetchall()
-    ]
+    out["children"] = _summaries(
+        conn,
+        [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM tasks WHERE parent_id = ? ORDER BY id", (task_id,)
+            ).fetchall()
+        ],
+    )
     out["links"] = list_links(conn, task_id)
     out["comments"] = list_comments(conn, task_id)
     out["activity"] = list_activity(conn, task_id)
@@ -1298,7 +1370,7 @@ def list_tasks(
         )
     if limit:
         sql += f" LIMIT {int(limit)}"
-    items = [_summary(conn, dict(r)) for r in conn.execute(sql, args).fetchall()]
+    items = _summaries(conn, [dict(r) for r in conn.execute(sql, args).fetchall()])
     _enrich_list(conn, items)
     return items
 
@@ -1935,13 +2007,10 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
             f"SELECT * FROM tasks WHERE id IN ({', '.join('?' * len(ids))})", ids
         ).fetchall()
     }
-    out = []
-    for tid, meta in ordered:
-        if tid not in rows:
-            continue
-        item = _summary(conn, rows[tid])
+    hit_meta = [(rows[tid], meta) for tid, meta in ordered if tid in rows]
+    out = _summaries(conn, [row for row, _ in hit_meta])
+    for item, (_, meta) in zip(out, hit_meta, strict=True):
         item.update(meta)
-        out.append(item)
     # breadcrumb · root · last_comment · comment_count — the same enriched
     # summary every list view gets, so a search hit renders as the same row
     _enrich_list(conn, out)
@@ -2013,14 +2082,17 @@ def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dic
     projection, so ``person_id`` never thins it."""
     t = today()
     iso = t.isoformat()
-    plan_rows = [
-        _summary(conn, dict(r))
-        for r in conn.execute(
-            "SELECT * FROM tasks WHERE planned_on = ? "
-            "ORDER BY plan_order IS NULL, plan_order, id",
-            (iso,),
-        ).fetchall()
-    ]
+    plan_rows = _summaries(
+        conn,
+        [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM tasks WHERE planned_on = ? "
+                "ORDER BY plan_order IS NULL, plan_order, id",
+                (iso,),
+            ).fetchall()
+        ],
+    )
     _enrich_list(conn, plan_rows)
     due = [
         it
