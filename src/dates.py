@@ -1,7 +1,11 @@
 """Dates — the small natural-language parser + recurrence arithmetic.
 
 Shared by the ``tasks`` CLI today and by quick-add later, so the phrases a
-user types map to one deterministic rule set:
+user types map to one deterministic rule set. "Today" is ``src.clock``'s, not
+``date.today()``: a pinned process — the e2e instances — has to resolve
+"next friday" against the day it believes in, or the date the parser writes
+into the quick-add Due field is the only thing on the page still reading the
+machine's calendar (#225).
 
     today · tomorrow · yesterday
     fri · friday               → the coming Friday (today if today is Friday)
@@ -45,6 +49,8 @@ from __future__ import annotations
 import calendar
 import re
 from datetime import date, timedelta
+
+from src import clock
 
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
 #: Cadences that can carry a fixed-day anchor (#112) — the rest are pure offsets.
@@ -242,7 +248,7 @@ def next_due(
         raise ValueError(
             f"unknown recurrence {recurrence!r} (expected one of {', '.join(RECURRENCES)})"
         )
-    today = today or date.today()
+    today = today or clock.today()
     base = due if due is not None else today
     floor = max(base, today)
     canonical = normalise_anchor(recurrence, anchor)
@@ -329,7 +335,7 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
     """
     if text is None:
         return None
-    today = today or date.today()
+    today = today or clock.today()
     s = text.strip().lower()
     s = re.sub(r"\s+", " ", s)
     if s in _NO_DATE:

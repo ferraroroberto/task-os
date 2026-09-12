@@ -60,7 +60,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import _get, shot, table_view, tree_view
+from tests.e2e.conftest import E2E_ANCHOR, _get, shot, table_view, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -156,7 +156,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         quotes.locator(".due-btn").click()
         assert page.evaluate("window.__pickerOpens") == ["due-date"], "the cell did not open the picker"
         assert quotes.locator(".due-text").count() == 0, "the cell still swaps in a text box"
-        new_due = (date.today() + timedelta(days=14)).isoformat()
+        new_due = (E2E_ANCHOR + timedelta(days=14)).isoformat()
         quotes.locator(".due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due
         )
@@ -225,7 +225,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         expect(quick_add).to_be_visible()
         qa = quick_add.locator(".quick-add-input")
         qa.fill("renew passport next friday")
-        friday = _next_friday(date.today()).isoformat()
+        friday = _next_friday(E2E_ANCHOR).isoformat()
         expect(quick_add.locator(".quick-add-due")).to_have_value(friday)
         # To Do is the default for a task added by hand (#148) — Inbox is for
         # what arrives on its own, and this one is being typed.
@@ -387,7 +387,7 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
         page.locator("#taskDrawer input[data-field='due']").input_value()
     )
     assert rolled.weekday() == 4, f"rolled to {rolled} ({rolled:%A}), expected a Friday"
-    assert rolled > old_due and rolled > date.today()
+    assert rolled > old_due and rolled > E2E_ANCHOR
 
     # A cadence that takes no fixed day drops the anchor — and the picker with
     # it. The picker vanishing is the re-render signal: the drawer only redraws
@@ -454,7 +454,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     Screenshots: docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
     (6 = dark, in the dark context; 7 = phone, in the phone leg).
     """
-    today = date.today().isoformat()
+    today = E2E_ANCHOR.isoformat()
 
     # 1. The seed's plan renders ordered on top of Today, with the progress line.
     page.goto(f"{base}/")
@@ -573,7 +573,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
 
     Screenshots: docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
     """
-    today = date.today()
+    today = E2E_ANCHOR
     starts = (today + timedelta(days=30)).isoformat()
     due = (today + timedelta(days=60)).isoformat()
 

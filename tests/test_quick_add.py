@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 
+from src import clock
 from src import tasks_repo as repo
 from src.db import connect, init_db
 from src.quick_add import parse, resolve_parent
@@ -84,3 +85,11 @@ def test_resolve_parent(tmp_path: Path) -> None:
         assert resolve_parent(conn, {"title": "nothing like this"}) is None
     finally:
         conn.close()
+
+
+def test_the_default_today_is_the_process_clock_not_the_machine() -> None:
+    """`parse()` inherits `src.dates`' clock, so a pinned process parses its own day (#225)."""
+    pinned = datetime.combine(MONDAY, datetime.min.time()).astimezone()
+    with clock.use_clock(lambda: pinned):
+        assert parse("Water the plants tomorrow")["due"] == "2026-08-18"
+        assert parse("Renew passport next friday")["due"] == "2026-08-28"

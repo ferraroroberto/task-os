@@ -147,7 +147,7 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | `team` | shared install for a small team: `enabled`, `people` — Step 12 |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
-Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider, and `TASKOS_CLOCK=<ISO datetime>` pins the process clock (the test harness uses all four for isolation; nothing in normal use sets any of them).
+Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider, `TASKOS_CLOCK=<ISO datetime>` pins the process clock and `TASKOS_BUILD_SHA=<string>` pins the build identity the `Build:` footer prints (the test harness uses all five for isolation — the last two so the story gallery in `docs/screenshots/` does not rewrite itself on every commit and every calendar day; nothing in normal use sets any of them, and a pinned build SHA is logged as a warning because a process reporting an identity it did not compute is also what would defeat the restart recipe's `/api/version` check).
 
 ## Data model
 
@@ -630,11 +630,11 @@ Idempotent on the Notion ids: `tasks.external_id` and `comments.external_id` (sc
 ## Verify, restart, prove
 
 ```powershell
-& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → pytest → routed e2e (disposable instance)
+& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → pytest → routed e2e (disposable instance) → gallery baseline
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 
-The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()` so two runs of one commit produce the same files; `python -m scripts.shot_determinism` runs the suite twice and proves it, and `docs/validation.md` states the four capture rules a new story inherits.
+The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()`, on a frozen clock, so two runs of one commit produce the same files and a run months from now still produces the ones in the repo. `python -m scripts.shot_determinism` runs the suite twice and proves the capture is stable; `--check-tree` compares what a run rewrote against the committed gallery and restores it (the gate's last stage). `docs/validation.md` states the five capture rules a new story inherits.
 
 ## Phone access & auth
 

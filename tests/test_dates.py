@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
+from src import clock
 from src.dates import (
     AnchorError,
     DateParseError,
@@ -239,3 +240,19 @@ def test_next_due_without_a_due_rolls_from_today() -> None:
 )
 def test_describe_recurrence(cadence: str | None, anchor: str | None, label: str) -> None:
     assert describe_recurrence(cadence, anchor) == label
+
+
+def test_the_default_today_is_the_process_clock_not_the_machine() -> None:
+    """A pinned process resolves "tomorrow" against the day it believes in (#225).
+
+    The e2e instances run on `TASKOS_CLOCK`, and the date this parser writes
+    into the quick-add Due field is on the screenshot. Reading `date.today()`
+    here made that one value the only thing on the page still following the
+    machine's calendar, so the gallery could never match its committed self.
+    """
+    pinned = datetime.combine(MON, datetime.min.time()).astimezone()
+    with clock.use_clock(lambda: pinned):
+        assert parse_date("today") == MON
+        assert parse_date("tomorrow") == date(2026, 8, 18)
+        assert parse_date("next friday") == date(2026, 8, 28)
+        assert next_due(None, "weekly", "fri") == FRI

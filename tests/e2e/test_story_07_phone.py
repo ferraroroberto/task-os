@@ -55,7 +55,7 @@ import json
 import os
 import re
 from collections.abc import Iterator
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -136,7 +136,7 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
     # `pageerror` assertion below then (intermittently) caught as a page error.
     made = page.request.post(f"{base}/api/tasks", data=json.dumps({
         "title": "Wire the moisture sensor",
-        "due": (date.today() + timedelta(days=3)).isoformat(),
+        "due": (E2E_ANCHOR + timedelta(days=3)).isoformat(),
         "folder_ref": "{user}/code/garden-bot",
     }), headers={"content-type": "application/json"})
     assert made.ok, made.text()
@@ -196,7 +196,7 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         expect(row.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
         assert not page.locator("#taskDrawer").is_visible(), "the date tap opened the drawer"
         # picking a day commits it — the row re-renders on the new date
-        new_due = (date.today() + timedelta(days=5)).isoformat()
+        new_due = (E2E_ANCHOR + timedelta(days=5)).isoformat()
         row.locator(".due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
         expect(page.locator(f"#paneTable .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
@@ -260,7 +260,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         qa = quick_add.locator(".quick-add-input")
         qa.fill("Water the balcony plants today")
         # the parse lands in the Due field, where it can still be corrected (#80)
-        expect(quick_add.locator(".quick-add-due")).to_have_value(date.today().isoformat())
+        expect(quick_add.locator(".quick-add-due")).to_have_value(E2E_ANCHOR.isoformat())
         qa.press("Enter")
         expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")

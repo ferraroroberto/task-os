@@ -109,6 +109,21 @@ def test_version_shape(client: TestClient) -> None:
     assert body["schema_version"] == dbmod.SCHEMA_VERSION
 
 
+def test_the_build_sha_can_be_pinned_for_the_gallery(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#225 — the ``Build:`` footer is on every story screenshot, so an honest
+    ``git rev-parse`` rewrote 19 of them on every commit and the gallery could
+    never be compared against a regeneration. ``TASKOS_BUILD_SHA`` is the
+    ``TASKOS_CLOCK`` of build identity: the e2e instances set it, nothing in
+    production does, and without it the real SHA is still what is reported."""
+    from src.static_versioning import BUILD_SHA_ENV, _git_short_sha
+
+    monkeypatch.setenv(BUILD_SHA_ENV, "e2e0000")
+    assert _git_short_sha(REPO_ROOT) == "e2e0000"
+    monkeypatch.delenv(BUILD_SHA_ENV)
+    real = _git_short_sha(REPO_ROOT)
+    assert real and real != "e2e0000"
+
+
 def test_index_is_stamped_and_no_cache(client: TestClient) -> None:
     r = client.get("/")
     assert r.status_code == 200
