@@ -510,7 +510,7 @@ def settle(page: Page) -> None:
     page.evaluate(_SETTLE_JS)
 
 
-def assert_pinned_clock(page: Page) -> None:
+def _assert_pinned_clock(page: Page) -> None:
     """Refuse to capture a page that is reading the machine's clock (#225).
 
     ``_pinned_browser_clock`` covers every context the suite opens today; this
@@ -531,7 +531,7 @@ def assert_pinned_clock(page: Page) -> None:
 def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
-    assert_pinned_clock(page)
+    _assert_pinned_clock(page)
     page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
 
 

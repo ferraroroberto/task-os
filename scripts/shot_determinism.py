@@ -204,7 +204,7 @@ def _baseline_bytes(rel: str) -> bytes | None:
     return result.stdout if result.returncode == 0 else None
 
 
-def _check_against_gallery(restore: bool = True) -> int:
+def _check_against_gallery() -> int:
     """Compare the gallery on disk against the one git is holding.
 
     This is the comparison that was missing (#225). It only ever looks at what
@@ -229,6 +229,9 @@ def _check_against_gallery(restore: bool = True) -> int:
             if committed is None:
                 moved.append((name, "git holds no copy of it"))
                 continue
+            if not (SHOTS_DIR / name).exists():
+                moved.append((name, "git holds it, this run deleted it"))
+                continue
             reference = Path(tmp) / name
             reference.write_bytes(committed)
             why = _visible_difference(reference, SHOTS_DIR / name)
@@ -246,7 +249,7 @@ def _check_against_gallery(restore: bool = True) -> int:
     for name, why in moved:
         print(f"  ❌ drifted: {name} — {why}")
 
-    if restore and changed:
+    if changed:
         # Only ever tracked modifications, and only ever back to the index — an
         # untracked new shot is left exactly where the run put it.
         _git("checkout", "--", SHOTS_REL)
