@@ -49,13 +49,13 @@ from src import tasks_repo as repo
 from src.config import AppConfig
 from src.db import connect
 from src.issues import IssueInfo, IssueProvider, IssueProviderError, get_provider, short_repo
+from src.schema import CLOSED_STATUSES
 
 logger = logging.getLogger(__name__)
 
 SYNC_ACTOR = "sync"
 INITIAL_DELAY_S = 10.0
 DESCRIPTION_MAX = 10_000
-CLOSED_STATES = ("done", "cancelled")
 
 
 @dataclass
@@ -193,7 +193,7 @@ def sync_once(conn: Any, provider: IssueProvider, *, actor: str = SYNC_ACTOR,
             result.retitled += 1
             changed = True
         if ref["state"] == "closed":
-            if ref["task_status"] in CLOSED_STATES:
+            if ref["task_status"] in CLOSED_STATUSES:
                 repo.update_task(conn, task_id, actor=actor, status="todo")
             result.reopened += 1
             changed = True
@@ -217,7 +217,7 @@ def sync_once(conn: Any, provider: IssueProvider, *, actor: str = SYNC_ACTOR,
         if cache is not None:
             cache[info.key] = info
         if info.state == "closed":
-            if ref["task_status"] not in CLOSED_STATES:
+            if ref["task_status"] not in CLOSED_STATUSES:
                 repo.update_task(conn, task_id, actor=actor, status="done")
                 result.closed_ids.append(task_id)
             repo.touch_issue_ref(conn, task_id, state="closed", url=info.url or None, actor=actor, ts=ts)
@@ -328,5 +328,5 @@ class IssueSyncService:
                 return
 
 
-__all__ = ["CLOSED_STATES", "INITIAL_DELAY_S", "SYNC_ACTOR", "AlreadyLinked", "IssueSyncService", "IssuesDisabled",
+__all__ = ["INITIAL_DELAY_S", "SYNC_ACTOR", "AlreadyLinked", "IssueSyncService", "IssuesDisabled",
            "SyncResult", "issue_from_task", "sync_once", "task_from_issue"]

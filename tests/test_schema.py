@@ -266,3 +266,23 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         assert schema.migrate(conn) == 15
     finally:
         conn.close()
+
+
+def test_only_schema_spells_the_closed_pair() -> None:
+    """``CLOSED_STATUSES`` has to be the only place the pair is written down.
+
+    The constant and its SQL form (:data:`schema.CLOSED_SQL`) exist so that
+    adding a third closed status is one edit. A module that restates
+    ``'done', 'cancelled'`` inline opts out of that silently — it keeps working
+    and keeps being wrong — so the rule is pinned here rather than left to
+    review (#186).
+    """
+    root = Path(__file__).resolve().parent.parent
+    offenders: list[str] = []
+    for path in sorted([*root.joinpath("src").rglob("*.py"), *root.joinpath("app").rglob("*.py")]):
+        if path == root / "src" / "schema.py":
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "'done', 'cancelled'" in line or '"done", "cancelled"' in line:
+                offenders.append(f"{path.relative_to(root).as_posix()}:{n}")
+    assert offenders == [], "restates the closed pair instead of reading schema.CLOSED_STATUSES/CLOSED_SQL"
