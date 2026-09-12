@@ -7,6 +7,7 @@ elsewhere); ``install_opener.py --dry-run`` and ``src/opener.py`` run anywhere."
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import inspect
 import os
@@ -117,6 +118,38 @@ def _out(r: subprocess.CompletedProcess) -> str:
     return _decode(r.stdout).strip()
 
 
+def _lines(r: subprocess.CompletedProcess) -> list[str]:
+    return [ln.strip() for ln in _decode(r.stdout).splitlines() if ln.strip()]
+
+
+def _transcripts(tmp_path: Path) -> tuple[Path, Path]:
+    """A fake ``.claude/projects``: the transcript owning ``session_01ResumeMe``,
+    a decoy, and a NEWER transcript that merely mentions the id (a grep result
+    quoted in a conversation) — which must not shadow the owner, since only the
+    session-url marker identifies it."""
+    projects = tmp_path / "projects"
+    proj = projects / "E--automation-demo"
+    proj.mkdir(parents=True)
+    repo_dir = tmp_path / "demo-repo"
+    repo_dir.mkdir()
+    cwd_json = str(repo_dir).replace("\\", "\\\\")
+    (proj / "11111111-2222-3333-4444-555555555555.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01ResumeMe"}}\n',
+        encoding="utf-8",
+    )
+    (proj / "aaaaaaaa-0000-0000-0000-000000000000.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse"}}\n',
+        encoding="utf-8",
+    )
+    time.sleep(0.05)
+    (proj / "bbbbbbbb-0000-0000-0000-000000000000.jsonl").write_text(
+        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse",'
+        '"text":"we grepped and saw session_01ResumeMe in the logs"}\n',
+        encoding="utf-8",
+    )
+    return projects, repo_dir
+
+
 @windows_only
 def test_decodes_and_expands_onedrive_from_the_chip_url(pc: dict[str, str]) -> None:
     r = run_opener(opener_url("{onedrive}/house/kitchen (2024)"), pc)
@@ -199,37 +232,55 @@ def test_resume_finds_the_transcript_and_targets_its_repo(pc: dict[str, str], tm
     """taskos://resume?session=… (#77): the launcher maps the web session id to
     the local transcript's uuid + the repo it ran in ("cwd"), dry-run printing
     what it would reopen instead of launching a terminal."""
-    projects = tmp_path / "projects"
-    proj = projects / "E--automation-demo"
-    proj.mkdir(parents=True)
-    repo_dir = tmp_path / "demo-repo"
-    repo_dir.mkdir()
-    cwd_json = str(repo_dir).replace("\\", "\\\\")
-    (proj / "11111111-2222-3333-4444-555555555555.jsonl").write_text(
-        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01ResumeMe"}}\n',
-        encoding="utf-8",
-    )
-    (proj / "aaaaaaaa-0000-0000-0000-000000000000.jsonl").write_text(
-        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse"}}\n',
-        encoding="utf-8",
-    )
-    # a NEWER transcript that merely mentions the id (a grep result quoted in a
-    # conversation) must not shadow the owner — only the session-url marker wins
-    time.sleep(0.05)
-    (proj / "bbbbbbbb-0000-0000-0000-000000000000.jsonl").write_text(
-        f'{{"cwd":"{cwd_json}","url":"https://claude.ai/code/session_01SomethingElse",'
-        '"text":"we grepped and saw session_01ResumeMe in the logs"}\n',
-        encoding="utf-8",
-    )
+    projects, repo_dir = _transcripts(tmp_path)
     r = run_launcher("taskos://resume?session=session_01ResumeMe", pc,
                      TASKOS_OPENER_PROJECTS=str(projects))
     assert r.returncode == 0, _decode(r.stdout) + _decode(r.stderr)
-    assert _out(r) == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
+    assert _lines(r)[0] == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
     # the shape a browser actually sends: the scheme normalised with a slash
     # before the query (like open/?ref=) — same result
     r = run_launcher("taskos://resume/?session=session_01ResumeMe", pc,
                      TASKOS_OPENER_PROJECTS=str(projects))
-    assert _out(r) == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
+    assert _lines(r)[0] == f"resume: 11111111-2222-3333-4444-555555555555 in {repo_dir}"
+
+
+@windows_only
+def test_resume_launches_one_tab_in_the_repo(pc: dict[str, str], tmp_path: Path) -> None:
+    """The launch argv itself (#227). ``;`` is Windows Terminal's own new-tab
+    delimiter and it splits on one *before* the argument's quoting is considered,
+    so the ``;``-separated ``-Command`` this used to build arrived as three tabs:
+    a bare prompt, a tab that tried to run ``Write-Host`` as an executable, and a
+    ``claude`` that never saw ``-d`` and so started in ``system32``.
+
+    The dry run used to return before the launch code, which is how that shipped
+    with green tests; it prints the argv now so this can assert on it. The
+    payload rides as one base64 token, an alphabet with no ``;`` — decoded back
+    here, so an encoding that merely *looks* opaque cannot pass."""
+    projects, repo_dir = _transcripts(tmp_path)
+    uuid = "11111111-2222-3333-4444-555555555555"
+
+    r = run_launcher("taskos://resume?session=session_01ResumeMe", pc,
+                     TASKOS_OPENER_PROJECTS=str(projects), TASKOS_OPENER_WT="1")
+    assert r.returncode == 0, _decode(r.stdout) + _decode(r.stderr)
+    exec_line = next(ln for ln in _lines(r) if ln.startswith("resume-exec: "))
+    argv = exec_line.removeprefix("resume-exec: ").split(" ")
+    # one tab, opened in the repo the transcript recorded
+    assert ";" not in exec_line, exec_line
+    assert argv[:2] == ["wt", "-d"] and argv[2] == str(repo_dir)
+    assert argv[3:7] == ["powershell", "-NoProfile", "-NoExit", "-EncodedCommand"]
+    # and it carries the whole command, both echoes included, not a truncated one
+    inner = base64.b64decode(argv[7]).decode("utf-16-le")
+    assert inner.count("Write-Host") == 2 and str(repo_dir) in inner
+    assert inner.endswith(f"claude --resume {uuid}")
+
+    # the wt-less fallback keeps its own shape: same payload, -WorkingDirectory
+    r = run_launcher("taskos://resume?session=session_01ResumeMe", pc,
+                     TASKOS_OPENER_PROJECTS=str(projects), TASKOS_OPENER_WT="0")
+    exec_line = next(ln for ln in _lines(r) if ln.startswith("resume-exec: "))
+    assert ";" not in exec_line, exec_line
+    assert exec_line.startswith(f"resume-exec: powershell -WorkingDirectory {repo_dir} "
+                                "-NoProfile -NoExit -EncodedCommand ")
+    assert base64.b64decode(exec_line.rsplit(" ", 1)[1]).decode("utf-16-le") == inner
 
 
 @windows_only

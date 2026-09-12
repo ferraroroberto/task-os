@@ -128,9 +128,11 @@ function Get-TranscriptMatch {
 # transcript (.jsonl) Claude Code wrote, so one recursive search maps it to the
 # local session uuid and the project folder it ran in. Unknown here (another
 # PC's session, pruned transcripts) -> open the conversation on the web instead.
-# Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>" /
-# "resume-web: <url>" instead of launching; TASKOS_OPENER_PROJECTS overrides
-# the transcript root (default %USERPROFILE%\.claude\projects).
+# Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "resume: <uuid> in <dir>"
+# plus "resume-exec: <argv>" / "resume-web: <url>" instead of launching;
+# TASKOS_OPENER_PROJECTS overrides the transcript root (default
+# %USERPROFILE%\.claude\projects); TASKOS_OPENER_WT=1/0 forces the Windows
+# Terminal branch on or off instead of probing for wt.
 # Browsers normalise the custom scheme to taskos://resume/?session=… (slash
 # before the query) — accept both, like opener.cmd does for open/?ref=.
 if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
@@ -177,18 +179,43 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
         $raw = $line.Matches[0].Groups[1].Value -replace '\\\\', '\'
         if (Test-Path -LiteralPath $raw) { $dir = $raw }
     }
-    if ($env:TASKOS_OPENER_DRYRUN) { "resume: $uuid in $dir"; exit 0 }
+    # Echo before claude starts: a long transcript takes a while to first
+    # paint, and a silent black window reads as a failure. Single-quote the
+    # only interpolated path so a quote in it cannot end the string.
+    $shown = $dir -replace "'", "''"
+    $inner = "Write-Host 'task-os opener - resuming $uuid' -ForegroundColor Cyan; Write-Host 'in $shown - the first paint of a long session can take a minute...'; claude --resume $uuid"
+    # Hand that to the terminal as one base64 token. `;` is Windows Terminal's
+    # own new-tab delimiter and wt splits on one *before* it considers the
+    # quoting of the argument, so a `;`-separated -Command turned one resume
+    # into three tabs: a bare prompt, a tab that tried to run `Write-Host` as an
+    # executable (0x80070002), and a `claude` that never saw -d and so started
+    # in system32 (#227). The base64 alphabet contains no `;`, nothing can
+    # split, and -NoExit still applies.
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($inner))
+    # -d is the one part of the tab's directory wt reads off its command line,
+    # so escape a `;` there too rather than trust that no repo path carries one.
+    $wtDir = $dir -replace ';', '\;'
+    # TASKOS_OPENER_WT (tests) forces the branch either way; otherwise ask.
+    $useWt = if ($env:TASKOS_OPENER_WT) { $env:TASKOS_OPENER_WT -eq '1' }
+             else { [bool](Get-Command wt -ErrorAction SilentlyContinue) }
+    $argv = if ($useWt) { @('-d', $wtDir, 'powershell', '-NoProfile', '-NoExit', '-EncodedCommand', $encoded) }
+            else { @('-NoProfile', '-NoExit', '-EncodedCommand', $encoded) }
+    if ($env:TASKOS_OPENER_DRYRUN) {
+        "resume: $uuid in $dir"
+        # the argv too: TASKOS_OPENER_DRYRUN used to return before the launch
+        # code, which is why the three-tab shape shipped with green tests
+        $exe = if ($useWt) { 'wt' } else { "powershell -WorkingDirectory $dir" }
+        "resume-exec: $exe $($argv -join ' ')"
+        exit 0
+    }
     # Never let the resumed session inherit a nested-run marker: launched from
     # inside another Claude session (an agent, a launcher-hosted shell), the
     # marker would silently turn transcript saving OFF in the resumed session.
     Remove-Item Env:CLAUDE_CODE_CHILD_SESSION -ErrorAction SilentlyContinue
-    # Echo before claude starts: a long transcript takes a while to first
-    # paint, and a silent black window reads as a failure.
-    $inner = "Write-Host 'task-os opener - resuming $uuid' -ForegroundColor Cyan; Write-Host 'in $dir - the first paint of a long session can take a minute...'; claude --resume $uuid"
-    if (Get-Command wt -ErrorAction SilentlyContinue) {
-        Start-Process wt -ArgumentList '-d', $dir, 'powershell', '-NoProfile', '-NoExit', '-Command', $inner
+    if ($useWt) {
+        Start-Process wt -ArgumentList $argv
     } else {
-        Start-Process powershell -WorkingDirectory $dir -ArgumentList '-NoProfile', '-NoExit', '-Command', $inner
+        Start-Process powershell -WorkingDirectory $dir -ArgumentList $argv
     }
     exit 0
 }
