@@ -37,6 +37,7 @@ import sqlite3
 from datetime import date
 from typing import Any
 
+from src import clock
 from src.dates import DateParseError, parse_date
 from src.schema import CLOSED_SQL
 
@@ -122,7 +123,7 @@ def parse(text: str, today: date | None = None) -> dict[str, Any]:
     and ``starts`` are ISO dates or ``None``. Never raises — an unparseable
     tail is simply part of the title.
     """
-    today = today or date.today()
+    today = today or clock.today()
     raw = re.sub(r"\s+", " ", (text or "").strip())
     body, parent_ref = _split_parent(raw)
     body, starts, starts_phrase = _split_starts(body, today)

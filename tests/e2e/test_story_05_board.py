@@ -71,7 +71,7 @@ list and appears in the Board's Done today column.
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -82,7 +82,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, scroll_to_bottom, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -190,7 +190,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         quick_add = page.locator("#quickAdd")
         expect(quick_add).to_be_visible()
         quick_add.locator(".quick-add-input").fill("Order fence paint tomorrow")
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        tomorrow = (E2E_ANCHOR + timedelta(days=1)).isoformat()
         expect(quick_add.locator(".quick-add-due")).to_have_value(tomorrow)
         page.keyboard.press("Escape")                            # discards the draft
         expect(quick_add).to_be_hidden()
@@ -306,7 +306,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
         expect(vocab.locator(".trow-status option[value='complete']")).to_have_count(1)
         vocab.locator(".trow-status").select_option("complete")
-        next_due = (date.today() + timedelta(days=7)).isoformat()
+        next_due = (E2E_ANCHOR + timedelta(days=7)).isoformat()
         expect(page.locator(f"#paneToday section.today .trow[data-id='{vid}']")).to_have_count(0)
         rolled = _get(base, f"/api/tasks/{vid}")
         assert rolled["due"] == next_due and rolled["status"] == "todo"
@@ -336,7 +336,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         books.locator(".trow-status").select_option("done")
         expect(page.locator(f"#paneToday section.today .trow[data-id='{bid}']")).to_have_count(0)
         done = _get(base, f"/api/tasks/{bid}")
-        assert done["status"] == "done" and done["done_at"][:10] == date.today().isoformat()
+        assert done["status"] == "done" and done["done_at"][:10] == E2E_ANCHOR.isoformat()
         page.click("nav.tabs .tab[data-tab='board']")
         expect(_col(page, "done").locator(f".trow[data-id='{bid}']")).to_be_visible()
         expect(page.locator(".board-col-count[data-col='done']")).to_have_text("2")
@@ -402,7 +402,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         page.locator(f"#tableHost .task-row[data-id='{ids[1]}'] .row-check").check()
         expect(page.locator("#tableBulk .bulk-due")).to_be_visible()
         expect(page.locator("#tableBulk .due-text")).to_have_count(0)
-        target = (date.today() + timedelta(days=14)).isoformat()
+        target = (E2E_ANCHOR + timedelta(days=14)).isoformat()
         page.locator("#tableBulk input.due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", target)
         expect(page.locator("#tableBulk")).to_be_hidden()
@@ -475,7 +475,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     _clear_toasts(page)
     page.keyboard.press("t")
     expect(page.locator(".toasts")).to_have_text(re.compile("Due tomorrow"))
-    assert _get(base, f"/api/tasks/{rid}")["due"] == (date.today() + timedelta(days=1)).isoformat()
+    assert _get(base, f"/api/tasks/{rid}")["due"] == (E2E_ANCHOR + timedelta(days=1)).isoformat()
 
     # 17. `e` completes — and on a recurring task that means the roll, whose
     #     undo has to put the *pre-roll* due back (issue #54 semantics).
@@ -611,7 +611,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     through the API mid-walk — the coding task with the issue chip — and
     restored at the end, so the phone leg's Today reads as seeded.
     """
-    today = date.today()
+    today = E2E_ANCHOR
     iso = lambda days_ago: (today - timedelta(days=days_ago)).isoformat()  # noqa: E731
     watering = _get(base, "/api/tasks?q=watering%20schedule")["items"][0]
     assert watering["status"] == "todo", watering["status"]       # the keyboard walk put it back
@@ -753,6 +753,13 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     expect(drawer.locator("#drawerTitle")).to_have_value("Repaint the garden fence")
+    # The drawer is its own scroller and Delete sits at its foot, so the click
+    # would scroll the panel by however much the layout happened to need at
+    # that instant — and the Issue section below it arrives on a fetch. The
+    # shot behind the dialog was then a coin toss between two offsets: 163,962
+    # px apart between two runs of one commit (#225). Park it at the end first
+    # and prove it stayed there (#166), so the click scrolls nothing.
+    scroll_to_bottom(page, drawer)
     drawer.locator(".drawer-delete").click()
     dialog = page.locator("#confirmDialog")
     expect(dialog).to_be_visible()

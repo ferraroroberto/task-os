@@ -13,6 +13,12 @@
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
+      5. gallery baseline  — whatever shots stage 4 rewrote, compared against
+                             the committed ones and then restored, so a
+                             verification run neither hides gallery drift nor
+                             leaves rewritten PNGs behind (#225). Re-baselining
+                             is deliberate: run `pytest tests/e2e` yourself,
+                             review what moved, `git add docs/screenshots`.
 
     Anchors to the repo root, so run it from anywhere:
         & .\scripts\verify-before-ship.ps1
@@ -89,6 +95,13 @@ if ($tier -eq "skip") {
     $label = if ($e2eBrowsers) { $e2eBrowsers } else { "suite-default" }
     Invoke-Stage "pytest e2e (${tier}: $e2eTarget, $label)" { & $py -m pytest @e2eArgs }
 }
+
+# ------------------------------------------------- gallery baseline (#225)
+# Runs on every tier, including `skip`: with no shot rewritten it is a no-op
+# that costs a `git diff`. It is what makes docs/screenshots/ a baseline rather
+# than a folder of pictures — two fresh runs agreeing proves only that the
+# capture is stable, never that the gallery still matches the code.
+Invoke-Stage "gallery baseline (committed vs regenerated)" { & $py -m scripts.shot_determinism --check-tree }
 
 Write-Host ""
 Write-Host "[PASS] all checks green - safe to ship." -ForegroundColor Green

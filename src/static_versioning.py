@@ -28,6 +28,7 @@ from __future__ import annotations
 # Standard library imports
 import hashlib
 import logging
+import os
 import posixpath
 import re
 import subprocess
@@ -186,6 +187,16 @@ def rewrite_js_imports(body: str, hashes: Dict[str, str], from_dir: str = "") ->
     return _JS_IMPORT_RE.sub(_sub, body)
 
 
+#: Test-only override for the build SHA, the ``TASKOS_CLOCK`` of build identity
+#: (#225). The ``Build:`` footer is on every gallery screenshot, so an honest
+#: SHA rewrote 19 of them on every commit and the committed gallery could never
+#: be compared against a regeneration. Nothing in production sets it; the e2e
+#: conftest sets it for its disposable instances, and an override is logged
+#: loudly because a process reporting a build identity it did not compute is
+#: also what would defeat the restart recipe's ``/api/version`` check.
+BUILD_SHA_ENV = "TASKOS_BUILD_SHA"
+
+
 def _git_short_sha(repo_root: Path) -> str:
     """Short git SHA of ``HEAD``, captured once at construction.
 
@@ -195,6 +206,11 @@ def _git_short_sha(repo_root: Path) -> str:
     stray cmd from flashing and dodge the invalid-handle trap a console-less
     parent can hit before git even runs.
     """
+    pinned = os.environ.get(BUILD_SHA_ENV, "").strip()
+    if pinned:
+        logger.warning("⚠️  build SHA pinned to %r by %s — this build reports an "
+                       "identity it did not compute", pinned, BUILD_SHA_ENV)
+        return pinned
     cmd = ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"]
     try:
         result = subprocess.run(

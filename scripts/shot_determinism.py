@@ -28,10 +28,33 @@ Anything else moving is a determinism regression — the story that writes it
 captured something still in flight, and the fix belongs in that story or in
 `tests/e2e/conftest.py`'s `settle()`, never in these escapes.
 
-The two runs happen minutes apart on one day, which is the property that
-matters: the seed is anchored on *today* on purpose (relative due dates have to
-stay believable on screen), so the gallery does move day to day. That drift is
-expected and re-baselining is a deliberate act; capture noise is neither.
+Two runs minutes apart answer "is the capture stable?" — and, structurally,
+nothing else. They cannot see the *other* drift, the one that actually bit
+(#225): a gallery that no longer matches what today's code renders. Both
+snapshots are fresh, so a shot that has been wrong in the repo for twenty
+commits compares clean against itself. Nothing was comparing the committed
+bytes, which is why 76 of them had silently drifted before anyone looked.
+
+So there is a second mode, and it is the one the pre-ship gate runs:
+
+    & .\.venv\Scripts\python.exe -m scripts.shot_determinism --baseline
+    & .\.venv\Scripts\python.exe -m scripts.shot_determinism --check-tree
+
+`--baseline` runs the suite once and compares what it wrote against the
+gallery git already has; `--check-tree` does only the comparison, for a caller
+that has just run the suite itself (the gate). Both then **restore** the tree,
+so a verification run stops leaving a pile of rewritten PNGs behind for the
+next person to remember to `git checkout`. The baseline is the git *index*,
+which equals `HEAD` in a clean tree and deliberately lets a staged
+re-baseline be the thing compared against — `git checkout --` can then never
+throw staged work away.
+
+A drift here is not capture noise and not a bug in this script: either the UI
+changed and the gallery owes it a deliberate re-baseline (run `pytest
+tests/e2e`, look at what moved, `git add docs/screenshots`), or something on
+screen is still unpinned. Everything the app paints from a clock, a path or a
+build identity is pinned for exactly this reason — see
+`tests/e2e/conftest.py`'s "deterministic capture" section.
 
 Known open flake (#170, status: unreproduced this session): under the
 heaviest load observed on 2026-09-09, all four of story 22's desktop shots
@@ -153,6 +176,92 @@ def _run_suite(label: str) -> None:
     print("\n".join(report.splitlines()[-3:]), flush=True)
 
 
+# --------------------------------------- the gallery git has vs the one on disk
+# `SHOTS_REL` is how git spells the gallery: `git diff --name-only` answers in
+# repo-root-relative posix paths, and `git show :<path>` takes one.
+SHOTS_REL = "docs/screenshots"
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    """One `git` call against this repo, bytes out (a PNG is not text)."""
+    return subprocess.run(
+        ["git", "-C", str(REPO_ROOT), *args],
+        capture_output=True, stdin=subprocess.DEVNULL,
+        check=False, creationflags=NO_WINDOW,
+    )
+
+
+def _git_lines(*args: str) -> list[str]:
+    result = _git(*args)
+    if result.returncode != 0:
+        sys.exit(f"❌ git {' '.join(args)} failed: {result.stderr.decode('utf-8', 'replace').strip()}")
+    return [line for line in result.stdout.decode("utf-8", "replace").splitlines() if line]
+
+
+def _baseline_bytes(rel: str) -> bytes | None:
+    """The committed bytes of one shot — the index's copy, `HEAD`'s in a clean tree."""
+    result = _git("show", f":{rel}")
+    return result.stdout if result.returncode == 0 else None
+
+
+def _check_against_gallery(restore: bool = True) -> int:
+    """Compare the gallery on disk against the one git is holding.
+
+    This is the comparison that was missing (#225). It only ever looks at what
+    the run just rewrote — `git diff` names those — so it is as meaningful
+    after a routed partial e2e slice as after a full suite, and costs nothing
+    when the slice was `skip`.
+    """
+    total = len(list(SHOTS_DIR.glob("*.png")))
+    changed = [rel for rel in _git_lines("diff", "--name-only", "--", SHOTS_REL)
+               if rel.endswith(".png")]
+    untracked = [rel for rel in _git_lines("ls-files", "--others", "--exclude-standard", "--", SHOTS_REL)
+                 if rel.endswith(".png")]
+
+    raster, allowed, moved = [], [], []
+    with tempfile.TemporaryDirectory(prefix="taskos-gallery-baseline-") as tmp:
+        for rel in changed:
+            name = Path(rel).name
+            if name in ALLOWED_TO_DIFFER:
+                allowed.append(name)
+                continue
+            committed = _baseline_bytes(rel)
+            if committed is None:
+                moved.append((name, "git holds no copy of it"))
+                continue
+            reference = Path(tmp) / name
+            reference.write_bytes(committed)
+            why = _visible_difference(reference, SHOTS_DIR / name)
+            (moved if why else raster).append((name, why) if why else name)
+
+    print(f"\n{total} shots · {total - len(changed)} byte-identical to the committed gallery · "
+          f"{len(raster)} raster-noise only · {len(allowed)} on the stated allowlist · "
+          f"{len(moved)} drifted · {len(untracked)} not in the gallery yet")
+    for name in raster:
+        print(f"  raster:  {name} (≤{RASTER_MAX_DELTA}/255 on ≤{RASTER_MAX_PIXELS} px)")
+    for name in allowed:
+        print(f"  allowed: {name} — {ALLOWED_TO_DIFFER[name]}")
+    for rel in untracked:
+        print(f"  new:     {Path(rel).name} — no committed twin; commit it to put it in the gallery")
+    for name, why in moved:
+        print(f"  ❌ drifted: {name} — {why}")
+
+    if restore and changed:
+        # Only ever tracked modifications, and only ever back to the index — an
+        # untracked new shot is left exactly where the run put it.
+        _git("checkout", "--", SHOTS_REL)
+        print(f"\nrestored {len(changed)} rewritten shot(s) from git — the tree is as you left it")
+
+    if moved:
+        print("\n❌ the committed gallery no longer matches what this code renders.\n"
+              "   Either the UI changed and the gallery owes it a deliberate re-baseline\n"
+              "   (`python -m pytest tests/e2e`, review what moved, `git add docs/screenshots`),\n"
+              "   or something on screen is unpinned — see tests/e2e/conftest.py's pinned inputs.")
+        return 1
+    print("\n✅ the committed gallery is what this code renders")
+    return 0
+
+
 def _snapshot(into: Path) -> None:
     into.mkdir(parents=True, exist_ok=True)
     for png in SHOTS_DIR.glob("*.png"):
@@ -174,7 +283,21 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--keep", type=Path, default=None,
                     help="directory to keep both snapshots in (default: a temp dir, removed)")
+    ap.add_argument("--baseline", action="store_true",
+                    help="run the suite once and compare what it writes against the committed "
+                         "gallery, then restore the tree (#225)")
+    ap.add_argument("--check-tree", action="store_true",
+                    help="the comparison half of --baseline, for a caller that has just run the "
+                         "suite itself (the pre-ship gate)")
     args = ap.parse_args()
+
+    if args.baseline and args.check_tree:
+        ap.error("--baseline already runs the suite; --check-tree is the same comparison without it")
+    if args.check_tree:
+        return _check_against_gallery()
+    if args.baseline:
+        _run_suite("baseline run")
+        return _check_against_gallery()
 
     work = args.keep or Path(tempfile.mkdtemp(prefix="taskos-shot-determinism-"))
     first, second = work / "run-1", work / "run-2"

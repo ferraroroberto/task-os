@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import IO
 
 import pytest
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Browser, Locator, Page, expect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from tests.conftest import write_test_config
@@ -80,17 +80,39 @@ _DEFAULT_TIMEOUT_MS = int(os.environ.get("E2E_DEFAULT_TIMEOUT_MS", "15000"))
 # fetching after this has something else wrong with it.
 _SETTLE_NETWORK_MS = 5000
 
-# The session's own "now" (#134). One date for the whole run — the seed anchors
-# on it and every disposable instance pins `TASKOS_CLOCK` to it — so a task
-# touched during a story is stamped 09:00 rather than the minute the run
-# happened to reach it, and two runs of the same commit write byte-identical
-# timestamps into the gallery. The date still moves day to day (the seed's
-# relative dues have to stay believable on screen, so it is deliberately not
-# frozen to a fixed past day); the time of day no longer does. Sampling it once
-# here also keeps a run that straddles midnight self-consistent.
-E2E_ANCHOR = date.today()
-E2E_CLOCK = (datetime.combine(E2E_ANCHOR, datetime.min.time())
-             .replace(hour=9).astimezone().isoformat(timespec="seconds"))
+# The suite's own "now" (#134, frozen by #225). One instant for every run, ever
+# — the seed anchors on it, every disposable instance pins `TASKOS_CLOCK` to it,
+# and every browser context renders on it — so a task touched during a story is
+# stamped 09:00 rather than the minute the run reached it, and *any two runs*
+# write byte-identical timestamps into the gallery.
+#
+# It used to be `date.today()`, with the time of day pinned and the date left to
+# move: the reasoning was that the seed's relative dues have to stay believable
+# on screen. They do, and they still are — every seeded date is an offset from
+# this anchor, so "in 9d" reads "in 9d" whichever day the suite runs. What the
+# moving date actually bought was a gallery that silently disagreed with its own
+# committed bytes the day after it was baselined: 57 of the 183 shots moved on
+# content alone, two characters of date reflowing a whole card (#225 measured
+# one Board shot moving 23,955 px over `in 9d` → `in 13d`). A baseline that
+# expires overnight is not a baseline.
+#
+# A Monday, so "plan your day" and the weekday-snapping recurrence rolls land
+# where a reader expects; in the recent past, so nothing on screen is dated in
+# the future. Changing it re-baselines the whole gallery — a deliberate act,
+# never a side effect.
+E2E_ANCHOR = date(2026, 9, 7)
+E2E_NOW = datetime.combine(E2E_ANCHOR, datetime.min.time()).replace(hour=9).astimezone()
+E2E_CLOCK = E2E_NOW.isoformat(timespec="seconds")
+#: The same instant as the browser counts it, for the clock pin and its guard.
+E2E_CLOCK_MS = int(E2E_NOW.timestamp() * 1000)
+
+#: What the e2e instances report as their build identity, in place of the real
+#: `git rev-parse --short HEAD` (#225). The footer prints it, so an unpinned SHA
+#: rewrote 19 shots on *every* commit — the gallery could not be compared
+#: against its committed self even on the day it was taken. Deliberately not a
+#: plausible SHA: a reader of the gallery should see at a glance that the build
+#: band is a fixture, not the build the shot was taken from.
+E2E_BUILD_SHA = "e2e0000"
 
 
 #: One stable working root for the whole suite (#134). `tmp_path_factory`
@@ -169,7 +191,9 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     picks one (story 08 picks the fake). ``TASKOS_CLOCK`` pins the instance's
     clock to ``E2E_CLOCK`` so the timestamps a story writes — activity rows,
     comments, ``done_at`` — land on the shot as 09:00 rather than the minute
-    the run reached them (#134). ``TASKOS_CAPTURE_DELAY_S`` pins the capture
+    the run reached them (#134); ``TASKOS_BUILD_SHA`` pins the build identity
+    the page footer prints, so the gallery stops rewriting its own footer band
+    on every commit (#225). ``TASKOS_CAPTURE_DELAY_S`` pins the capture
     poller's *own* first automatic pass to an hour out: `TASKOS_CLOCK` only
     pins the timestamps that poller writes, not the real
     `threading.Event.wait()` that decides when it writes one, so a story that
@@ -191,6 +215,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_CONFIG_PATH": str(config_path),
         "TASKOS_ISSUE_PROVIDER": "none",
         "TASKOS_CLOCK": E2E_CLOCK,
+        "TASKOS_BUILD_SHA": E2E_BUILD_SHA,
         "TASKOS_CAPTURE_DELAY_S": "3600",
         **(extra_env or {}),
     }
@@ -485,9 +510,28 @@ def settle(page: Page) -> None:
     page.evaluate(_SETTLE_JS)
 
 
+def assert_pinned_clock(page: Page) -> None:
+    """Refuse to capture a page that is reading the machine's clock (#225).
+
+    ``_pinned_browser_clock`` covers every context the suite opens today; this
+    is what keeps that true. A page reached some other way — a popup, a context
+    opened by a future helper — would otherwise stamp the run's own calendar
+    day onto a gallery shot and silently expire the baseline, which is exactly
+    the failure this issue closes.
+    """
+    now_ms = page.evaluate("() => Date.now()")
+    if abs(now_ms - E2E_CLOCK_MS) > 1000:
+        raise AssertionError(
+            f"this page's clock is not pinned: it reads {now_ms} ms, the suite runs at "
+            f"{E2E_CLOCK_MS} ms ({E2E_CLOCK}). Capturing it would date the gallery to "
+            "whichever day the suite happened to run — see conftest's _pinned_browser_clock."
+        )
+
+
 def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
+    assert_pinned_clock(page)
     page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
 
 
@@ -592,6 +636,39 @@ def tree_view(page: Page) -> None:
 def table_view(page: Page) -> None:
     """Open the Table tab on its grid/rows view — the other half of the pair."""
     _table_pane_view(page, "table", "#paneTable #tableHost")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _pinned_browser_clock() -> Iterator[None]:
+    """Every browser context this suite opens renders on ``E2E_NOW`` (#225).
+
+    ``TASKOS_CLOCK`` reaches the *server's* now and stops there. The dates a
+    reader actually sees on a card — ``in 9d``, ``9 Sep 09:``, an overdue tint
+    — are computed in the page by ``format.js::relDue`` off a bare
+    ``new Date()``, against whatever day the machine thinks it is. That is what
+    moved 57 of the gallery's shots overnight while the code stood still.
+
+    ``set_fixed_time`` and not ``install``: the page's ``Date`` is frozen while
+    its *timers* keep running on the real clock, which is what ``settle()``,
+    every CSS animation and the toast stack need in order to behave at all.
+
+    It wraps ``Browser.new_context`` rather than riding pytest-playwright's
+    ``context`` fixture because every story opens its own contexts — desktop,
+    dark, phone, WebKit — and a pin a story has to remember to apply is a pin
+    that eventually is not applied. ``shot()`` checks the result anyway.
+    """
+    original = Browser.new_context
+
+    def new_context(self: Browser, *args, **kwargs):
+        context = original(self, *args, **kwargs)
+        context.clock.set_fixed_time(E2E_NOW)
+        return context
+
+    Browser.new_context = new_context
+    try:
+        yield
+    finally:
+        Browser.new_context = original
 
 
 @pytest.fixture(autouse=True)
