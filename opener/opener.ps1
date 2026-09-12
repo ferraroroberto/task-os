@@ -76,6 +76,53 @@ if ($Url.Contains('"')) {
     exit 3
 }
 
+# Does this transcript carry the session id, and in which shape? 2 = the
+# session-url marker (this is the owning transcript), 1 = a bare mention,
+# 0 = neither.
+#
+# Reading the bytes here rather than shelling out to Select-String -Quiet: for a
+# pure "does this file contain the literal" test a raw read measured ~7x faster
+# on this PC's corpus, and one pass answers both questions instead of two. Read
+# in chunks with an overlap the length of the longest needle so a match
+# straddling a chunk boundary is still seen - the largest transcript on this PC
+# is 61 MB and pulling one whole into a string would materialise twice that.
+# FileShare ReadWrite because a live session holds its own transcript open.
+#
+# The read buffer is allocated once and reused: a fresh 1 MB char[] per file
+# costs 25 GB of allocation churn across this PC's 12k transcripts, and cutting
+# it took a full no-hit traversal from 12.1 s to 7.6 s (measured, #227).
+$script:TranscriptBuf = $null
+function Get-TranscriptMatch {
+    param([string]$Path, [string]$Marker, [string]$Bare)
+    if ($null -eq $script:TranscriptBuf) { $script:TranscriptBuf = [char[]]::new(1048576) }
+    $buf = $script:TranscriptBuf
+    $overlap = $Marker.Length - 1
+    $found = 0
+    try {
+        $fs = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $sr = [System.IO.StreamReader]::new($fs, [System.Text.Encoding]::UTF8)
+            $tail = ''
+            while (($n = $sr.Read($buf, 0, $buf.Length)) -gt 0) {
+                $chunk = $tail + [string]::new($buf, 0, $n)
+                # the marker embeds the bare id, so the cheap test rules out both
+                # - which is the answer for all but a handful of files
+                if ($chunk.Contains($Bare)) {
+                    if ($chunk.Contains($Marker)) { return 2 }
+                    $found = 1
+                }
+                $tail = if ($chunk.Length -gt $overlap) { $chunk.Substring($chunk.Length - $overlap) }
+                        else { $chunk }
+            }
+        } finally { $fs.Dispose() }
+    } catch {
+        # unreadable (locked, vanished mid-scan) - it simply is not the hit
+        return $found
+    }
+    return $found
+}
+
 # taskos://resume?session=<session_01…> — reopen a Claude Code session in a
 # terminal on THIS PC (#77). The web session id is embedded in the local
 # transcript (.jsonl) Claude Code wrote, so one recursive search maps it to the
@@ -92,20 +139,28 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
                 else { Join-Path $env:USERPROFILE '.claude\projects' }
     $hit = $null
     if (Test-Path -LiteralPath $projects) {
-        $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue
+        # Newest first, and stop at the first owner. The marker sits near the top
+        # of a transcript (the line Claude Code writes when the session is
+        # bridged), so the owning file is normally the first or second one read.
+        # The old shape filtered *then* sorted, and Sort-Object blocks the
+        # pipeline - so Select-Object -First 1 could not stop the upstream filter
+        # and every one of this PC's 12k transcripts was read on every resume
+        # (~170 s), twice over on a miss (#227).
+        $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
         # A transcript that merely MENTIONS another session's id (a grep result,
         # a handoff note) must not shadow the owner: the owner carries the id in
         # its own session-url field. Only when no transcript carries that marker
-        # fall back to a bare-id match (older transcript shapes).
+        # fall back to a bare-id match (older transcript shapes) - recorded as we
+        # pass it, so a miss costs one traversal rather than two.
         $marker = '"url":"https://claude.ai/code/' + $id + '"'
-        $hit = $files |
-            Where-Object { Select-String -LiteralPath $_.FullName -Pattern $marker -SimpleMatch -Quiet } |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($null -eq $hit) {
-            $hit = $files |
-                Where-Object { Select-String -LiteralPath $_.FullName -Pattern $id -SimpleMatch -Quiet } |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $bareHit = $null
+        foreach ($f in $files) {
+            $m = Get-TranscriptMatch -Path $f.FullName -Marker $marker -Bare $id
+            if ($m -eq 2) { $hit = $f; break }
+            if ($m -eq 1 -and $null -eq $bareHit) { $bareHit = $f }
         }
+        if ($null -eq $hit) { $hit = $bareHit }
     }
     if ($null -eq $hit) {
         $web = "https://claude.ai/code/$id"
