@@ -275,7 +275,12 @@ html, body {
    with the accent and draws a check when ticked.
    The element stays a real <input type=checkbox> — `appearance: none` takes
    only the paint, so the label pairing, Space, :checked and the form value
-   are still the platform's. */
+   are still the platform's.
+   /design-sync's `no-native-checkbox` contract FAILs on this and is wrong to
+   (#191): it reads every checkbox as a boolean setting owed the switch, but
+   design.md's Base UI table maps Checkbox to shadcn's *Checkbox*, a component
+   of its own, and warns against hand-rolling a primitive the platform already
+   gets right. Settled — re-skin, don't replace. */
 .check {
   appearance: none;
   -webkit-appearance: none;
@@ -1435,10 +1440,13 @@ a.chip:hover { text-decoration: underline; }
 .markdown a { color: var(--accent); }
 /* The remove button is borderless and chip-height (#77 — the 34px bordered
    square dwarfed the link pill); its ::before restores the 44px hit rect, so
-   the ROW keeps a 34px floor: 34 + the 10px gap = 44px pitch and the expanded
-   rects of stacked rows never overlap (design.md "Touch targets"). */
+   the ROW floor is one --row-sm pitch less the 10px gap = 34px, and the
+   expanded rects of stacked rows never overlap (design.md "Touch targets").
+   Written as that subtraction rather than a bare 34px: design.md's list-row
+   wants the rows scale "via var(--row-*) or a calc() derivation, never an ad
+   hoc literal", and the pitch is the whole reason for the number. */
 .drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
 .link-rm {
   width: 26px;
   height: 26px;
@@ -1476,9 +1484,10 @@ a.chip:hover { text-decoration: underline; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
 /* Blocked by (#100) — same row/form shape as Links: a flat list of removable
-   rows, then a Move-to-style picker to add one. */
+   rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
+   the-gap floor. */
 .drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.blocker-row { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.blocker-row { display: flex; align-items: center; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
 .blocker-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -2088,7 +2097,9 @@ kbd {
   padding: 0 5px;
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  /* the sub-sm radius, spelled the one way: half of --radius-sm, as .check
+     derives it, so 4px is never a second hand-picked corner. */
+  border-radius: calc(var(--radius-sm) / 2);
   background: var(--card-off);
   color: var(--muted);
   font: inherit;
