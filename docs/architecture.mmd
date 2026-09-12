@@ -49,6 +49,7 @@ flowchart LR
     ai["ai/ (#95)<br/>client.py: Anthropic-shape local hub client<br/>one in-flight request · no retries · cached reachability<br/>triage.py: bounded context + whole-response validation<br/>stage only → individual accept/reject; accept actor=ai + Todo"]
     archive["archive_batch.py (#157)<br/>ArchiveBatchService: plan → rank → apply → rescan<br/>subprocess only, NO_WINDOW, bounded by timeout_seconds<br/>never imports the archiver; one child at a time (409)<br/>confidence ≥ confidence_threshold, else needs_review<br/>date_prefix handed back unchanged · candidates kept verbatim<br/>revert · move · accept · retry — move/accept write a correction<br/>move: filed → undo then apply · needs_review → apply only (#159)<br/>retry: failed + files → the SAME decision back to apply (#174)<br/>plan already_archived + in_inbox → finished, the file reused (#174)<br/>apply/revert --renumber (archive.renumber) → archive_renumber (#176)<br/>failed rescan = done + error, never a clean run"]
     arank["archive_rank.py (#158)<br/>rank(mails, corrections, client) — pure, no DB<br/>batches of archive.batch_size · own AIClient on archive.model<br/>the model returns an INDEX, never a path, never a date<br/>prompt-only JSON + whole-batch validator (ai_invalid_response)<br/>last archive.examples corrections as few-shot lines<br/>a hub failure degrades THAT batch to the suggester's top<br/>agreement = picks equal to rank 0 (None ≠ 0.0)"]
+    astore["archive_store.py (split out #186)<br/>create_run · finish_run · insert_item · update_item<br/>get_run · list_runs · list_items · get_item<br/>record_correction · recent_corrections · filed_message_ids<br/>counters derived from the item rows, never accumulated<br/>the router and the service read rows through the same functions<br/>never imports archive_batch"]
     arenum["archive_renumber.py (#176, split out #186)<br/>apply_renumber_map(conn, folder, entries): a verb's renumbered map → UPDATEs<br/>files_json · links(kind=email) · tasks.external_id follow the rename<br/>idempotent · dry_run counts and writes nothing · never imports archive_batch"]
     dates["dates.py<br/>parse_date · next_due · anchors (#112)"]
     qa["quick_add.py<br/>parse · resolve_parent · strip_lead_in"]
@@ -174,12 +175,14 @@ flowchart LR
   pwa -->|"static/archive.js: run · read the run · accept / move / revert / retry per mail (#159, #174)"| archiver
   llm -->|"curl / scripts — the same routes the tab uses"| archiver
   archiver --> archive
+  archiver -->|"get_run · list_runs · list_items (read-only)"| astore
   archive --> db
   archive -->|"subprocess (NO_WINDOW, timeout, JSON on stdout)"| batchcli
-  archive --> ar
+  archive -->|"every run / item / correction row"| astore
+  astore --> ar
   archive -->|"folder ref → absolute path (move)"| placeholders
   archive -->|"rank(mails, corrections, client) between plan and apply"| arank
-  archive -->|"record_correction on move / accept<br/>recent_corrections → the next prompt"| acorr
+  astore -->|"record_correction on move / accept<br/>recent_corrections → the next prompt"| acorr
   archive -->|"each verb's renumbered map → apply_renumber_map (#176)"| arenum
   arenum -->|"rename_link_url + rename_external_id"| repo
   arank -->|"one request per batch; exact JSON contract<br/>config.archive.model + archive.ai_timeout_seconds"| hub

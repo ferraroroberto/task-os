@@ -21,7 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from scripts import apply_renumber_map as apply_map
-from src import archive_batch, email_capture, placeholders
+from src import archive_store, email_capture, placeholders
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.ai import AIClient
@@ -181,7 +181,7 @@ def test_a_run_files_reviews_and_records_every_mail(
     assert run["agreement"] is None
     assert (run["planned"], run["archived"], run["needs_review"], run["failed"]) == (3, 2, 1, 0)
 
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, run["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, run["id"])}
     filed = items["confident@example.invalid"]
     assert filed["status"] == "archived" and filed["chosen_folder"] == FOLDER_HOUSE
     assert filed["files"] == [ARCHIVED_FILE] and filed["sequence"] == "0042"
@@ -239,7 +239,7 @@ def test_a_second_run_over_the_same_message_id_writes_nothing(
     # one the archiver's index already had. The mail left in the Inbox is, which
     # is the whole point of leaving it there.
     assert (second["planned"], second["archived"], second["needs_review"]) == (1, 0, 1)
-    assert [i["message_id"] for i in archive_batch.list_items(conn, second["id"])] == [
+    assert [i["message_id"] for i in archive_store.list_items(conn, second["id"])] == [
         "unsure@example.invalid"
     ]
     # And nothing was filed a second time: one ``apply``, from the first run.
@@ -248,13 +248,13 @@ def test_a_second_run_over_the_same_message_id_writes_nothing(
 
 def test_the_unique_index_refuses_a_second_filed_row(conn: sqlite3.Connection) -> None:
     """The DB has the last word, whatever the archiver's index believes."""
-    run = archive_batch.create_run(conn)
+    run = archive_store.create_run(conn)
     fields = {"message_id": "dupe@example.invalid", "status": "archived"}
-    archive_batch.insert_item(conn, run["id"], **fields)
+    archive_store.insert_item(conn, run["id"], **fields)
     with pytest.raises(sqlite3.IntegrityError):
-        archive_batch.insert_item(conn, run["id"], **fields)
+        archive_store.insert_item(conn, run["id"], **fields)
     # A reverted mail leaves the index and may be archived again.
-    archive_batch.insert_item(conn, run["id"], message_id="dupe@example.invalid", status="reverted")
+    archive_store.insert_item(conn, run["id"], message_id="dupe@example.invalid", status="reverted")
 
 
 def test_limit_bounds_what_one_run_touches(conn: sqlite3.Connection, tmp_path: Path) -> None:
@@ -269,7 +269,7 @@ def test_limit_bounds_what_one_run_touches(conn: sqlite3.Connection, tmp_path: P
     )
     run = service_for(repo).run_now(limit=1)
     assert run["planned"] == 1 and run["archived"] == 1
-    assert [i["message_id"] for i in archive_batch.list_items(conn, run["id"])] == ["m0@example.invalid"]
+    assert [i["message_id"] for i in archive_store.list_items(conn, run["id"])] == ["m0@example.invalid"]
 
 
 def test_an_apply_failure_is_recorded_and_stays_revertible(
@@ -289,7 +289,7 @@ def test_an_apply_failure_is_recorded_and_stays_revertible(
     run = svc.run_now()
     assert (run["archived"], run["failed"]) == (0, 1)
 
-    item = archive_batch.list_items(conn, run["id"])[0]
+    item = archive_store.list_items(conn, run["id"])[0]
     assert item["status"] == "failed" and item["files"] == [ARCHIVED_FILE]
     assert "move_failed" in item["error"] and "still in the Inbox" in item["error"]
 
@@ -309,7 +309,7 @@ def test_an_apply_failure_with_nothing_written_is_not_revertible(
         )])],
     )
     svc = service_for(repo)
-    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, item["id"])
     assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
@@ -342,7 +342,7 @@ def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
         )],
     )
     svc = service_for(repo)
-    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     assert item["status"] == "archived" and item["files"] == [OLDER_RENUMBERED]
     # …and it is still undoable, which is the thing blanking it would have cost.
     svc._require_revertible(item)
@@ -364,7 +364,7 @@ def test_a_mail_on_disk_not_stated_in_the_inbox_stays_a_no_op(
             mail("gone@example.invalid", already_archived=OLDER_FILE, in_inbox=in_inbox),
         ])],
     )
-    item = archive_batch.list_items(conn, service_for(repo).run_now()["id"])[0]
+    item = archive_store.list_items(conn, service_for(repo).run_now()["id"])[0]
     assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
     assert item["chosen_folder"] is None
     assert "already has this mail filed" in item["reason"]
@@ -441,7 +441,7 @@ def test_the_model_picks_among_the_candidates_and_the_run_records_it(
     # One of the two went where the archiver would have put it.
     assert run["agreement"] == pytest.approx(0.5)
 
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, run["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, run["id"])}
     overridden = items["override@example.invalid"]
     assert overridden["status"] == "archived" and overridden["chosen_folder"] == FOLDER_BILLS
     assert overridden["chosen_rank"] == 1 and overridden["confidence"] == pytest.approx(0.88)
@@ -481,7 +481,7 @@ def test_an_unsure_pick_leaves_the_mail_in_the_inbox(
     )
     run = service_for(repo, ai=FakeHub(picks_doc(pick))).run_now()
 
-    item = archive_batch.list_items(conn, run["id"])[0]
+    item = archive_store.list_items(conn, run["id"])[0]
     assert item["status"] == "needs_review" and item["files"] == []
     assert item["chosen_folder"] == expected_folder
     assert expected_reason in item["reason"]
@@ -506,7 +506,7 @@ def test_an_unusable_answer_files_by_the_archiver_and_names_the_failure(
     assert "ai_invalid_response" in run["error"] and "outside its 2 candidates" in run["error"]
     assert run["agreement"] is None
 
-    item = archive_batch.list_items(conn, run["id"])[0]
+    item = archive_store.list_items(conn, run["id"])[0]
     assert item["chosen_folder"] == FOLDER_HOUSE and item["chosen_rank"] == 0
     assert "could not rank this batch" in item["reason"]
 
@@ -536,11 +536,11 @@ def test_a_move_teaches_the_next_run_and_the_prompt_carries_it(
         picks_doc(pick_for("second@example.invalid", 1, 0.9)),
     )
     svc = service_for(repo, ai=hub)
-    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    item = archive_store.list_items(conn, svc.run_now()["id"])[0]
 
     svc.move(conn, item["id"], "{archive}/admin/bills", hint="bills from this sender go to admin")
 
-    stored = archive_batch.recent_corrections(conn)
+    stored = archive_store.recent_corrections(conn)
     assert len(stored) == 1
     assert stored[0]["suggested_folder"] == FOLDER_HOUSE
     assert stored[0]["chosen_folder"] == "E:/archive/admin/bills"
@@ -578,12 +578,12 @@ def test_accepting_a_below_threshold_mail_is_a_correction_too(
         pick_for("broken@example.invalid", 0, 0.95),
     ))
     svc = service_for(repo, ai=hub)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     svc.accept(conn, items["shy@example.invalid"]["id"], hint="always the heating folder")
     svc.accept(conn, items["broken@example.invalid"]["id"])
 
-    stored = archive_batch.recent_corrections(conn)
+    stored = archive_store.recent_corrections(conn)
     assert len(stored) == 1 and stored[0]["message_id"] == "shy@example.invalid"
     assert stored[0]["suggested_folder"] == stored[0]["chosen_folder"] == FOLDER_HOUSE
     assert stored[0]["hint"] == "always the heating folder"
@@ -598,7 +598,7 @@ def test_the_prompt_carries_only_the_last_configured_number_of_examples(
         apply=[apply_doc([apply_result("m@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
     for n in range(5):
-        archive_batch.record_correction(
+        archive_store.record_correction(
             conn, {"id": None, "message_id": f"old{n}@example.invalid", "subject": f"Older {n}",
                    "sender": "someone@example.invalid", "chosen_folder": FOLDER_HOUSE,
                    "candidates": []},
@@ -678,7 +678,7 @@ def test_a_failed_rescan_leaves_the_run_done_and_says_so(
 
 
 def _one_archived_item(conn: sqlite3.Connection, svc: ArchiveBatchService) -> dict:
-    return archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    return archive_store.list_items(conn, svc.run_now()["id"])[0]
 
 
 def test_revert_deletes_the_files_and_puts_the_mail_back(
@@ -719,7 +719,7 @@ def test_a_partial_revert_keeps_the_row_and_names_what_happened(
         svc.revert(conn, item["id"])
     assert caught.value.code == "archive_revert_failed"
 
-    still = archive_batch.get_item(conn, item["id"])
+    still = archive_store.get_item(conn, item["id"])
     assert still["status"] == "archived" and "not_in_archive_folder" in still["error"]
 
 
@@ -789,16 +789,16 @@ def test_a_move_whose_refile_fails_records_the_undo_it_already_did(
     )
     svc = service_for(repo)
     item = _one_archived_item(conn, svc)
-    assert "lost@example.invalid" in archive_batch.filed_message_ids(conn)
+    assert "lost@example.invalid" in archive_store.filed_message_ids(conn)
 
     with pytest.raises(ArchiveError) as caught:
         svc.move(conn, item["id"], "{archive}/admin/bills")
     assert caught.value.code == "archive_outlook_unavailable"
 
-    after = archive_batch.get_item(conn, item["id"])
+    after = archive_store.get_item(conn, item["id"])
     assert after["status"] == "reverted" and after["files"] == []
     assert "back in the Inbox" in after["error"] and "Outlook went away" in after["error"]
-    assert "lost@example.invalid" not in archive_batch.filed_message_ids(conn)
+    assert "lost@example.invalid" not in archive_store.filed_message_ids(conn)
     assert not svc.running
 
 
@@ -829,7 +829,7 @@ def test_move_files_a_needs_review_mail_that_was_never_archived(
     # itself filed nothing, so the move's own `apply` is the first there is.
     assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
     # …and the correction it teaches carries the hint (#158).
-    stored = archive_batch.recent_corrections(conn)
+    stored = archive_store.recent_corrections(conn)
     assert len(stored) == 1 and stored[0]["hint"] == "bills go to the flat"
     assert stored[0]["chosen_folder"] == "E:/archive/admin/bills"
 
@@ -883,7 +883,7 @@ def test_accept_marks_a_reviewable_row_and_refuses_a_finished_one(
         apply=[apply_doc([apply_result("done@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
     svc = service_for(repo)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     accepted = svc.accept(conn, items["seen@example.invalid"]["id"])
     assert accepted["status"] == "needs_review" and accepted["decided_at"]
@@ -927,7 +927,7 @@ def test_retry_finishes_a_move_outlook_refused_and_keeps_what_is_on_disk(
         reused=True, move_via="saved_retry",
     ))
     svc = service_for(repo)
-    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     assert item["status"] == "failed" and item["files"] == [ARCHIVED_FILE]
     assert item["sequence"] == "0042" and item["decided_at"] is None
     assert "move_failed" in item["error"]
@@ -956,13 +956,13 @@ def test_a_retry_refused_again_keeps_the_row_failed_with_the_newer_reason(
                           "the same decision again"},
     ))
     svc = service_for(repo)
-    item = archive_batch.list_items(conn, svc.run_now()["id"])[0]
+    item = archive_store.list_items(conn, svc.run_now()["id"])[0]
 
     with pytest.raises(ArchiveError) as caught:
         svc.retry(conn, item["id"])
     assert caught.value.http_status == 502 and caught.value.code == "archive_retry_failed"
 
-    still = archive_batch.get_item(conn, item["id"])
+    still = archive_store.get_item(conn, item["id"])
     assert still["status"] == "failed" and still["files"] == [ARCHIVED_FILE]
     assert "restart Outlook" in still["error"] and still["decided_at"] is None
     # Still on disk and still in the Inbox, so it is still offered a retry.
@@ -993,7 +993,7 @@ def test_retry_refuses_every_row_with_nothing_half_done(
         ])],
     )
     svc = service_for(repo)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     assert items["done@example.invalid"]["status"] == "archived"
     assert items["shy@example.invalid"]["status"] == "needs_review"
     assert items["nowhere@example.invalid"]["status"] == "failed"
@@ -1115,13 +1115,13 @@ def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
         ],
     )
     svc = service_for(repo_dir)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     undone = svc.revert(conn, items["first@example.invalid"]["id"])
     assert undone["status"] == "reverted" and undone["files"] == []
     assert undone["reason"].endswith(" · renumbered 1 file(s) in heating")
     # The mail still filed there followed the rename.
-    stayed = archive_batch.get_item(conn, items["second@example.invalid"]["id"])
+    stayed = archive_store.get_item(conn, items["second@example.invalid"]["id"])
     assert stayed["files"] == [OLDER_RENUMBERED]
 
     svc.revert(conn, stayed["id"])
@@ -1160,12 +1160,12 @@ def test_a_map_is_healed_even_when_the_mail_itself_failed(
         )],
     )
     svc = service_for(repo_dir)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, items["stuck@example.invalid"]["id"])
     assert caught.value.code == "archive_revert_failed"
 
-    stayed = archive_batch.get_item(conn, items["neighbour@example.invalid"]["id"])
+    stayed = archive_store.get_item(conn, items["neighbour@example.invalid"]["id"])
     assert stayed["files"] == [OLDER_RENUMBERED]
 
 
@@ -1207,15 +1207,15 @@ def test_a_move_that_gets_no_result_still_heals_both_legs_maps(
         )],
     )
     svc = service_for(repo_dir)
-    items = {i["message_id"]: i for i in archive_batch.list_items(conn, svc.run_now()["id"])}
+    items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     with pytest.raises(ArchiveError) as caught:
         svc.move(conn, items["moving@example.invalid"]["id"], "{archive}/admin/bills")
     assert caught.value.code == "archive_move_failed"
 
-    assert archive_batch.get_item(conn, items["moving@example.invalid"]["id"])["status"] == "reverted"
-    neighbour = archive_batch.get_item(conn, items["neighbour@example.invalid"]["id"])
+    assert archive_store.get_item(conn, items["moving@example.invalid"]["id"])["status"] == "reverted"
+    neighbour = archive_store.get_item(conn, items["neighbour@example.invalid"]["id"])
     assert neighbour["files"] == [OLDER_RENUMBERED]
-    bystander = archive_batch.get_item(conn, items["bystander@example.invalid"]["id"])
+    bystander = archive_store.get_item(conn, items["bystander@example.invalid"]["id"])
     assert bystander["files"] == [bills_renumbered]
 
 
@@ -1281,8 +1281,8 @@ def test_a_saved_map_heals_the_same_way_and_a_dry_run_writes_nothing(
         str(write_test_config(tmp_path / "config.json", placeholders={"archive": "E:/archive"})),
     )
     captured = _capture_the_email(conn, ARCHIVED_FILE)
-    item_id = archive_batch.insert_item(
-        conn, archive_batch.create_run(conn)["id"], message_id="saved@example.invalid",
+    item_id = archive_store.insert_item(
+        conn, archive_store.create_run(conn)["id"], message_id="saved@example.invalid",
         subject="Boiler service", status="archived",
         files_json=json.dumps([ARCHIVED_FILE, ATTACHMENT_FILE]),
     )
@@ -1295,11 +1295,11 @@ def test_a_saved_map_heals_the_same_way_and_a_dry_run_writes_nothing(
     assert apply_map.main([str(map_file), "--dry-run"]) == 0
     preview = capsys.readouterr().out
     assert "would rewrite 1 archive item(s), 1 link(s) and 1 captured task(s)" in preview
-    assert archive_batch.get_item(conn, item_id)["files"] == [ARCHIVED_FILE, ATTACHMENT_FILE]
+    assert archive_store.get_item(conn, item_id)["files"] == [ARCHIVED_FILE, ATTACHMENT_FILE]
 
     assert apply_map.main([str(map_file)]) == 0
     assert "rewrote 1 archive item(s), 1 link(s) and 1 captured task(s)" in capsys.readouterr().out
-    assert archive_batch.get_item(conn, item_id)["files"] == [
+    assert archive_store.get_item(conn, item_id)["files"] == [
         RENUMBERED_FILE, RENUMBERED_ATTACHMENT,
     ]
     assert repo.list_links(conn, captured["id"])[0]["url"].endswith("0002 - boiler service.msg")
@@ -1471,7 +1471,7 @@ def test_the_hint_rides_the_accept_body_into_the_correction(api: TestClient) -> 
 
     conn = dbmod.connect()
     try:
-        stored = archive_batch.recent_corrections(conn)
+        stored = archive_store.recent_corrections(conn)
     finally:
         conn.close()
     assert len(stored) == 1 and stored[0]["hint"] == "utility mail goes here"
