@@ -263,13 +263,14 @@ def test_resume_launches_one_tab_in_the_repo(pc: dict[str, str], tmp_path: Path)
                      TASKOS_OPENER_PROJECTS=str(projects), TASKOS_OPENER_WT="1")
     assert r.returncode == 0, _decode(r.stdout) + _decode(r.stderr)
     exec_line = next(ln for ln in _lines(r) if ln.startswith("resume-exec: "))
-    argv = exec_line.removeprefix("resume-exec: ").split(" ")
-    # one tab, opened in the repo the transcript recorded
-    assert ";" not in exec_line, exec_line
-    assert argv[:2] == ["wt", "-d"] and argv[2] == str(repo_dir)
-    assert argv[3:7] == ["powershell", "-NoProfile", "-NoExit", "-EncodedCommand"]
+    # one tab, opened in the repo the transcript recorded. A `;` wt is meant to
+    # take literally arrives escaped (`\;`) — drop those before looking for a
+    # bare one, which is the character that would split the tab.
+    assert ";" not in exec_line.replace("\\;", ""), exec_line
+    assert exec_line.startswith(f"resume-exec: wt -d {repo_dir} "
+                                "powershell -NoProfile -NoExit -EncodedCommand ")
     # and it carries the whole command, both echoes included, not a truncated one
-    inner = base64.b64decode(argv[7]).decode("utf-16-le")
+    inner = base64.b64decode(exec_line.rsplit(" ", 1)[1]).decode("utf-16-le")
     assert inner.count("Write-Host") == 2 and str(repo_dir) in inner
     assert inner.endswith(f"claude --resume {uuid}")
 
@@ -277,7 +278,7 @@ def test_resume_launches_one_tab_in_the_repo(pc: dict[str, str], tmp_path: Path)
     r = run_launcher("taskos://resume?session=session_01ResumeMe", pc,
                      TASKOS_OPENER_PROJECTS=str(projects), TASKOS_OPENER_WT="0")
     exec_line = next(ln for ln in _lines(r) if ln.startswith("resume-exec: "))
-    assert ";" not in exec_line, exec_line
+    assert ";" not in exec_line.replace("\\;", ""), exec_line
     assert exec_line.startswith(f"resume-exec: powershell -WorkingDirectory {repo_dir} "
                                 "-NoProfile -NoExit -EncodedCommand ")
     assert base64.b64decode(exec_line.rsplit(" ", 1)[1]).decode("utf-16-le") == inner
