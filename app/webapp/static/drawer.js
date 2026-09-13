@@ -51,6 +51,15 @@ import { toast } from './toast.js';
  */
 export function createDrawer(el, opts) {
   let current = null;      // the detail payload
+  // Every load of the payload takes a number, and only the newest may render
+  // (#236). One hash navigation fires `popstate` *and* `hashchange`, so
+  // `open()` used to run twice for one click and fetch twice: the slower
+  // answer, read before an edit, then painted over the edit's own refresh and
+  // the drawer showed the old value of a field the server had already
+  // changed. `opening` is the id an open is still fetching, so the second
+  // arrival of the same navigation is dropped outright.
+  let loads = 0;
+  let opening = null;
   let descEditing = false;
   let pickerOpen = false;  // the folder-index picker under the Folder field
   let editingLinkId = null;
@@ -1228,11 +1237,13 @@ export function createDrawer(el, opts) {
   }
 
   async function refresh() {
-    if (current == null) return;
+    // an open still in flight is about to render a fresh payload of its own
+    if (current == null || opening != null) return;
     const id = current.id;
+    const seq = ++loads;
     try {
       const data = await api('/api/tasks/' + id);
-      if (current && current.id === id) { current = data; render(); }
+      if (seq === loads && current && current.id === id) { current = data; render(); }
     } catch (err) {
       toast(err.message || 'Could not load the task', 'error');
     }
@@ -1240,23 +1251,32 @@ export function createDrawer(el, opts) {
 
   return {
     async open(id) {
+      if (opening === id) return;
+      opening = id;
+      const seq = ++loads;
       descEditing = false;
       pickerOpen = false;
       editingLinkId = null;
       editingCommentId = null;
       try {
         const data = await api('/api/tasks/' + id);
+        if (seq !== loads) return;   // a newer open, or a close, took over meanwhile
         current = data;
         render();
         el.hidden = false;
         document.body.dataset.drawer = 'open';
         el.scrollTop = 0;
       } catch (err) {
+        if (seq !== loads) return;
         toast(err.message || 'Task not found', 'error');
         opts.onClose();
+      } finally {
+        if (seq === loads) opening = null;
       }
     },
     close() {
+      loads++;
+      opening = null;
       current = null;
       el.hidden = true;
       el.innerHTML = '';
