@@ -1,10 +1,10 @@
 """Issue providers — ``get_provider(config)`` picks the forge for this install.
 
-    issues.provider = "github"   → GitHubProvider(owner, assignee)   (src/issues/github.py)
-    issues.provider = "gitlab"   → arrives with a later step: add the class next to
-                                   GitHub in ``_PROVIDERS`` below — the sync, the
-                                   router, the CLI and the UI are provider-agnostic
+    issues.provider = "github"   → GitHubProvider(owner, assignee)         (src/issues/github.py)
+    issues.provider = "gitlab"   → GitLabProvider(owner, assignee, host)   (src/issues/gitlab.py)
     anything else / blank        → NullProvider (reports *not configured*, never syncs)
+
+The sync, the router, the CLI and the UI are provider-agnostic.
 
 Env override (tests, the e2e disposable instance): ``TASKOS_ISSUE_PROVIDER``
 = ``none`` (force the NullProvider so no test spawns ``gh``) or ``fake``
@@ -36,10 +36,17 @@ def _github(config: AppConfig) -> IssueProvider:
     return GitHubProvider(config.issues.owner, config.issues.assignee)
 
 
-# provider name → factory. A GitLab entry ("gitlab": _gitlab) is the whole
-# registration a later step needs; nothing else in the app keys on the name.
+def _gitlab(config: AppConfig) -> IssueProvider:
+    from src.issues.gitlab import GitLabProvider
+
+    return GitLabProvider(config.issues.owner, config.issues.assignee, config.issues.host)
+
+
+# provider name → factory — the whole registration a provider needs; nothing
+# else in the app keys on the name.
 _PROVIDERS: dict[str, Callable[[AppConfig], IssueProvider]] = {
     "github": _github,
+    "gitlab": _gitlab,
 }
 
 

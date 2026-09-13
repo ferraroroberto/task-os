@@ -253,7 +253,7 @@ def test_service_not_configured_states(monkeypatch: pytest.MonkeyPatch, tmp_path
     monkeypatch.delenv(PROVIDER_ENV)
     from src.config import AppConfig, IssuesConfig
 
-    assert isinstance(get_provider(AppConfig(issues=IssuesConfig(provider="gitlab"))), NullProvider)   # not yet
+    assert isinstance(get_provider(AppConfig(issues=IssuesConfig(provider="bitbucket"))), NullProvider)   # unknown
     assert isinstance(get_provider(AppConfig(issues=IssuesConfig(provider=""))), NullProvider)
     gh = get_provider(AppConfig(issues=IssuesConfig(provider="github", owner="")))
     assert isinstance(gh, GitHubProvider) and gh.is_configured() == (False, "issues.owner is not set in config")

@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first and full-width; the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA, **Step 8** GitHub issues as coding tasks, **Step 9** folders that open on any PC — placeholders, the `taskos://` opener, the folder index, **Step 10** federated search — one box over tasks, folders, emails and issues. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step — each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)). Shipped so far: **Step 1** the shell, **Step 2** the core — SQLite schema, JSON API and the `tasks` CLI, **Step 3** the one-shot Notion importer, **Step 4** the PC-first views — Table, Tree, the task drawer and quick-add, **Step 5** the Board and Today views, **Step 6** the markdown mirror + nightly backup, **Step 7** phone access — Tailscale HTTPS, token / password sign-in, the installable PWA, **Step 8** GitHub issues as coding tasks, **Step 9** folders that open on any PC — placeholders, the `taskos://` opener, the folder index, **Step 10** federated search — one box over tasks, folders, emails and issues, **Step 11** GitLab as a second issue provider, switched by config (its walk on a second-site machine is still pending). Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -102,7 +102,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
-                          issues/ (IssueProvider contract · github.py via gh · fake.py for tests) · issue_sync.py (sync pass + scheduler)
+                          issues/ (IssueProvider contract · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler)
                           placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
                           (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
                           search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·
@@ -132,9 +132,9 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 
 | Key | Meaning |
 | --- | --- |
-| `site` | `home` or a second site name — selects nothing yet; later steps key providers on it |
+| `site` | `home` or a second site name — a label; nothing keys on it (the forge is `issues.provider`, the synced folder is `placeholders` / `mirror`) |
 | `port` | webapp port (default **8448**) |
-| `issues` | `provider` (`github`; `gitlab` arrives with Step 11; blank = off), `owner` (whose repos are searched), `assignee` (`@me`), `sync_minutes` (default 10). See [Issues as tasks](#issues-as-tasks) |
+| `issues` | `provider` (`github` · `gitlab`; blank = off), `owner` (GitHub: whose repos are searched · GitLab: the group path, sub-groups included), `assignee` (`@me` or a username), `sync_minutes` (default 10), `host` (GitLab only: the hostname of a self-hosted instance; blank = `gitlab.com`). See [Issues as tasks](#issues-as-tasks) |
 | `placeholders` | `onedrive`, `user`, and a `sharepoint` map (`{"docs": "E:/…"}` → `{sharepoint:docs}`) — what **this** server expands folder refs with for display; the opener on each PC expands the same tokens from its own environment. See [Folders that open on any PC](#folders-that-open-on-any-pc) |
 | `web_roots` | optional cloud *web* equivalent per placeholder, same shape (`{"onedrive": "https://…", "sharepoint": {"docs": "https://…"}}`). A ref starting with a mapped token gets its provider **web URL** derived (root + the percent-encoded rest) as `folder_url` — the phone popover's **Open web link** — unless the task carries an explicit folder web link, which always wins. Empty (the sample) = no derivation. Only refs whose root has a web twin are covered |
 | `mirror` | `dir` — the markdown mirror folder (one `.md` per task); `backup_dir` — where the dated `.db` copies go. Both take `{placeholders}`; either blank / unresolved / with a missing parent folder = that service off, with the reason in `/api/status` and `tasks mirror status`. Both stay off when the app runs on the committed sample (no `config/config.json`) or on an overridden database (`TASKOS_DB_PATH`) whose folder they are not inside — see the provenance rule under [Markdown mirror](#markdown-mirror) and [Backups](#backups) |
@@ -402,7 +402,21 @@ Point `mirror.backup_dir` at a synced folder (`{onedrive}/task-os/backup`); the 
 
 A coding task **is** an issue: `type = coding` ⇔ an `issue_refs` row (provider, `owner/repo`, number, state, url, last synced). The sync keeps the two in step, **read-mostly** — task-os never edits an issue's title, labels or state on the forge; the one write is *Create issue* below.
 
-**Provider** — `config/config.json → issues`: `provider` (`github` today; `gitlab` arrives with Step 11; blank / `none` = off), `owner` (whose repositories are searched), `assignee` (`@me`), `sync_minutes` (default 10). GitHub goes through the **`gh` CLI** (`gh auth login` once; no token in config): `gh search issues --assignee @me --state open --owner <owner> --json …`, `gh issue view`, `gh issue create` — each a subprocess with a 20 s timeout, never on a poll. Not configured (blank owner, `gh` not on PATH) and every failure (`not_authenticated`, `timeout`, `rate_limited`, `not_found`, `error` — classified from `gh`'s stderr) are **visible states**: `GET /api/issues/status`, the Settings card *Issues as tasks* and `tasks issues status` say which; a failed listing changes nothing — never an empty list read as "no issues".
+**Provider** — `config/config.json → issues`: `provider` (`github` or `gitlab`; blank / `none` = off), `owner` (whose repositories are searched), `assignee` (`@me`), `sync_minutes` (default 10), `host` (GitLab only). GitHub goes through the **`gh` CLI** (`gh auth login` once; no token in config): `gh search issues --assignee @me --state open --owner <owner> --json …`, `gh issue view`, `gh issue create` — each a subprocess with a 20 s timeout, never on a poll. Not configured (blank owner, `gh` not on PATH) and every failure (`not_authenticated`, `timeout`, `rate_limited`, `not_found`, `error` — classified from `gh`'s stderr) are **visible states**: `GET /api/issues/status`, the Settings card *Issues as tasks* and `tasks issues status` say which; a failed listing changes nothing — never an empty list read as "no issues".
+
+**GitLab (a second site)** — the same app, switched by config only; the sync, auto-close, *Create issue*, the chips and search are unchanged. It goes through **`glab api`** (`glab auth login --hostname <your-gitlab-host>` once; no token in config), with the same 20 s timeout, the same classified failures and the same visible not-configured states (blank `owner`, `glab` not on PATH). `owner` is the **group path** (`my-group` or `my-group/sub-group` — the group's issue list includes its sub-groups' projects), `assignee` is `@me` or a GitLab username, `host` is the instance's hostname (blank = `gitlab.com`; it is always passed as `--hostname`, so the process's working directory never picks the forge). Listing: `GET groups/<group>/issues?state=opened&scope=assigned_to_me` (`--paginate`); confirming a close: `GET projects/<path>/issues/<iid>`; *Create issue*: `POST projects/<path>/issues` with the task's title and description, assigned by user id. A GitLab issue's `iid` is the task's number, its full project path the `repo` (so `code` = `<project>#<iid>`). A second site's `config.json`:
+
+```json
+{
+  "site": "second",
+  "port": 8448,
+  "issues": { "provider": "gitlab", "host": "gitlab.example.com", "owner": "example-group", "assignee": "@me", "sync_minutes": 10 },
+  "placeholders": { "onedrive": "D:/Synced" },
+  "mirror": { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" }
+}
+```
+
+Refs are keyed by provider, so a database that once synced GitHub keeps those tasks as they are; a GitLab pass never polls them.
 
 **Sync** — a pass runs 10 s after startup, then every `sync_minutes` while the app is up, and on demand: **↻** in the header, *Sync now* on the Settings card or in a task's issue panel, `POST /api/issues/sync`, `tasks issues sync`. One pass:
 
@@ -411,11 +425,11 @@ A coding task **is** an issue: `type = coding` ⇔ an `issue_refs` row (provider
 | an open issue assigned to you with no task | a new **coding** task in **To do**: `title` = the issue title, `code` = `<repo>#<n>` (short repo name), `description` = the issue body, a link (`kind = issue`), the ref (state `open`, url); `created_by = sync`. Dedupe key = (provider, repo, number) — a re-run touches nothing it already made |
 | the issue's **title changed** | the task title follows (activity `title` by `sync`) — the issue title is canonical for a coding task; rename it on the forge |
 | an issue that was **closed** is open again | the ref goes `open`; a task that was done / cancelled is **reopened** to `todo` (activity by `sync`) |
-| a ref that should be open is **missing from the list** | confirmed first with one `gh issue view`: **closed** → the ref goes `closed` and the task is **done** (skipped when already done / cancelled; activity `status … → done · sync` + `issue_state open → closed · sync`); still open (unassigned from you, another owner) → nothing but `last_synced` moves; the lookup failed → the task is left alone and the error is in the result. Closed refs are not polled again |
+| a ref that should be open is **missing from the list** | confirmed first with one `gh issue view` (GitLab: one issue read): **closed** → the ref goes `closed` and the task is **done** (skipped when already done / cancelled; activity `status … → done · sync` + `issue_state open → closed · sync`); still open (unassigned from you, another owner) → nothing but `last_synced` moves; the lookup failed → the task is left alone and the error is in the result. Closed refs are not polled again |
 
 GitHub's search index is eventually consistent — an issue closed seconds ago can still be listed *open* for ~30 s; the next pass catches it. Every task the sync creates or changes goes through the same repo layer as the UI, so the activity log, the markdown mirror and the Board see it like any other write.
 
-**Create / link / unlink** — in the drawer's issue panel of a plain task: *Create issue* (repo from the last-seen list or typed as `owner/repo`) runs `gh issue create` with the task's title and description, assigns it to you and links it — the task becomes coding with `code = repo#N` (`tasks issue create N --repo owner/name` from the terminal). *Link existing* takes `owner/repo#N` or the issue URL (`PUT /api/tasks/{id}/issue`) — the next sync fills state and url. *Unlink* (`DELETE`) makes it a plain task again; the issue is untouched. Board / Table / Tree cards carry the chip (`repo#N`, provider glyph, muted with a check once closed) that opens the issue.
+**Create / link / unlink** — in the drawer's issue panel of a plain task: *Create issue* (repo from the last-seen list or typed as `owner/repo`) runs `gh issue create` (GitLab: the `POST` above) with the task's title and description, assigns it to you and links it — the task becomes coding with `code = repo#N` (`tasks issue create N --repo owner/name` from the terminal). *Link existing* takes `owner/repo#N` (a nested GitLab path too) or the issue URL on any host — a URL with GitLab's `/-/issues/` is a GitLab ref (`PUT /api/tasks/{id}/issue`) — the next sync fills state and url. *Unlink* (`DELETE`) makes it a plain task again; the issue is untouched. Board / Table / Tree cards carry the chip (`repo#N`, provider glyph, muted with a check once closed) that opens the issue.
 
 **Never written back:** titles, labels, state, assignees, comments. A local rename of a coding task is overwritten by the next sync; a task marked done locally does **not** close its issue.
 ## Folders that open on any PC

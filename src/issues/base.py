@@ -1,5 +1,5 @@
-"""The issue-provider contract — what a forge (GitHub today, GitLab with a
-later step) must offer for issues to become tasks.
+"""The issue-provider contract — what a forge (GitHub, GitLab) must offer for
+issues to become tasks.
 
 Read-mostly by design (plan §05): a provider *lists* the open issues assigned
 to the configured user, *reads* one issue, and *creates* one from a task.
@@ -100,8 +100,7 @@ class NullProvider:
 
     Selected when ``issues.provider`` is blank / ``none`` / unknown, or forced
     with ``TASKOS_ISSUE_PROVIDER=none`` (the unit-test default, so no test ever
-    spawns ``gh``). A GitLab implementation is a later step: register it in
-    ``src/issues/__init__.py::get_provider`` next to GitHub.
+    spawns ``gh`` or ``glab``).
     """
 
     name = "none"
