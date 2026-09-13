@@ -605,9 +605,24 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     page.locator("#paneToday .plan-done-btn").click()
     expect(page.locator("#paneToday .plan-list .trow .trow-title")).to_have_text(
         ["Look into a standing desk", "Try the new bakery"])
+    # One hash navigation, one load (#236): it fires `popstate` and
+    # `hashchange`, and while both opened the drawer the slower of the two
+    # loads — read before the edit below — could paint over the edit's own
+    # refresh, leaving the label on "Starts · in 7d" for a task the server had
+    # already cleared (1 run in 8, and the rest of the gallery drifted after it).
+    loads: list[str] = []
+    task_path = f"/api/tasks/{lib_id}"
+
+    def on_request(r) -> None:  # noqa: ANN001 — a Playwright Request
+        if r.method == "GET" and r.url.endswith(task_path):
+            loads.append(r.url)
+
+    page.on("request", on_request)
     page.goto(f"{base}/#task/{lib_id}")
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    page.remove_listener("request", on_request)
+    assert len(loads) == 1, f"one hash navigation loaded the task {len(loads)} times"
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
     starts_input.fill("")
     starts_input.blur()
@@ -615,7 +630,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     # " · <caption>" only while the field has a value, so a bare "Starts"
     # means the PATCH came back and the drawer redrew from the response.
     # Asserting on the input alone would pass on the local edit and let the
-    # API read below race the write (seen failing once against a stale value).
+    # API read below race the write.
     expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
     assert _get(base, f"/api/tasks/{tap_id}")["status"] == "todo"
