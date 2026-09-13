@@ -516,12 +516,12 @@ export function mountSettings(opts) {
     const ok = st.state === 'ok';
     const word = CALENDAR_WORDS[st.state] || st.state;
     els.statusCalendar.append(statusPart(ok ? 'ok' : 'warn', word));
+    if (!ok && st.failing_since) els.statusCalendar.append(' since ' + fmtTsShort(st.failing_since));
     if (ok && st.events_today != null) {
       els.statusCalendar.append(' · ' + st.events_today + ' event(s) today');
     }
     if (st.skipped_recurring) els.statusCalendar.append(' · ' + st.skipped_recurring + ' recurring not checked');
     if (st.unreadable) els.statusCalendar.append(' · ' + st.unreadable + ' unreadable');
-    if (!ok && st.failing_since) els.statusCalendar.append(' since ' + fmtTsShort(st.failing_since));
     if (st.error) els.statusCalendar.append(' — ' + st.error);
     els.statusCalendarSource.append(st.source ? codeEl(st.source) : 'unknown');
     els.statusCalendarSource.append(' · every ' + st.refresh_minutes + ' min · ' + st.timeout_seconds + ' s timeout');
