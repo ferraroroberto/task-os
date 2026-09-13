@@ -6,6 +6,9 @@ loopback port with ``TASKOS_DB_PATH`` → a temp database and
 mirror / backup folders blanked (or pointed into the temp dir — see
 ``mirrored_webapp``), so a run never reads or writes the live ``:8448`` app,
 its ``data/tasks.db``, ``config/config.json`` or the real mirror folder.
+Every instance works under one fixed ``E2E_WORK_ROOT`` shared by all checkouts
+on the machine, so a run holds it for the session (``_one_run_per_work_root``)
+and a second concurrent run stops before booting anything (#244).
 
 Auth (Step 7): the browser reaches the disposable instance over loopback,
 which ``src.auth`` treats as the owner — no token, cookie or env switch is
@@ -65,6 +68,8 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
+from tests.e2e._work_root_lock import WorkRootBusy
+from tests.e2e._work_root_lock import acquire as acquire_work_root
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
@@ -125,6 +130,26 @@ E2E_BUILD_SHA = "e2e0000"
 #: checkout's own drive and slowed writes enough to lose races the stories were
 #: already winning only narrowly.
 E2E_WORK_ROOT = Path(tempfile.gettempdir()) / "taskos-e2e"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _one_run_per_work_root() -> Iterator[None]:
+    """Hold ``E2E_WORK_ROOT`` for the whole session, or stop before booting (#244).
+
+    The root is per machine, so another checkout's concurrent run would share
+    every folder `e2e_workdir` clears. Autouse and session-scoped, so it is set
+    up ahead of every instance fixture and torn down after the last of them.
+    ``pytest.exit`` rather than a fixture error: one message naming the holder,
+    not the same error repeated on every story.
+    """
+    try:
+        lock = acquire_work_root(E2E_WORK_ROOT, REPO_ROOT)
+    except WorkRootBusy as busy:
+        pytest.exit(str(busy), returncode=2)
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def e2e_workdir(name: str) -> Path:
