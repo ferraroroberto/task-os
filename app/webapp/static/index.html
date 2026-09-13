@@ -684,6 +684,33 @@
             </div>
           </div>
         </details>
+        <!-- Calendar (#96): status from GET /api/status's `calendar` — the
+             read-only lane beside Today. The address itself is a secret and
+             never reaches the page: the source row is its host alone. -->
+        <details class="card card--collapsible settings-card" id="calendarCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
+              <h3 class="collapse-title">Calendar</h3>
+              <span class="collapse-count" id="calendarCardMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Today shows your real calendar beside the task list, read-only, from a private ICS address in <code>calendar.ics_url</code> (Google's secret iCal address or Outlook's published calendar link). Nothing is ever written to the calendar. The copy is refreshed every few minutes; recurring events the app cannot expand are counted, never dropped.</p>
+            <dl class="status-rows" id="calendarStatus" aria-live="polite">
+              <div class="status-row"><dt>Calendar</dt><dd id="statusCalendar" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Source</dt><dd id="statusCalendarSource" class="muted">–</dd></div>
+              <div class="status-row"><dt>Last fetched</dt><dd id="statusCalendarFetched" class="muted">–</dd></div>
+            </dl>
+            <div class="card-actions">
+              <button type="button" id="calendarRefresh" class="button-surface" disabled>
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+                Refresh now
+              </button>
+            </div>
+          </div>
+        </details>
         <!-- Voice (#92): status from GET /api/status's `voice` — a cached TCP
              probe of the whisper endpoint. No button: there is nothing to run
              on demand, only somewhere to be reachable. -->

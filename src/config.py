@@ -224,6 +224,29 @@ class ArchiveConfig:
 
 
 @dataclass(frozen=True)
+class CalendarConfig:
+    """The read-only calendar lane on Today (#96).
+
+    ``ics_url``          a private ICS address (Google's "secret address in
+                         iCal format", Outlook's published ICS link;
+                         ``webcal://`` is read as ``https://``). **A secret**:
+                         anyone holding it reads the calendar, so it lives in
+                         the gitignored real config only, is kept out of this
+                         dataclass's ``repr``, and every log line, status and
+                         error names its **host** alone. Blank = the lane is
+                         off, with that as its visible reason.
+    ``refresh_minutes``  how long a good copy is served before the next fetch
+                         (a failed fetch is retried after a minute).
+    ``timeout_seconds``  the bound on one fetch, and on how long a Today
+                         request ever waits for one.
+    """
+
+    ics_url: str = field(default="", repr=False)
+    refresh_minutes: int = 10
+    timeout_seconds: float = 2.0
+
+
+@dataclass(frozen=True)
 class TeamConfig:
     """A shared install for a small team (Step 12). ``enabled`` off (the
     default) = the Step 7 model unchanged. On: ``/login`` also accepts the
@@ -265,6 +288,7 @@ class AppConfig:
     enrich: EnrichConfig = field(default_factory=EnrichConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     archive: ArchiveConfig = field(default_factory=ArchiveConfig)
+    calendar: CalendarConfig = field(default_factory=CalendarConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
@@ -389,6 +413,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     enrich = _as_dict(raw.get("enrich"))
     ai = _as_dict(raw.get("ai"))
     archive = _as_dict(raw.get("archive"))
+    calendar = _as_dict(raw.get("calendar"))
     team = _as_dict(raw.get("team"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
@@ -479,6 +504,15 @@ def load_config(path: Path | None = None) -> AppConfig:
                 "archive.ai_timeout_seconds",
             ),
             renumber=bool(archive.get("renumber", ArchiveConfig.renumber)),
+        ),
+        calendar=CalendarConfig(
+            ics_url=str(calendar.get("ics_url", "") or "").strip(),
+            refresh_minutes=_as_int(
+                calendar.get("refresh_minutes"), CalendarConfig.refresh_minutes, "calendar.refresh_minutes",
+            ),
+            timeout_seconds=_as_float(
+                calendar.get("timeout_seconds"), CalendarConfig.timeout_seconds, "calendar.timeout_seconds",
+            ),
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),

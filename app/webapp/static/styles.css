@@ -2010,6 +2010,67 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .trow.is-plan .plan-grip { display: none; }
 }
 
+/* ------------------------------------------------- calendar lane (#96) */
+/* Desktop only: the task stack on the left, a slim read-only column of today's
+   events on the right (calendar.js). Below 1024 px the lane is not drawn and
+   the layout wrapper is a plain block, so the phone renders as it did. */
+.cal-lane { display: none; }
+@media (min-width: 1024px) {
+  .today-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17.5rem;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+  .cal-lane {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding-left: var(--space-md);
+    border-left: 1px solid var(--line);
+  }
+}
+.cal-lane .empty-state { padding: var(--space-lg) var(--space-md); }
+.cal-hint { margin: 0; padding: 0 var(--space-xs); color: var(--muted); font-size: var(--font-caption); line-height: 1.5; }
+.cal-hint code {
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  font-size: 0.92em;
+  background: var(--card-off);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+/* A failure is a callout, never a blank: the red-washed box of the danger tier. */
+.cal-notice {
+  display: grid;
+  gap: 2px;
+  padding: 10px var(--gap);
+  border: 1px solid var(--deficit-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--deficit-soft);
+}
+.cal-notice-title { display: flex; align-items: center; gap: var(--space-sm); margin: 0; color: var(--danger); font-size: var(--font-label); font-weight: 600; }
+.cal-notice-title .icon { flex: none; width: var(--icon-inline); height: var(--icon-inline); }
+.cal-notice-detail { margin: 0; font-size: var(--font-caption); line-height: 1.4; overflow-wrap: anywhere; }
+.cal-note { margin: 0; padding: 0 var(--space-xs); color: var(--muted); font-size: var(--font-caption); line-height: 1.4; }
+.cal-note.is-attention { color: var(--attention); font-weight: 600; }
+.cal-allday { display: grid; gap: var(--space-xs); padding: var(--space-sm) var(--space-xs); border-top: 1px solid var(--line); }
+.cal-allday-label { color: var(--muted); font-size: var(--font-caption); }
+.cal-allday-list { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.cal-chip { padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--accent-soft); font-size: var(--font-caption); font-weight: 600; }
+.cal-events { margin: 0; padding: 0; list-style: none; }
+.cal-event {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: baseline;
+  padding: var(--space-sm) var(--space-xs);
+  border-top: 1px solid var(--line);
+}
+.cal-time { color: var(--muted); font-size: var(--font-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-body { display: grid; min-width: 0; }
+.cal-summary { font-size: var(--font-label); overflow-wrap: anywhere; }
+.cal-span { color: var(--muted); font-size: var(--font-caption); }
+
 /* ------------------------------------------------- login page (Step 7) */
 /* /login: one vendored card centred on the canvas, one field, one button.
    Where a non-loopback page request lands (src/auth.py); the SPA redirects

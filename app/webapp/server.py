@@ -10,10 +10,12 @@ Route families (each in ``app/webapp/routers/``):
     people  /api/people…         → contacts / assignees CRUD
     search  /api/search?q=&kinds=&limit= → federated: tasks · folders · emails · issues,
                                    grouped, unconfigured = visible; /api/search/status
-    views   /api/board · /api/today → the Board's four buckets · Today grouped by project
+    views   /api/board · /api/today → the Board's four buckets · Today grouped by project,
+                                   with the read-only calendar lane's group (#96);
+                                   POST /api/calendar/refresh fetches the calendar now
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
                                    backup, folder index + opener (Step 9), capture (#98),
-                                   local AI (#95); POST
+                                   local AI (#95), calendar lane (#96); POST
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
     folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
@@ -118,6 +120,7 @@ from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService
 from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
+from src.calendar_lane import CalendarService
 from src.certs import cert_paths
 from src.config import load_config
 from src.db import db_path, init_db
@@ -235,6 +238,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # No thread of its own either: a run is started on demand and drives the
     # archiver's batch CLI in one worker thread for its lifetime (#157).
     app.state.archive = ArchiveBatchService(config)
+    # No thread of its own either (#96): a fetch starts when a Today request
+    # finds the copy expired, and runs in one short-lived worker bounded by
+    # `calendar.timeout_seconds`.
+    app.state.calendar = CalendarService(config)
     app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
     for a in app.state.search.status():
         if not a["configured"]:

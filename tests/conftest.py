@@ -45,6 +45,7 @@ def write_test_config(
     ai_base_url: str | None = None,
     ai_model: str | None = None,
     archive: dict | None = None,
+    calendar: dict | None = None,
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
@@ -61,7 +62,9 @@ def write_test_config(
     endpoint), ``archive`` (the whole block; ``None`` forces ``enabled: false``
     — the sample names a real email-archiver checkout, and a test that spawned
     it would drive this machine's Outlook, so #157's tests pass a block pointing
-    at ``tests/fixtures/archiver_fake``)
+    at ``tests/fixtures/archiver_fake``), ``calendar`` (merged over a blank
+    ``ics_url`` — no test ever fetches a real calendar; #96's tests pass
+    ``tests/fixtures/calendar_fake``'s loopback address)
     and, optionally, the ``placeholders`` / ``web_roots`` maps (Step 9 / #28
     tests point ``{onedrive}`` at a temp tree / a fake cloud root)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
@@ -86,6 +89,7 @@ def write_test_config(
     raw["archive"] = {**raw.get("archive", {}), **(archive or {})}
     if archive is None:
         raw["archive"]["enabled"] = False
+    raw["calendar"] = {**raw.get("calendar", {}), "ics_url": "", **(calendar or {})}
     if placeholders is not None:
         raw["placeholders"] = dict(placeholders)
     if web_roots is not None:

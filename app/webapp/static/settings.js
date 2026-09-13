@@ -20,6 +20,11 @@
  *   Archive        the batch archiver (#157–#159): what it is configured with,
  *                  what the last run did, "Run now" over the whole Inbox and
  *                  the way to the tab that owns the report (#167).
+ *   Calendar       the Today lane's private ICS feed (#96): its state (off ·
+ *                  ok · address refused · unreachable · timed out · not a
+ *                  calendar), the host it reads from — never the address —
+ *                  and "Refresh now". The refresh answers the fresh group,
+ *                  which the bootstrap pushes into Today (`opts.onCalendar`).
  *   Voice          whether a transcription endpoint is answering, and which
  *                  one (#92, #144: the hub — so parakeet — or the local
  *                  whisper fallback). The same status the quick-add mic
@@ -33,7 +38,7 @@
  *   Folder opener  the per-PC opener install command + the folder index
  *                  (Step 9), with "Reindex folders now".
  *
- * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, archive, voice and AI cards
+ * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, archive, calendar, voice and AI cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
@@ -51,7 +56,7 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
  * Wire the Settings pane once and hand back the bootstrap's handle.
  * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
  *          onCaptured: () => void, onArchiveRun: () => void,
- *          onOpenArchive: () => void}} opts
+ *          onOpenArchive: () => void, onCalendar: (group: object) => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
  *            renderIssues: (status: object|null) => void, revealCard: (key: string) => void}}
  */
@@ -91,6 +96,11 @@ export function mountSettings(opts) {
     statusArchiveLast: document.getElementById('statusArchiveLast'),
     archiveRunNow: document.getElementById('archiveRunNow'),
     archiveOpenTab: document.getElementById('archiveOpenTab'),
+    calendarCardMeta: document.getElementById('calendarCardMeta'),
+    statusCalendar: document.getElementById('statusCalendar'),
+    statusCalendarSource: document.getElementById('statusCalendarSource'),
+    statusCalendarFetched: document.getElementById('statusCalendarFetched'),
+    calendarRefresh: document.getElementById('calendarRefresh'),
     voiceCardMeta: document.getElementById('voiceCardMeta'),
     statusVoice: document.getElementById('statusVoice'),
     statusVoiceUrl: document.getElementById('statusVoiceUrl'),
@@ -297,6 +307,7 @@ export function mountSettings(opts) {
       els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       renderCapture(body.capture);
       renderArchive(body.archive);
+      renderCalendar(body.calendar);
       renderVoice(body.voice);
       renderEnrich(body.enrich);
       renderAI(body.ai);
@@ -311,6 +322,7 @@ export function mountSettings(opts) {
       els.statusIndex.textContent = 'unknown — ' + err.message;
       renderCapture(null);
       renderArchive(null);
+      renderCalendar(null);
       renderVoice(null);
       renderEnrich(null);
       renderAI(null);
@@ -470,6 +482,66 @@ export function mountSettings(opts) {
         // API's own sentence is better than anything invented here.
         toast(err.message || 'Could not start the run', 'error');
       }
+      refreshStatus();
+    });
+  }
+
+  // ------------------------------------------------------------ calendar
+  //: The state word in the row and the card header, per `calendar.state`.
+  const CALENDAR_WORDS = {
+    ok: 'reading', bad_url: 'address refused', unreachable: 'unreachable',
+    timeout: 'timed out', parse_error: 'not a calendar',
+  };
+
+  /** The Today lane's half of `GET /api/status` (#96). Off always carries its
+   *  reason; every failure keeps its own word; `null` = the status call itself
+   *  failed, which is "unknown", not "off". The source is the host only — the
+   *  address is a secret and the API never sends it. */
+  function renderCalendar(st) {
+    const rows = [els.statusCalendar, els.statusCalendarSource, els.statusCalendarFetched];
+    rows.forEach(function (dd) { dd.replaceChildren(); dd.classList.remove('muted'); });
+    els.calendarRefresh.disabled = !(st && st.configured && st.state !== 'off');
+    if (!st) {
+      rows.forEach(function (dd) { dd.textContent = 'unknown'; });
+      els.calendarCardMeta.textContent = 'unknown';
+      return;
+    }
+    if (!st.configured || st.state === 'off') {
+      els.statusCalendar.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
+      els.statusCalendarSource.textContent = '–';
+      els.statusCalendarFetched.textContent = '–';
+      els.calendarCardMeta.textContent = 'off';
+      return;
+    }
+    const ok = st.state === 'ok';
+    const word = CALENDAR_WORDS[st.state] || st.state;
+    els.statusCalendar.append(statusPart(ok ? 'ok' : 'warn', word));
+    if (!ok && st.failing_since) els.statusCalendar.append(' since ' + fmtTsShort(st.failing_since));
+    if (ok && st.events_today != null) {
+      els.statusCalendar.append(' · ' + st.events_today + ' event(s) today');
+    }
+    if (st.skipped_recurring) els.statusCalendar.append(' · ' + st.skipped_recurring + ' recurring not checked');
+    if (st.unreadable) els.statusCalendar.append(' · ' + st.unreadable + ' unreadable');
+    if (st.error) els.statusCalendar.append(' — ' + st.error);
+    els.statusCalendarSource.append(st.source ? codeEl(st.source) : 'unknown');
+    els.statusCalendarSource.append(' · every ' + st.refresh_minutes + ' min · ' + st.timeout_seconds + ' s timeout');
+    els.statusCalendarFetched.textContent = st.fetched_at
+      ? fmtTsShort(st.fetched_at) + (st.stale ? ' (stale)' : '') : 'never';
+    els.calendarCardMeta.textContent = ok ? 'on' : (st.stale ? 'stale' : 'error');
+  }
+
+  function wireCalendarRefresh() {
+    els.calendarRefresh.addEventListener('click', async function () {
+      els.calendarRefresh.disabled = true;
+      try {
+        const group = await api('/api/calendar/refresh', { method: 'POST', body: {} });
+        opts.onCalendar(group);
+        if (group.state === 'ok') {
+          toast('Calendar: ' + (group.events.length + group.all_day.length) + ' event(s) today', 'success');
+        } else {
+          toast('Calendar: ' + (CALENDAR_WORDS[group.state] || group.state) + ' — ' + (group.error || group.reason || 'unknown'), 'error');
+        }
+      } catch (err) { toast(err.message || 'Refresh failed', 'error'); }
       refreshStatus();
     });
   }
@@ -641,6 +713,7 @@ export function mountSettings(opts) {
   wireIssueSyncNow();
   wireCaptureRunNow();
   wireArchiveCard();
+  wireCalendarRefresh();
 
   return {
     refreshStatus: refreshStatus,

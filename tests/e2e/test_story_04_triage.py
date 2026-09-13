@@ -16,7 +16,8 @@ shots the validation record links to:
     docs/screenshots/story-04-triage-{1..8}-desktop.png
     docs/screenshots/story-04-triage-11-desktop.png   (stale window, #101)
 
-then the drawer at 390×844 (WebKit, touch) with the geometry checks:
+then — in the same test function since #96 — the drawer at 390×844 (WebKit,
+touch) with the geometry checks:
 
     docs/screenshots/story-04-triage-9-phone.png   (table as the shared rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
@@ -112,7 +113,14 @@ def _open_filters(page: Page, host_id: str):
 
 # ----------------------------------------------------------- desktop leg
 
-def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> None:
+def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwright, shots: Path) -> None:
+    """The desktop walk, then the phone leg on the same instance.
+
+    One collected test, not two: the phone leg was its own test function until
+    #96's calendar story needed a slot under the e2e budget (CLAUDE.md), so it
+    is folded in here, the way story 05's was for Step 12 — same steps, same
+    order, same shots.
+    """
     base = seeded_webapp
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
@@ -359,6 +367,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
         shot(dark_page, shots / "story-15-plan-my-day-6-desktop.png")
     finally:
         dark_ctx.close()
+
+    _walk_phone_table_cards_and_drawer_sheet(base, playwright, shots)
 
 
 # ------------------------------------------- recurrence anchor (#112)
@@ -777,11 +787,10 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
 
 # ------------------------------------------------------------- phone leg
 
-def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
+def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): the Table as the shared rows, drawer
     full-screen, 44px targets (the row's status select is the deliberate
     compact exception — ≤32px, centred on the title line, UX rounds 1–3)."""
-    base = seeded_webapp
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named

@@ -21,6 +21,11 @@
  * re-committing is a conscious act, never a silent carry-over. A task
  * planned today leaves the due/week buckets — it lives in the plan.
  *
+ * The calendar lane (#96, calendar.js) sits beside all of it on the desktop:
+ * today's events from the private ICS address (opts.calendar — the
+ * /api/today calendar group), so plan mode picks against real free time. It
+ * is read-only and never filtered.
+ *
  * Everything else is derived in the browser from the shared filtered list,
  * so the filter card (status · project · person · sort …) applies here like
  * on every other tab; the plan itself is your commitment list and stays
@@ -31,6 +36,7 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
+import { calendarLane } from './calendar.js';
 import { collapsibleCard } from './collapsible.js';
 import { fmtDay, relDue, todayISO } from './format.js';
 import { compareItems, rowList, taskRow } from './rows.js';
@@ -108,7 +114,7 @@ function groupByRoot(items, sort) {
  *          onToggleSelect?: (id:number)=>void}} handlers
  * @param {{sort?: string, today?: string,
  *          plan?: {items: Array<object>, done: number, total: number},
- *          planMode?: boolean,
+ *          planMode?: boolean, calendar?: object|null,
  *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
  */
 export function renderToday(host, items, handlers, opts) {
@@ -119,14 +125,22 @@ export function renderToday(host, items, handlers, opts) {
   const cands = planCandidates(items, t);
   host.innerHTML = '';
   const counts = data.counts;
+  // Tasks on the left, the calendar lane on the right (hidden < 1024 px).
+  const layout = document.createElement('div');
+  layout.className = 'today-layout';
+  const main = document.createElement('div');
+  main.className = 'today-main';
+  layout.appendChild(main);
+  layout.appendChild(calendarLane(o.calendar || null));
+  host.appendChild(layout);
 
   if (plan.items.length || o.planMode) {
-    host.appendChild(buildPlanSection(plan, cands, handlers, o));
+    main.appendChild(buildPlanSection(plan, cands, handlers, o));
   }
   if (o.planMode) {
-    host.appendChild(buildPicker(cands, t, handlers, o));
+    main.appendChild(buildPicker(cands, t, handlers, o));
   } else if (!plan.items.length && cands.length && handlers.onPlanMode) {
-    host.appendChild(buildBanner(cands, t, handlers));
+    main.appendChild(buildBanner(cands, t, handlers));
   }
 
   const section = document.createElement('section');
@@ -153,7 +167,7 @@ export function renderToday(host, items, handlers, opts) {
   } else {
     data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers, o)); });
   }
-  host.appendChild(section);
+  main.appendChild(section);
 
   // Later this week — a flat disclosure (vendored markup, hairline instead of a card box).
   const later = collapsibleCard({
@@ -165,7 +179,7 @@ export function renderToday(host, items, handlers, opts) {
   } else {
     data.week.forEach(function (g) { later.body.appendChild(buildGroup(g, handlers, o)); });
   }
-  host.appendChild(later.card);
+  main.appendChild(later.card);
 }
 
 // ------------------------------------------------------------ My plan (#89)
