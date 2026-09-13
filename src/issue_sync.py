@@ -39,6 +39,7 @@ panel — an in-memory cache, warm after the first pass.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -55,6 +56,16 @@ logger = logging.getLogger(__name__)
 
 SYNC_ACTOR = "sync"
 INITIAL_DELAY_S = 10.0
+#: Real-second override for `INITIAL_DELAY_S` — the issue sync's twin of
+#: `src.email_capture.DELAY_ENV`, for the same reason. `TASKOS_CLOCK` pins the
+#: timestamps a pass *writes*, but the first automatic pass is scheduled off a
+#: real `threading.Event.wait()`, so on the e2e issues instance (story 08) it
+#: fired ~10 s after boot — inside a story that takes ~9 s unloaded — and
+#: under load landed after the story's own ↻ passes, rewriting the Settings
+#: card's last-sync counts under the assertion (#205). Nothing in production
+#: sets this; the e2e suite's `_boot()` pins it past any story's real runtime,
+#: the same way unit tests pass `initial_delay` directly.
+DELAY_ENV = "TASKOS_ISSUE_SYNC_DELAY_S"
 DESCRIPTION_MAX = 10_000
 
 
@@ -229,14 +240,25 @@ def sync_once(conn: Any, provider: IssueProvider, *, actor: str = SYNC_ACTOR,
     return result
 
 
+def _default_initial_delay() -> float:
+    """`INITIAL_DELAY_S`, unless `DELAY_ENV` overrides it (see its docstring)."""
+    raw = os.environ.get(DELAY_ENV, "").strip()
+    if not raw:
+        return INITIAL_DELAY_S
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{DELAY_ENV}={raw!r} is not a number") from exc
+
+
 class IssueSyncService:
     """The in-app scheduler + status holder (one per process, on ``app.state.issues``)."""
 
     def __init__(self, config: AppConfig, provider: IssueProvider | None = None, *,
-                 interval_minutes: int | None = None, initial_delay: float = INITIAL_DELAY_S) -> None:
+                 interval_minutes: int | None = None, initial_delay: float | None = None) -> None:
         self.provider = provider or get_provider(config)
         self.interval_minutes = max(1, int(interval_minutes or config.issues.sync_minutes or 10))
-        self.initial_delay = initial_delay
+        self.initial_delay = _default_initial_delay() if initial_delay is None else initial_delay
         self.enabled, self.reason = self.provider.is_configured()
         self.last_sync: str | None = None
         self.last_result: SyncResult | None = None

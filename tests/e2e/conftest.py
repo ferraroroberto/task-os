@@ -200,7 +200,10 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     enables capture (story 24's archive fixture) could otherwise have that
     real 15 s timer land mid-story and rewrite a status card a shot already
     framed (#170: story-24-archive-9-desktop.png moved between two runs of one
-    commit for exactly that reason).
+    commit for exactly that reason). ``TASKOS_ISSUE_SYNC_DELAY_S`` does the
+    same for the issue sync's real 10 s first pass, which story 08's
+    ~9 s walk straddles: under load it landed after the story's own ↻
+    passes and rewrote the Settings card's counts under the assertion (#205).
     """
     port = _free_tcp_port()
     print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
@@ -217,6 +220,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_CLOCK": E2E_CLOCK,
         "TASKOS_BUILD_SHA": E2E_BUILD_SHA,
         "TASKOS_CAPTURE_DELAY_S": "3600",
+        "TASKOS_ISSUE_SYNC_DELAY_S": "3600",
         **(extra_env or {}),
     }
     cmd = [

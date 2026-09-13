@@ -277,6 +277,35 @@ def test_service_thread_runs_the_first_pass_after_the_delay(conn, fake: FakeProv
     assert service.status()["running"] is False
 
 
+def test_first_pass_delay_env_pins_the_automatic_pass_out_of_a_story(conn, fake: FakeProvider,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """``TASKOS_ISSUE_SYNC_DELAY_S`` moves the real first-pass wait (#205).
+
+    The e2e issues instance sets it an hour out; without it the 10 s first pass
+    landed inside story 08 and rewrote the counts it asserts.
+    """
+    import time
+
+    from src.issue_sync import INITIAL_DELAY_S
+
+    env = "TASKOS_ISSUE_SYNC_DELAY_S"   # literal: the name tests/e2e/conftest.py's _boot() sets
+    monkeypatch.delenv(env, raising=False)
+    assert IssueSyncService(load_config(), provider=fake).initial_delay == INITIAL_DELAY_S
+    monkeypatch.setenv(env, "3600")
+    assert IssueSyncService(load_config(), provider=fake, initial_delay=0.2).initial_delay == 0.2   # explicit wins
+    service = IssueSyncService(load_config(), provider=fake, interval_minutes=1)
+    assert service.initial_delay == 3600.0
+    service.start()
+    try:
+        time.sleep(0.5)
+        assert service.status()["running"] is True and service.last_sync is None
+    finally:
+        service.stop()
+    monkeypatch.setenv(env, "soon")
+    with pytest.raises(ValueError, match=env):
+        IssueSyncService(load_config(), provider=fake)
+
+
 class _Proc:
     def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
         self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
