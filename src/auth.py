@@ -18,8 +18,9 @@ app**: the gate is closed, not open, and startup says so loudly.
 **Team mode** (``team.enabled``, Step 12) adds one more way through the same
 gate and loosens nothing: ``/login`` also accepts the shared team password
 (``scripts/set_team_password.py``, the same PBKDF2 hash) and hands back a
-``taskos_team`` cookie — never the owner's token, so a teammate cannot script
-the API with it. Its value is derived (HMAC of the team password hash keyed by
+``taskos_team`` cookie — never the owner's token (it grants the same access to
+the app while it is valid, but it is not the bearer secret and cannot outlive
+a change of either secret). Its value is derived (HMAC of the team password hash keyed by
 the token), so rotating either one signs every teammate out, and with no token
 configured there is no team cookie either: the gate stays closed. A teammate
 must then pick a name (``src/team.py``) before any page loads. Team mode off =
