@@ -3,7 +3,7 @@
 %% new client surface, a schema step). Not generated, not checked by the gate.
 flowchart LR
   subgraph clients["Clients"]
-    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>(the Table pane draws two of them: grid ⇄ tree on one strip, #161)<br/>journal.js (the done journal — #journal, a pane with no tab, closed tasks by day, #102)<br/>selection.js (the ONE selection) · bulkbar.js (Board + Table bulk actions, #81)<br/>keys.js (the ONE keymap: row keys + undo + the ? sheet + its palette entries, #99)<br/>snooze.js (the four-option menu, shared by the Today row and the s key)<br/>drawer.js (+ Delete task, #121) · quickadd.js (the add dialog) · confirm.js (the one destructive-action dialog, #121) · folderpick.js (the shared folder-index picker)<br/>format.js · api.js · toast.js · dueinput.js (the shared due trio) · collapsible.js (the disclosure-card builder) · popover.js (the ONE outside-click/Escape closer, shared by the multi-select and the snooze menu)<br/>voice.js + voice-worklet.js (click-toggle mic → AudioWorklet tap → 16 kHz mono WAV;<br/>re-posts the growing take for the live transcript, #92/#146)<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>archive.js (Archive tab, #159 — run the batch, read the report,<br/>accept · move to a candidate or any folder + hint · revert per mail<br/>· retry a move Outlook refused after the file was written, #174;<br/>grid on desktop, cards on the phone)<br/>login.html (token / password → cookie)"]
+    pwa["PWA · app/webapp/static/<br/>app.js (one filtered list · URL ↔ filters · #task/id)<br/>rows.js (the one task row + status select + sort) · filters.js (the one filter card)<br/>board.js · table.js · tree.js · today.js — renderings of that list<br/>(the Table pane draws two of them: grid ⇄ tree on one strip, #161)<br/>journal.js (the done journal — #journal, a pane with no tab, closed tasks by day, #102)<br/>selection.js (the ONE selection) · bulkbar.js (Board + Table bulk actions, #81)<br/>keys.js (the ONE keymap: row keys + undo + the ? sheet + its palette entries, #99)<br/>snooze.js (the four-option menu, shared by the Today row and the s key)<br/>drawer.js (+ Delete task, #121) · quickadd.js (the add dialog) · confirm.js (the one destructive-action dialog, #121) · folderpick.js (the shared folder-index picker)<br/>format.js · api.js · toast.js · dueinput.js (the shared due trio) · collapsible.js (the disclosure-card builder) · popover.js (the ONE outside-click/Escape closer, shared by the multi-select and the snooze menu)<br/>voice.js + voice-worklet.js (click-toggle mic → AudioWorklet tap → 16 kHz mono WAV;<br/>re-posts the growing take for the live transcript, #92/#146)<br/>search.js (Search tab) · settings.js (Settings tab) · palette.js (Ctrl+K)<br/>archive.js (Archive tab, #159 — run the batch, read the report,<br/>accept · move to a candidate or any folder + hint · revert per mail<br/>· retry a move Outlook refused after the file was written, #174;<br/>grid on desktop, cards on the phone)<br/>login.html (token / password → cookie · team: pick your name)"]
     phone["Phone · https://‹host›.ts.net:8448<br/>installed PWA (manifest · icons · iOS meta)"]
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
@@ -15,9 +15,10 @@ flowchart LR
   end
 
   subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]
-    authmw["src/auth.py · AuthMiddleware<br/>loopback = owner · else bearer / cookie<br/>public: /static /healthz /api/version /login"]
+    authmw["src/auth.py · AuthMiddleware<br/>loopback = owner · else bearer / cookie<br/>team mode: + taskos_team cookie, name step before any page<br/>public: /static /healthz /api/version /login"]
     misc["routers/misc<br/>/ · /healthz · /api/version<br/>/opener/opener.{cmd,ps1} (public)"]
-    authr["routers/auth<br/>/login · /api/login · /api/logout<br/>access_status() → /api/status"]
+    authr["routers/auth<br/>/login · /api/login · /api/logout<br/>/api/team · /api/team/name · /api/team/avatars (Step 12)<br/>access_status() → /api/status"]
+    team["src/team.py<br/>taskos_name → the picked author (a label, not a credential)<br/>data/avatars/(name slug).png|jpg|webp"]
     tasksr["routers/tasks<br/>/api/tasks… (POST: external_id → idempotent capture, #98) (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99) · POST /api/tasks/bulk/delete (#121)<br/>/api/activity · /api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
@@ -55,7 +56,7 @@ flowchart LR
     qa["quick_add.py<br/>parse · resolve_parent · strip_lead_in"]
     schema["schema.py<br/>MIGRATIONS v1→v16 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
-    config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
+    config["config.py<br/>config/config.json · auth {token, password_hash} · team {enabled, people, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py<br/>save_team_password_hash() ← scripts/set_team_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
   end
 
@@ -102,6 +103,8 @@ flowchart LR
   authmw --> authr
   authmw --> tasksr
   authr --> config
+  authr --> team
+  tasksr -->|"resolve_actor"| team
   pwa -->|fetch| misc
   pwa -->|fetch| tasksr
   pwa -->|"stage / accept / reject"| air

@@ -67,7 +67,7 @@ const TAB_KEY = 'task-os.tab';
 const TABLE_VIEW_KEY = 'task-os.tableView';
 const PHONE_TABLE_MQ = '(max-width: 767px)';
 // Deep links into the Settings pane: hash → the card settings.js opens.
-const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search' };
+const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search', '#settings/access': 'access' };
 // The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it (#102).
 const JOURNAL_HASH = /^#journal(\/|$)/;
 const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];

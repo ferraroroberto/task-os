@@ -40,6 +40,10 @@
     <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none">
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </symbol>
 </svg>
 
   <main class="login-main">
@@ -61,6 +65,19 @@
       <button id="loginSubmit" type="submit" class="button-primary">Sign in</button>
       <p id="loginError" class="login-error" role="alert" hidden></p>
     </form>
+    <!-- Team mode (Step 12): after the team password, or at ?step=name, the
+         browser picks its name from team.people (GET /api/team). -->
+    <section id="pickCard" class="card login-card" aria-labelledby="pickTitle" hidden>
+      <div class="card-head">
+        <h1 class="card-title" id="pickTitle">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
+          Who are you?
+        </h1>
+      </div>
+      <p class="card-meta">Pick your name — it goes on the comments and changes you make from this browser, which remembers it. It is a label, not a password.</p>
+      <div id="pickList" class="team-people" role="group" aria-labelledby="pickTitle"></div>
+      <p id="pickError" class="login-error" role="alert" hidden></p>
+    </section>
   </main>
 
   <script>
@@ -94,6 +111,89 @@
         input.select();
       }
 
+      // ---- team mode: pick your name (Step 12) ----
+      var pickCard = document.getElementById('pickCard');
+      var pickList = document.getElementById('pickList');
+      var pickError = document.getElementById('pickError');
+
+      function readJson(res) {
+        return res.text().then(function (text) {
+          try { return text ? JSON.parse(text) : null; } catch (_) { return null; }
+        });
+      }
+
+      function pickFail(msg) {
+        pickError.textContent = msg;
+        pickError.hidden = false;
+      }
+
+      function initials(name) {
+        return name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
+      }
+
+      function personButton(person, you) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = (person.name === you ? 'button-tint' : 'button-surface') + ' team-person';
+        b.setAttribute('aria-pressed', person.name === you ? 'true' : 'false');
+        var face;
+        if (person.avatar) {
+          face = document.createElement('img');
+          face.src = person.avatar;
+          face.alt = '';
+        } else {
+          face = document.createElement('span');
+          face.textContent = initials(person.name);
+          face.setAttribute('aria-hidden', 'true');
+        }
+        face.className = 'team-avatar' + (person.avatar ? '' : ' team-initials');
+        var label = document.createElement('span');
+        label.className = 'team-name';
+        label.textContent = person.name;
+        b.append(face, label);
+        b.addEventListener('click', function () { choose(person.name); });
+        return b;
+      }
+
+      function choose(name) {
+        pickError.hidden = true;
+        pickList.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+        fetch('/api/team/name', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name }),
+          credentials: 'same-origin',
+          cache: 'no-store',
+        }).then(function (res) {
+          return readJson(res).then(function (body) {
+            if (res.ok) { location.replace(next); return; }
+            pickList.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+            pickFail(((body && body.error) || {}).message || ('HTTP ' + res.status));
+          });
+        }).catch(function () { pickFail('Server unreachable.'); });
+      }
+
+      function showPick() {
+        form.hidden = true;
+        pickCard.hidden = false;
+        fetch('/api/team', { credentials: 'same-origin', cache: 'no-store' }).then(function (res) {
+          return readJson(res).then(function (body) {
+            if (res.status === 401) {              // not signed in yet: the password first
+              pickCard.hidden = true;
+              form.hidden = false;
+              btn.disabled = false;
+              input.focus();
+              return;
+            }
+            if (!res.ok || !body) { pickFail(((body && body.error) || {}).message || ('HTTP ' + res.status)); return; }
+            if (!body.enabled) { location.replace(next); return; }
+            if (!body.people.length) { pickFail('No names are configured (team.people) — ask the owner.'); return; }
+            pickList.replaceChildren.apply(pickList, body.people.map(function (p) { return personButton(p, body.you); }));
+            pickList.querySelector('button').focus();
+          });
+        }).catch(function () { pickFail('Server unreachable.'); });
+      }
+
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
         var secret = input.value.trim();
@@ -110,13 +210,15 @@
           return res.text().then(function (text) {
             var body = null;
             try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+            if (res.ok && body && body.via === 'team' && !body.you) { showPick(); return; }
             if (res.ok) { location.replace(next); return; }
             var e = (body && body.error) || {};
             fail(e.message === 'authentication required' ? (e.detail || e.message) : (e.message || ('HTTP ' + res.status)));
           });
         }).catch(function () { fail('Server unreachable.'); });
       });
-      input.focus();
+      if (params.get('step') === 'name') showPick();
+      else input.focus();
     })();
   </script>
 </body>

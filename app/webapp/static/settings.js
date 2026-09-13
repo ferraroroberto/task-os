@@ -57,6 +57,7 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
  */
 export function mountSettings(opts) {
   const els = {
+    accessCard: document.getElementById('accessCard'),
     accessClient: document.getElementById('accessClient'),
     accessRows: document.getElementById('accessRows'),
     signOutBtn: document.getElementById('signOutBtn'),
@@ -100,8 +101,8 @@ export function mountSettings(opts) {
     searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
-  // The two cards a deep link (`#settings/opener`, `#settings/search`) opens.
-  const DEEP_LINK_CARDS = { opener: els.folderCard, search: els.searchCard };
+  // The cards a deep link (`#settings/opener`, `#settings/search`, `#settings/access`) opens.
+  const DEEP_LINK_CARDS = { opener: els.folderCard, search: els.searchCard, access: els.accessCard };
 
   // ------------------------------------------------------ phone access card
   function accessRow(label, ok, text) {
@@ -113,15 +114,30 @@ export function mountSettings(opts) {
     return [dt, dd];
   }
 
-  function renderAccessCard(st) {
-    const client = { loopback: 'this PC', token: 'signed in', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
+  // Team mode (Step 12): a row only when it is on — who this browser writes
+  // as, and the way back to the pick-your-name step. `team` is GET /api/team's
+  // body, or an Error when that call failed (its own "unknown" state).
+  function teamRow(team) {
+    if (team instanceof Error) return accessRow('Team', false, 'unknown — ' + team.message);
+    if (!team || !team.enabled) return [];
+    const [dt, dd] = accessRow('Team', null, team.you ? 'you are ' + team.you + ' · ' : 'on — no name picked on this browser · ');
+    const change = document.createElement('a');
+    change.href = '/login?step=name&next=' + encodeURIComponent('/#settings/access');
+    change.textContent = team.you ? 'change name' : 'pick one';
+    dd.appendChild(change);
+    return [dt, dd];
+  }
+
+  function renderAccessCard(st, team) {
+    const client = { loopback: 'this PC', token: 'signed in', team: 'team member', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
     els.accessClient.textContent = client;
     els.accessRows.replaceChildren(
       ...accessRow('HTTPS', st.https, st.https ? 'on — Tailscale certificate' : 'off — plain HTTP (run scripts/gen_tailscale_cert.py)'),
       ...accessRow('Access token', st.auth.enabled, st.auth.enabled ? 'configured — other devices sign in at /login' : 'not set — only this PC can use the app (scripts/gen_token.py)'),
       ...accessRow('Password', null, st.auth.password ? 'set — accepted at /login' : 'not set (optional; scripts/set_password.py)'),
+      ...teamRow(team),
     );
-    els.signOutBtn.hidden = st.auth.client !== 'token';
+    els.signOutBtn.hidden = st.auth.client !== 'token' && st.auth.client !== 'team';
   }
 
   function renderAccessUnknown(message) {
@@ -265,8 +281,11 @@ export function mountSettings(opts) {
   // The card headers carry a state word (on · synced · indexed · off), never a count.
   async function refreshStatus() {
     try {
-      const body = await api('/api/status');
-      renderAccessCard(body);
+      const [body, team] = await Promise.all([
+        api('/api/status'),
+        api('/api/team').catch(function (err) { return err; }),
+      ]);
+      renderAccessCard(body, team);
       renderMirrorRow(els.statusMirror, body.mirror);
       renderBackupRow(els.statusBackup, body.backup);
       renderMirrorEventsRow(body.mirror).catch(function () {});

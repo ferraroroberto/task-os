@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from src.static_versioning import BuildInfo
 from src.tasks_repo import DEFAULT_ACTOR
+from src.team import NAME_COOKIE, member_from_cookie
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 STATIC_DIR = PROJECT_ROOT / "app" / "webapp" / "static"
@@ -24,15 +25,21 @@ ACTOR_HEADER = "X-Actor"
 
 
 def resolve_actor(request: Request, explicit: str | None = None) -> str:
-    """Who is acting: an explicit body field → the ``X-Actor`` header → the
-    first configured team member → ``"me"``."""
+    """Who is acting: an explicit body field → the ``X-Actor`` header → in
+    team mode, the name this browser picked (``src.team``) → the first
+    configured team member → ``"me"``."""
     if explicit and explicit.strip():
         return explicit.strip()
     header = request.headers.get(ACTOR_HEADER, "").strip()
     if header:
         return header
     config = getattr(request.app.state, "config", None)
-    people = getattr(getattr(config, "team", None), "people", None) or []
+    team = getattr(config, "team", None)
+    if team is not None:
+        picked = member_from_cookie(request.cookies.get(NAME_COOKIE), team)
+        if picked:
+            return picked
+    people = getattr(team, "people", None) or []
     return str(people[0]) if people else DEFAULT_ACTOR
 
 

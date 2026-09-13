@@ -15,6 +15,17 @@ Two classes of caller:
 No token configured (the committed sample) means **only loopback can use the
 app**: the gate is closed, not open, and startup says so loudly.
 
+**Team mode** (``team.enabled``, Step 12) adds one more way through the same
+gate and loosens nothing: ``/login`` also accepts the shared team password
+(``scripts/set_team_password.py``, the same PBKDF2 hash) and hands back a
+``taskos_team`` cookie — never the owner's token (it grants the same access to
+the app while it is valid, but it is not the bearer secret and cannot outlive
+a change of either secret). Its value is derived (HMAC of the team password hash keyed by
+the token), so rotating either one signs every teammate out, and with no token
+configured there is no team cookie either: the gate stays closed. A teammate
+must then pick a name (``src/team.py``) before any page loads. Team mode off =
+the team password and the team cookie are never consulted.
+
 What stays public on any client: the static assets (``/static/``, incl. the
 manifest + icons a phone needs *before* it can log in), ``/healthz``,
 ``/api/version`` (the build-identity contract), the ``/login`` page and
@@ -40,12 +51,15 @@ from urllib.parse import quote
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from src.config import AuthConfig
+from src.config import AuthConfig, TeamConfig
+from src.team import NAME_COOKIE, member_from_cookie
 
 logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "taskos_token"
+TEAM_COOKIE = "taskos_team"
 COOKIE_MAX_AGE = 90 * 24 * 3600  # 90 days — one login per phone per quarter
+_TEAM_SESSION_CONTEXT = b"task-os team session\x00"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 PUBLIC_PREFIXES = ("/static/",)
@@ -109,25 +123,47 @@ def token_matches(presented: str | None, auth: AuthConfig) -> bool:
     return hmac.compare_digest(presented, auth.token)
 
 
-def check_secret(secret: str, auth: AuthConfig) -> str | None:
-    """What ``/login`` accepts: the token itself or the optional password.
+def team_session(auth: AuthConfig, team: TeamConfig) -> str | None:
+    """The ``taskos_team`` cookie value, or ``None`` when team sign-in is off.
 
-    Returns ``"token"`` / ``"password"`` on success, ``None`` when refused.
+    Derived, never stored: HMAC-SHA256 of the team password hash keyed by the
+    bearer token. Needs all three of team mode on, a team password and a token.
+    """
+    if not (team.enabled and team.password_hash and auth.token):
+        return None
+    mac = hmac.new(auth.token.encode("utf-8"), _TEAM_SESSION_CONTEXT + team.password_hash.encode("utf-8"), hashlib.sha256)
+    return base64.urlsafe_b64encode(mac.digest()).decode("ascii").rstrip("=")
+
+
+def team_session_matches(presented: str | None, auth: AuthConfig, team: TeamConfig) -> bool:
+    expected = team_session(auth, team)
+    if not presented or not expected:
+        return False
+    return hmac.compare_digest(presented, expected)
+
+
+def check_secret(secret: str, auth: AuthConfig, team: TeamConfig | None = None) -> str | None:
+    """What ``/login`` accepts: the token itself, the optional password, or —
+    in team mode — the shared team password.
+
+    Returns ``"token"`` / ``"password"`` / ``"team"`` on success, ``None`` when refused.
     """
     if token_matches(secret, auth):
         return "token"
     if auth.password_hash and verify_password(secret, auth.password_hash):
         return "password"
+    if team is not None and team_session(auth, team) and verify_password(secret, team.password_hash):
+        return "team"
     return None
 
 
-def _cookie_value(headers: list[tuple[bytes, bytes]]) -> str | None:
+def _cookie_value(headers: list[tuple[bytes, bytes]], cookie: str = COOKIE_NAME) -> str | None:
     for name, value in headers:
         if name != b"cookie":
             continue
         for part in value.decode("latin-1").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == COOKIE_NAME:
+            if k == cookie:
                 return v.strip()
     return None
 
@@ -141,9 +177,10 @@ def _bearer_value(headers: list[tuple[bytes, bytes]]) -> str | None:
     return None
 
 
-def classify(scope: Scope, auth: AuthConfig) -> str:
-    """``"loopback"`` · ``"token"`` (bearer header or cookie) · ``"public"``
-    (an exempt path) · ``"denied"``."""
+def classify(scope: Scope, auth: AuthConfig, team: TeamConfig | None = None) -> str:
+    """``"loopback"`` · ``"token"`` (bearer header or cookie) · ``"team"`` (the
+    team sign-in cookie, team mode only) · ``"public"`` (an exempt path) ·
+    ``"denied"``."""
     client = scope.get("client")
     host = client[0] if client else ""
     if is_loopback(host):
@@ -152,30 +189,52 @@ def classify(scope: Scope, auth: AuthConfig) -> str:
     headers = scope.get("headers", [])
     if token_matches(_bearer_value(headers), auth) or token_matches(_cookie_value(headers), auth):
         return "token"
+    if team is not None and team_session_matches(_cookie_value(headers, TEAM_COOKIE), auth, team):
+        return "team"
     if is_public_path(path):
         return "public"
     return "denied"
 
 
+def _login_redirect(scope: Scope, extra: str = "") -> RedirectResponse:
+    path: str = scope.get("path", "")
+    query = scope.get("query_string", b"").decode("latin-1")
+    target = path + ("?" + query if query else "")
+    return RedirectResponse(f"/login?{extra}next={quote(target, safe='')}", status_code=302)
+
+
 class AuthMiddleware:
     """The one auth choke point (see the module docstring)."""
 
-    def __init__(self, app: ASGIApp, get_auth: Callable[[], AuthConfig]) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        get_auth: Callable[[], AuthConfig],
+        get_team: Callable[[], TeamConfig] = TeamConfig,
+    ) -> None:
         self.app = app
         self._get_auth = get_auth
+        self._get_team = get_team
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         auth = self._get_auth()
-        verdict = classify(scope, auth)
+        team = self._get_team()
+        verdict = classify(scope, auth, team)
         scope.setdefault("state", {})["auth"] = verdict
+        path: str = scope.get("path", "")
+        if verdict == "team" and not path.startswith("/api/") and not is_public_path(path):
+            # A teammate names themselves before any page loads, so nothing
+            # they write is signed with the owner's default name.
+            if member_from_cookie(_cookie_value(scope.get("headers", []), NAME_COOKIE), team) is None:
+                await _login_redirect(scope, "step=name&")(scope, receive, send)
+                return
         if verdict != "denied":
             await self.app(scope, receive, send)
             return
 
-        path: str = scope.get("path", "")
         client = scope.get("client")
         host = client[0] if client else "?"
         response: Any
@@ -188,7 +247,5 @@ class AuthMiddleware:
                 headers={"WWW-Authenticate": 'Bearer realm="task-os"'},
             )
         else:
-            query = scope.get("query_string", b"").decode("latin-1")
-            target = path + ("?" + query if query else "")
-            response = RedirectResponse(f"/login?next={quote(target, safe='')}", status_code=302)
+            response = _login_redirect(scope)
         await response(scope, receive, send)

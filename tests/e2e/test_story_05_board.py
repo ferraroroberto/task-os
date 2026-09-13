@@ -123,7 +123,13 @@ def _open_filters(page: Page, host_id: str):
 
 # ----------------------------------------------------------- desktop leg
 
-def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) -> None:
+def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Playwright, shots: Path) -> None:
+    """The desktop walk, then the phone leg on the same instance.
+
+    One collected test, not two: the phone leg was its own test function until
+    Step 12's team story needed a slot under the e2e budget (CLAUDE.md), so it
+    is folded in here — same steps, same order, same shots.
+    """
     base = seeded_webapp
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
@@ -427,6 +433,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         assert errors == [], errors
     finally:
         context.close()
+    _walk_phone_today_landing_and_board_carousel(base, playwright, shots)
 
 
 def _clear_toasts(page: Page) -> None:
@@ -808,11 +815,10 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneTable [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
 
 
-def test_phone_today_landing_and_board_carousel(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
+def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
     one-column scroll-snap carousel with the count strip, 44px targets (the
     row's status select is the deliberate compact exception)."""
-    base = seeded_webapp
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
