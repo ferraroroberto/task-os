@@ -1052,9 +1052,12 @@ export function createDrawer(el, opts) {
       linkForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const v = refInput.value.trim();
-        const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(v) || /(?:github|gitlab)\.com\/([^/\s]+\/[^/\s#?]+)\/(?:-\/)?issues\/(\d+)/.exec(v);
+        // GitLab paths nest (group/sub-group/project) and hosts self-host, so the
+        // path may have more than two segments and the URL any host; a URL
+        // with GitLab's `/-/issues/` separator is a GitLab issue.
+        const m = /^([\w.-]+(?:\/[\w.-]+)+)#(\d+)$/.exec(v) || /^(?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+(?::\d+)?\/([^\s#?]+?)\/(?:-\/)?issues\/(\d+)/.exec(v);
         if (!m) { toast('Use owner/repo#N or the issue URL', 'error'); refInput.focus(); return; }
-        const provider = /gitlab\.com/.test(v) ? 'gitlab' : ((st && st.provider) || 'github');
+        const provider = /gitlab\.com|\/-\/issues\//.test(v) ? 'gitlab' : (/github\.com\//.test(v) ? 'github' : ((st && st.provider) || 'github'));
         try {
           await api('/api/tasks/' + t.id + '/issue', { method: 'PUT', body: { provider: provider, repo: m[1], number: Number(m[2]) } });
           toast('Linked ' + m[1] + '#' + m[2], 'success');

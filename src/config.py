@@ -55,10 +55,15 @@ def unresolved_placeholders(value: str) -> list[str]:
 
 @dataclass(frozen=True)
 class IssuesConfig:
+    """``provider`` github | gitlab; ``owner`` the GitHub owner or the GitLab
+    group path; ``host`` the GitLab hostname (blank = gitlab.com — GitHub
+    ignores it)."""
+
     provider: str = "github"
     owner: str = "ferraroroberto"
     assignee: str = "@me"
     sync_minutes: int = 10
+    host: str = ""
 
 
 @dataclass(frozen=True)
@@ -397,6 +402,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             owner=str(issues.get("owner", "")),
             assignee=str(issues.get("assignee", "@me")),
             sync_minutes=int(issues.get("sync_minutes", 10) or 10),
+            host=str(issues.get("host", "") or ""),
         ),
         placeholders=placeholders,
         web_roots=web_roots,

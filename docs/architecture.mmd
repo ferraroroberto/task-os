@@ -9,7 +9,7 @@ flowchart LR
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
-    forge["GitHub (via gh CLI)<br/>issues assigned to me"]
+    forge["GitHub (via gh CLI) · GitLab (via glab api)<br/>issues assigned to me"]
     radar["whatsapp-radar · src/task_os/client.py<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
     opener["per-PC opener · opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
   end
@@ -38,7 +38,7 @@ flowchart LR
     mirror["mirror.py<br/>render/parse · export (debounced)<br/>import watcher (2 s) · conflict/rejected → mirror_events (#84)"]
     backup["backup.py<br/>run_backup (sqlite backup API)<br/>BackupScheduler daily 03:00 · keep 30"]
     issync["issue_sync.py<br/>sync_once: list → new coding tasks (inbox)<br/>title follows · closed → done · reopened → todo<br/>issue_from_task: task → new issue (route + CLI)<br/>IssueSyncService: 10 s after start, every sync_minutes"]
-    issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>fake.py (tests, e2e) · get_provider(config)"]
+    issues["issues/<br/>base.py IssueProvider · IssueInfo<br/>github.py (gh search/view/create)<br/>gitlab.py (glab api: group issues/issue/POST)<br/>fake.py (tests, e2e) · get_provider(config)"]
     placeholders["placeholders.py<br/>resolve(ref) · to_ref(path) · opener_url"]
     folderidx["folder_index.py<br/>FolderIndexService: roots · reindex (24 h) · search<br/>vendor/foldersearcher_core.py (verbatim)"]
     openerinfo["opener.py<br/>install.txt commands · opener.env template"]
@@ -148,7 +148,7 @@ flowchart LR
   lifespan --> issync
   lifespan --> capture
   issync -->|"list_open_assigned · get"| issues
-  issues -->|"gh subprocess"| forge
+  issues -->|"gh / glab subprocess"| forge
   issync -->|"create_task · update_task(actor=sync)<br/>set_issue_ref · touch_issue_ref"| repo
   cli -->|"issues sync · issue create (app down)"| issync
   radar -->|"bearer token"| authmw
