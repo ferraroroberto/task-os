@@ -675,6 +675,38 @@ def table_view(page: Page) -> None:
     _table_pane_view(page, "table", "#paneTable #tableHost")
 
 
+#: Chromium switches every capture needs. Only Chromium: WebKit and Firefox
+#: reject unknown switches at launch.
+_CHROMIUM_CAPTURE_ARGS = ("--disable-partial-raster",)
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args: dict, browser_name: str) -> dict:
+    """Rasterise every frame whole, so one DOM paints one set of pixels (#234).
+
+    With partial raster on, Chromium updates a changed region of an existing
+    tile by re-rastering just that rect, clipped, over the pixels already
+    there. A rounded control corner then comes out of whichever raster last
+    covered it, which depends on the order the page's async paints happened
+    to land in. Story 20's dark drawer showed exactly that: identical
+    layout in every run (155 boxes, same fractional geometry), yet three
+    distinct files across 44 runs (34 / 2 / 8), ~100 px apart at delta 3,
+    all on rounded control corners. That sat one level outside the gallery's
+    raster band, so the baseline gate went red on about one run in four. A
+    forced repaint did not settle it (it only moved which state won). With
+    this switch, 14 of 14 runs produced one byte-identical file, and the
+    first capture on a page stopped differing from the second.
+
+    The switch lives here, at the one Chromium launch every story shares, so
+    no story can capture without it. WebKit legs launch their own browser and
+    are untouched.
+    """
+    if browser_name != "chromium":
+        return browser_type_launch_args
+    args = [*browser_type_launch_args.get("args", []), *_CHROMIUM_CAPTURE_ARGS]
+    return {**browser_type_launch_args, "args": args}
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _pinned_browser_clock() -> Iterator[None]:
     """Every browser context this suite opens renders on ``E2E_NOW`` (#225).
