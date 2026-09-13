@@ -15,7 +15,8 @@ Rules enforced here (plan §04):
   field, old → new;
 - ``done()`` on a recurring task rolls the *same* task's due forward to the
   next occurrence after both that due and today (``src.dates.next_due``,
-  honouring the fixed-day ``recurrence_anchor``) and logs the completion; a
+  honouring the fixed-day ``recurrence_anchor`` and the every-N
+  ``recurrence_interval``) and logs the completion; a
   non-recurring task becomes ``done`` with ``done_at``; the roll never
   touches ``starts``. ``done_at`` is the *closed-at* stamp (#102): entering
   ``done`` or ``cancelled`` sets it, reopening clears it — the done journal
@@ -74,7 +75,7 @@ from typing import Any
 # `repo.use_clock(...)`, and `src.clock` owns the process-wide `TASKOS_CLOCK`
 # pin the e2e instances boot with (#134).
 from src.clock import now_iso, today, use_clock  # noqa: F401
-from src.dates import AnchorError, next_due, normalise_anchor
+from src.dates import AnchorError, IntervalError, next_due, normalise_anchor, normalise_interval
 from src.schema import (
     CAPTURE_STATUS,
     CLOSED_SQL,
@@ -99,7 +100,8 @@ DEFAULT_ACTOR = "me"
 # :func:`plan_reorder`) — never PATCHed, never activity-logged, never mirrored.
 _TASK_FIELDS = (
     "parent_id", "code", "title", "type", "status", "priority", "due", "starts", "recurrence",
-    "recurrence_anchor", "planned_on", "description", "folder_ref", "next_action", "person_id",
+    "recurrence_anchor", "recurrence_interval", "planned_on", "description", "folder_ref",
+    "next_action", "person_id",
 )
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
 DATE_FIELDS = ("due", "starts", "planned_on")
@@ -233,6 +235,27 @@ def _carry_anchor(recurrence: str | None, value: Any) -> str | None:
     try:
         return normalise_anchor(recurrence, value)
     except AnchorError:
+        return None
+
+
+def _validate_interval(recurrence: str | None, value: Any) -> int | None:
+    """The stored "every N" for ``recurrence``; a bad one is a 422 (#229)."""
+    try:
+        return normalise_interval(recurrence, value)
+    except IntervalError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _carry_interval(recurrence: str | None, value: Any) -> int | None:
+    """The stored interval kept across a cadence change — :func:`_carry_anchor`'s twin.
+
+    Every cadence takes an interval, so it survives a switch between them
+    (the drawer shows "every 7" right beside the new cadence); only clearing
+    Repeat drops it, since a task that does not repeat has nothing to count.
+    """
+    try:
+        return normalise_interval(recurrence, value)
+    except IntervalError:
         return None
 
 
@@ -509,8 +532,8 @@ def create_task(
     values: dict[str, Any] = {
         "parent_id": None, "code": None, "type": "task", "status": DEFAULT_STATUS,
         "priority": "none", "due": None, "starts": None, "recurrence": None,
-        "recurrence_anchor": None, "planned_on": None, "description": "",
-        "folder_ref": None, "next_action": None, "person_id": None,
+        "recurrence_anchor": None, "recurrence_interval": None, "planned_on": None,
+        "description": "", "folder_ref": None, "next_action": None, "person_id": None,
     }
     values.update({k: v for k, v in fields.items() if k != "title"})
     values["title"] = title
@@ -525,6 +548,9 @@ def create_task(
     _validate_enum("recurrence", values["recurrence"], nullable=True)
     values["recurrence_anchor"] = _validate_anchor(
         values["recurrence"], values["recurrence_anchor"]
+    )
+    values["recurrence_interval"] = _validate_interval(
+        values["recurrence"], values["recurrence_interval"]
     )
     for f in DATE_FIELDS:
         values[f] = _validate_date(values[f], f)
@@ -542,10 +568,12 @@ def create_task(
     cur = conn.execute(
         """
         INSERT INTO tasks(parent_id, code, title, type, status, priority, due, starts, recurrence,
-                          recurrence_anchor, planned_on, plan_order, description, folder_ref,
-                          next_action, person_id, created_by, created_at, updated_at, done_at)
+                          recurrence_anchor, recurrence_interval, planned_on, plan_order,
+                          description, folder_ref, next_action, person_id, created_by,
+                          created_at, updated_at, done_at)
         VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :starts, :recurrence,
-                :recurrence_anchor, :planned_on, :plan_order, :description, :folder_ref,
+                :recurrence_anchor, :recurrence_interval, :planned_on, :plan_order, :description,
+                :folder_ref,
                 :next_action, :person_id, :created_by, :ts, :ts, :done_at)
         """,
         {
@@ -627,6 +655,18 @@ def update_task(
             sets["recurrence_anchor"] = anchor
         else:
             sets.pop("recurrence_anchor", None)
+    # Interval (#229) — the same end-state resolution as the anchor above.
+    if "recurrence" in sets or "recurrence_interval" in changes:
+        cadence = sets.get("recurrence", current["recurrence"])
+        interval = (
+            _validate_interval(cadence, changes["recurrence_interval"])
+            if "recurrence_interval" in changes
+            else _carry_interval(cadence, current["recurrence_interval"])
+        )
+        if interval != current["recurrence_interval"]:
+            sets["recurrence_interval"] = interval
+        else:
+            sets.pop("recurrence_interval", None)
 
     if "type" in sets:
         has_ref = conn.execute(
@@ -914,6 +954,7 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
             base,
             current["recurrence"],
             current["recurrence_anchor"],
+            current["recurrence_interval"],
             today=today(),
         ).isoformat()
         ts = now_iso()

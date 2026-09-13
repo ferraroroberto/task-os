@@ -7,7 +7,8 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
 
     ---                       YAML frontmatter (flat scalars + a links list)
     id: 42 · external_id · parent · title · code · type · status · priority
-    due · starts · planned_on · recurrence · recurrence_anchor · person (name)
+    due · starts · planned_on · recurrence · recurrence_anchor · recurrence_interval
+    person (name)
     folder_ref · next_action
     blocked_by: [id, id]     the tasks that must close first (#100)
     links: [{url, label, kind}] · created_at · updated_at · done_at · exported_at
@@ -33,7 +34,8 @@ differs from the recorded one, parses them and applies:
 - changed **scalar frontmatter fields** through the repo with ``actor="md"``
   (so activity rows are written like any other change) — ``title``, ``code``,
   ``status``, ``priority``, ``due``, ``starts`` and ``planned_on`` (natural
-  phrases welcome), ``recurrence`` + ``recurrence_anchor``, ``person`` (by
+  phrases welcome), ``recurrence`` + ``recurrence_anchor`` +
+  ``recurrence_interval``, ``person`` (by
   name), ``folder_ref``, ``next_action``, ``parent``; and the
   ``## Description`` body. ``plan_order``
   is deliberately not mirrored (#89): it is presentation-level ordering, and
@@ -108,7 +110,7 @@ from typing import Any
 
 from src import tasks_repo as repo
 from src.config import AppConfig, resolve_placeholders, unresolved_placeholders
-from src.dates import DateParseError, parse_date
+from src.dates import DateParseError, IntervalError, parse_date, parse_interval
 from src.db import DB_PATH_ENV, connect
 
 logger = logging.getLogger(__name__)
@@ -130,8 +132,8 @@ _PLAIN_SAFE_RE = re.compile(r"^[A-Za-z0-9_./ ,+():@%\u00c0-\uffff-]*$")
 #: Frontmatter keys, in the order they are written.
 FRONTMATTER_KEYS = (
     "id", "external_id", "parent", "title", "code", "type", "status", "priority", "due",
-    "starts", "planned_on", "recurrence", "recurrence_anchor", "person", "folder_ref",
-    "next_action", "blocked_by", "links",
+    "starts", "planned_on", "recurrence", "recurrence_anchor", "recurrence_interval", "person",
+    "folder_ref", "next_action", "blocked_by", "links",
     "created_at", "updated_at", "done_at", "exported_at",
 )
 #: Keys the import applies (everything else in the frontmatter is read-only).
@@ -139,7 +141,7 @@ FRONTMATTER_KEYS = (
 #: :meth:`Mirror._apply_blocked_by`, not the generic per-field loop below.
 IMPORTABLE_KEYS = (
     "title", "code", "status", "priority", "due", "starts", "planned_on", "recurrence",
-    "recurrence_anchor", "person", "folder_ref", "next_action", "parent",
+    "recurrence_anchor", "recurrence_interval", "person", "folder_ref", "next_action", "parent",
 )
 #: file key → activity field name (the conflict baseline lookup).
 _ACTIVITY_FIELD = {"parent": "parent", "person": "person_id"}
@@ -228,6 +230,7 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
         "planned_on": task.get("planned_on"),
         "recurrence": task.get("recurrence"),
         "recurrence_anchor": task.get("recurrence_anchor"),
+        "recurrence_interval": task.get("recurrence_interval"),
         "person": (task.get("person") or {}).get("name"),
         "folder_ref": task.get("folder_ref"),
         "next_action": task.get("next_action"),
@@ -708,6 +711,11 @@ class Mirror:
                 return int(raw)
             except (TypeError, ValueError) as exc:
                 raise repo.ValidationError(f"parent must be a task id (got {raw!r})") from exc
+        if key == "recurrence_interval":
+            try:
+                return parse_interval(raw)  # the repo checks it against the cadence
+            except IntervalError as exc:
+                raise repo.ValidationError(str(exc)) from exc
         if key in ("status", "priority", "recurrence", "recurrence_anchor"):
             return str(raw).strip().lower()
         return str(raw).strip()

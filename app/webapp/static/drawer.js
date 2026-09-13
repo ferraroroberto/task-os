@@ -3,8 +3,8 @@
  * A right-hand side panel on desktop (>= 1024px; the content shrinks so the
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
- * title → fields row (status, priority, due, starts, recurrence + its fixed-day
- * anchor when the cadence takes one, person, code,
+ * title → fields row (status, priority, due, starts, recurrence + its every-N
+ * interval + its fixed-day anchor when the cadence takes one, person, code,
  * move-to — re-parent without the tree drag, the phone's path) →
  * folder (the ref as an opener chip + resolved path, an editor that folds a
  * pasted absolute path onto the placeholders, a picker over the folder
@@ -30,10 +30,11 @@ import { icon } from './_vendored/icons/icons.js';
 import { confirmDialog } from './confirm.js';
 import { duePicker } from './dueinput.js';
 import {
-  PRIORITIES, RECURRENCES, aiChip, anchorOptions, chipFor, fmtTs, isDeferred, issueChip,
+  PRIORITIES, aiChip, chipFor, fmtTs, isDeferred, issueChip,
   linkKind, linkify, providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
+import { RECURRENCES, anchorOptions, intervalUnit } from './recurrence.js';
 import { statusOptions } from './rows.js';
 import { toast } from './toast.js';
 
@@ -103,6 +104,50 @@ export function createDrawer(el, opts) {
       patch(body);
     });
     wrap.append(l, sel);
+    return wrap;
+  }
+
+  /** How many cadences a recurrence waits between occurrences (#229) — "Every
+   *  [7] weeks", between Repeat and On so the three read as one sentence.
+   *
+   *  Empty (or 1) is every cadence and PATCHes null; the unit follows the
+   *  cadence. A digit keypad on the phone (`inputmode`) rather than
+   *  `type=number`, whose desktop spinner and wheel-scrolling would change the
+   *  value by accident. A bad value is the server's 422, toasted, and the
+   *  refresh puts the stored interval back.
+   */
+  function intervalField(t) {
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    const l = document.createElement('span');
+    l.className = 'field-label';
+    l.textContent = 'Every';
+    const row = document.createElement('span');
+    row.className = 'field-interval-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]*';
+    input.className = 'input-native field-control';
+    input.dataset.field = 'recurrence_interval';
+    input.placeholder = '1';
+    const stored = t.recurrence_interval ? String(t.recurrence_interval) : '';
+    input.value = stored;
+    const unit = document.createElement('span');
+    unit.className = 'field-unit';
+    unit.textContent = intervalUnit(t.recurrence);
+    function commit() {
+      const v = input.value.trim();
+      if (v === stored || (v === '1' && stored === '')) { input.value = stored; return; }
+      patch({ recurrence_interval: v === '' || v === '1' ? null : (/^\d+$/.test(v) ? Number(v) : v) });
+    }
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+      if (ev.key === 'Escape') { input.value = stored; input.blur(); }
+    });
+    input.addEventListener('blur', commit);
+    row.append(input, unit);
+    wrap.append(l, row);
     return wrap;
   }
 
@@ -359,11 +404,13 @@ export function createDrawer(el, opts) {
     // Starts sits right after Due — the two dates of a task, read together.
     fields.appendChild(dateField(t, 'starts', 'Starts',
       isDeferred(t) ? relDue(t.starts).text : 'passed'));
-    // Repeat is a composer (#112): the cadence, then — only for the cadences
-    // that can carry one — the fixed day it lands on. Switching the cadence
-    // re-renders, and the server has already dropped an anchor the new
-    // cadence cannot hold, so the second select never shows a stale day.
+    // Repeat is a composer (#112): the cadence, then — once there is one — how
+    // many of it to wait (#229), then — only for the cadences that can carry
+    // one — the fixed day it lands on. Switching the cadence re-renders, and
+    // the server has already dropped an anchor the new cadence cannot hold, so
+    // the On select never shows a stale day.
     fields.appendChild(selectField('Repeat', 'recurrence', RECURRENCES, t.recurrence || '', function (v) { return v || 'never'; }));
+    if (t.recurrence) fields.appendChild(intervalField(t));
     const anchorGroups = anchorOptions(t.recurrence);
     if (anchorGroups.length) fields.appendChild(anchorField(t, anchorGroups));
     const people = [{ id: '', name: '—' }].concat(opts.people() || []);

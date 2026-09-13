@@ -125,6 +125,21 @@ def test_story_02_add_nest_comment_tree_due_show(run: Runner) -> None:
     assert (show["activity"][0]["field"], show["activity"][0]["old_value"], show["activity"][0]["new_value"]) == ("due", None, "2026-09-01")
 
 
+def test_add_every_seven_weeks_on_saturday_and_roll_it(run: Runner) -> None:
+    """#229 over both backends: the flag, the label, and a completion 7 weeks on."""
+    code, out, _ = run("add", "Treat clothes against moths", "--due", "2099-09-05",
+                       "--recurrence", "weekly", "--recurrence-anchor", "sat", "--recurrence-interval", "7")
+    assert code == 0
+    assert out.strip() == "added #1  Treat clothes against moths  (due 2099-09-05, every 7 weeks on Saturday)"
+    code, out, _ = run("done", "1")
+    assert code == 0
+    assert out.strip() == "#1 done — recurring every 7 weeks on Saturday, next due 2099-10-24"
+    code, out, _ = run("show", "1", "--json")
+    assert _json(out)["recurrence_interval"] == 7
+    code, _, err = run("add", "Bad", "--recurrence", "daily", "--recurrence-interval", "0")
+    assert code != 0 and "interval" in err
+
+
 def test_natural_dates_and_clear(run: Runner) -> None:
     today = date.today()
     code, out, _ = run("add", "Soon", "--due", "tomorrow", "--json")

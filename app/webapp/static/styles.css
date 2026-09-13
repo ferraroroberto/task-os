@@ -1413,6 +1413,10 @@ a.chip:hover { text-decoration: underline; }
 .field-due-btn { width: var(--control-h); height: var(--control-h); border-radius: var(--radius-md); color: var(--muted); }
 .field-due-btn:hover { color: var(--accent); }
 .field-due-row .due-date.is-visible { height: var(--control-h); }
+/* Every: the interval input + its unit ("weeks"), read as one phrase (#229). */
+.field-interval-row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.field-interval-row .field-control { flex: 1 1 auto; }
+.field-unit { color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
 /* Section headings: the app's title font (vendored card-title metrics) with
    the section glyph — never uppercase (#46). */
 .drawer-section { padding: 14px 0 6px; }

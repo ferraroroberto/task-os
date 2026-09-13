@@ -69,6 +69,12 @@ Version history:
        deleted. A second graph, so its cycle guard (``src/tasks_repo.py``)
        walks ``task_blocks`` alone — a blocks-edge may cross parent subtrees
        freely, unlike ``move()``'s parent-tree guard.
+    16 tasks.recurrence_interval (INTEGER, nullable)                (issue #229)
+       — repeat every N cadences ("every 7 weeks on Saturday"), beside the
+       cadence and its anchor for v9's reason. NULL = every cadence, so every
+       existing recurring task rolls exactly as before. Validation (NULL or
+       2–999) and the phase rule for an anchored interval live in
+       ``src/dates.py``.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -478,10 +484,19 @@ CREATE INDEX idx_archive_corrections_item ON archive_corrections(item_id);
 ALTER TABLE archive_runs ADD COLUMN agreement REAL;
 """
 
+# tasks.recurrence_interval (#229) — the "every N" beside the cadence, a plain
+# nullable column for exactly v9's reason: folding it into ``tasks.recurrence``
+# would widen that CHECK, which means rebuilding ``tasks`` and firing its
+# ON DELETE CASCADEs. NULL = every cadence, so no existing row changes meaning
+# and none is touched. No index — carried on the row, never a predicate.
+_V16 = """
+ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER;
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13, 14: _V14, 15: _V15,
+    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16,
 }
 
 #: The version a freshly migrated database carries.

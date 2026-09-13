@@ -44,6 +44,13 @@ Its shots:
     docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
     docs/screenshots/story-15-plan-my-day-6-desktop.png   (dark)
     docs/screenshots/story-15-plan-my-day-7-phone.png
+
+**Story 25 — repeat every N (#229)** rides here too, as
+``_walk_recurrence_interval`` right after the story-17 anchor walk it extends
+(the same drawer, the same seeded task) plus a phone assertion. Its shots:
+
+    docs/screenshots/story-25-recurrence-interval-1-desktop.png
+    docs/screenshots/story-25-recurrence-interval-2-phone.png
 """
 
 from __future__ import annotations
@@ -332,6 +339,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 
         # --------------------------------------- recurrence anchor (#112) ----
         _walk_recurrence_anchor(page, base, shots)
+
+        # ------------------------------------- recurrence interval (#229) ----
+        _walk_recurrence_interval(page, base, shots)
     finally:
         context.close()
 
@@ -402,6 +412,57 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     # and later stories read the same DB; one synchronous call cannot race.
     page.request.patch(f"{base}/api/tasks/{review['id']}", data={
         "recurrence": "weekly", "recurrence_anchor": "fri", "due": review["due"],
+    })
+
+
+def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
+    """#229 — Repeat every N: "every 7 weeks on Saturday".
+
+    The seed's "Weekly review" is due on a Saturday. The drawer's Every field
+    takes 7 and the On picker Saturday; the row behind the drawer reads the
+    composed label, and completing the task lands exactly 7 weeks on — a
+    Saturday, never the coming one. Restored over the API afterwards, like
+    the anchor walk before it.
+
+    Screenshot: docs/screenshots/story-25-recurrence-interval-1-desktop.png
+    """
+    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
+    task_url = f"{base}/api/tasks/{review['id']}"
+    page.goto(f"{base}/")
+    page.goto(f"{base}/#task/{review['id']}")
+    drawer = page.locator("#taskDrawer")
+    every = drawer.locator("input[data-field='recurrence_interval']")
+    expect(every).to_have_value("")
+    expect(drawer.locator(".field-unit")).to_have_text("weeks")
+
+    def patched(r) -> bool:  # noqa: ANN001 — a Playwright Response
+        return r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{review['id']}")
+
+    every.fill("7")
+    with page.expect_response(patched) as resp:
+        every.press("Enter")
+    assert resp.value.json()["recurrence_interval"] == 7
+    with page.expect_response(patched) as resp:
+        drawer.locator("select[data-field='recurrence_anchor']").select_option("sat")
+    assert resp.value.json()["recurrence_anchor"] == "sat"
+    # the re-rendered list behind the drawer speaks the same words the CLI prints
+    label = "'every 7 weeks on Saturday'"
+    expect(page.locator(f".trow-recur[title={label}], .due-recur[title={label}]").first).to_be_attached()
+    expect(every).to_have_value("7")
+    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    shot(page, shots / "story-25-recurrence-interval-1-desktop.png")
+
+    old_due = date.fromisoformat(review["due"])
+    assert old_due.weekday() == 5, f"the seed's review is due {old_due:%A}, the walk expects a Saturday"
+    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
+    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
+    rolled = date.fromisoformat(page.locator("#taskDrawer input[data-field='due']").input_value())
+    assert rolled == old_due + timedelta(weeks=7), f"rolled to {rolled}, expected 7 weeks after {old_due}"
+    assert page.request.get(task_url).json()["recurrence_interval"] == 7
+
+    page.request.patch(task_url, data={
+        "recurrence": "weekly", "recurrence_anchor": "fri", "recurrence_interval": None,
+        "due": review["due"],
     })
 
 
@@ -845,6 +906,29 @@ def test_phone_table_cards_and_drawer_sheet(seeded_webapp: str, playwright: Play
         assert_min_target(plan.locator(".plan-unplan"))
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-15-plan-my-day-7-phone.png")
+
+        # --------------------------------------------- story 25 (#229) ----
+        # "Every [7] weeks" on the phone the PWA lives on: the interval input
+        # is a real touch target with a digit keypad, beside its unit, and the
+        # Repeat composer never pushes the sheet sideways.
+        review = _get(base, "/api/tasks?q=Weekly%20review")["items"][0]
+        task_url = f"{base}/api/tasks/{review['id']}"
+        page.request.patch(task_url, data={"recurrence_anchor": "sat", "recurrence_interval": 7})
+        page.goto(f"{base}/#task/{review['id']}")
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+        every = drawer.locator("input[data-field='recurrence_interval']")
+        expect(every).to_have_value("7")
+        expect(every).to_have_attribute("inputmode", "numeric")
+        expect(drawer.locator(".field-unit")).to_have_text("weeks")
+        assert_min_target(every)
+        assert_no_overlap(drawer.locator("select[data-field='recurrence'], "
+                                         "input[data-field='recurrence_interval'], "
+                                         "select[data-field='recurrence_anchor']"))
+        every.scroll_into_view_if_needed()
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-25-recurrence-interval-2-phone.png")
+        page.request.patch(task_url, data={"recurrence_anchor": "fri", "recurrence_interval": None})
         context.close()
     finally:
         wk.close()
