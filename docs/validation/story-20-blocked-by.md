@@ -29,4 +29,6 @@ verified (e2e walk on the seeded instance, screenshots read back, both themes re
 
 **2026-09-06 (#134):** shot 1 as first committed was a **blank Board** — the walk asserted "no Release v0.2 row" before the pane had rendered anything, so the absence proved nothing and the capture caught the empty frame. The step now waits for the blocker's own row to be visible first and scopes the absence to `#paneBoard` (the Tree legitimately carries that row, step 2), and the shot has been recaptured against a populated Board.
 
+**2026-09-13 (#234):** shot 5 was bistable. Its layout was identical in every run, yet Chromium's partial raster left the drawer's rounded control corners in one of three renderings (44 isolated runs: 34 / 2 / 8), about 100 px apart at delta 3, one level outside the gallery's raster band. The suite now launches Chromium with `--disable-partial-raster`, which collapses it to one rendering; that rendering is 154 px at delta 3 from the old file, so shot 5 was re-baselined once, deliberately. No other shot was re-baselined.
+
 **Deliberate limits (from the issue):** edges only, no ordering/critical-path view, no auto-surfaced "next action" beyond the hide itself, no cross-project rollups, no unblock notification.
