@@ -579,7 +579,15 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
     tap_planned = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
     desk_planned = _trow(page, "Look into a standing desk", "#paneToday .plan-list")
-    tap_planned.drag_to(desk_planned)
+    # The rows swap in the DOM while the drag is still over them (`dragover`),
+    # but the new order is POSTed only on `dragend`, so the DOM matching says
+    # nothing yet about the server. Wait for the write itself before reading
+    # it back (#236: the read below once returned the old order).
+    def reordered(r) -> bool:  # noqa: ANN001 — a Playwright Response
+        return r.request.method == "POST" and r.url.endswith("/api/plan/reorder")
+
+    with page.expect_response(reordered):
+        tap_planned.drag_to(desk_planned)
     expect(page.locator("#paneToday .plan-list .trow .trow-title").first).to_have_text("Fix leaking tap")
     api_plan = _get(base, "/api/today")["plan"]
     assert [t["title"] for t in api_plan["items"]] == ["Fix leaking tap", "Look into a standing desk"]
