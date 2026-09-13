@@ -59,6 +59,7 @@ from tests.e2e.conftest import (
     _post,
     _terminate,
     e2e_workdir,
+    hold_toasts,
     shot,
 )
 
@@ -205,6 +206,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         "el => el.scrollWidth > el.clientWidth || getComputedStyle(el).textOverflow === 'ellipsis'")
     assert_no_horizontal_overflow(page)
     field = drawer.locator("#drawerFolder")
+    hold_toasts(page)                  # shot 5 frames this step's toast and the next one's
     field.fill(str(inst.od / "admin" / "car"))                              # backslashes, absolute
     field.press("Enter")
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fadmin%2Fcar")
