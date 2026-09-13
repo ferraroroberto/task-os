@@ -193,7 +193,7 @@ html, body {
 }
 @media (pointer: fine), (min-width: 521px) {
   .app {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0) + var(--space-lg));
     scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
   }
 }
@@ -229,8 +229,8 @@ html, body {
   background: transparent;
   margin-top: var(--space-sm);
 }
-.card.disclosure-flat > .collapse-summary { padding-left: 4px; padding-right: 4px; }
-.card.disclosure-flat > .collapse-body { padding: 0 0 4px; }
+.card.disclosure-flat > .collapse-summary { padding-left: var(--space-xs); padding-right: var(--space-xs); }
+.card.disclosure-flat > .collapse-body { padding: 0 0 var(--space-xs); }
 
 /* ------------------------------------------------------------ settings */
 /* Every Settings card is a collapsible disclosure (index.html). The body
@@ -322,9 +322,9 @@ html, body {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-pill);
   background: var(--card-off);
   border: 1px solid var(--line);
@@ -353,9 +353,9 @@ a.chip:hover { text-decoration: underline; }
   position: fixed;
   z-index: 60;
   max-width: min(420px, calc(100vw - 16px));
-  padding: 10px 12px;
+  padding: 10px var(--gap);
   display: grid;
-  gap: 8px;
+  gap: var(--space-sm);
   box-shadow: var(--shadow);
 }
 .folder-pop-title, .folder-pop-hint { margin: 0; font-size: var(--font-caption); color: var(--muted); }
@@ -363,7 +363,7 @@ a.chip:hover { text-decoration: underline; }
 .folder-pop-install { font-weight: 600; }
 .folder-pop-path {
   display: block;
-  padding: 6px 8px;
+  padding: 6px var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--card-off);
   border: 1px solid var(--line);
@@ -384,7 +384,7 @@ a.chip:hover { text-decoration: underline; }
 }
 
 /* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
-.drawer-folder { display: grid; gap: 8px; }
+.drawer-folder { display: grid; gap: var(--space-sm); }
 /* Two lines, never more (#74): [chip + delete] then [ref + Change + Pick].
    Line 1 mirrors line 2's grid — same gutter, same trailing auto column — so
    the delete button's right edge lands on the picker's and the chip's left
@@ -408,12 +408,12 @@ a.chip:hover { text-decoration: underline; }
 .folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
 .folder-form .button-surface, .folder-pick { white-space: nowrap; }
-.folder-pick { display: inline-flex; align-items: center; gap: 4px; }
-.folder-picker { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
+.folder-pick { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.folder-picker { display: grid; gap: 6px; padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
 .folder-picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
 .folder-picker-btn {
-  display: grid; width: 100%; text-align: left; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center;
-  padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--fg); cursor: pointer;
+  display: grid; width: 100%; text-align: left; grid-template-columns: 16px 1fr; column-gap: var(--space-sm); align-items: center;
+  padding: 6px var(--space-sm); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--fg); cursor: pointer;
 }
 .folder-picker-btn .icon { grid-row: 1 / span 2; width: 16px; height: 16px; color: var(--muted); }
 .folder-picker-name { font-weight: 600; font-size: var(--font-body); }
@@ -422,22 +422,22 @@ a.chip:hover { text-decoration: underline; }
 .folder-picker-note { margin: 0; font-size: var(--font-caption); }
 
 /* Settings: opener card */
-.opener-block { display: grid; gap: 8px; margin-top: 8px; }
-.opener-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.opener-block { display: grid; gap: var(--space-sm); margin-top: var(--space-sm); }
+.opener-block-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
 .opener-block-title { font-size: var(--font-caption); color: var(--muted); }
 .opener-cmd {
-  margin: 0; padding: 8px 10px; max-height: 160px; overflow: auto;
+  margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
   font-size: var(--font-caption); white-space: pre-wrap; word-break: break-all;
 }
 .opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
-.opener-more { display: grid; gap: 8px; }
+.opener-more { display: grid; gap: var(--space-sm); }
 
 /* Status pills — status colors signal state (design.md). One size everywhere. */
 .pill {
   display: inline-flex;
   align-items: center;
-  padding: 1px 8px;
+  padding: 1px var(--space-sm);
   border-radius: var(--radius-pill);
   font-size: var(--font-caption);
   font-weight: 600;
@@ -538,7 +538,7 @@ a.chip:hover { text-decoration: underline; }
 .bulk-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   flex: none;
   color: var(--accent);
   font-size: var(--font-caption);
@@ -573,21 +573,21 @@ a.chip:hover { text-decoration: underline; }
    full width — a textarea and a folder picker have no business at 55% of a
    phone row. */
 .detail-dialog.quickadd-dialog { width: min(560px, 94vw); margin-top: 10vh; }
-.quickadd-card .row { gap: 8px; }
+.quickadd-card .row { gap: var(--space-sm); }
 .quickadd-card .row--stack { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
-.quickadd-card .row--stack > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.quickadd-card .row--stack > span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .quickadd-card .row label { cursor: pointer; }
 .quickadd-card .quick-add-due, .quickadd-card .quick-add-status { min-width: 55%; }
 .quick-add-desc {
   min-height: calc(var(--control-h) * 2);
-  padding: 8px 10px;
+  padding: var(--space-sm) 10px;
   line-height: 1.4;
   font-size: var(--font-label);
   resize: vertical;
 }
 /* The picker's own toggle sits on the label line, so the ref input keeps the
    full width; the hit list drops under both. */
-.quick-add-pick { min-height: 28px; padding: 0 8px; font-size: var(--font-caption); display: inline-flex; align-items: center; gap: 4px; }
+.quick-add-pick { min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
 .quick-add-pick .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* modal.css styles every span inside a .row as a label (ink, 600); the
    picker toggle's own label must keep the ghost button's muted tone. */
@@ -604,7 +604,7 @@ a.chip:hover { text-decoration: underline; }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 4px 12px;
+  padding: var(--space-xs) var(--gap);
 }
 .quick-add-row:focus-within { border-color: var(--accent); }
 .quick-add-glyph { color: var(--muted); display: inline-flex; }
@@ -690,12 +690,12 @@ a.chip:hover { text-decoration: underline; }
 }
 .quick-add-voice-hint {
   margin: 6px 0 0;
-  padding: 0 4px;
+  padding: 0 var(--space-xs);
   color: var(--muted);
   font-size: var(--font-caption);
   line-height: 1.4;
 }
-.quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 0 4px; }
+.quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-sm); padding: 0 var(--space-xs); }
 .quick-add-chips:empty { display: none; }
 
 /* ======================================================== the filter card */
@@ -711,13 +711,13 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 .filter-select, .filter-row .msel { max-width: 200px; }
 .filter-q { width: 100%; }      /* the strip's own width (#80) */
 .filter-clear { min-height: var(--control-h); }
 @media (max-width: 767px) {
-  .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
   .filter-select, .filter-row .msel { width: 100%; max-width: none; }
   .filter-clear { grid-column: 1 / -1; }
 }
@@ -748,7 +748,7 @@ a.chip:hover { text-decoration: underline; }
   overflow: auto;
   display: grid;
   gap: 2px;
-  padding: 4px;
+  padding: var(--space-xs);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -757,16 +757,16 @@ a.chip:hover { text-decoration: underline; }
 .msel-opt {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   min-height: 32px;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   font-size: var(--font-label);
   white-space: nowrap;
   cursor: pointer;
 }
 .msel-opt:hover { background: var(--card-2); }
-.msel-none { margin: 0; padding: 6px 8px; font-size: var(--font-caption); }
+.msel-none { margin: 0; padding: 6px var(--space-sm); font-size: var(--font-caption); }
 @media (pointer: coarse) {
   .msel-summary { line-height: calc(var(--row-sm) - 2px); }
   .msel-opt { min-height: var(--row-sm); }
@@ -808,7 +808,7 @@ a.chip:hover { text-decoration: underline; }
   z-index: 25;
   display: grid;
   gap: 2px;
-  padding: 4px;
+  padding: var(--space-xs);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -817,9 +817,9 @@ a.chip:hover { text-decoration: underline; }
 .snooze-opt {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   min-height: 32px;
-  padding: 4px 10px;
+  padding: var(--space-xs) 10px;
   border: 0;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -865,7 +865,7 @@ a.chip:hover { text-decoration: underline; }
   align-items: center;
   column-gap: 10px;
   row-gap: 2px;
-  padding: 8px 4px;
+  padding: var(--space-sm) var(--space-xs);
   border-top: 1px solid var(--line-muted);
   color: var(--fg);
 }
@@ -936,7 +936,7 @@ a.chip:hover { text-decoration: underline; }
   align-self: center;
   width: auto;
   height: 30px;
-  padding: 0 8px;
+  padding: 0 var(--space-sm);
   font-size: var(--font-caption);
   font-weight: 600;
 }
@@ -945,7 +945,7 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
+  gap: var(--space-xs) 10px;
   min-width: 0;
   color: var(--muted);
   font-size: var(--font-caption);
@@ -1020,7 +1020,7 @@ a.chip:hover { text-decoration: underline; }
        at the top with nothing balancing it at the bottom; a symmetric padding
        leaves the content — and with it the centred status select — half a pixel
        low. A row with no hairline above it gets the full 13px back. */
-  .trow { min-height: var(--row-lg); padding: 12px 4px 13px; row-gap: 6px; }
+  .trow { min-height: var(--row-lg); padding: 12px var(--space-xs) 13px; row-gap: 6px; }
   .trows > .trow:first-child,
   .board-list > .trow:first-child,
   .today-list > .trow:first-child,
@@ -1062,7 +1062,7 @@ a.chip:hover { text-decoration: underline; }
   }
   /* a 20px box inside the 64px card clears the 44px floor on its own row
      track without an expansion rectangle that could overlap the status select */
-  .trow-check { width: 20px; height: 20px; margin: 0 4px; }
+  .trow-check { width: 20px; height: 20px; margin: 0 var(--space-xs); }
   /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
      says nothing and ate the meta line. No pill, no fill: the accent colour
      already says "tappable", and a marked box read as heavier than the
@@ -1183,7 +1183,7 @@ a.chip:hover { text-decoration: underline; }
   font-size: var(--font-caption);
   font-weight: 600;
   text-align: left;
-  padding: 8px 10px;
+  padding: var(--space-sm) 10px;
   border-bottom: 1px solid var(--line-muted);
   white-space: nowrap;
 }
@@ -1220,7 +1220,7 @@ a.chip:hover { text-decoration: underline; }
 .prio-high { color: var(--danger); font-weight: 600; }
 .prio-none { color: var(--muted); }
 .c-person, .c-project { white-space: nowrap; }
-.folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
 .c-folder .chip { max-width: 200px; }
 .c-comment { max-width: 280px; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1235,7 +1235,7 @@ a.chip:hover { text-decoration: underline; }
   align-items: center;
   gap: 5px;
   min-height: 30px;
-  padding: 0 8px;
+  padding: 0 var(--space-sm);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
@@ -1269,7 +1269,7 @@ a.chip:hover { text-decoration: underline; }
 .tree > .tree-node:first-child > .trow { border-top: 0; }
 .tree-node { display: block; }
 .tree .trow {
-  padding-left: calc(4px + var(--depth, 0) * 22px);
+  padding-left: calc(var(--space-xs) + var(--depth, 0) * 22px);
   /* Indent guides: one hairline per depth level (a 22px cycle matching the
      padding step, clipped to the row's own depth). Hover/drop tints use
      background-color so they never wipe the guide image. */
@@ -1305,9 +1305,9 @@ a.chip:hover { text-decoration: underline; }
 .tree.is-dragging .tree-root-drop {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 4px 6px;
-  padding: 10px 12px;
+  gap: var(--space-sm);
+  margin: var(--space-sm) var(--space-xs) 6px;
+  padding: 10px var(--gap);
   border: 1px dashed var(--line);
   border-radius: var(--radius-md);
   color: var(--muted);
@@ -1347,15 +1347,15 @@ a.chip:hover { text-decoration: underline; }
   body[data-drawer="open"] { overflow: hidden; }
   body[data-drawer="open"] nav.tabs { visibility: hidden; }
 }
-.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-height: 34px; font-size: var(--font-caption); }
+.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); margin-bottom: 6px; }
+.drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-xs); min-height: 34px; font-size: var(--font-caption); }
 .crumb {
   border: 0;
   background: transparent;
   color: var(--accent);
   font: inherit;
   font-size: var(--font-caption);
-  padding: 4px 4px;
+  padding: var(--space-xs) var(--space-xs);
   min-height: 28px;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1363,7 +1363,7 @@ a.chip:hover { text-decoration: underline; }
 .crumb:hover { background: var(--accent-soft); }
 .crumb-root { color: var(--muted); cursor: default; }
 .crumb-sep { color: var(--muted); }
-.drawer-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long
    title wraps to 2–3 lines, never an ellipsis and never a sideways clip (#32). */
@@ -1387,7 +1387,7 @@ a.chip:hover { text-decoration: underline; }
 /* Phone: the code prefix sits on its own line ABOVE the title instead of
    inline pushing it off-screen (#32). */
 @media (max-width: 1023px) {
-  .drawer-title-row { flex-wrap: wrap; gap: 2px 8px; }
+  .drawer-title-row { flex-wrap: wrap; gap: 2px var(--space-sm); }
   .drawer-code { flex: 1 1 100%; }
   .drawer-title { font-size: 1.35rem; }
 }
@@ -1396,7 +1396,7 @@ a.chip:hover { text-decoration: underline; }
 .drawer-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-sm);
   padding: 10px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -1421,21 +1421,21 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 0.4em;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-sm);
   color: var(--fg);
   font-size: var(--font-body);
   font-weight: 700;
 }
 .drawer-section-title > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
 .drawer-tools { margin-left: auto; font-size: var(--font-caption); font-weight: 600; }
-.drawer-tools .button-ghost { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
+.drawer-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .drawer-none { margin: 0; font-size: var(--font-caption); }
-.drawer-desc-edit { width: 100%; height: auto; padding: 8px 10px; resize: vertical; font-family: inherit; }
+.drawer-desc-edit { width: 100%; height: auto; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; }
 .drawer-desc-save { margin-top: 6px; min-height: var(--control-h); padding: 0 14px; font-size: var(--font-label); }
 .markdown { font-size: var(--font-label); line-height: 1.5; }
 .markdown p, .markdown ul, .markdown ol, .markdown pre { margin: 0 0 6px; }
-.markdown h3, .markdown h4, .markdown h5 { margin: 8px 0 4px; font-size: var(--font-body); }
-.markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: 8px 10px; overflow-x: auto; }
+.markdown h3, .markdown h4, .markdown h5 { margin: var(--space-sm) 0 var(--space-xs); font-size: var(--font-body); }
+.markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
 /* The remove button is borderless and chip-height (#77 — the 34px bordered
@@ -1445,8 +1445,8 @@ a.chip:hover { text-decoration: underline; }
    Written as that subtraction rather than a bare 34px: design.md's list-row
    wants the rows scale "via var(--row-*) or a calc() derivation, never an ad
    hoc literal", and the pitch is the whole reason for the number. */
-.drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
+.drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--space-sm); }
+.link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: calc(var(--row-sm) - 10px); }
 .link-rm {
   width: 26px;
   height: 26px;
@@ -1463,7 +1463,7 @@ a.chip:hover { text-decoration: underline; }
 }
 .link-rm::before { content: ""; position: absolute; inset: -9px; }   /* 26 + 2x9 = 44 */
 .link-rm:hover { color: var(--danger); }
-.link-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.link-actions { display: flex; align-items: center; gap: var(--space-xs); flex: none; }
 .link-label-edit { flex: 1 1 auto; min-width: 0; }
 .icon-btn {
   width: 34px;
@@ -1486,8 +1486,8 @@ a.chip:hover { text-decoration: underline; }
 /* Blocked by (#100) — same row/form shape as Links: a flat list of removable
    rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
    the-gap floor. */
-.drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.blocker-row { display: flex; align-items: center; gap: 8px; min-height: calc(var(--row-sm) - 10px); }
+.drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--space-sm); }
+.blocker-row { display: flex; align-items: center; gap: var(--space-sm); min-height: calc(var(--row-sm) - 10px); }
 .blocker-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -1511,19 +1511,19 @@ a.chip:hover { text-decoration: underline; }
    against the top edge, so the placeholder reads level with the Send button
    beside it. `safe` keeps the first line reachable once the comment grows past
    the box: centred overflow would push the top out of the scroll area. */
-.comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: 8px 10px; resize: vertical; font-family: inherit; align-content: safe center; }
+.comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; align-content: safe center; }
 /* Send matches the Description "Edit" button (ghost tier, same metrics). */
-.comment-send { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
+.comment-send { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .comment-list { display: flex; flex-direction: column; }
 /* Repeating entries = flat list rows on a hairline (design.md list-row). */
-.comment { padding: 8px 0; border-top: 1px solid var(--line-muted); }
+.comment { padding: var(--space-sm) 0; border-top: 1px solid var(--line-muted); }
 .comment:first-child { border-top: 0; }
-.comment-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--font-caption); margin-bottom: 2px; }
+.comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-caption); margin-bottom: 2px; }
 .comment-meta strong { color: var(--fg); }
 /* Pencil + trash park at the right end of the meta line (#155) — the Links
    row's borderless chip-height button, whose ::before carries the 44px hit
    rect; `margin-left: auto` is the only thing this pair adds. */
-.comment-actions { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+.comment-actions { display: flex; align-items: center; gap: var(--space-xs); flex: none; margin-left: auto; }
 /* The inline editor is the composer, re-pointed at an existing body: it wears
    `.comment-composer` + `.comment-input` + `.comment-send` and adds only what
    the composer has no need for — a hairline of air under the meta line, and a
@@ -1533,7 +1533,7 @@ a.chip:hover { text-decoration: underline; }
    composer's Send button in the accent tint — colour only, never
    `.button-tint`, whose 48px/13px/700 block recipe is for a full-width
    primary and towered over the thread it lives in (#155). */
-.comment-edit-wrap { margin: 4px 0 0; }
+.comment-edit-wrap { margin: var(--space-xs) 0 0; }
 .comment-edit { min-width: 0; }
 .comment-edit-save {
   background: var(--accent-soft);
@@ -1547,7 +1547,7 @@ a.chip:hover { text-decoration: underline; }
 .activity-row {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
   padding: 6px 0;
   border-top: 1px solid var(--line-muted);
   font-size: var(--font-caption);
@@ -1560,14 +1560,14 @@ a.chip:hover { text-decoration: underline; }
 .activity-old { color: var(--muted); }
 .activity-arrow { color: var(--muted); }
 .activity-meta { color: var(--muted); white-space: nowrap; }
-.children-list { display: flex; flex-direction: column; margin-bottom: 8px; }
+.children-list { display: flex; flex-direction: column; margin-bottom: var(--space-sm); }
 .child-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
   min-height: var(--row-sm);
-  padding: 4px 6px;
+  padding: var(--space-xs) 6px;
   border: 0;
   border-top: 1px solid var(--line-muted);
   background: transparent;
@@ -1585,22 +1585,22 @@ a.chip:hover { text-decoration: underline; }
 /* Step 8: the linked issue (chip · state pill · labels · meta · unlink) or
    the create / link forms for a plain task. Chips carry the state: an open
    issue reads as any link chip, a closed one goes muted with a check. */
-.issue-panel { display: flex; flex-direction: column; gap: 8px; font-size: var(--font-label); }
+.issue-panel { display: flex; flex-direction: column; gap: var(--space-sm); font-size: var(--font-label); }
 .issue-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.issue-labels { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.issue-labels { display: inline-flex; flex-wrap: wrap; gap: var(--space-xs); }
 .chip-label-tag { color: var(--muted); font-size: 0.7rem; padding: 0 6px; }
 .issue-meta { font-size: var(--font-caption); }
 .issue-actions { display: flex; gap: 6px; }
-.issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; }
+.issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .issue-form { display: flex; gap: 6px; }
 .issue-form .input-native { flex: 1 1 auto; min-width: 0; }
-.issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
 a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); border-color: var(--line); }
 .chip-issue-closed .chip-label { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .chip-issue .chip-state { width: var(--icon-inline); height: var(--icon-inline); color: var(--success); }
 .chip-issue-unknown { border-style: dashed; }
 .card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
-.card-actions .button-surface { display: inline-flex; align-items: center; gap: 4px; }
+.card-actions .button-surface { display: inline-flex; align-items: center; gap: var(--space-xs); }
 .card-actions .button-surface .icon { width: 14px; height: 14px; }
 /* the header ↻ sits left of the theme toggle; both pin right */
 .home-head .home-sync { margin-left: auto; }
@@ -1616,15 +1616,15 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   max-width: min(420px, calc(100vw - 2 * var(--gap)));
   pointer-events: none;
 }
 .toast {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--space-sm);
+  padding: 10px var(--gap);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1697,7 +1697,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board { display: flex; flex-direction: column; gap: var(--gap); }
 /* Phone strip: column switcher + counts — a segmented control that doubles
    as the column header while the carousel shows one column at a time. */
-.board-strip { display: flex; gap: 4px; }
+.board-strip { display: flex; gap: var(--space-xs); }
 .board-strip-btn {
   flex: 1;
   min-width: 0;
@@ -1759,7 +1759,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 @media (pointer: coarse) { .board-strip-btn { min-height: var(--row-sm); } }
 /* Small empty state per column — a peer of the rows, not a full-height card. */
-.board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: 4px; }
+.board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: var(--space-xs); }
 .board-empty .empty-state-icon { width: 20px; height: 20px; }
 .board-empty .empty-state-message { font-size: var(--font-caption); }
 
@@ -1770,10 +1770,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   margin-left: auto;
   min-width: 0;
   height: 32px;
-  padding: 0 8px;
+  padding: 0 var(--space-sm);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--font-caption);
 }
 .board-triage .icon { width: var(--icon-inline); height: var(--icon-inline); }
@@ -1783,7 +1783,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   width: calc(100% - 8px);
   height: var(--row-sm);
   justify-content: center;
-  margin: 4px;
+  margin: var(--space-xs);
 }
 .ai-suggestion {
   grid-column: 1 / -1;
@@ -1791,7 +1791,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 4px 4px 4px 8px;
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
   border: 1px solid var(--accent-border-soft);
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
@@ -1841,7 +1841,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     top: 0;
     z-index: 1;
     margin: 0;
-    padding: 8px 4px;
+    padding: var(--space-sm) var(--space-xs);
     background: var(--bg);
     border-bottom: 1px solid var(--line-muted);
     color: var(--fg);
@@ -1856,7 +1856,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 /* Flat: a heading line, project groups on hairlines, the shared rows,
    "Later this week" as a flat disclosure below with breathing room. */
 .today { display: flex; flex-direction: column; }
-.today-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 4px 8px; }
+.today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
 .today-title { display: inline-flex; align-items: center; gap: 0.4em; margin: 0; font-size: var(--font-body); font-weight: 700; }
 .today-title .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
 .today-counts { color: var(--muted); font-size: var(--font-label); }
@@ -1865,9 +1865,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-group-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   margin: 0;
-  padding: 10px 4px 2px;
+  padding: 10px var(--space-xs) 2px;
   color: var(--fg);
   font-size: var(--font-label);
   font-weight: 600;
@@ -1875,7 +1875,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-group-title.is-loose { color: var(--muted); }
 .today-group-link {
   border: 0;
-  padding: 2px 4px;
+  padding: 2px var(--space-xs);
   margin-left: -4px;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -1948,7 +1948,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   align-items: center;
   gap: 10px;
   margin-bottom: var(--space-md);
-  padding: 10px 12px;
+  padding: 10px var(--gap);
   border: 1px solid var(--accent-border-soft);
   border-radius: var(--radius-md);
   background: var(--accent-soft);
@@ -1958,7 +1958,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: var(--font-label);
   font-weight: 600;
 }
@@ -1969,7 +1969,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    (`.trow-extra`); Later is the snooze popover (#87) wearing a wide summary. */
 .plan-picker { margin-bottom: var(--space-md); }
 .plan-done-btn { flex: none; font-weight: 600; }
-.plan-targets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
+.plan-targets { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; padding-top: 2px; }
 .plan-target {
   display: inline-flex;
   align-items: center;
@@ -2028,7 +2028,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* Settings → Phone access card: status rows from GET /api/status. A coloured
    state word is always bold — one rule for every Settings row (#48). */
-.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: var(--font-caption); }
+.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-xs) var(--gap); margin: 0; font-size: var(--font-caption); }
 .access-rows dt { color: var(--muted); }
 .access-rows dd { margin: 0; }
 .access-rows .ok { color: var(--success); font-weight: 600; }
@@ -2060,7 +2060,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-meta { font-size: var(--font-caption); white-space: nowrap; }
 .search-groups { display: grid; gap: var(--gap); }
 .search-group { margin: 0; }
-.search-body { padding: 0 14px 8px; }
+.search-body { padding: 0 14px var(--space-sm); }
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
 .search-hit:first-child { border-top: 0; }
@@ -2070,7 +2070,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-hit-link, a.chip.search-hit-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   padding: 0;
   border: 0;
   background: transparent;
@@ -2113,8 +2113,8 @@ kbd {
    a full-width sheet under the safe area (the vendored top-anchor rule keeps
    the max-height math). */
 .detail-dialog.palette-dialog { width: min(640px, 94vw); margin-top: 12vh; }
-.palette-card { padding: 8px; }
-.palette-input-row { display: flex; align-items: center; gap: 8px; padding: 2px 4px 6px 10px; border-bottom: 1px solid var(--line-muted); }
+.palette-card { padding: var(--space-sm); }
+.palette-input-row { display: flex; align-items: center; gap: var(--space-sm); padding: 2px var(--space-xs) 6px 10px; border-bottom: 1px solid var(--line-muted); }
 .palette-input-row > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
 .palette-input {
   flex: 1 1 auto;
@@ -2134,7 +2134,7 @@ kbd {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 8px 10px;
+  padding: var(--space-sm) 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
 }
@@ -2142,7 +2142,7 @@ kbd {
 .palette-item-icon { width: 18px; height: 18px; color: var(--muted); }
 .palette-item.is-active .palette-item-icon { color: var(--accent); }
 .palette-item-main { min-width: 0; display: grid; gap: 1px; }
-.palette-item-label { display: flex; align-items: center; gap: 8px; font-size: var(--font-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-item-label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--font-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-item-hint { font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-empty { padding: 14px 10px; font-size: var(--font-label); }
 .palette-foot { margin: 6px 6px 0; font-size: var(--font-caption); }
@@ -2194,8 +2194,8 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* ---- the confirmation dialog (#121): the vendored modal shell, one danger primary */
 .detail-dialog.confirm-dialog { width: min(480px, 94vw); margin-top: 14vh; }
-.confirm-body { margin: 12px 0 0; font-size: var(--font-label); color: var(--ink); }
-.confirm-body p { margin: 0 0 8px; }
+.confirm-body { margin: var(--gap) 0 0; font-size: var(--font-label); color: var(--ink); }
+.confirm-body p { margin: 0 0 var(--space-sm); }
 .confirm-warn { color: var(--danger); font-weight: 600; }
 /* the destructive primary restates the tint recipe on danger (design.md) */
 .detail-save-btn.confirm-danger { background: var(--deficit-soft); color: var(--danger); border-color: var(--deficit-border-soft); }
@@ -2203,7 +2203,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* ---- the drawer's delete foot (#121) */
 .drawer-danger { padding: 14px 0 18px; }
-.drawer-delete { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 8px; color: var(--danger); border-color: var(--deficit-border-soft); }
+.drawer-delete { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); color: var(--danger); border-color: var(--deficit-border-soft); }
 .drawer-delete:hover { background: var(--deficit-soft); }
 .drawer-delete .icon { width: var(--icon-title); height: var(--icon-title); }
 .keys-lead { margin: 0 0 10px; font-size: var(--font-caption); }
@@ -2212,14 +2212,14 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .keys-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px 12px;
+  gap: var(--space-xs) var(--gap);
   align-items: baseline;
   padding: 6px 0;
 }
 .keys-row + .keys-row { border-top: 1px solid var(--line-muted); }
 /* one width for the key column, so every label starts on the same line —
    a `W` is wider than an `E` and the ragged edge showed */
-.keys-combo { display: inline-flex; gap: 4px; align-self: center; min-width: 40px; }
+.keys-combo { display: inline-flex; gap: var(--space-xs); align-self: center; min-width: 40px; }
 .keys-main { min-width: 0; }
 .keys-label { font-size: var(--font-label); }
 .keys-hint { font-size: var(--font-caption); }
@@ -2230,7 +2230,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* ---- Done journal (#102) — a Today-shaped reading surface: the same head,
    group titles and rows; a day is a group, cancelled rows sit muted, the
    window widens by a week from the foot. ---- */
-.journal-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--font-label); cursor: pointer; }
+.journal-toggle { display: inline-flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-label); cursor: pointer; }
 .journal .today-head { flex-wrap: wrap; }
 .journal .today-counts { margin-right: auto; }
 @media (max-width: 767px) {
@@ -2315,7 +2315,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* ---- the per-row actions (both drawings) ---- */
 .archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.archive-action { display: inline-flex; align-items: center; gap: 4px; min-height: var(--control-h); font-size: var(--font-caption); }
+.archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-caption); }
 .archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
    *Revert* are all `.archive-action`, so an open panel may not invent a colour
@@ -2336,7 +2336,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
   display: grid;
   gap: 6px;
   margin-top: 6px;
-  padding: 8px;
+  padding: var(--space-sm);
   /* a reading width, not the whole 1440 — the score at the far end of a
      screen-wide row is a scan nobody wants to make */
   max-width: 52rem;
@@ -2350,10 +2350,10 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
   width: 100%;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: baseline;
   min-height: var(--row-sm);
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   text-align: left;
   font-size: var(--font-caption);
 }
@@ -2383,7 +2383,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
 .archive-card-head .archive-subject { min-width: 0; max-width: none; }
 .archive-card-meta, .archive-card-why { margin: 0; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
-.archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; font-size: var(--font-caption); }
+.archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); min-width: 0; font-size: var(--font-caption); }
 .archive-card-dest .archive-dest { min-width: 0; max-width: 100%; }
 .archive-card-why .archive-reason { max-width: none; overflow-wrap: anywhere; }
 /* A file chip is `.archive-files`' own flex item, which — like any flex item —
@@ -2466,7 +2466,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
     align-items: stretch;
     min-width: 0;
     min-height: var(--control-h);
-    padding-right: 4px;
+    padding-right: var(--space-xs);
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--input-bg);
