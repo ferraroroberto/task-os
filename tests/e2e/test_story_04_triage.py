@@ -365,8 +365,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, shots: Path) -> No
 #
 # Riding inside this test for the same reason stories 13–15 do: the suite is
 # capped at 15 tests and this walks the drawer the triage story already has
-# open. The seeded instance is session-scoped, so the walk puts the task back
-# the way it found it before returning.
+# open. The file's seeded instance also serves the phone leg below, so the walk
+# puts the task back the way it found it before returning.
 
 
 def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
@@ -408,8 +408,8 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
         f"{base}/api/tasks/{review['id']}"
     ).json()["recurrence_anchor"] is None
 
-    # Restore over the API, not the UI — the seeded instance is session-scoped
-    # and later stories read the same DB; one synchronous call cannot race.
+    # Restore over the API, not the UI — the rest of this file reads the same
+    # seeded DB; one synchronous call cannot race.
     page.request.patch(f"{base}/api/tasks/{review['id']}", data={
         "recurrence": "weekly", "recurrence_anchor": "fri", "due": review["due"],
     })
@@ -501,8 +501,8 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
 #
 # #89, riding here like stories 13 and 14: the suite is capped at 15 tests
 # and this story walks the same Today surface. The seeded instance is
-# session-scoped, so the walk restores what it changed (statuses, starts,
-# the seeded plan) before returning — later stories assert over the same DB.
+# shared with the phone leg below, so the walk restores what it changed
+# (statuses, starts, the seeded plan) before returning.
 
 
 def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
@@ -600,7 +600,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     assert (api_plan["done"], api_plan["total"]) == (1, 2)
     shot(page, shots / "story-15-plan-my-day-5-desktop.png")
 
-    # ---- restore: the session-scoped seed serves the later stories --------
+    # ---- restore: the file's seeded instance serves the phone leg ---------
     # tap back to todo and out of the plan; the bakery back in (the seeded
     # plan's shape); the library awake again via the drawer (story-13 idiom).
     done_row.locator(".trow-status").select_option("todo")
@@ -767,8 +767,8 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert_no_horizontal_overflow(page)
 
     # Put the seeded task back the way this walk found it: `seeded_webapp` is
-    # session-scoped, so a task left asleep here would vanish from Today for
-    # every later story (it did — story 05 caught it).
+    # shared with the phone leg below, so a task left asleep here would vanish
+    # from its Today.
     starts_input.fill("")
     starts_input.blur()
     expect(starts_input).to_have_value("")

@@ -19,9 +19,10 @@ booted with a temp config that carries a token.
 (never a kill — reclaiming the port is ``tray.bat --restart``'s job). The
 check → refuse → log policy is the vendored ``_e2e_live_guard.py``.
 
-``seeded_webapp`` boots a second disposable instance over the synthetic
-fixture (``tests/fixtures/seed.py``) for the stories that need data on
-screen (Step 4 on); ``webapp`` stays empty for story 01. Story 22 boots its
+``seeded_webapp`` boots a disposable instance over the synthetic fixture
+(``tests/fixtures/seed.py``) for the stories that need data on screen (Step 4
+on) — a fresh one per story module, so no story inherits another's leftovers
+(#236); ``webapp`` stays empty for story 01. Story 22 boots its
 own pair over ``tests/fixtures/whisper_fake.FakeWhisper`` (never the fleet's
 real hub or whisper server — both ``voice`` endpoints are blank suite-wide). ``mirrored_webapp``
 (story 06) is a seeded instance whose ``mirror.dir`` / ``backup_dir`` are
@@ -301,20 +302,27 @@ def webapp() -> Iterator[str]:
         log.close()
 
 
-@pytest.fixture(scope="session")
-def seeded_webapp() -> Iterator[str]:
-    """A second disposable instance over the **synthetic seed** (tests/fixtures/seed.py).
+@pytest.fixture(scope="module")
+def seeded_webapp(request: pytest.FixtureRequest) -> Iterator[str]:
+    """A disposable instance over the **synthetic seed** (tests/fixtures/seed.py), one per story module.
 
     Story tests from Step 4 on walk real data; story 01 keeps the empty
     instance. Never available against the live app (``TASKOS_E2E_LIVE=1``):
     the seed refuses a database that already has tasks, and the live DB is
     the user's — those tests skip loudly instead.
+
+    Module-scoped, not session-scoped (#236): every story file starts from the
+    seed as committed, so what one story leaves behind — or leaves
+    half-restored when it fails — can never reach another story's assertions
+    or shots. One session-wide instance let a single story-04 failure drift 22
+    shots in the stories after it. The two functions inside one file (a desktop
+    walk and its phone leg) still share the file's instance.
     """
     if os.environ.get(LIVE_ENV) == "1":
         pytest.skip(f"{LIVE_ENV}=1: the seeded fixture never runs against the live database")
     from tests.fixtures.seed import seed_db
 
-    work = e2e_workdir("seeded")
+    work = e2e_workdir(f"seeded-{request.module.__name__.rsplit('.', 1)[-1]}")
     db = work / "tasks.db"
     seed_db(db, E2E_ANCHOR)
     proc, base, log = _boot(work, db)

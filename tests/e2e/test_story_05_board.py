@@ -152,8 +152,6 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, shots: Path) ->
         # a row = title + status select on line 1, then the meta line: project ·
         # due · priority · chips · children · comment COUNT · person — never the
         # comment body (UX round 2, issue #32; the ONE row of round 3, #46)
-        # (story 04 may already have edited "Get three quotes" in this session's
-        # seeded instance — the checks below use rows it leaves alone)
         quotes = _card(page, "Get three quotes")
         expect(quotes.locator(".trow-status")).to_have_value("todo")
         expect(quotes.locator(".trow-project")).to_have_text("Home renovation")

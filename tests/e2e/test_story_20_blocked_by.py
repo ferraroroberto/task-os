@@ -169,9 +169,5 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         drawer.locator(".drawer-blocked .blocker-row .icon-btn").click()
         expect(drawer.locator(".drawer-blocked .drawer-none")).to_have_text("Not blocked by anything.")
         assert _get(base, f"/api/tasks/{a_id}")["blocked"] is False
-
-        # clean up the throwaway pair — the seeded instance is session-scoped
-        page.request.delete(f"{base}/api/tasks/{a_id}")
-        page.request.delete(f"{base}/api/tasks/{b_id}")
     finally:
         context.close()
