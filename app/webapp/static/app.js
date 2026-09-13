@@ -116,6 +116,7 @@ const state = {
   deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
   blocked: [],      // the locked tasks (#100) — same shape as deferred, the Tree only
   plan: { items: [], done: 0, total: 0 },  // /api/today's plan group (#89) — unfiltered on purpose
+  calendar: null,   // /api/today's calendar group (#96) — the lane beside Today; null = not loaded
   planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'board',
@@ -313,6 +314,7 @@ async function refreshAll() {
     ]);
     state.total = results[2].count;
     state.plan = results[3].plan || { items: [], done: 0, total: 0 };
+    state.calendar = results[3].calendar || null;
     pruneSelection();
     if (state.total === 0) {
       state.items = [];
@@ -706,7 +708,9 @@ function renderTodayPane() {
     onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onSnooze: snoozeTask,
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
     onToggleSelect: selectHandlers.onToggleSelect,
-  }, Object.assign({ sort: state.filters.sort, plan: state.plan, planMode: state.planMode }, selectOpts()));
+  }, Object.assign({
+    sort: state.filters.sort, plan: state.plan, planMode: state.planMode, calendar: state.calendar,
+  }, selectOpts()));
 }
 
 /** The Table pane draws the one filtered list two ways (#161) — the grid and
@@ -1187,6 +1191,9 @@ async function boot() {
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.
     onCaptured: function () { refreshAll(); },
+    // Refresh now on the Calendar card answers the fresh lane (#96): Today
+    // shows it without a second round trip.
+    onCalendar: function (group) { state.calendar = group; renderTodayPane(); },
     // A run started from the Settings card is the Archive tab's run: hand it to
     // that pane, which re-reads the service, picks the live run up and resumes
     // polling it — and refreshes the Board's "needs you" line off the same block.

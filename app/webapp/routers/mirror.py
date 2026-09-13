@@ -11,6 +11,9 @@
                                archive: {configured, reason, running, repo, candidates,
                                confidence_threshold, timeout_seconds, last_run,
                                last_error} (#157),
+                               calendar: {configured, reason, state, error, source,
+                               fetched_at, failing_since, stale, refreshing,
+                               events_today, …} (#96 — the host only, never the URL),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
@@ -59,6 +62,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     enrich = getattr(request.app.state, "enrich", None)
     ai = getattr(request.app.state, "ai", None)
     archive = getattr(request.app.state, "archive", None)
+    calendar = getattr(request.app.state, "calendar", None)
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
@@ -72,6 +76,8 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         "ai": ai.status() if ai else {"enabled": False, "reason": "AI service not started"},
         "archive": archive.status(db) if archive
         else {"configured": False, "reason": "archive service not started"},
+        "calendar": calendar.status() if calendar
+        else {"configured": False, "state": "off", "reason": "calendar service not started"},
         "opener": opener.status(ph),
         "placeholders": ph,
     }

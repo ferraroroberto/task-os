@@ -445,6 +445,7 @@ class LocalBackend:
         from src.ai import AIClient
         from src.archive_batch import ArchiveBatchService
         from src.backup import BackupScheduler
+        from src.calendar_lane import CalendarService
         from src.email_capture import EmailCaptureService
         from src.enrich import EnrichClient
         from src.folder_index import FolderIndexService
@@ -485,6 +486,9 @@ class LocalBackend:
             # did — both read off the config and this database, so the answer is
             # the same with the app up or down (#157). Nothing is spawned here.
             "archive": ArchiveBatchService(config).status(self.conn),
+            # The calendar is an install fact too (#96): the address is in the
+            # config and the fetch runs from this PC, bounded by its timeout.
+            "calendar": CalendarService(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
         }

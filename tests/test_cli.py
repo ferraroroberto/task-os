@@ -329,7 +329,7 @@ def test_seeded_show_and_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
 #: The one shape ``tasks mirror status --json`` emits, whatever the transport.
 STATUS_KEYS = {"https", "auth", "mirror", "backup", "folders", "capture", "voice",
-               "enrich", "ai", "archive", "opener", "placeholders"}
+               "enrich", "ai", "archive", "calendar", "opener", "placeholders"}
 
 
 def test_status_json_shape_is_identical_on_both_backends(run: Runner) -> None:
