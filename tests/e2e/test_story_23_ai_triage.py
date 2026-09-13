@@ -10,7 +10,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, shot
+from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, hold_toasts, shot
 from tests.fixtures.anthropic_fake import FakeAnthropic
 from tests.fixtures.seed import seed_db
 
@@ -64,6 +64,7 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
 
     triage = page.locator(".board-col[data-col='inbox'] .board-triage")
     expect(triage).to_be_enabled()
+    hold_toasts(page)                  # shot 2 frames the triage toast and the accept toast
     triage.click()
     suggestions = page.locator(".board-col[data-col='inbox'] .ai-suggestion")
     expect(suggestions.first).to_be_visible()

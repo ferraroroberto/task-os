@@ -559,6 +559,39 @@ def dismiss_toasts(page: Page) -> None:
     expect(page.locator(".toast")).to_have_count(0)
 
 
+_HOLD_TOASTS_JS = """
+() => {
+  if (window.__taskosToastsHeld) return;
+  window.__taskosToastsHeld = true;
+  const remove = Element.prototype.remove;
+  Element.prototype.remove = function () {
+    if (this.classList && this.classList.contains('toast')) return;
+    return remove.call(this);
+  };
+}
+"""
+
+
+def hold_toasts(page: Page) -> None:
+    """Keep every toast on screen until this document is left (#236).
+
+    The other half of `dismiss_toasts`. "Capture it young" only covers the
+    toast the last action raised. A shot that frames a *stack* — a toast from
+    one step and another from the next — also frames the older toast's
+    remaining lifetime, and that lifetime is real wall-clock time: unloaded,
+    story 09's fifth shot catches its older toast at ~1.3 s of 4.5 s and
+    story 23's second at ~0.9 s, and on a loaded host the older one is simply
+    gone (10,885 and 12,248 px of drift, one toast short).
+
+    Call it before the action that raises the first toast such a shot frames.
+    It pins what the gallery shows — the stack as a reader left it — the way
+    the pinned clock pins a date. While held, a toast's own close and action
+    buttons cannot remove it either, so never pair it with `dismiss_toasts`
+    on the same document; a navigation to a new document releases it.
+    """
+    page.evaluate(_HOLD_TOASTS_JS)
+
+
 #: How many settle → scroll → settle rounds `scroll_to_bottom` will spend
 #: waiting for a pane to stop growing under it. Each round costs one `settle()`,
 #: so this is a bound on a hang, not a budget anyone should need to spend: a
