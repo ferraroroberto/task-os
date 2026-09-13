@@ -75,7 +75,7 @@ tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground 
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           event_loop.py, manager.py (adopt-or-spawn uvicorn; cert --check → --ssl-* when a cert exists)
-app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout) · tasks
+app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout, /api/team…) · tasks
                           (/api/tasks…, /api/activity) · people · views (/api/board, /api/today)
                           · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,
                           GET/DELETE /api/mirror/events, /api/backup) · folders (/api/resolve, /api/folders/search, /api/folders/reindex)
@@ -101,7 +101,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           clock.py (the one process clock, pinned by TASKOS_CLOCK) · runtime_data.py (resolves where the SQLite
                           file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
-                          auth.py (loopback owner · bearer / cookie gate) · certs.py (cert pair, auto-renew hook)
+                          auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler)
                           placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
                           (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
@@ -116,7 +116,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
 opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat),
-                          gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py,
+                          gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py, set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
                           email-archiver index) + e2e/ (Playwright, one story test per step)
@@ -144,7 +144,7 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 | `enrich` | `url` — the hub's chat endpoint, where a **spoken** line goes to be split into a title and a description (default `http://127.0.0.1:8000/v1/chat/completions`; blank = enrichment off, visibly, and the spoken line keeps the plain parse). `model` — named on purpose here, unlike transcription (default `agentic_light_nothink`). `timeout_seconds` (default 30). See [Voice quick-add](#voice-quick-add) |
 | `ai` | local AI shared by task workflows: `enabled`, `base_url` (default `http://127.0.0.1:8000`), `model` (default hub alias `claude_haiku`) and `timeout_seconds` (default 30). The first consumer is [AI Inbox triage](#ai-inbox-triage); disabled and unreachable states are visible on the Board, in Settings, `/api/status` and the CLI |
 | `archive` | batch-archiving the Outlook Inbox through [email-archiver](https://github.com/ferraroroberto/email-archiver): `enabled` (**false in the sample** — no checkout without its own config may drive Outlook), `repo` (that checkout; blank = off, visibly — deliberately not derived from `search.email_db`, which may live elsewhere), `python` (blank = `<repo>/.venv/Scripts/python.exe`, the archiver's own venv), `candidates` (ranked folders asked of the archiver per mail, default 10 — the model is shown only the **top 6** of them, the rest being noise it would have to read; a `move` can still name any folder at all), `confidence_threshold` (default 0.7 — below it a mail stays in the Inbox as *needs you*), `timeout_seconds` (default 600 — a full Inbox is walked over COM). The ranking (#158) adds `model` (which hub model picks the folder, default `claude_haiku`), `batch_size` (mails per hub request, default 8), `examples` (stored corrections carried as few-shot lines, default 20) and `ai_timeout_seconds` (that request's own bound, default 180 — a batch is a far longer request than one triage). `renumber` (default **true**) asks the archiver to re-sequence every folder an `apply` or a `revert` disturbed and heals every path this database stores from the map it returns — see [Renumbering, and the paths it heals](#renumbering-and-the-paths-it-heals). The hub root and the on/off switch stay `ai.base_url` / `ai.enabled`. See [Archive the Inbox](#archive-the-inbox) |
-| `team` | shared install for a small team: `enabled`, `people` — Step 12 |
+| `team` | shared install for a small team (Step 12): `enabled` (**false in the sample** — off is the single-owner model unchanged), `people` (the names a teammate picks from; the first is the owner's default name) · `password_hash` (the shared team password, `scripts/set_team_password.py`; empty in the sample). See [Team mode](#team-mode) |
 | `auth` | `token` (the bearer secret `scripts/gen_token.py` writes) · `password_hash` (optional, `scripts/set_password.py`). Both empty in the sample = only this PC can use the app |
 
 Secrets (the Notion token for the one-shot import — `NOTION_API_TOKEN`, optionally `NOTION_TASKS_DB_ID`) go in `.env` (or any dotenv passed with `--env-file`), never in config; the GitHub side needs no token of its own — it is the `gh` CLI's login. `TASKOS_CONFIG_PATH` / `TASKOS_DB_PATH` env vars override the config/db location, `TASKOS_ISSUE_PROVIDER=none|fake` (+ `TASKOS_ISSUE_FAKE_PATH`) overrides the issue provider, `TASKOS_CLOCK=<ISO datetime>` pins the process clock and `TASKOS_BUILD_SHA=<string>` pins the build identity the `Build:` footer prints (the test harness uses all five for isolation — the last two so the story gallery in `docs/screenshots/` does not rewrite itself on every commit and every calendar day; nothing in normal use sets any of them, and a pinned build SHA is logged as a warning because a process reporting an identity it did not compute is also what would defeat the restart recipe's `/api/version` check).
@@ -159,7 +159,7 @@ Rules the repo layer enforces (`src/tasks_repo.py`): a task with children **is**
 
 ## API
 
-All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error": {"code", "message", "detail"?}}` (404 `not_found`, 422 `validation_error`, 409 `cycle`). The actor recorded on activity/comments is the body's `actor`/`author`, else the `X-Actor` header, else the first `team.people` entry in config.
+All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error": {"code", "message", "detail"?}}` (404 `not_found`, 422 `validation_error`, 409 `cycle`). The actor recorded on activity/comments is the body's `actor`/`author`, else the `X-Actor` header, else (team mode) the name this browser picked, else the first `team.people` entry in config.
 
 | Method · path | What |
 | --- | --- |
@@ -199,9 +199,10 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `GET /api/mirror/events` · `DELETE /api/mirror/events` | inspect every standing import conflict/rejection (most recent first) · clear all of them → `{cleared}` |
 | `POST /api/resolve` `{ref}` | a folder ref **or** an absolute path → `{ref, path, resolved, unresolved, href}`: `ref` folded onto the placeholders (`E:\onedrive\house` → `{onedrive}/house`), `path` this server's absolute path (display only), `href` the `taskos://open?ref=…` link. The value rides the body, not a `?ref=` query — that parameter name is on every tracking-parameter blocklist, so a URL-cleaning browser extension strips it off the URL before the request leaves the browser (#66). Task payloads carry `folder_resolved` + `folder_url` (a `links(kind=folder)` web URL, when one exists) so no client resolves a ref itself |
 | `GET /api/folders/search?q=&limit=` · `POST /api/folders/reindex` | the folder index: substring AND over every indexed path → `{items: [{path, ref, name, depth}], count, indexing}` · rescan `search.folder_roots` now (409 `folders_disabled` when no root is configured / usable) |
-| `POST /api/login` `{secret}` · `POST /api/logout` | token or password → the 90-day `taskos_token` cookie · clear it |
+| `POST /api/login` `{secret}` · `POST /api/logout` | token or password → the 90-day `taskos_token` cookie; in team mode the team password → the `taskos_team` cookie instead (`via: "team"`, `you`) · clear them |
+| `GET /api/team` · `POST /api/team/name` `{name}` · `GET /api/team/avatars/{index}` | team mode: `{enabled, people: [{name, avatar}], you}` · pick this browser's name (the `taskos_name` cookie; 409 `team_disabled` when off, 422 for a name not in `team.people`) · that person's avatar image (404 without one) |
 
-Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `GET /opener/opener.cmd` and `GET /opener/opener.ps1` (the per-PC opener's handler and launcher, public so a second PC's install one-liner can download them). Every `/api/` route except `/api/version` and `/api/login` needs the caller to be loopback or to carry the token (see "Phone access & auth").
+Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `GET /opener/opener.cmd` and `GET /opener/opener.ps1` (the per-PC opener's handler and launcher, public so a second PC's install one-liner can download them). Every `/api/` route except `/api/version` and `/api/login` needs the caller to be loopback or to carry the token — or, in team mode, the team cookie (see "Phone access & auth" and "Team mode").
 
 ## CLI — `tasks`
 
@@ -686,6 +687,23 @@ tray.bat --restart                                               # config is rea
 Settings → **Phone access** shows what this connection is (`this PC` · `signed in`), whether HTTPS and the token are on, and a **Sign out on this device** button when signed in with the cookie.
 
 **What stays public** on any client: the static assets under `/static/` (the manifest and icons a phone needs before it can sign in), `/healthz`, `/api/version` (the build-identity contract), the `/login` page and `/api/login` itself. Everything else under `/api/` is gated; a page request from a signed-out phone redirects to `/login?next=…` and comes back where it started.
+
+## Team mode
+
+A shared install for a small team on the same private network (Step 12). Off by default, and off means exactly the model above.
+
+```powershell
+# config/config.json: "team": { "enabled": true, "people": ["<owner>", "<teammate>", …] }
+& .\.venv\Scripts\python.exe scripts\gen_token.py            # team sign-in needs a token to exist
+& .\.venv\Scripts\python.exe scripts\set_team_password.py    # prompts twice, no echo; stores the PBKDF2 hash only
+tray.bat --restart
+```
+
+- **Signing in.** A teammate opens the URL → the same sign-in card → types the **team password** → a 90-day `taskos_team` cookie (HttpOnly, `Secure` over HTTPS). It is **not** the owner's token, so it cannot script the API from elsewhere, and it is derived from the token and the team password hash: rotating either (`gen_token.py --force`, or a new team password) signs every teammate out. With no token configured there is no team sign-in either — the gate stays closed. `set_team_password.py --clear` turns the team password off.
+- **Picking a name.** Right after signing in — and on any page they open before they have — the teammate lands on *Who are you?* and picks one of `team.people`. The choice is remembered per browser (`taskos_name`, 90 days) and becomes the author of their comments and the actor on their changes. **The name is an authorship label, not a credential**: it grants no access, only a listed name counts, and anyone who can already write could state another one through the API. Settings → *Phone access* shows *you are <name> · change name*.
+- **Loopback is still the owner.** This PC never needs the password or a name; with none picked it writes as the first entry of `team.people`.
+- **Avatars** (optional): `data/avatars/<slug>.png|jpg|jpeg|webp`, the slug being the name lower-cased with other characters collapsed to `-` (`Sam Rivera` → `sam-rivera.png`). Without one, the card shows initials.
+- **Folders** open through each person's own opener (Folders that open on any PC): a folder chip carries the placeholder ref, so it resolves to *their* synced copy on *their* PC.
 
 ## Roadmap
 

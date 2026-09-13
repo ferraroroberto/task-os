@@ -225,8 +225,15 @@ class ArchiveConfig:
 
 @dataclass(frozen=True)
 class TeamConfig:
+    """A shared install for a small team (Step 12). ``enabled`` off (the
+    default) = the Step 7 model unchanged. On: ``/login`` also accepts the
+    shared team password (``password_hash``, PBKDF2 — written only by
+    ``scripts/set_team_password.py``) and each browser picks one of
+    ``people`` as its name on comments and activity."""
+
     enabled: bool = False
     people: list[str] = field(default_factory=list)
+    password_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -476,6 +483,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),
             people=_as_str_list(team.get("people")),
+            password_hash=str(team.get("password_hash", "") or "").strip(),
         ),
         auth=AuthConfig(
             token=str(auth.get("token", "") or "").strip(),
@@ -495,20 +503,37 @@ def save_auth(*, token: str | None = None, password_hash: str | None = None, pat
     and ``scripts/set_password.py``; the running app re-reads config on
     restart only (``tray.bat --restart``).
     """
-    target = path or CONFIG_PATH
-    if target == CONFIG_SAMPLE_PATH:
-        raise ValueError("refusing to write secrets into config.sample.json")
-    if target.exists():
-        raw = _as_dict(json.loads(target.read_text(encoding="utf-8")))
-    else:
-        raw = _as_dict(json.loads(CONFIG_SAMPLE_PATH.read_text(encoding="utf-8")))
-        logger.info("ℹ️ config: creating %s from the sample", target)
+    target, raw = _read_for_secret_write(path)
     auth = _as_dict(raw.get("auth"))
     if token is not None:
         auth["token"] = token
     if password_hash is not None:
         auth["password_hash"] = password_hash
     raw["auth"] = {"token": str(auth.get("token", "")), "password_hash": str(auth.get("password_hash", ""))}
+    return _write_secret_config(target, raw)
+
+
+def save_team_password_hash(password_hash: str, *, path: Path | None = None) -> Path:
+    """Write ``team.password_hash`` into the **real** config — the same
+    contract as :func:`save_auth` (other keys, ``team.enabled`` and
+    ``team.people`` included, are preserved; the sample is never written).
+    Used by ``scripts/set_team_password.py`` only."""
+    target, raw = _read_for_secret_write(path)
+    raw["team"] = {**_as_dict(raw.get("team")), "password_hash": password_hash}
+    return _write_secret_config(target, raw)
+
+
+def _read_for_secret_write(path: Path | None) -> tuple[Path, dict[str, Any]]:
+    target = path or CONFIG_PATH
+    if target == CONFIG_SAMPLE_PATH:
+        raise ValueError("refusing to write secrets into config.sample.json")
+    if target.exists():
+        return target, _as_dict(json.loads(target.read_text(encoding="utf-8")))
+    logger.info("ℹ️ config: creating %s from the sample", target)
+    return target, _as_dict(json.loads(CONFIG_SAMPLE_PATH.read_text(encoding="utf-8")))
+
+
+def _write_secret_config(target: Path, raw: dict[str, Any]) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return target

@@ -2029,6 +2029,19 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .login-card .input-native { height: var(--row-md); font-size: var(--font-body); }
 .login-card .button-primary { min-height: var(--row-md); }
 .login-error { margin: 0; color: var(--danger); font-size: var(--font-label); }
+/* Team mode's pick-your-name step (Step 12): one full-width row per person,
+   the surface button tier (the current name on the tint tier), at the
+   login field's row height so each name is a comfortable phone target. */
+.team-people { display: flex; flex-direction: column; gap: var(--space-sm); }
+.team-person {
+  display: flex; align-items: center; gap: var(--space-sm);
+  width: 100%; height: auto; min-height: var(--row-md); padding: 0 var(--space-md);
+  font-size: var(--font-body); text-align: left;
+}
+.team-person.button-surface { color: var(--fg); }
+.team-avatar { width: var(--icon-feature); height: var(--icon-feature); flex: none; border-radius: var(--radius-pill); object-fit: cover; }
+.team-initials { display: inline-grid; place-items: center; background: var(--line); color: var(--muted); font-size: var(--font-caption); font-weight: 700; }
+.team-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Settings → Phone access card: status rows from GET /api/status. A coloured
    state word is always bold — one rule for every Settings row (#48). */
@@ -2037,6 +2050,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .access-rows dd { margin: 0; }
 .access-rows .ok { color: var(--success); font-weight: 600; }
 .access-rows .warn { color: var(--danger); font-weight: 600; }
+.access-rows a { color: var(--accent); }
 .access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }
 
 /* ====================================================== Step 10 surfaces */

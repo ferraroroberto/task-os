@@ -35,11 +35,13 @@ Route families (each in ``app/webapp/routers/``):
                                    subprocess (#157); the service's own state
                                    rides /api/status's `archive`
     auth    GET /login · POST /api/login|logout — the token / password →
-            cookie swap (Step 7)
+            cookie swap (Step 7); GET /api/team · POST /api/team/name ·
+            GET /api/team/avatars/{i} — team mode's pick-your-name (Step 12)
 
 Access (``src.auth.AuthMiddleware``): loopback is the owner; any other client
 needs the bearer token (header or the ``taskos_token`` cookie ``/login``
-sets). Static assets, ``/healthz``, ``/api/version`` and ``/login`` stay
+sets) or, in team mode, the ``taskos_team`` cookie the team password buys.
+Static assets, ``/healthz``, ``/api/version`` and ``/login`` stay
 public. HTTPS is uvicorn's job (``--ssl-*`` from ``app.webapp.manager`` /
 ``webapp.bat`` when ``webapp/certificates/{cert,key}.pem`` exist).
 
@@ -206,6 +208,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("🔐 auth: token configured — non-loopback clients sign in at /login")
     else:
         logger.warning("⚠️ auth: no token in config — only this PC (loopback) can use the app; run scripts/gen_token.py")
+    team = app.state.config.team
+    if team.enabled:
+        if not (team.password_hash and app.state.config.auth.enabled):
+            logger.warning("⚠️ team mode: on, but teammates cannot sign in — it needs both a token and a team password (scripts/set_team_password.py)")
+        else:
+            logger.info("👥 team mode: on — %d people to pick from at /login", len(team.people))
     if cert_paths() is None:
         logger.warning("⚠️ https: no webapp/certificates/{cert,key}.pem — the launcher serves plain HTTP; run scripts/gen_tailscale_cert.py")
     config = app.state.config
@@ -274,7 +282,9 @@ def create_app() -> FastAPI:
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
     _install_error_handlers(app)
-    app.add_middleware(AuthMiddleware, get_auth=lambda: app.state.config.auth)
+    app.add_middleware(
+        AuthMiddleware, get_auth=lambda: app.state.config.auth, get_team=lambda: app.state.config.team
+    )
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(misc.router)
