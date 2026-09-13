@@ -84,6 +84,9 @@ class FakeCalendar:
 
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._server.daemon_threads = True
+        # `drop` and `slow` end connections on purpose; socketserver would print
+        # each one as a traceback into the test output.
+        self._server.handle_error = lambda request, client_address: None
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
