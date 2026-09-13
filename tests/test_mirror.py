@@ -202,6 +202,29 @@ def test_import_changed_due_logs_actor_md(env, mirror: Mirror) -> None:
     assert mirror.import_tick(conn)["imported"] == []
 
 
+def test_import_recurrence_interval_round_trips(env, mirror: Mirror) -> None:
+    """#229: the interval exports beside the anchor and imports like it; a bad one is rejected."""
+    conn = env["conn"]
+    tid, path = _bathroom(env)
+    mirror.export_task(conn, tid)
+    text = path.read_text(encoding="utf-8")
+    assert "\nrecurrence_interval: null\n" in text
+    text = text.replace("\nrecurrence: null\n", "\nrecurrence: weekly\n")
+    text = text.replace("\nrecurrence_anchor: null\n", "\nrecurrence_anchor: sat\n")
+    _touch(path, text.replace("\nrecurrence_interval: null\n", "\nrecurrence_interval: 7\n"))
+    res = mirror.import_tick(conn)["imported"][0]
+    assert res["applied"] == {"recurrence": "weekly", "recurrence_anchor": "sat", "recurrence_interval": 7}
+    task = repo.get_task(conn, tid)
+    assert (task["recurrence"], task["recurrence_anchor"], task["recurrence_interval"]) == ("weekly", "sat", 7)
+    assert "\nrecurrence_interval: 7\n" in path.read_text(encoding="utf-8")
+    assert mirror.import_tick(conn)["imported"] == []
+
+    _touch(path, path.read_text(encoding="utf-8").replace("\nrecurrence_interval: 7\n", "\nrecurrence_interval: seven\n"))
+    res = mirror.import_tick(conn)["imported"][0]
+    assert len(res["rejected"]) == 1 and "recurrence_interval" in res["rejected"][0]
+    assert repo.get_task(conn, tid)["recurrence_interval"] == 7
+
+
 def test_import_natural_due_phrase_and_person_by_name(env, mirror: Mirror) -> None:
     conn = env["conn"]
     tid, path = _bathroom(env)

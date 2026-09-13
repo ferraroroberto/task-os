@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import calendar
+from datetime import date, datetime, timedelta
 
 import pytest
 
 from src import clock
 from src.dates import (
+    MAX_INTERVAL,
+    RECURRENCES,
     AnchorError,
     DateParseError,
+    IntervalError,
     add_months,
     describe_recurrence,
     next_due,
     normalise_anchor,
+    normalise_interval,
     parse_date,
+    parse_interval,
 )
 
 MON = date(2026, 8, 17)  # a Monday
@@ -240,6 +246,153 @@ def test_next_due_without_a_due_rolls_from_today() -> None:
 )
 def test_describe_recurrence(cadence: str | None, anchor: str | None, label: str) -> None:
     assert describe_recurrence(cadence, anchor) == label
+
+
+# ------------------------------------------------ every-N intervals (#229)
+
+@pytest.mark.parametrize(
+    ("raw", "stored"),
+    [(None, None), ("", None), ("  ", None), (1, None), ("1", None),
+     (2, 2), (7, 7), (" 7 ", 7), (MAX_INTERVAL, MAX_INTERVAL)],
+)
+def test_normalise_interval(raw: object, stored: int | None) -> None:
+    for cadence in RECURRENCES:
+        assert normalise_interval(cadence, raw) == stored
+
+
+@pytest.mark.parametrize("raw", [0, -3, MAX_INTERVAL + 1, "seven", "7.5", 7.5, True, "2w"])
+def test_parse_interval_rejects(raw: object) -> None:
+    with pytest.raises(IntervalError):
+        parse_interval(raw)
+
+
+def test_an_interval_needs_a_recurrence() -> None:
+    with pytest.raises(IntervalError):
+        normalise_interval(None, 7)
+    assert normalise_interval(None, 1) is None   # "every one" of nothing is still nothing
+
+
+@pytest.mark.parametrize(
+    ("cadence", "interval", "expected"),
+    [
+        ("daily", 3, date(2026, 8, 20)),
+        ("weekly", 2, date(2026, 8, 31)),
+        ("monthly", 2, date(2026, 10, 17)),
+        ("quarterly", 2, date(2027, 2, 17)),
+        ("yearly", 3, date(2029, 8, 17)),
+    ],
+)
+def test_next_due_unanchored_interval(cadence: str, interval: int, expected: date) -> None:
+    assert next_due(MON, cadence, None, interval, today=MON) == expected
+
+
+@pytest.mark.parametrize("cadence", RECURRENCES)
+@pytest.mark.parametrize("interval", [None, 1])
+def test_an_interval_of_one_rolls_exactly_as_no_interval(cadence: str, interval: int | None) -> None:
+    """NULL and 1 are today's roll — every existing recurring task is unaffected."""
+    anchors = {"weekly": [None, "fri", "mon,wed"], "monthly": [None, "day-31", "last-fri"]}
+    for anchor in anchors.get(cadence, [None]):
+        for due in (date(2026, 1, 31), MON, date(2026, 7, 4)):
+            for today in (due, MON, date(2026, 12, 30)):
+                assert next_due(due, cadence, anchor, interval, today=today) == next_due(
+                    due, cadence, anchor, today=today
+                )
+
+
+def _roll(due: date, cadence: str, anchor: str | None, interval: int, today: date) -> date:
+    return next_due(due, cadence, anchor, interval, today=today)
+
+
+# The story (#229): treat the clothes against moths every 7 weeks, on a Saturday.
+def test_every_seven_weeks_on_saturday_never_drifts() -> None:
+    """Forty completions — early, on the day, late — stay on the original 7-week grid."""
+    first = date(2026, 9, 5)  # a Saturday
+    assert _roll(first, "weekly", "sat", 7, today=first) == date(2026, 10, 24)
+    due = first
+    for n in range(40):
+        ticked = due + timedelta(days=(-3, 0, 4, 20)[n % 4])   # early · on time · late · very late
+        rolled = _roll(due, "weekly", "sat", 7, today=ticked)
+        assert rolled.weekday() == 5
+        assert (rolled - first).days % 49 == 0
+        assert rolled > ticked
+        assert (rolled - due).days >= 49   # never a plain next-Saturday roll
+        due = rolled
+
+
+def test_an_overdue_interval_catches_up_onto_its_own_phase() -> None:
+    """Three months late, the roll lands on the next qualifying Saturday, not the next Saturday."""
+    assert _roll(date(2026, 9, 5), "weekly", "sat", 7, today=date(2026, 12, 1)) == date(2026, 12, 12)
+
+
+def test_the_due_week_sets_the_phase_for_an_anchored_interval() -> None:
+    """A due off the anchor day lands on the anchor in its own week — the N = 1 rule —
+    and from there every step is a whole interval."""
+    wednesday = date(2026, 9, 2)
+    first = _roll(wednesday, "weekly", "sat", 7, today=wednesday)
+    assert first == date(2026, 9, 5)
+    assert _roll(first, "weekly", "sat", 7, today=first) == date(2026, 10, 24)
+
+
+def test_a_weekday_list_interval_uses_every_day_of_a_qualifying_week() -> None:
+    """Mon/Wed/Fri every 2 weeks: Monday → Wednesday, then Friday → the Monday two weeks on."""
+    assert _roll(MON, "weekly", "mon,wed,fri", 2, today=MON) == date(2026, 8, 19)
+    assert _roll(FRI, "weekly", "mon,wed,fri", 2, today=FRI) == date(2026, 8, 31)
+
+
+@pytest.mark.parametrize(
+    ("due", "anchor", "interval", "expected"),
+    [
+        ("2026-08-15", "day-15", 3, date(2026, 11, 15)),
+        ("2026-08-28", "last-fri", 2, date(2026, 10, 30)),
+        ("2026-12-06", "1-sun", 2, date(2027, 2, 7)),       # across the year end
+        ("2026-01-31", "day-31", 3, date(2026, 4, 30)),     # clamped, then …
+        ("2026-04-30", "day-31", 3, date(2026, 7, 31)),     # … back on the 31st
+    ],
+)
+def test_next_due_monthly_anchor_interval(due: str, anchor: str, interval: int, expected: date) -> None:
+    d = date.fromisoformat(due)
+    assert _roll(d, "monthly", anchor, interval, today=d) == expected
+
+
+def test_a_monthly_anchor_interval_never_drifts() -> None:
+    first = date(2026, 1, 31)
+    due = first
+    for n in range(24):
+        ticked = due + timedelta(days=(0, 10, -2)[n % 3])
+        rolled = _roll(due, "monthly", "day-31", 2, today=ticked)
+        months = (rolled.year - first.year) * 12 + rolled.month - first.month
+        assert months % 2 == 0 and rolled > ticked
+        assert rolled.day == calendar.monthrange(rolled.year, rolled.month)[1]
+        due = rolled
+
+
+def test_a_plain_monthly_interval_catch_up_measures_from_the_original_due() -> None:
+    """Every 2 months from Dec 31, ticked on Mar 1: Feb 28 is passed over and the
+    candidate after it is Apr 30 — measured from the 31st, not stepped from the 28th."""
+    assert _roll(date(2025, 12, 31), "monthly", None, 2, today=date(2026, 3, 1)) == date(2026, 4, 30)
+
+
+@pytest.mark.parametrize(
+    ("cadence", "anchor", "interval", "label"),
+    [
+        ("weekly", "sat", 7, "every 7 weeks on Saturday"),
+        ("weekly", "mon,thu", 2, "every 2 weeks on Monday and Thursday"),
+        ("weekly", "mon,tue,wed,thu,fri", 2, "every 2 weeks on weekdays"),
+        ("weekly", None, 3, "every 3 weeks"),
+        ("daily", None, 3, "every 3 days"),
+        ("monthly", "day-15", 2, "every 2 months on the 15th"),
+        ("monthly", "last-fri", 6, "every 6 months on the last Friday"),
+        ("monthly", None, 2, "every 2 months"),
+        ("quarterly", None, 2, "every 2 quarters"),
+        ("yearly", None, 5, "every 5 years"),
+        ("weekly", "fri", 1, "every Friday"),
+        ("yearly", None, None, "yearly"),
+    ],
+)
+def test_describe_recurrence_with_an_interval(
+    cadence: str, anchor: str | None, interval: int | None, label: str
+) -> None:
+    assert describe_recurrence(cadence, anchor, interval) == label
 
 
 def test_the_default_today_is_the_process_clock_not_the_machine() -> None:

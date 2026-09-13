@@ -32,8 +32,9 @@ import { duePicker } from './dueinput.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
   STATUSES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
-  recurrenceLabel, relDue, startsLabel,
+  relDue, startsLabel,
 } from './format.js';
+import { recurrenceLabel } from './recurrence.js';
 import { snoozeButton } from './snooze.js';
 
 export const SORTS = [
@@ -199,7 +200,7 @@ export function metaLine(t, opts) {
   if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
   else if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
   if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
-  if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', recurrenceLabel(t.recurrence, t.recurrence_anchor)));
+  if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval)));
   if (t.folder_ref) {
     // The phone renders this one icon-only with a 44px tap surface (#74) — the
     // truncated ref reads as noise there — so the name lives on aria-label, not

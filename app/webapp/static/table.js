@@ -23,8 +23,9 @@ import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
-  linkify, priorityLabel, recurrenceLabel, relDue, startsLabel, statusPill,
+  linkify, priorityLabel, relDue, startsLabel, statusPill,
 } from './format.js';
+import { recurrenceLabel } from './recurrence.js';
 import { rowList, statusSelect } from './rows.js';
 
 const COMMENT_MAX = 90;
@@ -294,7 +295,7 @@ function buildDueCell(t, handlers) {
     const r = document.createElement('span');
     r.className = 'due-recur';
     r.innerHTML = icon('repeat');
-    r.title = recurrenceLabel(t.recurrence, t.recurrence_anchor);
+    r.title = recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval);
     btn.appendChild(r);
   }
   // The coarse branch reveals the native input to click it; a cancelled pick

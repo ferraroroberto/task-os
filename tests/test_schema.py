@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from src import db as dbmod
-from src import schema
+from src import schema, tasks_repo
 
 EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
@@ -31,10 +32,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 15
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 16
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 15
+        assert schema.current_version(conn) == 16
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
@@ -49,13 +50,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 15
-        assert schema.migrate(conn) == 15
+        assert schema.migrate(conn) == 16
+        assert schema.migrate(conn) == 16
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -69,10 +70,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 15
+        assert schema.current_version(conn) == 16
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -92,7 +93,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -137,7 +138,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -199,7 +200,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -225,9 +226,11 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         conn.execute("DROP TRIGGER tasks_reject_retired_doing_update")
         # Same reason for everything v13 and later added: the marker is about to
         # be rewound to 12, so the file has to look like a v12 file or the
-        # replayed migrations collide with their own tables (#157's v14, #158's v15).
+        # replayed migrations collide with their own tables and columns (#157's
+        # v14, #158's v15, #229's v16).
         conn.executescript(
             "DROP TABLE archive_corrections; DROP TABLE archive_items; DROP TABLE archive_runs;"
+            " ALTER TABLE tasks DROP COLUMN recurrence_interval;"
         )
         conn.execute("PRAGMA ignore_check_constraints = ON")
         conn.execute("UPDATE settings SET value = '12' WHERE key = 'schema_version'")
@@ -249,7 +252,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
     finally:
         conn.close()
 
-    assert dbmod.init_db() == 15
+    assert dbmod.init_db() == 16
     conn = dbmod.connect()
     try:
         task = conn.execute(
@@ -263,7 +266,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
             )
-        assert schema.migrate(conn) == 15
+        assert schema.migrate(conn) == 16
     finally:
         conn.close()
 
@@ -286,3 +289,60 @@ def test_only_schema_spells_the_closed_pair() -> None:
             if "'done', 'cancelled'" in line or '"done", "cancelled"' in line:
                 offenders.append(f"{path.relative_to(root).as_posix()}:{n}")
     assert offenders == [], "restates the closed pair instead of reading schema.CLOSED_STATUSES/CLOSED_SQL"
+
+
+# (id, title, due, recurrence, anchor) → the due ``done()`` rolled to on Mon
+# 17 Aug 2026 *before* #229 — each value read off origin/main's src/dates.py.
+_PRE_229_ROLLS = [
+    (1, "Water the plants", "2026-08-14", "weekly", None, "2026-08-21"),
+    (2, "Weekly review", "2026-08-14", "weekly", "fri", "2026-08-21"),
+    (3, "Pay the rent", "2026-07-31", "monthly", "day-31", "2026-08-31"),
+    (4, "Dentist check-up", "2026-08-17", "quarterly", None, "2026-11-17"),
+    (5, "Book club", "2026-07-24", "monthly", "last-fri", "2026-08-28"),
+    (6, "Stretch", None, "daily", None, "2026-08-18"),
+]
+
+
+def test_v16_adds_the_interval_without_touching_existing_recurring_tasks(_temp_db: Path) -> None:
+    """A v15 file's recurring tasks — anchored or not — survive v16 untouched,
+    carry no interval, keep their cascading children, and roll exactly as before (#229)."""
+    conn = _open(_temp_db)
+    conn.execute("PRAGMA foreign_keys = ON")
+    for target in range(1, 16):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '15')")
+    for tid, title, due, cadence, anchor, _ in _PRE_229_ROLLS:
+        conn.execute(
+            "INSERT INTO tasks(id, title, status, due, recurrence, recurrence_anchor, created_at, updated_at)"
+            " VALUES (?, ?, 'todo', ?, ?, ?, 'created', 'updated')",
+            (tid, title, due, cadence, anchor),
+        )
+        conn.execute("INSERT INTO links(task_id, url, kind) VALUES (?, 'https://example.com', 'web')", (tid,))
+        conn.execute("INSERT INTO comments(task_id, ts, body) VALUES (?, 'ts', 'keep me')", (tid,))
+        conn.execute(
+            "INSERT INTO activity(task_id, ts, field, old_value, new_value) VALUES (?, 'ts', 'title', 'a', 'b')",
+            (tid,),
+        )
+    conn.commit()
+    before_rows = [tuple(r) for r in conn.execute("SELECT * FROM tasks ORDER BY id")]
+    before_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
+    conn.close()
+
+    assert dbmod.init_db() == 16
+    conn = dbmod.connect()
+    try:
+        after_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
+        # a plain ADD COLUMN: the recurrence CHECK is the shipped one, the table was not rebuilt
+        assert after_sql.startswith(before_sql[: before_sql.rfind(")")].rstrip())
+        assert "recurrence_interval INTEGER" in after_sql
+        after_rows = [tuple(r) for r in conn.execute("SELECT * FROM tasks ORDER BY id")]
+        assert [row[:-1] for row in after_rows] == before_rows
+        assert {row[-1] for row in after_rows} == {None}
+        for table in ("links", "comments", "activity"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == len(_PRE_229_ROLLS)
+
+        with tasks_repo.use_clock(lambda: datetime(2026, 8, 17, 9, 0, 0).astimezone()):
+            for tid, _title, _due, _cadence, _anchor, expected in _PRE_229_ROLLS:
+                assert tasks_repo.done(conn, tid)["due"] == expected
+    finally:
+        conn.close()

@@ -93,6 +93,7 @@ class TaskCreate(BaseModel):
     planned_on: str | None = None
     recurrence: str | None = None
     recurrence_anchor: str | None = None
+    recurrence_interval: int | None = None
     description: str | None = None
     folder_ref: str | None = None
     next_action: str | None = None
@@ -114,6 +115,7 @@ class TaskUpdate(BaseModel):
     planned_on: str | None = None
     recurrence: str | None = None
     recurrence_anchor: str | None = None
+    recurrence_interval: int | None = None
     description: str | None = None
     folder_ref: str | None = None
     next_action: str | None = None

@@ -53,14 +53,14 @@ flowchart LR
     arenum["archive_renumber.py (#176, split out #186)<br/>apply_renumber_map(conn, folder, entries): a verb's renumbered map → UPDATEs<br/>files_json · links(kind=email) · tasks.external_id follow the rename<br/>idempotent · dry_run counts and writes nothing · never imports archive_batch"]
     dates["dates.py<br/>parse_date · next_due · anchors (#112)"]
     qa["quick_add.py<br/>parse · resolve_parent · strip_lead_in"]
-    schema["schema.py<br/>MIGRATIONS v1→v15 · migrate()"]
+    schema["schema.py<br/>MIGRATIONS v1→v16 · migrate()"]
     db["db.py<br/>connect · init_db · get_db"]
     config["config.py<br/>config/config.json · auth {token, password_hash}<br/>save_auth() ← scripts/gen_token.py · set_password.py"]
     certs["certs.py<br/>webapp/certificates/{cert,key}.pem<br/>ensure_cert_fresh() → scripts/gen_tailscale_cert.py --check"]
   end
 
   subgraph storage["SQLite (WAL) · data/tasks.db"]
-    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)<br/>planned_on · plan_order (v8)<br/>recurrence_anchor (v9)<br/>done_at = closed-at, cancelled too (v10)"]
+    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)<br/>planned_on · plan_order (v8)<br/>recurrence_anchor (v9) · recurrence_interval (v16)<br/>done_at = closed-at, cancelled too (v10)"]
     l["links"]
     c["comments<br/>external_id (v3)"]
     a["activity"]

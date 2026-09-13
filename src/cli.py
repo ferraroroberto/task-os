@@ -1,7 +1,8 @@
 """``tasks`` — the terminal / scripting / LLM surface of task-os.
 
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
-              [--recurrence weekly [--recurrence-anchor fri]] [--person "Sam"]
+              [--recurrence weekly [--recurrence-anchor fri] [--recurrence-interval 7]]
+              [--person "Sam"]
               [--desc "..."]
     tasks ls [--status todo,standby|open|all] [--project N] [--due today|week|overdue]
              [--deferred] [--blocked] [--updated-before <date|30d>]
@@ -576,6 +577,13 @@ def pick_backend(args: argparse.Namespace) -> HttpBackend | LocalBackend:
 # ---------------------------------------------------------------- formatting
 
 
+def _recurrence_text(t: dict[str, Any]) -> str:
+    """A task's cadence + anchor + interval in ``src.dates``' one wording."""
+    return describe_recurrence(
+        t["recurrence"], t.get("recurrence_anchor"), t.get("recurrence_interval")
+    )
+
+
 def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
     bits = [f"#{t['id']}", t["title"]]
     tail = []
@@ -588,7 +596,7 @@ def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
     if t.get("starts"):
         tail.append(f"starts {t['starts']}")
     if t.get("recurrence"):
-        tail.append(describe_recurrence(t["recurrence"], t.get("recurrence_anchor")))
+        tail.append(_recurrence_text(t))
     if t.get("type") == "coding" and t.get("issue_ref"):
         tail.append(f"{t['issue_ref']['repo']}#{t['issue_ref']['number']}")
     if t.get("blocked"):
@@ -672,8 +680,7 @@ def fmt_show(t: dict[str, Any]) -> str:
         lines.append(f"  in: {crumb}")
     lines.append(f"  type {t['type']} · status {t['status']} · priority {t['priority']} · due {t.get('due') or '-'}"
                  + (f" · starts {t['starts']}" if t.get("starts") else "")
-                 + (f" · {describe_recurrence(t['recurrence'], t.get('recurrence_anchor'))}"
-                    if t.get("recurrence") else ""))
+                 + (f" · {_recurrence_text(t)}" if t.get("recurrence") else ""))
     if t.get("description"):
         lines.append(f"  {t['description']}")
     if t.get("folder_ref"):
@@ -1080,6 +1087,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             fields["recurrence"] = args.recurrence
         if args.recurrence_anchor:
             fields["recurrence_anchor"] = args.recurrence_anchor
+        if args.recurrence_interval is not None:
+            fields["recurrence_interval"] = args.recurrence_interval
         if args.person:
             fields["person_id"] = _resolve_person(backend, args.person)
         if args.desc:
@@ -1136,7 +1145,7 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "done":
         t = backend.done(args.id)
         if t.get("recurrence"):
-            label = describe_recurrence(t["recurrence"], t.get("recurrence_anchor"))
+            label = _recurrence_text(t)
             return t, f"#{t['id']} done — recurring {label}, next due {t['due']}"
         return t, f"#{t['id']} done"
     if cmd == "plan":
@@ -1246,6 +1255,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--recurrence-anchor",
         help="the fixed day it lands on — weekly: fri or mon,tue,wed,thu,fri · "
              "monthly: day-15, 1-sun, last-fri",
+    )
+    a.add_argument(
+        "--recurrence-interval", type=int, metavar="N",
+        help="repeat every N cadences — --recurrence weekly --recurrence-anchor sat "
+             "--recurrence-interval 7 is every 7 weeks on Saturday",
     )
     a.add_argument("--person", help="person id or name")
     a.add_argument("--desc", help="description (markdown)")

@@ -36,12 +36,31 @@ split ``FREQ=WEEKLY;BYDAY=FR``):
     daily / quarterly / yearly         no anchor
     (no anchor)                        the plain offset from the due date
 
+And an **interval** N — repeat every N cadences rather than every one, stored
+in ``tasks.recurrence_interval`` (issue #229, iCalendar's ``INTERVAL=N``).
+NULL, and 1, mean every cadence; any cadence takes one, anchored or not:
+
+    daily     + 3                      every 3 days
+    weekly    + 7 + ``sat``            every 7 weeks on Saturday
+    monthly   + 2 + ``day-15``         every 2 months on the 15th
+    quarterly + 2                      every 2 quarters
+
 :func:`next_due` is the one roll used on completion, anchored or not: the
 first occurrence strictly after the completed due *and* strictly after today,
 so a task three weeks overdue lands in the future instead of on another
 overdue date. Candidates are always measured from the original due, never
 accumulated step by step, so a plain monthly on the 31st reads Feb 28 → Mar 31
 → Apr 30 rather than drifting onto the 28th for good.
+
+An anchored interval needs a phase — *which* Saturdays count for "every 7
+weeks on Saturday". The due date being completed supplies it: its week
+(Monday-first) or month is a qualifying period, and so is every Nth one after
+it. The roll lands on the first anchored day, in a qualifying period, after
+both that due and today. A rolled due therefore always sits in a qualifying
+period itself, so the phase survives every completion (no drift, however late
+the task is ticked), and editing the due by hand deliberately re-phases it.
+With N = 1 every period qualifies and this is exactly the anchored roll #112
+shipped.
 """
 
 from __future__ import annotations
@@ -59,6 +78,9 @@ ANCHORED_RECURRENCES = ("weekly", "monthly")
 WEEKDAY_ABBR = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 #: The weekday-list anchor behind "every weekday".
 WEEKDAYS_ANCHOR = "mon,tue,wed,thu,fri"
+#: The largest "every N" a task can carry (#229) — far past any real cadence,
+#: and low enough that no roll can walk a date off the end of the calendar.
+MAX_INTERVAL = 999
 
 # Spelled out here rather than read from ``calendar.day_name``, which follows
 # the process locale — the label a task carries must not depend on it.
@@ -66,6 +88,15 @@ _WEEKDAY_FULL = (
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 )
 _ORDINAL_WORDS = {1: "first", 2: "second", 3: "third", 4: "fourth"}
+#: The unit an interval counts, per cadence — "every 3 *days*", "every 2 *quarters*".
+_INTERVAL_UNITS = {
+    "daily": "days", "weekly": "weeks", "monthly": "months",
+    "quarterly": "quarters", "yearly": "years",
+}
+#: Days per cadence step, for the cadences measured in days.
+_CADENCE_DAYS = {"daily": 1, "weekly": 7}
+#: Months per cadence step, for the rest.
+_CADENCE_MONTHS = {"monthly": 1, "quarterly": 3, "yearly": 12}
 
 _WEEKDAYS = {
     "mon": 0, "monday": 0,
@@ -104,6 +135,10 @@ class DateParseError(ValueError):
 
 class AnchorError(ValueError):
     """The anchor is not a fixed day this cadence can carry."""
+
+
+class IntervalError(ValueError):
+    """The interval is not an "every N" this cadence can carry."""
 
 
 def add_months(d: date, months: int) -> date:
@@ -162,17 +197,66 @@ def normalise_anchor(recurrence: str | None, anchor: str | None) -> str | None:
     )
 
 
+def parse_interval(interval: object) -> int | None:
+    """An "every N" in its stored shape, or ``None`` for every cadence (#229).
+
+    ``None``, blank and ``1`` all mean "every cadence" and come back ``None`` —
+    one spelling of no interval, so an explicit 1 never reads as a change. A
+    whole number from 2 to :data:`MAX_INTERVAL` is kept; a digit string is
+    accepted too, because the markdown mirror's front matter is text.
+
+    Raises :class:`IntervalError` for anything else — a typo must be a
+    rejection, never a task that silently repeats every cadence.
+    """
+    if interval is None or (isinstance(interval, str) and not interval.strip()):
+        return None
+    if isinstance(interval, int) and not isinstance(interval, bool):
+        n = interval
+    elif isinstance(interval, str) and interval.strip().isdigit():
+        n = int(interval.strip())
+    else:
+        raise IntervalError(f"interval must be a whole number (got {interval!r})")
+    if not 1 <= n <= MAX_INTERVAL:
+        raise IntervalError(f"interval {n} out of range (1–{MAX_INTERVAL})")
+    return None if n == 1 else n
+
+
+def normalise_interval(recurrence: str | None, interval: object) -> int | None:
+    """:func:`parse_interval`, refused on a task that does not repeat.
+
+    Every cadence takes an interval, so the cadence only matters by being
+    there: a task with no recurrence has nothing to count.
+    """
+    n = parse_interval(interval)
+    if n is not None and recurrence not in RECURRENCES:
+        raise IntervalError(f"an interval needs a recurrence (got {recurrence!r})")
+    return n
+
+
 def _anchor_weekdays(anchor: str) -> list[int]:
     return [_WEEKDAYS[part] for part in anchor.split(",")]
 
 
-def _next_weekday_after(d: date, weekdays: list[int]) -> date:
-    """The first day strictly after ``d`` whose weekday is in ``weekdays``."""
-    for step in range(1, 8):
-        candidate = d + timedelta(days=step)
-        if candidate.weekday() in weekdays:
-            return candidate
-    raise AssertionError("unreachable: a week always contains an anchored weekday")
+def _next_weekday_after(d: date, weekdays: list[int], base: date, interval: int = 1) -> date:
+    """The first day strictly after ``d`` whose weekday is in ``weekdays``,
+    inside a week that qualifies for ``interval``.
+
+    The week holding ``base`` qualifies, and so does every ``interval``-th
+    week after it (Monday-first). ``d`` is never before ``base``, so the search
+    starts at the qualifying week at or before ``d``'s own and needs at most
+    the next one too.
+    """
+    base_monday = base - timedelta(days=base.weekday())
+    weeks = (d - base_monday).days // 7
+    week = weeks - weeks % interval
+    for _ in range(3):  # d's qualifying week, then the next — the third is pure paranoia
+        monday = base_monday + timedelta(weeks=week)
+        for weekday in sorted(weekdays):
+            candidate = monday + timedelta(days=weekday)
+            if candidate > d:
+                return candidate
+        week += interval
+    raise AssertionError(f"unreachable: no anchored weekday within two qualifying weeks of {d}")
 
 
 def _monthly_anchor_date(anchor: str, year: int, month: int) -> date:
@@ -195,28 +279,36 @@ def _monthly_anchor_date(anchor: str, year: int, month: int) -> date:
     return first + timedelta(days=(weekday - first.weekday()) % 7 + (int(ordinal) - 1) * 7)
 
 
-def _next_monthly_anchor_after(d: date, anchor: str) -> date:
-    """The first date the monthly ``anchor`` picks out, strictly after ``d``."""
-    year, month = d.year, d.month
-    for _ in range(3):  # this month, then the next — the third is pure paranoia
-        candidate = _monthly_anchor_date(anchor, year, month)
+def _next_monthly_anchor_after(d: date, anchor: str, base: date, interval: int = 1) -> date:
+    """The first date the monthly ``anchor`` picks out, strictly after ``d``,
+    inside a month that qualifies for ``interval``.
+
+    The month holding ``base`` qualifies, and so does every ``interval``-th
+    month after it — the monthly twin of :func:`_next_weekday_after`.
+    """
+    base_index = base.year * 12 + base.month - 1
+    months = d.year * 12 + d.month - 1 - base_index
+    index = base_index + months - months % interval
+    for _ in range(3):  # d's qualifying month, then the next — the third is pure paranoia
+        candidate = _monthly_anchor_date(anchor, index // 12, index % 12 + 1)
         if candidate > d:
             return candidate
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-    raise AssertionError(f"unreachable: no {anchor!r} occurrence within three months of {d}")
+        index += interval
+    raise AssertionError(f"unreachable: no {anchor!r} occurrence within two qualifying months of {d}")
 
 
-def _next_offset_after(base: date, recurrence: str, floor: date) -> date:
-    """The first ``base + k × cadence`` (k ≥ 1) strictly after ``floor``.
+def _next_offset_after(base: date, recurrence: str, floor: date, interval: int = 1) -> date:
+    """The first ``base + k × interval × cadence`` (k ≥ 1) strictly after ``floor``.
 
     Measured from ``base`` every time rather than accumulated, so a monthly on
     the 31st reads Feb 28 → Mar 31 → Apr 30 instead of clamping once and
     living on the 28th ever after.
     """
-    days = {"daily": 1, "weekly": 7}.get(recurrence)
+    days = _CADENCE_DAYS.get(recurrence)
     if days:
+        days *= interval
         return base + timedelta(days=((floor - base).days // days + 1) * days)
-    months = {"monthly": 1, "quarterly": 3, "yearly": 12}[recurrence]
+    months = _CADENCE_MONTHS[recurrence] * interval
     step = 1
     while True:
         candidate = add_months(base, months * step)
@@ -229,6 +321,7 @@ def next_due(
     due: date | None,
     recurrence: str,
     anchor: str | None = None,
+    interval: int | None = None,
     *,
     today: date | None = None,
 ) -> date:
@@ -242,7 +335,9 @@ def next_due(
     completed is the one that is due, so the next one is the one after it.
 
     ``due`` of ``None`` rolls from today. An unanchored cadence keeps the
-    plain offset it has always had, now with the same catch-up.
+    plain offset it has always had, now with the same catch-up. ``interval``
+    (#229) repeats every N cadences; an anchored one takes its phase from
+    ``due``'s week or month — see the module docstring.
     """
     if recurrence not in RECURRENCES:
         raise ValueError(
@@ -252,38 +347,61 @@ def next_due(
     base = due if due is not None else today
     floor = max(base, today)
     canonical = normalise_anchor(recurrence, anchor)
+    every = normalise_interval(recurrence, interval) or 1
     if canonical is None:
-        return _next_offset_after(base, recurrence, floor)
+        return _next_offset_after(base, recurrence, floor, every)
     if recurrence == "weekly":
-        return _next_weekday_after(floor, _anchor_weekdays(canonical))
-    return _next_monthly_anchor_after(floor, canonical)
+        return _next_weekday_after(floor, _anchor_weekdays(canonical), base, every)
+    return _next_monthly_anchor_after(floor, canonical, base, every)
 
 
-def describe_recurrence(recurrence: str | None, anchor: str | None = None) -> str:
-    """A human label for a cadence + anchor — ``"every Friday"``, ``"monthly on the 15th"``.
+def describe_recurrence(
+    recurrence: str | None, anchor: str | None = None, interval: int | None = None
+) -> str:
+    """A human label for a cadence + anchor + interval — ``"every Friday"``,
+    ``"monthly on the 15th"``, ``"every 7 weeks on Saturday"``.
 
     The one place the wording is decided; ``format.js`` mirrors it for the web
-    UI and the CLI prints it verbatim.
+    UI (``tests/test_recurrence_label_parity.py`` holds the two together) and
+    the CLI prints it verbatim.
     """
     if not recurrence:
         return ""
     canonical = normalise_anchor(recurrence, anchor)
+    every = normalise_interval(recurrence, interval)
+    if every is None:
+        if canonical is None:
+            return recurrence
+        if recurrence == "weekly":
+            return "every " + _weekday_anchor_words(canonical, "weekday")
+        return "monthly on the " + _monthly_anchor_words(canonical)
+    period = f"every {every} {_INTERVAL_UNITS[recurrence]}"
     if canonical is None:
-        return recurrence
+        return period
     if recurrence == "weekly":
-        days = _anchor_weekdays(canonical)
-        if days == [0, 1, 2, 3, 4]:
-            return "every weekday"
-        names = [_WEEKDAY_FULL[d] for d in days]
-        if len(names) == 1:
-            return f"every {names[0]}"
-        return "every " + ", ".join(names[:-1]) + " and " + names[-1]
+        return f"{period} on " + _weekday_anchor_words(canonical, "weekdays")
+    return f"{period} on the " + _monthly_anchor_words(canonical)
+
+
+def _weekday_anchor_words(canonical: str, weekdays_word: str) -> str:
+    """``"Friday"`` · ``"Monday and Thursday"`` · the Mon–Fri list as ``weekdays_word``."""
+    days = _anchor_weekdays(canonical)
+    if days == [0, 1, 2, 3, 4]:
+        return weekdays_word
+    names = [_WEEKDAY_FULL[d] for d in days]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _monthly_anchor_words(canonical: str) -> str:
+    """``"15th"`` · ``"first Sunday"`` · ``"last Friday"``."""
     m = _ANCHOR_DAY_RE.match(canonical)
     if m:
-        return f"monthly on the {_ordinal(int(m.group(1)))}"
+        return _ordinal(int(m.group(1)))
     ordinal, name = canonical.split("-")
     which = "last" if ordinal == "last" else _ORDINAL_WORDS[int(ordinal)]
-    return f"monthly on the {which} {_WEEKDAY_FULL[_WEEKDAYS[name]]}"
+    return f"{which} {_WEEKDAY_FULL[_WEEKDAYS[name]]}"
 
 
 def _ordinal(n: int) -> str:

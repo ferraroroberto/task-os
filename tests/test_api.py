@@ -36,7 +36,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 15
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 16
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -509,6 +509,20 @@ def test_recurrence_anchor_round_trips_and_rejects_a_bad_pair(client: TestClient
     assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
     assert client.patch(f"/api/tasks/{tid}", json={"recurrence_anchor": None}).json()[
         "recurrence_anchor"
+    ] is None
+
+
+def test_recurrence_interval_round_trips_and_rejects_a_bad_value(client: TestClient) -> None:
+    """The interval is a first-class field on create, PATCH and read (#229)."""
+    tid = _mk(client, "Moths", recurrence="weekly", recurrence_anchor="sat", recurrence_interval=7)
+    assert client.get(f"/api/tasks/{tid}").json()["recurrence_interval"] == 7
+    assert client.patch(f"/api/tasks/{tid}", json={"recurrence_interval": 3}).json()["recurrence_interval"] == 3
+    bad = client.patch(f"/api/tasks/{tid}", json={"recurrence_interval": 0})
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "validation_error"
+    orphan = client.post("/api/tasks", json={"title": "No cadence", "recurrence_interval": 7})
+    assert orphan.status_code == 422
+    assert client.patch(f"/api/tasks/{tid}", json={"recurrence_interval": None}).json()[
+        "recurrence_interval"
     ] is None
 
 

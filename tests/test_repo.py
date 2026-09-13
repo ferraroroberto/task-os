@@ -369,6 +369,58 @@ def test_changing_the_cadence_drops_an_anchor_it_cannot_carry(conn: sqlite3.Conn
     assert repo.update_task(conn, back["id"], recurrence=None)["recurrence_anchor"] is None
 
 
+# ------------------------------------------- every-N intervals (#229)
+
+def test_done_rolls_every_seven_weeks_on_saturday(conn: sqlite3.Connection, frozen: None) -> None:
+    """The story: a Saturday clothes-moth treatment, ticked Monday, lands 7 weeks on — a Saturday."""
+    t = repo.create_task(conn, "Treat clothes against moths", status="todo", due="2026-08-15",
+                         recurrence="weekly", recurrence_anchor="sat", recurrence_interval=7)
+    assert t["recurrence_interval"] == 7
+    rolled = repo.done(conn, t["id"], actor="me")
+    assert rolled["due"] == "2026-10-03"                        # Sat 15 Aug + 7 weeks
+    assert ("due", "2026-08-15", "2026-10-03") in _fields(rolled["activity"])
+    again = repo.done(conn, t["id"], actor="me")
+    assert again["due"] == "2026-11-21"                         # and 7 more, still a Saturday
+
+
+def test_interval_is_stored_canonically(conn: sqlite3.Connection) -> None:
+    assert repo.create_task(conn, "A", recurrence="daily", recurrence_interval="3")["recurrence_interval"] == 3
+    assert repo.create_task(conn, "B", recurrence="daily", recurrence_interval=1)["recurrence_interval"] is None
+    t = repo.create_task(conn, "C", recurrence="weekly", recurrence_interval=2)
+    # an explicit 1 is "no interval": a change, logged as one
+    cleared = repo.update_task(conn, t["id"], recurrence_interval=1, actor="me")
+    assert cleared["recurrence_interval"] is None
+    assert ("recurrence_interval", "2", None) in _fields(cleared["activity"])
+    # setting the value already stored is no change at all
+    before = len(cleared["activity"])
+    assert len(repo.update_task(conn, t["id"], recurrence_interval=None)["activity"]) == before
+
+
+@pytest.mark.parametrize(
+    ("cadence", "interval"),
+    [("weekly", 0), ("weekly", -2), ("monthly", 1000), ("daily", "seven"), (None, 7)],
+)
+def test_bad_interval_is_rejected(conn: sqlite3.Connection, cadence: str | None, interval: object) -> None:
+    with pytest.raises(repo.ValidationError):
+        repo.create_task(conn, "Nope", recurrence=cadence, recurrence_interval=interval)
+    t = repo.create_task(conn, "Nope too", recurrence=cadence)
+    with pytest.raises(repo.ValidationError):
+        repo.update_task(conn, t["id"], recurrence_interval=interval)
+
+
+def test_the_interval_follows_the_cadence_and_leaves_with_it(conn: sqlite3.Connection) -> None:
+    """Every cadence takes an interval, so switching keeps it; clearing Repeat drops it, logged."""
+    t = repo.create_task(conn, "Moths", recurrence="weekly", recurrence_anchor="sat", recurrence_interval=7)
+    switched = repo.update_task(conn, t["id"], recurrence="quarterly", actor="me")
+    assert (switched["recurrence_anchor"], switched["recurrence_interval"]) == (None, 7)
+    gone = repo.update_task(conn, t["id"], recurrence=None, actor="me")
+    assert gone["recurrence_interval"] is None
+    assert ("recurrence_interval", "7", None) in _fields(gone["activity"])
+    # both halves in one PATCH validate as a pair
+    both = repo.update_task(conn, t["id"], recurrence="monthly", recurrence_interval=2)
+    assert (both["recurrence"], both["recurrence_interval"]) == ("monthly", 2)
+
+
 def test_done_non_recurring_closes(conn: sqlite3.Connection) -> None:
     t = repo.create_task(conn, "One-off", due="2026-08-20")
     d = repo.done(conn, t["id"], actor="me")
