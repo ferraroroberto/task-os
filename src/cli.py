@@ -834,6 +834,7 @@ def fmt_capture_status(c: dict[str, Any]) -> str:
             f" · next {c.get('next_run') or '(app not running)'}")
     if c.get("last_run"):
         line += (f" · {r.get('listed', 0)} flagged · {r.get('created', 0)} new"
+                 + (f" · {r['dismissed']} dismissed" if r.get("dismissed") else "")
                  + (f" · {len(r.get('errors') or [])} error(s)" if r.get("errors") else ""))
     if c.get("last_error"):
         line += f" · last error {c['last_error']}"

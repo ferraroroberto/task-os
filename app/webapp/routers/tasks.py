@@ -318,7 +318,9 @@ def create_task(
     A capture source (the email poller here, whatsapp-radar over HTTP) posts the
     source's own id; the first call creates (**201**), a replay gets the same
     task back **untouched** on **200**, so a retry after a timeout can never
-    make a second Inbox task. Without ``external_id`` nothing changes.
+    make a second Inbox task. A replay after that task was deleted is **410**
+    ``capture_dismissed`` (#254) — the delete stands. Without ``external_id``
+    nothing changes.
     """
     fields = _resolve_dates(
         body.model_dump(exclude={"title", "actor", "external_id"}, exclude_none=True)
@@ -329,6 +331,10 @@ def create_task(
     task, outcome = repo.capture_task(
         db, external_id=body.external_id, title=body.title, actor=actor, **fields
     )
+    if outcome == "dismissed":
+        raise repo.CaptureDismissed(
+            f"the task captured under {body.external_id!r} was deleted; it will not be captured again"
+        )
     if outcome == "unchanged":
         response.status_code = 200
     return task

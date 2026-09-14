@@ -36,7 +36,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 16
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 17
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -585,6 +585,20 @@ def test_external_id_makes_the_create_idempotent(client: TestClient) -> None:
     assert drifted.json()["title"] == "Bring the forms on Friday"
 
     assert client.get("/api/tasks", params={"status": "inbox"}).json()["count"] == 1
+
+
+def test_a_capture_replayed_after_its_task_was_deleted_is_410(client: TestClient) -> None:
+    """#254 — a delete dismisses the capture: a replay of the same source id
+    must not bring the task back, and says why in the one error envelope."""
+    body = {"title": "Bring the forms on Friday", "external_id": "wa:msg-9"}
+    task = client.post("/api/tasks", json=body).json()
+    assert client.delete(f"/api/tasks/{task['id']}").status_code == 200
+
+    replay = client.post("/api/tasks", json=body)
+
+    assert replay.status_code == 410
+    assert replay.json()["error"]["code"] == "capture_dismissed"
+    assert client.get("/api/tasks", params={"status": "inbox"}).json()["count"] == 0
 
 
 def test_a_create_without_an_external_id_is_unchanged(client: TestClient) -> None:
