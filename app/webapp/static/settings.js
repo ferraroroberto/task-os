@@ -365,6 +365,7 @@ export function mountSettings(opts) {
       if (r) {
         els.statusCaptureRun.append(
           ' · ' + r.listed + ' flagged · ' + r.created + ' new'
+          + (r.dismissed ? ' · ' + r.dismissed + ' dismissed' : '')
           + (r.errors && r.errors.length ? ' · ' + r.errors.length + ' error(s)' : '')
         );
       }

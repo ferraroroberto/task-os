@@ -39,7 +39,10 @@ link and the capture key onto the new name, so nothing is captured twice.
 
 Capture is one-way by construction. Clearing the flag later does not delete or
 close the task, and nothing here ever writes back to the mail — see
-:func:`~src.tasks_repo.capture_task`.
+:func:`~src.tasks_repo.capture_task`. The other direction holds too: deleting a
+captured task *dismisses* that mail (#254). Its archived ``.msg`` keeps the
+flag it was saved with, so the index offers it on every pass; the capture key
+outlives the task and the pass counts it ``dismissed`` instead of landing it.
 
 :class:`EmailCaptureService` runs it in-app: a thread started from the webapp
 lifespan like the issue sync — first pass shortly after startup, then every
@@ -144,19 +147,24 @@ class CaptureResult:
     listed: int = 0
     created: int = 0
     unchanged: int = 0
+    #: still flagged, but the task it once landed was deleted (#254)
+    dismissed: int = 0
     errors: list[str] = field(default_factory=list)
     created_ids: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "listed": self.listed, "created": self.created, "unchanged": self.unchanged,
-            "errors": list(self.errors), "created_ids": list(self.created_ids),
+            "dismissed": self.dismissed, "errors": list(self.errors),
+            "created_ids": list(self.created_ids),
         }
 
     def summary(self) -> str:
         bits = [f"{self.listed} flagged email(s)", f"{self.created} new"]
         if self.unchanged:
             bits.append(f"{self.unchanged} already captured")
+        if self.dismissed:
+            bits.append(f"{self.dismissed} dismissed")
         if self.errors:
             bits.append(f"{len(self.errors)} error(s)")
         return " · ".join(bits)
@@ -286,6 +294,9 @@ def capture_once(
                 status="inbox",
                 description=_description(entry),
             )
+            if outcome == "dismissed":
+                result.dismissed += 1
+                continue
             if outcome != "created":
                 result.unchanged += 1
                 continue

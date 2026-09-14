@@ -15,6 +15,7 @@ EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
     "ai_suggestions", "archive_runs", "archive_items", "archive_corrections",
     "tasks_fts", "comments_fts", "mirror_state", "mirror_events", "task_blocks",
+    "capture_keys",
 }
 
 
@@ -32,10 +33,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 16
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 17
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 16
+        assert schema.current_version(conn) == 17
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
@@ -50,13 +51,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 16
-        assert schema.migrate(conn) == 16
+        assert schema.migrate(conn) == 17
+        assert schema.migrate(conn) == 17
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -70,10 +71,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 16
+        assert schema.current_version(conn) == 17
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -93,7 +94,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -138,7 +139,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -200,7 +201,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -227,10 +228,10 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         # Same reason for everything v13 and later added: the marker is about to
         # be rewound to 12, so the file has to look like a v12 file or the
         # replayed migrations collide with their own tables and columns (#157's
-        # v14, #158's v15, #229's v16).
+        # v14, #158's v15, #229's v16, #254's v17).
         conn.executescript(
             "DROP TABLE archive_corrections; DROP TABLE archive_items; DROP TABLE archive_runs;"
-            " ALTER TABLE tasks DROP COLUMN recurrence_interval;"
+            " ALTER TABLE tasks DROP COLUMN recurrence_interval; DROP TABLE capture_keys;"
         )
         conn.execute("PRAGMA ignore_check_constraints = ON")
         conn.execute("UPDATE settings SET value = '12' WHERE key = 'schema_version'")
@@ -252,7 +253,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
     finally:
         conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
         task = conn.execute(
@@ -266,7 +267,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
             )
-        assert schema.migrate(conn) == 16
+        assert schema.migrate(conn) == 17
     finally:
         conn.close()
 
@@ -328,7 +329,7 @@ def test_v16_adds_the_interval_without_touching_existing_recurring_tasks(_temp_d
     before_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
     conn.close()
 
-    assert dbmod.init_db() == 16
+    assert dbmod.init_db() == 17
     conn = dbmod.connect()
     try:
         after_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
@@ -344,5 +345,49 @@ def test_v16_adds_the_interval_without_touching_existing_recurring_tasks(_temp_d
         with tasks_repo.use_clock(lambda: datetime(2026, 8, 17, 9, 0, 0).astimezone()):
             for tid, _title, _due, _cadence, _anchor, expected in _PRE_229_ROLLS:
                 assert tasks_repo.done(conn, tid)["due"] == expected
+    finally:
+        conn.close()
+
+
+def test_v17_backfills_the_capture_keys_of_tasks_captured_before_it(_temp_db: Path) -> None:
+    """An install upgraded past #254 must not re-land a task it captured earlier
+    and deletes afterwards: every captured task's key is recorded. An *imported*
+    task (its create row rewritten to ``imported``) reconciles on purpose and
+    is left out; a plain task has no key to record."""
+    conn = _open(_temp_db)
+    for target in range(1, 17):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '16')")
+    rows = [
+        (1, "Captured mail", "email:{onedrive}/mail/a.msg", "created"),
+        (2, "Captured message", "wa:msg-1", "created"),
+        (3, "Imported page", "notion:abc", "imported"),
+        (4, "Hand-made", None, "created"),
+    ]
+    for tid, title, ext, field in rows:
+        conn.execute(
+            "INSERT INTO tasks(id, title, external_id, created_at, updated_at)"
+            " VALUES (?, ?, ?, '2026-09-01T08:00:00+02:00', 'u')",
+            (tid, title, ext),
+        )
+        conn.execute(
+            "INSERT INTO activity(task_id, ts, field, new_value) VALUES (?, 't', ?, ?)",
+            (tid, field, ext),
+        )
+    conn.commit()
+    conn.close()
+
+    assert dbmod.init_db() == 17
+    conn = dbmod.connect()
+    try:
+        keys = dict(conn.execute("SELECT external_id, captured_at FROM capture_keys").fetchall())
+        assert keys == {
+            "email:{onedrive}/mail/a.msg": "2026-09-01T08:00:00+02:00",
+            "wa:msg-1": "2026-09-01T08:00:00+02:00",
+        }
+        tasks_repo.delete_task(conn, 1)
+        assert tasks_repo.capture_task(
+            conn, external_id="email:{onedrive}/mail/a.msg", title="Captured mail", actor="t"
+        ) == (None, "dismissed")
     finally:
         conn.close()

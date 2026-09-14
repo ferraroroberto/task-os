@@ -233,6 +233,61 @@ def test_capture_task_is_idempotent_under_a_racing_second_pass(
     assert len(repo.list_tasks(conn, status=["inbox"])) == 1
 
 
+def test_a_deleted_capture_stays_gone_while_the_email_stays_flagged(
+    conn: sqlite3.Connection, tmp_path: Path, od: Path, placeholders: dict[str, str]
+) -> None:
+    """#254 — deleting a captured task is a dismissal, not a reset. The archived
+    ``.msg`` keeps its flag, so before the capture key outlived the row the very
+    next pass landed the same mail again under a new id. Both delete paths."""
+    index = _index(tmp_path, od, placeholders)
+    first = capture_once(conn, index)
+    assert first.created == 2
+    one, two = first.created_ids
+    repo.delete_task(conn, one)
+    repo.bulk_delete(conn, [two])
+
+    again = capture_once(conn, index)
+
+    assert again.listed == 2 and again.created == 0
+    assert again.dismissed == 2 and again.unchanged == 0
+    assert repo.list_tasks(conn, status=["inbox"]) == []
+    assert "2 dismissed" in again.summary()
+
+
+def test_capture_task_tells_a_live_capture_from_a_dismissed_one(conn: sqlite3.Connection) -> None:
+    task, outcome = repo.capture_task(conn, external_id="wa:1", title="Kept", actor="t")
+    assert outcome == "created"
+    kept, outcome = repo.capture_task(conn, external_id="wa:1", title="Kept", actor="t")
+    assert outcome == "unchanged" and kept["id"] == task["id"]
+
+    repo.delete_task(conn, task["id"])
+    gone, outcome = repo.capture_task(conn, external_id="wa:1", title="Kept", actor="t")
+    assert (gone, outcome) == (None, "dismissed")
+    assert conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
+
+    # a key never offered before still lands
+    _, outcome = repo.capture_task(conn, external_id="wa:2", title="New", actor="t")
+    assert outcome == "created"
+
+
+def test_a_renamed_ref_keeps_a_dismissed_capture_dismissed(conn: sqlite3.Connection) -> None:
+    """The archiver renumbers a folder after the task was already deleted: the
+    key must follow the new name even though no task carries it any more."""
+    old_ref, new_ref = "{onedrive}/mail/0042 - quote.msg", "{onedrive}/mail/0002 - quote.msg"
+    task, _ = repo.capture_task(
+        conn, external_id=email_capture.external_id_for(old_ref), title="Quote", actor="t"
+    )
+    repo.delete_task(conn, task["id"])
+
+    moved = email_capture.rename_ref(conn, old_ref, new_ref)
+
+    assert moved == {"links": 0, "tasks": 0}
+    _, outcome = repo.capture_task(
+        conn, external_id=email_capture.external_id_for(new_ref), title="Quote", actor="t"
+    )
+    assert outcome == "dismissed"
+
+
 def test_capture_task_refuses_a_blank_external_id(conn: sqlite3.Connection) -> None:
     with pytest.raises(repo.ValidationError):
         repo.capture_task(conn, external_id="  ", title="No key", actor="t")

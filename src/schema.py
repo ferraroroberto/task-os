@@ -75,6 +75,13 @@ Version history:
        existing recurring task rolls exactly as before. Validation (NULL or
        2–999) and the phase rule for an anchored interval live in
        ``src/dates.py``.
+    17 capture_keys(external_id, captured_at) + backfill            (issue #254)
+       — every source id a *capture* ever landed, kept apart from the task
+       row so deleting the task dismisses the capture instead of resetting
+       it: the source (a still-flagged ``.msg``) keeps offering the id, and
+       ``tasks_repo.capture_task`` answers ``dismissed`` rather than landing it
+       again. Backfilled from every keyed task that was not *imported* (an
+       import reconciles on purpose and has no tombstone).
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -493,10 +500,29 @@ _V16 = """
 ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER;
 """
 
+# capture_keys (#254) — the capture key outlives the task. ``tasks.external_id``
+# alone made "capture lands once" true only while the row existed: a delete
+# took the key with it and the next poll landed the same still-flagged mail
+# again. No FK to ``tasks`` on purpose — surviving the delete is the point.
+# The backfill covers every keyed task except an import's (its ``created``
+# activity row was rewritten to ``imported``), so an install upgraded past
+# this step can delete what it captured earlier and keep it gone.
+_V17 = """
+CREATE TABLE capture_keys (
+    external_id TEXT PRIMARY KEY,
+    captured_at TEXT NOT NULL
+);
+INSERT INTO capture_keys(external_id, captured_at)
+    SELECT external_id, created_at FROM tasks
+     WHERE external_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM activity a
+                        WHERE a.task_id = tasks.id AND a.field = 'imported');
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16,
+    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17,
 }
 
 #: The version a freshly migrated database carries.

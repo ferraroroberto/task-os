@@ -1,7 +1,7 @@
 """Capture route family — the inbound channels that land tasks in Inbox (#98).
 
     POST /api/capture/email/run   one flagged-email pass now →
-                                  {listed, created, unchanged, errors, created_ids}
+                                  {listed, created, unchanged, dismissed, errors, created_ids}
                                   (409 + the reason when the poller is off)
 
 There is deliberately no ``GET /api/capture/status`` twin: the poller's

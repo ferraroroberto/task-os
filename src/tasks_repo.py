@@ -42,7 +42,9 @@ Rules enforced here (plan §04):
 - a *capture* is idempotent on ``external_id`` too, but one-way:
   :func:`capture_task` creates the task the first time a source offers it and
   then never touches it again (#98) — an import reconciles, a capture only
-  ever lands.
+  ever lands. Its key is remembered in ``capture_keys`` apart from the row,
+  so deleting the task *dismisses* the capture rather than inviting the
+  source to land it again (#254).
 
 Timestamps come from ``src.clock``'s :func:`now_iso` (local time, second
 precision, offset kept), re-exported here with :func:`use_clock` and
@@ -137,6 +139,13 @@ class ValidationError(RepoError):
 class CycleError(ValidationError):
     code = "cycle"
     http_status = 409
+
+
+class CaptureDismissed(RepoError):
+    """A capture source replayed an id whose task was deleted (#254)."""
+
+    code = "capture_dismissed"
+    http_status = 410
 
 
 # ------------------------------------------------------- folder resolver
@@ -1055,8 +1064,8 @@ def capture_task(
     title: str,
     actor: str,
     **fields: Any,
-) -> tuple[dict[str, Any], str]:
-    """Land a task from a capture source, once → ``(task, "created" | "unchanged")``.
+) -> tuple[dict[str, Any] | None, str]:
+    """Land a task from a capture source, once → ``(task, "created" | "unchanged")`` or ``(None, "dismissed")``.
 
     The rule behind every inbound channel (#98): flagged emails polled from the
     archiver's index, a WhatsApp message the radar marks, anything later. It is
@@ -1067,10 +1076,14 @@ def capture_task(
       write and no activity row. Un-flagging the email, editing the title here,
       moving the task on: none of it is undone by the next pass. A captured
       task, once real, is yours.
+    - ``external_id`` captured before but its task since **deleted** →
+      ``(None, "dismissed")``, no write (#254). Deleting is yours too: the
+      source keeps offering the id (an archived ``.msg`` keeps its flag), and
+      ``capture_keys`` — which outlives the row — is what stops it coming back.
     - otherwise the task is created normally (``created`` activity, ``status``
       ``inbox`` unless a caller says otherwise — named here rather than
-      inherited, because :data:`DEFAULT_STATUS` is now ``todo``) and stamped
-      with ``external_id``.
+      inherited, because :data:`DEFAULT_STATUS` is now ``todo``), stamped
+      with ``external_id``, and its key recorded in ``capture_keys``.
 
     The stamp is a second statement rather than a ``create_task`` field because
     ``external_id`` is not a task *field* (it is not in ``_TASK_FIELDS``, so it
@@ -1085,6 +1098,10 @@ def capture_task(
     existing = find_by_external_id(conn, "tasks", external_id)
     if existing is not None:
         return get_task(conn, int(existing["id"])), "unchanged"
+    if conn.execute(
+        "SELECT 1 FROM capture_keys WHERE external_id = ?", (external_id,)
+    ).fetchone() is not None:
+        return None, "dismissed"
 
     # Inbox is named here rather than inherited from `create_task`'s default:
     # that default is now "todo" (#148, what a *hand-made* task means), and the
@@ -1098,6 +1115,10 @@ def capture_task(
     task_id = int(created["id"])
     try:
         conn.execute("UPDATE tasks SET external_id = ? WHERE id = ?", (external_id, task_id))
+        conn.execute(
+            "INSERT OR IGNORE INTO capture_keys(external_id, captured_at) VALUES (?, ?)",
+            (external_id, created["created_at"]),
+        )
         conn.commit()
     except sqlite3.IntegrityError:
         # Another pass captured the same source id between the lookup and here.
@@ -1759,6 +1780,10 @@ def rename_external_id(
     already belong to a task a poll captured before the heal ran. The v3
     partial unique index refuses it, and this says so in the log and returns 0
     rather than merging two tasks nobody asked it to merge.
+
+    The ``capture_keys`` row moves too, **with or without a task** (#254): a
+    capture already dismissed by a delete must stay dismissed under its new
+    name, or the renamed ``.msg`` lands again. The count is still tasks moved.
     """
     old_external_id, new_external_id = (old_external_id or "").strip(), (new_external_id or "").strip()
     if not old_external_id or not new_external_id or old_external_id == new_external_id:
@@ -1766,13 +1791,24 @@ def rename_external_id(
     rows = conn.execute(
         "SELECT id FROM tasks WHERE external_id = ?", (old_external_id,)
     ).fetchall()
-    if not rows or dry_run:
+    keyed = conn.execute(
+        "SELECT 1 FROM capture_keys WHERE external_id = ?", (old_external_id,)
+    ).fetchone() is not None
+    if dry_run or not (rows or keyed):
         return len(rows)
     try:
         conn.execute(
             "UPDATE tasks SET external_id = ? WHERE external_id = ?",
             (new_external_id, old_external_id),
         )
+        # OR IGNORE: the new name may already be known (captured before the
+        # heal ran) — then the old key simply goes.
+        conn.execute(
+            "INSERT OR IGNORE INTO capture_keys(external_id, captured_at)"
+            " SELECT ?, captured_at FROM capture_keys WHERE external_id = ?",
+            (new_external_id, old_external_id),
+        )
+        conn.execute("DELETE FROM capture_keys WHERE external_id = ?", (old_external_id,))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.rollback()
