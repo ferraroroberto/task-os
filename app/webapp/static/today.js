@@ -3,7 +3,8 @@
  * Tasks due ≤ today (overdue first, then today), grouped by root project
  * with the shared due-first sort inside each group (#116 — a task's date
  * always decides its position, recurring or not); "Later this week"
- * (tomorrow … +7 days) sits collapsed below as a flat disclosure. Rows are
+ * (tomorrow … +7 days) sits open by default below as a flat disclosure,
+ * collapsible via its own chevron (#253). Rows are
  * the ONE task row (rows.js, issue #46) — title + status select (the Board
  * control; the old checkbox is gone), the meta line (project hidden — the
  * group already names it) and the snooze control (#87) — the one view that
@@ -170,10 +171,13 @@ export function renderToday(host, items, handlers, opts) {
   main.appendChild(section);
 
   // Later this week — a flat disclosure (vendored markup, hairline instead of a card box).
+  // Open by default (#253) — renderToday rebuilds the host from scratch every
+  // call, so there is no user-toggle state to preserve across a re-render.
   const later = collapsibleCard({
     className: 'disclosure-flat today-later', icon: 'calendar-days', title: 'Later this week',
     count: counts.week + (counts.week === 1 ? ' task' : ' tasks'),
   });
+  later.card.open = true;
   if (!data.week.length) {
     later.body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
   } else {
