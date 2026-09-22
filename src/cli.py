@@ -33,8 +33,9 @@ Every command takes ``--json`` for machine-readable output (the same shapes
 the REST API returns — a fact only a live request can settle, such as
 ``mirror status``'s ``https``, comes back as the string ``"unknown"`` on the
 app-down path rather than being omitted or guessed). Talks to the running
-server over HTTP when it answers
-(``http://127.0.0.1:<config port>``, override with ``--server URL`` /
+server over HTTP(S) when it answers
+(``https://127.0.0.1:<config port>`` when the cert pair exists, else
+``http://…``; override with ``--server URL`` /
 ``TASKOS_URL``); otherwise — app down — it opens the database directly, so
 the CLI works either way. ``--local`` forces the direct path. ``--actor``
 names who is acting (activity / comment author); default = the configured
@@ -57,6 +58,7 @@ import json
 import logging
 import os
 import sqlite3
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -107,7 +109,27 @@ class CliError(Exception):
 Transport = Callable[[str, str, dict[str, Any] | None], tuple[int, Any]]
 
 
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def _tls_context(base: str) -> ssl.SSLContext | None:
+    """HTTPS to loopback skips certificate verification (hostname included): the served leaf names the
+    tailnet host (``<host>.ts.net``), never ``127.0.0.1``, and loopback is
+    already the owner (``src/auth.py``) — the same exception the tray's own
+    probe makes (``WebappManager.is_reachable``, #259). Any other host is
+    verified as usual (``None`` = urllib's default context)."""
+    parts = urllib.parse.urlsplit(base)
+    if parts.scheme != "https" or (parts.hostname or "") not in _LOOPBACK_HOSTS:
+        return None
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def _urllib_transport(base: str, actor: str | None) -> Transport:
+    tls = _tls_context(base)
+
     def send(method: str, path: str, body: dict[str, Any] | None) -> tuple[int, Any]:
         data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(base + path, data=data, method=method)
@@ -117,7 +139,7 @@ def _urllib_transport(base: str, actor: str | None) -> Transport:
         if actor:
             req.add_header("X-Actor", actor)
         try:
-            with urllib.request.urlopen(req, timeout=15) as res:
+            with urllib.request.urlopen(req, timeout=15, context=tls) as res:
                 raw = res.read().decode("utf-8")
                 return res.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as exc:
@@ -581,7 +603,7 @@ class LocalBackend:
 def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
     """One short ``/healthz`` probe — is the app up?"""
     try:
-        with urllib.request.urlopen(f"{base}/healthz", timeout=timeout) as res:
+        with urllib.request.urlopen(f"{base}/healthz", timeout=timeout, context=_tls_context(base)) as res:
             return res.status == 200
     except (urllib.error.URLError, OSError):
         return False
@@ -592,12 +614,25 @@ def pick_backend(args: argparse.Namespace) -> HttpBackend | LocalBackend:
     actor = args.actor or (config.team.people[0] if config.team.people else None)
     if args.local:
         return LocalBackend(actor)
-    base = args.server or os.environ.get(SERVER_ENV, "").strip() or f"http://127.0.0.1:{config.port}"
-    if server_answers(base):
-        return HttpBackend(base, actor)
-    if args.server or os.environ.get(SERVER_ENV):
-        raise CliError(f"nothing answers {base}/healthz (drop --server / {SERVER_ENV} to use the database directly)")
+    explicit = args.server or os.environ.get(SERVER_ENV, "").strip()
+    if explicit:
+        if server_answers(explicit):
+            return HttpBackend(explicit, actor)
+        raise CliError(f"nothing answers {explicit}/healthz (drop --server / {SERVER_ENV} to use the database directly)")
+    for base in _default_bases(config.port):
+        if server_answers(base):
+            return HttpBackend(base, actor)
     return LocalBackend(actor)
+
+
+def _default_bases(port: int) -> list[str]:
+    """Where the app is on this PC: HTTPS first when the cert pair exists (the
+    tray then serves TLS — ``src/certs.py``), plain HTTP always as the second
+    try, like the tray's own probe (#259)."""
+    from src import certs
+
+    plain = f"http://127.0.0.1:{port}"
+    return [f"https://127.0.0.1:{port}", plain] if certs.cert_paths() else [plain]
 
 
 # ---------------------------------------------------------------- formatting

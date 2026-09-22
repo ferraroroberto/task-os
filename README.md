@@ -208,7 +208,7 @@ Also `GET /` shell · `GET /login` sign-in page · `GET /healthz` liveness · `G
 
 ## CLI — `tasks`
 
-`tasks.bat` at the repo root runs `src/cli.py` in the venv. It talks to the running app over HTTP when `:8448` answers (`--server URL` / `TASKOS_URL` to point elsewhere) and falls back to opening the database directly when the app is down (`--local` forces that). `--json` on every command prints the same shapes the API returns; `--actor NAME` sets who is acting; `-v` says which backend answered.
+`tasks.bat` at the repo root runs `src/cli.py` in the venv. It talks to the running app when `:8448` answers — `https://127.0.0.1` first when the cert pair exists (the tray then serves TLS), else plain `http://` (#259). Loopback skips certificate verification, since the leaf names the tailnet host and loopback is already the owner; any other `--server URL` / `TASKOS_URL` is verified normally. When nothing answers (the app is down), it opens the database directly (`--local` forces that). `--json` on every command prints the same shapes the API returns; `--actor NAME` sets who is acting; `-v` says which backend answered.
 
 ```
 tasks add "title" [--parent N] [--due <date>] [--starts <date>] [--priority high|medium|low|none]

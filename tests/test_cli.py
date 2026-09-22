@@ -542,3 +542,78 @@ def test_folder_absolute_path_folds_onto_placeholders(run: Runner, monkeypatch: 
     assert code == 0 and _json(out)["folder_ref"] == "{onedrive}/house/boiler"
     code, out, _ = run("set", str(_json(out)["id"]), "--folder", "E:/elsewhere/x", "--json")
     assert _json(out)["folder_ref"] == "E:/elsewhere/x"
+
+
+def test_pick_backend_prefers_https_on_loopback_when_a_cert_is_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#259: the tray serves HTTPS whenever the cert pair exists, so the default
+    probe must try https://127.0.0.1 first — a plain-HTTP-only probe made every
+    command on a real install fall back to the database."""
+    from src import certs
+
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "t.db"))
+    monkeypatch.delenv(cli.SERVER_ENV, raising=False)
+    monkeypatch.setattr(certs, "cert_paths", lambda project_root=None: (Path("c"), Path("k")))
+    monkeypatch.setattr(cli, "server_answers", lambda base, timeout=0.0: base.startswith("https://"))
+    be = cli.pick_backend(cli.build_parser().parse_args(["ls"]))
+    assert isinstance(be, cli.HttpBackend) and be.base.startswith("https://127.0.0.1:")
+    # no cert → plain HTTP, as before
+    monkeypatch.setattr(certs, "cert_paths", lambda project_root=None: None)
+    monkeypatch.setattr(cli, "server_answers", lambda base, timeout=0.0: base.startswith("http://"))
+    be = cli.pick_backend(cli.build_parser().parse_args(["ls"]))
+    assert isinstance(be, cli.HttpBackend) and be.base.startswith("http://127.0.0.1:")
+
+
+def test_https_loopback_probe_and_calls_accept_a_cert_for_another_name(tmp_path: Path) -> None:
+    """#259: the served leaf names the tailnet host, not 127.0.0.1 — loopback
+    (already the owner, src/auth.py) is reached without the hostname check,
+    both by the probe and by the HTTP backend's calls."""
+    import datetime as dt
+    import http.server
+    import ssl
+    import threading
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "box.example.ts.net")])
+    now = dt.datetime.now(dt.UTC)
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+        .serial_number(1).not_valid_before(now - dt.timedelta(days=1)).not_valid_after(now + dt.timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName("box.example.ts.net")]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    cert_file, key_file = tmp_path / "cert.pem", tmp_path / "key.pem"
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 — http.server's hook name
+            body = b'{"items": []}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cert_file, key_file)
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"https://127.0.0.1:{server.server_address[1]}"
+        assert cli.server_answers(base, timeout=3) is True
+        assert cli.HttpBackend(base).ls() == []
+    finally:
+        server.shutdown()
+        server.server_close()
