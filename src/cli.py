@@ -113,7 +113,7 @@ _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
 def _tls_context(base: str) -> ssl.SSLContext | None:
-    """HTTPS to loopback skips the hostname check: the served leaf names the
+    """HTTPS to loopback skips certificate verification (hostname included): the served leaf names the
     tailnet host (``<host>.ts.net``), never ``127.0.0.1``, and loopback is
     already the owner (``src/auth.py``) — the same exception the tray's own
     probe makes (``WebappManager.is_reachable``, #259). Any other host is
