@@ -174,7 +174,7 @@ All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error
 | `PATCH /api/tasks/{id}` · `DELETE /api/tasks/{id}` | partial update (fields present only; `parent_id` goes through the cycle guard; `due`, `starts` and `planned_on` natural or ISO, `""` clears — the plan rules of [Plan my day](#plan-my-day) apply) · delete the task **and its subtree** → `{id, deleted}` (the count that went; the detail's `descendant_count` says it beforehand — what the drawer's confirmation names, #121) |
 | `POST /api/tasks/{id}/move` `{parent_id\|null}` · `POST /api/tasks/{id}/done` | re-parent · complete (recurring → roll) |
 | `GET/POST /api/tasks/{id}/comments` `{body, origin?, author?}` · `PATCH …/comments/{cid}` `{body}` · `DELETE …/comments/{cid}` | thread · add → 201 · rewrite the body (author, time and `origin` unchanged; empty = 422) · remove |
-| `GET/POST /api/tasks/{id}/links` `{url, label?, kind?}` · `PATCH …/links/{lid}` `{label}` · `DELETE …/links/{lid}` | links · rename a link's label (url/kind unchanged) · remove |
+| `GET/POST /api/tasks/{id}/links` `{url, label?, kind?}` (kind omitted → inferred from the URL by `tasks_repo.infer_link_kind`: `{…}` ref → folder, `mailto:` → email, an AI chat host → ai, a GitHub issue URL → issue, else web) · `PATCH …/links/{lid}` `{label}` · `DELETE …/links/{lid}` | links · rename a link's label (url/kind unchanged) · remove |
 | `GET /api/tasks/{id}/blockers` · `POST …/blockers` `{blocker_id}` · `DELETE …/blockers/{blocker_id}` | the task's blockers · add one (201; 409 `cycle` on a self-block or a cycle) · remove one (404 if it wasn't a blocker) — see [Blocked-by dependencies](#blocked-by-dependencies) |
 | `PUT /api/tasks/{id}/issue` `{provider?, repo, number, url?, state?}` · `DELETE …/issue` | attach an existing issue (→ `coding`; the next sync fills state / url) · detach (→ `task`; the issue is untouched) |
 | `GET /api/tasks/{id}/issue` · `POST /api/tasks/{id}/issue` `{repo}` | the drawer's panel: `{ref, info}` (the stored ref + the last-seen labels / updated time from the sync cache; `?live=1` asks the provider now) · **create an issue from the task** (title + description → `gh issue create`, assigned to you) and link it → 201 with the task (`409 already_linked` / `issues_disabled`, `502 provider_error`) |
@@ -217,6 +217,7 @@ tasks add "title" [--parent N] [--due <date>] [--starts <date>] [--priority high
                   [--recurrence-anchor fri | mon,tue,wed,thu,fri | day-15 | 1-sun | last-fri]
                   [--recurrence-interval N]   every N cadences (2–999)
                   [--person id|name] [--desc "…"]
+                  [--folder <ref|path>] [--link <url> [--link-label "…"]]   one link; its kind is inferred
 tasks ls [--status todo,standby | open | all] [--project N] [--due today|week|overdue] [--person id|name]
          [--deferred]              only the sleeping tasks (a start date still ahead)
          [--blocked]               only tasks with an open blocker
@@ -224,6 +225,9 @@ tasks ls [--status todo,standby | open | all] [--project N] [--due today|week|ov
 tasks show N               detail with breadcrumb, children, links, comments, activity (old → new)
 tasks tree [N]             nested view (everything, or N's subtree)
 tasks comment N "text"     origin = cli
+tasks set N [--title "…"] [--status …] [--priority …] [--desc "…"] [--folder <ref|path>|none]
+                           edit fields, one activity row each; --status done does not roll a recurring task (use done)
+tasks link N <url> [--label "…"] [--kind web|folder|email|issue|ai]   kind omitted → inferred from the URL
 tasks due N <date>         "none" clears
 tasks starts N <date>      the day it starts mattering — snooze; "none" clears
 tasks done N               recurring tasks roll forward and stay open
@@ -461,6 +465,8 @@ What gets registered is `opener.ps1`, which receives the URL as an **argument**,
 ## AI conversation links
 
 Paste the URL of an AI conversation into a task's links — Claude Code / claude.ai, ChatGPT, Gemini, GitHub Copilot, Microsoft Copilot are all recognised and stored as one kind (`ai`), no per-provider split — and the task wears a **bot chip** on the Board / Table / Tree rows, same as the folder chip. A Claude Code session page shows the full transcript even after the local session ended (archived sessions stay readable), so the link never rots.
+
+The recognition is the server's (`tasks_repo.infer_link_kind`, #257), so an agent in a conversation gets the same result from the terminal: `tasks add "…" --link <session-url> --folder <ref>` creates the task already connected, and `tasks link N <session-url>` attaches the conversation to an existing one.
 
 - **Phone (coarse pointer):** tapping the chip opens the conversation in a new tab — there is no CLI to resume into.
 - **Desktop:** clicking the chip opens a small popover — **Open conversation** (the usual choice, new tab) and, for a `claude.ai/code/session_…` URL, **Resume in CLI on this PC** (`taskos://resume?session=…`). The same per-PC opener that opens folders searches `%USERPROFILE%\.claude\projects` for the transcript carrying that session id, and reopens it in a terminal (`wt` when installed) running `claude --resume <local-session-uuid>` **in the repo the session ran in** — that terminal is the one deliberate exception to the opener's "no window" rule (task-os#130), since it's the feature. A session this PC never saw falls back to opening the web page, with a popup notice. The pure-`cmd` fallback registration cannot search transcripts — it says so instead of degrading silently.

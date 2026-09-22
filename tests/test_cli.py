@@ -485,3 +485,60 @@ def test_cli_add_starts_in_to_do_and_can_still_say_inbox(run: Runner) -> None:
     assert code == 0 and "todo" not in out
     code, out, _ = run("add", "Triage one", "--status", "inbox")
     assert code == 0 and "inbox" in out
+
+
+def test_folder_links_and_set_over_both_backends(run: Runner) -> None:
+    """#257: an agent attaches the conversation and the folder, and edits fields, from the CLI."""
+    session = "https://claude.ai/code/session_01TestOnlyAgentLink"
+    code, out, _ = run("add", "Call the clinic", "--folder", "{onedrive}/health/records",
+                       "--link", session, "--link-label", "health: results", "--json")
+    assert code == 0
+    t = _json(out)
+    assert t["folder_ref"] == "{onedrive}/health/records"
+    assert [(lk["kind"], lk["label"], lk["url"]) for lk in t["links"]] == [("ai", "health: results", session)]
+
+    code, out, _ = run("link", str(t["id"]), "https://chatgpt.com/c/abc", "--json")
+    assert code == 0 and _json(out)["kind"] == "ai"
+    code, out, _ = run("link", str(t["id"]), "https://example.com/doc")
+    assert code == 0 and out.strip() == f"#{t['id']} linked [web] https://example.com/doc"
+    code, out, _ = run("link", str(t["id"]), "https://example.com/x", "--kind", "folder", "--json")
+    assert _json(out)["kind"] == "folder"
+
+    code, out, _ = run("set", str(t["id"]), "--status", "standby", "--title", "Call the clinic back",
+                       "--desc", "ask for the report", "--priority", "high", "--json")
+    assert code == 0
+    t2 = _json(out)
+    assert (t2["status"], t2["title"], t2["description"], t2["priority"]) == (
+        "standby", "Call the clinic back", "ask for the report", "high")
+    acts = _json(run("show", str(t["id"]), "--json")[1])["activity"]
+    fields = [a["field"] for a in acts]
+    for f in ("status", "title", "description", "priority"):
+        assert fields.count(f) == 1, (f, fields)
+    assert {a["actor"] for a in acts if a["field"] in ("status", "title")} == {"tester"}
+
+    code, out, _ = run("set", str(t["id"]), "--folder", "none", "--json")
+    assert code == 0 and _json(out)["folder_ref"] is None
+
+
+def test_set_and_link_refuse_bad_input(run: Runner) -> None:
+    run("add", "Thing")
+    code, _, err = run("set", "1")
+    assert code != 0 and "at least one" in err
+    code, _, err = run("add", "Other", "--link-label", "orphan")
+    assert code != 0 and "--link" in err
+    code, _, err = run("link", "99", "https://example.com")
+    assert code != 0
+    with pytest.raises(SystemExit):
+        run("link", "1", "https://example.com", "--kind", "carrier-pigeon")
+
+
+def test_folder_absolute_path_folds_onto_placeholders(run: Runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#257: an absolute --folder is stored as the portable ref, like the drawer's paste."""
+    import dataclasses
+
+    real = cli.load_config()
+    monkeypatch.setattr(cli, "load_config", lambda: dataclasses.replace(real, placeholders={"onedrive": "D:/Cloud"}))
+    code, out, _ = run("add", "Scan the invoice", "--folder", r"D:\Cloud\house\boiler", "--json")
+    assert code == 0 and _json(out)["folder_ref"] == "{onedrive}/house/boiler"
+    code, out, _ = run("set", str(_json(out)["id"]), "--folder", "E:/elsewhere/x", "--json")
+    assert _json(out)["folder_ref"] == "E:/elsewhere/x"

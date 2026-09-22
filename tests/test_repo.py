@@ -1035,3 +1035,25 @@ def test_list_tasks_costs_the_same_queries_whatever_the_row_count(tmp_path: Path
         return Counting.n
 
     assert queries_for(3) == queries_for(30)
+
+
+@pytest.mark.parametrize(("url", "kind"), [
+    ("{onedrive}/areas/x", "folder"),
+    ("mailto:someone@example.com", "email"),
+    ("https://claude.ai/code/session_01abc", "ai"),
+    ("https://chatgpt.com/c/1", "ai"),
+    ("https://gemini.google.com/app/1", "ai"),
+    ("https://github.com/copilot", "ai"),
+    ("https://github.com/owner/repo/issues/12", "issue"),
+    ("https://example.com/claude.ai/", "web"),
+    ("https://example.com", "web"),
+])
+def test_infer_link_kind(url: str, kind: str) -> None:
+    """#257: the one server-side rule every link without a kind goes through."""
+    assert repo.infer_link_kind(url) == kind
+
+
+def test_add_link_without_kind_infers_it(conn: sqlite3.Connection) -> None:
+    t = repo.create_task(conn, "Chat")
+    assert repo.add_link(conn, t["id"], "https://chatgpt.com/c/9")["kind"] == "ai"
+    assert repo.add_link(conn, t["id"], "https://example.com", kind="folder")["kind"] == "folder"

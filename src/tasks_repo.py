@@ -68,6 +68,7 @@ row when one exists, else the cloud twin derived from ``config.web_roots`` —
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from collections.abc import Callable, Iterable
 from datetime import date, timedelta
@@ -1701,18 +1702,45 @@ def clear_mirror_events(conn: sqlite3.Connection) -> int:
 # ------------------------------------------------------------------ links
 
 
+_AI_URL_RE = re.compile(
+    r"^https?://(?:www\.)?(?:claude\.ai/|chatgpt\.com/|chat\.openai\.com/|gemini\.google\.com/"
+    r"|copilot\.microsoft\.com/|github\.com/copilot(?:/|$))",
+    re.IGNORECASE,
+)
+_ISSUE_URL_RE = re.compile(r"github\.com/[^/]+/[^/]+/issues/\d+")
+
+
+def infer_link_kind(url: str) -> str:
+    """The ``kind`` a link is stored under when the caller names none — the
+    one rule for the drawer, quick-add, the CLI and any script (#257): a
+    ``{placeholder}`` ref is a folder, ``mailto:`` an email, a known AI chat
+    host an AI conversation (#77), a GitHub issue URL an issue, else web."""
+    url = (url or "").strip()
+    if url.startswith("{"):
+        return "folder"
+    if re.match(r"^mail(?:to:|://)", url, re.IGNORECASE):
+        return "email"
+    if _AI_URL_RE.match(url):
+        return "ai"
+    if _ISSUE_URL_RE.search(url):
+        return "issue"
+    return "web"
+
+
 def add_link(
     conn: sqlite3.Connection,
     task_id: int,
     url: str,
     *,
     label: str | None = None,
-    kind: str = "web",
+    kind: str | None = None,
 ) -> dict[str, Any]:
+    """Attach a link; ``kind=None`` → :func:`infer_link_kind`."""
     _require_task(conn, task_id)
     url = (url or "").strip()
     if not url:
         raise ValidationError("link url is required")
+    kind = kind or infer_link_kind(url)
     if kind not in LINK_KINDS:
         raise ValidationError(f"kind must be one of {', '.join(LINK_KINDS)} (got {kind!r})")
     cur = conn.execute(

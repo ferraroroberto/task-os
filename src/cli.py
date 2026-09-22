@@ -3,12 +3,14 @@
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
               [--recurrence weekly [--recurrence-anchor fri] [--recurrence-interval 7]]
               [--person "Sam"]
-              [--desc "..."]
+              [--desc "..."] [--folder "{onedrive}/..."] [--link URL [--link-label "..."]]
     tasks ls [--status todo,standby|open|all] [--project N] [--due today|week|overdue]
              [--deferred] [--blocked] [--updated-before <date|30d>]
     tasks show N
     tasks tree [N]
     tasks comment N "text"
+    tasks set N [--title] [--status] [--priority] [--desc] [--folder ref|none]   edit fields (#257)
+    tasks link N URL [--label "..."] [--kind web|folder|email|issue|ai]   kind inferred when omitted
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
     tasks starts N <date>       the day it starts mattering; same vocabulary, "none" clears
     tasks done N
@@ -65,7 +67,14 @@ from typing import Any
 
 from src.config import load_config
 from src.dates import DateParseError, describe_recurrence, parse_date
-from src.schema import CLOSED_STATUSES, DEFAULT_STATUS, RECURRENCES, TASK_PRIORITIES, TASK_STATUSES
+from src.schema import (
+    CLOSED_STATUSES,
+    DEFAULT_STATUS,
+    LINK_KINDS,
+    RECURRENCES,
+    TASK_PRIORITIES,
+    TASK_STATUSES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +183,13 @@ class HttpBackend:
 
     def due(self, task_id: int, due: str | None) -> dict[str, Any]:
         return self._call("PATCH", f"/api/tasks/{task_id}", {"due": due, "actor": self.actor})
+
+    def update(self, task_id: int, **fields: Any) -> dict[str, Any]:
+        return self._call("PATCH", f"/api/tasks/{task_id}", {**fields, "actor": self.actor})
+
+    def link(self, task_id: int, url: str, label: str | None, kind: str | None) -> dict[str, Any]:
+        body = {"url": url, "label": label, "kind": kind}
+        return self._call("POST", f"/api/tasks/{task_id}/links", body)
 
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._call("PATCH", f"/api/tasks/{task_id}", {"starts": starts, "actor": self.actor})
@@ -337,6 +353,12 @@ class LocalBackend:
 
     def due(self, task_id: int, due: str | None) -> dict[str, Any]:
         return self._wrap(self._repo.set_due, task_id, due, actor=self.actor)
+
+    def update(self, task_id: int, **fields: Any) -> dict[str, Any]:
+        return self._wrap(self._repo.update_task, task_id, actor=self.actor, **fields)
+
+    def link(self, task_id: int, url: str, label: str | None, kind: str | None) -> dict[str, Any]:
+        return self._wrap(self._repo.add_link, task_id, url, label=label, kind=kind)
 
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._wrap(self._repo.set_starts, task_id, starts, actor=self.actor)
@@ -1073,6 +1095,17 @@ def _triage_dialogue(args: argparse.Namespace, backend: HttpBackend | LocalBacke
     )
 
 
+def _folder_arg(value: str) -> str | None:
+    """``--folder`` → the stored ref: ``none`` / empty clears, an absolute path
+    folds onto the configured placeholders (``{onedrive}/…``) exactly as the
+    drawer's ``POST /api/resolve`` does, so the chip opens on any PC (#257)."""
+    from src import placeholders
+
+    if value.strip().lower() in ("", "none"):
+        return None
+    return placeholders.to_ref(value, load_config().placeholders) or None
+
+
 def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
     """Execute one command → (json payload, human text)."""
     cmd = "rm" if args.command == "delete" else args.command   # `delete` is rm's alias
@@ -1098,7 +1131,20 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             fields["person_id"] = _resolve_person(backend, args.person)
         if args.desc:
             fields["description"] = args.desc
+        if args.folder:
+            fields["folder_ref"] = _folder_arg(args.folder)
+        if args.link_label and not args.link:
+            raise CliError("--link-label needs --link", code="usage")
         t = backend.add(**fields)
+        if args.link:
+            # a second call: the task already exists if this one fails, so
+            # the error names it rather than implying nothing was written
+            try:
+                backend.link(t["id"], args.link, args.link_label, None)
+            except CliError as exc:
+                raise CliError(f"added #{t['id']}, but the link failed: {exc}", code=exc.code,
+                               detail=exc.detail) from exc
+            t = backend.show(t["id"])
         return t, f"added {_fmt_task_line(t)}"
     if cmd == "ls":
         filters: dict[str, Any] = {}
@@ -1141,6 +1187,25 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
     if cmd == "comment":
         c = backend.comment(args.id, args.text)
         return c, f"commented on #{args.id}: {c['body']}"
+    if cmd == "set":
+        changes: dict[str, Any] = {}
+        if args.title is not None:
+            changes["title"] = args.title
+        if args.status:
+            changes["status"] = args.status
+        if args.priority:
+            changes["priority"] = args.priority
+        if args.desc is not None:
+            changes["description"] = args.desc
+        if args.folder is not None:
+            changes["folder_ref"] = _folder_arg(args.folder)
+        if not changes:
+            raise CliError("set needs at least one of --title --status --priority --desc --folder", code="usage")
+        t = backend.update(args.id, **changes)
+        return t, f"updated {_fmt_task_line(t)}"
+    if cmd == "link":
+        lk = backend.link(args.id, args.url, args.label, args.kind)
+        return lk, f"#{args.id} linked [{lk['kind']}] {lk.get('label') or lk['url']}"
     if cmd == "due":
         t = backend.due(args.id, _parse_date_arg(args.date))
         return t, f"#{t['id']} due → {t.get('due') or 'none'}"
@@ -1268,6 +1333,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     a.add_argument("--person", help="person id or name")
     a.add_argument("--desc", help="description (markdown)")
+    a.add_argument("--folder", help="folder ref ({onedrive}/…) or absolute path — the per-PC opener's chip")
+    a.add_argument("--link", help="one link to attach (its kind is inferred: an AI chat URL wears the bot chip)")
+    a.add_argument("--link-label", help="label for --link")
 
     ls = sub.add_parser("ls", parents=[common], help="list tasks")
     ls.add_argument("--status", help=f"comma list of {','.join(TASK_STATUSES)} · open (default) · all")
@@ -1296,6 +1364,21 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("comment", parents=[common], help="add a comment")
     c.add_argument("id", type=int)
     c.add_argument("text")
+
+    se_ = sub.add_parser("set", parents=[common], help="edit fields — title, status, priority, description, folder")
+    se_.add_argument("id", type=int)
+    se_.add_argument("--title")
+    se_.add_argument("--status", choices=TASK_STATUSES,
+                     help="done here does not roll a recurring task — use `tasks done` for that")
+    se_.add_argument("--priority", choices=TASK_PRIORITIES)
+    se_.add_argument("--desc", help="replace the description (markdown); \"\" clears")
+    se_.add_argument("--folder", help="folder ref or absolute path; 'none' clears")
+
+    lk = sub.add_parser("link", parents=[common], help="attach a link to a task")
+    lk.add_argument("id", type=int)
+    lk.add_argument("url")
+    lk.add_argument("--label")
+    lk.add_argument("--kind", choices=LINK_KINDS, help="default: inferred from the URL")
 
     d = sub.add_parser("due", parents=[common], help="set the due date")
     d.add_argument("id", type=int)
