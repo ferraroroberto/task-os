@@ -625,3 +625,12 @@ def test_status_carries_the_capture_state(client: TestClient) -> None:
     assert "capture" in st
     assert st["capture"]["enabled"] is False
     assert st["capture"]["reason"] == "search.email_db not configured"
+
+
+def test_link_without_kind_is_classified_server_side(seeded: TestClient) -> None:
+    """#257: the drawer and quick-add POST no kind; the server's rule decides."""
+    t = seeded.post("/api/tasks", json={"title": "Chat link"}).json()["id"]
+    ai = seeded.post(f"/api/tasks/{t}/links", json={"url": "https://chatgpt.com/c/7"})
+    assert ai.status_code == 201 and ai.json()["kind"] == "ai"
+    web = seeded.post(f"/api/tasks/{t}/links", json={"url": "https://example.com/p", "label": "p"})
+    assert web.json()["kind"] == "web"

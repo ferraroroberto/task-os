@@ -33,7 +33,7 @@
 
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, linkKind, relDue } from './format.js';
+import { STATUSES, relDue } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { toast } from './toast.js';
 import { mountMic } from './voice.js';
@@ -234,7 +234,7 @@ export function createQuickAdd(dialog, opts) {
       try {
         await api('/api/tasks/' + task.id + '/links', {
           method: 'POST',
-          body: { url: url, label: linkLabel.value.trim() || null, kind: linkKind(url) },
+          body: { url: url, label: linkLabel.value.trim() || null },
         });
       } catch (err) {
         toast('Added #' + task.id + ', but the link failed: ' + (err.message || 'unknown error'), 'error');

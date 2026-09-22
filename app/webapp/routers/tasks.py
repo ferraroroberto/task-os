@@ -175,7 +175,8 @@ class CommentEditBody(BaseModel):
 class LinkBody(BaseModel):
     url: str
     label: str | None = None
-    kind: str = "web"
+    #: omitted → inferred from the URL by ``repo.infer_link_kind`` (#257)
+    kind: str | None = None
 
 
 class LinkLabelBody(BaseModel):

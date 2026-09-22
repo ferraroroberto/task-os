@@ -31,7 +31,7 @@ import { confirmDialog } from './confirm.js';
 import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, aiChip, chipFor, fmtTs, isDeferred, issueChip,
-  linkKind, linkify, providerIcon, relDue, renderMarkdown, statusPill,
+  linkify, providerIcon, relDue, renderMarkdown, statusPill,
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { RECURRENCES, anchorOptions, intervalUnit } from './recurrence.js';
@@ -602,9 +602,9 @@ export function createDrawer(el, opts) {
       ev.preventDefault();
       const u = url.value.trim();
       if (!u) return;
-      const kind = linkKind(u);
       try {
-        await api('/api/tasks/' + t.id + '/links', { method: 'POST', body: { url: u, label: label.value.trim() || null, kind: kind } });
+        // no kind: the server classifies the URL (one rule, #257)
+        await api('/api/tasks/' + t.id + '/links', { method: 'POST', body: { url: u, label: label.value.trim() || null } });
         await refresh();
       } catch (err) { toast(err.message, 'error'); }
     });
