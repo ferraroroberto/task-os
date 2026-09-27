@@ -207,6 +207,39 @@ def test_file_ref_and_unknown_placeholder(pc: dict[str, str]) -> None:
 
 
 @windows_only
+def test_only_folders_and_documents_on_this_pc_are_opened(pc: dict[str, str]) -> None:
+    """A file goes to its default app only when that app opens it rather than
+    runs it, and a ref that starts on another computer is refused before it is
+    touched — in the pure-cmd branch, in the inline-PowerShell one (an accented
+    name) and through the launcher. Folders and documents still open."""
+    od = Path(pc["od"])
+    for name in ("tool.exe", "script.bat", "link.lnk", "café.exe"):
+        (od / name).write_bytes(b"x")
+    for ref, shown in (
+        ("{onedrive}/tool.exe", f"{od}\\tool.exe"),
+        ("{onedrive}/TOOL.EXE", f"{od}\\TOOL.EXE"),
+        ("{onedrive}/tool.exe.", f"{od}\\tool.exe."),
+        ("{onedrive}/script.bat", f"{od}\\script.bat"),
+        ("{onedrive}/link.lnk", f"{od}\\link.lnk"),
+        ("{onedrive}/café.exe", f"{od}\\café.exe"),
+        ("//unreachable.invalid/share/x.txt", "\\\\unreachable.invalid\\share\\x.txt"),
+        ("\\\\unreachable.invalid\\share", "\\\\unreachable.invalid\\share"),
+        ("//unreachable.invalid/café", "\\\\unreachable.invalid\\café"),
+    ):
+        r = run_opener(opener_url(ref), pc)
+        assert r.returncode == 0 and _out(r) == f"refused: {shown}", f"{ref!r}: {_out(r)}"
+    assert _out(run_launcher(opener_url("{onedrive}/script.bat"), pc)) == f"refused: {od}\\script.bat"
+    # the same refusal for real: visible, nothing started, its own exit code
+    r = run_opener(opener_url("{onedrive}/tool.exe"), pc, dryrun=False)
+    assert r.returncode == 6 and "Nothing was opened" in _decode(r.stdout)
+    # what the opener is for is unchanged
+    assert _out(run_opener(opener_url("{onedrive}/notes.txt"), pc)) == f"open: {od}\\notes.txt"
+    assert _out(run_opener(opener_url("{onedrive}/house"), pc)) == f"open: {od}\\house"
+    (od / "réunion.txt").write_bytes(b"x")
+    assert _out(run_opener(opener_url("{onedrive}/réunion.txt"), pc)) == f"open: {od}\\réunion.txt"
+
+
+@windows_only
 def test_missing_path_shows_the_notice_for_real(pc: dict[str, str]) -> None:
     r = run_opener(opener_url("{onedrive}/not-synced-here"), pc, dryrun=False)
     assert r.returncode == 1
