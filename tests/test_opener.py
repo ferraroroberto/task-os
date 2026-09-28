@@ -232,6 +232,8 @@ def test_only_documents_open_anything_else_is_shown_in_its_folder(pc: dict[str, 
         ("{onedrive}/café.exe", f"reveal: {od / 'café.exe'}"),
         ("{onedrive}/café.sh", f"reveal: {od / 'café.sh'}"),
         ("{onedrive}/notes.txt::$DATA", f"refused: {od / 'notes.txt::$DATA'}"),
+        ("{onedrive}/notes.txt:x.cmd", f"refused: {od / 'notes.txt:x.cmd'}"),
+        ("{onedrive}/café.txt:x", f"refused: {od / 'café.txt:x'}"),
         ("//unreachable.invalid/share/x.txt", f"refused: {unc}share\\x.txt"),
         (unc + "share", f"refused: {unc}share"),
         ("//unreachable.invalid/café", f"refused: {unc}café"),
@@ -244,10 +246,39 @@ def test_only_documents_open_anything_else_is_shown_in_its_folder(pc: dict[str, 
         r = run_opener(opener_url(ref), pc)
         assert r.returncode == 0 and _out(r) == line, f"{ref!r}: {_out(r)}"
     assert _out(run_launcher(opener_url("{onedrive}/script.bat"), pc)) == f"reveal: {od / 'script.bat'}"
+    # a wildcard names no one file: refused in both branches (raw in the URL → cmd)
+    for url, shown in (("taskos://open?ref=%7Bonedrive%7D%2Ft*.exe", od / "t*.exe"),
+                       ("taskos://open?ref=%7Bonedrive%7D%2Ftool.ex?", od / "tool.ex?"),
+                       (opener_url("{onedrive}/caf*.exe"), od / "caf*.exe")):
+        assert _out(run_opener(url, pc)) == f"refused: {shown}", url
     # the refusal for real: visible, nothing started, its own exit code
     for ref in ("//unreachable.invalid/share", "//unreachable.invalid/café"):
         r = run_opener(opener_url(ref), pc, dryrun=False)
         assert r.returncode == 6 and "Nothing was opened" in _decode(r.stdout), ref
+
+
+@windows_only
+def test_a_file_under_a_share_placeholder_is_a_file_not_a_folder(pc: dict[str, str]) -> None:
+    """``if exist "<path>\\"`` is true for a plain file on a network share, so
+    folder-or-file is decided by attributes: a program under a placeholder that
+    opener.env maps to a share is revealed, a document there opens, and a folder
+    there opens in Explorer — in both branches. Reached over this PC's own
+    administrative share; skipped where that share is off."""
+    od = Path(pc["od"])
+    share = f"\\\\localhost\\{od.drive[0]}$" + str(od)[2:]
+    if not os.path.isdir(share):
+        pytest.skip("this PC's administrative share is not reachable")
+    for name in ("tool.cmd", "café.cmd"):
+        (od / name).write_bytes(b"x")
+    env_file = Path(pc["la"]) / "task-os" / "opener.env"
+    env_file.write_text(env_file.read_text(encoding="utf-8") + f"scr={share}\n", encoding="utf-8")
+    for ref, line in (
+        ("{scr}/tool.cmd", f"reveal: {share}\\tool.cmd"),
+        ("{scr}/café.cmd", f"reveal: {share}\\café.cmd"),
+        ("{scr}/notes.txt", f"open: {share}\\notes.txt"),
+        ("{scr}/house", f"open: {share}\\house"),
+    ):
+        assert _out(run_opener(opener_url(ref), pc)) == line, ref
 
 
 @windows_only
