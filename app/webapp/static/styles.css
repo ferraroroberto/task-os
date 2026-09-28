@@ -1317,7 +1317,8 @@ a.chip:hover { text-decoration: underline; }
 }
 
 /* ------------------------------------------------------------ drawer */
-/* Desktop: fixed right-hand panel below the sticky nav; the content
+/* Desktop: fixed right-hand panel below the sticky nav (level with the page
+   head beside the wide-layout rail); the content
    column shrinks so the list is never covered. Phone: full-screen sheet. */
 .drawer {
   --drawer-w: 440px;
@@ -1337,6 +1338,11 @@ a.chip:hover { text-decoration: underline; }
     width: var(--drawer-w);
   }
   body[data-drawer="open"] .app { padding-right: calc(var(--drawer-w, 440px) + var(--gap) * 2); }
+}
+/* Beside the wide-layout left rail (nav-tabs.css) there is no top bar to clear:
+   the panel starts on .app's own top line, level with the page head. */
+@media (min-width: 1100px) and (pointer: fine) {
+  .drawer { top: calc(var(--gap) + var(--space-xs)); }
 }
 @media (max-width: 1023px) {
   .drawer {
