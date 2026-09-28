@@ -98,9 +98,14 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         page.goto(webapp)
         _assert_shell(page, sha)
         assert _theme(page) == "light"
-        # PC-first: the app column uses the full width (no 772px cap).
-        app_w = page.locator("main.app").evaluate("el => el.getBoundingClientRect().width")
-        assert app_w >= DESKTOP["width"] - 40, f"main.app is {app_w}px wide — not full width"
+        # PC-first: the app column uses the full width beside the nav (no 772px
+        # cap). At this width the nav is the vendored left rail, so the column
+        # runs from the rail's edge to the viewport's, never under it.
+        rail = page.locator("nav.tabs").evaluate("el => el.getBoundingClientRect().right")
+        app = page.locator("main.app").evaluate(
+            "el => { const r = el.getBoundingClientRect(); return {left: r.left, width: r.width}; }")
+        assert app["left"] >= rail, f"main.app starts at {app['left']}px, under the {rail}px rail"
+        assert app["width"] >= DESKTOP["width"] - rail - 40, f"main.app is {app['width']}px wide — not full width"
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-01-open-1-desktop.png")
 
