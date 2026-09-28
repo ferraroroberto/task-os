@@ -792,7 +792,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(run_now).to_be_disabled()
     run_now.evaluate("el => { el.disabled = false; el.click(); }")
     expect(page.locator(".toast-error")).to_contain_text("one Outlook, one run at a time")
-    # The card polls itself out of "running" — no tab change, no reload.
+    # The card leaves "running" on its own — the Archive pane follows the run and
+    # publishes the status it reads (#262) — no tab change, no reload.
     expect(run_now).to_be_enabled(timeout=30000)
     expect(acard.locator("#archiveCardMeta")).not_to_have_text("running")
     ctx.close()

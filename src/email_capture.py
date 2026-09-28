@@ -54,20 +54,16 @@ lifespan like the issue sync — first pass shortly after startup, then every
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
-import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from src import clock
 from src import tasks_repo as repo
 from src.config import AppConfig
-from src.db import connect
 from src.placeholders import normalize_path, to_ref
+from src.poller import Poller
 from src.search.emails_adapter import email_db_uri
 
 logger = logging.getLogger(__name__)
@@ -97,17 +93,6 @@ DESCRIPTION_MAX = 10_000
 #: One pass never lands more than this, so a first run against a large archive
 #: cannot flood Inbox in one go; the rest arrive on the following passes.
 BATCH_LIMIT = 200
-
-
-def _default_initial_delay() -> float:
-    """`INITIAL_DELAY_S`, unless `DELAY_ENV` overrides it (see its docstring)."""
-    raw = os.environ.get(DELAY_ENV, "").strip()
-    if not raw:
-        return INITIAL_DELAY_S
-    try:
-        return float(raw)
-    except ValueError as exc:
-        raise ValueError(f"{DELAY_ENV}={raw!r} is not a number") from exc
 
 
 def external_id_for(ref: str) -> str:
@@ -317,8 +302,12 @@ def capture_once(
     return result
 
 
-class EmailCaptureService:
+class EmailCaptureService(Poller[CaptureResult]):
     """The in-app poller + status holder (one per process, on ``app.state.capture``)."""
+
+    INITIAL_DELAY_S = INITIAL_DELAY_S
+    DELAY_ENV = DELAY_ENV
+    THREAD_NAME = "task-os-capture"
 
     def __init__(self, config: AppConfig, index: FlaggedEmailIndex | None = None, *,
                  interval_minutes: int | None = None, initial_delay: float | None = None) -> None:
@@ -327,18 +316,13 @@ class EmailCaptureService:
         )
         minutes = config.capture.email_poll_minutes if interval_minutes is None else interval_minutes
         self.interval_minutes = int(minutes)
-        self.initial_delay = _default_initial_delay() if initial_delay is None else initial_delay
+        self._init_poller(initial_delay)
         if self.interval_minutes <= 0:
             self.enabled, self.reason = False, "capture.email_poll_minutes is 0 — the poller is off"
         else:
             self.enabled, self.reason = self.index.is_configured()
         self.last_run: str | None = None
         self.last_result: CaptureResult | None = None
-        self.last_error: str | None = None
-        self.next_run: datetime | None = None
-        self._lock = threading.Lock()
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
         if not self.enabled:
             logger.warning("⚠️ capture: flagged-email capture off — %s", self.reason)
 
@@ -352,60 +336,27 @@ class EmailCaptureService:
             "last_run": self.last_run,
             "last_result": self.last_result.to_dict() if self.last_result else None,
             "last_error": self.last_error,
-            "next_run": self.next_run.isoformat(timespec="minutes") if self.next_run else None,
-            "running": self._thread is not None and self._thread.is_alive(),
+            "next_run": self._next_run_text(),
+            "running": self._running(),
         }
 
     # ---------------------------------------------------------------- run
-    def run_now(self, conn: Any | None = None) -> CaptureResult | None:
-        """One pass now (also the thread's tick). Errors are recorded, never raised past here."""
-        if not self.enabled:
-            return None
-        with self._lock:
-            own = conn is None
-            c = conn or connect()
-            try:
-                result = capture_once(c, self.index)
-            except Exception as exc:  # noqa: BLE001 — a bad pass is a status, not a dead app
-                self.last_error = f"{type(exc).__name__}: {exc}"
-                logger.exception("❌ capture: pass failed")
-                return None
-            finally:
-                if own:
-                    c.close()
-            self.last_error = None
-            self.last_run = repo.now_iso()
-            self.last_result = result
-            logger.info("✅ capture: %s", result.summary())
-            return result
+    def _run_pass(self, conn: Any) -> CaptureResult:
+        return capture_once(conn, self.index)
 
-    def start(self) -> None:
-        if not self.enabled or self._thread is not None:
-            return
-        self._stop.clear()
-        # The clock, not `datetime.now()` — this value is rendered on the
-        # Settings card, and so on a story screenshot (#134). The loop's own
-        # `_stop.wait()` does the scheduling; this is display only.
-        self.next_run = clock.now() + timedelta(seconds=self.initial_delay)
-        self._thread = threading.Thread(target=self._run, name="task-os-capture", daemon=True)
-        self._thread.start()
-        logger.info("ℹ️ capture: flagged emails every %d min (first pass in %.0f s)",
-                    self.interval_minutes, self.initial_delay)
+    def _record_success(self, result: CaptureResult) -> None:
+        self.last_error = None
+        self.last_run = repo.now_iso()
+        self.last_result = result
+        logger.info("✅ capture: %s", result.summary())
 
-    def stop(self) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5)
-            self._thread = None
+    def _record_failure(self, exc: Exception) -> None:
+        self.last_error = f"{type(exc).__name__}: {exc}"
+        logger.exception("❌ capture: pass failed")
 
-    def _run(self) -> None:
-        if self._stop.wait(self.initial_delay):
-            return
-        while not self._stop.is_set():
-            self.run_now()
-            self.next_run = clock.now() + timedelta(minutes=self.interval_minutes)
-            if self._stop.wait(self.interval_minutes * 60):
-                return
+    def _start_message(self) -> str:
+        return (f"ℹ️ capture: flagged emails every {self.interval_minutes} min "
+                f"(first pass in {self.initial_delay:.0f} s)")
 
 
 __all__ = [

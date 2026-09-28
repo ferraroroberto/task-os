@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import threading
 import time
 from datetime import date
@@ -64,6 +63,7 @@ from typing import Any
 import requests
 
 from src import clock, quick_add
+from src.ai.json_payload import json_payload
 from src.config import AppConfig
 from src.dates import DateParseError, parse_date
 from src.pooled_http import pooled_request
@@ -96,10 +96,6 @@ PARSER = "parser"
 #: not know is not a key we can validate.
 _ALLOWED = ("title", "description", "due_phrase", "starts_phrase")
 
-#: Qwen-family templates emit a thinking block before the answer.
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-#: ```json … ``` — the other thing a chat model wraps JSON in.
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 _SYSTEM = (
     "You turn a short spoken note into one task. Today is {today} ({weekday}).\n"
@@ -126,24 +122,6 @@ class EnrichError(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
-
-
-def strip_wrappers(raw: str) -> str:
-    """The JSON inside a chat model's answer: thinking block and fence removed.
-
-    Both are things the model adds around the payload rather than to it, and
-    both are why ``response_format`` could not be used here (see the module
-    docstring) — so they are handled where they land instead.
-    """
-    text = _THINK_RE.sub("", raw or "").strip()
-    fenced = _FENCE_RE.search(text)
-    if fenced:
-        return fenced.group(1).strip()
-    # An unfenced reply that still has a preamble: take the outermost braces.
-    start, end = text.find("{"), text.rfind("}")
-    if 0 <= start < end:
-        return text[start:end + 1]
-    return text
 
 
 def resolve_phrase(phrase: Any, transcript: str, today: date) -> tuple[str | None, str | None]:
@@ -290,7 +268,7 @@ class EnrichClient:
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise EnrichError(f"the model's answer was not a chat completion: {exc}") from exc
         try:
-            parsed = json.loads(strip_wrappers(content))
+            parsed = json.loads(json_payload(content))
         except ValueError as exc:
             raise EnrichError(f"the model did not answer with JSON: {exc}") from exc
         if not isinstance(parsed, dict):

@@ -47,6 +47,7 @@
 'use strict';
 
 import { api } from './api.js';
+import { renderRunSummary } from './archive.js';
 import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
 
@@ -58,6 +59,7 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
  *          onCaptured: () => void, onArchiveRun: () => void,
  *          onOpenArchive: () => void, onCalendar: (group: object) => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
+ *            renderArchive: (st: object|null) => void,
  *            renderIssues: (status: object|null) => void, revealCard: (key: string) => void}}
  */
 export function mountSettings(opts) {
@@ -307,6 +309,9 @@ export function mountSettings(opts) {
       els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
       renderCapture(body.capture);
       renderArchive(body.archive);
+      // A run this page did not start (another device): hand it to the Archive
+      // pane, which follows it and publishes the outcome back (#262).
+      if (body.archive && body.archive.running) opts.onArchiveRun();
       renderCalendar(body.calendar);
       renderVoice(body.voice);
       renderEnrich(body.enrich);
@@ -387,17 +392,14 @@ export function mountSettings(opts) {
   }
 
   // ------------------------------------------------------------- archive
-  //: While a run is in flight the card re-reads the service on this cadence,
-  //: so "running" resolves into the run's own counts on its own. The chain
-  //: only exists while `running` is true, so it ends with the run.
-  const ARCHIVE_POLL_MS = 2000;
-  let archivePoll = 0;
-
   /** The batch archiver's half of `GET /api/status` (#157–#159, #167). The
    *  Archive tab owns the report and the review actions; this card is what
    *  the install is configured with and what the last run did. Not configured
    *  always carries its reason; `null` = the status call itself failed, which
-   *  is "unknown" and not the same as "off". */
+   *  is "unknown" and not the same as "off". This card never follows a live
+   *  run itself (#262): the Archive pane does, and publishes each status it
+   *  reads back here through `renderArchive` — so "running" resolves into the
+   *  run's own counts when that pane's poll finishes. */
   function renderArchive(st) {
     els.archiveRunNow.disabled = !st || !st.configured || !!st.running;
     const rows = [els.statusArchiveRepo, els.statusArchiveModel,
@@ -406,7 +408,6 @@ export function mountSettings(opts) {
     if (!st) {
       rows.forEach(function (el) { el.textContent = 'unknown'; });
       els.archiveCardMeta.textContent = 'unknown';
-      stopArchivePoll();
       return;
     }
     if (!st.configured) {
@@ -415,7 +416,6 @@ export function mountSettings(opts) {
       els.statusArchiveThreshold.textContent = '–';
       els.statusArchiveLast.textContent = '–';
       els.archiveCardMeta.textContent = 'off';
-      stopArchivePoll();
       return;
     }
     els.statusArchiveRepo.append(
@@ -431,23 +431,8 @@ export function mountSettings(opts) {
       pct(st.confidence_threshold),
       ' · ' + (st.candidates == null ? '?' : st.candidates) + ' folder(s) ranked per mail'
     );
-    renderArchiveRun(st.last_run);
+    renderRunSummary(els.statusArchiveLast, st.last_run, false);
     els.archiveCardMeta.textContent = archiveWord(st);
-    if (st.running) startArchivePoll(); else stopArchivePoll();
-  }
-
-  function renderArchiveRun(last) {
-    if (!last) { els.statusArchiveLast.textContent = 'never'; return; }
-    els.statusArchiveLast.append(
-      fmtTsShort(last.finished_at || last.started_at), ' · ',
-      statusPart(last.status === 'done' ? 'ok' : 'warn', last.status),
-      ' · ' + (last.planned || 0) + ' mail(s) · ' + (last.archived || 0) + ' filed · '
-      + (last.needs_review || 0) + ' need you · ' + (last.failed || 0) + ' failed'
-    );
-    if (last.agreement != null) {
-      els.statusArchiveLast.append(' · model agreed with the suggester on ' + pct(last.agreement));
-    }
-    if (last.error) els.statusArchiveLast.append(' · ' + last.error);
   }
 
   /** The one word in the card header. `agreement` is the only rate the status
@@ -459,15 +444,6 @@ export function mountSettings(opts) {
     if (st.last_error || (last && last.status === 'failed')) return 'error';
     if (last && last.agreement != null) return pct(last.agreement) + ' agreed';
     return 'on';
-  }
-
-  function startArchivePoll() {
-    if (archivePoll) return;
-    archivePoll = window.setTimeout(function () { archivePoll = 0; refreshStatus(); }, ARCHIVE_POLL_MS);
-  }
-
-  function stopArchivePoll() {
-    if (archivePoll) { window.clearTimeout(archivePoll); archivePoll = 0; }
   }
 
   function wireArchiveCard() {
@@ -718,6 +694,7 @@ export function mountSettings(opts) {
 
   return {
     refreshStatus: refreshStatus,
+    renderArchive: renderArchive,
     refreshSearchStatus: refreshSearchStatus,
     renderIssues: renderIssues,
     revealCard: revealCard,

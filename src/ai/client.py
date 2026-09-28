@@ -10,7 +10,6 @@ proof that a model produced usable text.
 from __future__ import annotations
 
 import logging
-import socket
 import threading
 import time
 from typing import Any
@@ -19,12 +18,11 @@ import anthropic
 
 from src import clock
 from src.config import AppConfig
-from src.voice import endpoint_of
+from src.voice import connect_failure, endpoint_of
 
 logger = logging.getLogger(__name__)
 
 PROBE_TTL_SECONDS = 15.0
-PROBE_TIMEOUT_SECONDS = 1.5
 
 
 class AIError(RuntimeError):
@@ -84,15 +82,9 @@ class AIClient:
             cached = self._verdict
             if cached and not force and time.monotonic() < cached[0]:
                 return cached[1], cached[2]
-        endpoint = endpoint_of(self.base_url)
-        assert endpoint is not None
-        host, port = endpoint
-        detail: str | None = None
-        try:
-            with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_SECONDS):
-                pass
-        except OSError as exc:
-            detail = f"{exc.__class__.__name__}: {exc}"
+        # The shared connect (timeout vs refusal told apart, #262): its sentence
+        # is the diagnostic for the log; the public reason stays generic.
+        detail = connect_failure(self.base_url)
         public_reason = None if detail is None else "local AI hub unavailable"
         with self._lock:
             self._verdict = (

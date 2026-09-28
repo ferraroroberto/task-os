@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.ai import AIClient, AIError
+from src.ai.json_payload import json_payload
 from src.ai.triage import (
     accept_suggestion,
     assemble_context,
@@ -78,6 +79,23 @@ def proposed(ids: dict[str, int]) -> dict[str, Any]:
             "reason": "A small repair with a clear owner.",
         }]
     }
+
+
+def test_the_json_is_found_inside_whatever_the_model_wrapped_it_in() -> None:
+    """`response_format` is unusable on the open-weight backends (the model's
+    template injects a `<think>` prefix the grammar cannot accommodate, probed
+    live), so the wrappers are handled here — once, for triage, archive ranking
+    and enrichment alike (#262)."""
+    payload = '{"title": "Call the plumber"}'
+    assert json_payload(payload) == payload
+    assert json_payload(f"<think>weighing it up</think>\n{payload}") == payload
+    assert json_payload(f"```json\n{payload}\n```") == payload
+    assert json_payload(f"```JSON\n{payload}\n```") == payload
+    assert json_payload(f"<think>hm</think>\n```\n{payload}\n```") == payload
+    assert json_payload(f"Here is the task:\n{payload}\nHope that helps.") == payload
+    # Nothing JSON-shaped in it at all comes back as-is, for the caller to fail on.
+    assert json_payload("I could not do that") == "I could not do that"
+    assert json_payload("") == ""
 
 
 def test_context_is_compact_and_assembled_separately_from_prose(
@@ -211,17 +229,22 @@ def test_reject_resolves_the_suggestion_without_touching_the_task(
     assert after["activity"] == before["activity"]
 
 
-def test_disabled_and_unreachable_are_distinct_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_disabled_and_unreachable_are_distinct_statuses(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
     disabled = AIClient(AppConfig(ai=AIConfig(enabled=False)))
     assert disabled.status()["reason"] == "disabled in config"
     unreachable = AIClient(AppConfig(ai=AIConfig(
         enabled=True, base_url="http://127.0.0.1:1", model="fake", timeout_seconds=1,
     )))
-    monkeypatch.setattr("src.ai.client.PROBE_TIMEOUT_SECONDS", 0.01)
-    status = unreachable.status()
+    monkeypatch.setattr("src.voice.PROBE_TIMEOUT_S", 0.01)
+    with caplog.at_level("INFO", logger="src.ai.client"):
+        status = unreachable.status()
     assert status["configured"] is True
     assert status["reachable"] is False
     assert status["reason"] == "local AI hub unavailable"
+    # The log carries the shared probe's own sentence (refusal vs timeout), not just the class name.
+    assert "127.0.0.1:1" in caplog.text
 
 
 def test_client_uses_one_anthropic_messages_request() -> None:

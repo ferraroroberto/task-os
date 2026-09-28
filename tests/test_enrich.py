@@ -35,7 +35,6 @@ from src.enrich import (
     EnrichError,
     enrich_line,
     resolve_phrase,
-    strip_wrappers,
 )
 from tests.fixtures.chat_fake import FakeChat
 
@@ -84,21 +83,6 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 
 # ------------------------------------------------------------------- pieces
-
-
-def test_the_json_is_found_inside_whatever_the_model_wrapped_it_in() -> None:
-    """`response_format` is unusable on this backend (the model's template
-    injects a `<think>` prefix the grammar cannot accommodate, probed live), so
-    the wrappers are handled here instead of prevented upstream."""
-    payload = '{"title": "Call the plumber"}'
-    assert strip_wrappers(payload) == payload
-    assert strip_wrappers(f"<think>weighing it up</think>\n{payload}") == payload
-    assert strip_wrappers(f"```json\n{payload}\n```") == payload
-    assert strip_wrappers(f"<think>hm</think>\n```\n{payload}\n```") == payload
-    assert strip_wrappers(f"Here is the task:\n{payload}\nHope that helps.") == payload
-    # Nothing JSON-shaped in it at all comes back as-is, for the caller to fail on.
-    assert strip_wrappers("I could not do that") == "I could not do that"
-    assert strip_wrappers("") == ""
 
 
 def test_a_phrase_nobody_said_is_dropped() -> None:

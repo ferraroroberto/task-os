@@ -32,12 +32,12 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from src.ai.client import AIError
+from src.ai.json_payload import json_payload
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,6 @@ FOLDER_PARTS = 3
 #: open-weight path) and ``claude_haiku`` as the configured default.
 MAX_TOKENS = 6000
 
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 _PICK_KEYS = {"message_id", "candidate", "confidence", "reason"}
 
 SYSTEM_PROMPT = """You file emails into an existing archive folder tree.
@@ -214,15 +213,6 @@ def build_prompt(mails: list[dict[str, Any]], corrections: list[dict[str, Any]])
 # ---------------------------------------------------------------- validation
 
 
-def _json_text(raw: str) -> str:
-    text = (raw or "").strip()
-    fenced = _FENCE_RE.search(text)
-    if fenced:
-        return fenced.group(1).strip()
-    start, end = text.find("{"), text.rfind("}")
-    return text[start:end + 1] if 0 <= start < end else text
-
-
 def _invalid(detail: str) -> AIError:
     return AIError(
         "ai_invalid_response", "the local model returned an unusable ranking",
@@ -238,7 +228,7 @@ def _validate_response(raw: str, expected: dict[str, int]) -> dict[str, Pick]:
     than a mail filed into whichever folder the index happened to land on.
     """
     try:
-        decoded = json.loads(_json_text(raw))
+        decoded = json.loads(json_payload(raw))
     except ValueError as exc:
         raise _invalid(f"invalid JSON: {exc}") from exc
     if not isinstance(decoded, dict) or set(decoded) != {"picks"}:
