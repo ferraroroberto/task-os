@@ -15,22 +15,28 @@ rem       {user}                %USERNAME%
 rem       {sharepoint:<name>}   the "<name>=<path>" line in %LOCALAPPDATA%\task-os\opener.env
 rem                             (a "<name>=<path>" line also overrides {<name>} — e.g. onedrive=D:\OneDrive)
 rem   Env knobs (tests): TASKOS_OPENER_DRYRUN=1 prints "open: <path>" / "missing: <path>"
-rem   / "refused: <path>" instead of launching anything; TASKOS_OPENER_ENV overrides
-rem   the opener.env location.
+rem   / "reveal: <path>" / "refused: <path>" instead of launching anything;
+rem   TASKOS_OPENER_ENV overrides the opener.env location.
 rem
-rem   What it opens: a folder on this PC, or a document on this PC with its default
-rem   app. A ref that names another computer (\\host\...) before any placeholder is
-rem   expanded, or a file Windows would run rather than open (the NOOPEN list below,
-rem   plus %PATHEXT%), is refused visibly, exit 6. A placeholder this PC maps in
-rem   opener.env may still point at a share - that value is this PC's own config.
+rem   What it opens: a folder on this PC in Explorer, or a file whose type is on the
+rem   DOCS list below with its default app. Any other file on this PC - a program, a
+rem   script some installed app would run, a name with no extension - is shown
+rem   selected in its folder instead, never started. A ref that names another
+rem   computer (\\host\...) before any placeholder is expanded, or a stream past the
+rem   file name (a colon after the drive), is refused visibly, exit 6. A placeholder
+rem   this PC maps in opener.env may still point at a share - that value is this
+rem   PC's own config.
 rem
 rem   Known limits: a "!" inside a path is lost (delayed expansion). A percent
 rem   sequence outside the decoded set (accented letters, %C3%A9) hands the whole job
 rem   to ONE inline PowerShell command (same rules; still no script file).
 setlocal EnableExtensions EnableDelayedExpansion
 title task-os opener
-rem one list for both branches (the inline PowerShell one reads it from the env)
-set "NOOPEN=.exe;.com;.bat;.cmd;.pif;.scr;.cpl;.msc;.msi;.msp;.mst;.hta;.js;.jse;.vbs;.vbe;.wsf;.wsh;.wsc;.sct;.ps1;.psm1;.psd1;.ps1xml;.psc1;.lnk;.url;.website;.reg;.inf;.scf;.jar;.application;.appref-ms;.gadget;.library-ms;.settingcontent-ms;.search-ms;.searchconnector-ms;.diagcab;.appx;.appxbundle;.msix;.msixbundle;.appinstaller;.chm;.hlp;.xbap;.xll;.iso;.img;.vhd;.vhdx;.rdp;.theme;.themepack;.desktopthemepackfile;%PATHEXT%"
+rem The file types that open with their default app: documents, never programs.
+rem An allow-list, because a list of what runs is never complete - any installed
+rem app can register a type it executes. One list for both branches (the inline
+rem PowerShell one reads it from the env).
+set "DOCS=.pdf;.txt;.md;.rtf;.csv;.tsv;.log;.json;.doc;.docx;.xls;.xlsx;.ppt;.pptx;.odt;.ods;.odp;.vsdx;.msg;.eml;.png;.jpg;.jpeg;.gif;.bmp;.webp;.tif;.tiff;.heic;.mp3;.m4a;.wav;.mp4;.mov;.mkv;.webm;.zip"
 
 rem ---- 0. where the URL comes from ----------------------------------------
 rem opener.ps1 (the registered launcher) passes it in TASKOS_OPENER_URL, never on
@@ -123,7 +129,7 @@ findstr /r /c:"%%[0-9A-Fa-f][0-9A-Fa-f]" "%PROBE%" >nul 2>&1
 set "STILL=%ERRORLEVEL%"
 del "%PROBE%" >nul 2>&1
 if "%STILL%"=="0" (
-  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; function Refuse($p){ if($env:TASKOS_OPENER_DRYRUN){ Write-Output ('refused: '+$p); exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  The opener only opens folders and documents on this PC,'+$n+'  and this link points somewhere else:'+$n+$n+'      '+$p+$n+$n+'  Nothing was opened.'+$n); if(-not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 6 }; $r=[uri]::UnescapeDataString($env:RAW); if($r.Contains($q)){ Write-Host ($n+'  task-os opener'+$n+$n+'  This link carries a quote character, which the app never sends.'+$n+'  Nothing was opened.'+$n); if(-not $env:TASKOS_OPENER_DRYRUN -and -not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 3 }; $d=$r.Replace('/','\'); if($d.StartsWith('\\')){ Refuse $d }; $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; $deny=@($env:NOOPEN -split ';' | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ }); function Runs($p){ try { $x=[IO.Path]::GetFullPath($p) } catch { return $true }; if($x.IndexOf(':',2) -ge 0){ return $true }; return ($deny -contains [IO.Path]::GetExtension($x.TrimEnd('. ')).ToLower()) }; if(Test-Path -LiteralPath $r -PathType Container){ if($env:TASKOS_OPENER_DRYRUN){ 'open: '+$r; exit 0 }; Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ if(Runs $r){ Refuse $r }; if($env:TASKOS_OPENER_DRYRUN){ 'open: '+$r; exit 0 }; Start-Process -LiteralPath $r; exit 0 }; if($env:TASKOS_OPENER_DRYRUN){ 'missing: '+$r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); if(-not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 1"
+  powershell -NoProfile -NonInteractive -Command "if([Console]::IsOutputRedirected){[Console]::OutputEncoding=[Text.Encoding]::UTF8}; $q=[char]34; $n=[Environment]::NewLine; function Refuse($p){ if($env:TASKOS_OPENER_DRYRUN){ Write-Output ('refused: '+$p); exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  The opener only opens folders and documents on this PC,'+$n+'  and this link points somewhere else:'+$n+$n+'      '+$p+$n+$n+'  Nothing was opened.'+$n); if(-not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 6 }; $r=[uri]::UnescapeDataString($env:RAW); if($r.Contains($q)){ Write-Host ($n+'  task-os opener'+$n+$n+'  This link carries a quote character, which the app never sends.'+$n+'  Nothing was opened.'+$n); if(-not $env:TASKOS_OPENER_DRYRUN -and -not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 3 }; $d=$r.Replace('/','\'); if($d.StartsWith('\\')){ Refuse $d }; $f=$env:ENVFILE; if($f -and (Test-Path -LiteralPath $f)){ Get-Content -LiteralPath $f | ForEach-Object { if($_ -match '^\s*([^#=][^=]*?)\s*=(.*)$'){ $k=[regex]::Escape($matches[1]); $v=[Environment]::ExpandEnvironmentVariables($matches[2]).Replace('$','$$'); $r=$r -replace ('(?i)\{sharepoint:'+$k+'\}'),$v -replace ('(?i)\{'+$k+'\}'),$v } } }; $od=$env:OneDriveCommercial; if(-not $od){$od=$env:OneDrive}; if($od){$r=$r -replace '(?i)\{onedrive\}',$od.Replace('$','$$')}; if($env:USERNAME){$r=$r -replace '(?i)\{user\}',$env:USERNAME}; $r=$r.Replace('/','\'); if($r -notmatch '^[A-Za-z]:\\$'){$r=$r.TrimEnd('\')}; $docs=@($env:DOCS -split ';' | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ }); if(Test-Path -LiteralPath $r -PathType Container){ if($env:TASKOS_OPENER_DRYRUN){ 'open: '+$r; exit 0 }; Start-Process explorer.exe -ArgumentList ($q+$r+$q); exit 0 }; if(Test-Path -LiteralPath $r){ $x=$null; try { $x=[IO.Path]::GetFullPath($r).TrimEnd('. ') } catch { }; if(-not $x -or $x.IndexOf(':',2) -ge 0){ Refuse $r }; if($docs -contains [IO.Path]::GetExtension($x).ToLower()){ if($env:TASKOS_OPENER_DRYRUN){ 'open: '+$r; exit 0 }; Start-Process -LiteralPath $x; exit 0 }; if($env:TASKOS_OPENER_DRYRUN){ 'reveal: '+$x; exit 0 }; Start-Process explorer.exe -ArgumentList ('/select,'+$q+$x+$q); exit 0 }; if($env:TASKOS_OPENER_DRYRUN){ 'missing: '+$r; exit 0 }; Write-Host ($n+'  task-os opener'+$n+$n+'  This folder is not synced on this PC, or a placeholder is missing:'+$n+$n+'      '+$r+$n+$n+'  Copy the path above, sync the folder here, or add its placeholder to'+$n+'      '+$f+$n+'  - one name=path line per placeholder'+$n); if(-not $env:VIAPS){ Read-Host 'Press Enter to close' | Out-Null }; exit 1"
   exit /b !ERRORLEVEL!
 )
 
@@ -157,21 +163,31 @@ rem (goto + top-level exits, as for resume: a non-zero exit /b inside a block
 rem does not reach the fallback registration's cmd.exe /c wrapper)
 if exist "!REF!\" goto :open_folder
 if not exist "!REF!" goto :missing
-rem A file goes to its default app only when that app opens it rather than runs
-rem it. %%~f normalises first: Windows drops trailing dots and spaces from a name,
-rem so "x.exe." is x.exe, and a colon past the drive is not a plain file name.
+rem A file goes to its default app only when its type is on DOCS; any other file is
+rem shown selected in its folder. %%~f normalises first: Windows drops trailing
+rem dots and spaces from a name, so "x.exe." is x.exe, and a colon past the drive
+rem is not a plain file name. A name with no extension never reaches start, which
+rem would run a same-named file with a %%PATHEXT%% extension beside it instead.
 for %%F in ("!REF!") do set "FULL=%%~fF"
 set "TAIL=!FULL:~2!"
 if not "!TAIL::=!"=="!TAIL!" goto :refused
 set "EXT="
 for %%F in ("!FULL!") do set "EXT=%%~xF"
 rem (";" separates the items of a for set, so the list iterates as it is)
-if defined EXT for %%E in (!NOOPEN!) do if /i "!EXT!"=="%%E" goto :refused
+if defined EXT for %%E in (!DOCS!) do if /i "!EXT!"=="%%E" goto :open_file
+if defined TASKOS_OPENER_DRYRUN (
+  echo reveal: !FULL!
+  exit /b 0
+)
+start "" explorer /select,"!FULL!"
+exit /b 0
+
+:open_file
 if defined TASKOS_OPENER_DRYRUN (
   echo open: !REF!
   exit /b 0
 )
-start "" "!REF!"
+start "" "!FULL!"
 exit /b 0
 
 :open_folder

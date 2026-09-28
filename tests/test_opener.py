@@ -2,8 +2,9 @@
 ``cmd.exe`` — the environment points at a temp tree (``OneDrive``,
 ``OneDriveCommercial``, ``USERNAME``, ``LOCALAPPDATA``) and
 ``TASKOS_OPENER_DRYRUN=1`` makes the handler print ``open: <path>`` /
-``missing: <path>`` instead of launching Explorer. Windows-only (skipped
-elsewhere); ``install_opener.py --dry-run`` and ``src/opener.py`` run anywhere."""
+``missing: <path>`` / ``reveal: <path>`` / ``refused: <path>`` instead of
+launching anything. Windows-only (skipped elsewhere); ``install_opener.py
+--dry-run`` and ``src/opener.py`` run anywhere."""
 
 from __future__ import annotations
 
@@ -207,36 +208,46 @@ def test_file_ref_and_unknown_placeholder(pc: dict[str, str]) -> None:
 
 
 @windows_only
-def test_only_folders_and_documents_on_this_pc_are_opened(pc: dict[str, str]) -> None:
-    """A file goes to its default app only when that app opens it rather than
-    runs it, and a ref that starts on another computer is refused before it is
-    touched — in the pure-cmd branch, in the inline-PowerShell one (an accented
-    name) and through the launcher. Folders and documents still open."""
+def test_only_documents_open_anything_else_is_shown_in_its_folder(pc: dict[str, str]) -> None:
+    """A file goes to its default app only when its type is on the document
+    list; any other file (a program, a script some installed app would run, a
+    name with no extension that a same-named .cmd could stand in for) is shown
+    selected in its folder instead — never started. A ref that starts on another
+    computer, or names a stream past the file, is refused before it is touched.
+    Pure-cmd branch, inline-PowerShell one (an accented name) and the launcher."""
     od = Path(pc["od"])
-    for name in ("tool.exe", "script.bat", "link.lnk", "café.exe"):
+    for name in ("tool.exe", "script.bat", "link.lnk", "npm", "npm.cmd", "deploy.sh",
+                 "café.exe", "café.sh", "mail.msg", "réunion.txt", "Report.PDF"):
         (od / name).write_bytes(b"x")
-    for ref, shown in (
-        ("{onedrive}/tool.exe", f"{od}\\tool.exe"),
-        ("{onedrive}/TOOL.EXE", f"{od}\\TOOL.EXE"),
-        ("{onedrive}/tool.exe.", f"{od}\\tool.exe."),
-        ("{onedrive}/script.bat", f"{od}\\script.bat"),
-        ("{onedrive}/link.lnk", f"{od}\\link.lnk"),
-        ("{onedrive}/café.exe", f"{od}\\café.exe"),
-        ("//unreachable.invalid/share/x.txt", "\\\\unreachable.invalid\\share\\x.txt"),
-        ("\\\\unreachable.invalid\\share", "\\\\unreachable.invalid\\share"),
-        ("//unreachable.invalid/café", "\\\\unreachable.invalid\\café"),
+    unc = "\\\\unreachable.invalid\\"
+    for ref, line in (
+        ("{onedrive}/tool.exe", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/TOOL.EXE", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/tool.exe.", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/tool.exe ", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/script.bat", f"reveal: {od / 'script.bat'}"),
+        ("{onedrive}/link.lnk", f"reveal: {od / 'link.lnk'}"),
+        ("{onedrive}/npm", f"reveal: {od / 'npm'}"),
+        ("{onedrive}/deploy.sh", f"reveal: {od / 'deploy.sh'}"),
+        ("{onedrive}/café.exe", f"reveal: {od / 'café.exe'}"),
+        ("{onedrive}/café.sh", f"reveal: {od / 'café.sh'}"),
+        ("{onedrive}/notes.txt::$DATA", f"refused: {od / 'notes.txt::$DATA'}"),
+        ("//unreachable.invalid/share/x.txt", f"refused: {unc}share\\x.txt"),
+        (unc + "share", f"refused: {unc}share"),
+        ("//unreachable.invalid/café", f"refused: {unc}café"),
+        ("{onedrive}/notes.txt", f"open: {od / 'notes.txt'}"),
+        ("{onedrive}/Report.PDF", f"open: {od / 'Report.PDF'}"),
+        ("{onedrive}/mail.msg", f"open: {od / 'mail.msg'}"),
+        ("{onedrive}/réunion.txt", f"open: {od / 'réunion.txt'}"),
+        ("{onedrive}/house", f"open: {od / 'house'}"),
     ):
         r = run_opener(opener_url(ref), pc)
-        assert r.returncode == 0 and _out(r) == f"refused: {shown}", f"{ref!r}: {_out(r)}"
-    assert _out(run_launcher(opener_url("{onedrive}/script.bat"), pc)) == f"refused: {od}\\script.bat"
-    # the same refusal for real: visible, nothing started, its own exit code
-    r = run_opener(opener_url("{onedrive}/tool.exe"), pc, dryrun=False)
-    assert r.returncode == 6 and "Nothing was opened" in _decode(r.stdout)
-    # what the opener is for is unchanged
-    assert _out(run_opener(opener_url("{onedrive}/notes.txt"), pc)) == f"open: {od}\\notes.txt"
-    assert _out(run_opener(opener_url("{onedrive}/house"), pc)) == f"open: {od}\\house"
-    (od / "réunion.txt").write_bytes(b"x")
-    assert _out(run_opener(opener_url("{onedrive}/réunion.txt"), pc)) == f"open: {od}\\réunion.txt"
+        assert r.returncode == 0 and _out(r) == line, f"{ref!r}: {_out(r)}"
+    assert _out(run_launcher(opener_url("{onedrive}/script.bat"), pc)) == f"reveal: {od / 'script.bat'}"
+    # the refusal for real: visible, nothing started, its own exit code
+    for ref in ("//unreachable.invalid/share", "//unreachable.invalid/café"):
+        r = run_opener(opener_url(ref), pc, dryrun=False)
+        assert r.returncode == 6 and "Nothing was opened" in _decode(r.stdout), ref
 
 
 @windows_only
