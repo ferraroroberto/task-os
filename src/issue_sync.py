@@ -39,17 +39,13 @@ panel — an in-memory cache, warm after the first pass.
 from __future__ import annotations
 
 import logging
-import os
-import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from typing import Any
 
-from src import clock
 from src import tasks_repo as repo
 from src.config import AppConfig
-from src.db import connect
 from src.issues import IssueInfo, IssueProvider, IssueProviderError, get_provider, short_repo
+from src.poller import Poller
 from src.schema import CLOSED_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -240,35 +236,23 @@ def sync_once(conn: Any, provider: IssueProvider, *, actor: str = SYNC_ACTOR,
     return result
 
 
-def _default_initial_delay() -> float:
-    """`INITIAL_DELAY_S`, unless `DELAY_ENV` overrides it (see its docstring)."""
-    raw = os.environ.get(DELAY_ENV, "").strip()
-    if not raw:
-        return INITIAL_DELAY_S
-    try:
-        return float(raw)
-    except ValueError as exc:
-        raise ValueError(f"{DELAY_ENV}={raw!r} is not a number") from exc
-
-
-class IssueSyncService:
+class IssueSyncService(Poller[SyncResult]):
     """The in-app scheduler + status holder (one per process, on ``app.state.issues``)."""
+
+    INITIAL_DELAY_S = INITIAL_DELAY_S
+    DELAY_ENV = DELAY_ENV
+    THREAD_NAME = "task-os-issues"
 
     def __init__(self, config: AppConfig, provider: IssueProvider | None = None, *,
                  interval_minutes: int | None = None, initial_delay: float | None = None) -> None:
         self.provider = provider or get_provider(config)
         self.interval_minutes = max(1, int(interval_minutes or config.issues.sync_minutes or 10))
-        self.initial_delay = _default_initial_delay() if initial_delay is None else initial_delay
+        self._init_poller(initial_delay)
         self.enabled, self.reason = self.provider.is_configured()
         self.last_sync: str | None = None
         self.last_result: SyncResult | None = None
-        self.last_error: str | None = None
         self.last_error_code: str | None = None
-        self.next_run: datetime | None = None
         self.cache: dict[tuple[str, str, int], IssueInfo] = {}
-        self._lock = threading.Lock()
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
         if not self.enabled:
             logger.warning("⚠️ issues: sync disabled — %s", self.reason)
 
@@ -283,8 +267,8 @@ class IssueSyncService:
             "last_result": self.last_result.to_dict() if self.last_result else None,
             "last_error": self.last_error,
             "last_error_code": self.last_error_code,
-            "next_run": self.next_run.isoformat(timespec="minutes") if self.next_run else None,
-            "running": self._thread is not None and self._thread.is_alive(),
+            "next_run": self._next_run_text(),
+            "running": self._running(),
             "repos": sorted({k[1] for k in self.cache}),
         }
 
@@ -292,62 +276,29 @@ class IssueSyncService:
         return self.cache.get((provider, repo, int(number)))
 
     # ---------------------------------------------------------------- run
-    def run_now(self, conn: Any | None = None) -> SyncResult | None:
-        """One pass now (also the thread's tick). Errors are recorded, never raised past here."""
-        if not self.enabled:
-            return None
-        with self._lock:
-            own = conn is None
-            c = conn or connect()
-            try:
-                result = sync_once(c, self.provider, cache=self.cache)
-            except IssueProviderError as exc:
-                self.last_error = str(exc)
-                self.last_error_code = exc.code
-                logger.error("❌ issues: sync failed (%s): %s", exc.code, exc)
-                return None
-            except Exception as exc:  # noqa: BLE001 — a bug in a pass is a status, not a crash of the app
-                self.last_error = f"{type(exc).__name__}: {exc}"
-                self.last_error_code = "error"
-                logger.exception("❌ issues: sync crashed")
-                return None
-            finally:
-                if own:
-                    c.close()
-            self.last_error = None
-            self.last_error_code = None
-            self.last_sync = repo.now_iso()
-            self.last_result = result
-            logger.info("✅ issues: sync — %s", result.summary())
-            return result
+    def _run_pass(self, conn: Any) -> SyncResult:
+        return sync_once(conn, self.provider, cache=self.cache)
 
-    def start(self) -> None:
-        if not self.enabled or self._thread is not None:
+    def _record_success(self, result: SyncResult) -> None:
+        self.last_error = None
+        self.last_error_code = None
+        self.last_sync = repo.now_iso()
+        self.last_result = result
+        logger.info("✅ issues: sync — %s", result.summary())
+
+    def _record_failure(self, exc: Exception) -> None:
+        if isinstance(exc, IssueProviderError):
+            self.last_error = str(exc)
+            self.last_error_code = exc.code
+            logger.error("❌ issues: sync failed (%s): %s", exc.code, exc)
             return
-        self._stop.clear()
-        # The clock, not `datetime.now()`: this value is displayed on the
-        # Settings card (and so on a story screenshot), never waited on —
-        # the loop's own `_stop.wait()` does the scheduling (#134).
-        self.next_run = clock.now() + timedelta(seconds=self.initial_delay)
-        self._thread = threading.Thread(target=self._run, name="task-os-issues", daemon=True)
-        self._thread.start()
-        logger.info("ℹ️ issues: %s sync every %d min (first pass in %.0f s)", self.provider.name,
-                    self.interval_minutes, self.initial_delay)
+        self.last_error = f"{type(exc).__name__}: {exc}"
+        self.last_error_code = "error"
+        logger.exception("❌ issues: sync crashed")
 
-    def stop(self) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5)
-            self._thread = None
-
-    def _run(self) -> None:
-        if self._stop.wait(self.initial_delay):
-            return
-        while not self._stop.is_set():
-            self.run_now()
-            self.next_run = clock.now() + timedelta(minutes=self.interval_minutes)
-            if self._stop.wait(self.interval_minutes * 60):
-                return
+    def _start_message(self) -> str:
+        return (f"ℹ️ issues: {self.provider.name} sync every {self.interval_minutes} min "
+                f"(first pass in {self.initial_delay:.0f} s)")
 
 
 __all__ = ["INITIAL_DELAY_S", "SYNC_ACTOR", "AlreadyLinked", "IssueSyncService", "IssuesDisabled",

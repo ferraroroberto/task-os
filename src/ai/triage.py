@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import sqlite3
 from collections.abc import Iterable
 from datetime import date
@@ -13,6 +12,7 @@ from typing import Any
 from src import clock
 from src import tasks_repo as repo
 from src.ai.client import AIClient, AIError
+from src.ai.json_payload import json_payload
 from src.schema import CLOSED_SQL
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,6 @@ MAX_REASON_CHARS = 240
 MAX_TOKENS = 2400
 ALLOWED_PRIORITIES = frozenset({"none", "low", "medium", "high"})
 ALLOWED_FIELDS = frozenset({"parent_id", "priority", "due", "person_id", "reason"})
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
 SYSTEM_PROMPT = """You triage Inbox tasks in a personal task manager.
 Return JSON only, with this exact top-level shape:
@@ -34,15 +33,6 @@ Use only ids present in the supplied projects and people. Parent, due and person
 Priority must be one of none, low, medium, high. Due must be YYYY-MM-DD or null.
 Do not propose a status: accepting a suggestion moves the task to Todo.
 Do not invent facts. Keep each reason under 20 words."""
-
-
-def _json_text(raw: str) -> str:
-    text = (raw or "").strip()
-    fenced = _FENCE_RE.search(text)
-    if fenced:
-        return fenced.group(1).strip()
-    start, end = text.find("{"), text.rfind("}")
-    return text[start:end + 1] if 0 <= start < end else text
 
 
 def _inbox_rows(conn: sqlite3.Connection, task_ids: Iterable[int] | None) -> list[dict[str, Any]]:
@@ -135,7 +125,7 @@ def _validate_response(
     conn: sqlite3.Connection, raw: str, expected_ids: set[int],
 ) -> list[dict[str, Any]]:
     try:
-        decoded = json.loads(_json_text(raw))
+        decoded = json.loads(json_payload(raw))
     except ValueError as exc:
         raise _invalid(f"invalid JSON: {exc}") from exc
     suggestions = decoded.get("suggestions") if isinstance(decoded, dict) else None

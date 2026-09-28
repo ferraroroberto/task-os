@@ -1203,7 +1203,12 @@ async function boot() {
   // The Archive pane (#159), mounted here for the same reason: a stored
   // `archive` tab fires the nav's onChange straight into it.
   archive = mountArchive({
-    onStatus: function (st) { state.archive = st; if (state.total) renderBoardPane(); },
+    // The Settings archive card renders the same block rather than polling it (#262).
+    onStatus: function (st) {
+      state.archive = st;
+      settings.renderArchive(st);
+      if (state.total) renderBoardPane();
+    },
     // A run files mail and a review action re-files one — neither touches a
     // task, so only the archiver's own state is re-read here.
     onChanged: function () { if (state.total) renderBoardPane(); },

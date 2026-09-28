@@ -79,6 +79,68 @@ const MAX_HINT = 500;
 //: each chip to its own line (#173) and a card has room to grow.
 const FILES_CAP = 4;
 
+/** `09/09 01:03` — the head's compact stamp: the locale's own day/month
+ *  order, no year, and a 24-hour clock, because `9/9/26, 1:03 AM` is 30px of
+ *  a line that has none to spare. The whole reading stays in the row title. */
+function stampShort(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return fmtTsShort(iso);
+  // The locale decides the order and the separator; the padding is ours,
+  // because ICU resolves a day+month-only skeleton to whichever pattern the
+  // locale has and can hand back `9/9` where `09/09` was asked for.
+  const day = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: '2-digit' })
+    .formatToParts(d)
+    .map(function (part) {
+      return part.type === 'literal' ? part.value : String(part.value).padStart(2, '0');
+    })
+    .join('');
+  return day + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/** `7 mail(s) · 3 filed · 3 need you · 1 failed`. */
+function counts(r) {
+  return (r.planned || 0) + ' mail(s) · ' + outcomes(r);
+}
+
+/** What the run did with the mails, without restating how many there were —
+ *  the three outcomes add up to the plan. */
+function outcomes(r) {
+  return (r.archived || 0) + ' filed · ' + (r.needs_review || 0) + ' need you · '
+    + (r.failed || 0) + ' failed';
+}
+
+/**
+ * Draw a run's one-line summary into `el` — the single formatter of it (#262):
+ * this pane's head and the Settings archive card both call it, so the wording
+ * and the status colour cannot drift apart. `last` is the API's run row
+ * (`status.last_run`); `null` is "never run". `narrow` picks the one-line
+ * phone wording.
+ * @param {HTMLElement} el
+ * @param {object|null} last
+ * @param {boolean} narrow
+ */
+export function renderRunSummary(el, last, narrow) {
+  el.replaceChildren();
+  el.classList.remove('muted');
+  if (!last) { el.textContent = 'never'; return; }
+  const at = last.finished_at || last.started_at;
+  el.append(
+    narrow ? stampShort(at) : fmtTsShort(at), ' · ',
+    statusPart(last.status === 'failed' || last.status === 'running' ? 'warn' : 'ok', last.status),
+    ' · ' + (narrow ? outcomes(last) : counts(last))
+  );
+  if (last.agreement != null) {
+    el.append(narrow
+      ? ' · ' + pct(last.agreement) + ' agreed'
+      : ' · model agreed with the suggester on ' + pct(last.agreement));
+  }
+  if (last.error) el.append(' · ' + last.error);
+}
+
 /**
  * Wire the Archive pane once and hand back the bootstrap's handle.
  * @param {{onStatus: (archive: object|null) => void, onChanged: () => void}} opts
@@ -123,28 +185,6 @@ export function mountArchive(opts) {
    *  never `run(s)`, which reads as an unfinished sentence on a phone. */
   function plural(n, word) {
     return n + ' ' + word + (n === 1 ? '' : 's');
-  }
-
-  /** `09/09 01:03` — the head's compact stamp: the locale's own day/month
-   *  order, no year, and a 24-hour clock, because `9/9/26, 1:03 AM` is 30px of
-   *  a line that has none to spare. The whole reading stays in the row title. */
-  function stampShort(iso) {
-    const d = new Date(iso);
-    if (isNaN(d)) return fmtTsShort(iso);
-    // The locale decides the order and the separator; the padding is ours,
-    // because ICU resolves a day+month-only skeleton to whichever pattern the
-    // locale has and can hand back `9/9` where `09/09` was asked for.
-    const day = new Intl.DateTimeFormat(undefined, { day: '2-digit', month: '2-digit' })
-      .formatToParts(d)
-      .map(function (part) {
-        return part.type === 'literal' ? part.value : String(part.value).padStart(2, '0');
-      })
-      .join('');
-    return day + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  }
-
-  function pad2(n) {
-    return String(n).padStart(2, '0');
   }
 
   function renderHead() {
@@ -194,32 +234,7 @@ export function mountArchive(opts) {
   }
 
   function renderLastRun(last) {
-    els.lastRun.replaceChildren();
-    els.lastRun.classList.remove('muted');
-    if (!last) { els.lastRun.textContent = 'never'; return; }
-    const at = last.finished_at || last.started_at;
-    els.lastRun.append(
-      narrow() ? stampShort(at) : fmtTsShort(at), ' · ',
-      statusPart(last.status === 'failed' ? 'warn' : last.status === 'running' ? 'warn' : 'ok', last.status),
-      ' · ' + (narrow() ? outcomes(last) : counts(last))
-    );
-    if (last.agreement != null) {
-      els.lastRun.append(narrow()
-        ? ' · ' + pct(last.agreement) + ' agreed'
-        : ' · model agreed with the suggester on ' + pct(last.agreement));
-    }
-    if (last.error) els.lastRun.append(' · ' + last.error);
-  }
-
-  function counts(r) {
-    return (r.planned || 0) + ' mail(s) · ' + outcomes(r);
-  }
-
-  /** What the run did with the mails, without restating how many there were —
-   *  the three outcomes add up to the plan. */
-  function outcomes(r) {
-    return (r.archived || 0) + ' filed · ' + (r.needs_review || 0) + ' need you · '
-      + (r.failed || 0) + ' failed';
+    renderRunSummary(els.lastRun, last, narrow());
   }
 
   /** What the runs on the picker add up to. Derived from the run rows on
@@ -917,6 +932,14 @@ export function mountArchive(opts) {
    *  pick the poll back up when the service says a run is in flight. */
   async function refresh() {
     await Promise.all([refreshStatus(), loadRuns()]);
+    // A live run is the one to follow, whichever run the picker was last on:
+    // `tick` polls `runId`, and a finished run there would end the poll (and the
+    // Settings card's "running", which follows this pane's) while the new run
+    // is still going.
+    if (status && status.running && runs.length && runs[0].status === 'running') {
+      runId = runs[0].id;
+      els.pick.value = String(runId);
+    }
     await loadRun();
     if (status && status.running && !polling) startPolling();
   }

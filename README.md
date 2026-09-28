@@ -104,12 +104,12 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
-                          issues/ (IssueProvider contract · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler)
+                          issues/ (IssueProvider contract · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)
                           placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
                           (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
                           search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·
                           federated.py — concurrent, grouped, unconfigured = visible) · ai/ (Anthropic-compatible hub client +
-                          staged Inbox triage validation/application) · email_capture.py (flagged mail → Inbox, read-only)
+                          staged Inbox triage validation/application · json_payload.py, the one reply-unwrapping helper) · email_capture.py (flagged mail → Inbox, read-only)
                           archive_batch.py (the archiver's batch CLI as a subprocess: plan → decide → apply → rescan)
                           archive_store.py (the run / item / correction rows — no subprocess, no service state)
                           archive_renumber.py (heals stored .msg paths from the archiver's renumber map)
