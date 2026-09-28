@@ -2,8 +2,9 @@
 ``cmd.exe`` — the environment points at a temp tree (``OneDrive``,
 ``OneDriveCommercial``, ``USERNAME``, ``LOCALAPPDATA``) and
 ``TASKOS_OPENER_DRYRUN=1`` makes the handler print ``open: <path>`` /
-``missing: <path>`` instead of launching Explorer. Windows-only (skipped
-elsewhere); ``install_opener.py --dry-run`` and ``src/opener.py`` run anywhere."""
+``missing: <path>`` / ``reveal: <path>`` / ``refused: <path>`` instead of
+launching anything. Windows-only (skipped elsewhere); ``install_opener.py
+--dry-run`` and ``src/opener.py`` run anywhere."""
 
 from __future__ import annotations
 
@@ -204,6 +205,83 @@ def test_onedrive_commercial_wins_and_env_file_overrides(pc: dict[str, str], tmp
 def test_file_ref_and_unknown_placeholder(pc: dict[str, str]) -> None:
     assert _out(run_opener(opener_url("{onedrive}/notes.txt"), pc)) == f"open: {pc['od']}\\notes.txt"
     assert _out(run_opener(opener_url("{nope}/x"), pc)) == "missing: {nope}\\x"
+
+
+@windows_only
+def test_only_documents_open_anything_else_is_shown_in_its_folder(pc: dict[str, str]) -> None:
+    """A file goes to its default app only when its type is on the document
+    list; any other file (a program, a script some installed app would run, a
+    name with no extension that a same-named .cmd could stand in for) is shown
+    selected in its folder instead — never started. A ref that starts on another
+    computer, or names a stream past the file, is refused before it is touched.
+    Pure-cmd branch, inline-PowerShell one (an accented name) and the launcher."""
+    od = Path(pc["od"])
+    for name in ("tool.exe", "script.bat", "link.lnk", "npm", "npm.cmd", "deploy.sh",
+                 "café.exe", "café.sh", "mail.msg", "réunion.txt", "Report.PDF"):
+        (od / name).write_bytes(b"x")
+    unc = "\\\\unreachable.invalid\\"
+    for ref, line in (
+        ("{onedrive}/tool.exe", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/TOOL.EXE", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/tool.exe.", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/tool.exe ", f"reveal: {od / 'tool.exe'}"),
+        ("{onedrive}/script.bat", f"reveal: {od / 'script.bat'}"),
+        ("{onedrive}/link.lnk", f"reveal: {od / 'link.lnk'}"),
+        ("{onedrive}/npm", f"reveal: {od / 'npm'}"),
+        ("{onedrive}/deploy.sh", f"reveal: {od / 'deploy.sh'}"),
+        ("{onedrive}/café.exe", f"reveal: {od / 'café.exe'}"),
+        ("{onedrive}/café.sh", f"reveal: {od / 'café.sh'}"),
+        ("{onedrive}/notes.txt::$DATA", f"refused: {od / 'notes.txt::$DATA'}"),
+        ("{onedrive}/notes.txt:x.cmd", f"refused: {od / 'notes.txt:x.cmd'}"),
+        ("{onedrive}/café.txt:x", f"refused: {od / 'café.txt:x'}"),
+        ("//unreachable.invalid/share/x.txt", f"refused: {unc}share\\x.txt"),
+        (unc + "share", f"refused: {unc}share"),
+        ("//unreachable.invalid/café", f"refused: {unc}café"),
+        ("{onedrive}/notes.txt", f"open: {od / 'notes.txt'}"),
+        ("{onedrive}/Report.PDF", f"open: {od / 'Report.PDF'}"),
+        ("{onedrive}/mail.msg", f"open: {od / 'mail.msg'}"),
+        ("{onedrive}/réunion.txt", f"open: {od / 'réunion.txt'}"),
+        ("{onedrive}/house", f"open: {od / 'house'}"),
+        # an unmapped {sharepoint:<name>} keeps the placeholder-missing notice
+        ("{sharepoint:unmapped}/plans", "missing: {sharepoint:unmapped}\\plans"),
+        ("{sharepoint:unmapped}/café", "missing: {sharepoint:unmapped}\\café"),
+    ):
+        r = run_opener(opener_url(ref), pc)
+        assert r.returncode == 0 and _out(r) == line, f"{ref!r}: {_out(r)}"
+    assert _out(run_launcher(opener_url("{onedrive}/script.bat"), pc)) == f"reveal: {od / 'script.bat'}"
+    # a wildcard names no one file: refused in both branches (raw in the URL → cmd)
+    for url, shown in (("taskos://open?ref=%7Bonedrive%7D%2Ft*.exe", od / "t*.exe"),
+                       ("taskos://open?ref=%7Bonedrive%7D%2Ftool.ex?", od / "tool.ex?"),
+                       (opener_url("{onedrive}/caf*.exe"), od / "caf*.exe")):
+        assert _out(run_opener(url, pc)) == f"refused: {shown}", url
+    # the refusal for real: visible, nothing started, its own exit code
+    for ref in ("//unreachable.invalid/share", "//unreachable.invalid/café"):
+        r = run_opener(opener_url(ref), pc, dryrun=False)
+        assert r.returncode == 6 and "Nothing was opened" in _decode(r.stdout), ref
+
+
+@windows_only
+def test_a_file_under_a_share_placeholder_is_a_file_not_a_folder(pc: dict[str, str]) -> None:
+    """``if exist "<path>\\"`` is true for a plain file on a network share, so
+    folder-or-file is decided by attributes: a program under a placeholder that
+    opener.env maps to a share is revealed, a document there opens, and a folder
+    there opens in Explorer — in both branches. Reached over this PC's own
+    administrative share; skipped where that share is off."""
+    od = Path(pc["od"])
+    share = f"\\\\localhost\\{od.drive[0]}$" + str(od)[2:]
+    if not os.path.isdir(share):
+        pytest.skip("this PC's administrative share is not reachable")
+    for name in ("tool.cmd", "café.cmd"):
+        (od / name).write_bytes(b"x")
+    env_file = Path(pc["la"]) / "task-os" / "opener.env"
+    env_file.write_text(env_file.read_text(encoding="utf-8") + f"scr={share}\n", encoding="utf-8")
+    for ref, line in (
+        ("{scr}/tool.cmd", f"reveal: {share}\\tool.cmd"),
+        ("{scr}/café.cmd", f"reveal: {share}\\café.cmd"),
+        ("{scr}/notes.txt", f"open: {share}\\notes.txt"),
+        ("{scr}/house", f"open: {share}\\house"),
+    ):
+        assert _out(run_opener(opener_url(ref), pc)) == line, ref
 
 
 @windows_only
