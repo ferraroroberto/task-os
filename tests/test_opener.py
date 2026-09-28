@@ -242,6 +242,9 @@ def test_only_documents_open_anything_else_is_shown_in_its_folder(pc: dict[str, 
         ("{onedrive}/mail.msg", f"open: {od / 'mail.msg'}"),
         ("{onedrive}/réunion.txt", f"open: {od / 'réunion.txt'}"),
         ("{onedrive}/house", f"open: {od / 'house'}"),
+        # an unmapped {sharepoint:<name>} keeps the placeholder-missing notice
+        ("{sharepoint:unmapped}/plans", "missing: {sharepoint:unmapped}\\plans"),
+        ("{sharepoint:unmapped}/café", "missing: {sharepoint:unmapped}\\café"),
     ):
         r = run_opener(opener_url(ref), pc)
         assert r.returncode == 0 and _out(r) == line, f"{ref!r}: {_out(r)}"
