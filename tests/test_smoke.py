@@ -59,6 +59,16 @@ def test_bad_port_falls_back(tmp_path: Path) -> None:
     assert load_config(p).port == 8448
 
 
+def test_bad_sync_minutes_falls_back_instead_of_crashing_startup(tmp_path: Path) -> None:
+    """#263 — ``issues.sync_minutes`` used to be parsed with a bare ``int()``,
+    so a hand-edited non-numeric value raised ``ValueError`` out of
+    ``load_config`` and took down webapp startup and every CLI command. It
+    must fall back like every other numeric key instead."""
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"issues": {"sync_minutes": "10m"}}), encoding="utf-8")
+    assert load_config(p).issues.sync_minutes == 10
+
+
 # ---------------------------------------------------------------------- db
 
 def test_init_db_creates_settings_and_stamps_version(_temp_db: Path) -> None:

@@ -433,7 +433,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             provider=str(issues.get("provider", "github")),
             owner=str(issues.get("owner", "")),
             assignee=str(issues.get("assignee", "@me")),
-            sync_minutes=int(issues.get("sync_minutes", 10) or 10),
+            sync_minutes=_as_int(issues.get("sync_minutes"), 10, "issues.sync_minutes"),
             host=str(issues.get("host", "") or ""),
         ),
         placeholders=placeholders,
