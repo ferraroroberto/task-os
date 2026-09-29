@@ -12,15 +12,15 @@ description = "<b>task-os</b> — one master task list: nested tasks that become
 # apps for the modules the scaffold does not ship yet). sha = the source repo
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
-nav            = { src = "app/webapp/static/_vendored/nav",           sha = "41af40ac3633a3e7ded88553b95726092344faf9", dest = "app/webapp/static/_vendored/nav" }
-icons          = { src = "app/webapp/static/_vendored/icons",         sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/icons" }
+nav            = { src = "app/webapp/static/_vendored/nav",           sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/nav" }
+icons          = { src = "app/webapp/static/_vendored/icons",         sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/card" }
-button         = { src = "app/webapp/static/_vendored/button",        sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/button" }
-modal          = { src = "app/webapp/static/_vendored/modal",         sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/modal" }
+button         = { src = "app/webapp/static/_vendored/button",        sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/button" }
+modal          = { src = "app/webapp/static/_vendored/modal",         sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/modal" }
 disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/disclosure" }
 empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "bede95f00aee0b17d5007246a29fa881a71f24f4", dest = "app/webapp/static/_vendored/empty-state" }
 select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/select-native" }
-switch         = { src = "app/webapp/static/_vendored/switch",        sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/switch" }
+switch         = { src = "app/webapp/static/_vendored/switch",        sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/switch" }
 home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/home-head" }
 page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/webapp/static/_vendored/page-foot" }
 single_instance = { src = "app/tray/single_instance.py",              sha = "d156ef85e54986ec5b09fb6ef863f2ebb37b4136", dest = "app/tray/single_instance.py" }
