@@ -502,6 +502,43 @@ def test_deferred_intersects_with_a_status_filter(conn: sqlite3.Connection, froz
     assert [t["title"] for t in got] == ["Sleeping standby"]
 
 
+def test_a_done_task_with_an_open_blocker_stays_in_the_done_journal(
+    conn: sqlite3.Connection, frozen: None
+) -> None:
+    """#263 — ``blocked`` used to default to ``"hide"`` even for a
+    closed-status / done-window query, so a task completed while its blocker
+    was still open vanished from the done journal and the Board's Done-today
+    column. A closed-only view now defaults it (and ``deferred``) to
+    ``"all"`` instead, the same as ``include_closed``."""
+    blocker = repo.create_task(conn, "Still open", status="todo")
+    task = repo.create_task(conn, "Finished but blocked", status="todo")
+    repo.add_blocker(conn, task["id"], blocker["id"])
+    done = repo.done(conn, task["id"])
+    assert done["status"] == "done"
+    assert task["id"] in {t["id"] for t in repo.list_tasks(conn, status=["done"])}
+    assert task["id"] in {
+        t["id"] for t in repo.list_tasks(conn, status=["done"], done_on="2026-08-17")
+    }
+    assert task["id"] in {t["id"] for t in repo.board(conn)["columns"]["done"]}
+    # an explicit override still wins over the closed-view default
+    assert task["id"] not in {
+        t["id"] for t in repo.list_tasks(conn, status=["done"], blocked="hide")
+    }
+
+
+def test_a_done_task_with_a_future_starts_stays_in_the_done_journal(
+    conn: sqlite3.Connection, frozen: None
+) -> None:
+    """Same #263 slip on the ``deferred`` gate — a task closed before its
+    ``starts`` day arrived must not vanish from the closed-status views."""
+    task = repo.create_task(conn, "Finished early", status="todo", starts="2026-09-06")
+    repo.done(conn, task["id"])
+    assert task["id"] in {t["id"] for t in repo.list_tasks(conn, status=["done"])}
+    assert task["id"] not in {
+        t["id"] for t in repo.list_tasks(conn, status=["done"], deferred="hide")
+    }
+
+
 def test_updated_before_is_a_strict_stale_boundary(conn: sqlite3.Connection) -> None:
     """#101: ``updated_before`` lists tasks last touched strictly before the
     boundary day — touched ON the boundary (or today) never appears — and any

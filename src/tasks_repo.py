@@ -1297,10 +1297,11 @@ def list_tasks(
     - ``deferred``: what to do with a task whose ``starts`` has not arrived
       (#87) — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
       the filter card's *Deferred*, ``tasks ls --deferred``) or ``"all"``.
-      Unset follows ``include_closed``: that flag means "hide nothing", so it
-      lifts this gate too — otherwise a count taken with it (the app's "any
-      tasks at all?", the mirror's file total) would quietly omit the
-      sleeping ones and report a number nobody could reconcile.
+      Unset follows the working-view/closed-view split below: a closed view
+      means "hide nothing", so it lifts this gate too — otherwise a count
+      taken with it (the app's "any tasks at all?", the mirror's file total)
+      would quietly omit the sleeping ones and report a number nobody could
+      reconcile.
       This is the ONE place the working views' deferral rule lives: Board,
       Today, Table and the CLI are all projections of this function, so they
       inherit it. :func:`tree` and :func:`search` do not go through here on
@@ -1308,10 +1309,18 @@ def list_tasks(
     - ``blocked``: what to do with a task that has an open blocker (#100) —
       ``"hide"`` (only unblocked tasks — the default working-view rule),
       ``"only"`` (only blocked ones — the status multi-select's ``blocked``
-      pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows
-      ``include_closed`` exactly like ``deferred``. This is the ONE place the
+      pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows the
+      same closed-view rule as ``deferred``. This is the ONE place the
       rule lives; :func:`tree` and :func:`search` keep showing a blocked task
       (with its lock) on purpose.
+    - Unset ``deferred``/``blocked`` default to ``"hide"`` in a *working*
+      view and ``"all"`` in a *closed* view — ``include_closed=True``, a
+      ``status`` filter naming only closed statuses (``done``/``cancelled``,
+      not the ``"open"`` shorthand), or a ``done_on``/``done_from``/``done_to``
+      window. Those are all read as the done journal / closed history, where
+      a still-blocked or not-yet-started task that already finished must not
+      vanish (#263). Pass ``deferred``/``blocked`` explicitly to override
+      either default in either kind of view.
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
     top ancestor — the Table's project column) and ``last_comment``.
@@ -1319,8 +1328,23 @@ def list_tasks(
     where: list[str] = []
     args: list[Any] = []
 
+    status_values = [status] if isinstance(status, str) else (list(status) if status else None)
+    # A closed-only view (an explicit closed-status filter, or a done-window
+    # journal query) is a working-view escape hatch just like include_closed:
+    # deferred/blocked default to "all" so a done task with a future `starts`
+    # or an unresolved blocker still surfaces in the done journal / Done column.
+    closed_view = (
+        include_closed
+        or bool(done_on or done_from or done_to)
+        or (
+            status_values is not None
+            and status_values != ["open"]
+            and all(v in CLOSED_STATUSES for v in status_values)
+        )
+    )
+
     if deferred is None:
-        deferred = "all" if include_closed else "hide"
+        deferred = "all" if closed_view else "hide"
     if deferred not in ("hide", "only", "all"):
         raise ValidationError(f"deferred must be hide, only or all (got {deferred!r})")
     if deferred != "all":
@@ -1330,7 +1354,7 @@ def list_tasks(
         args.append(today().isoformat())
 
     if blocked is None:
-        blocked = "all" if include_closed else "hide"
+        blocked = "all" if closed_view else "hide"
     if blocked not in ("hide", "only", "all"):
         raise ValidationError(f"blocked must be hide, only or all (got {blocked!r})")
     if blocked != "all":
@@ -1345,15 +1369,14 @@ def list_tasks(
             where.append(f"t.id IN ({', '.join('?' * len(blocked_ids))})")
             args.extend(blocked_ids)
 
-    if status:
-        values = [status] if isinstance(status, str) else list(status)
-        if values == ["open"]:
+    if status_values is not None:
+        if status_values == ["open"]:
             where.append(f"t.status NOT IN ({CLOSED_SQL})")
         else:
-            for v in values:
+            for v in status_values:
                 _validate_enum("status", v)
-            where.append(f"t.status IN ({', '.join('?' * len(values))})")
-            args.extend(values)
+            where.append(f"t.status IN ({', '.join('?' * len(status_values))})")
+            args.extend(status_values)
     elif not include_closed:
         where.append(f"t.status NOT IN ({CLOSED_SQL})")
 
