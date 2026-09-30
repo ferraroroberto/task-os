@@ -44,6 +44,12 @@ foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sh
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
 #   BuildInfo/stamp_html/stamp_js; only the no_window import path adapted)
 
+# Width follows the shape of the view (fleet-config#1113, design.md Layout): these
+# tabs are two-dimensional (lanes, a many-field grid, a calendar lane, a run report)
+# and span the window; Search and Settings keep the 772px measure.
+[design]
+wide_views = ["board", "table", "today", "archive"]
+
 # Diff-proportionate e2e routing (project-scaffolding#180): the gate's browser
 # phase is classified by scripts/classify_e2e.py against these rules, first
 # match wins; an unmatched path, a mixed diff, or an empty diff fails safe to

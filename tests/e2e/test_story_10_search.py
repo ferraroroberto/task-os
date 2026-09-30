@@ -17,7 +17,7 @@ mailbox), the issue provider → the file-backed fake (never ``gh``). 1440×900
 Chromium then a 390-wide touch context, saving the proof shots the
 validation record links to:
 
-    docs/screenshots/story-10-search-1-desktop.png   "kitchen": four groups, full width
+    docs/screenshots/story-10-search-1-desktop.png   "kitchen": four groups, in the centred 772px measure
     docs/screenshots/story-10-search-2-desktop.png   drawer open beside the results
     docs/screenshots/story-10-search-4-desktop.png   Ctrl+K: jump to a task
     docs/screenshots/story-10-search-5-desktop.png   Ctrl+K: > commands (dark)
