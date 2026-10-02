@@ -2432,7 +2432,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .confirm-body p { margin: 0 0 var(--space-sm); }
 .confirm-warn { color: var(--danger); font-weight: 600; }
 /* the destructive primary restates the tint recipe on danger (design.md) */
-.detail-save-btn.confirm-danger { background: var(--deficit-soft); color: var(--danger); border-color: var(--deficit-border-soft); }
+.detail-save-btn.confirm-danger { background: var(--deficit-soft); color: var(--danger-text); border-color: var(--deficit-border-soft); }
 .detail-save-btn.confirm-danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
 
 /* ---- the drawer's delete foot (#121) */
