@@ -511,7 +511,10 @@ a.chip:hover { text-decoration: underline; }
 .opener-cmd {
   margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
-  font-size: var(--font-caption); white-space: pre-wrap; word-break: break-all;
+  font-size: var(--font-caption); white-space: pre-wrap;
+  /* a long token (a path, a URL) breaks where it must; words still wrap whole —
+     break-all split "Directory" and "-Force" mid-word (#281) */
+  overflow-wrap: anywhere;
 }
 .opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
 /* 12 + 20 + 12 = the 44px floor for a one-line summary (#281); it stays a
