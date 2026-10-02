@@ -16,6 +16,7 @@ and dark, saving the numbered proof shots the validation record links to:
 from __future__ import annotations
 
 import json
+import tomllib
 import urllib.request
 from pathlib import Path
 
@@ -35,6 +36,9 @@ from tests.e2e.conftest import shot
 TABS = ["Board", "Table", "Today", "Archive", "Search", "Settings"]
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
+MEASURE = 772
+WIDE_VIEWS = ["board", "table", "today", "archive"]
+MEASURED_VIEWS = ["search", "settings"]
 
 
 def _version(base: str) -> dict:
@@ -135,11 +139,39 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         page.reload()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
         page.click("nav.tabs .tab[data-tab='board']")
+
+        # Width follows the shape of the view (fleet-config#1113, design.md Layout):
+        # the two-dimensional tabs span the window, the one-dimensional ones keep the
+        # 772px measure. The wide views are declared in `.fleet.toml` (`[design]
+        # wide_views`), which fleet-config's design review reads, so this pins the
+        # declaration to the rendered widths. Last, because it moves the stored tab.
+        _assert_widths(page)
+        page.click("nav.tabs .tab[data-tab='board']")
+
         page.click("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
         assert _stored_theme(page) == "light"
     finally:
         context.close()
+
+
+def _pane_width(page: Page, tab: str) -> float:
+    page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
+    pane = page.locator("[role=tabpanel]:not([hidden])")
+    pane.wait_for()
+    return pane.evaluate("el => el.getBoundingClientRect().width")
+
+
+def _assert_widths(page: Page) -> None:
+    fleet_toml = Path(__file__).resolve().parents[2] / ".fleet.toml"
+    declared = tomllib.loads(fleet_toml.read_text(encoding="utf-8"))["design"]["wide_views"]
+    assert declared == WIDE_VIEWS, f".fleet.toml [design] wide_views is {declared}"
+    for tab in WIDE_VIEWS:
+        width = _pane_width(page, tab)
+        assert width >= DESKTOP["width"] * 0.6, f"{tab} is a declared wide view but is {width}px wide"
+    for tab in MEASURED_VIEWS:
+        width = _pane_width(page, tab)
+        assert MEASURE - 1 <= width <= MEASURE + 1, f"{tab} is one-dimensional and must hold the {MEASURE}px measure, got {width}px"
 
 
 # ------------------------------------------------------------- phone leg
