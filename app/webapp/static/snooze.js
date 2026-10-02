@@ -85,6 +85,9 @@ export function snoozeButton(t, onSnooze) {
   const d = document.createElement('details');
   d.className = 'snooze';
   d.dataset.id = String(t.id);
+  // One snooze menu open at a time across the list (an exclusive `<details
+  // name>` group), the same rule popover.js applies on an outside click (#281).
+  d.setAttribute('name', 'task-os-snooze');
 
   // A quiet inline icon, not a boxed button (the folder-glyph pattern): the
   // visible footprint stays icon-sized so rows keep their height, while the

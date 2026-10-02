@@ -1050,6 +1050,10 @@ a.chip:hover { text-decoration: underline; }
   line-height: 1.3;
   cursor: pointer;
 }
+/* On a fine pointer the due chip's tap area reaches 5px past it (.hit-target);
+   when a narrow column wraps the meta line, the chip that lands under it must
+   start below that, or a tap between the two lines is a coin toss (#281). */
+@media (pointer: fine) { .trow-meta { row-gap: 6px; } }
 .trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .trow-meta > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }

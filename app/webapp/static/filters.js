@@ -232,6 +232,10 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
   const d = document.createElement('details');
   d.className = 'msel' + (selected.length ? ' has-value' : '');
   d.dataset.name = name;
+  // One open at a time, by the platform (an exclusive `<details name>` group):
+  // opening a second multi-select closes the first even when nothing clicked
+  // outside, so two menus never stack over the rows at once (#281).
+  d.setAttribute('name', 'task-os-msel');
   d.open = !!texts.open;
   const summary = document.createElement('summary');
   summary.className = 'select-native msel-summary';
