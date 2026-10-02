@@ -237,6 +237,7 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
   summary.className = 'select-native msel-summary';
   summary.setAttribute('aria-label', label);
   summary.setAttribute('role', 'button');
+  summary.setAttribute('aria-haspopup', 'dialog');
   const txt = document.createElement('span');
   txt.className = 'msel-text';
   const picked = values.filter(function (v) { return selected.indexOf(String(v[0])) >= 0; });
@@ -245,7 +246,10 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
   d.appendChild(summary);
   const menu = document.createElement('div');
   menu.className = 'msel-menu';
-  menu.setAttribute('role', 'group');
+  // shadcn Popover's content role (Radix renders role="dialog"): a non-modal
+  // panel floating over the page, holding its own group of checkboxes. It is
+  // also what tells a reader the open menu is a layer above the rows (#281).
+  menu.setAttribute('role', 'dialog');
   menu.setAttribute('aria-label', label);
   values.forEach(function (v) {
     const opt = document.createElement('label');

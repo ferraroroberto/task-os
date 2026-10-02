@@ -46,7 +46,9 @@ export const SNOOZE_OPTIONS = [
 export function snoozeMenu(t, onPick) {
   const menu = document.createElement('div');
   menu.className = 'snooze-menu';
-  menu.setAttribute('role', 'group');
+  // The same popover role as the filter card's multi-select (shadcn Popover,
+  // role="dialog"): a non-modal layer over the rows, never part of them (#281).
+  menu.setAttribute('role', 'dialog');
   menu.setAttribute('aria-label', 'Snooze ' + t.title + ' until');
 
   SNOOZE_OPTIONS.forEach(function (opt) {
@@ -90,6 +92,7 @@ export function snoozeButton(t, onSnooze) {
   const summary = document.createElement('summary');
   summary.className = 'snooze-summary hit-target';
   summary.setAttribute('role', 'button');
+  summary.setAttribute('aria-haspopup', 'dialog');
   summary.setAttribute('aria-label', 'Snooze ' + t.title);
   summary.title = 'Snooze';
   summary.innerHTML = icon('clock');
