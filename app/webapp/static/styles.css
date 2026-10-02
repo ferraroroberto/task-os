@@ -73,6 +73,13 @@
   --font-caption: 0.75rem;
   /* controls + rows */
   --control-h: 36px;
+  /* hit-target.min (design.md) — the 44px effective pointer-target floor. A
+     native input/select is a replaced element that can't carry the .hit-target
+     ::before expansion, so it gets the real 44px box and paints its 36px
+     control inside a transparent --control-inset band (#281, the
+     home-automation #779 recipe). */
+  --hit-min: 44px;
+  --control-inset: calc((var(--hit-min) - var(--control-h)) / 2);
   --row-sm: 44px;
   --row-md: 52px;
   --row-lg: 60px;
@@ -172,6 +179,49 @@ button, input, select, textarea { font: inherit; }
 .hit-target::before, .icon-btn::before, .toast-close::before, .tree-toggle::before { content: ""; position: absolute; inset: -5px; }
 .tree-toggle::before { inset: -8px; }        /* 28x28 authored */
 .due-pick-btn::before { inset: -7px; }       /* 30x30 authored, overrides .icon-btn's 34px inset */
+
+/* Native inputs/selects reach the 44px floor with real geometry (#281): the
+   element box is --hit-min tall, the visible 36px control is its padding box
+   inside a transparent vertical --control-inset border, and the 1px boundary
+   is an inset shadow on that padding box, in control-border (design.md: an
+   input or select draws its boundary there). The radius pair keeps the
+   visible corners at rounded.md and the focus ring hugs the visible box.
+   `.input-native` is declared whole here: the vendored select-native.css
+   copy predates the scaffold's shared `.input-native` rule, so the text
+   inputs had no recipe at all. Textareas keep their own height. The task
+   row's status select is not in this rule — the row's geometry is its own
+   contract (#32, #74) — and touch controls that are already 44px tall drop
+   the band (`--control-inset: 0px`, the coarse block below). */
+input.input-native {
+  font-size: var(--font-label);
+  padding: 0 10px;
+  color: var(--ink);
+  font-family: inherit;
+}
+input.input-native,
+select.select-native:not(.trow-status),
+summary.select-native {
+  height: var(--hit-min);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--control-inset) 0;
+  border-radius: var(--radius-md) / calc(var(--radius-md) + var(--control-inset));
+  background: var(--input-bg) padding-box;
+  box-shadow: inset 0 0 0 1px var(--control-border);
+}
+/* A textarea is as tall as its rows, so it needs no band: the same surface,
+   boundary and radius, drawn on its own border. */
+textarea.input-native {
+  font-size: var(--font-label);
+  color: var(--ink);
+  font-family: inherit;
+  background: var(--input-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+}
+input.input-native:focus-visible,
+select.select-native:not(.trow-status):focus-visible,
+summary.select-native:focus-visible { outline-offset: calc(2px - var(--control-inset)); }
 
 html, body {
   margin: 0;
@@ -424,7 +474,7 @@ a.chip:hover { text-decoration: underline; }
    floor — the point of #74 round 2 is that it never grows past a control.) */
 .folder-current .chip {
   min-width: 0;
-  height: var(--control-h);
+  height: var(--hit-min);   /* the drawer's control height (#281) */
   padding: 0 10px;
   border-radius: var(--radius-md);
   font-size: var(--font-label);
@@ -455,6 +505,9 @@ a.chip:hover { text-decoration: underline; }
   font-size: var(--font-caption); white-space: pre-wrap; word-break: break-all;
 }
 .opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
+/* 12 + 20 + 12 = the 44px floor for a one-line summary (#281); it stays a
+   list-item so the disclosure keeps its marker. */
+.opener-more > summary { padding-block: 12px; line-height: 20px; }
 .opener-more { display: grid; gap: var(--space-sm); }
 
 /* Status pills — status colors signal state (design.md). One size everywhere. */
@@ -504,11 +557,14 @@ a.chip:hover { text-decoration: underline; }
   border-radius: var(--radius-md);
 }
 .quick-add-btn .icon, .strip-square .icon { width: var(--icon-title); height: var(--icon-title); }
-/* Real geometry, no invisible expansion: these stand shoulder to shoulder with
-   an 8px gap, so a ::before inset would make neighbouring hit rects overlap —
-   design.md's "adjacent cluster" rule. (.due-pick-btn's own -7px inset is for
-   the Table's 30px cell button, which has no neighbour.) */
-.strip-square::before { inset: 0; }
+/* They stand shoulder to shoulder with an 8px gap, so each may take exactly
+   half of it: 4px of invisible expansion on every side makes the 36px square
+   44px effective with neighbouring hit rects edge to edge, never overlapping —
+   design.md's "adjacent cluster" rule (#281). On touch the squares are 44px
+   real and the expansion resets (the coarse block). (.due-pick-btn's own -7px
+   inset is for the Table's 30px cell button, which has no neighbour.) */
+.strip-square, .quick-add-btn { position: relative; }
+.strip-square::before, .quick-add-btn::before { content: ""; position: absolute; inset: -4px; }
 
 /* --------------------------------------- the Table pane's view toggle (#161) */
 /* The grid and the outliner are two drawings of ONE filtered list, so they
@@ -535,6 +591,13 @@ a.chip:hover { text-decoration: underline; }
   color: var(--accent);
 }
 .view-seg:last-child[aria-pressed="true"] { border-left-color: transparent; }
+/* The two halves share an edge, so neither expands across it (#281): each
+   takes the strip's 4px on its three outer sides only, and is 40px wide so
+   that 40 + 4 still reaches the 44px floor. Touch resets this with the
+   rest of the strip (44px real squares, coarse block). */
+.view-seg { width: 40px; }
+.view-seg:first-child::before { inset: -4px 0 -4px -4px; }
+.view-seg:last-child::before { inset: -4px -4px -4px 0; }
 
 /* ------------------------------------------------- select mode (#81) */
 /* The Select toggle sits beside the +, same geometry. Once tasks are ticked
@@ -611,8 +674,12 @@ a.chip:hover { text-decoration: underline; }
 }
 /* The picker's own toggle sits on the label line, so the ref input keeps the
    full width; the hit list drops under both. */
-.quick-add-pick { min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
+.quick-add-pick { position: relative; min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
 .quick-add-pick .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* 28 + 2x8 = 44 (#281): the label line keeps its height, the 12px row padding
+   above and the 8px row gap below hold the expansion clear of the divider and
+   of the input under it. */
+.quick-add-pick::before { content: ""; position: absolute; inset: -8px 0; }
 /* modal.css styles every span inside a .row as a label (ink, 600); the
    picker toggle's own label must keep the ghost button's muted tone. */
 .quick-add-pick .folder-pick-label { color: inherit; }
@@ -636,7 +703,7 @@ a.chip:hover { text-decoration: underline; }
 .quick-add-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: var(--control-h);
+  height: var(--hit-min);   /* the line-1 field is the dialog's first target (#281) */
   border: 0;
   background: transparent;
   color: var(--fg);
@@ -655,8 +722,8 @@ a.chip:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-h);
-  height: var(--control-h);
+  width: var(--hit-min);
+  height: var(--hit-min);
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -739,7 +806,10 @@ a.chip:hover { text-decoration: underline; }
 }
 .filter-select, .filter-row .msel { max-width: 200px; }
 .filter-q { width: 100%; }      /* the strip's own width (#80) */
-.filter-clear { min-height: var(--control-h); }
+.filter-clear { position: relative; min-height: var(--control-h); }
+/* 36 + 2x4 = 44 beside the filter row's other controls, 8px apart (#281);
+   44px painted on touch, where the expansion resets (coarse block). */
+.filter-clear::before { content: ""; position: absolute; inset: -4px; }
 @media (max-width: 767px) {
   .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
   .filter-select, .filter-row .msel { width: 100%; max-width: none; }
@@ -761,7 +831,7 @@ a.chip:hover { text-decoration: underline; }
 .msel-summary::-webkit-details-marker { display: none; }
 .msel-summary::after { content: "\2304"; color: var(--muted); font-size: 0.9em; line-height: 1; transform: translateY(-2px); }
 .msel-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.msel.has-value .msel-summary { color: var(--accent); border-color: var(--accent-border-soft); }
+.msel.has-value .msel-summary { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border-soft); }
 .msel-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -782,18 +852,23 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  min-height: 32px;
-  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--hit-min);
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) 14px;
   border-radius: var(--radius-sm);
   font-size: var(--font-label);
   white-space: nowrap;
   cursor: pointer;
 }
 .msel-opt:hover { background: var(--card-2); }
+/* The tick box is 16px; the option row is the 44px it lives in (#281). Its
+   invisible expansion fills exactly that row (16 + 2x14) — the rows stand 2px
+   apart, so no two boxes' rects meet — and the 14px left padding keeps it
+   inside the menu. The label already ticks on a click anywhere in the row. */
+.msel-opt .check { position: relative; }
+.msel-opt .check::after { content: ""; position: absolute; inset: -14px; }
 .msel-none { margin: 0; padding: 6px var(--space-sm); font-size: var(--font-caption); }
 @media (pointer: coarse) {
   .msel-summary { line-height: calc(var(--row-sm) - 2px); }
-  .msel-opt { min-height: var(--row-sm); }
 }
 
 /* -------------------------------------------------- snooze (issue #87)
@@ -842,7 +917,7 @@ a.chip:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  min-height: 32px;
+  min-height: var(--hit-min);
   padding: var(--space-xs) 10px;
   border: 0;
   background: transparent;
@@ -865,7 +940,6 @@ a.chip:hover { text-decoration: underline; }
      visual + 8px per side), never by growing the visible square back */
   .snooze-summary { width: 28px; height: 28px; }
   .snooze-summary:not(.plan-target)::before { inset: -8px; }
-  .snooze-opt { min-height: var(--row-sm); }
 }
 
 /* ============================================================ the task row */
@@ -1343,6 +1417,11 @@ a.chip:hover { text-decoration: underline; }
    head beside the wide-layout rail); the content
    column shrinks so the list is never covered. Phone: full-screen sheet. */
 .drawer {
+  /* The drawer is an editor: line after line of inputs beside buttons, so
+     its controls are 44px painted on every pointer, the way touch already
+     drew them (#281) — an inset band here would leave each 36px button 4px
+     off its input's centre. */
+  --control-inset: 0px;
   --drawer-w: 440px;
   position: fixed;
   z-index: 6;
@@ -1440,7 +1519,8 @@ a.chip:hover { text-decoration: underline; }
    so a tighter gap would put it over the text input (design.md "Touch targets"). */
 .field-due-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .field-due-row .field-control { flex: 1 1 auto; }
-.field-due-btn { width: var(--control-h); height: var(--control-h); border-radius: var(--radius-md); color: var(--muted); }
+.field-due-btn { width: var(--hit-min); height: var(--hit-min); border-radius: var(--radius-md); color: var(--muted); }
+.drawer .button-surface, .drawer .button-ghost { min-height: var(--hit-min); }
 .field-due-btn:hover { color: var(--accent); }
 .field-due-row .due-date.is-visible { height: var(--control-h); }
 /* Every: the interval input + its unit ("weeks"), read as one phrase (#229). */
@@ -1635,6 +1715,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .chip-issue-unknown { border-style: dashed; }
 .card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
 .card-actions .button-surface { display: inline-flex; align-items: center; gap: var(--space-xs); }
+/* Every Settings button is pressed on its own in a card body, never in a
+   cluster, so it simply is 44px tall (#281) — the vendored 36px control
+   height is a floor the min-height lifts. */
+.settings-card .button-surface, .settings-card .button-ghost { min-height: var(--hit-min); }
 .card-actions .button-surface .icon { width: 14px; height: 14px; }
 /* the header ↻ sits left of the theme toggle; both pin right */
 .home-head .home-sync { margin-left: auto; }
@@ -1704,7 +1788,14 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   /* These already carry real 44px geometry here, so the invisible expansion
      would push the effective rect past its neighbour — design.md forbids
      overlapping tap rectangles. The 34px tree toggle still needs its 5px. */
-  .icon-btn::before, .toast-close::before, .quick-add-btn::before { inset: 0; }
+  .icon-btn::before, .toast-close::before, .quick-add-btn::before,
+  .strip-square::before, .view-seg:first-child::before, .view-seg:last-child::before,
+  .filter-clear::before { inset: 0; }
+  .view-seg { width: var(--row-sm); }
+  /* …and the native controls that stand beside them are 44px painted too, so
+     the strip and the filter card keep one height on touch: no inset band. */
+  .bulk-status, .filter-select, .filter-q, .msel-summary,
+  .drawer .select-native, .drawer .input-native { --control-inset: 0px; }
   .tree-toggle::before { inset: -5px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1735,7 +1826,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-strip-btn {
   flex: 1;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--hit-min);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1791,7 +1882,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-list > .trow:first-child { border-top: 0; }
 /* Drop target: the whole column lights up while a row hovers over it. */
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
-@media (pointer: coarse) { .board-strip-btn { min-height: var(--row-sm); } }
 /* Small empty state per column — a peer of the rows, not a full-height card. */
 .board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: var(--space-xs); }
 .board-empty .empty-state-icon { width: 20px; height: 20px; }
@@ -1803,7 +1893,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-triage {
   margin-left: auto;
   min-width: 0;
-  height: 32px;
+  height: 34px;             /* + .hit-target's 5px a side = 44 (#281) */
   padding: 0 var(--space-sm);
   display: inline-flex;
   align-items: center;
@@ -1875,6 +1965,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     top: 0;
     z-index: 1;
     margin: 0;
+    min-height: var(--row-md);   /* holds the links' 44px targets below (#281) */
     padding: var(--space-sm) var(--space-xs);
     background: var(--bg);
     border-bottom: 1px solid var(--line-muted);
@@ -1919,6 +2010,12 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   cursor: pointer;
 }
 .today-group-link:hover { background: var(--accent-soft); }
+/* The project name is a 25px text button in its group title; it reaches the
+   44px floor invisibly inside the title's 10px top padding and the first
+   row's own top padding below it (#281) — the row's controls start under
+   that padding, so the two never meet. */
+.today-group-link { position: relative; }
+.today-group-link::before { content: ""; position: absolute; inset: -10px 0; }
 .today-group-count { color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
 .today-list > .trow:first-child { border-top: 0; }
 .today-later .today-group:first-child { border-top: 0; }
@@ -1949,6 +2046,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .plan-more .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .plan-more:hover { color: var(--fg); }
+/* 24 + 2x10 = 44 on a fine pointer (#281); touch has its own 28 + 2x8 below.
+   It stands alone at the end of the plan's heading line. */
+.plan-more::before { inset: -10px; }
 .trow.is-plan {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-areas:
@@ -2199,6 +2299,11 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-off, .search-none, .search-err { margin: 0; padding: 10px 0; font-size: var(--font-caption); }
 .search-off a { color: var(--accent); }
+/* The inline Settings link is a caption-sized word: 14px of padding around
+   its line is the room its 44px target takes, invisibly (#281). */
+.search-off { padding: 14px 0; }
+.search-off a { position: relative; }
+.search-off a::before { content: ""; position: absolute; inset: -14px -4px; }
 .search-err { color: var(--danger); }
 kbd {
   display: inline-block;
@@ -2228,7 +2333,7 @@ kbd {
 .palette-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 40px;
+  height: var(--hit-min);
   border: 0;
   background: transparent;
   color: var(--fg);
@@ -2353,6 +2458,11 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* The Done column's link to it — quiet, at the far end of the sticky title. */
 .board-col-link { margin-left: auto; color: var(--muted); font-size: var(--font-caption); font-weight: 400; text-decoration: none; }
 .board-col-link:hover, .board-col-link:focus-visible { color: var(--accent); text-decoration: underline; }
+/* A caption-sized text link, 17px tall: it expands invisibly to 44px inside
+   the 52px column title it sits in (#281); the Triage button beside it stands
+   12px away, room for both expansions. */
+.board-col-link { position: relative; }
+.board-col-link::before { content: ""; position: absolute; inset: -14px -4px; }
 
 /* ---- Archive tab (#159) — the batch run and its report. Full-width like
    every other PC-first pane: the head card carries the one button, the bound
@@ -2423,7 +2533,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .c-act { min-width: 13.5rem; }
 
 /* ---- the per-row actions (both drawings) ---- */
-.archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
 .archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-caption); }
 .archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
@@ -2471,7 +2581,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-cand-path { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-cand-score { color: var(--muted); font-variant-numeric: tabular-nums; }
 .archive-move-none { margin: 0; font-size: var(--font-caption); }
-.archive-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.archive-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-sm); align-items: center; }
 /* The field and its picker button are one group in the markup so the phone can
    draw them as one box (below); on a wide screen the group dissolves and its
    two children are the grid's own first two tracks, exactly as before. */
@@ -2589,6 +2699,8 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
     flex: 1 1 auto;
     border: 0;
     background: transparent;
+    height: auto;       /* the box owns the height; the input only fills it */
+    box-shadow: none;   /* the box around it is the field's one boundary */
   }
   .archive-other-field .folder-pick {
     position: relative;
@@ -2621,6 +2733,26 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
   .archive-other .folder-pick,
   .archive-other-field,
   .archive-runbar .button-ghost { min-height: var(--row-sm); }
+  /* 44px painted here, so no inset band */
+  .archive-limit-input, .archive-run-pick, .archive-other-input, .archive-hint { --control-inset: 0px; }
+}
+/* On a fine pointer the buttons keep the 36px control height and reach the
+   44px floor invisibly, 4px a side (#281): every gap between them and their
+   neighbours is 8px, so the expanded rects meet edge to edge and never
+   overlap. The inputs and the run picker beside them get there through the
+   inset band (top of this sheet). */
+.archive-run, .archive-action, .archive-other-go, .archive-runbar .button-ghost { position: relative; }
+.archive-run::before, .archive-action::before, .archive-other-go::before,
+.archive-runbar .button-ghost::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+/* …and on touch they are 44px painted (the coarse block above), so the
+   expansion resets. */
+@media (pointer: coarse) {
+  .archive-run::before, .archive-action::before, .archive-other-go::before,
+  .archive-runbar .button-ghost::before { inset: 0; }
 }
 
 /* The Inbox column's pointer at this tab: a quiet button wearing the same
@@ -2632,4 +2764,4 @@ button.board-archive-link {
   font-family: inherit;
   cursor: pointer;
 }
-.board-archive-link + .board-triage { margin-left: var(--space-sm); }
+.board-archive-link + .board-triage { margin-left: var(--gap); }   /* 4 + 5 of expansion fit (#281) */

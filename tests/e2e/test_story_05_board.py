@@ -368,9 +368,14 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator("#paneBoard [data-quick-add]")).to_be_hidden()
         # one line, one height — asserted on the desktop leg too, because the
         # mismatch that shipped here was fine-pointer only: the squares took
-        # .icon-btn's 34px against the select's 36px
+        # .icon-btn's 34px against the select's 36px. The select is measured by
+        # its painted box: its element is the 44px hit target, the 36px control
+        # drawn inside a transparent border band (#281).
         boxes = bar.locator("select, button").evaluate_all(
-            "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
+            "els => els.map(e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e);"
+            " const t = e.tagName === 'SELECT' ? parseFloat(cs.borderTopWidth) : 0;"
+            " const b = e.tagName === 'SELECT' ? parseFloat(cs.borderBottomWidth) : 0;"
+            " return {y: r.y + t, h: r.height - t - b, w: r.width}; })")
         assert len(boxes) == 4, boxes                        # status select · date · delete · ✕
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
