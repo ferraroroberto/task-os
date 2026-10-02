@@ -424,8 +424,10 @@ a.chip:hover { text-decoration: underline; }
 /* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
    link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
-.chip-project { color: var(--muted); padding: 0 6px; }
-.chip-type { padding: 2px 5px; color: var(--muted); }
+.chip-project { padding: 0 6px; }
+.chip-type { padding: 2px 5px; }
+/* No muted chip text: fg-muted on the neutral-soft fill is under 4.5:1 in both
+   themes (design.md chip — the fill is what makes it quiet, #281). */
 
 /* Folder popover (format.js): the path to copy on a phone / no opener, or the
    one-time "Nothing opened? Install the opener" hint under the chip. Fixed,
@@ -2540,7 +2542,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-files .chip { max-width: 9rem; }
 /* The desktop cap's own chip (#178): same pill, a button rather than a link,
    quiet until hovered — expanding it is not a destination. */
-.archive-files-more { cursor: pointer; font: inherit; color: var(--muted); }
+.archive-files-more { cursor: pointer; font: inherit; }   /* fg on the chip fill, #281 */
 .archive-files-more:hover, .archive-files-more:focus-visible {
   color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft);
 }
