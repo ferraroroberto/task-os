@@ -268,7 +268,8 @@ def main():
     with open(os.path.join(HERE, "_calls.jsonl"), "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"verb": args.verb, "argv": sys.argv[1:], "payload": payload}) + "\\n")
 
-    time.sleep(float(responses.get("sleep", 0)))
+    if args.verb in responses.get("sleep_verbs", ["plan", "apply", "revert"]):
+        time.sleep(float(responses.get("sleep", 0)))
     answers = responses.get(args.verb) or []
     index = min(responses.setdefault("_seen_" + args.verb, 0), len(answers) - 1)
     responses["_seen_" + args.verb] = index + 1
@@ -307,6 +308,7 @@ def build_fake_archiver(
     exit_code: int = 0,
     scan_exit_code: int = 0,
     sleep: float = 0.0,
+    sleep_verbs: tuple[str, ...] = ("plan", "apply", "revert"),
     with_batch: bool = True,
     with_scan: bool = True,
 ) -> Path:
@@ -328,6 +330,7 @@ def build_fake_archiver(
         json.dumps({
             "plan": list(plan or []), "apply": list(apply or []), "revert": list(revert or []),
             "exit_code": exit_code, "scan_exit_code": scan_exit_code, "sleep": sleep,
+            "sleep_verbs": list(sleep_verbs),
         }),
         encoding="utf-8",
     )

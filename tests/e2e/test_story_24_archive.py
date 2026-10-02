@@ -140,7 +140,9 @@ LONG_ATT_3 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - club-timetable.pd
 LONG_ATT_4 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - medical-form.pdf"
 
 #: Long enough that the running state is observable from the page and from a
-#: second POST, short enough that the story stays a few seconds.
+#: second POST, short enough that the story stays a few seconds. Only the run's
+#: own `plan` pays it: the single-mail apply / revert the story presses by hand
+#: are one-shot calls nothing observes mid-flight.
 CHILD_SLEEP_S = 1.1
 
 
@@ -215,6 +217,7 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
         ],
         revert=[revert_doc([revert_result(FILED_ID, deleted=[HOUSE_FILE])])],
         sleep=CHILD_SLEEP_S,
+        sleep_verbs=("plan",),
     )
     cfg = write_test_config(
         work / "config.json",
