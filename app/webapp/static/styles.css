@@ -42,6 +42,8 @@
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-border-soft: color-mix(in srgb, var(--accent) 24%, transparent);
   --accent-border-strong: color-mix(in srgb, var(--accent) 28%, transparent);
+  /* chip / count fill (design.md neutral-soft) — text on it is fg, never muted */
+  --neutral-soft: color-mix(in srgb, var(--muted) 16%, transparent);
   /* vendored button.css danger-tier names — alias the status red, never a second red */
   --deficit: var(--danger);
   --deficit-soft: color-mix(in srgb, var(--danger) 12%, transparent);
@@ -403,7 +405,7 @@ html, body {
   max-width: 100%;
   padding: 2px var(--space-sm);
   border-radius: var(--radius-pill);
-  background: var(--card-off);
+  background: var(--neutral-soft);   /* design.md chip — never canvas-subtle inside a card (#281) */
   border: 1px solid var(--line);
   color: var(--fg);
   font-size: var(--font-caption);
@@ -414,9 +416,11 @@ html, body {
 }
 .chip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; }
-a.chip { color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft); }
+/* Text on the accent tint is accent-text (design.md): the base accent drops
+   under 4.5:1 on its own 16% tint in both themes (#281). */
+a.chip { color: var(--accent-text); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
-.chip-parent { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
+.chip-parent { color: var(--accent-text); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 /* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
    link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
@@ -1857,13 +1861,13 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   min-width: 18px;
   padding: 1px 5px;
   border-radius: var(--radius-pill);
-  background: var(--card-2);
-  color: var(--muted);
+  background: var(--neutral-soft);   /* the chip recipe: neutral-soft + fg (#281) */
+  color: var(--fg);
   font-size: var(--font-caption);
   font-weight: 600;
   text-align: center;
 }
-.board-strip-btn.active .board-count { background: var(--accent-soft); color: var(--accent); }
+.board-strip-btn.active .board-count { background: var(--accent-soft); color: var(--accent-text); }
 
 /* Carousel (phone / narrow): one column per viewport, swipe between them —
    scroll-snap gives the swipe for free, no gesture JS. */
@@ -1984,7 +1988,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     font-weight: 600;
   }
   .board-list { border-top: 0; }
-  .board-col-count { background: var(--card-2); }
 }
 
 /* ------------------------------------------------------------- today */
@@ -2411,6 +2414,13 @@ tr.task-row:focus-within > td { background: var(--card-2); }
 /* …and a ticked row stays visibly ticked while focused, same as under the
    cursor (#81) — this block is later in the file, so it has to say so. */
 .trow.is-selected:focus-within { background: var(--accent-soft); }
+/* Dark only: fg-muted holds 4.64:1 on the card but 4.08 on the card-2 lift a
+   hovered, focused or s-targeted row wears, so the row's secondary text takes
+   a step toward fg there (12%: 4.8:1) — same hierarchy, readable (#281).
+   Light keeps 4.93:1 on its lift and needs nothing. */
+[data-theme="dark"] .trow:is(:hover, :focus-within, .is-key-target):not(.is-selected) {
+  --muted: color-mix(in srgb, var(--fg) 12%, #7d8590);
+}
 tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* The shortcuts sheet — the vendored modal shell, read-only. */
