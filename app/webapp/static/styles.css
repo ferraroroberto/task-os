@@ -326,6 +326,9 @@ html, body {
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
    ACTION: moon in light (tap → dark), sun in dark (tap → light). */
 .home-head .home-toggle:active { background: var(--card-2); color: var(--fg); }
+/* The Settings gear while its pane is up (#281): the active nav tab's
+   accent-soft + accent-text, since it stands in for the tab it replaced. */
+.home-head .home-toggle[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
 :root[data-theme="dark"] .theme-icon-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-icon-sun { display: none; }
 

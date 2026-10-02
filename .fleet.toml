@@ -153,3 +153,11 @@ path = ".gitattributes"
 [[e2e.rule]]
 tier = "none"
 path = "LICENSE"
+
+# /design-review (fleet-config skills/design-review): Settings is no tab since
+# #281 (five destinations is the pill's ceiling) but the header gear, so the
+# walk reaches its pane as a click on a fresh load — read-only, it only opens.
+[[design.review.extra_steps]]
+tab = "board"
+id = "settings"
+click = "#settingsBtn"

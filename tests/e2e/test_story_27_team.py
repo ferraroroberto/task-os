@@ -173,7 +173,7 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
 
         # Settings says who this browser is, with the way back to the name step
         page.goto(f"{base}/")
-        page.locator("nav.tabs .tab[data-tab='settings']").click()
+        page.locator("#settingsBtn").click()
         page.locator("#accessCard summary").click()
         expect(page.locator("#accessRows")).to_contain_text("you are Sam Rivera")
         expect(page.locator("#accessRows a")).to_have_attribute("href", "/login?step=name&next=%2F%23settings%2Faccess")

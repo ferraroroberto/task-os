@@ -33,7 +33,7 @@ from tests.e2e.conftest import shot
 
 # Six destinations: the Tree became a view of the Table (#161) and the slot it
 # freed went to Archive (#159).
-TABS = ["Board", "Table", "Today", "Archive", "Search", "Settings"]
+TABS = ["Board", "Table", "Today", "Archive", "Search"]   # Settings is the header gear (#281)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
@@ -146,7 +146,15 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         # wide_views`), which fleet-config's design review reads, so this pins the
         # declaration to the rendered widths. Last, because it moves the stored tab.
         _assert_widths(page)
+        # The gear opens Settings over the tab it covers (#281): no tab lit while
+        # it is up, and a tab press leaves it, as for the journal.
+        gear = page.locator("#settingsBtn")
+        expect(gear).to_have_attribute("aria-current", "page")
+        expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
         page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("#paneSettings")).to_be_hidden()
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        expect(gear).not_to_have_attribute("aria-current", "page")
 
         page.click("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
@@ -156,6 +164,11 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
 
 
 def _pane_width(page: Page, tab: str) -> float:
+    if tab == "settings":                 # no tab since #281: the header gear opens it
+        page.locator("#settingsBtn").click()
+        pane = page.locator("#paneSettings")
+        pane.wait_for()
+        return pane.evaluate("el => el.getBoundingClientRect().width")
     page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
     pane = page.locator("[role=tabpanel]:not([hidden])")
     pane.wait_for()

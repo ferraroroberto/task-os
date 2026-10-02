@@ -66,7 +66,9 @@ const TAB_KEY = 'task-os.tab';
 // installed PWA reopens in the view you left it in.
 const TABLE_VIEW_KEY = 'task-os.tableView';
 const PHONE_TABLE_MQ = '(max-width: 767px)';
-// Deep links into the Settings pane: hash → the card settings.js opens.
+// Settings is a pane with no tab (#281): the header gear opens it, `#settings`
+// keeps it across a reload, and these deep links open it on one card.
+const SETTINGS_HASH = '#settings';
 const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search', '#settings/access': 'access' };
 // The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it (#102).
 const JOURNAL_HASH = /^#journal(\/|$)/;
@@ -74,6 +76,8 @@ const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];
 
 const els = {
   themeToggle: document.getElementById('themeToggle'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  paneSettings: document.getElementById('paneSettings'),
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
@@ -133,6 +137,7 @@ const state = {
   // weeks ending today, newest closing first), never merged into `items`.
   // `older` is null until the probe answered — unknown, not "no".
   journal: { open: false, weeks: 1, items: [], older: null, cancelled: true },
+  settingsOpen: false,  // the Settings pane is up over the nav's tab (#281)
 };
 
 let nav = null;
@@ -852,6 +857,7 @@ function refreshJournal() {
  *  pane is now covered, so no tab claims to be showing. Any tab press leaves
  *  (the nav re-shows its pane on its own — see boot()). */
 function openJournal() {
+  hideSettings();
   if (!state.journal.open) {
     state.journal.open = true;
     const navEl = document.querySelector('nav.tabs');
@@ -869,6 +875,39 @@ function hideJournal() {
   state.journal.open = false;
   els.paneJournal.hidden = true;
   if (JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+}
+
+// ------------------------------------------------------------- settings
+/** Show the Settings pane over whichever pane the nav has up (#281). Settings
+ *  is no tab — five destinations is the pill's ceiling (design.md) — but the
+ *  header gear, in the journal's shape: the pill's lit tab comes off, any tab
+ *  press leaves (the nav re-shows its own pane, onChange hides this one), and
+ *  `#settings` keeps it across a reload. */
+function openSettings() {
+  hideJournal();
+  if (!state.settingsOpen) {
+    state.settingsOpen = true;
+    const navEl = document.querySelector('nav.tabs');
+    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+    navEl.dataset.activeTab = 'settings';
+    document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneSettings; });
+    els.settingsBtn.setAttribute('aria-current', 'page');
+    const scroller = document.querySelector('.app');
+    if (scroller) scroller.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+  if (location.hash !== SETTINGS_HASH) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  settings.refreshStatus();
+  fetchIssuesStatus();
+  settings.refreshSearchStatus();
+}
+
+function hideSettings() {
+  if (!state.settingsOpen) return;
+  state.settingsOpen = false;
+  els.paneSettings.hidden = true;
+  els.settingsBtn.removeAttribute('aria-current');
+  if (location.hash === SETTINGS_HASH) history.replaceState(null, '', location.pathname + location.search);
 }
 
 // ---------------------------------------------------------- URL / drawer
@@ -904,11 +943,11 @@ function onHashChange() {
   if (settingsCard) {
     // The folder chip's one-time hint / a "not configured" search row link
     // here: Settings → that card, opened (settings.js owns the pane's DOM).
-    nav.setTab('settings');
-    history.replaceState(null, '', location.pathname + location.search);
+    openSettings();
     settings.revealCard(settingsCard);
     return;
   }
+  if (location.hash === SETTINGS_HASH) { openSettings(); return; }
   if (location.hash === '#search') {
     // Deep link to the Search tab (?q= carries the query — see boot()).
     nav.setTab('search');
@@ -933,7 +972,8 @@ function focusRow(task) {
   // The Table pane's host is whichever of its two views is up (#161).
   const tableHost = state.tableView === 'tree' ? els.treeHost : els.tableHost;
   const hosts = { table: tableHost, board: els.boardHost, today: els.todayHost };
-  let host = hosts[tab];
+  // Settings covers the nav's tab (#281): land on the Table, as a non-list tab does.
+  let host = state.settingsOpen ? null : hosts[tab];
   if (!host) { nav.setTab('table'); host = tableHost; }
   const target = host.querySelector('.trow[data-id="' + task.id + '"] .trow-main, .task-row[data-id="' + task.id + '"]');
   if (target) {
@@ -1110,7 +1150,7 @@ function paletteCommands() {
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: go('archive') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
-    { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: go('settings') },
+    { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
     { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
     ...(keys && !keys.hasTarget() ? keys.commands() : []),
   ];
@@ -1243,14 +1283,20 @@ async function boot() {
     onChange: function (tab) {
       state.tab = tab;
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
+      hideSettings();  // …and Settings, the same way (#281)
       if (tab === 'board' && board) board.show();
-      if (tab === 'settings') { settings.refreshStatus(); fetchIssuesStatus(); settings.refreshSearchStatus(); }
       if (tab === 'archive') archive.refresh();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
     },
   });
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
+  // A PWA last left on the Settings tab (before #281) reopens on Settings once;
+  // the nav has already stored its default tab in that key's place.
+  if (storedTab === 'settings' && !location.hash) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  // Pressed while Settings is up, it re-reads the cards — what tapping the
+  // Settings tab used to do.
+  els.settingsBtn.addEventListener('click', openSettings);
   wireQuickAdd();
   wireSelectMode();
   wireTableView();

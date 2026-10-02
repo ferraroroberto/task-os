@@ -326,7 +326,7 @@ def test_say_the_task(
     # Settings agrees with the button — one /api/status, several readers
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     card = _open_card(page, "voiceCard")
     expect(card.locator("#voiceCardMeta")).to_have_text("on")
     expect(card.locator("#statusVoice .status-ok")).to_have_text("reachable")
@@ -381,7 +381,7 @@ def test_say_the_task(
     p2.keyboard.press("Escape")
 
     # 7. …and Settings says the same thing, in the same words
-    p2.get_by_role("tab", name="Settings").click()
+    p2.get_by_role("button", name="Settings", exact=True).click()
     card2 = _open_card(p2, "voiceCard")
     expect(card2.locator("#voiceCardMeta")).to_have_text("off")
     expect(card2.locator("#statusVoice .status-off")).to_have_text("not reachable")
