@@ -838,7 +838,10 @@ a.chip:hover { text-decoration: underline; }
   left: 0;
   z-index: 25;
   min-width: 100%;
-  max-height: 260px;
+  /* Tall enough for the whole status list (seven 44px options, #281): a menu
+     that scrolls hides its last tick boxes under its own edge, where they sit
+     over the rows yet take no tap. A long people list still scrolls. */
+  max-height: 360px;
   overflow: auto;
   display: grid;
   gap: 2px;
