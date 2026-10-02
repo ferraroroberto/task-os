@@ -96,3 +96,45 @@ def test_the_wire_bytes_really_are_smaller(client: TestClient) -> None:
         wire = b"".join(r.iter_raw())
     assert r.headers["content-encoding"] == "gzip"
     assert len(gzip.decompress(wire)) > 3 * len(wire)
+
+
+# ------------------------------------------------ entry document revalidation (#280)
+
+def test_index_carries_a_validator_and_keeps_revalidating(client: TestClient) -> None:
+    r = _get(client, "/")
+    assert r.headers["etag"].startswith('W/"') and r.headers["etag"].endswith('"')
+    assert r.headers["cache-control"] == "no-cache, must-revalidate"
+
+
+def test_a_repeat_with_the_validator_is_a_bodyless_304(client: TestClient) -> None:
+    etag = _get(client, "/").headers["etag"]
+    r = client.get("/", headers={"If-None-Match": etag, "Accept-Encoding": "gzip"})
+    assert r.status_code == 304
+    assert r.content == b""
+    assert "content-encoding" not in r.headers
+    assert r.headers["etag"] == etag
+    assert r.headers["cache-control"] == "no-cache, must-revalidate"
+
+
+def test_validator_matching_is_tolerant_but_not_loose(client: TestClient) -> None:
+    etag = _get(client, "/").headers["etag"]
+    bare = etag[2:]
+    assert client.get("/", headers={"If-None-Match": bare}).status_code == 304
+    assert client.get("/", headers={"If-None-Match": f'"nope", {etag}'}).status_code == 304
+    assert client.get("/", headers={"If-None-Match": "*"}).status_code == 304
+    assert client.get("/", headers={"If-None-Match": 'W/"stale"'}).status_code == 200
+
+
+def test_the_validator_moves_when_the_served_page_does(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 304 must never outlive a build: the stamped page names the fleet hash
+    of every asset, so a new hash is a new page and a new validator."""
+    from app.webapp.routers import misc
+
+    before = _get(client, "/").headers["etag"]
+    monkeypatch.setattr(misc.BUILD_INFO, "stamp_html", lambda html: html + "<!-- new build -->")
+    after = _get(client, "/")
+    assert after.headers["etag"] != before
+    stale = client.get("/", headers={"If-None-Match": before})
+    assert stale.status_code == 200 and "new build" in stale.text
