@@ -88,7 +88,9 @@ if ($tier -eq "skip") {
     Write-Host ""
     Write-Host ">> e2e routing: $tier" -ForegroundColor Cyan
     Write-Host "   reason: $routeReason" -ForegroundColor DarkGray
-    $e2eArgs = @($e2eTarget)
+    # The classifier space-joins several targets (a diff touching two e2e modules);
+    # one pytest argument holding a space is "file or directory not found" (#277).
+    $e2eArgs = @($e2eTarget -split '\s+' | Where-Object { $_ })
     foreach ($b in ($e2eBrowsers -split ',' | Where-Object { $_ })) {
         $e2eArgs += @("--browser", $b)
     }
