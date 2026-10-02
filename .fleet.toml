@@ -72,6 +72,12 @@ tier       = "static"
 prefix     = "app/webapp/static/_vendored/"
 extensions = ["html"]
 
+# A vendored component's README is documentation the suite never opens (#279).
+[[e2e.rule]]
+tier       = "none"
+prefix     = "app/webapp/static/_vendored/"
+extensions = ["md"]
+
 # Real browser surface -> full suite.
 [[e2e.rule]]
 tier   = "full"
@@ -85,6 +91,15 @@ prefix = "tests/e2e/"
 [[e2e.rule]]
 tier = "full"
 path = "launcher.py"
+# What the stories import and read: the fakes (whisper, chat, anthropic, archiver,
+# calendar), the seed, the calendar .ics/.html files, and write_test_config. These
+# used to fall to the "tests/ -> none" rule below, or to unclassified (#279).
+[[e2e.rule]]
+tier   = "full"
+prefix = "tests/fixtures/"
+[[e2e.rule]]
+tier = "full"
+path = "tests/conftest.py"
 
 # Backend / tooling / docs with no browser impact -> no browser suite.
 [[e2e.rule]]
