@@ -58,6 +58,8 @@ wide_views = ["board", "table", "today", "archive"]
 static_pytest_target = "tests/e2e/test_smoke.py"
 static_browsers       = ["chromium"]
 full_pytest_target    = "tests/e2e"
+# The gate writes this on every routed e2e run (per-test seconds for /e2e-audit).
+junit_xml             = "data/e2e-junit.xml"
 
 # Inert assets under the static tree -> smoke is enough.
 [[e2e.rule]]
