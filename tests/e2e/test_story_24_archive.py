@@ -324,7 +324,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # ---------------------------------------------------------------- capture
     # 1. Settings → the Capture card is on, and "Check now" lands the two
     #    flagged mails as Inbox tasks (the on-screen half of story 21).
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     card = _open_card(page, "captureCard")
     expect(card.locator("#captureCardMeta")).to_have_text("on")
     expect(card.locator("#statusCaptureRun")).to_have_text("not yet")
@@ -573,7 +573,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     (#167): what the archiver is, what the model works with, where the
     #     threshold sits and what the last run did — read from the very block
     #     the tab renders, plus the way back to it.
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     acard = _open_card(page, "archiveCard")
     expect(acard.locator("#archiveCardMeta")).to_have_text("on")
     expect(acard.locator("#statusArchiveRepo .status-ok")).to_have_text("ready")
@@ -588,14 +588,14 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     acard.locator("#archiveOpenTab").click()
     expect(page.locator("#paneArchive")).to_be_visible()
 
-    # 10. Phone: six destinations in the pill, and the report as cards whose
+    # 10. Phone: five destinations in the pill (Settings is the gear, #281), and the report as cards whose
     #     actions live behind each row's own menu — the grid does not fit here.
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True,
                                 has_touch=True, color_scheme="light")
     phone.add_init_script(INTERCEPT)
     p = phone.new_page()
     p.goto(base + "/")
-    expect(p.locator("nav.tabs .tab")).to_have_count(6)
+    expect(p.locator("nav.tabs .tab")).to_have_count(5)
     p.get_by_role("tab", name="Archive").tap()
     expect(p.locator("#paneArchive")).to_be_visible()
     expect(p.locator(".archive-card")).to_have_count(7)
@@ -764,7 +764,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # 10b. The Settings card is the same five rows in a 390-wide column, and the
     #      two things it can do are still thumb-sized there (#167).
-    p.locator("nav.tabs .tab[data-tab='settings']").tap()
+    p.locator("#settingsBtn").tap()
     pcard = p.locator("#archiveCard")
     pcard.locator("summary.collapse-summary").tap()
     expect(pcard).to_have_attribute("open", "")
@@ -787,7 +787,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     sentence as a toast, never a console error. Left until last: a second
     #     run re-plans the same three mails and would move the report the steps
     #     above read. It is waited out, so nothing races the shutdown.
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     run_now = acard.locator("#archiveRunNow")
     expect(run_now).to_be_enabled()
     run_now.click()

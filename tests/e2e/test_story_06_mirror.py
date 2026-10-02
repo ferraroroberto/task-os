@@ -84,7 +84,7 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
 
         # 1. Settings → the card reports both services on, pointing at the temp folders.
         page.goto(f"{base}/")
-        page.click("nav.tabs .tab[data-tab='settings']")
+        page.click("#settingsBtn")
         card = page.locator("#mirrorCard")
         expect(card.locator("#statusMirror .status-ok")).to_have_text("enabled")
         expect(card.locator("#statusMirror")).to_contain_text(str(inst.mirror_dir))
@@ -163,7 +163,7 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         # The diagnostic surfaces on the Settings card instead — inspect, then clear it.
         page.keyboard.press("Escape")  # close the drawer first — it overlays the tab panel
         expect(drawer).to_be_hidden()
-        page.click("nav.tabs .tab[data-tab='settings']")
+        page.click("#settingsBtn")
         card.locator("summary.collapse-summary").click()  # the disclosure starts collapsed
         expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
         expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
@@ -191,7 +191,7 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         assert st["backup"]["last_file"] == backup.name
         assert _get(base, "/healthz")["ok"] is True
         page.evaluate("document.documentElement.dataset.theme = 'dark'")
-        page.click("nav.tabs .tab[data-tab='settings']")
+        page.click("#settingsBtn")
         expect(card.locator("#statusMirror .status-warn")).to_have_text("enabled · 1 file(s) skipped")
         expect(card.locator("#statusMirror")).to_contain_text(broken.name)
         expect(card.locator("#statusBackup")).to_contain_text(backup.name)

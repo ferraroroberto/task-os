@@ -79,7 +79,7 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     assert {row["actor"] for row in task["activity"] if row["field"] in {"parent", "priority", "status"}} == {"ai"}
     shot(page, shots / "story-23-ai-triage-2-desktop.png")
 
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     card = page.locator("#aiCard")
     card.locator("summary").click()
     expect(card.locator("#aiCardMeta")).to_have_text("on")

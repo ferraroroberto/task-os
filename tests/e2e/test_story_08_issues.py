@@ -172,7 +172,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
 
         # 6. Settings (dark): provider enabled, the last sync's counts.
         page.evaluate("document.documentElement.dataset.theme = 'dark'")
-        page.click("nav.tabs .tab[data-tab='settings']")
+        page.click("#settingsBtn")
         card = page.locator("#issuesCard")
         # every Settings card is a collapsed disclosure (#46): the summary
         # carries the state word, the body opens on demand

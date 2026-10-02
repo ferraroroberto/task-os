@@ -99,7 +99,7 @@ def _open_today(page: Page, base: str) -> None:
 
 
 def _open_calendar_card(page: Page):
-    page.get_by_role("tab", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     card = page.locator("#calendarCard")
     expect(card).to_be_visible()
     if not card.evaluate("el => el.open"):

@@ -345,11 +345,9 @@
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
       <span class="tab-label">Search</span>
     </button>
-    <button id="tabSettings" type="button" class="tab" data-tab="settings"
-            role="tab" aria-selected="false" aria-controls="paneSettings" tabindex="-1">
-      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
-      <span class="tab-label">Settings</span>
-    </button>
+    <!-- No Settings tab (#281): five destinations is the pill's ceiling
+         (design.md nav-bar.maxTabs), and Settings is the rarely-used one —
+         it is the gear in the header, one tap from every tab. -->
   </nav>
 
   <main class="app">
@@ -378,6 +376,12 @@
               title="Toggle theme" aria-label="Toggle dark mode">
         <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
         <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
+      </button>
+      <!-- Settings (#281): the header gear, not a sixth tab. aria-current
+           while its pane is up; any tab press leaves it, as for the journal. -->
+      <button type="button" id="settingsBtn" class="home-toggle hit-target"
+              title="Settings" aria-label="Settings" aria-controls="paneSettings">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
       </button>
     </div>
 
@@ -544,7 +548,9 @@
         <div id="journalHost" data-empty="tasks"></div>
       </div>
     </section>
-    <section id="paneSettings" class="pane" role="tabpanel" aria-labelledby="tabSettings" aria-label="Settings" hidden>
+    <!-- Settings (#281): a pane with no tab, like the journal — the header
+         gear opens it over the current tab, any tab press leaves it. -->
+    <section id="paneSettings" class="pane" role="region" aria-label="Settings" hidden>
       <div class="pane-body">
         <!-- Every Settings card is the vendored disclosure, collapsed by default
              (#46): the summary carries the title + a state word (on · synced ·
