@@ -511,7 +511,10 @@ a.chip:hover { text-decoration: underline; }
 .opener-cmd {
   margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
-  font-size: var(--font-caption); white-space: pre-wrap; word-break: break-all;
+  font-size: var(--font-caption); white-space: pre-wrap;
+  /* a long token (a path, a URL) breaks where it must; words still wrap whole —
+     break-all split "Directory" and "-Force" mid-word (#281) */
+  overflow-wrap: anywhere;
 }
 .opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
 /* 12 + 20 + 12 = the 44px floor for a one-line summary (#281); it stays a
@@ -2114,12 +2117,12 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   font-weight: 600;
 }
 .plan-banner-text .icon { width: var(--icon-title); height: var(--icon-title); color: var(--accent); flex: none; }
-.plan-banner-btn { flex: none; font-weight: 600; }
+.plan-banner-btn { flex: none; font-weight: 600; min-height: var(--hit-min); }   /* alone in its banner: 44px real (#281) */
 
 /* Plan mode: candidates each grow the two large targets on a third row line
    (`.trow-extra`); Later is the snooze popover (#87) wearing a wide summary. */
 .plan-picker { margin-bottom: var(--space-md); }
-.plan-done-btn { flex: none; font-weight: 600; }
+.plan-done-btn { flex: none; font-weight: 600; min-height: var(--hit-min); }
 .plan-targets { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; padding-top: 2px; }
 .plan-target {
   display: inline-flex;
@@ -2515,7 +2518,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-runbar { justify-content: flex-start; flex-wrap: wrap; }
 .archive-runbar-label { color: var(--muted); font-size: var(--font-caption); }
 .archive-run-pick { min-height: var(--control-h); max-width: min(100%, 26rem); }
-.archive-runbar .button-ghost { margin-left: auto; }
+.archive-runbar .button-ghost { margin-left: auto; min-height: var(--control-h); }   /* + its 4px a side = 44 (#281) */
 
 /* ---- the report grid ---- */
 .archive-table-wrap { padding: 0; overflow: hidden; }
