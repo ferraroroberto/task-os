@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -259,6 +261,17 @@ def test_client_uses_one_anthropic_messages_request() -> None:
         assert sent["system"] == "system"
         assert sent["messages"] == [{"role": "user", "content": "context"}]
         assert sent["max_tokens"] == 90
+
+
+def test_the_sdk_is_not_imported_until_a_call_is_made() -> None:
+    """The SDK is ~1.5 s of import that every process start used to pay (the server,
+    the CLI, each disposable e2e instance) although most never make an AI call."""
+    code = "import sys, app.webapp.server; sys.exit(int('anthropic' in sys.modules))"
+    done = subprocess.run(
+        [sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    assert done.returncode == 0, f"importing the server loaded the anthropic SDK\n{done.stderr[-500:]}"
 
 
 def test_api_stages_accepts_and_rejects(

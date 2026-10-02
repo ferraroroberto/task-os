@@ -12,13 +12,14 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any
-
-import anthropic
+from typing import TYPE_CHECKING, Any
 
 from src import clock
 from src.config import AppConfig
 from src.voice import connect_failure, endpoint_of
+
+if TYPE_CHECKING:
+    import anthropic
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,11 @@ class AIClient:
 
     def _complete_once(self, *, system: str, user: str, max_tokens: int) -> str:
         """The single SDK call behind :meth:`complete`."""
+        # Imported here, not at module level: the SDK is ~1.5 s of import and every
+        # process that imports this module (the server, the CLI, every disposable
+        # test instance) used to pay it at start although most never make a call.
+        import anthropic
+
         reason = self.unconfigured_reason
         if reason:
             raise AIError("ai_disabled", reason, http_status=409)
