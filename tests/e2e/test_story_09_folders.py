@@ -146,7 +146,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.keyboard.press("Escape")
     expect(pop).to_be_hidden()
     chip.click()                                                            # second click: no hint (one-time)
-    page.wait_for_timeout(600)
+    page.wait_for_timeout(600)                                              # past the hint's own 350 ms delay (format.js)
     expect(pop).to_be_hidden()
     assert len(page.evaluate("window.__taskosClicks")) == 2
 
@@ -310,7 +310,6 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     # 6. dark, for the record
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    page.wait_for_timeout(200)
     shot(page, shots / "story-09-folders-6-desktop.png")
     ctx.close()
 

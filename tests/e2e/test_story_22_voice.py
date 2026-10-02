@@ -319,7 +319,7 @@ def test_say_the_task(
     posted = len(inst.whisper.requests)
     page.keyboard.press("Escape")
     expect(reopened).to_be_hidden()
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(round(3 * PARTIAL_S * 1000))   # three partial cadences: a live poller would have posted
     assert len(inst.whisper.requests) == posted
     expect(page.locator("#quickAdd .quick-add-input")).to_have_value("")
 

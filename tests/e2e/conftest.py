@@ -182,7 +182,7 @@ def _wait_healthz(base: str, timeout: float) -> bool:
                     return True
         except OSError:
             pass
-        time.sleep(0.3)
+        time.sleep(0.05)
     return False
 
 
