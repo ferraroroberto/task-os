@@ -63,7 +63,9 @@ export function confirmDialog(o) {
     actions.className = 'detail-actions';
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = 'detail-save-btn confirm-danger';
+    // The modal's one footer primary at button-primary's 48px, restating the
+    // tint recipe on danger (styles.css .confirm-danger), never a solid red (#281).
+    go.className = 'button-primary detail-save-btn confirm-danger';
     go.textContent = o.action || 'Delete';
     go.addEventListener('click', function () { answer = true; dialog.close(); });
     actions.appendChild(go);
