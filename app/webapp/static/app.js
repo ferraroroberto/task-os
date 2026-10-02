@@ -111,7 +111,7 @@ const state = {
   people: [],
   projects: [],     // [{id, title, depth}] — every task with children, tree order
   taskIndex: [],    // [{id, title, depth}] — EVERY task, tree order (#100 blocker picker)
-  tree: [],         // /api/tasks/tree?include_closed=true — the full forest
+  tree: [],         // /api/tasks/tree?include_closed=true&descriptions=false — the full forest, minus the text only the drawer reads
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
   blocked: [],      // the locked tasks (#100) — same shape as deferred, the Tree only
@@ -245,7 +245,7 @@ function flattenAll(forest) {
 }
 
 async function loadTree() {
-  const res = await api('/api/tasks/tree?include_closed=true');
+  const res = await api('/api/tasks/tree?include_closed=true&descriptions=false');
   state.tree = res.items || [];
   state.projects = flattenProjects(state.tree);
   state.taskIndex = flattenAll(state.tree);
