@@ -634,3 +634,32 @@ def test_link_without_kind_is_classified_server_side(seeded: TestClient) -> None
     assert ai.status_code == 201 and ai.json()["kind"] == "ai"
     web = seeded.post(f"/api/tasks/{t}/links", json={"url": "https://example.com/p", "label": "p"})
     assert web.json()["kind"] == "web"
+
+
+# ------------------------------------------------ slim boot tree (#280)
+
+def test_tree_descriptions_are_opt_out_and_default_unchanged(client: TestClient) -> None:
+    """The boot forest never reads a description (the drawer re-fetches the task),
+    and the closed ones are megabytes. Opt out per request; the default shape is
+    what the CLI and every other caller already get."""
+    a = client.post("/api/tasks", json={"title": "Parent", "description": "long " * 50}).json()
+    client.post("/api/tasks", json={"title": "Child", "parent_id": a["id"], "description": "child text"})
+
+    full = client.get("/api/tasks/tree").json()["items"]
+    assert full[0]["description"] == "long " * 50
+    assert full[0]["children"][0]["description"] == "child text"
+
+    slim = client.get("/api/tasks/tree?descriptions=false").json()["items"]
+    assert "description" not in slim[0]
+    assert "description" not in slim[0]["children"][0]
+    # everything else the views render from is still there
+    assert {"id", "title", "status", "children", "depth", "is_project"} <= set(slim[0])
+    assert [n["title"] for n in slim[0]["children"]] == ["Child"]
+
+
+def test_slim_tree_is_much_smaller_for_long_descriptions(client: TestClient) -> None:
+    for i in range(10):
+        client.post("/api/tasks", json={"title": f"t{i}", "description": "x" * 5000})
+    full = client.get("/api/tasks/tree").content
+    slim = client.get("/api/tasks/tree?descriptions=false").content
+    assert len(slim) * 4 < len(full)

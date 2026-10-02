@@ -1518,18 +1518,25 @@ def tree(
     root_id: int | None = None,
     *,
     include_closed: bool = False,
+    descriptions: bool = True,
 ) -> list[dict[str, Any]]:
     """Nested ``{...task, children: [...]}`` forest — the whole tree, or ``root_id``'s subtree.
 
     Closed (done/cancelled) tasks are pruned unless ``include_closed``; a
     closed project keeps showing while it has open descendants.
+    ``descriptions=False`` leaves the ``description`` key off every node: the
+    web app boots from the whole forest and never reads one there (the drawer
+    fetches its own task), yet the closed ones are most of the payload (#280).
     """
     rows = conn.execute("SELECT * FROM tasks ORDER BY id").fetchall()
     by_parent: dict[int | None, list[dict[str, Any]]] = {}
     all_by_id: dict[int, dict[str, Any]] = {}
     for r in rows:
-        by_parent.setdefault(r["parent_id"], []).append(dict(r))
-        all_by_id[r["id"]] = dict(r)
+        row = dict(r)
+        if not descriptions:
+            row.pop("description", None)
+        by_parent.setdefault(r["parent_id"], []).append(row)
+        all_by_id[r["id"]] = row
     refs = {r["task_id"]: dict(r) for r in conn.execute("SELECT * FROM issue_refs").fetchall()}
     # blocked-by (#100), prefetched like issue_refs above: one query for the
     # whole tree rather than a per-node lookup. Ordered by blocker id, the
@@ -1566,6 +1573,8 @@ def tree(
         return build(None, 0)
     root = _require_task(conn, root_id)
     node = dict(root)
+    if not descriptions:
+        node.pop("description", None)
     node["depth"] = 0
     node["issue_ref"] = refs.get(root_id)
     node.update(blocked_fields(root_id))

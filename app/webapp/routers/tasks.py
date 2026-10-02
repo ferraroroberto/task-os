@@ -7,7 +7,7 @@
                                          the same task back untouched on 200
     POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
     POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
-    GET    /api/tasks/tree?root=N        nested forest (or N's subtree)
+    GET    /api/tasks/tree?root=N        nested forest (or N's subtree); descriptions=false drops them (the boot, #280)
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
     DELETE /api/tasks/{id}               delete the task and its subtree
@@ -391,9 +391,10 @@ def bulk_delete_tasks(
 def tree(
     root: int | None = None,
     include_closed: bool = False,
+    descriptions: bool = True,
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
-    return {"items": repo.tree(db, root, include_closed=include_closed)}
+    return {"items": repo.tree(db, root, include_closed=include_closed, descriptions=descriptions)}
 
 
 # ---------------------------------------------------------------- detail
