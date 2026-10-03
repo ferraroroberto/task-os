@@ -15,12 +15,34 @@
 | 5 | On Today, tap the circle of a recurring task, then of a plain overdue one (story 05) | The recurring task rolls one cadence forward (toast `Completed — next: …` with **Undo (Z)**). The plain one closes and lands in the Board's Done-today column |
 | 6 | On the phone, tap ⋯ → **Change date…** on a row (story 07) | The vendored modal (top-anchored) offers Today · Tomorrow · This weekend · Next week · Pick a date… · No date, and a pick re-dates the row |
 | 7 | Measure a phone row (stories 04, 05, 07) | The circle and the kebab are 44×44, the circle, the open target and the kebab share no pixel, the row is ≤ 61px with its hairline, and nothing on the meta line is a button or a link |
+| 8 | On the phone, swipe a Table row left, then right (story 07, synthetic touch pointers) | Left: the row springs back and the date sheet opens, nothing written. A swipe that starts in the 20px edge zone does nothing. Right: the row slides out, the task is done, the toast offers **Undo (Z)**, and Undo brings the row back |
 
 ## Proof
 
 - Screenshots: [story-29-row-actions-1-desktop.png](../screenshots/story-29-row-actions-1-desktop.png) (the open menu on a Today row).
 - E2e: step 4b of `_walk_starts_and_snooze` inside `tests/e2e/test_story_04_triage.py`, the circle in `tests/e2e/test_story_05_board.py`, and the phone row in `tests/e2e/test_story_07_phone.py` (`_walk_row_tap_targets`). They ride existing stories, so the suite gains no test function.
-- Unit: `tests/test_row_actions.py`, the shared table's plans, inverses and messages under node.
+- Unit: `tests/test_row_actions.py`, the shared table's plans, inverses and messages under node. `tests/test_swipe.py`, the swipe classifier: edge zone, slop and direction lock, the 96px / 35 % threshold, flick.
+
+## Owner's iPhone checklist (not verified)
+
+Walk these in the **installed standalone PWA** on the iPhone. Record each item as walked, or as **not verified**.
+
+- **Gestures**
+  - Swipe right from the middle of a Today row: it slides out, and the toast offers Undo for 10 s.
+  - Swipe right starting near the left edge: does iOS edge-back fire instead, and is 20 px of edge zone enough?
+  - Swipe left: the row springs back and the date sheet (top-anchored modal) opens. Cancel writes nothing.
+  - Flick-scroll a long Today list vertically: no row should swipe by accident.
+  - A slow diagonal drag should scroll, not swipe.
+  - A long-press on a row: no callout and no text selection.
+- **Feedback and access**
+  - Undo works inside 10 s, and the toast sits clear of the nav pill.
+  - With Reduce Motion on in iOS Settings, the row still follows the finger, but the spring-back and slide-out are instant.
+  - VoiceOver reaches Complete through the circle and Change date through ⋯, without swiping.
+- **Layout**
+  - Rows run edge to edge on Today, the Table and the Tree.
+  - On the Board, rows do not swipe and the columns still do.
+  - The ⋯ menu inside the Board carousel is not clipped.
+  - Check all of the above in light and dark.
 
 ## Result
 

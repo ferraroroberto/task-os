@@ -25,7 +25,12 @@ allowed on screen). What a browser can prove of the story:
   edge, the whole row ≤ 61px — while the date, folder and AI conversation on its
   meta line are passive (no button, no link); the date is changed through the
   kebab's "Change date" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
-  and — on Tree, at 320/390/430/772 — the same three still apart;
+  rows run edge to edge; and — on Tree, at 320/390/430/772 — the same three
+  still apart;
+- the row's swipes, with synthetic touch pointers (#311): left opens the date
+  sheet and writes nothing, a touch starting in the 20px edge zone is ignored,
+  right completes with Undo. The feel of the gesture on a real iPhone is the
+  owner's checklist (story 29);
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
   comes back and the shell loads. The non-loopback gate itself is unit-level
@@ -189,7 +194,44 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         expect(page.locator(f"#paneTable .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
             "title", new_due)
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
-        # Let the re-render the patch kicked off finish before the row's task is
+        page.wait_for_load_state("networkidle")
+
+        # Swipe (#311): a sideways touch on the row runs its two actions. These
+        # are synthetic touch pointers, so they prove the wiring, not the feel
+        # (that is the owner's iPhone walk): left opens the date sheet and
+        # writes nothing, a touch starting in the 20px edge zone is ignored,
+        # right completes with Undo.
+        swipe = """(el, [x0, x1]) => {
+          const r = el.getBoundingClientRect();
+          const y = r.top + r.height / 2;
+          const fire = (type, x) => el.dispatchEvent(new PointerEvent(type, {
+            pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: x, clientY: y }));
+          fire('pointerdown', x0);
+          for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
+          fire('pointerup', x1);
+        }"""
+        row = page.locator(f"#paneTable .trow[data-id='{task['id']}']")
+        expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
+        row.locator(".trow-main").evaluate(swipe, [300, 100])
+        expect(sheet).to_be_visible()
+        expect(sheet.locator("h2")).to_have_text("Change date")
+        sheet.locator(".detail-close").tap()
+        expect(sheet).to_be_hidden()
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
+        row.locator(".trow-main").evaluate(swipe, [5, 250])
+        expect(row.locator(".trow-reveal")).to_have_count(0)
+        expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "todo"
+        row.locator(".trow-main").evaluate(swipe, [100, 300])
+        toast = page.locator(".toast-success").last
+        expect(toast).to_contain_text("Completed")
+        expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
+        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}']")).to_have_count(0)
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
+        toast.locator(".toast-action").tap()
+        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}']")).to_be_visible()
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "todo"
+        # Let the re-renders the writes kicked off finish before the row's task is
         # deleted below: pulling it out from under the in-flight GETs aborts
         # them, and WebKit reports an aborted request as a page error.
         page.wait_for_load_state("networkidle")
