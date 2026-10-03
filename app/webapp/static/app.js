@@ -35,6 +35,7 @@
 import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
+import { actionById, createActions } from './actions.js';
 import { api, qs } from './api.js';
 import { mountArchive } from './archive.js';
 import { mountBoard } from './board.js';
@@ -45,7 +46,7 @@ import {
   BLOCKED, DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters,
   listParams, mountFilters,
 } from './filters.js';
-import { STATUSES, fmtDay, relDue, todayISO } from './format.js';
+import { STATUSES, fmtDay, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
@@ -147,6 +148,7 @@ let settings = null;
 let archive = null;       // the Archive pane (#159) — the batch run + its report
 let palette = null;
 let keys = null;          // the row keymap + undo (#99); also feeds the palette
+let actions = null;       // the one row-action runner + its undo (actions.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
 const bulkBars = [];      // one per pane strip (Board · Table · Today), all over one selection (#81)
@@ -446,24 +448,24 @@ async function patchTask(id, changes) {
   if (drawer.currentId() === id) drawer.refresh();
 }
 
-/** The row's status select. "complete" (recurring tasks only — see
- *  rows.js::statusOptions) goes through POST /tasks/{id}/done so the task
- *  rolls its due one cadence forward instead of closing; "done" (and every
- *  other status) is a plain PATCH — closed for good, recurring or not
- *  (issue #54). */
+/** The row's status select (and the drawer's). Completing goes through the
+ *  one action runner (#311) — the same write, toast and Undo as the `e` key:
+ *  "complete" (recurring tasks only — see rows.js::statusOptions) rolls the
+ *  due one cadence forward instead of closing, and "done" on a task that does
+ *  not recur is the same close. "done" on a recurring task stays a plain
+ *  PATCH — closed for good, off the series (issue #54) — as does every other
+ *  status. */
 async function setStatus(id, status) {
-  if (status !== 'complete') return patchTask(id, { status: status });
-  let t;
-  try {
-    t = await api('/api/tasks/' + id + '/done', { method: 'POST', body: {} });
-  } catch (err) {
-    toast(err.message || 'Could not complete the task', 'error');
-    throw err;
+  const task = status === 'complete' || status === 'done' ? await resolveTask(id) : null;
+  const completes = status === 'complete' || (status === 'done' && task && !task.recurrence);
+  if (!completes) return patchTask(id, { status: status });
+  if (!task) {
+    toast('That task is no longer on the list', 'error');
+    throw new Error('task not found');
   }
-  toast('Done — next: ' + t.due + ' (' + relDue(t.due).text + ')', 'success');
-  await refreshAll();
-  if (drawer.currentId() === id) drawer.refresh();
-  return t;
+  // Another row action still writing: refuse rather than queue, so the
+  // select puts its old value back instead of claiming a change.
+  if (!(await actions.run(actionById('complete'), [task]))) throw new Error('busy');
 }
 
 /** Snooze one task from a Today row (#87): set `starts` to the phrase the menu
@@ -1225,11 +1227,13 @@ function paletteCommands() {
   return cmds;
 }
 
-/** The row keymap (#99). Every keyed write is one POST /api/tasks/bulk — one
- *  id or the whole ticked set — so a key means the same thing either way and
- *  each task still goes through the repo layer's single-task path. */
-function wireKeys() {
-  keys = mountKeys(els.keysHelp, {
+/** The one row-action runner (#311): the keymap, the status select and the
+ *  row's own controls all commit through it. Every write is one POST
+ *  /api/tasks/bulk — one id or the whole ticked set — so an action means the
+ *  same thing either way and each task still goes through the repo layer's
+ *  single-task path. */
+function wireActions() {
+  actions = createActions({
     write: function (ids, changes) {
       return api('/api/tasks/bulk', { method: 'POST', body: Object.assign({ ids: ids }, changes) });
     },
@@ -1237,6 +1241,13 @@ function wireKeys() {
       await refreshAll();
       if (drawer.currentId() != null) drawer.refresh();
     },
+  });
+}
+
+/** The row keymap (#99), reading the same actions. */
+function wireKeys() {
+  keys = mountKeys(els.keysHelp, {
+    actions: actions,
     resolveTask: resolveTask,
     isBlocked: function () { return drawer.currentId() != null; },
   });
@@ -1255,6 +1266,7 @@ function wirePalette() {
 // ---------------------------------------------------------------- boot
 async function boot() {
   wireTheme();
+  wireActions();
   drawer = createDrawer(els.drawer, {
     onChanged: refreshAll,
     onOpen: openTask,
