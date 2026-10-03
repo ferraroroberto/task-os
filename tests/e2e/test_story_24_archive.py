@@ -413,9 +413,15 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     wraps onto a second line, taller than every other cell in the row.
     #     That used to read as the row's other cells having drifted to the
     #     top; centred vertical alignment (#178) keeps them level with it.
+    # #305: the file chips are 44px targets (the "+1 more" one too), and on the
+    # wrapped second line they touch the first without overlapping it.
+    assert_min_target(long_row.locator(".archive-files .chip"))
+    assert_no_overlap(long_row.locator(".archive-files .chip"))
     long_row.locator(".archive-files-more").click()
     expect(long_row.locator(".archive-files a.chip")).to_have_count(5)
     expect(long_row.locator(".archive-files-more")).to_have_count(0)
+    assert_min_target(long_row.locator(".archive-files .chip"))
+    assert_no_overlap(long_row.locator(".archive-files .chip"))
     subject_box = _box(long_row.locator(".c-subject > *"))
     files_box = _box(long_row.locator(".c-files > *"))
     assert files_box["height"] > subject_box["height"] + 4, (
@@ -618,6 +624,9 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
         assert chip_box["x"] + chip_box["width"] <= card_box["x"] + card_box["width"] + 1, (
             f"chip {chip_index} runs past the card's right edge ({chip_box} vs {card_box})"
         )
+    # #305: each stacked file chip is a 44px target, none sharing a pixel
+    assert_min_target(long_chips)
+    assert_no_overlap(long_chips)
     assert_no_horizontal_overflow(p)
 
     # 10a. The head is one line, and the three readings are one line each — no

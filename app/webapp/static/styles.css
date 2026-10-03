@@ -1253,7 +1253,18 @@ a.chip:hover { text-decoration: underline; }
 .prio-high { color: var(--danger); font-weight: 600; }
 .prio-none { color: var(--muted); }
 .c-person, .c-project { white-space: nowrap; }
-.folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
+/* The chips of a cell — the Table grid's folder and AI chips, the Archive
+   report's file chips and its "+N more" — are 44px targets (#305), the recipe
+   the task row's meta pills settled on (#303): the pill paints 24px, an
+   invisible ::before reaches 11px above and below it (the box is placed from
+   the PADDING box, 22px, so that is 22 + 22 = 44), and the 11px margin is what
+   keeps the band — which the design review measures from the border box, 24 +
+   22 = 46 — on the pill's own 46px line. A wrapped line therefore touches the
+   one above without overlapping it. Sideways the band reaches 4px, and the
+   10px column gap leaves 2px clear between two neighbours' bands. */
+.folder-chips .chip { position: relative; margin: 11px 0; }
+.folder-chips .chip::before { content: ""; position: absolute; inset: -11px -4px; }
 .c-folder .chip { max-width: 200px; }
 .c-comment { max-width: 280px; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2552,7 +2563,10 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
    its own edge and the next one wraps to its own line, rather than the whole
    row stretching to fit its longest chip. */
 .archive-card .archive-files { min-width: 0; }
-.archive-card .archive-files .chip { max-width: 100%; min-width: 0; overflow: hidden; }
+.archive-card .archive-files .chip { max-width: 100%; min-width: 0; }
+/* the chip no longer clips (#305: its ::before band reaches outside it); the
+   label already does — `.chip-label` is `overflow: hidden` with an ellipsis, so
+   it is the part that shrinks */
 .archive-menu-body { padding-top: 6px; }
 @media (max-width: 520px) {
   .archive-other { grid-template-columns: minmax(0, 1fr); }

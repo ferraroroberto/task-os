@@ -329,6 +329,12 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(moved_row.locator(".t-crumb")).to_have_text("Family admin")
         expect(moved_row.locator(".c-project")).to_have_text("Family admin")
         assert_no_horizontal_overflow(page)
+        # #305: the folder cell's folder and AI chips are 44px targets that
+        # share no pixel — measured over every chip the grid shows
+        grid_chips = page.locator(".task-table .c-folder .chip")
+        assert grid_chips.count() >= 2, "the seed shows no folder/AI chips in the grid"
+        assert_min_target(grid_chips)
+        assert_no_overlap(grid_chips)
         shot(page, shots / "story-04-triage-8-desktop.png")
 
         # Deep link: a fresh load of #task/<id> opens the drawer with the breadcrumb.
