@@ -277,6 +277,8 @@ function buildRow(t, handlers, opts) {
   // the column already says the status, so the row does not repeat it
   const li = taskRow(t, handlers, {
     draggable: !o.selectable, selectable: o.selectable, selected: o.selected, hideStatus: true,
+    // the phone Board's columns are a sideways carousel: a row swipe would fight it
+    swipe: false,
   });
   if (o.selectable) return li;
   if (o.suggestion) li.appendChild(suggestionStrip(o.suggestion, handlers));

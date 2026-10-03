@@ -1081,6 +1081,59 @@ a.chip:hover { text-decoration: underline; }
   .tree,
   .board-columns { margin-inline: calc(-1 * var(--gap)); }
 }
+/* Swipe (#311, swipe.js). On touch the browser keeps the vertical scroll
+   (pan-y) and hands sideways travel to the script; a hold neither selects
+   text nor raises the link callout mid-gesture. While a row is swiped, an
+   opaque layer and the row's own parts slide together by --swipe-x and
+   uncover the reveal underneath, which names what the release will do. */
+@media (pointer: coarse) {
+  .trow.is-swipeable {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+.trow:is(.is-swiping, .is-settling, .is-leaving) { overflow: hidden; }
+.trow:is(.is-swiping, .is-settling, .is-leaving)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--bg);
+  transform: translateX(var(--swipe-x, 0));
+}
+.trow:is(.is-swiping, .is-settling, .is-leaving) > :not(.trow-reveal) {
+  position: relative;
+  z-index: 2;
+  transform: translateX(var(--swipe-x, 0));
+}
+.trow:is(.is-settling, .is-leaving)::before,
+.trow:is(.is-settling, .is-leaving) > :not(.trow-reveal) { transition: transform 200ms ease-out; }
+.trow-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 20px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: var(--font-body-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.trow-reveal .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* a right swipe uncovers the left edge, a left swipe the right one */
+.trow-reveal[data-side="left"] { justify-content: flex-end; }
+.trow-reveal.is-armed { background: var(--accent-soft); color: var(--accent-text); }
+/* The finger still moves the row (direct manipulation); only the authored
+   motion — spring back, slide out — drops out (design.md motion rule). */
+@media (prefers-reduced-motion: reduce) {
+  .trow:is(.is-settling, .is-leaving)::before,
+  .trow:is(.is-settling, .is-leaving) > :not(.trow-reveal) { transition-duration: 0.01ms; }
+}
 
 /* The status select of the Table's desktop grid (rows.js statusSelect): the
    shared 44px native-control box with a 7px band, so what is painted is the

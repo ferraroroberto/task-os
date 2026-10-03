@@ -31,6 +31,8 @@ import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { actionById } from './actions.js';
 import { aiResumeHref, followLink, issueUrl, openTaskFolder, providerIcon, todayISO } from './format.js';
 import { openDatePicker } from './snooze.js';
+import { bindSwipe } from './swipe.js';
+import { icon } from './_vendored/icons/icons.js';
 
 /** The actions the menu lists, in order, until Settings changes it (#311 plan §2). */
 export const MENU_DEFAULT = [
@@ -38,15 +40,20 @@ export const MENU_DEFAULT = [
   'status-inbox', 'status-todo', 'status-standby', 'status-cancelled', 'priority',
 ];
 
+/** What each swipe does until Settings changes it (#311 plan §3): right
+ *  completes, left changes the date. An id of '' means that side does nothing. */
+export const SWIPE_DEFAULT = { right: 'complete', left: 'change-date' };
+
 const CLOSED = { done: 1, cancelled: 1 };
 
 /**
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          onOpen: (id:number) => void,
  *          onPlan?: (id:number) => any, onUnplan?: (id:number) => any,
- *          order?: () => string[]}} ctx
+ *          order?: () => string[], swipes?: () => {right: string, left: string}}} ctx
+ *        order: the menu's action ids; swipes: each side's action id
  * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
- *            endRender: () => void, close: () => void}}
+ *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
 export function createTaskMenu(ctx) {
   const ctl = createRowMenu({ className: 'task-menu' });
@@ -71,9 +78,17 @@ export function createTaskMenu(ctx) {
       openDatePicker(t, action.menu, el.closest('.trow') || el, function (phrase) {
         ctx.actions.run(action, [t], phrase, refocus(t, el));
       });
-      return;
+      return Promise.resolve(false);
     }
-    ctx.actions.run(action, [t], undefined, refocus(t, el));
+    return ctx.actions.run(action, [t], undefined, refocus(t, el));
+  }
+
+  /** The action a swipe to `side` runs on `t`, or null when that side is
+   *  set to nothing or its action does not apply to this task. */
+  function swipeAction(t, side) {
+    const ids = ctx.swipes ? ctx.swipes() : SWIPE_DEFAULT;
+    const a = actionById(ids[side] || '');
+    return a && a.applies(t) ? a : null;
   }
 
   function items(t, kebab) {
@@ -124,6 +139,20 @@ export function createTaskMenu(ctx) {
 
   return {
     attach: function (t, kebab) { ctl.attach(String(t.id), kebab, items(t, kebab)); },
+    /** Make a row swipeable (swipe.js): each side runs its configured action. */
+    swipe: function (t, li) {
+      bindSwipe(li, {
+        action: function (side) {
+          const a = swipeAction(t, side);
+          return a ? { label: a.label, icon: a.icon } : null;
+        },
+        onCommit: function (side) {
+          const a = swipeAction(t, side);
+          return a ? run(a, t, li) : false;
+        },
+        icon: icon,
+      });
+    },
     /** The completion circle: complete an open task, reopen a closed one. */
     toggleDone: function (t, el) { run(actionById(CLOSED[t.status] ? 'reopen' : 'complete'), t, el); },
     endRender: function () { ctl.endRender(); },

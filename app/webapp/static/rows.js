@@ -234,12 +234,13 @@ function rowKebab(t, menu, li) {
  *          and the circle both commit through it
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
- *          selected?: boolean}} [opts]
+ *          selected?: boolean, swipe?: boolean}} [opts]
  *          prefix     = an element before the circle (the Tree's toggle, a plan grip);
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on (#81): the checkbox replaces the
- *                       circle, the kebab goes, and the row gesture ticks
+ *                       circle, the kebab goes, and the row gesture ticks;
+ *          swipe      = false where the view owns the sideways swipe (the Board)
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
@@ -290,6 +291,10 @@ export function taskRow(t, handlers, opts) {
   li.appendChild(main);
 
   if (handlers.menu && !o.selectable) li.appendChild(rowKebab(t, handlers.menu, li));
+  // A touch swipe runs a row action (swipe.js, #311) — an open task's row
+  // only (a closed one's circle reopens it), never in Select mode, and not
+  // where the view swipes sideways itself (the phone Board's carousel).
+  if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.swipe !== false) handlers.menu.swipe(t, li);
   if (o.extra) {
     o.extra.classList.add('trow-extra');
     li.appendChild(o.extra);
