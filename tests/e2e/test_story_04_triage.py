@@ -845,12 +845,14 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         lefts = sorted(set(b[0] for b in boxes))
         assert len(lefts) == 2, boxes                                  # two columns
         assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
-        # rows are >=44px tall; the status select is compact and, since #74,
-        # centred against the WHOLE card (title + meta) rather than the title line
+        # rows are >=44px tall, and since #301 the status select is a real 44px
+        # box on the title line (it paints the compact 30px inside a transparent
+        # band, the shared native-control recipe), not a 30px control that
+        # leans on an expansion
         assert_min_target(rows)
         assert_no_overlap(rows.locator(".trow-status"))
         heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
-        assert heights and all(h <= 32 for h in heights), heights
+        assert heights and all(h == 44 for h in heights), heights
         # #74 round 2: a folder never makes a card taller. It is an inline glyph
         # like every other meta item now, so a row that has one is exactly as tall
         # as a plain one. (Rows above that height are metas that wrapped to a
@@ -859,17 +861,20 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
             "els => els.map(e => [!!e.querySelector('.chip-folder'),"
             " Math.round(e.getBoundingClientRect().height)])")
         assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
-        # `base_h`, not `base` — that name is the instance URL in this function
-        base_h = min(h for _, h in by_folder)
-        assert {h for f, h in by_folder if f} == {base_h}, by_folder
-        assert base_h in {h for f, h in by_folder if not f}, by_folder
+        # (the list's first row has no hairline above it, so it is 1px shorter:
+        # the claim is that a folder row is no taller than a plain one)
+        plain_h = {h for f, h in by_folder if not f}
+        assert {h for f, h in by_folder if f} <= plain_h, by_folder
+        # #301: the select sits on the TITLE line (a 44px line of its own, level
+        # with the open target), and the meta line is the 44px line under it —
+        # the row is two lines, not one control floating between them
         sel_box = watering.locator(".trow-status").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
         meta_box = watering.locator(".trow-meta").bounding_box()
         assert sel_box and main_box and meta_box
-        sel_center = sel_box["y"] + sel_box["height"] / 2
-        rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
-        assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
+        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
+        assert main_box["height"] >= 44 and meta_box["height"] >= 44, (main_box, meta_box)
+        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
         assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         shot(page, shots / "story-04-triage-9-phone.png")
 

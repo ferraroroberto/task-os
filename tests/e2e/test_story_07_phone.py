@@ -23,10 +23,9 @@ allowed on screen). What a browser can prove of the story:
 - a row's three meta-line tap targets (#107) — the due chip (which opens the
   date picker), the folder and the AI conversation: none of them sharing a
   pixel with another (also against `.trow-main` and `.trow-status`, #110),
-  all inside their own card, the row still inside the ≤96px density budget,
-  the date's own (deliberately sub-44px) floor, the folder/AI pair's own
-  37px-tall floor (#110), and — on Tree, at 320/390/430/772 — the same trio
-  not wrapping apart onto separate meta lines;
+  all real 44px boxes (#301, the row budget raised to two 44px lines) inside
+  their own card and still inside the ≤96px row ceiling, and — on Tree, at
+  320/390/430/772 — the same trio not wrapping apart onto separate meta lines;
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
   comes back and the shell loads. The non-loopback gate itself is unit-level
@@ -164,30 +163,21 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         # `.trow-status` (#110) — the pair not overlapping itself says
         # nothing about whether it reaches past the title into main.
         assert_no_overlap(row.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
-        # 44 wide (unchanged) x 37 tall, not the 44 square this pair used to
-        # hit (#110): the upward reach is now capped at the row's own 6px
-        # title/meta gap instead of reaching into `.trow-main`, and the 7px
-        # that caps back can't be bought from the bottom (already at the
-        # row's own padding bound) without growing every row that carries the
-        # chip — styles.css says why 37, not 44, is this pair's floor now.
-        for t in effective_rects(row.locator(".trow-folder, .trow-ai")):
-            assert t.effective.width >= 44 and t.effective.height >= 37, t
-        # The date is the one target here that does NOT reach the fleet's 44px
-        # floor, and deliberately: every side of it is bounded (styles.css says
-        # by what), and buying the last 9px means a deeper card, which breaks
-        # the ≤96px phone-row budget issue #32 set for this surface and story
-        # 05 asserts. It gets everything the row can give — 2.4x the bare
-        # text's area, past WCAG 2.5.8's 24px — and the budget keeps the rest.
-        # Assert the floor it does meet, so a later shrink still fails loud.
-        assert_min_target(row.locator(".trow-due"), 32.0)
+        # #301: all three are real 44px boxes now — the folder and AI glyphs
+        # 44x44, the date 44 tall by its own text width (and at least 44 wide) —
+        # so the expansions #107/#110 traded against the ≤96px row budget are
+        # gone with the budget: the row grew to two 44px lines instead.
+        for t in effective_rects(targets):
+            assert t.effective.width >= 44 and t.effective.height >= 44, t
+        assert_min_target(targets)
         # …and every one of them stays inside its own card, so none steals a
         # tap from the row below (the #74 rule, now for three targets).
         box = row.bounding_box()
         for t in effective_rects(targets):
             assert t.effective.top >= box["y"] - 0.5, (t, box)
             assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
-        # the row keeps the phone's density budget (#32) with all three on it
-        assert row.bounding_box()["height"] <= 96, row.bounding_box()
+        # two 44px lines and a hairline (#301), still inside the old ≤96px ceiling
+        assert 86 <= row.bounding_box()["height"] <= 96, row.bounding_box()
         shot(page, shots / "story-07-phone-9-phone.png")
 
         # tapping it opens the picker: on a coarse pointer that is the reveal-
@@ -300,65 +290,53 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #74: on the phone the row's folder chip is its bare glyph with a
-        # widened tap surface - the ref ellipsized at 180px said nothing and
-        # its pill was a ~20px target - and the status select centres against
-        # the WHOLE row (title + meta), not the title line alone. 44 wide by
-        # 37 tall, not a 44 square (#110 capped the upward reach at the row's
-        # own title/meta gap — styles.css says why).
+        # #74 → #301: on the phone the row's folder chip is its bare glyph (the
+        # ref ellipsized at 180px said nothing) in a real 44x44 box — no
+        # invisible expansion, because three of these sit side by side and
+        # boxes that share a pixel make a tap a coin toss — and the row is two
+        # 44px lines: the open target and the status select on the first, the
+        # meta line's targets on the second.
         fchip = kitchen.locator(".trow-meta .chip-folder")
         expect(fchip).to_be_visible()
         expect(fchip.locator(".chip-label")).to_be_hidden()
         assert "{onedrive}/house/kitchen" in (fchip.get_attribute("aria-label") or "")
-        assert_min_target(fchip, 37.0)
+        assert_min_target(fchip, 44.0)
         # One glyph size on the meta line: the folder reads no heavier than the
         # calendar or the repeat arrows beside it (round 2 of #74).
         sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect();"
             " return [Math.round(r.width), Math.round(r.height)]; })")
         assert sizes and all(sz == [16, 16] for sz in sizes), sizes
-        # The 44px surface is INVISIBLE (no fill, no border - the accent glyph is
-        # the whole affordance) and stays inside this card: a widened target that
-        # reached into the next row would steal that row's taps.
-        hit = kitchen.evaluate(
-            "el => { const c = el.querySelector('.trow-folder');"
-            " const b = getComputedStyle(c, '::before'), cs = getComputedStyle(c);"
-            " const cb = c.getBoundingClientRect(), r = el.getBoundingClientRect();"
-            " const n = s => parseFloat(s) || 0;"
-            " return { top: cb.top + n(b.top), bottom: cb.bottom - n(b.bottom),"
-            "  rowTop: r.top, rowBottom: r.bottom, bg: cs.backgroundColor,"
-            "  border: cs.borderTopColor }; }")
-        assert hit["top"] >= hit["rowTop"] - 0.5, hit
-        assert hit["bottom"] <= hit["rowBottom"] + 0.5, hit
-        # What actually bounds it: the row's bottom padding is >= the ::before
-        # inset, so even a wrapped meta line (glyph flush with the meta's bottom)
-        # keeps the target inside this card. Assert the invariant, not the number.
-        pad_vs_inset = kitchen.evaluate(
-            "el => { const c = el.querySelector('.trow-folder');"
-            " return [parseFloat(getComputedStyle(el).paddingBottom),"
-            "  -parseFloat(getComputedStyle(c, '::before').bottom)]; }")
-        assert pad_vs_inset[0] >= pad_vs_inset[1], pad_vs_inset
-        assert hit["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
-        assert hit["border"] in ("rgba(0, 0, 0, 0)", "transparent"), hit
+        # The 44px box is INVISIBLE (no fill, no border - the accent glyph is the
+        # whole affordance) and stays inside this card: a target that reached
+        # into the next row would steal that row's taps.
+        skin = fchip.evaluate(
+            "el => { const cs = getComputedStyle(el);"
+            " return { bg: cs.backgroundColor, border: cs.borderTopColor,"
+            "  before: getComputedStyle(el, '::before').content }; }")
+        assert skin["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), skin
+        assert skin["border"] in ("rgba(0, 0, 0, 0)", "transparent"), skin
+        assert skin["before"] in ("none", "normal"), skin     # real geometry, no expansion left over
+        fbox = fchip.bounding_box()
+        row_box = kitchen.bounding_box()
+        assert fbox and row_box
+        assert fbox["y"] >= row_box["y"] - 0.5, (fbox, row_box)
+        assert fbox["y"] + fbox["height"] <= row_box["y"] + row_box["height"] + 0.5, (fbox, row_box)
         sel = kitchen.locator(".trow-status")
-        # ONE locator, so both rects are measured in a single evaluate_all:
+        # ONE locator, so every rect is measured in a single evaluate_all:
         # the Board is a scroll-snapping carousel and two separate
         # measurements can land at different scroll offsets.
-        assert_no_overlap(kitchen.locator(".trow-meta .chip-folder, .trow-status"))
+        assert_no_overlap(kitchen.locator(".trow-meta .chip-folder, .trow-status, .trow-main"))
         main_box = kitchen.locator(".trow-main").bounding_box()
         meta_box = kitchen.locator(".trow-meta").bounding_box()
         sel_box = sel.bounding_box()
-        title_box = kitchen.locator(".trow-title").bounding_box()
-        assert main_box and meta_box and sel_box and title_box
-        rows_centre = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
-        sel_centre = sel_box["y"] + sel_box["height"] / 2
-        assert abs(sel_centre - rows_centre) <= 2, (sel_box, main_box, meta_box)
-        assert sel_centre > title_box["y"] + title_box["height"] / 2 + 2, (sel_box, title_box)
-        # ... and centred on the CARD, not just on title+meta: an empty third grid
-        # track used to add a trailing row-gap that put the card's centre 3px
-        # below the select's, and the 1px hairline another half (#74).
-        row_box = kitchen.bounding_box()
-        assert row_box and abs(sel_centre - (row_box["y"] + row_box["height"] / 2)) <= 0.5, (sel_box, row_box)
+        assert main_box and meta_box and sel_box
+        # the select is centred on the TITLE line, level with the open target
+        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
+        assert main_box["height"] >= 44 and meta_box["height"] >= 44, (main_box, meta_box)
+        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
+        # two 44px lines and a hairline: the row budget #301 set (about 88px)
+        assert 86 <= row_box["height"] <= 96, row_box
         kitchen.locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
@@ -459,9 +437,9 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             assert_no_horizontal_overflow(page)
             # #110: on Tree, the row's own left indent eats into the width
             # Table/Board/Today have to spare, so a row's due/folder/AI trio
-            # can wrap apart there where it would not elsewhere — and a
-            # horizontal margin (the pair's own separation rule) does nothing
-            # once two of them land on different meta lines.
+            # can wrap apart there where it would not elsewhere. Since #301 each
+            # target is a real 44px box on its own 44px line, so a wrapped line
+            # starts exactly where the one above it ends and nothing overlaps.
             tree_view(page)
             drift = page.locator(
                 "#paneTable #treeHost .trow",

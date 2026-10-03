@@ -191,9 +191,10 @@ button, input, select, textarea { font: inherit; }
    `.input-native` is declared whole here: the vendored select-native.css
    copy predates the scaffold's shared `.input-native` rule, so the text
    inputs had no recipe at all. Textareas keep their own height. The task
-   row's status select is not in this rule — the row's geometry is its own
-   contract (#32, #74) — and touch controls that are already 44px tall drop
-   the band (`--control-inset: 0px`, the coarse block below). */
+   row's status select wears the same recipe with a wider band (its own
+   `--control-inset`, so it still paints the compact 30px it always did, #301),
+   and touch controls that are already 44px tall drop the band
+   (`--control-inset: 0px`, the coarse block below). */
 input.input-native {
   font-size: var(--font-label);
   padding: 0 10px;
@@ -201,7 +202,7 @@ input.input-native {
   font-family: inherit;
 }
 input.input-native,
-select.select-native:not(.trow-status),
+select.select-native,
 summary.select-native {
   height: var(--hit-min);
   border-style: solid;
@@ -222,7 +223,7 @@ textarea.input-native {
   border-radius: var(--radius-md);
 }
 input.input-native:focus-visible,
-select.select-native:not(.trow-status):focus-visible,
+select.select-native:focus-visible,
 summary.select-native:focus-visible { outline-offset: calc(2px - var(--control-inset)); }
 
 html, body {
@@ -894,22 +895,24 @@ a.chip:hover { text-decoration: underline; }
    pattern): boxed 30/44px squares beside the status select made every row
    read taller and heavier than its text. The visible footprint stays
    icon-sized; the shared .hit-target ::before expansion supplies the real
-   click area (34px effective on desktop, 44px on touch via the coarse
-   override below). Plan mode's Later target re-adds `button-surface` — there
-   a large boxed target is the point. */
+   click area (28 + 8px a side = 44 on every pointer, #301, centred on the
+   title line's own 44px band so it meets neither the select beside it nor the
+   meta line under it). Plan mode's Later target re-adds `button-surface` —
+   there a large boxed target is the point. */
 .snooze { grid-area: snooze; position: relative; align-self: center; }
 .snooze-summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   list-style: none;
   cursor: pointer;
   color: var(--muted);
   border-radius: var(--radius-sm);
 }
+.snooze-summary:not(.plan-target)::before { inset: -8px; }
 .snooze-summary::-webkit-details-marker { display: none; }
 .snooze-summary .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .snooze-summary:hover { color: var(--fg); }
@@ -950,12 +953,6 @@ a.chip:hover { text-decoration: underline; }
    quiet, like every other leading icon on a row. */
 .snooze-pick { border-top: 1px solid var(--line-muted); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 .snooze-pick .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
-@media (pointer: coarse) {
-  /* still 44px effective on touch — via a wider invisible expansion (28px
-     visual + 8px per side), never by growing the visible square back */
-  .snooze-summary { width: 28px; height: 28px; }
-  .snooze-summary:not(.plan-target)::before { inset: -8px; }
-}
 
 /* ============================================================ the task row */
 /* `.trow` (rows.js): a tight grid — text column + control column. Line 1 is
@@ -975,10 +972,20 @@ a.chip:hover { text-decoration: underline; }
   grid-template-areas:
     "main ctrl"
     "meta meta";
+  /* The row budget (#301): two 44px lines — the title and the status select on
+     the first, the meta line's targets on the second — so every control on a
+     row is a real 44px target, on every pointer, and none is squeezed into
+     the hairline between two others. About 88px with the row's hairline; a
+     row with no meta line is the first line alone, never shorter than
+     `rows.md`. This replaced the ≤96px, 30px-controls-plus-invisible-
+     expansion budget of #32/#74/#107/#110, whose notes said the budget had to
+     be raised before any of these could reach 44. */
+  grid-template-rows: minmax(var(--hit-min), auto) auto;
   align-items: center;
   column-gap: 10px;
-  row-gap: 2px;
-  padding: var(--space-sm) var(--space-xs);
+  row-gap: 0;
+  min-height: var(--row-md);
+  padding: 0 var(--space-xs);
   border-top: 1px solid var(--line-muted);
   color: var(--fg);
 }
@@ -989,7 +996,9 @@ a.chip:hover { text-decoration: underline; }
     "prefix main ctrl"
     "prefix meta meta";
 }
-.trow-prefix { grid-area: prefix; align-self: center; }
+/* The prefix (the Tree's toggle, a plan row's grip) belongs to the title line:
+   a 44px box centred on it, not on the whole two-line row (#301). */
+.trow-prefix { grid-area: prefix; align-self: start; min-height: var(--hit-min); display: inline-flex; align-items: center; }
 /* Select mode (#81): a leading checkbox column, on the Board's cards and the
    Table's phone rows alike — the same row, so the same affordance. Only the
    selectable views set it, so the Tree's prefix column never meets it. */
@@ -1020,14 +1029,15 @@ a.chip:hover { text-decoration: underline; }
     "sel prefix main ctrl"
     "sel prefix meta meta";
 }
-.trow-check { grid-area: sel; align-self: center; }
+.trow-check { grid-area: sel; align-self: start; margin-top: 12px; }
 .trow:hover { background: var(--card-2); }
 .trow.is-high { border-left: 3px solid var(--danger); padding-left: 6px; }
 .trow.is-dragging { opacity: 0.5; }
 .trow.is-new { background: var(--accent-soft); }
 /* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
 .trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
-.trow-main { grid-area: main; min-width: 0; cursor: pointer; }
+/* The row's open target: the title line, a full 44px tall (#301). */
+.trow-main { grid-area: main; min-width: 0; min-height: var(--hit-min); display: flex; align-items: center; cursor: pointer; }
 .trow-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
 /* One line, ellipsized — a row never grows on the title (#32). */
 .trow-title {
@@ -1042,37 +1052,50 @@ a.chip:hover { text-decoration: underline; }
 }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
 .tree-node.is-context > .trow .trow-title { color: var(--muted); font-weight: 500; }
-/* The status control: compact select, right-aligned, centered on the title. */
+/* The status control: a select on the title line, right-aligned. It is the
+   shared 44px native-control box (the recipe above) with a 7px band, so what
+   is painted is the compact 30px it always was and what is tappable is 44. */
 .trow-status {
+  --control-inset: 7px;
   grid-area: ctrl;
   justify-self: end;
   align-self: center;
   width: auto;
-  height: 30px;
   padding: 0 var(--space-sm);
   font-size: var(--font-caption);
   font-weight: 600;
 }
+/* The meta line (#301): a 44px line of its own. Its interactive parts — the
+   due chip, the folder and AI glyphs, the issue chip — are each 44px tall on
+   this line, either as real geometry (the due button, the icon-only glyphs) or,
+   for a painted pill, as an invisible ::before reaching the line's own top and
+   bottom edges. A wrapped second line starts exactly where the first ends
+   (row-gap 0), so the targets of two lines touch but never overlap. The
+   horizontal gap is 12px: a pill's ::before reaches at most 4px either side,
+   so the rectangles of two neighbours stay a pixel-clear 4px apart. */
 .trow-meta {
   grid-area: meta;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-xs) 10px;
+  align-content: flex-start;
+  gap: 0 12px;
   min-width: 0;
+  min-height: var(--hit-min);
   color: var(--muted);
   font-size: var(--font-caption);
   line-height: 1.3;
   cursor: pointer;
 }
-/* On a fine pointer the due chip's tap area reaches 5px past it (.hit-target);
-   when a narrow column wraps the meta line, the chip that lands under it must
-   start below that, or a tap between the two lines is a coin toss (#281). */
-@media (pointer: fine) { .trow-meta { row-gap: 6px; } }
+/* a wrapped line is a whole 44px line too: text parts and the due chip are 44
+   tall themselves, a painted pill (below) gets 15px of margin a side */
+.trow-meta > span { min-height: var(--hit-min); }
 .trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .trow-meta > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
-.trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; }
+/* inline-block (not the line's inline-flex) so the ellipsis works; its line-height
+   is the 44px line's, which centres the one-line text on it like its neighbours (#301) */
+.trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; line-height: var(--hit-min); }
 .trow-due { color: var(--fg); }
 /* The due chip is a real button now (#107) — clicking the date opens the same
    picker the card's Due field opens. It must render exactly like the span it
@@ -1095,7 +1118,14 @@ a.chip:hover { text-decoration: underline; }
   white-space: nowrap;
   color: var(--fg);
   cursor: pointer;
+  /* real 44px geometry (#301), no padding, so the chip's look is still the
+     bare text: the target is simply the whole 44px line it sits on */
+  min-width: var(--hit-min);
+  min-height: var(--hit-min);
 }
+/* the shared .hit-target expansion would reach into the neighbours now that
+   the button is a real 44px box */
+.trow-meta button.trow-due::before { content: none; }
 /* The sleeping marker (#87) — muted like the rest of the meta line: it is a
    statement of fact, not a state to warn about, so it takes no status colour. */
 .trow-starts { color: var(--muted); }
@@ -1114,167 +1144,53 @@ a.chip:hover { text-decoration: underline; }
 }
 .trow-prio.prio-high { color: var(--danger); }
 /* chips on the meta line stay meta-sized: caption text, tight padding,
-   ellipsized — and capped to the meta line's own height, so a row with a
-   folder chip is exactly as tall as one without (the #74 rule, applied to
-   the shared row's meta line: a chip never changes a card's height).
+   ellipsized — painted 16px tall, so a row with a folder chip is exactly as
+   tall as one without (the #74 rule: a chip never changes a card's height).
    The glyph is the fleet's 16px `inline` step like every other icon on this
    line (#129) — the same 16px as the chip's border box, so the chip does NOT
-   grow and the height invariant above still holds: a Lucide glyph carries its
-   own stroke padding, so the ink stays comfortably inside the hairline. */
-.trow-meta .chip { max-width: min(100%, 180px); padding: 0 6px; height: var(--icon-inline); line-height: 1; }
+   grow: a Lucide glyph carries its own stroke padding, so the ink stays
+   comfortably inside the hairline.
+   The tap target is a 44px band of the meta line (#301): an invisible
+   ::before reaches 15px above and below the pill and 4px either side (never
+   past the 12px column gap's midpoint, so two chips' targets stay apart). 15,
+   not 14: the box is placed from the PADDING box, 1px inside the chip's
+   border, so the real band is 14 + 30 = 44 — and the pill's 15px margin is
+   what keeps the band (measured from the border box by the design review) on
+   its own line, a line 46px tall, clear of the title line above and the next
+   row below. */
+.trow-meta .chip { position: relative; max-width: min(100%, 180px); margin: 15px 0; padding: 0 6px; height: var(--icon-inline); line-height: 1; }
+.trow-meta .chip::before { content: ""; position: absolute; inset: -15px -4px; }
 .trow-extra { grid-column: 1 / -1; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
 .trow.has-prefix .trow-extra { grid-column: 2 / -1; }
 @media (pointer: coarse) {
-  /* Air between the title and the meta line, and ONE card height whether or
-     not the row carries a folder: the folder is an inline glyph like every
-     other meta item, and the min-height covers a row with no meta line. */
-  /* Two numbers with reasons, don't "tidy" them:
-     - 13px bottom is NOT decoration. It is >= the folder target's 13px ::before
-       inset, which is what keeps that target inside this card even in the worst
-       case — a meta line that wrapped, putting the glyph flush with the meta's
-       bottom edge. Shrink this and the target reaches into the next row.
-     - 12px top, one less, because the 1px hairline lives INSIDE the border box
-       at the top with nothing balancing it at the bottom; a symmetric padding
-       leaves the content — and with it the centred status select — half a pixel
-       low. A row with no hairline above it gets the full 13px back. */
-  .trow { min-height: var(--row-lg); padding: 12px var(--space-xs) 13px; row-gap: 6px; }
-  .trows > .trow:first-child,
-  .board-list > .trow:first-child,
-  .today-list > .trow:first-child,
-  .tree > .tree-node:first-child > .trow { padding-top: 13px; }
-  /* 24px, not the glyph's 18: the folder's 44px tap surface is centred on
-     this line and has to fit inside the card (see .trow-folder::before). */
-  .trow-meta { min-height: 24px; }
-  .trow-status { height: 32px; }
-  /* The status control centers against the WHOLE row (title + meta), not the
-     title line alone (#74): it is the row's control, not the title's, and with
-     the folder chip down to its glyph there is finally room for it. */
-  .trow {
-    grid-template-areas:
-      "main ctrl"
-      "meta ctrl";
-  }
-  .trow.has-prefix {
-    grid-template-areas:
-      "prefix main ctrl"
-      "prefix meta ctrl";
-  }
-  .trow.has-select {
-    grid-template-areas:
-      "sel main ctrl"
-      "sel meta ctrl";
-  }
-  /* …and the Today grids: the snooze trigger spans both rows exactly like
-     the select, or its 28px box stretches the title track and the row lands
-     at 88px where every other tab's sits at 76 (the same #74 rule). */
-  .trow.has-snooze {
-    grid-template-areas:
-      "main snooze ctrl"
-      "meta snooze ctrl";
-  }
-  .trow.has-prefix.has-select {
-    grid-template-areas:
-      "sel prefix main ctrl"
-      "sel prefix meta ctrl";
-  }
-  /* a 20px box inside the 64px card clears the 44px floor on its own row
-     track without an expansion rectangle that could overlap the status select */
-  .trow-check { width: 20px; height: 20px; margin: 0 var(--space-xs); }
-  /* The folder chip is its bare glyph on touch — a ref ellipsized at 180px
-     says nothing and ate the meta line. No pill, no fill: the accent colour
-     already says "tappable", and a marked box read as heavier than the
-     calendar and repeat glyphs beside it, which are the same 16px.
-     The tap surface is widened INVISIBLY instead, and the inset is kept
-     inside the row's own box so it never reaches into the next card.
+  /* The folder and AI chips are their bare glyph on touch — a ref ellipsized
+     at 180px says nothing and ate the meta line. No pill, no fill: the accent
+     colour already says "tappable", and a marked box read as heavier than the
+     calendar and repeat glyphs beside it, which are the same 16px. What is
+     tappable is a real 44x44 box around the glyph (#301) — real geometry, not
+     the invisible ::before the pill wears on a fine pointer, because three of
+     these sit side by side on one line (due · folder · AI) and expanded
+     rectangles that share a pixel make a tap a coin toss (#107, #110). The
+     12px column gap then separates them with nothing to tune.
      The name is on aria-label (rows.js); the tap behaviour (web twin, else
-     the path popover) is unchanged.
-     Since #107 the folder is no longer the only competitor on this line —
-     see the separation rules below. */
+     the path popover) is unchanged. */
   .trow-meta .trow-folder,
   .trow-meta .trow-ai {
-    position: relative;
+    justify-content: center;
+    width: var(--hit-min);
+    height: var(--hit-min);
     max-width: none;
+    margin: 0;
     padding: 0;
     background: none;
     border-color: transparent;
   }
+  .trow-meta .trow-folder::before,
+  .trow-meta .trow-ai::before { content: none; }
   .trow-meta .trow-folder .chip-label,
   .trow-meta .trow-ai .chip-label { display: none; }
-  /* Not -13px on every side any more (#110): a symmetric -13px top reached
-     7px past the row's 6px title/meta gap and into `.trow-main` — which is
-     the row-open target, so a tap meant for the glyph could open the task
-     instead. Top is capped at -6px, the same bound the due chip's own top
-     obeys (below). Bottom stays at -13px, its own bound — the row's own
-     bottom padding — same as before. That yields 44 wide (untouched) by
-     37 tall (18 glyph + 6 + 13), short of the 44 square this pair used to
-     hit: buying the other 7px back would mean growing the glyph's own box,
-     which grows every row that carries it (no `row-gap` slack to spend it
-     from — see the wrap rule below, which already spends what there is).
-     Two contracts, one row, same call the due chip already made below: the
-     density budget wins, and 37 is still 2x the naked 18px glyph and well
-     past WCAG 2.5.8's 24px floor. */
-  .trow-meta .trow-folder::before,
-  .trow-meta .trow-ai::before { content: ""; position: absolute; inset: -6px -13px -13px; }
-  /* …which is why these two are exempt from the desktop chip-height cap: the
-     -13px inset needs the full 18px glyph box to reach the height above. */
-  .trow-meta .trow-folder,
-  .trow-meta .trow-ai { height: 18px; }
-  .trow-meta .trow-folder .icon,
-  .trow-meta .trow-ai .icon { width: var(--icon-inline); height: var(--icon-inline); }
-  /* ---- three targets on one line, none of them sharing a pixel (#107) ----
-     The meta line carries up to three tap targets — the due chip, the folder
-     and the AI conversation — and each needs both a 44px surface AND pixels of
-     its own: two expanded rectangles that overlap make a tap in the shared
-     band a coin toss. The folder/AI pair already overlapped before #107 (two
-     18px glyphs, 13px of expansion on each side, 10px of column gap = a 16px
-     shared band in which a tap meant for the folder opened the conversation);
-     the extra margin below is what actually separates them. Numbers, not
-     decoration: the margin closes the gap to the sum of the two facing
-     expansions, so measure both before touching either. */
-  .trow-meta .trow-folder + .trow-ai { margin-left: 16px; }        /* 10 + 16 = 26 = 13 + 13 */
-  .trow-meta .trow-due-box + .trow-folder,
-  .trow-meta .trow-due-box + .trow-ai { margin-left: 7px; }        /* 10 +  7 = 17 =  4 + 13 */
-  /* The due chip's own surface, and the one number here that is a compromise
-     rather than a derivation. Every side is already spoken for:
-     - 6 above is the row's `row-gap` between the title and the meta. One pixel
-       more and the target reaches into `.trow-main`, which is the *row-open*
-       target — tapping the bottom of a title would open the date picker
-       instead of the task. A caught regression, not theory.
-     - 13 below is the row's own bottom padding, the same bound the folder
-       glyph's target obeys: a target that reaches past its card steals the
-       next row's taps.
-     - 4 each side keeps the bleed off the neighbours on a 390px line.
-     That yields 54.6 x 35.2 — 2.4x the area of the bare 46.6 x 16.2 text, and
-     comfortably past WCAG 2.5.8's 24px floor, but short of the 44px the fleet
-     spec asks for and every other control here meets. It cannot reach 44
-     without either stealing the title's taps or making the card deeper, and a
-     deeper card breaks the ≤96px phone-row budget that issue #32 set for this
-     surface and story 05 asserts. Two contracts, one row: the density budget
-     wins, because it is the one this app chose for itself. Raise the budget
-     first if this is ever to become a 44px target. */
-  .trow-meta button.trow-due::before { inset: -6px -4px -13px; }
-  /* The margins above only separate targets that land on the SAME meta line;
-     a narrow line can wrap one of this pair onto its own line, and a
-     horizontal margin does nothing for two rects stacked vertically (#110).
-     Each of the three targets' facing edges is -13px (bottom) or -6px (top),
-     so two of them on adjacent wrapped lines need 13 + 6 = 19px between the
-     lines to stay clear of each other whichever one wraps on top. `~` (not
-     `+`) for the due pairs: rows.js can seat priority/recurrence/starts/
-     blocked between due and folder/ai (none of them carry a `::before`, so
-     they never themselves need clearance) and the wrap can still land right
-     between due and folder/ai with one of those riding along on either side.
-     `row-gap` is one value shared by every line boundary in the container —
-     it cannot single out just the boundary that needs it — so widening it
-     also costs height on a boundary that didn't need it, whenever the row
-     wraps for some unrelated reason (an issue-ref chip, a comment count).
-     `.tree` is the only tab narrow enough (row indent eats the width the
-     other three tabs have to spare) to hit that unrelated-wrap case in the
-     seeded data, and Tree carries no ≤96px budget of its own (issue #32's
-     is a Board-row contract, story 05's own assertion) — Today/Table/Board
-     stay off this rule so their 390px density budget is never in play. */
-  .tree .trow-meta:has(.trow-due-box ~ .trow-folder),
-  .tree .trow-meta:has(.trow-due-box ~ .trow-ai),
-  .trow-meta:has(.trow-folder + .trow-ai) { row-gap: 19px; }
+  /* a 20px box on the title line's own 44px band (12 + 20 + 12) */
+  .trow-check { width: 20px; height: 20px; margin: 12px var(--space-xs) 0; }
 }
 
 /* ------------------------------------------------------------- table */
@@ -1343,7 +1259,6 @@ a.chip:hover { text-decoration: underline; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-comment-meta { color: var(--muted); font-size: var(--font-caption); }
 .c-next { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c-status .trow-status { height: 30px; }
 /* Due cell: a quiet inline button (icon + relative label) that opens the date
    picker (#107). Positioned so the hidden date input it owns has an anchor. */
 .due-cell { position: relative; }
@@ -1351,7 +1266,7 @@ a.chip:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 30px;
+  min-height: var(--hit-min);   /* a real 44px target (#301); the cell's own padding sits outside it */
   padding: 0 var(--space-sm);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -2012,7 +1927,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   align-items: center;
   gap: var(--space-sm);
   margin: 0;
-  padding: 10px var(--space-xs) 2px;
+  padding: 10px var(--space-xs);
   color: var(--fg);
   font-size: var(--font-label);
   font-weight: 600;
@@ -2031,9 +1946,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .today-group-link:hover { background: var(--accent-soft); }
 /* The project name is a 25px text button in its group title; it reaches the
-   44px floor invisibly inside the title's 10px top padding and the first
-   row's own top padding below it (#281) — the row's controls start under
-   that padding, so the two never meet. */
+   44px floor invisibly inside the title's own 10px padding above and below
+   (#281, #301) — the first row's open target starts under that padding, so the
+   two never meet. */
 .today-group-link { position: relative; }
 .today-group-link::before { content: ""; position: absolute; inset: -10px 0; }
 .today-group-count { color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
@@ -2083,8 +1998,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2093,6 +2008,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   align-self: center;
   cursor: pointer;
 }
+/* 28 + 8px a side = 44 on every pointer, like the snooze trigger beside it (#301) */
+.plan-unplan::before { inset: -8px; }
 .plan-unplan .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .plan-unplan:hover { color: var(--danger); }
 
@@ -2143,19 +2060,18 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 @media (pointer: coarse) {
   /* 44px effective on touch through the invisible expansion, like the snooze
      trigger — the visible icon never grows back into a box */
-  .plan-more, .plan-unplan { width: 28px; height: 28px; }
-  .plan-more::before, .plan-unplan::before { inset: -8px; }
+  .plan-more { width: 28px; height: 28px; }
+  .plan-more::before { inset: -8px; }
   .plan-target { min-height: var(--row-sm); }
-  /* The remove control spans both rows like the status select (#74's rule,
-     same as the coarse has-snooze grid) — declared here because the base
-     .trow.is-plan template above would otherwise win the cascade. The grip
-     goes entirely: HTML5 drag never fires on touch (the phone plans in tap
-     order), and its dead column was what wrapped a crowded meta line. */
+  /* The grip goes entirely on touch: HTML5 drag never fires there (the phone
+     plans in tap order), and its dead column was what wrapped a crowded meta
+     line. Declared here because the base .trow.is-plan template above would
+     otherwise win the cascade. */
   .trow.is-plan {
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
       "main unplan ctrl"
-      "meta unplan ctrl";
+      "meta meta   meta";
   }
   .trow.is-plan .plan-grip { display: none; }
 }
