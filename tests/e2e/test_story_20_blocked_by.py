@@ -63,6 +63,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         # 1. Board: the blocked task is out of every column — hidden by default,
         #    exactly like a deferred (#87) one.
         page.goto(f"{base}/")
+        page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
         expect(page.locator("#paneBoard")).to_be_visible()
         # The blocker itself first: "no Release v0.2 row" is only evidence once
         # the Board has actually rendered its rows. Without this the count-0

@@ -373,7 +373,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
     try:
         dark_page = dark_ctx.new_page()
         dark_page.goto(f"{base}/?status=deferred")
-        expect(dark_page.locator("#paneBoard, #paneTable, #paneToday").first).to_be_visible()
+        dark_page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
+        expect(dark_page.locator("#paneBoard")).to_be_visible()
         shot(dark_page, shots / "story-13-starts-snooze-5-desktop.png")
         # Today in dark: My plan on top with the restored seeded plan (#89)
         dark_page.goto(f"{base}/")

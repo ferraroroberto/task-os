@@ -144,8 +144,11 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
 
-        # 1. Board is the desktop landing tab; four columns side by side, full width.
+        # 1. Today is the landing tab on every pointer (#319); one tab press to the
+        #    Board — four columns side by side, full width.
         page.goto(f"{base}/")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+        page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         cols = page.locator(".board-col")
         expect(cols).to_have_count(4)
@@ -1021,6 +1024,28 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         wk.close()
 
 
+# Wraps the page's own fetch so a list read is answered by the server at once
+# and handed to the app late — the order the network does not promise (#321).
+# In the page, not a Playwright route: a route handler that sleeps is a callback
+# in flight, and one still sleeping when the context closes fails the teardown.
+_HOLD_LIST_READS = r"""() => {
+  const real = window.fetch.bind(window);
+  const hold = window.__hold = {on: false, held: 0, delivered: 0};
+  window.fetch = function (input, init) {
+    const url = typeof input === 'string' ? input : input.url;
+    const method = (init && init.method) || 'GET';
+    const lists = /\/api\/(tasks\?|tasks\/tree|today)/.test(url);
+    if (!hold.on || method !== 'GET' || !lists) return real(input, init);
+    hold.held += 1;
+    return real(input, init).then(function (res) {
+      return new Promise(function (resolve) {
+        setTimeout(function () { hold.delivered += 1; resolve(res); }, 1500);
+      });
+    });
+  };
+}"""
+
+
 def _walk_edit_refresh(page: Page, base: str) -> None:
     """§ #321 — a late read from an earlier refresh must not undo a newer edit.
 
@@ -1033,68 +1058,59 @@ def _walk_edit_refresh(page: Page, base: str) -> None:
     rows after the held answers have been delivered, so a stale overwrite has
     already happened by the time it is looked for.
     """
-    due_today = E2E_ANCHOR.isoformat()
     made = page.evaluate(
         "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
         "body: JSON.stringify(b)}).then(r => r.json())",
-        {"title": "Renew the parking permit", "status": "todo", "due": due_today})
+        {"title": "Renew the parking permit", "status": "todo", "due": E2E_ANCHOR.isoformat()})
     tid = made["id"]
     page.goto(f"{base}/")
-    page.click("nav.tabs .tab[data-tab='board']")
-    expect(page.locator(f"#boardHost .trow[data-id='{tid}']")).to_be_visible()
-    page.click("nav.tabs .tab[data-tab='today']")
+    page.click("nav.tabs .tab[data-tab='today']")   # the last tab left is remembered, not Today
     expect(_today_row(page, "Renew the parking permit")).to_be_visible()   # due today → the due list
     page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator(f"#boardHost .trow[data-id='{tid}']")).to_be_visible()
+    page.evaluate(_HOLD_LIST_READS)
 
-    hold = {"on": False, "held": 0, "delivered": 0}
+    def counts() -> dict:
+        return page.evaluate("window.__hold")
 
-    def handler(route) -> None:
-        url = route.request.url
-        lists = "/api/tasks?" in url or "/api/today" in url or "/api/tasks/tree" in url
-        if hold["on"] and route.request.method == "GET" and lists:
-            hold["held"] += 1
-            response = route.fetch()          # the server's answer, as of now
-            page.wait_for_timeout(1500)       # delivered late
-            route.fulfill(response=response)
-            hold["delivered"] += 1
-        else:
-            route.continue_()
+    page.locator(f"#boardHost .trow[data-id='{tid}'] .trow-title").click()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
 
-    page.route("**/api/**", handler)
-    try:
-        page.locator(f"#boardHost .trow[data-id='{tid}'] .trow-title").click()
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
+    # 1. The title, with its refresh's list reads held back.
+    page.evaluate("window.__hold.on = true")
+    drawer.locator("#drawerTitle").fill("Renew the residents' permit")
+    drawer.locator("#drawerTitle").press("Enter")
+    for _ in range(100):
+        if counts()["held"]:
+            break
+        page.wait_for_timeout(50)
+    assert counts()["held"], "the first edit's refresh never read the list"
+    # …every read of that refresh, not only the first to arrive: wait until the
+    # batch stops growing before the hold is lifted.
+    seen = -1
+    while seen != counts()["held"]:
+        seen = counts()["held"]
+        page.wait_for_timeout(250)
 
-        # 1. The title, with its refresh's list reads held back.
-        hold["on"] = True
-        drawer.locator("#drawerTitle").fill("Renew the residents' permit")
-        drawer.locator("#drawerTitle").press("Enter")
-        for _ in range(100):
-            if hold["held"]:
-                break
-            page.wait_for_timeout(50)
-        assert hold["held"], "the first edit's refresh never read the list"
+    # 2. The due date, while those reads are still held: a phrase, the way the
+    #    drawer takes one. Its refresh is answered at once.
+    page.evaluate("window.__hold.on = false")
+    due = drawer.locator("input[data-field='due']")
+    due.fill("in 30 days")
+    due.press("Enter")
+    later = (E2E_ANCHOR + timedelta(days=30)).isoformat()
+    assert _get(base, f"/api/tasks/{tid}")["due"] == later
 
-        # 2. The due date, while those reads are still held: a phrase, the way
-        #    the drawer takes one. Its refresh is answered at once.
-        hold["on"] = False
-        due = drawer.locator("input[data-field='due']")
-        due.fill("in 30 days")
-        due.press("Enter")
-        later = (E2E_ANCHOR + timedelta(days=30)).isoformat()
-        assert _get(base, f"/api/tasks/{tid}")["due"] == later
-
-        # 3. Let every held answer land, then settle — the stale overwrite, if
-        #    there is one, has happened by now.
-        for _ in range(200):
-            if hold["delivered"] >= hold["held"]:
-                break
-            page.wait_for_timeout(50)
-        assert hold["delivered"] >= hold["held"], "held reads were never delivered"
-        settle(page)
-    finally:
-        page.unroute("**/api/**")
+    # 3. Let every held answer land, then settle — the stale overwrite, if there
+    #    is one, has happened by now.
+    for _ in range(200):
+        state = counts()
+        if state["delivered"] >= state["held"]:
+            break
+        page.wait_for_timeout(50)
+    assert state["delivered"] >= state["held"], "held reads were never delivered"
+    settle(page)
 
     # 4. Board: the new title and the new due on the one row, no reload.
     row = page.locator(f"#boardHost .trow[data-id='{tid}']")

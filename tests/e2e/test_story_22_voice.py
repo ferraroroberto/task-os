@@ -171,8 +171,8 @@ def _open_add(page: Page):
     """The + in the strip opens the add dialog, as a user would.
 
     Every pane carries its own + and only the visible pane's can be pressed —
-    which is the Board on the desktop and Today on a coarse pointer, so the
-    visible one is the one to click rather than a pane named here.
+    which is Today, the landing tab, until a test switches — so the visible one
+    is the one to click rather than a pane named here.
     """
     page.locator(".quick-add-btn:visible").first.click()
     dialog = page.locator("#quickAdd")
@@ -284,6 +284,7 @@ def test_say_the_task(
     expect(dialog).to_be_hidden()
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    page.click("nav.tabs .tab[data-tab='board']")   # the add happened on Today, the landing tab (#319)
     todo = page.locator(".board-col[data-col='todo']")
     expect(todo.locator(".trow-title", has_text=ENRICHED_TITLE)).to_be_visible()
     shot(page, shots / "story-22-voice-4-desktop.png")

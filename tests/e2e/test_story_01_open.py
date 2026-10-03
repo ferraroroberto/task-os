@@ -31,9 +31,9 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import shot
 
-# Six destinations: the Tree became a view of the Table (#161) and the slot it
-# freed went to Archive (#159).
-TABS = ["Board", "Table", "Today", "Archive", "Search"]   # Settings is the header gear (#281)
+# Five destinations: the Tree became a view of the Table (#161) and the slot it
+# freed went to Archive (#159). Today leads, and is where a first visit opens (#319).
+TABS = ["Today", "Board", "Table", "Archive", "Search"]   # Settings is the header gear (#281)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
@@ -47,10 +47,10 @@ def _version(base: str) -> dict:
         return json.loads(res.read().decode("utf-8"))
 
 
-def _assert_shell(page: Page, sha: str, landing: str = "board") -> None:
+def _assert_shell(page: Page, sha: str, landing: str = "today") -> None:
     """The parts of the story every surface must show. ``landing`` is the tab
-    a first visit opens on: the Board on a fine pointer, Today on a touch
-    device (Step 5) — both empty panes carry the same first-task prompt."""
+    a first visit opens on: Today on every pointer (#319) — an empty pane
+    carries the first-task prompt."""
     tabs = page.locator("nav.tabs .tab")
     expect(tabs).to_have_count(len(TABS))
     assert tabs.all_inner_texts() == TABS
@@ -166,8 +166,24 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         page.click("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
         assert _stored_theme(page) == "light"
+
+        # Today leads the nav at 1280 as at 1440 and 390, and a deep link still
+        # beats the landing tab (#319).
+        page.set_viewport_size({"width": 1280, "height": 800})
+        _assert_today_leads(page)
+        page.goto(f"{webapp}/#search")
+        expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "search")
+        expect(page.locator("#paneSearch")).to_be_visible()
     finally:
         context.close()
+
+
+def _assert_today_leads(page: Page) -> None:
+    """Today is the first nav item whichever shape the nav takes — the left rail
+    (top-most) or the bottom pill (left-most)."""
+    spots = page.locator("nav.tabs .tab").evaluate_all(
+        "els => els.map(e => { const r = e.getBoundingClientRect(); return [e.dataset.tab, r.top, r.left]; })")
+    assert min(spots, key=lambda s: (round(s[1]), s[2]))[0] == "today", spots
 
 
 def _pane_width(page: Page, tab: str) -> float:
@@ -270,7 +286,8 @@ def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> No
         )
         page = context.new_page()
         page.goto(webapp)
-        _assert_shell(page, sha, landing="today")
+        _assert_shell(page, sha)
+        _assert_today_leads(page)
 
         # The nav is the floating bottom pill: fixed, anchored near the bottom.
         nav = page.locator("nav.tabs")

@@ -327,9 +327,15 @@
   <!-- Body-level nav, sibling of <main class="app"> — never nested inside it
        (_vendored/nav/README.md "Pinning the bar (iOS)"). Desktop: top
        segmented control; phone: the floating bottom pill. -->
-  <nav class="tabs" role="tablist" aria-label="Primary navigation" data-active-tab="board">
-    <button id="tabBoard" type="button" class="tab active" data-tab="board"
-            role="tab" aria-selected="true" aria-controls="paneBoard">
+  <nav class="tabs" role="tablist" aria-label="Primary navigation" data-active-tab="today">
+    <!-- Today is the first destination and the one the app opens on (#319) -->
+    <button id="tabToday" type="button" class="tab active" data-tab="today"
+            role="tab" aria-selected="true" aria-controls="paneToday">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
+      <span class="tab-label">Today</span>
+    </button>
+    <button id="tabBoard" type="button" class="tab" data-tab="board"
+            role="tab" aria-selected="false" aria-controls="paneBoard" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-square-kanban"></use></svg>
       <span class="tab-label">Board</span>
     </button>
@@ -337,11 +343,6 @@
             role="tab" aria-selected="false" aria-controls="paneTable" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-table"></use></svg>
       <span class="tab-label">Table</span>
-    </button>
-    <button id="tabToday" type="button" class="tab" data-tab="today"
-            role="tab" aria-selected="false" aria-controls="paneToday" tabindex="-1">
-      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
-      <span class="tab-label">Today</span>
     </button>
     <!-- #159: the batch-archiving report. A destination, not a Settings card —
          it is where the run is started and where every filed mail is reviewed. -->
@@ -390,7 +391,7 @@
     <!-- One <section class="pane"> per tab; every non-default pane starts
          hidden so nothing flashes before nav-tabs.js runs. Each pane body is
          a stack container pinned to minmax(0, 1fr) (design.md Layout). -->
-    <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board">
+    <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board" hidden>
       <div class="pane-body">
         <!-- Top strip (#80): the live text filter, always visible, the Select
              toggle (#81) and the + that opens the quick-add dialog. The rest
@@ -456,7 +457,7 @@
         <div id="treeHost" data-empty="tasks" hidden></div>
       </div>
     </section>
-    <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today" hidden>
+    <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today">
       <div class="pane-body">
         <!-- Top strip (#80): the live text filter, always visible, the Select
              toggle (#81) and the + that opens the quick-add dialog. The rest

@@ -122,7 +122,7 @@ const state = {
   calendar: null,   // /api/today's calendar group (#96) — the lane beside Today; null = not loaded
   planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
-  tab: 'board',
+  tab: 'today',
   tableView: 'table',  // which host the Table pane shows: 'table' | 'tree' (#161)
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
@@ -1189,10 +1189,10 @@ function paletteCommands() {
     // they are still listed (that is the discovery), just under the places
     // you can actually go right now.
     ...(keys && keys.hasTarget() ? keys.commands() : []),
+    { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-table', label: 'Go to Table', icon: 'table', run: goView('table') },
     { id: 'go-tree', label: 'Table → Tree view', icon: 'list-tree', run: goView('tree') },
-    { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: go('archive') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
@@ -1300,7 +1300,7 @@ async function boot() {
     onChanged: function () { if (state.total) renderBoardPane(); },
   });
   // The filters are shared by every tab, so a shared URL never moves the tab
-  // by itself. First visit: the phone lands on Today, the desktop on the Board.
+  // by itself. First visit: Today, on every pointer (#319) — the first tab in the nav.
   const f = state.filters;
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   // ?q= belongs to the Search tab when the page lands there (#search deep
@@ -1325,7 +1325,7 @@ async function boot() {
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
   nav = initNavTabs({
     storageKey: TAB_KEY,
-    defaultTab: coarse ? 'today' : 'board',
+    defaultTab: 'today',
     onChange: function (tab) {
       state.tab = tab;
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
