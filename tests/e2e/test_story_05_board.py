@@ -59,6 +59,12 @@ Story 19 points here.
 
     docs/screenshots/story-19-delete-task-{1,2}-desktop.png
 
+§ #321 (``_walk_edit_refresh``, same reason): an edit the server confirmed shows
+on every visible row without a reload even when an earlier refresh is still in
+flight — the title edited with the list reads held back, the due date edited
+before they arrive, then both rows (Board, Today) are checked once the late
+answers land. No screenshots: the proof is the rows.
+
 UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
 title + status select on line 1, the meta line under it) and shares ONE
 filter card; the Today checkbox is gone — "ticking" is the row's status
@@ -83,7 +89,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _get, scroll_to_bottom, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, scroll_to_bottom, settle, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -436,6 +442,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         _walk_keyboard_actions(page, base, shots)
         _walk_done_journal(page, base, shots)
         _walk_delete_task(page, base, shots)
+        _walk_edit_refresh(page, base)
         assert errors == [], errors
     finally:
         context.close()
@@ -1012,3 +1019,94 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         context.close()
     finally:
         wk.close()
+
+
+def _walk_edit_refresh(page: Page, base: str) -> None:
+    """§ #321 — a late read from an earlier refresh must not undo a newer edit.
+
+    Every edit's ``refreshAll()`` follows the last one's, and the network does
+    not answer in order: the read issued before the second edit landed used to
+    resolve *after* the one issued once it had, and the older snapshot then sat
+    on the rows until a reload. The walk holds the list reads of the first
+    edit's refresh (the server answers them at once — it is the delivery that
+    is late), makes the second edit while they are held, and only checks the
+    rows after the held answers have been delivered, so a stale overwrite has
+    already happened by the time it is looked for.
+    """
+    due_today = E2E_ANCHOR.isoformat()
+    made = page.evaluate(
+        "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
+        "body: JSON.stringify(b)}).then(r => r.json())",
+        {"title": "Renew the parking permit", "status": "todo", "due": due_today})
+    tid = made["id"]
+    page.goto(f"{base}/")
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator(f"#boardHost .trow[data-id='{tid}']")).to_be_visible()
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(_today_row(page, "Renew the parking permit")).to_be_visible()   # due today → the due list
+    page.click("nav.tabs .tab[data-tab='board']")
+
+    hold = {"on": False, "held": 0, "delivered": 0}
+
+    def handler(route) -> None:
+        url = route.request.url
+        lists = "/api/tasks?" in url or "/api/today" in url or "/api/tasks/tree" in url
+        if hold["on"] and route.request.method == "GET" and lists:
+            hold["held"] += 1
+            response = route.fetch()          # the server's answer, as of now
+            page.wait_for_timeout(1500)       # delivered late
+            route.fulfill(response=response)
+            hold["delivered"] += 1
+        else:
+            route.continue_()
+
+    page.route("**/api/**", handler)
+    try:
+        page.locator(f"#boardHost .trow[data-id='{tid}'] .trow-title").click()
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+
+        # 1. The title, with its refresh's list reads held back.
+        hold["on"] = True
+        drawer.locator("#drawerTitle").fill("Renew the residents' permit")
+        drawer.locator("#drawerTitle").press("Enter")
+        for _ in range(100):
+            if hold["held"]:
+                break
+            page.wait_for_timeout(50)
+        assert hold["held"], "the first edit's refresh never read the list"
+
+        # 2. The due date, while those reads are still held: a phrase, the way
+        #    the drawer takes one. Its refresh is answered at once.
+        hold["on"] = False
+        due = drawer.locator("input[data-field='due']")
+        due.fill("in 30 days")
+        due.press("Enter")
+        later = (E2E_ANCHOR + timedelta(days=30)).isoformat()
+        assert _get(base, f"/api/tasks/{tid}")["due"] == later
+
+        # 3. Let every held answer land, then settle — the stale overwrite, if
+        #    there is one, has happened by now.
+        for _ in range(200):
+            if hold["delivered"] >= hold["held"]:
+                break
+            page.wait_for_timeout(50)
+        assert hold["delivered"] >= hold["held"], "held reads were never delivered"
+        settle(page)
+    finally:
+        page.unroute("**/api/**")
+
+    # 4. Board: the new title and the new due on the one row, no reload.
+    row = page.locator(f"#boardHost .trow[data-id='{tid}']")
+    expect(row.locator(".trow-title")).to_have_text("Renew the residents' permit")
+    expect(row).to_contain_text("in 4w")
+    expect(drawer.locator("#drawerTitle")).to_have_value("Renew the residents' permit")
+
+    # 5. Today: the task moved out of the due list with its date.
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(_today_row(page, "Renew the residents' permit")).to_have_count(0)
+    expect(_today_row(page, "Renew the parking permit")).to_have_count(0)
+
+    # 6. Leave the instance as found: the phone leg shares it, and one more
+    #    task would move its counts and the shots that show them.
+    page.evaluate(f"fetch('/api/tasks/{tid}', {{method: 'DELETE'}})")

@@ -237,6 +237,21 @@ function flattenOpen(forest) {
   return out;
 }
 
+/** Latest-wins guard for the reads that replace shared state (#321).
+ *
+ *  Two loads can be in flight at once — every edit's `refreshAll()` follows the
+ *  last one's, and a filter change reloads the list on its own. The network
+ *  does not answer in the order it was asked: a slow read issued *before* an
+ *  edit landed could resolve *after* the read issued once it had, and the older
+ *  snapshot then overwrote the newer, leaving the visible row on the previous
+ *  value until a reload. Each read takes a ticket when it starts and is
+ *  discarded on arrival if a newer one has started since. Per resource, so a
+ *  filter change that only reloads the list never throws away an in-flight
+ *  write's tree or plan. */
+const loadSeq = { tree: 0, items: 0, today: 0 };
+function beginLoad(resource) { return ++loadSeq[resource]; }
+function isLatest(resource, seq) { return loadSeq[resource] === seq; }
+
 const CLOSED_TREE_URL = '/api/tasks/tree?include_closed=true&descriptions=false';
 
 /** The Tree needs closed nodes only when a closed task can be in its `keep`
@@ -249,10 +264,11 @@ function needsClosed(f) {
  *  included, so the filter and Move-to lose nothing). While a closed status
  *  is filtered the closed forest rides along, so a write does not flash the
  *  Tree's loading block — otherwise it loads lazily, see ensureClosedTree. */
-async function loadTree() {
+async function loadTree(seq) {
   const calls = [api('/api/tasks/tree?descriptions=false'), api('/api/projects')];
   if (needsClosed(state.filters)) calls.push(api(CLOSED_TREE_URL).catch(function () { return null; }));
   const res = await Promise.all(calls);
+  if (!isLatest('tree', seq)) return;
   state.tree = res[0].items || [];
   state.projects = res[1].items || [];
   state.taskIndex = flattenOpen(state.tree);
@@ -288,7 +304,7 @@ function ensureClosedTree() {
  *  prunes to the ids in the filtered list — reads `state.deferred` /
  *  `state.blocked` on top. Merging them here would put a sleeping or locked
  *  task back on the Board the moment anyone forgot to filter. */
-async function loadItems() {
+async function loadItems(seq) {
   const f = state.filters;
   const params = listParams(f);
   const showsDeferred = f.status.indexOf(DEFERRED) >= 0;
@@ -306,6 +322,7 @@ async function loadItems() {
     ? Promise.resolve({ items: [] })   // already the whole list — no second call
     : api('/api/tasks' + qs(Object.assign({}, params, slim, { status: [BLOCKED] })));
   const [results, sleeping, locked] = await Promise.all([Promise.all(calls), deferredCall, blockedCall]);
+  if (!isLatest('items', seq)) return false;
   const seen = new Set();
   const items = [];
   results.forEach(function (r) {
@@ -314,6 +331,7 @@ async function loadItems() {
   state.items = items;
   state.deferred = showsDeferred ? items.slice() : (sleeping.items || []);
   state.blocked = showsBlocked ? items.slice() : (locked.items || []);
+  return true;
 }
 
 function countOpen(forest) {
@@ -338,13 +356,17 @@ function pruneSelection() {
 }
 
 async function refreshAll() {
+  const todaySeq = beginLoad('today');
   try {
     const results = await Promise.all([
-      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1&descriptions=false'), api('/api/today'),
+      loadTree(beginLoad('tree')), loadItems(beginLoad('items')),
+      api('/api/tasks?include_closed=true&limit=1&descriptions=false'), api('/api/today'),
     ]);
-    state.total = results[2].count;
-    state.plan = results[3].plan || { items: [], done: 0, total: 0 };
-    state.calendar = results[3].calendar || null;
+    if (isLatest('today', todaySeq)) {
+      state.total = results[2].count;
+      state.plan = results[3].plan || { items: [], done: 0, total: 0 };
+      state.calendar = results[3].calendar || null;
+    }
     pruneSelection();
     if (state.total === 0) {
       state.items = [];
@@ -627,7 +649,8 @@ async function moveTask(id, parentId) {
 function onFilterChange(next) {
   state.filters = next;
   syncUrl();
-  loadItems().then(function () {
+  loadItems(beginLoad('items')).then(function (applied) {
+    if (!applied) return;   // a newer read owns the list now and will render it
     renderAll();
     if (state.journal.open) refreshJournal();
   }).catch(function (err) { toast(err.message, 'error'); });
