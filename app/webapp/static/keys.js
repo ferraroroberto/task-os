@@ -23,7 +23,7 @@
 import { icon } from './_vendored/icons/icons.js';
 import { ACTIONS } from './actions.js';
 import * as selection from './selection.js';
-import { snoozeMenu } from './snooze.js';
+import { closeDatePicker, isDatePickerOpen, openDatePicker } from './snooze.js';
 import { toast } from './toast.js';
 
 /** A task row in a view whose rows are action targets. */
@@ -32,7 +32,7 @@ const ROW = '.trow[data-id], tr.task-row[data-id]';
  *  It is a host inside the Table pane since #161, not a pane of its own. */
 const NOT_A_TARGET = '#treeHost';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
-const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .msel, .folder-picker, .toast, .bulk-bar';
+const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .row-menu, .msel, .folder-picker, .toast, .bulk-bar';
 
 
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
@@ -58,7 +58,6 @@ export function mountKeys(helpDialog, handlers) {
   const actions = handlers.actions;
   let resolving = false;    // a key's tasks are being looked up; a held key must not double-post
   let lastRowId = null;     // the row that had focus before the palette took it
-  let pop = null;           // the open snooze popover, if any
 
   // ------------------------------------------------------------ targets
   function rowOf(el) {
@@ -130,39 +129,18 @@ export function mountKeys(helpDialog, handlers) {
     return actions.undo(refocus(focusRecord(rowOf(document.activeElement))));
   }
 
-  // -------------------------------------------------------- snooze popover
-  function closePop() {
-    if (!pop) return;
-    pop.remove();
-    pop = null;
-    document.querySelectorAll('.is-key-target').forEach(function (el) { el.classList.remove('is-key-target'); });
-  }
-
-  /** The row's snooze menu, mounted beside whatever is focused — the tabs
-   *  whose rows carry no snooze button get the same four options. */
-  function openSnooze(action, tasks, rec, anchor) {
-    closePop();
-    pop = document.createElement('div');
-    pop.className = 'snooze-pop';
-    pop.appendChild(snoozeMenu(tasks[0], function (phrase) {
-      closePop();
+  // ---------------------------------------------------------- date picker
+  /** The date picker beside whatever is focused (snooze.js) — the tabs whose
+   *  rows carry no date control get the same options. */
+  function askDate(action, tasks, rec, anchor) {
+    openDatePicker(tasks[0], action.menu, anchor, function (phrase) {
       actions.run(action, tasks, phrase, refocus(rec));
-    }));
-    document.body.appendChild(pop);
-    // The menu takes focus, so the row loses its :focus-within tint just as
-    // the user is about to pick a date for it — keep it marked explicitly.
-    if (anchor && anchor.classList.contains('trow')) anchor.classList.add('is-key-target');
-    const r = (anchor || document.body).getBoundingClientRect();
-    const w = pop.offsetWidth;
-    pop.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
-    pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
-    const first = pop.querySelector('.snooze-opt');
-    if (first) first.focus();
+    });
   }
 
   // ------------------------------------------------------------ perform
   async function perform(action, source) {
-    if (resolving || pop || actions.isBusy()) return;
+    if (resolving || isDatePickerOpen() || actions.isBusy()) return;
     const tgt = target(source);
     if (!tgt) {
       toast('Focus a task row first — Tab moves between rows, ? lists the keys', 'error');
@@ -181,9 +159,9 @@ export function mountKeys(helpDialog, handlers) {
       toast('That task is no longer on the list', 'error');
       return;
     }
-    // While the popover is up, `pop` is what blocks a second action.
+    // While the picker is up, it is what blocks a second action.
     if (action.menu) {
-      openSnooze(action, tasks, rec, tgt.row || document.querySelector('.bulk-bar:not([hidden])'));
+      askDate(action, tasks, rec, tgt.row || document.querySelector('.bulk-bar:not([hidden])'));
       return;
     }
     await actions.run(action, tasks, undefined, refocus(rec));
@@ -242,7 +220,8 @@ export function mountKeys(helpDialog, handlers) {
 
     const acts = document.createElement('div');
     acts.className = 'keys-rows';
-    ACTIONS.forEach(function (a) { acts.appendChild(keyRow(a.kbd, a.label, a.hint)); });
+    ACTIONS.forEach(function (a) { if (a.kbd) acts.appendChild(keyRow(a.kbd, a.label, a.hint)); });
+    acts.appendChild(keyRow('.', 'The row menu (⋯)', 'every action for the focused row; also the menu key or Shift F10'));
     acts.appendChild(keyRow('Z', 'Undo the last change', 'one level, while its toast is up'));
     acts.appendChild(keyRow('?', 'This list', null));
     card.appendChild(acts);
@@ -265,6 +244,18 @@ export function mountKeys(helpDialog, handlers) {
     helpDialog.showModal();
   }
 
+  /** `.` opens the focused row's ⋯ menu — its kebab's own toggle, so the
+   *  keyboard gets exactly the menu a tap gets (the menu key and Shift F10
+   *  arrive as a contextmenu event on the row, which rows.js routes the same
+   *  way). A desktop grid row has no menu; the key then does nothing. */
+  function openRowMenu(ev) {
+    const row = rowOf(document.activeElement);
+    const kebab = row ? row.querySelector('.trow-kebab') : null;
+    if (!kebab) return;
+    ev.preventDefault();
+    kebab.click();
+  }
+
   // ------------------------------------------------------------- wiring
   function isTyping(el) {
     if (!el || !el.closest) return false;
@@ -279,11 +270,11 @@ export function mountKeys(helpDialog, handlers) {
   document.addEventListener('keydown', function (ev) {
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     if (ev.key === 'Escape') {
-      // Escape closes the popover and stops there: app.js's Escape would
+      // Escape closes the date picker and stops there: app.js's Escape would
       // otherwise also leave Select mode, throwing away the very selection
       // this menu was about to snooze. This listener is registered *before*
       // that one (see boot()), which is what lets it stop the chain.
-      if (pop) { closePop(); ev.stopImmediatePropagation(); }
+      if (isDatePickerOpen()) { closeDatePicker(); ev.stopImmediatePropagation(); }
       return;
     }
     if (isTyping(ev.target)) return;
@@ -293,18 +284,13 @@ export function mountKeys(helpDialog, handlers) {
     if (handlers.isBlocked()) return;                     // the drawer owns the keys
     if (ev.key === '?') { ev.preventDefault(); openHelp(); return; }
     if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); runUndo(); return; }
+    if (ev.key === '.') { openRowMenu(ev); return; }
     const action = ACTIONS.find(function (a) { return a.key === ev.key.toLowerCase(); });
     if (!action) return;
     ev.preventDefault();
     perform(action, 'key');
   });
 
-  // An outside click or a scroll closes the popover — it is pinned to the
-  // viewport, so a scrolled page would leave it hanging beside nothing.
-  document.addEventListener('click', function (ev) {
-    if (pop && !pop.contains(ev.target)) closePop();
-  });
-  window.addEventListener('scroll', closePop, true);
 
   return {
     openHelp: openHelp,

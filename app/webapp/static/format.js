@@ -309,27 +309,51 @@ export function folderChip(ref, opts) {
   if (info.resolved) el.dataset.resolved = info.resolved;
   el.addEventListener('click', function (ev) {
     ev.stopPropagation();          // never also opens the row's drawer
-    if (window.matchMedia('(pointer: coarse)').matches) {
-      ev.preventDefault();
-      if (info.url) { window.open(info.url, '_blank', 'noopener'); return; }
-      chipWebUrl(info).then(function (url) {
-        if (url) {
-          // an async window.open can be popup-blocked — fall back to navigating
-          if (!window.open(url, '_blank', 'noopener')) location.assign(url);
-        } else {
-          showFolderPopover(el, info, 'copy');
-        }
-      });
-      return;
-    }
-    let seen = false;
-    try { seen = localStorage.getItem(HINT_KEY) === '1'; } catch (_) { /* private mode */ }
-    if (!seen) {
-      try { localStorage.setItem(HINT_KEY, '1'); } catch (_) { /* private mode */ }
-      setTimeout(function () { showFolderPopover(el, info, 'hint'); }, 350);
-    }
+    openFolderInfo(info, el, ev);
   });
   return el;
+}
+
+/** Follow a link the way a tap on an `<a>` would — `taskos://` reaches the
+ *  per-PC opener this way without the page navigating away. */
+export function followLink(href) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.rel = 'noopener';
+  a.click();
+}
+
+/** What a tap on a folder does. `ev` is the chip's own click, whose default
+ *  IS the `taskos://` navigation on a PC; without one (the row menu's Open
+ *  folder, #311, has no chip to tap) the navigation is made here. Popovers
+ *  sit beside `anchor`. */
+function openFolderInfo(info, anchor, ev) {
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    if (ev) ev.preventDefault();
+    if (info.url) { window.open(info.url, '_blank', 'noopener'); return; }
+    chipWebUrl(info).then(function (url) {
+      if (url) {
+        // an async window.open can be popup-blocked — fall back to navigating
+        if (!window.open(url, '_blank', 'noopener')) location.assign(url);
+      } else {
+        showFolderPopover(anchor, info, 'copy');
+      }
+    });
+    return;
+  }
+  if (!ev) followLink(openerHref(info.ref));
+  let seen = false;
+  try { seen = localStorage.getItem(HINT_KEY) === '1'; } catch (_) { /* private mode */ }
+  if (!seen) {
+    try { localStorage.setItem(HINT_KEY, '1'); } catch (_) { /* private mode */ }
+    setTimeout(function () { showFolderPopover(anchor, info, 'hint'); }, 350);
+  }
+}
+
+/** Open a task's folder from somewhere that is not its chip (the row menu).
+ *  @param {object} t  a task summary (`folder_ref`, `folder_resolved`, `folder_url`) */
+export function openTaskFolder(t, anchor) {
+  openFolderInfo({ ref: String(t.folder_ref || ''), resolved: t.folder_resolved || null, url: t.folder_url || null }, anchor, null);
 }
 
 // --------------------------------------------------------- AI conversation chips
@@ -387,6 +411,12 @@ function showAiPopover(anchor, url) {
   if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
   el.style.left = left + 'px';
   el.style.top = top + 'px';
+}
+
+/** The `taskos://resume` link for a Claude Code conversation, else null. */
+export function aiResumeHref(url) {
+  const session = CLAUDE_SESSION_RE.exec(url || '');
+  return session ? RESUME_SCHEME + encodeURIComponent(session[1]) : null;
 }
 
 /** The AI-conversation chip: bot glyph, opens on tap (phone) or via the

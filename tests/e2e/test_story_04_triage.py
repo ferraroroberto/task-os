@@ -52,6 +52,12 @@ Its shots:
 
     docs/screenshots/story-25-recurrence-interval-1-desktop.png
     docs/screenshots/story-25-recurrence-interval-2-phone.png
+
+**Story 29 — act on a row from its menu (#311)** rides inside
+``_walk_starts_and_snooze`` (step 4b): the same Today row, snoozed again from
+its ⋯ kebab instead of the clock, through the shared action runner. Its shots:
+
+    docs/screenshots/story-29-row-actions-1-desktop.png
 """
 
 from __future__ import annotations
@@ -69,7 +75,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _get, shot, table_view, tree_view
+from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot, table_view, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -851,6 +857,47 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     toast.locator(".toast-action").click()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+
+    # 4b. Story 29 (#311): the same push from the row's ⋯ menu. The kebab
+    #     lists the row's actions — the shared table's, offered only where
+    #     they apply, then the task's own links — and its Snooze… opens the
+    #     same date picker, commits through the same runner (toast + Undo),
+    #     and the keyboard reaches the menu with `.`.
+    row = _trow(page, "School enrolment forms", "#paneToday")
+    kebab = row.locator(".trow-kebab")
+    expect(kebab).to_have_attribute("aria-haspopup", "menu")
+    dismiss_toasts(page)
+    kebab.click()
+    menu = page.locator(".row-menu")
+    expect(menu).to_be_visible()
+    expect(kebab).to_have_attribute("aria-expanded", "true")
+    actions = menu.locator(".row-menu-item").evaluate_all("els => els.map(e => e.dataset.action)")
+    assert actions[:3] == ["complete", "change-date", "snooze"], actions
+    assert "reopen" not in actions and "status-todo" not in actions   # open task, already todo
+    assert actions[-1] == "open"
+    expect(menu.locator(".row-menu-item").first).to_be_focused()
+    shot(page, shots / "story-29-row-actions-1-desktop.png")
+    menu.locator("[data-action='snooze']").click()
+    expect(menu).to_be_hidden()
+    picker = page.locator(".snooze-pop .snooze-menu")
+    expect(picker).to_be_visible()
+    picker.get_by_text("Tomorrow", exact=True).click()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    toast = page.locator(".toast-success").last
+    expect(toast).to_contain_text("Snoozed to")
+    expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] == tomorrow
+    toast.locator(".toast-action").click()
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    # `.` on a focused row opens its menu; Escape closes it, focus back on the kebab
+    _trow(page, "School enrolment forms", "#paneToday").locator(".trow-main").focus()
+    page.keyboard.press(".")
+    expect(menu).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    expect(_trow(page, "School enrolment forms", "#paneToday").locator(".trow-kebab")).to_be_focused()
+    dismiss_toasts(page)
 
     # 5. The drawer edits Starts beside Due — the same control, one behaviour.
     page.goto(f"{base}/#task/{task_id}")

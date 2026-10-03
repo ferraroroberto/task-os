@@ -31,7 +31,7 @@ const out = JSON.parse(input).map(([id, method, tasks, arg, after]) => {
   if (method === 'keys') return mod.ACTIONS.map((a) => [a.id, a.key, a.label]);
   const a = mod.actionById(id);
   if (!a) return null;
-  return a[method](tasks, arg, after);
+  return method === "applies" ? a.applies(tasks) : a[method](tasks, arg, after);
 });
 process.stdout.write(JSON.stringify(out));
 """
@@ -58,8 +58,9 @@ def test_the_table_keeps_its_ids_and_keys() -> None:
     """Keys, palette ids and the coming Settings choices all name actions by id."""
     (table,) = _call_js([[None, "keys", None, None, None]])
     assert [(a[0], a[1]) for a in table] == [
-        ("complete", "e"), ("due-tomorrow", "t"), ("due-next-week", "w"), ("snooze", "s"),
-        ("priority", "p"), ("status-inbox", "1"), ("status-todo", "2"), ("status-standby", "3"),
+        ("complete", "e"), ("reopen", None), ("change-date", "d"), ("due-tomorrow", "t"),
+        ("due-next-week", "w"), ("snooze", "s"), ("priority", "p"), ("status-inbox", "1"),
+        ("status-todo", "2"), ("status-standby", "3"), ("status-cancelled", None),
     ]
 
 
@@ -79,6 +80,34 @@ def test_plans_write_one_group_through_the_bulk_fields() -> None:
         [{"ids": [1, 2], "changes": {"starts": "this weekend"}}],
         [{"ids": [1, 2], "changes": {"status": "standby"}}],
     ]
+
+
+def test_the_menu_offers_only_what_applies() -> None:
+    """The row menu hides an action that would do nothing or does not fit (#311)."""
+    done = dict(PLAIN, status="done")
+    ids = ["complete", "reopen", "change-date", "snooze", "priority", "status-todo", "status-cancelled"]
+    got = _call_js([[i, "applies", t, None, None] for t in (PLAIN, done) for i in ids])
+    assert dict(zip(ids, got[:7], strict=True)) == {
+        "complete": True, "reopen": False, "change-date": True, "snooze": True,
+        "priority": True, "status-todo": False, "status-cancelled": True,     # already todo
+    }
+    assert dict(zip(ids, got[7:], strict=True)) == {
+        "complete": False, "reopen": True, "change-date": False, "snooze": False,
+        "priority": True, "status-todo": False, "status-cancelled": False,   # closed: Reopen instead
+    }
+
+
+def test_change_date_writes_the_phrase_or_clears_it() -> None:
+    got = _call_js([
+        ["change-date", "plan", [PLAIN], "this weekend", None],
+        ["change-date", "plan", [PLAIN], None, None],
+        ["change-date", "message", [PLAIN], "this weekend", [dict(PLAIN, due="2026-10-10")]],
+        ["change-date", "message", [PLAIN], None, [dict(PLAIN, due=None)]],
+    ])
+    assert got[0] == [{"ids": [1], "changes": {"due": "this weekend"}}]
+    assert got[1] == [{"ids": [1], "changes": {"due": None}}]
+    assert got[2] == "Due Sat 10 Oct"
+    assert got[3] == "Due date cleared"
 
 
 def test_priority_cycles_each_task_from_its_own_value() -> None:

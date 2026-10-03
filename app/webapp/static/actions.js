@@ -30,6 +30,10 @@ import { ACTION_TTL_MS, toast } from './toast.js';
 /** Ascending, wrapping at the top — one press always moves, `none` included. */
 const PRIORITIES = ['none', 'low', 'medium', 'high'];
 export const STATUS_KEYS = [['1', 'inbox'], ['2', 'todo'], ['3', 'standby']];
+const CLOSED = { done: 1, cancelled: 1 };
+
+function isOpen(t) { return !CLOSED[t.status]; }
+function isClosed(t) { return !!CLOSED[t.status]; }
 
 // ------------------------------------------------------------- grouping
 /** `[{ids, changes}]` for one shared change. */
@@ -67,8 +71,12 @@ export function nextPriority(p) {
  *   message(tasks, arg, after)→ what the toast says (the count is prefixed by
  *                               the caller); `after` is the tasks as the server
  *                               answered, for a message that names the result
- * `menu: true` means the action asks for a value first (snooze) and commits
- * from the popover instead of straight away.
+ *   applies(task)             → whether the row menu offers it for this task
+ *                               (the keys act regardless: a key is a deliberate ask)
+ * `menu: 'starts' | 'due'` means the action asks for a date first (snooze,
+ * change date) and commits from the date picker instead of straight away.
+ * `key: null` is an action no key reaches — the row menu, the palette and the
+ * swipes still do.
  */
 export const ACTIONS = [
   {
@@ -82,6 +90,7 @@ export const ACTIONS = [
       const closed = tasks.filter(function (t) { return !t.recurrence; });
       return groupByCurrent(rolled, ['due']).concat(groupByCurrent(closed, ['status']));
     },
+    applies: isOpen,
     message: function (tasks, arg, after) {
       // One recurring task rolled: say where it went, as the status select
       // always has (issue #54).
@@ -91,10 +100,31 @@ export const ACTIONS = [
     },
   },
   {
+    id: 'reopen', key: null, kbd: null, icon: 'rotate-ccw',
+    label: 'Reopen task', hint: 'back to todo',
+    plan: function (tasks) { return oneGroup(tasks, { status: 'todo' }); },
+    invert: function (tasks) { return groupByCurrent(tasks, ['status']); },
+    applies: isClosed,
+    message: function () { return 'Reopened'; },
+  },
+  {
+    id: 'change-date', key: 'd', kbd: 'D', icon: 'calendar-days', menu: 'due',
+    label: 'Change date…', hint: 'today · tomorrow · this weekend · next week · a date · no date',
+    plan: function (tasks, phrase) { return oneGroup(tasks, { due: phrase }); },
+    invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
+    applies: isOpen,
+    message: function (tasks, arg, after) {
+      const d = after && after.length === 1 ? after[0].due : undefined;
+      if (arg === null) return 'Due date cleared';
+      return d ? 'Due ' + fmtDay(d) : 'Due date changed';
+    },
+  },
+  {
     id: 'due-tomorrow', key: 't', kbd: 'T', icon: 'calendar-days',
     label: 'Due tomorrow', hint: null,
     plan: function (tasks) { return oneGroup(tasks, { due: 'tomorrow' }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
+    applies: isOpen,
     message: function () { return 'Due tomorrow'; },
   },
   {
@@ -102,13 +132,15 @@ export const ACTIONS = [
     label: 'Due next week', hint: null,
     plan: function (tasks) { return oneGroup(tasks, { due: 'next week' }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
+    applies: isOpen,
     message: function () { return 'Due next week'; },
   },
   {
-    id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: true,
+    id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: 'starts',
     label: 'Snooze…', hint: 'tomorrow · this weekend · next week · a date',
     plan: function (tasks, phrase) { return oneGroup(tasks, { starts: phrase }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['starts']); },
+    applies: isOpen,
     message: function (tasks, arg, after) {
       const s = after && after.length === 1 ? after[0].starts : null;
       return s ? 'Snoozed to ' + fmtDay(s) : 'Snoozed';
@@ -121,18 +153,23 @@ export const ACTIONS = [
       return groupByCurrent(tasks, ['priority'], function (t) { return nextPriority(t.priority); });
     },
     invert: function (tasks) { return groupByCurrent(tasks, ['priority']); },
+    applies: function () { return true; },
     message: function (tasks) {
       return tasks.length === 1 ? 'Priority ' + nextPriority(tasks[0].priority) : 'Priority cycled';
     },
   },
 ];
 
-STATUS_KEYS.forEach(function (pair) {
+// The statuses a row moves between by hand. Cancelled has no key (it is rare,
+// and a stray digit should not close a task) but the row menu offers it.
+STATUS_KEYS.concat([[null, 'cancelled']]).forEach(function (pair) {
   ACTIONS.push({
     id: 'status-' + pair[1], key: pair[0], kbd: pair[0], icon: 'circle-dot',
     label: 'Status: ' + pair[1], hint: null,
     plan: function (tasks) { return oneGroup(tasks, { status: pair[1] }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['status']); },
+    // a closed row has Reopen instead of a list of statuses to land on
+    applies: function (t) { return isOpen(t) && t.status !== pair[1]; },
     message: function () { return 'Status ' + pair[1]; },
   });
 });

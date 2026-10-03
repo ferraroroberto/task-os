@@ -953,6 +953,12 @@ a.chip:hover { text-decoration: underline; }
    quiet, like every other leading icon on a row. */
 .snooze-pick { border-top: 1px solid var(--line-muted); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 .snooze-pick .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
+.snooze-clear .icon { width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
+/* The phone's date picker (#311): the same options in the vendored modal,
+   full width, a 44px row each, instead of a popover beside the row. */
+.date-card-task { margin: 0 0 var(--space-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.date-card .snooze-menu.date-sheet { position: static; padding: 0; border: 0; box-shadow: none; background: transparent; }
+.date-sheet .snooze-opt { min-height: var(--row-sm); font-size: var(--font-body); }
 
 /* ============================================================ the task row */
 /* `.trow` (rows.js): a tight grid — text column + control column. Line 1 is
@@ -1065,6 +1071,27 @@ a.chip:hover { text-decoration: underline; }
   font-size: var(--font-caption);
   font-weight: 600;
 }
+/* The title line's control cell (#311): the status select and the ⋯ kebab
+   side by side, one grid area, so every row template above keeps its shape.
+   The kebab is a real 44px square (the action-row accessory), muted at rest;
+   the vendored row-menu tints it accent while its menu is open. */
+.trow-ctrl { grid-area: ctrl; justify-self: end; align-self: center; display: inline-flex; align-items: center; }
+.trow-kebab {
+  flex: none;
+  width: var(--row-sm);
+  height: var(--row-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.trow-kebab .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.trow-kebab:hover { color: var(--fg); }
 /* The meta line (#301): a 44px line of its own. Its interactive parts — the
    due chip, the folder and AI glyphs, the issue chip — are each 44px tall on
    this line, either as real geometry (the due button, the icon-only glyphs) or,
