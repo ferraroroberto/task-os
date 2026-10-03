@@ -28,9 +28,15 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 LOCK_NAME = ".run.lock"
+
+#: The lock the workers of one session take, one at a time, around "pick a free
+#: port, start the child that binds it, wait until it answers" (#288).
+BOOT_LOCK_NAME = ".boot.lock"
 
 #: Where the Windows byte-range lock sits. A Windows lock is mandatory — reading
 #: a locked byte fails — so it is taken far past anything the holder record
@@ -110,6 +116,35 @@ class WorkRootLock:
             _unlock(fd)
         finally:
             os.close(fd)
+
+
+@contextmanager
+def boot_lock(root: Path, timeout: float = 120.0) -> Iterator[None]:
+    """Serialise instance boots across the workers of one session (#288).
+
+    A free port is found by binding port 0 and letting go of it, and the child
+    process binds it a moment later: in that window a second worker's
+    ``bind(0)`` can be handed the very same number. Boots take about a second,
+    so holding an OS lock over the whole pick-start-wait costs a few seconds in
+    total and removes the race outright, where a retry would only paper over a
+    ``healthz`` answered by the *other* worker's instance. Like the run lock it
+    is dropped by the kernel if the holder dies. Waits up to ``timeout``.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / BOOT_LOCK_NAME
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o644)
+    deadline = time.monotonic() + timeout
+    try:
+        while not _try_lock(fd):
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"no instance boot slot after {timeout:.0f}s ({path})")
+            time.sleep(0.05)
+        try:
+            yield
+        finally:
+            _unlock(fd)
+    finally:
+        os.close(fd)
 
 
 def acquire(root: Path, checkout: Path) -> WorkRootLock:

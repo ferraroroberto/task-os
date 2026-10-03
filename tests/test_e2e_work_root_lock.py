@@ -115,3 +115,88 @@ def test_release_frees_the_root_and_clears_the_record(tmp_path: Path) -> None:
 
     second = acquire(tmp_path, Path("E:/checkouts/task-os-wt-2"))
     second.release()
+
+
+# ------------------------------------------------ under pytest-xdist (#288)
+
+_BOOT_HOLDER = (
+    "import sys, time\n"
+    "from pathlib import Path\n"
+    "from tests.e2e._work_root_lock import boot_lock\n"
+    "with boot_lock(Path(sys.argv[1])):\n"
+    "    print('booting', flush=True)\n"
+    "    time.sleep(1.5)\n"
+)
+
+
+def test_a_second_worker_waits_for_the_boot_slot(tmp_path: Path) -> None:
+    """Two workers never pick-and-bind a port at once: the second waits its turn."""
+    import time
+
+    from tests.e2e._work_root_lock import boot_lock
+
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _BOOT_HOLDER, str(tmp_path)],
+        cwd=str(REPO_ROOT), stdout=subprocess.PIPE, text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+    try:
+        assert proc.stdout and proc.stdout.readline().strip() == "booting"
+        started = time.monotonic()
+        with boot_lock(tmp_path, timeout=30):
+            waited = time.monotonic() - started
+        assert waited >= 0.5, f"the second boot did not wait for the first ({waited:.2f}s)"
+        # …and once the holder is gone the slot is free at once
+        proc.wait(timeout=10)
+        started = time.monotonic()
+        with boot_lock(tmp_path, timeout=5):
+            pass
+        assert time.monotonic() - started < 1.0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        if proc.stdout:
+            proc.stdout.close()
+
+
+def test_a_boot_slot_that_never_frees_times_out_loudly(tmp_path: Path) -> None:
+    from tests.e2e._work_root_lock import boot_lock
+
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _BOOT_HOLDER, str(tmp_path)],
+        cwd=str(REPO_ROOT), stdout=subprocess.PIPE, text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+    try:
+        assert proc.stdout and proc.stdout.readline().strip() == "booting"
+        with pytest.raises(TimeoutError, match="no instance boot slot"):
+            with boot_lock(tmp_path, timeout=0.3):
+                pass
+    finally:
+        proc.kill()
+        if proc.stdout:
+            proc.stdout.close()
+
+
+def test_only_the_session_controller_holds_the_work_root() -> None:
+    """The controller takes the root; an xdist worker (``workerinput``) and a
+    collect-only run (nothing boots) never do."""
+    from types import SimpleNamespace
+
+    from tests.e2e.conftest import holds_work_root
+
+    plain = SimpleNamespace(option=SimpleNamespace(collectonly=False))
+    assert holds_work_root(plain) is True
+    worker = SimpleNamespace(option=SimpleNamespace(collectonly=False), workerinput={"workerid": "gw0"})
+    assert holds_work_root(worker) is False
+    collecting = SimpleNamespace(option=SimpleNamespace(collectonly=True))
+    assert holds_work_root(collecting) is False
+
+
+def test_worker_names_only_exist_under_xdist(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.e2e.conftest import worker_suffix
+
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+    assert worker_suffix() == ""
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw3")
+    assert worker_suffix() == "-gw3"

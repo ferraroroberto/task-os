@@ -24,6 +24,8 @@ pytest>=8.0
 # starlette's TestClient dependency (fastapi.testclient) - test-only.
 httpx2>=0.1
 pytest-playwright>=0.5
+# The gate runs the full e2e tier on workers (-n, --dist loadfile; #288).
+pytest-xdist>=3.5
 playwright>=1.45
 ruff>=0.5
 # Brand-icon generation only (scripts/gen_icons.py -> project-scaffolding's

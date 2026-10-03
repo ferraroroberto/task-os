@@ -7,7 +7,8 @@ mirror / backup folders blanked (or pointed into the temp dir — see
 ``mirrored_webapp``), so a run never reads or writes the live ``:8448`` app,
 its ``data/tasks.db``, ``config/config.json`` or the real mirror folder.
 Every instance works under one fixed ``E2E_WORK_ROOT`` shared by all checkouts
-on the machine, so a run holds it for the session (``_one_run_per_work_root``)
+on the machine, so a run holds it for the session (``pytest_configure``,
+the controller only under ``-n``, #288)
 and a second concurrent run stops before booting anything (#244).
 
 Auth (Step 7): the browser reaches the disposable instance over loopback,
@@ -68,7 +69,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
-from tests.e2e._work_root_lock import WorkRootBusy
+from tests.e2e._work_root_lock import WorkRootBusy, boot_lock
 from tests.e2e._work_root_lock import acquire as acquire_work_root
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -132,24 +133,54 @@ E2E_BUILD_SHA = "e2e0000"
 E2E_WORK_ROOT = Path(tempfile.gettempdir()) / "taskos-e2e"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _one_run_per_work_root() -> Iterator[None]:
+def worker_suffix() -> str:
+    """``""`` in a plain run, ``-gw0`` / ``-gw1`` and so on on a pytest-xdist worker (#288).
+
+    Only what two workers could otherwise both name gets it: the session-scoped
+    ``webapp``'s work dir and every instance's log file. The module-scoped
+    instances are already one directory per story module, and ``--dist
+    loadfile`` keeps a module on one worker, so those paths (stories 09 and 10
+    put them on screen) are the same ones a serial run uses.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    return f"-{worker}" if worker else ""
+
+
+def holds_work_root(config: pytest.Config) -> bool:
+    """Whether this process is the one that holds ``E2E_WORK_ROOT`` (#244, #288).
+
+    The root belongs to the *session*: one holder, taken before anything boots.
+    Under pytest-xdist that is the controller; a worker has ``workerinput`` and
+    must never take it (it would refuse itself, the controller already holding
+    it). A collect-only run boots nothing, so it does not take it either.
+    """
+    return not hasattr(config, "workerinput") and not config.option.collectonly
+
+
+_WORK_ROOT_LOCK: list = []
+
+
+def pytest_configure(config: pytest.Config) -> None:
     """Hold ``E2E_WORK_ROOT`` for the whole session, or stop before booting (#244).
 
     The root is per machine, so another checkout's concurrent run would share
-    every folder `e2e_workdir` clears. Autouse and session-scoped, so it is set
-    up ahead of every instance fixture and torn down after the last of them.
+    every folder `e2e_workdir` clears. A hook rather than a session fixture
+    since #288: the controller of a ``-n`` run executes no fixtures, and each
+    worker would otherwise try to take the lock the controller holds.
     ``pytest.exit`` rather than a fixture error: one message naming the holder,
     not the same error repeated on every story.
     """
+    if not holds_work_root(config):
+        return
     try:
-        lock = acquire_work_root(E2E_WORK_ROOT, REPO_ROOT)
+        _WORK_ROOT_LOCK.append(acquire_work_root(E2E_WORK_ROOT, REPO_ROOT))
     except WorkRootBusy as busy:
         pytest.exit(str(busy), returncode=2)
-    try:
-        yield
-    finally:
-        lock.release()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    while _WORK_ROOT_LOCK:
+        _WORK_ROOT_LOCK.pop().release()
 
 
 def e2e_workdir(name: str) -> Path:
@@ -231,9 +262,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     ~9 s walk straddles: under load it landed after the story's own ↻
     passes and rewrote the Settings card's counts under the assertion (#205).
     """
-    port = _free_tcp_port()
-    print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
-    log: IO[str] = (work / "webapp.log").open("w", encoding="utf-8")
+    log_path = work / f"webapp{worker_suffix()}.log"
     if config_path is None:
         config_path = write_test_config(work / "config.json")
     env = {
@@ -249,20 +278,30 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_ISSUE_SYNC_DELAY_S": "3600",
         **(extra_env or {}),
     }
-    cmd = [
-        sys.executable, "-m", "uvicorn", "app.webapp.server:app",
-        "--host", "127.0.0.1", "--port", str(port),
-        "--log-level", "warning", "--loop", LOOP_FACTORY,
-    ]
-    kwargs: dict = dict(cwd=str(REPO_ROOT), stdout=log, stderr=subprocess.STDOUT, env=env)
+    kwargs: dict = dict(cwd=str(REPO_ROOT), env=env)
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-    proc = subprocess.Popen(cmd, **kwargs)
-    base = f"http://127.0.0.1:{port}"
-    if not _wait_healthz(base, timeout=20):
+    # One boot at a time across the workers of a session (#288): the port is
+    # picked by binding 0 and letting go, the child binds it later, and two
+    # workers in that window can be handed one number: then `healthz` is
+    # answered by the *other* worker's instance and the loser fails far from
+    # the cause. The lock covers pick, start and first answer, about a second.
+    with boot_lock(E2E_WORK_ROOT):
+        port = _free_tcp_port()
+        print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
+        log: IO[str] = log_path.open("w", encoding="utf-8")
+        cmd = [
+            sys.executable, "-m", "uvicorn", "app.webapp.server:app",
+            "--host", "127.0.0.1", "--port", str(port),
+            "--log-level", "warning", "--loop", LOOP_FACTORY,
+        ]
+        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, **kwargs)
+        base = f"http://127.0.0.1:{port}"
+        healthy = _wait_healthz(base, timeout=20)
+    if not healthy:
         _terminate(proc)
         log.close()
-        tail = (work / "webapp.log").read_text(encoding="utf-8", errors="replace")[-2000:]
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
         pytest.fail(f"disposable webapp did not answer {base}/healthz within 20s\n{tail}")
     return proc, base, log
 
@@ -318,7 +357,7 @@ def webapp() -> Iterator[str]:
         yield base
         return
 
-    work = e2e_workdir("empty")
+    work = e2e_workdir("empty" + worker_suffix())    # one per worker under -n (#288)
     proc, base, log = _boot(work, work / "tasks.db")
     try:
         yield base
@@ -781,6 +820,8 @@ def _bound_default_timeouts(context) -> None:
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Advisory sweep of browser helpers this run orphaned inside this checkout."""
+    if hasattr(session.config, "workerinput"):
+        return          # the controller sweeps once, after the last worker (#288)
     result = sweep_browser_helpers(REPO_ROOT)
     print(f"\n{result.summary()}")
     for entry in result.killed:
