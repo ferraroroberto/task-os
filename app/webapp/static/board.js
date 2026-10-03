@@ -274,8 +274,9 @@ function buildRow(t, handlers, opts) {
   const o = opts || {};
   // Drag is off in Select mode: a card that both drags to another column and
   // ticks on tap turns every slightly-moved tap into a status change (#81).
+  // the column already says the status, so the row does not repeat it
   const li = taskRow(t, handlers, {
-    draggable: !o.selectable, selectable: o.selectable, selected: o.selected,
+    draggable: !o.selectable, selectable: o.selectable, selected: o.selected, hideStatus: true,
   });
   if (o.selectable) return li;
   if (o.suggestion) li.appendChild(suggestionStrip(o.suggestion, handlers));

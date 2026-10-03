@@ -20,7 +20,9 @@
  *
  * One menu per rendered list (`createTaskMenu` per view): `attach()` while the
  * list is built, `endRender()` once it is, so an open menu follows its row
- * across a re-render or closes when the row has left.
+ * across a re-render or closes when the row has left. The row's completion
+ * circle commits through here too (`toggleDone()`), so it is the same write,
+ * toast and Undo as the menu's Complete.
  */
 
 'use strict';
@@ -43,32 +45,35 @@ const CLOSED = { done: 1, cancelled: 1 };
  *          onOpen: (id:number) => void,
  *          onPlan?: (id:number) => any, onUnplan?: (id:number) => any,
  *          order?: () => string[]}} ctx
- * @returns {{attach: (t:object, kebab:HTMLElement) => void, endRender: () => void, close: () => void}}
+ * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
+ *            endRender: () => void, close: () => void}}
  */
 export function createTaskMenu(ctx) {
   const ctl = createRowMenu({ className: 'task-menu' });
 
-  /** After the write the list is rebuilt and the kebab the menu handed focus
-   *  back to is gone: put focus on the same row's new kebab, if it stayed. */
-  function refocus(t, kebab) {
-    const pane = kebab.closest('.pane');
+  /** After the write the list is rebuilt and the control that had focus (the
+   *  kebab the menu handed it back to, the circle) is gone: put focus on the
+   *  same row's new one, if the row stayed. */
+  function refocus(t, el) {
+    const pane = el.closest('.pane');
+    const which = el.classList.contains('trow-done') ? '.trow-done' : '.trow-kebab';
     return {
       afterRefresh: function () {
         if (!pane || pane.hidden) return;
-        const next = pane.querySelector('.trow[data-id="' + t.id + '"] .trow-kebab');
+        const next = pane.querySelector('.trow[data-id="' + t.id + '"] ' + which);
         if (next) next.focus({ preventScroll: true });
       },
     };
   }
 
-  function run(action, t, kebab) {
+  function run(action, t, el) {
     if (action.menu) {
-      openDatePicker(t, action.menu, kebab.closest('.trow') || kebab, function (phrase) {
-        ctx.actions.run(action, [t], phrase, refocus(t, kebab));
+      openDatePicker(t, action.menu, el.closest('.trow') || el, function (phrase) {
+        ctx.actions.run(action, [t], phrase, refocus(t, el));
       });
       return;
     }
-    ctx.actions.run(action, [t], undefined, refocus(t, kebab));
+    ctx.actions.run(action, [t], undefined, refocus(t, el));
   }
 
   function items(t, kebab) {
@@ -119,6 +124,8 @@ export function createTaskMenu(ctx) {
 
   return {
     attach: function (t, kebab) { ctl.attach(String(t.id), kebab, items(t, kebab)); },
+    /** The completion circle: complete an open task, reopen a closed one. */
+    toggleDone: function (t, el) { run(actionById(CLOSED[t.status] ? 'reopen' : 'complete'), t, el); },
     endRender: function () { ctl.endRender(); },
     close: function () { ctl.close(); },
   };

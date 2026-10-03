@@ -307,6 +307,7 @@ export function mountSearch(box, host, opts) {
     main.appendChild(title);
     li.appendChild(main);
 
+    // the meta line sits inside the row's main column, as on a task row (#311)
     const metaLine = document.createElement('span');
     metaLine.className = 'trow-meta';
     const bits = [];
@@ -331,7 +332,7 @@ export function mountSearch(box, host, opts) {
       s.title = b;
       metaLine.appendChild(s);
     });
-    if (metaLine.childNodes.length) li.appendChild(metaLine);
+    if (metaLine.childNodes.length) main.appendChild(metaLine);
     const sn = snippetIsPath ? null : snippetLine(h, h.title);
     if (sn) { sn.classList.add('trow-extra'); li.appendChild(sn); }
 
@@ -341,7 +342,6 @@ export function mountSearch(box, host, opts) {
       link.click();
     }
     main.addEventListener('click', openIt);
-    metaLine.addEventListener('click', openIt);
     main.addEventListener('keydown', function (ev) {
       if (ev.target !== main) return;
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); link.click(); }

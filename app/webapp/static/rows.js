@@ -1,46 +1,40 @@
-/* task-os — the ONE task row every view renders (issue #46).
+/* task-os — the ONE task row every view renders (issue #46, #311).
  *
- * Board, Table (phone), Tree, Today and the Search tab's task hits are
- * different *renderings* of the same list, not different features — so they
- * share one row, one status control and one sort, built here:
+ * Board, Table (phone), Tree, Today, the done journal and the Search tab's
+ * task hits are different *renderings* of the same list, not different
+ * features — so they share one row and one sort, built here. The row is the
+ * fleet's vendored action-row (#311): tapping it opens the task, and
  *
- *   line 1  the title (one line, ellipsized) + the status select, right-aligned
- *           on the same line (the Board control, issue #27/#32 — now everywhere,
- *           fine and coarse pointers alike; a view with drag-and-drop keeps it too),
- *           preceded on Today by the snooze control (#87)
- *   line 2  the meta line: code (coding tasks) · project (root title) · due ·
- *           blocked (lock, only while an open blocker gates it — wins over
- *           starts, #100) · starts (only while the task is still asleep) ·
- *           priority · recurrence · folder chip · issue chip · children ·
- *           comments · person — only the parts that have content
+ *   leading   the completion circle — the one toggle a row shows: an open
+ *             task completes (a recurring one rolls to its next date), a
+ *             closed one reopens; both through the shared action runner, so
+ *             both come with Undo
+ *   main      the title (one line, ellipsized) over ONE quiet meta line: due ·
+ *             blocked or asleep · project · code · status (where the view does
+ *             not imply it) · priority · then glyphs — recurrence,
+ *             children, comments, folder, AI conversation, issue — and the
+ *             person. Passive text: nothing on it is its own tap target, so
+ *             the whole line opens the task
+ *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
+ *             change date, snooze, priority, plan, folder, AI, issue). Right-
+ *             click and the keyboard's menu key open the same menu
  *
- * Three of the meta line's parts are their own tap targets, not just text: the
- * due date opens the date picker (#107), the folder chip its twin/popover and
- * the AI chip its conversation. They are laid out so no two of their expanded
- * surfaces share a pixel — see `.trow-due-box` / `.trow-folder` / `.trow-ai`
- * in styles.css.
- *
- * Every action the row has sits behind its trailing ⋯ kebab too (#311): the
- * row menu (rowmenu.js) a view hands in as `handlers.menu`. Right-click and
- * the keyboard's menu key open the same menu; Select mode drops it, because
- * there the bulk bar owns the actions.
- *
- * Flat hairline separators between rows, no per-row box, the priority accent
- * on the left edge of a high-priority row. A view passes a `prefix` element
- * (the Tree's expand toggle) and/or an `extra` line (a Search snippet) — the
- * row itself never changes shape.
+ * Select mode swaps the circle for the checkbox and drops the kebab: there the
+ * row's one job is to tick and the bulk bar owns the actions. A view may pass a
+ * `prefix` (the Tree's expand toggle, a plan row's grip) and/or an `extra`
+ * line (a Search snippet, an AI suggestion, a plan candidate's targets) that
+ * wraps under the row — the row itself never changes shape. Flat hairlines
+ * between rows, no per-row box, the priority accent on the left edge of a
+ * high-priority row.
  */
 
 'use strict';
 
-import { duePicker } from './dueinput.js';
 import { icon } from './_vendored/icons/icons.js';
 import {
-  STATUSES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
-  relDue, startsLabel,
+  STATUSES, blockedLabel, breadcrumbText, isBlocked, isDeferred, providerIcon, relDue, startsLabel,
 } from './format.js';
 import { recurrenceLabel } from './recurrence.js';
-import { snoozeButton } from './snooze.js';
 
 export const SORTS = [
   ['due', 'due date'], ['priority', 'priority'], ['updated', 'last modified'], ['created', 'created'], ['title', 'title'],
@@ -99,7 +93,8 @@ export function statusOptions(t) {
 }
 
 /**
- * The status control — the same compact select on every row.
+ * The status select — the desktop Table grid's status cell (the shared row
+ * carries status in its ⋯ menu and its completion circle, #311).
  * @param {object} t
  * @param {(id:number, status:string) => Promise<any>} onStatus
  */
@@ -131,107 +126,80 @@ function metaPart(cls, iconName, text, title) {
   return el;
 }
 
-/**
- * The due chip. Given an `onDue` handler it IS the date picker's trigger
- * (#107) — tapping the date on the row opens the same native picker the card's
- * Due field opens, so re-planning costs one gesture instead of open-the-card-
- * then-click-the-date. Without one it stays the plain span it always was: a
- * view that wires no `onPatch`, and Select mode, where every row gesture has
- * to tick rather than do something of its own.
- *
- * The picker comes from `duePicker()` and not from a fourth hand-rolled call:
- * the coarse-pointer branch that makes a native date input actually open on
- * touch (#50) lives there once, and a copy here is exactly the drift its
- * header warns about.
- * @param {object} t
- * @param {{text: string, tone: string}} rel        relDue(t.due)
- * @param {((id:number, iso:string) => any)|null} onDue
- */
-function dueChip(t, rel, onDue) {
-  const cls = 'due' + (rel.tone ? ' due-' + rel.tone : '');
-  if (!onDue) {
-    const span = metaPart(cls, 'calendar-days', rel.text, t.due);
-    span.dataset.due = t.due;
-    return span;
-  }
-  const box = document.createElement('span');
-  box.className = 'trow-due-box';
-  const pick = duePicker({
-    className: 'trow-' + cls + ' hit-target',
-    value: t.due,
-    // The bare ISO date, exactly the tooltip the span twin carries: the chip
-    // is one line of a dense row, and the aria-label below is where "you can
-    // change this" belongs. The Table's roomier cell says it in words.
-    title: t.due,
-    ariaLabel: 'Due ' + rel.text + ' — change the due date of ' + t.title,
-    onPick: function (iso) { if (iso) onDue(t.id, iso); },
-  });
-  // The label goes after the glyph, exactly as metaPart builds the span twin,
-  // and it is what gives the accessible name its visible text (WCAG 2.5.3).
-  pick.button.appendChild(document.createTextNode(rel.text));
-  // The ISO date, for anything that needs the value rather than the words.
-  // It used to be readable only off the chip's `title`, which made the tooltip
-  // load-bearing: widening it to say the chip is clickable silently cost Today
-  // its overdue tint, because that is where today.js read the date from.
-  pick.button.dataset.due = t.due;
-  // The coarse branch reveals the native input in order to click it. Put it
-  // back out of the flow once the sheet closes — a cancelled pick must not
-  // leave a date box sitting in the meta line until the next render.
-  pick.picker.addEventListener('blur', function () { pick.picker.classList.remove('is-visible'); });
-  box.append(pick.button, pick.picker);
-  return box;
-}
+/** Statuses the row never spells out: todo is the default, done is the circle. */
+const QUIET_STATUSES = { todo: 1, done: 1 };
 
 /**
- * Build the meta line (line 2). Exported so the Table's desktop grid can
- * reuse the same parts in its cells if it ever needs to.
+ * Build the meta line: one line of quiet text, only the parts with content.
+ * A glyph stands for each link the task carries (folder, AI conversation,
+ * issue) — what to *do* with it lives in the row menu (#311).
  * @param {object} t
- * @param {{hideProject?: boolean, onDue?: (id:number, iso:string) => any}} [opts]
- *        onDue (optional) turns the due chip into the picker's trigger (#107)
+ * @param {{hideProject?: boolean, hideStatus?: boolean}} [opts]
+ *        hideStatus: the view already says the status (the Board's columns)
  */
 export function metaLine(t, opts) {
   const o = opts || {};
   const meta = document.createElement('span');
-  meta.className = 'trow-meta';
-  if (t.code) meta.appendChild(metaPart('code', null, t.code, 'code'));
+  meta.className = 'trow-meta action-row-meta';
+  if (t.due) {
+    const rel = relDue(t.due);
+    const due = metaPart('due' + (rel.tone ? ' due-' + rel.tone : ''), null, rel.text, t.due);
+    // The ISO date as a value — Today reads it for the row's overdue tint.
+    due.dataset.due = t.due;
+    meta.appendChild(due);
+  }
+  // Blocked wins over deferred (#100) — it's the harder gate: a task both
+  // asleep and blocked shows the lock, not the clock, wherever either still
+  // shows (the Tree, a search hit, the Deferred/blocked filters). Right after
+  // the date, because it says when the task can be worked at all, and a
+  // narrow Board column must not ellipsize it away.
+  if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
+  else if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
   const project = t.root ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
   // three levels down reads "Home renovation › Kitchen" on hover, #102)
   if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, breadcrumbText(t.breadcrumb) || project));
-  if (t.due) meta.appendChild(dueChip(t, relDue(t.due), o.onDue || null));
-  // Blocked wins over deferred (#100) — it's the harder gate: a task both
-  // asleep and blocked shows the lock, not the clock, wherever either still
-  // shows (the Tree, a search hit, the Deferred/blocked filters).
-  if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
-  else if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
+  if (t.code) meta.appendChild(metaPart('code', null, t.code, 'code'));
+  if (!o.hideStatus && !QUIET_STATUSES[t.status]) meta.appendChild(metaPart('state', null, t.status, 'status ' + t.status));
   if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
   if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval)));
-  if (t.folder_ref) {
-    // The phone renders this one icon-only with a 44px tap surface (#74) — the
-    // truncated ref reads as noise there — so the name lives on aria-label, not
-    // on the (hidden) chip text. Desktop keeps the label; the name still
-    // contains it, so WCAG 2.5.3 holds either way.
-    const fc = chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url });
-    fc.classList.add('trow-folder');
-    fc.setAttribute('aria-label', 'Folder ' + t.folder_ref);
-    meta.appendChild(fc);
-  }
-  if (t.ai_url) {
-    // Same phone treatment as the folder chip: icon-only, the name on aria-label.
-    const ac = aiChip(t.ai_url, t.ai_label);
-    ac.classList.add('trow-ai');
-    ac.setAttribute('aria-label', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : ''));
-    meta.appendChild(ac);
-  }
-  // the code already names the issue — no duplicate chip
-  if (t.issue_ref && !t.code) meta.appendChild(issueChip(t.issue_ref));
   if (t.child_count) meta.appendChild(metaPart('kids', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
   if (t.comment_count) {
     meta.appendChild(metaPart('comments', 'message-square', String(t.comment_count),
       t.last_comment ? t.last_comment.author + ': ' + (t.last_comment.body || '') : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments')));
   }
+  if (t.folder_ref) meta.appendChild(metaPart('folder', 'folder', '', 'Folder ' + t.folder_ref));
+  if (t.ai_url) meta.appendChild(metaPart('ai', 'bot', '', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : '')));
+  // the code already names the issue — no second mark for it
+  if (t.issue_ref && !t.code) {
+    const ref = t.issue_ref;
+    meta.appendChild(metaPart('issue', providerIcon(ref.provider), '', ref.repo + '#' + ref.number + ' · ' + (ref.state || 'state unknown')));
+  }
   if (t.person) meta.appendChild(metaPart('person', 'user', t.person.name, t.person.name));
   return meta;
+}
+
+/**
+ * The completion circle: the row's one leading toggle. Pressed = closed. A
+ * tap completes an open task (a recurring one rolls instead) and reopens a
+ * closed one — through the view's row menu, which commits through the shared
+ * runner (toast + Undo); a view without one falls back to the status call.
+ */
+function doneToggle(t, handlers) {
+  const closed = !!CLOSED[t.status];
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'trow-done action-row-fav';
+  btn.setAttribute('aria-pressed', closed ? 'true' : 'false');
+  btn.setAttribute('aria-label', 'Complete ' + t.title);
+  btn.title = closed ? 'Reopen' : (t.recurrence ? 'Complete — rolls to the next date' : 'Complete');
+  btn.innerHTML = icon('circle', 'action-row-fav-off') + icon('circle-check', 'action-row-fav-on');
+  btn.addEventListener('click', function () {
+    if (handlers.menu) { handlers.menu.toggleDone(t, btn); return; }
+    Promise.resolve(handlers.onStatus(t.id, closed ? 'todo' : (t.recurrence ? 'complete' : 'done')))
+      .catch(function () { /* the caller toasts the failure */ });
+  });
+  return btn;
 }
 
 /**
@@ -242,7 +210,7 @@ export function metaLine(t, opts) {
 function rowKebab(t, menu, li) {
   const kebab = document.createElement('button');
   kebab.type = 'button';
-  kebab.className = 'trow-kebab';
+  kebab.className = 'trow-kebab action-row-kebab';
   kebab.setAttribute('aria-label', 'More actions for ' + t.title);
   kebab.innerHTML = icon('ellipsis-vertical');
   menu.attach(t, kebab);
@@ -259,29 +227,25 @@ function rowKebab(t, menu, li) {
  * One task row.
  * @param {object} t                    a list summary (/api/tasks item, board/today item, search hit)
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
- *          onToggleSelect?: (id:number)=>void, onSnooze?: (id:number, phrase:string)=>Promise<any>,
- *          onPatch?: (id:number, patch:object)=>Promise<any>,
- *          menu?: {attach: (t:object, kebab:HTMLElement)=>void}}} handlers
- *          onPatch (optional) makes the due chip the date picker's trigger (#107);
- *          menu (optional) is the view's row menu (rowmenu.js, #311)
+ *          onToggleSelect?: (id:number)=>void,
+ *          menu?: {attach: (t:object, kebab:HTMLElement)=>void,
+ *                  toggleDone: (t:object, el:HTMLElement)=>void}}} handlers
+ *          menu (optional) is the view's row menu (rowmenu.js, #311) — the kebab
+ *          and the circle both commit through it
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
- *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean,
- *          snooze?: boolean}} [opts]
- *          prefix     = an element before the title (the Tree's toggle);
- *          extra      = a third line under the meta (a Search snippet);
+ *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
+ *          selected?: boolean}} [opts]
+ *          prefix     = an element before the circle (the Tree's toggle, a plan grip);
+ *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
- *          selectable = Select mode is on (#81): the row grows a leading
- *                       checkbox and the row gesture ticks instead of opening;
- *          snooze     = show the snooze control (#87) — Today passes it, so
- *                       "push this away" lives where the day's list is read
+ *          selectable = Select mode is on (#81): the checkbox replaces the
+ *                       circle, the kebab goes, and the row gesture ticks
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
-  const withSnooze = !!(o.snooze && handlers.onSnooze && !o.selectable);
   const li = document.createElement(o.tag || 'li');
-  li.className = 'trow' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
-    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '')
-    + (withSnooze ? ' has-snooze' : '');
+  li.className = 'trow action-row' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
+    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
   li.dataset.id = String(t.id);
   li.dataset.status = t.status;
   if (o.depth != null) li.style.setProperty('--depth', String(o.depth));
@@ -309,60 +273,34 @@ export function taskRow(t, handlers, opts) {
     li.appendChild(o.prefix);
   }
 
-  const main = document.createElement('div');
-  main.className = 'trow-main';
-  main.setAttribute('role', 'button');
-  main.tabIndex = 0;
+  if (!o.selectable) li.appendChild(doneToggle(t, handlers));
+
+  const main = document.createElement('button');
+  main.type = 'button';
+  main.className = 'trow-main action-row-main';
   main.setAttribute('aria-label', (o.selectable ? 'Select ' : '') + t.title);
   const title = document.createElement('span');
-  title.className = 'trow-title';
+  title.className = 'trow-title action-row-title';
   title.textContent = t.title;
   title.title = t.title;
   main.appendChild(title);
+  const meta = metaLine(t, o);
+  if (meta.childNodes.length) main.appendChild(meta);
+  main.addEventListener('click', activate);
   li.appendChild(main);
 
-  // Snooze sits before the status select, so the two row controls read
-  // left-to-right as "later" then "where is it now".
-  if (withSnooze) li.appendChild(snoozeButton(t, handlers.onSnooze));
-  const ctrl = document.createElement('span');
-  ctrl.className = 'trow-ctrl';
-  ctrl.appendChild(statusSelect(t, handlers.onStatus));
-  if (handlers.menu && !o.selectable) ctrl.appendChild(rowKebab(t, handlers.menu, li));
-  li.appendChild(ctrl);
-
-  // The due chip re-plans in place (#107) wherever the view wired a patch —
-  // never in Select mode, where the row's one job is to tick. The meta line's
-  // own click handler already ignores buttons, so the picker's trigger stops
-  // opening the drawer without a second rule.
-  const meta = metaLine(t, !handlers.onPatch || o.selectable ? o : Object.assign({}, o, {
-    onDue: function (id, iso) { return handlers.onPatch(id, { due: iso }); },
-  }));
-  if (meta.childNodes.length) li.appendChild(meta);
+  if (handlers.menu && !o.selectable) li.appendChild(rowKebab(t, handlers.menu, li));
   if (o.extra) {
     o.extra.classList.add('trow-extra');
     li.appendChild(o.extra);
   }
-
-  main.addEventListener('click', function (ev) {
-    if (ev.target.closest('a, select, button, input')) return;
-    activate();
-  });
-  main.addEventListener('keydown', function (ev) {
-    if (ev.target !== main) return;
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); }
-  });
-  // a click on the meta line (not on a chip) opens too — the whole row is the target
-  meta.addEventListener('click', function (ev) {
-    if (ev.target.closest('a, select, button, input')) return;
-    activate();
-  });
   return li;
 }
 
 /**
  * A flat list of rows.
  * @param {Array<object>} items
- * @param {{onOpen: Function, onStatus: Function, onToggleSelect?: Function}} handlers
+ * @param {{onOpen: Function, onStatus: Function, onToggleSelect?: Function, menu?: object}} handlers
  * @param {object} [opts]  forwarded to every row; `isSelected(id)` resolves
  *                         each row's `selected` flag (#81)
  */

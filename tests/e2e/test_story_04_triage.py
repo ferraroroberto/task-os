@@ -54,8 +54,9 @@ Its shots:
     docs/screenshots/story-25-recurrence-interval-2-phone.png
 
 **Story 29 — act on a row from its menu (#311)** rides inside
-``_walk_starts_and_snooze`` (step 4b): the same Today row, snoozed again from
-its ⋯ kebab instead of the clock, through the shared action runner. Its shots:
+``_walk_starts_and_snooze`` (step 4b): the same Today row, snoozed from its ⋯
+kebab (the row has no clock any more) and read in full, through the shared
+action runner. Its shots:
 
     docs/screenshots/story-29-row-actions-1-desktop.png
 """
@@ -697,7 +698,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     api_plan = _get(base, "/api/today")["plan"]
     assert [t["title"] for t in api_plan["items"]] == ["Fix leaking tap", "Look into a standing desk"]
     shot(page, shots / "story-15-plan-my-day-4-desktop.png")
-    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".trow-status").select_option("done")
+    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".trow-done").click()
     expect(plan.locator(".today-counts")).to_have_text("1 of 2 done")
     done_row = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
     expect(done_row).to_have_class(re.compile(r"\bis-closed\b"))
@@ -708,7 +709,7 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     # ---- restore: the file's seeded instance serves the phone leg ---------
     # tap back to todo and out of the plan; the bakery back in (the seeded
     # plan's shape); the library awake again via the drawer (story-13 idiom).
-    done_row.locator(".trow-status").select_option("todo")
+    done_row.locator(".trow-done").click()   # a closed row: the circle reopens it
     expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
     _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".plan-unplan").click()
     expect(_trow(page, "Fix leaking tap", "#paneToday .plan-list")).to_have_count(0)
@@ -832,15 +833,16 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     card.locator(".filter-clear").click()
     expect(page).to_have_url(f"{base}/")
 
-    # 4. Snooze from a Today row: pick an option, the task leaves, the toast
-    #    names the day it went to — and Undo puts it straight back.
+    # 4. Snooze from a Today row's menu: pick an option, the task leaves, the
+    #    toast names the day it went to — and Undo puts it straight back.
     page.click("nav.tabs .tab[data-tab='today']")
     row = _trow(page, "School enrolment forms", "#paneToday")
     expect(row).to_be_visible()
     task_id = int(row.get_attribute("data-id"))
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
-    row.locator(".snooze-summary").click()
-    menu = row.locator(".snooze-menu")
+    row.locator(".trow-kebab").click()
+    page.locator(".row-menu [data-action='snooze']").click()
+    menu = page.locator(".snooze-pop .snooze-menu")
     expect(menu).to_be_visible()
     expect(menu.locator(".snooze-opt")).to_have_count(4)   # 3 phrases + pick a date
     shot(page, shots / "story-13-starts-snooze-4-desktop.png")
@@ -858,11 +860,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
 
-    # 4b. Story 29 (#311): the same push from the row's ⋯ menu. The kebab
-    #     lists the row's actions — the shared table's, offered only where
-    #     they apply, then the task's own links — and its Snooze… opens the
-    #     same date picker, commits through the same runner (toast + Undo),
-    #     and the keyboard reaches the menu with `.`.
+    # 4b. Story 29 (#311): the row's ⋯ menu, read in full. The kebab lists the
+    #     row's actions — the shared table's, offered only where they apply,
+    #     then the task's own links — and its Snooze… opens the date picker,
+    #     commits through the same runner (toast + Undo), and the keyboard
+    #     reaches the menu with `.`.
     row = _trow(page, "School enrolment forms", "#paneToday")
     kebab = row.locator(".trow-kebab")
     expect(kebab).to_have_attribute("aria-haspopup", "menu")
@@ -925,8 +927,8 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
 
 def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): the Table as the shared rows, drawer
-    full-screen, 44px targets (the row's status select is the deliberate
-    compact exception — ≤32px, centred on the title line, UX rounds 1–3)."""
+    full-screen, 44px targets (the row's completion circle and ⋯ kebab are
+    each a full 44x44 box either side of the open target, #311)."""
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
@@ -943,12 +945,14 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         rows = page.locator("#paneTable .table-rows .trow")
         expect(rows).to_have_count(_get(base, "/api/tasks?status=todo")["count"])
         # phone: the grid is not rendered at all — the Table is the ONE shared
-        # row (title + status select, the meta line with the project under it)
+        # row (circle + title, the one passive meta line with the project in it,
+        # the ⋯ menu — no status select on the row since #311)
         expect(page.locator(".task-table")).to_have_count(0)
         watering = _trow(page, "Fix watering schedule drift", "#paneTable")
         expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
         expect(watering.locator(".trow-due")).to_be_visible()
-        expect(watering.locator(".trow-status")).to_have_value("todo")
+        expect(watering).to_have_attribute("data-status", "todo")
+        expect(rows.locator(".trow-status")).to_have_count(0)
         assert_no_horizontal_overflow(page)
         # the top strip (#80): the text filter, the view toggle's two halves
         # (#161) and the + sit side by side, all at the touch floor, with
@@ -981,36 +985,43 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         lefts = sorted(set(b[0] for b in boxes))
         assert len(lefts) == 2, boxes                                  # two columns
         assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
-        # rows are >=44px tall, and since #301 the status select is a real 44px
-        # box on the title line (it paints the compact 30px inside a transparent
-        # band, the shared native-control recipe), not a 30px control that
-        # leans on an expansion
+        # rows are >=44px tall, and the row's two controls — the completion
+        # circle and the ⋯ kebab — are real 44x44 boxes that never overlap the
+        # open target between them (#311)
         assert_min_target(rows)
-        assert_no_overlap(rows.locator(".trow-status"))
-        heights = rows.locator(".trow-status").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
-        assert heights and all(h == 44 for h in heights), heights
-        # #74 round 2: a folder never makes a card taller. It is an inline glyph
-        # like every other meta item now, so a row that has one is exactly as tall
-        # as a plain one. (Rows above that height are metas that wrapped to a
-        # second line - a different thing, and not what the folder caused.)
+        assert_min_target(rows.locator(".trow-done"))
+        assert_min_target(rows.locator(".trow-kebab"))
+        assert_no_overlap(rows.locator(".trow-done, .trow-main, .trow-kebab"))
+        sizes = rows.locator(".trow-done, .trow-kebab").evaluate_all(
+            "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
+        assert sizes and all(w == 44 and h == 44 for w, h in sizes), sizes
+        # #74 round 2: a folder never makes a card taller. It is a passive glyph
+        # on the one meta line like every other item, so a row that has one is
+        # exactly as tall as a plain one. (Rows above that height are metas
+        # that wrapped - a different thing, and not what the folder caused.)
         by_folder = rows.evaluate_all(
-            "els => els.map(e => [!!e.querySelector('.chip-folder'),"
+            "els => els.map(e => [!!e.querySelector('.trow-folder'),"
             " Math.round(e.getBoundingClientRect().height)])")
         assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
         # (the list's first row has no hairline above it, so it is 1px shorter:
         # the claim is that a folder row is no taller than a plain one)
         plain_h = {h for f, h in by_folder if not f}
         assert {h for f, h in by_folder if f} <= plain_h, by_folder
-        # #301: the select sits on the TITLE line (a 44px line of its own, level
-        # with the open target), and the meta line is the 44px line under it —
-        # the row is two lines, not one control floating between them
-        sel_box = watering.locator(".trow-status").bounding_box()
+        # #311: the row is circle · title-over-meta · kebab, level with each
+        # other, no taller than 60px (+ the hairline) with its meta line, and
+        # the kebab sits at the row's right edge
+        done_box = watering.locator(".trow-done").bounding_box()
         main_box = watering.locator(".trow-main").bounding_box()
-        meta_box = watering.locator(".trow-meta").bounding_box()
-        assert sel_box and main_box and meta_box
-        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
-        assert main_box["height"] >= 44 and meta_box["height"] >= 44, (main_box, meta_box)
-        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
+        kebab_box = watering.locator(".trow-kebab").bounding_box()
+        row_box = watering.bounding_box()
+        assert done_box and main_box and kebab_box and row_box
+        assert row_box["height"] <= 61, row_box
+        row_mid = row_box["y"] + row_box["height"] / 2
+        for box in (done_box, kebab_box):
+            assert abs((box["y"] + box["height"] / 2) - row_mid) <= 8, (box, row_box)
+        assert done_box["x"] + done_box["width"] <= main_box["x"] + 1, (done_box, main_box)
+        assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
+        assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
         assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         shot(page, shots / "story-04-triage-9-phone.png")
 
@@ -1044,14 +1055,17 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         page.goto(f"{base}/")          # drop the story's ?status=todo first
         page.locator("nav.tabs .tab[data-tab='today']").tap()
         expect(page.locator("#paneToday")).to_be_visible()
-        today_row = page.locator("#paneToday .today-group .trow.has-snooze").first
+        today_row = page.locator("#paneToday .today-group .trow").first
         expect(today_row).to_be_visible()
-        snooze = today_row.locator(".snooze-summary")
-        assert_min_target(snooze)
-        assert_no_overlap(page.locator("#paneToday .trow.has-snooze .snooze-summary, "
-                                       "#paneToday .trow.has-snooze .trow-status"))
-        snooze.tap()
-        menu = today_row.locator(".snooze-menu")
+        # the row has no clock any more (#311): snooze lives in the ⋯ menu,
+        # whose kebab is a touch target clear of the circle and the open target
+        assert_min_target(page.locator("#paneToday .today-group .trow-kebab"))
+        assert_no_overlap(page.locator("#paneToday .today-group .trow-done, "
+                                       "#paneToday .today-group .trow-main, "
+                                       "#paneToday .today-group .trow-kebab"))
+        today_row.locator(".trow-kebab").tap()
+        page.locator(".row-menu [data-action='snooze']").tap()
+        menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
         expect(menu).to_be_visible()
         assert_min_target(menu.locator(".snooze-opt"))
         assert_no_horizontal_overflow(page)

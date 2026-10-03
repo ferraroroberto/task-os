@@ -65,10 +65,11 @@ flight — the title edited with the list reads held back, the due date edited
 before they arrive, then both rows (Board, Today) are checked once the late
 answers land. No screenshots: the proof is the rows.
 
-UX round 3 (issue #46): every view renders the ONE task row (``.trow`` —
-title + status select on line 1, the meta line under it) and shares ONE
-filter card; the Today checkbox is gone — "ticking" is the row's status
-select, on every pointer. Today's done tasks ride in the shared list only
+UX round 3 (issue #46, the row slimmed by #311): every view renders the ONE
+task row (``.trow`` — completion circle, title with its one-line passive meta,
+⋯ kebab) and shares ONE filter card; "ticking" is the row's circle, on every
+pointer, and every other action (status, date, snooze, priority, plan, folder,
+AI, issue) is a ⋯ menu item. Today's done tasks ride in the shared list only
 for the Board's Done today column: Table, Tree and Today keep showing open
 tasks (as the filter card says), so a task finished today leaves the Today
 list and appears in the Board's Done today column.
@@ -165,16 +166,24 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert counts["done"] == 0                                    # seed's done tasks are old
         expect(_col(page, "done").locator(".board-col-title")).to_have_text(re.compile(r"^Done today"))
         expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_be_visible()
-        # a row = title + status select on line 1, then the meta line: project ·
-        # due · priority · chips · children · comment COUNT · person — never the
-        # comment body (UX round 2, issue #32; the ONE row of round 3, #46)
+        # a row = circle · title · kebab, with one passive meta line under the
+        # title: project · due · priority · glyphs for the folder / AI / issue
+        # it carries · children · comment COUNT · person — never the comment
+        # body (UX round 2, issue #32; the ONE row of round 3, #46; #311)
         quotes = _card(page, "Get three quotes")
-        expect(quotes.locator(".trow-status")).to_have_value("todo")
+        expect(quotes).to_have_attribute("data-status", "todo")
         expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
         expect(quotes.locator(".trow-person")).to_contain_text("Sam Rivera")
-        expect(_card(page, "Kitchen").locator(".trow-meta .chip-folder")).to_contain_text("kitchen")
+        kitchen = _card(page, "Kitchen")
+        expect(kitchen.locator(".trow-meta .trow-folder")).to_have_attribute("title", re.compile("kitchen$"))
+        expect(kitchen.locator(".trow-meta a, .trow-meta button")).to_have_count(0)   # passive glyphs, not links
+        kitchen.locator(".trow-kebab").click()
+        expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()   # the action lives in the menu
+        page.keyboard.press("Escape")
+        expect(page.locator(".row-menu")).to_have_count(0)
         watering = _card(page, "Fix watering schedule drift")
-        expect(watering.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
+        expect(watering.locator(".trow-meta .trow-issue")).to_have_attribute("title", re.compile(r"garden-bot#12 · "))
+        _open_issue_from_menu(page, watering, "garden-bot/issues/12")
         expect(watering.locator(".trow-comments")).to_have_text("1")
         expect(page.locator("#paneBoard .trow-comments").first).to_have_text(re.compile(r"^\d+$"))
         expect(page.locator("#paneBoard .t-comment")).to_have_count(0)   # the body bloated the cards
@@ -245,7 +254,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         quotes.drag_to(_col(page, "standby"))
         moved = _col(page, "standby").locator(f".trow[data-id='{qid}']")
         expect(moved).to_be_visible()
-        expect(moved.locator(".trow-status")).to_have_value("standby")
+        expect(moved).to_have_attribute("data-status", "standby")
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"]) - 1))
         expect(page.locator(".board-col-count[data-col='standby']")).to_have_text(str(len(api["standby"]) + 1))
         detail = _get(base, f"/api/tasks/{qid}")
@@ -299,11 +308,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         # decides its position, so a date/priority change actually reorders it)
         assert fam_titles == ["School enrolment forms", "Dentist check-up"]
         expect(fam.locator(".trow").last.locator(".trow-recur")).to_be_visible()
-        # the ONE row here too (#46): the status select on every row; the
-        # project is NOT repeated on the meta line — the group already names it
+        # the ONE row here too (#46): the circle and kebab on every row, no
+        # snooze clock (#311); the project is NOT repeated on the meta line —
+        # the group already names it
         school = _today_row(page, "School enrolment forms")
         expect(school).to_be_visible()
-        expect(school.locator(".trow-status")).to_have_value("todo")
+        expect(school).to_have_attribute("data-status", "todo")
+        expect(school.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
+        expect(school.locator(".trow-kebab")).to_be_visible()
+        expect(page.locator("#paneToday section.today .trow .snooze-summary")).to_have_count(0)
         expect(school.locator(".trow-person")).to_contain_text("Jordan Lee")
         expect(page.locator("#paneToday .trow-project")).to_have_count(0)
         later = page.locator(".today-later")
@@ -311,15 +324,17 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
         shot(page, shots / "story-05-board-5-desktop.png")
 
-        # 7. Mark a recurring task complete (the row's status select gains a
-        #    `complete` option for a recurring task, issue #54) → its due
-        #    rolls a cadence forward, it leaves the due list and shows up
-        #    under "Later this week" with the new date.
+        # 7. Mark a recurring task complete (the row's circle: on a recurring
+        #    task it rolls instead of closing, issue #54) → its due rolls a
+        #    cadence forward, it leaves the due list and shows up under
+        #    "Later this week" with the new date.
         vocab = _today_row(page, "Vocabulary review")
         vid = int(vocab.get_attribute("data-id"))
         assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
-        expect(vocab.locator(".trow-status option[value='complete']")).to_have_count(1)
-        vocab.locator(".trow-status").select_option("complete")
+        expect(vocab.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
+        vocab.locator(".trow-done").click()
+        expect(page.locator(".toasts")).to_contain_text("Completed")
+        expect(page.locator(".toast-action").first).to_have_text("Undo (Z)")
         next_due = (E2E_ANCHOR + timedelta(days=7)).isoformat()
         expect(page.locator(f"#paneToday section.today .trow[data-id='{vid}']")).to_have_count(0)
         rolled = _get(base, f"/api/tasks/{vid}")
@@ -327,16 +342,22 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert rolled["activity"][0]["field"] == "due"
         rolled_row = later.locator(f".trow[data-id='{vid}']")
         expect(rolled_row).to_be_visible()
-        expect(rolled_row.locator(".trow-status")).to_have_value("todo")
+        expect(rolled_row).to_have_attribute("data-status", "todo")
         expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
         expect(due_counts).to_contain_text(f"{today['counts']['today'] - 1} due today")
         rolled_row.scroll_into_view_if_needed()
         shot(page, shots / "story-05-board-6-desktop.png")
 
-        # 7b. The same recurring task, picked "done" instead of "complete":
-        #     closes for good — no further roll, off the recurring series
-        #     from here (issue #54's other half).
-        rolled_row.locator(".trow-status").select_option("done")
+        # 7b. The same recurring task, set "done" instead of completed: closes
+        #     for good — no further roll, off the recurring series from here
+        #     (issue #54's other half). The row's circle only rolls it, so the
+        #     close-for-good lives in the drawer's status select (#311).
+        rolled_row.locator(".trow-main").click()
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+        drawer.locator("select[data-field='status']").select_option("done")
+        page.keyboard.press("Escape")
+        expect(drawer).to_be_hidden()
         expect(later.locator(f".trow[data-id='{vid}']")).to_have_count(0)
         closed = _get(base, f"/api/tasks/{vid}")
         assert closed["status"] == "done" and closed["due"] == next_due
@@ -347,7 +368,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         #    it, alongside 6b's now-closed recurring task (both done today).
         books = _today_row(page, "Return library books")
         bid = int(books.get_attribute("data-id"))
-        books.locator(".trow-status").select_option("done")
+        books.locator(".trow-done").click()
         expect(page.locator(f"#paneToday section.today .trow[data-id='{bid}']")).to_have_count(0)
         done = _get(base, f"/api/tasks/{bid}")
         assert done["status"] == "done" and done["done_at"][:10] == E2E_ANCHOR.isoformat()
@@ -456,6 +477,21 @@ def _clear_toasts(page: Page) -> None:
     """Toasts stack and outlive a step, so each assertion below reads only its
     own: drop what is on screen before pressing the next key."""
     page.evaluate("document.getElementById('toasts').replaceChildren()")
+
+
+def _open_issue_from_menu(page: Page, row, fragment: str) -> None:
+    """The row's issue glyph is passive; the link is the ⋯ menu's ``issue``
+    item, which opens the forge in a new tab. ``window.open`` is recorded
+    rather than followed (no network, no popup left behind)."""
+    # a function, not an expression: Playwright invokes an expression whose value
+    # is a function, which would record one stray argument-less call
+    page.evaluate("() => { window.__opened = []; window.open = (...a) => { window.__opened.push(a); return null; }; }")
+    row.locator(".trow-kebab").click()
+    page.locator(".row-menu [data-action='issue']").click()
+    opened = page.evaluate("window.__opened")
+    assert len(opened) == 1 and fragment in opened[0][0], opened
+    assert opened[0][1:] == ["_blank", "noopener"], opened
+    expect(page.locator(".row-menu")).to_have_count(0)
 
 
 def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
@@ -657,7 +693,8 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(_journal_day(page, iso(1)).locator(".today-group-count")).to_have_text("2 done")
     kettle = _trow(page, f".journal-day[data-day='{iso(1)}']", "Descale the kettle")
     expect(kettle.locator(".trow-project")).to_have_text("Home renovation")
-    expect(kettle.locator(".trow-status")).to_have_value("done")
+    expect(kettle).to_have_attribute("data-status", "done")
+    expect(kettle.locator(".trow-done")).to_have_attribute("aria-pressed", "true")
     expect(_journal_day(page, iso(2)).locator(".today-group-count")).to_have_text("1 done · 1 cancelled")
     muted = _trow(page, f".journal-day[data-day='{iso(2)}']", "Cancel the unused streaming plan")
     assert float(muted.evaluate("el => getComputedStyle(el).opacity")) < 1
@@ -673,7 +710,8 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneJournal")).to_be_visible()
     expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
     drift = _trow(page, f".journal-day[data-day='{iso(0)}']", "Fix watering schedule drift")
-    expect(drift.locator(".trow-meta a.chip-issue")).to_have_attribute("href", re.compile("garden-bot/issues/12"))
+    expect(drift.locator(".trow-meta .trow-issue")).to_have_attribute("title", re.compile(r"garden-bot#12 · "))
+    _open_issue_from_menu(page, drift, "garden-bot/issues/12")   # a closed task's menu still carries the link
     expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
     shot(page, shots / "story-18-done-journal-1-desktop.png")
 
@@ -854,8 +892,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
 def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
     one-column scroll-snap carousel with the count strip, 44px targets (the
-    row's status select included since #301: a 44px box painting a compact
-    30px control)."""
+    row's circle and ⋯ kebab included, #311)."""
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
@@ -871,14 +908,17 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         rows = page.locator("#paneToday section.today .trow")
         expect(rows.first).to_be_visible()
-        # the ONE row on the phone: ≥44px tall, the status select a real 44px
-        # box on the title line (#301) and never overlapping its neighbours
+        # the ONE row on the phone: ≥44px tall, the circle and the ⋯ kebab real
+        # 44px boxes (#311) and never overlapping each other or the row's open
+        # target
         assert_min_target(rows)
-        selects = rows.locator(".trow-status")
-        assert_no_overlap(selects)
-        assert_min_target(selects)
-        heights = selects.evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
-        assert heights and all(h == 44 for h in heights), heights
+        for ctrl in (".trow-done", ".trow-kebab"):
+            assert_min_target(rows.locator(ctrl))
+            assert_no_overlap(rows.locator(ctrl))
+            heights = rows.locator(ctrl).evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
+            assert heights and all(h == 44 for h in heights), (ctrl, heights)
+        first_today = rows.first
+        assert_no_overlap([first_today.locator(c) for c in (".trow-done", ".trow-main", ".trow-kebab")])
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-8-phone.png")
 
@@ -904,9 +944,9 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
             "() => Math.abs(document.querySelector(\".board-col[data-col='standby']\").getBoundingClientRect().left"
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
-        # the row budget (UX round 2, issue #32; raised to two 44px lines by
-        # #301): every seeded row in the active column stays inside the ≤96px
-        # ceiling. #32's own acceptance criterion names this a phone-width
+        # the row budget (UX round 2, issue #32; slimmed to 60px + the hairline
+        # with a meta line by #311): every seeded row in the active column stays
+        # inside the ≤61px ceiling. #32's own acceptance criterion names this a phone-width
         # (390px, PHONE above) Board-row contract — not asserted at 320px
         # (#110's geometry sweep found rows over budget there, e.g. a long
         # title whose meta line wraps to more lines at the narrower width) and
@@ -914,32 +954,31 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         # the other tabs don't spend, so its rows run taller still).
         heights = _col(page, "standby").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
-        assert heights and all(h <= 96 for h in heights), heights
-        # touch fallback for the drag: the row's status select — right-aligned
-        # on the title line, auto width, a real 44px box (it paints a compact
-        # 30px control inside a transparent band, #301) level with the row's
-        # open target (UX rounds 1–3, issues #27/#32/#46)
+        assert heights and all(h <= 61 for h in heights), heights
+        # touch fallback for the drag: the row's ⋯ kebab menu carries the status
+        # items (#311) — the circle, the open target and the kebab are three
+        # separate 44px-tall cells in a line, the kebab flush with the row's
+        # right edge (UX rounds 1-3, issues #27/#32/#46)
         first_item = _col(page, "standby").locator(".trow").first
-        row_select = first_item.locator(".trow-status")
-        expect(row_select).to_be_visible()
-        sel_box = row_select.bounding_box()
+        done_box = first_item.locator(".trow-done").bounding_box()
         main_box = first_item.locator(".trow-main").bounding_box()
-        item_box = first_item.bounding_box()
-        assert sel_box and main_box and item_box
-        assert sel_box["height"] == 44, sel_box                      # the touch floor, as real geometry
-        assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
-        # the title line's control cell (select + the ⋯ kebab, #311) ends at the
-        # row's right edge; the kebab is a real 44px square right after the select
-        ctrl_box = first_item.locator(".trow-ctrl").bounding_box()
         kebab_box = first_item.locator(".trow-kebab").bounding_box()
-        assert ctrl_box and kebab_box
-        assert ctrl_box["x"] + ctrl_box["width"] >= item_box["x"] + item_box["width"] - 16, (ctrl_box, item_box)
+        item_box = first_item.bounding_box()
+        assert done_box and main_box and kebab_box and item_box
+        assert (done_box["width"], done_box["height"]) == (44, 44), done_box
         assert (kebab_box["width"], kebab_box["height"]) == (44, 44), kebab_box
-        assert kebab_box["x"] >= sel_box["x"] + sel_box["width"] - 1, (sel_box, kebab_box)
-        meta_box = first_item.locator(".trow-meta").bounding_box()
-        assert meta_box
-        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
-        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
+        assert done_box["x"] + done_box["width"] <= main_box["x"] + 1, (done_box, main_box)
+        assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
+        assert item_box["x"] + item_box["width"] - (kebab_box["x"] + kebab_box["width"]) <= 8, (kebab_box, item_box)
+        assert_no_overlap([first_item.locator(c) for c in (".trow-done", ".trow-main", ".trow-kebab")])
+        first_item.locator(".trow-kebab").tap()
+        menu = page.locator(".row-menu")
+        expect(menu).to_be_visible()
+        expect(menu.locator("[data-action='status-todo']")).to_be_visible()
+        expect(menu.locator("[data-action='status-inbox']")).to_be_visible()
+        expect(menu.locator("[data-action='status-standby']")).to_have_count(0)   # the column it is already in
+        page.keyboard.press("Escape")
+        expect(menu).to_have_count(0)
         # flat list, not a card: no rounded box on the column's list
         assert _col(page, "standby").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)

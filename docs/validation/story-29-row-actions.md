@@ -1,5 +1,7 @@
 # Story 29 — Act on a row from its menu (#311)
 
+**The row (#311 step 3).** A task row is the fleet's vendored action-row: a leading completion circle, the title over one quiet meta line (due · blocked or asleep · project · status where the view does not imply it · priority · glyphs for recurrence, children, comments, folder, AI conversation and issue · person), and one trailing ⋯ kebab, 60px tall where it used to be about 88. The status select, Today's snooze clock, the due picker and the folder, AI and issue chips left the row. Every one of them is in the menu, and the drawer still has them all. The circle completes an open task (a recurring one rolls) and reopens a closed one. It goes through the same runner as the menu, so both get a toast with Undo.
+
 **Story.** Every action a task row offers sits behind its trailing ⋯ kebab. A tap (or right-click, or `.` on a focused row, or the menu key) opens a list of the actions that apply to that task: complete or reopen, change the date, snooze, the statuses it is not already in, priority. Then come the task's own links: plan it for today, open its folder, its AI conversation, its issue, its details. A menu action commits through the same runner as the keys, so it gets the same toast with **Undo (Z)**. The menu is the vendored data-driven row-menu (project-scaffolding#317): it escapes the Board's sideways carousel, follows the menu-button keyboard pattern and gives focus back to the kebab.
 
 ## Steps and expected
@@ -10,11 +12,14 @@
 | 2 | Choose **Snooze…**, then **Tomorrow** | The menu closes, the date picker opens beside the row, the task leaves Today, and a toast reads `Snoozed to …` with **Undo (Z)** |
 | 3 | Press Undo | `starts` is cleared again and the row is back |
 | 4 | Focus the row, press `.`, then `Escape` | The menu opens from the keyboard, and Escape closes it with focus on the row's kebab |
+| 5 | On Today, tap the circle of a recurring task, then of a plain overdue one (story 05) | The recurring task rolls one cadence forward (toast `Completed — next: …` with **Undo (Z)**). The plain one closes and lands in the Board's Done-today column |
+| 6 | On the phone, tap ⋯ → **Change date…** on a row (story 07) | The vendored modal (top-anchored) offers Today · Tomorrow · This weekend · Next week · Pick a date… · No date, and a pick re-dates the row |
+| 7 | Measure a phone row (stories 04, 05, 07) | The circle and the kebab are 44×44, the circle, the open target and the kebab share no pixel, the row is ≤ 61px with its hairline, and nothing on the meta line is a button or a link |
 
 ## Proof
 
 - Screenshots: [story-29-row-actions-1-desktop.png](../screenshots/story-29-row-actions-1-desktop.png) (the open menu on a Today row).
-- E2e: step 4b of `_walk_starts_and_snooze` inside `tests/e2e/test_story_04_triage.py`. It rides an existing story, so the suite gains no test function.
+- E2e: step 4b of `_walk_starts_and_snooze` inside `tests/e2e/test_story_04_triage.py`, the circle in `tests/e2e/test_story_05_board.py`, and the phone row in `tests/e2e/test_story_07_phone.py` (`_walk_row_tap_targets`). They ride existing stories, so the suite gains no test function.
 - Unit: `tests/test_row_actions.py`, the shared table's plans, inverses and messages under node.
 
 ## Result

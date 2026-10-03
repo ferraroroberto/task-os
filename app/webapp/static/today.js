@@ -5,10 +5,9 @@
  * always decides its position, recurring or not); "Later this week"
  * (tomorrow … +7 days) sits open by default below as a flat disclosure,
  * collapsible via its own chevron (#253). Rows are
- * the ONE task row (rows.js, issue #46) — title + status select (the Board
- * control; the old checkbox is gone), the meta line (project hidden — the
- * group already names it) and the snooze control (#87) — the one view that
- * carries it, because this is where "not today" gets decided. Flat hairline
+ * the ONE task row (rows.js, issue #46) — the completion circle, the title
+ * over its meta line (project hidden — the group already names it) and the
+ * ⋯ menu, where Snooze… and Change date… live since #311. Flat hairline
  * rows, no card wrapper, group titles in the app's normal title font. This is
  * the phone's landing tab.
  *
@@ -270,7 +269,7 @@ function buildPlanSection(plan, cands, handlers, o) {
       un.setAttribute('aria-label', 'Remove ' + t.title + ' from the plan');
       un.innerHTML = icon('x');
       un.addEventListener('click', function () { handlers.onUnplan(t.id); });
-      row.insertBefore(un, row.querySelector('.trow-ctrl'));
+      row.insertBefore(un, row.querySelector('.trow-kebab'));
     }
     row.addEventListener('dragstart', function (ev) {
       ev.dataTransfer.setData('text/plain', String(t.id));
@@ -415,7 +414,7 @@ function buildGroup(group, handlers, o) {
   title.appendChild(n);
   wrap.appendChild(title);
   const list = rowList(group.items, handlers, {
-    hideProject: true, snooze: true,
+    hideProject: true,
     selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
   });
   list.classList.add('today-list');
