@@ -97,6 +97,19 @@ if ($tier -eq "skip") {
     # Per-test seconds for /e2e-audit (`.fleet.toml [e2e] junit_xml`); data/ is gitignored.
     $e2eArgs += @("--junitxml", "data/e2e-junit.xml")
     $label = if ($e2eBrowsers) { $e2eBrowsers } else { "suite-default" }
+    # The full tier runs on pytest-xdist workers (#288): --dist loadfile keeps a
+    # story module (and its module-scoped instance) on one worker, the
+    # controller alone holds the work-root lock, and instance boots are
+    # serialised. Four, because the evidence run (CLAUDE.md "Runtime contract")
+    # found 6 and 8 buy 10 s more at the cost of a loaded box. The narrower
+    # tiers are one or two files and stay serial. TASKOS_E2E_WORKERS=1 is the
+    # serial control; any other number overrides the four.
+    $workers = 4
+    if ($env:TASKOS_E2E_WORKERS) { $workers = [int]$env:TASKOS_E2E_WORKERS }
+    if ($tier -eq "full" -and $workers -gt 1) {
+        $e2eArgs += @("-n", "$workers", "--dist", "loadfile")
+        $label = "$label, -n $workers"
+    }
     Invoke-Stage "pytest e2e (${tier}: $e2eTarget, $label)" { & $py -m pytest @e2eArgs }
 }
 
