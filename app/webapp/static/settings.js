@@ -50,6 +50,7 @@ import { api } from './api.js';
 import { renderRunSummary } from './archive.js';
 import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
+import { bindTextSize } from './_vendored/text-size/text-size.js';
 
 const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
 
@@ -89,6 +90,8 @@ export function mountSettings(opts) {
     statusIssuesSync: document.getElementById('statusIssuesSync'),
     issuesSyncNow: document.getElementById('issuesSyncNow'),
     paletteOpen: document.getElementById('paletteOpen'),
+    textSizeControl: document.getElementById('textSizeControl'),
+    textSizeMeta: document.getElementById('textSizeMeta'),
     captureCardMeta: document.getElementById('captureCardMeta'),
     statusCapture: document.getElementById('statusCapture'),
     statusCaptureRun: document.getElementById('statusCaptureRun'),
@@ -653,6 +656,18 @@ export function mountSettings(opts) {
     els.paletteOpen.addEventListener('click', function () { opts.onOpenPalette(); });
   }
 
+  /** Text size (#314): the vendored control does the storing and stamping; this
+   *  only keeps the card's state word in step with the stamped step. */
+  function wireTextSize() {
+    const word = function () {
+      const size = document.documentElement.dataset.textsize || 'default';
+      els.textSizeMeta.textContent = size.charAt(0).toUpperCase() + size.slice(1);
+    };
+    bindTextSize(els.textSizeControl, 'task-os');
+    word();
+    els.textSizeControl.addEventListener('click', word);
+  }
+
   function wireIssueSyncNow() {
     els.issuesSyncNow.addEventListener('click', function () {
       // the button is the app's one sync control now (#301): it spins while the pass runs
@@ -700,6 +715,7 @@ export function mountSettings(opts) {
   wireMirrorEventsClear();
   wireIssueSyncNow();
   wirePaletteOpen();
+  wireTextSize();
   wireCaptureRunNow();
   wireArchiveCard();
   wireCalendarRefresh();
