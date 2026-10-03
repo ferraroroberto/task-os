@@ -60,6 +60,7 @@ function saveOpen(map) {
  * @param {HTMLElement} host  where the result groups render
  * @param {{onOpenTask: (id:number) => void, onQuery: (q:string) => void,
  *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>,
+ *          menu?: object,   (the Search tab's row menu, rowmenu.js — #311)
  *          onPatch?: (id:number, patch:object) => Promise<any>}} opts
  */
 export function mountSearch(box, host, opts) {
@@ -222,6 +223,7 @@ export function mountSearch(box, host, opts) {
     });
     meta.textContent = total + ' hit' + (total === 1 ? '' : 's');
     host.replaceChildren(wrap);
+    if (opts.menu) opts.menu.endRender();
   }
 
   function snippetLine(h, title) {
@@ -247,7 +249,7 @@ export function mountSearch(box, host, opts) {
         return r;
       });
     };
-    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, onPatch: onPatch },
+    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, onPatch: onPatch, menu: opts.menu },
       extra ? { extra: extra } : undefined);
     li.classList.add('search-hit');
     li.dataset.kind = 'tasks';

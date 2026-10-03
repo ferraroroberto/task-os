@@ -55,6 +55,7 @@ export function renderTable(host, items, handlers, opts) {
     onPatch: handlers.onPatch,          // the phone row's due chip re-plans too (#107)
     onStatus: handlers.onStatus,
     onToggleSelect: handlers.onToggleSelect,
+    menu: handlers.menu,                // the phone row's ⋯ (#311); the grid has none
   };
   if (o.phone) {
     // the phone renders the ONE task row, so the checkbox comes from rows.js —

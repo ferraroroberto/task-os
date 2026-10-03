@@ -90,7 +90,7 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{c
 app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
                           table.js, tree.js, today.js, drawer.js, quickadd.js, search.js (the Search tab),
                           rows.js (the one task row), filters.js (the one filter card), journal.js (the done journal),
-                          selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), keys.js (the one keymap), snooze.js,
+                          selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), rowmenu.js (the row's ⋯ menu), keys.js (the one keymap), snooze.js (the one date picker),
                           confirm.js, folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
                           archive.js (the Archive tab: the batch run + its report, retry a refused move), settings.js (the Settings pane — the header gear, no tab, #281),
                           calendar.js (the calendar lane beside Today), popover.js (the one outside-click / Escape closer for `<details>` popovers),

@@ -593,8 +593,9 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     #     palette lists the same keys, which is where they are discovered.
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
-    # 8 actions + Z + ?, then the five "getting around" keys
-    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(10)
+    # 9 keyed actions + the row menu's . + Z + ?, then the five "getting around"
+    # keys; the keyless actions (reopen, cancelled) live in the row menu (#311)
+    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(12)
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
@@ -927,7 +928,14 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         assert sel_box and main_box and item_box
         assert sel_box["height"] == 44, sel_box                      # the touch floor, as real geometry
         assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
-        assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
+        # the title line's control cell (select + the ⋯ kebab, #311) ends at the
+        # row's right edge; the kebab is a real 44px square right after the select
+        ctrl_box = first_item.locator(".trow-ctrl").bounding_box()
+        kebab_box = first_item.locator(".trow-kebab").bounding_box()
+        assert ctrl_box and kebab_box
+        assert ctrl_box["x"] + ctrl_box["width"] >= item_box["x"] + item_box["width"] - 16, (ctrl_box, item_box)
+        assert (kebab_box["width"], kebab_box["height"]) == (44, 44), kebab_box
+        assert kebab_box["x"] >= sel_box["x"] + sel_box["width"] - 1, (sel_box, kebab_box)
         meta_box = first_item.locator(".trow-meta").bounding_box()
         assert meta_box
         assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)

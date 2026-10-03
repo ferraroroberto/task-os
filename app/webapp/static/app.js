@@ -51,6 +51,7 @@ import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
+import { createTaskMenu } from './rowmenu.js';
 import { CLOSED, sortItems } from './rows.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
@@ -149,6 +150,7 @@ let archive = null;       // the Archive pane (#159) — the batch run + its rep
 let palette = null;
 let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let actions = null;       // the one row-action runner + its undo (actions.js, #311)
+let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
 const bulkBars = [];      // one per pane strip (Board · Table · Today), all over one selection (#81)
@@ -742,7 +744,7 @@ function renderBoardPane() {
   if (!board) {
     board = mountBoard({
       onOpen: openTask, onPatch: patchTask, onStatus: setStatus,
-      onToggleSelect: selectHandlers.onToggleSelect,
+      onToggleSelect: selectHandlers.onToggleSelect, menu: menus.board,
       onTriage: triageInbox,
       onAcceptSuggestion: acceptAISuggestion,
       onRejectSuggestion: rejectAISuggestion,
@@ -756,16 +758,18 @@ function renderBoardPane() {
     // in this column — the count is a pointer, never a task row (#159).
     archiveNeedsYou: archiveNeedsYou(),
   }, selectOpts()));
+  menus.board.endRender();
 }
 
 function renderTodayPane() {
   renderToday(els.todayHost, viewItems(), {
     onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onSnooze: snoozeTask,
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
-    onToggleSelect: selectHandlers.onToggleSelect,
+    onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today,
   }, Object.assign({
     sort: state.filters.sort, plan: state.plan, planMode: state.planMode, calendar: state.calendar,
   }, selectOpts()));
+  menus.today.endRender();
 }
 
 /** The Table pane draws the one filtered list two ways (#161) — the grid and
@@ -823,12 +827,14 @@ function renderTableGridView() {
   const items = viewItems();
   if (!items.length) {
     els.tableHost.replaceChildren(noMatchCard('list-filter', 'No tasks match these filters'));
+    menus.table.endRender();
     return;
   }
   const phone = window.matchMedia(PHONE_TABLE_MQ).matches;
   renderTableGrid(els.tableHost, sortItems(items, state.filters.sort),
-    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
+    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect, menu: menus.table },
     Object.assign({ phone: phone }, selectOpts()));
+  menus.table.endRender();
 }
 
 function renderTreeView() {
@@ -850,14 +856,16 @@ function renderTreeView() {
           onAction: function () { closedTreeError = null; renderTreeView(); },
         })
         : emptyCard('refresh-cw', 'Loading closed tasks…'));
+      menus.tree.endRender();
       return;
     }
     forest = state.closedTree;
   }
   const n = renderTree(els.treeHost, forest,
-    { onOpen: openTask, onPatch: patchTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
+    { onOpen: openTask, onPatch: patchTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect, menu: menus.tree },
     Object.assign({ keep: keep, byId: byId, sort: state.filters.sort }, selectOpts()));
   if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
+  menus.tree.endRender();
 }
 
 // ---------------------------------------------------------------- journal
@@ -901,12 +909,13 @@ async function loadJournal() {
 function renderJournalPane() {
   const w = journalWindow();
   renderJournal(els.journalHost, state.journal.items,
-    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus },
+    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, menu: menus.journal },
     {
       from: w.from, weeks: state.journal.weeks, hasOlder: state.journal.older, cancelled: state.journal.cancelled,
       onOlder: function () { state.journal.weeks += 1; refreshJournal(); },
       onCancelled: function (on) { state.journal.cancelled = on; refreshJournal(); },
     });
+  menus.journal.endRender();
   if (filterCards.journal) {
     filterCards.journal.render(state.filters, { projects: state.projects, people: state.people, count: state.journal.items.length });
   }
@@ -1242,6 +1251,13 @@ function wireActions() {
       if (drawer.currentId() != null) drawer.refresh();
     },
   });
+  // Each rendered list owns its menu, so one view's rebuild never closes a
+  // menu that is open on another's row.
+  const ctx = { actions: actions, onOpen: openTask, onPlan: planTask, onUnplan: unplanTask };
+  menus = {};
+  ['board', 'today', 'table', 'tree', 'journal', 'search'].forEach(function (view) {
+    menus[view] = createTaskMenu(ctx);
+  });
 }
 
 /** The row keymap (#99), reading the same actions. */
@@ -1367,6 +1383,7 @@ async function boot() {
     filters: function () { return state.filters; },
     onStatus: setStatus,
     onPatch: patchTask,
+    menu: menus.search,
   });
   if (searchQ) search.setQuery(searchQ);
   // Before the palette and before Escape below: the keymap's own listener has

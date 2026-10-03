@@ -270,7 +270,7 @@ function buildPlanSection(plan, cands, handlers, o) {
       un.setAttribute('aria-label', 'Remove ' + t.title + ' from the plan');
       un.innerHTML = icon('x');
       un.addEventListener('click', function () { handlers.onUnplan(t.id); });
-      row.insertBefore(un, row.querySelector('.trow-status'));
+      row.insertBefore(un, row.querySelector('.trow-ctrl'));
     }
     row.addEventListener('dragstart', function (ev) {
       ev.dataTransfer.setData('text/plain', String(t.id));

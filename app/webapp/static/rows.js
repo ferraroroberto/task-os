@@ -20,6 +20,11 @@
  * surfaces share a pixel — see `.trow-due-box` / `.trow-folder` / `.trow-ai`
  * in styles.css.
  *
+ * Every action the row has sits behind its trailing ⋯ kebab too (#311): the
+ * row menu (rowmenu.js) a view hands in as `handlers.menu`. Right-click and
+ * the keyboard's menu key open the same menu; Select mode drops it, because
+ * there the bulk bar owns the actions.
+ *
  * Flat hairline separators between rows, no per-row box, the priority accent
  * on the left edge of a high-priority row. A view passes a `prefix` element
  * (the Tree's expand toggle) and/or an `extra` line (a Search snippet) — the
@@ -230,12 +235,35 @@ export function metaLine(t, opts) {
 }
 
 /**
+ * The row's ⋯ kebab, wired to the view's menu. A right-click on the row (and
+ * the menu key, which the browser sends as the same event) opens that menu
+ * too — on a fine pointer only: a touch long-press is kept free.
+ */
+function rowKebab(t, menu, li) {
+  const kebab = document.createElement('button');
+  kebab.type = 'button';
+  kebab.className = 'trow-kebab';
+  kebab.setAttribute('aria-label', 'More actions for ' + t.title);
+  kebab.innerHTML = icon('ellipsis-vertical');
+  menu.attach(t, kebab);
+  li.addEventListener('contextmenu', function (ev) {
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+    if (ev.target.closest('a, input, select, textarea')) return;   // the browser's own menu there
+    ev.preventDefault();
+    if (kebab.getAttribute('aria-expanded') !== 'true') kebab.click();
+  });
+  return kebab;
+}
+
+/**
  * One task row.
  * @param {object} t                    a list summary (/api/tasks item, board/today item, search hit)
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
  *          onToggleSelect?: (id:number)=>void, onSnooze?: (id:number, phrase:string)=>Promise<any>,
- *          onPatch?: (id:number, patch:object)=>Promise<any>}} handlers
- *          onPatch (optional) makes the due chip the date picker's trigger (#107)
+ *          onPatch?: (id:number, patch:object)=>Promise<any>,
+ *          menu?: {attach: (t:object, kebab:HTMLElement)=>void}}} handlers
+ *          onPatch (optional) makes the due chip the date picker's trigger (#107);
+ *          menu (optional) is the view's row menu (rowmenu.js, #311)
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          draggable?: boolean, tag?: string, selectable?: boolean, selected?: boolean,
  *          snooze?: boolean}} [opts]
@@ -296,7 +324,11 @@ export function taskRow(t, handlers, opts) {
   // Snooze sits before the status select, so the two row controls read
   // left-to-right as "later" then "where is it now".
   if (withSnooze) li.appendChild(snoozeButton(t, handlers.onSnooze));
-  li.appendChild(statusSelect(t, handlers.onStatus));
+  const ctrl = document.createElement('span');
+  ctrl.className = 'trow-ctrl';
+  ctrl.appendChild(statusSelect(t, handlers.onStatus));
+  if (handlers.menu && !o.selectable) ctrl.appendChild(rowKebab(t, handlers.menu, li));
+  li.appendChild(ctrl);
 
   // The due chip re-plans in place (#107) wherever the view wired a patch —
   // never in Select mode, where the row's one job is to tick. The meta line's
