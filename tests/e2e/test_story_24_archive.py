@@ -564,7 +564,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     link.click()
     expect(page.locator("#paneArchive")).to_be_visible()
     page.get_by_role("tab", name="Board").click()
-    page.click("#paletteBtn")
+    page.keyboard.press("Control+K")
     page.fill("#paletteInput", ">go to archive")
     page.keyboard.press("Enter")
     expect(page.locator("#paneArchive")).to_be_visible()

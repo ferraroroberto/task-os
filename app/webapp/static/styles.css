@@ -1656,9 +1656,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 /* Every glyph on a Settings button is the icons.size inline step (16px), not
    1em of the caption-sized label (12px) or a hand-picked 14 (#281). */
 .settings-card .button-surface .icon, .settings-card .button-ghost .icon { width: var(--icon-inline); height: var(--icon-inline); }
-/* the header ↻ sits left of the theme toggle; both pin right */
-.home-head .home-sync { margin-left: auto; }
-.home-head .home-sync:not([hidden]) + .home-toggle { margin-left: var(--space-xs); }
 .is-busy .icon { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

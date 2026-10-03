@@ -6,7 +6,7 @@
  * ONE filter card (filters.js) that every tab mounts (issue #46): status ·
  * project · person · due · modified · text · sort, all in the URL query so a
  * view is shareable and the same on every tab. The task drawer (↔ #task/<id>)
- * and the quick-add bars; the issue sync (↻ in the header + Settings card,
+ * and the quick-add bars; the issue sync (the Settings card's "Sync now",
  * `syncIssues()` → POST /api/issues/sync → refreshAll); the Search tab
  * (search.js — one box over tasks · folders · emails · issues, `?q=` in the
  * URL while that tab is active, the shared filters applied to task hits) and
@@ -24,7 +24,7 @@
  * Done column, left by pressing any tab). What stays is what more than one
  * tab needs: routing (nav, the URL, #task/<id>, #journal and the two
  * #settings/… deep links), `state`, and the shared calls the drawer and the
- * palette also make — `syncIssues()` and the header ↻ among them.
+ * palette also make — `syncIssues()` among them.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -45,7 +45,7 @@ import {
   BLOCKED, DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters,
   listParams, mountFilters,
 } from './filters.js';
-import { STATUSES, fmtDay, fmtTsShort, relDue, todayISO } from './format.js';
+import { STATUSES, fmtDay, relDue, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
@@ -81,10 +81,8 @@ const els = {
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   settingsSite: document.getElementById('settingsSite'),
-  issuesSync: document.getElementById('issuesSync'),
   searchBox: document.getElementById('searchBox'),
   searchHost: document.getElementById('searchHost'),
-  paletteBtn: document.getElementById('paletteBtn'),
   palette: document.getElementById('palette'),
   quickAdd: document.getElementById('quickAdd'),
   boardFilters: document.getElementById('boardFilters'),
@@ -1035,35 +1033,22 @@ async function fetchVersion() {
 }
 
 // ------------------------------------------------------------ issue sync
-// The provider status is shared state: the header ↻ lives here, the Settings
-// card renders it (settings.js), the drawer and the palette read `state.issues`.
-function renderIssuesSync() {
-  const st = state.issues;
-  const configured = !!(st && st.enabled);
-  if (els.issuesSync) {
-    els.issuesSync.hidden = !configured;
-    els.issuesSync.title = configured
-      ? 'Sync issues now (' + st.provider + (st.last_sync ? ' · last ' + fmtTsShort(st.last_sync) : '') + ')'
-      : 'Issue provider not configured';
-  }
-}
-
+// The provider status is shared state: the Settings card renders it
+// (settings.js), the drawer and the palette read `state.issues`.
 async function fetchIssuesStatus() {
   try {
     state.issues = await api('/api/issues/status');
   } catch (err) {
     state.issues = null;
   }
-  renderIssuesSync();
   settings.renderIssues(state.issues);
 }
 
 let syncing = null;
-/** One sync pass now; every ↻ in the app funnels here (header, Settings, drawer). */
+/** One sync pass now; every ↻ in the app funnels here (Settings, drawer, palette). */
 async function syncIssues() {
   if (syncing) return syncing;
   syncing = (async function () {
-    els.issuesSync.classList.add('is-busy');
     try {
       const r = await api('/api/issues/sync', { method: 'POST' });
       const bits = [];
@@ -1080,16 +1065,11 @@ async function syncIssues() {
       toast('Issue sync failed: ' + (err.message || 'unknown'), 'error');
       throw err;
     } finally {
-      els.issuesSync.classList.remove('is-busy');
       await fetchIssuesStatus();
       syncing = null;
     }
   })();
   return syncing;
-}
-
-function wireIssueSync() {
-  if (els.issuesSync) els.issuesSync.addEventListener('click', function () { syncIssues().catch(function () {}); });
 }
 
 // ---------------------------------------------------- search + palette
@@ -1199,7 +1179,6 @@ function wireKeys() {
 
 function wirePalette() {
   palette = createPalette(els.palette, { commands: paletteCommands, onOpenTask: openTask });
-  els.paletteBtn.addEventListener('click', function () { palette.toggle(); });
   document.addEventListener('keydown', function (ev) {
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === 'k' || ev.key === 'K')) {
       ev.preventDefault();
@@ -1334,7 +1313,6 @@ async function boot() {
   // The Table flips between the grid and the shared rows at the phone breakpoint.
   const phoneMq = window.matchMedia(PHONE_TABLE_MQ);
   if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTablePane(); });
-  wireIssueSync();
   fetchVersion();
   settings.refreshStatus();
   await loadPeople();

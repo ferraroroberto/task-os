@@ -1,8 +1,8 @@
 """Story 08 — an issue becomes a task (Step 8/13, issue #9).
 
-    ↻ sync → my open issues appear as coding tasks in To do → open one: the
+    Settings → Sync now → my open issues appear as coding tasks in To do → open one: the
     drawer's issue panel (repo#N, state, labels, last synced) → nest it under
-    a project in the Tree → the issue is closed on the forge → ↻ → the task
+    a project in the Tree → the issue is closed on the forge → Sync now → the task
     is done and the log says ``sync`` → "Create issue" on a plain task → it
     turns coding with the new number, chip on the Board.
 
@@ -11,7 +11,7 @@ Walks the story against the **issues** disposable instance (conftest
 "forge" is a JSON file this test edits; never ``gh``, never the network) at
 1440×900 Chromium, saving the proof shots the validation record links to:
 
-    docs/screenshots/story-08-issues-1-desktop.png   Board after ↻: two new coding rows in To do, toast
+    docs/screenshots/story-08-issues-1-desktop.png   Board after Sync now: two new coding rows in To do, toast
     docs/screenshots/story-08-issues-2-desktop.png   drawer: issue panel — chip, open, label, last synced
     docs/screenshots/story-08-issues-3-desktop.png   Tree: the issue task nested under the project
     docs/screenshots/story-08-issues-4-desktop.png   drawer after the close: done · activity by sync · closed chip
@@ -28,12 +28,27 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from playwright.sync_api import Browser, expect
+from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot, tree_view
 
 DESKTOP = {"width": 1440, "height": 900}
 
+
+
+def _sync_now(page: Page) -> None:
+    """Settings → the Issues card's *Sync now* (the app's one sync control since #301).
+
+    The card is a collapsed disclosure; it is opened for the click and closed
+    again, so the step that walks its collapsed state (6) still finds it shut.
+    """
+    page.click("#settingsBtn")
+    card = page.locator("#issuesCard")
+    card.locator("summary.collapse-summary").click()
+    sync = card.locator("#issuesSyncNow")
+    expect(sync).to_be_enabled()
+    sync.click()
+    card.locator("summary.collapse-summary").click()
 
 def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -> None:
     inst = issues_webapp
@@ -48,13 +63,15 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
 
-        # 1. Board → ↻ (header) → the two issues without a task become coding tasks in To do.
+        # 1. Settings → Sync now (the header carries no sync button since #301) →
+        #    back on the Board, the two issues without a task are coding tasks in To do.
         page.goto(f"{base}/")
         expect(page.locator("#paneBoard")).to_be_visible()
-        sync = page.locator("#issuesSync")
-        expect(sync).to_be_visible()
-        sync.click()
+        expect(page.locator(".home-head #issuesSync")).to_have_count(0)
+        _sync_now(page)
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("#paneBoard")).to_be_visible()
         todo_col = page.locator(".board-col[data-col='todo']")
         # UX rounds 2+3 (#32/#46): a coding task's row names the issue as the
         # code on its meta line (the launcher's "repo#N" look) — no duplicate
@@ -114,9 +131,9 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(nested.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
         shot(page, shots / "story-08-issues-3-desktop.png")
 
-        # 4. The issue is closed on the forge → ↻ → the task is done, the log says sync.
+        # 4. The issue is closed on the forge → Sync now → the task is done, the log says sync.
         inst.set_issue("example/garden-bot", 14, state="closed")
-        sync.click()
+        _sync_now(page)
         expect(page.locator(".toast-success").last).to_contain_text("1 closed")
         done = _get(base, f"/api/tasks/{sensor['id']}")
         assert done["status"] == "done" and done["done_at"] and done["issue_ref"]["state"] == "closed"
