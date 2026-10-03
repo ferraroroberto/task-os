@@ -556,6 +556,27 @@
             <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
           </div>
         </details>
+        <!-- Command palette (#316): Ctrl+K has no phone equivalent since the
+             header lost its palette button (#301), so Settings opens it. -->
+        <details class="card card--collapsible settings-card" id="paletteCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
+              <h3 class="collapse-title">Command palette</h3>
+              <span class="collapse-count">Ctrl+K</span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>⌘</kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
+            <div class="card-actions">
+              <button type="button" id="paletteOpen" class="button-surface">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
+                Open command palette
+              </button>
+            </div>
+          </div>
+        </details>
         <!-- Phone access (Step 7): how this connection came in and what the
              install accepts — filled from GET /api/status by settings.js. -->
         <details class="card card--collapsible settings-card" id="accessCard">

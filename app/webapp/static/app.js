@@ -1248,6 +1248,8 @@ async function boot() {
   // because restoring the stored tab can fire onChange straight into it.
   settings = mountSettings({
     onSyncIssues: syncIssues,
+    // The phone's way into the palette (#316): Ctrl+K needs a hardware keyboard.
+    onOpenPalette: function () { palette.open(''); },
     onSearchStatus: function () { if (search) search.reloadStatus(); },
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.
