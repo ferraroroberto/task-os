@@ -823,7 +823,8 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
 def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
     one-column scroll-snap carousel with the count strip, 44px targets (the
-    row's status select is the deliberate compact exception)."""
+    row's status select included since #301: a 44px box painting a compact
+    30px control)."""
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
@@ -839,13 +840,14 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         rows = page.locator("#paneToday section.today .trow")
         expect(rows.first).to_be_visible()
-        # the ONE row on the phone: ≥44px tall, the status select compact
-        # (≤32px) and never overlapping its neighbours
+        # the ONE row on the phone: ≥44px tall, the status select a real 44px
+        # box on the title line (#301) and never overlapping its neighbours
         assert_min_target(rows)
         selects = rows.locator(".trow-status")
         assert_no_overlap(selects)
+        assert_min_target(selects)
         heights = selects.evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
-        assert heights and all(h <= 32 for h in heights), heights
+        assert heights and all(h == 44 for h in heights), heights
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-8-phone.png")
 
@@ -871,21 +873,21 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
             "() => Math.abs(document.querySelector(\".board-col[data-col='standby']\").getBoundingClientRect().left"
             " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
         )
-        # launcher-density rows (UX round 2, issue #32): every seeded row in
-        # the active column stays inside the ≤96px budget. #32's own
-        # acceptance criterion names this a phone-width (390px, PHONE above)
-        # Board-row contract — not asserted at 320px (#110's geometry sweep
-        # found rows over budget there, e.g. a long title whose meta line
-        # wraps to more lines at the narrower width) and not a Tree contract
-        # either (Tree's own left indent costs it width the other tabs don't
-        # spend, so its rows run taller still — see styles.css's `.tree`
-        # wrap-clearance rule).
+        # the row budget (UX round 2, issue #32; raised to two 44px lines by
+        # #301): every seeded row in the active column stays inside the ≤96px
+        # ceiling. #32's own acceptance criterion names this a phone-width
+        # (390px, PHONE above) Board-row contract — not asserted at 320px
+        # (#110's geometry sweep found rows over budget there, e.g. a long
+        # title whose meta line wraps to more lines at the narrower width) and
+        # not a Tree contract either (Tree's own left indent costs it width
+        # the other tabs don't spend, so its rows run taller still).
         heights = _col(page, "standby").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 96 for h in heights), heights
-        # touch fallback for the drag: the row's compact status select —
-        # right-aligned, ≤32px tall, auto width, its centre on the card's own
-        # centre (title + meta) since #74 (UX rounds 1–3, issues #27/#32/#46)
+        # touch fallback for the drag: the row's status select — right-aligned
+        # on the title line, auto width, a real 44px box (it paints a compact
+        # 30px control inside a transparent band, #301) level with the row's
+        # open target (UX rounds 1–3, issues #27/#32/#46)
         first_item = _col(page, "standby").locator(".trow").first
         row_select = first_item.locator(".trow-status")
         expect(row_select).to_be_visible()
@@ -893,14 +895,13 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         main_box = first_item.locator(".trow-main").bounding_box()
         item_box = first_item.bounding_box()
         assert sel_box and main_box and item_box
-        assert sel_box["height"] <= 32, sel_box                      # compact, never a 44px row of its own
+        assert sel_box["height"] == 44, sel_box                      # the touch floor, as real geometry
         assert sel_box["width"] < item_box["width"] / 2, (sel_box, item_box)   # auto width, not full-width
         assert sel_box["x"] + sel_box["width"] >= item_box["x"] + item_box["width"] - 16, (sel_box, item_box)
         meta_box = first_item.locator(".trow-meta").bounding_box()
         assert meta_box
-        sel_center = sel_box["y"] + sel_box["height"] / 2
-        rows_center = (main_box["y"] + meta_box["y"] + meta_box["height"]) / 2
-        assert abs(sel_center - rows_center) <= 2, (sel_box, main_box, meta_box)
+        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
+        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
         # flat list, not a card: no rounded box on the column's list
         assert _col(page, "standby").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         assert_no_horizontal_overflow(page)
