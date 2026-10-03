@@ -59,6 +59,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
@@ -347,6 +348,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(page.locator("#taskDrawer")).to_be_visible()
         expect(page.locator("#taskDrawer .drawer-crumbs .crumb")).to_have_text(["Family admin"])
 
+        # ------------------------------- closed tasks on demand (#309) ----
+        _walk_closed_on_demand(page, base)
+
         # ---------------------------------------------- story 13 (#87) ----
         _walk_starts_and_snooze(page, base, shots)
 
@@ -380,6 +384,79 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         dark_ctx.close()
 
     _walk_phone_table_cards_and_drawer_sheet(base, playwright, shots)
+
+
+# ------------------------------------------ closed tasks on demand (#309)
+#
+# Riding inside this test because it is the Tree's story and the suite is
+# capped (CLAUDE.md): no shots, the default views are unchanged, so the gallery
+# does not move. It runs in its own context — a cold boot, an empty HTTP cache
+# — so every recorded response is a 200 with a body to read.
+
+def _flatten(nodes: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for n in nodes:
+        out.append(n)
+        out.extend(_flatten(n.get("children") or []))
+    return out
+
+
+def _walk_closed_on_demand(page: Page, base: str) -> None:
+    """The boot no longer ships closed tasks or descriptions; the Tree loads the
+    closed forest only when a closed status is filtered, and only once."""
+    ctx = page.context.browser.new_context(viewport=DESKTOP, color_scheme="light")
+    try:
+        p = ctx.new_page()
+        seen = []
+        p.on("response", lambda r: seen.append(r) if "/api/" in r.url else None)
+
+        def calls(path: str) -> list:
+            return [r for r in seen if urlsplit(r.url).path == path]
+
+        def query(r) -> dict:
+            return parse_qs(urlsplit(r.url).query)
+
+        # 1. The cold boot: open forest, slim list, the project list.
+        p.goto(f"{base}/")
+        expect(p.locator("#homeHeadStatus")).to_have_text(re.compile(r"^\d+ open$"))
+        trees = calls("/api/tasks/tree")
+        assert trees, "the boot read no forest"
+        for r in trees:
+            assert query(r).get("descriptions") == ["false"] and "include_closed" not in query(r), r.url
+            nodes = _flatten(r.json()["items"])
+            assert nodes and all("description" not in n for n in nodes)
+            assert not [n for n in nodes if n["status"] in ("done", "cancelled") and not n["children"]],                 "the boot forest carries a closed leaf"
+        lists = calls("/api/tasks")
+        assert lists, "the boot read no list"
+        for r in lists:
+            assert query(r).get("descriptions") == ["false"], r.url
+            assert all("description" not in t for t in r.json()["items"])
+        assert calls("/api/projects"), "the boot did not read the project list"
+        # the closed tasks are still there for whoever asks: the default shape
+        assert any(t["status"] == "done" for t in _get(base, "/api/tasks?include_closed=true")["items"])
+
+        # 2. The default Tree view pays nothing for them.
+        tree_view(p)
+        expect(p.locator("#paneTable #treeHost .tree")).to_be_visible()
+        closed_calls = lambda: [r for r in calls("/api/tasks/tree") if "include_closed" in query(r)]  # noqa: E731
+        assert closed_calls() == []
+        expect(_trow(p, "Buy a birthday gift", "#paneTable #treeHost")).to_have_count(0)
+
+        # 3. A closed status in the filter loads the closed forest — once — and
+        #    the closed task is on the Tree; the next closed status reuses it.
+        card = _open_filters(p, "tableFilters")
+        status_sel = card.locator(".msel[data-name='status']")
+        status_sel.locator("summary.msel-summary").click()
+        status_sel.locator("input[name='status'][value='done']").check()
+        expect(_trow(p, "Buy a birthday gift", "#paneTable #treeHost")).to_be_visible()
+        # its ancestor is context, not a hole: a done task under an open project
+        expect(_trow(p, "Collect photos", "#paneTable #treeHost")).to_be_visible()
+        assert len(closed_calls()) == 1, [r.url for r in closed_calls()]
+        status_sel.locator("input[name='status'][value='cancelled']").check()
+        expect(_trow(p, "Sell the old bikes", "#paneTable #treeHost")).to_be_visible()
+        assert len(closed_calls()) == 1, [r.url for r in closed_calls()]
+    finally:
+        ctx.close()
 
 
 # ------------------------------------------- recurrence anchor (#112)

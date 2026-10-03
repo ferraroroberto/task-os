@@ -1,6 +1,6 @@
 """Tasks route family — CRUD, tree, move, done, comments, links, issue, activity.
 
-    GET    /api/tasks                    filtered flat list (summaries)
+    GET    /api/tasks                    filtered flat list (summaries); descriptions=false drops them (the boot, #309)
     POST   /api/tasks                    create → 201; with an ``external_id``
                                          (a capture source's own id, #98) the
                                          create is idempotent — a replay gets
@@ -8,6 +8,7 @@
     POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
     POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree); descriptions=false drops them (the boot, #280)
+    GET    /api/projects                 every task with children, closed too: {id, title, depth, status} (#309)
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
     DELETE /api/tasks/{id}               delete the task and its subtree
@@ -264,6 +265,7 @@ def list_tasks(
     done_from: str | None = None,
     done_to: str | None = None,
     include_closed: bool = False,
+    descriptions: bool = True,
     limit: int | None = Query(default=None, ge=1, le=1000),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
@@ -306,6 +308,7 @@ def list_tasks(
         updated_before=updated_before,
         deferred=deferred,
         blocked=blocked,
+        descriptions=descriptions,
     )
     return {"items": items, "count": len(items)}
 
@@ -395,6 +398,11 @@ def tree(
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
     return {"items": repo.tree(db, root, include_closed=include_closed, descriptions=descriptions)}
+
+
+@router.get("/projects")
+def projects(db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    return {"items": repo.projects(db)}
 
 
 # ---------------------------------------------------------------- detail

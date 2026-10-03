@@ -111,9 +111,10 @@ const els = {
 const state = {
   filters: filtersFromSearch(location.search),
   people: [],
-  projects: [],     // [{id, title, depth}] — every task with children, tree order
-  taskIndex: [],    // [{id, title, depth}] — EVERY task, tree order (#100 blocker picker)
-  tree: [],         // /api/tasks/tree?include_closed=true&descriptions=false — the full forest, minus the text only the drawer reads
+  projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
+  taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
+  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned), minus the text only the drawer reads (#309)
+  closedTree: null, // the full forest incl. closed tasks, loaded only while a closed status is filtered (#309); null = not loaded
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
   blocked: [],      // the locked tasks (#100) — same shape as deferred, the Tree only
@@ -221,37 +222,61 @@ async function loadStatus() {
   }
 }
 
-function flattenProjects(forest) {
+/** Every open task, not just projects — the blocker picker (#100) offers any
+ *  open task (a closed blocker gates nothing, #309), unlike Move-to which only
+ *  offers a re-parent target. A closed project kept in the forest for its open
+ *  descendants is context there, not an option. */
+function flattenOpen(forest) {
   const out = [];
   (function walk(nodes) {
     nodes.forEach(function (n) {
-      if (n.children && n.children.length) {
-        out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
-        walk(n.children);
-      }
-    });
-  })(forest);
-  return out;
-}
-
-/** Every task, not just projects — the blocker picker (#100) offers any
- *  task, unlike Move-to which only offers a re-parent target. */
-function flattenAll(forest) {
-  const out = [];
-  (function walk(nodes) {
-    nodes.forEach(function (n) {
-      out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
+      if (!CLOSED[n.status]) out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
       if (n.children && n.children.length) walk(n.children);
     });
   })(forest);
   return out;
 }
 
+const CLOSED_TREE_URL = '/api/tasks/tree?include_closed=true&descriptions=false';
+
+/** The Tree needs closed nodes only when a closed task can be in its `keep`
+ *  set — a done / cancelled status in the filter (#309). */
+function needsClosed(f) {
+  return f.status.some(function (s) { return CLOSED[s]; });
+}
+
+/** The boot reads the open forest plus the project list (closed projects
+ *  included, so the filter and Move-to lose nothing). While a closed status
+ *  is filtered the closed forest rides along, so a write does not flash the
+ *  Tree's loading block — otherwise it loads lazily, see ensureClosedTree. */
 async function loadTree() {
-  const res = await api('/api/tasks/tree?include_closed=true&descriptions=false');
-  state.tree = res.items || [];
-  state.projects = flattenProjects(state.tree);
-  state.taskIndex = flattenAll(state.tree);
+  const calls = [api('/api/tasks/tree?descriptions=false'), api('/api/projects')];
+  if (needsClosed(state.filters)) calls.push(api(CLOSED_TREE_URL).catch(function () { return null; }));
+  const res = await Promise.all(calls);
+  state.tree = res[0].items || [];
+  state.projects = res[1].items || [];
+  state.taskIndex = flattenOpen(state.tree);
+  state.closedTree = res[2] ? (res[2].items || []) : null;   // every write drops the cache
+  closedTreeError = null;
+}
+
+let closedTreeLoading = false;
+let closedTreeError = null;
+
+/** Lazily fetch the closed forest the first time a closed status is
+ *  filtered; renderTreeView shows the loading / error block meanwhile. */
+function ensureClosedTree() {
+  if (closedTreeLoading || state.closedTree) return;
+  closedTreeLoading = true;
+  closedTreeError = null;
+  api(CLOSED_TREE_URL).then(function (res) {
+    state.closedTree = res.items || [];
+  }).catch(function (err) {
+    closedTreeError = err;
+  }).then(function () {
+    closedTreeLoading = false;
+    if (state.tableView === 'tree') renderTablePane();
+  });
 }
 
 /** The shared list: the filters as sent to /api/tasks; when no status is
@@ -268,16 +293,18 @@ async function loadItems() {
   const params = listParams(f);
   const showsDeferred = f.status.indexOf(DEFERRED) >= 0;
   const showsBlocked = f.status.indexOf(BLOCKED) >= 0;
-  const calls = [api('/api/tasks' + qs(params))];
+  // No view reads a description off the list (the drawer fetches its own task), #309.
+  const slim = { descriptions: false };
+  const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
   if (!f.status.length) {
-    calls.push(api('/api/tasks' + qs(Object.assign({}, params, { status: ['done'], done_on: todayISO() }))));
+    calls.push(api('/api/tasks' + qs(Object.assign({}, params, slim, { status: ['done'], done_on: todayISO() }))));
   }
   const deferredCall = showsDeferred
     ? Promise.resolve({ items: [] })   // already the whole list — no second call
-    : api('/api/tasks' + qs(Object.assign({}, params, { status: [DEFERRED] })));
+    : api('/api/tasks' + qs(Object.assign({}, params, slim, { status: [DEFERRED] })));
   const blockedCall = showsBlocked
     ? Promise.resolve({ items: [] })   // already the whole list — no second call
-    : api('/api/tasks' + qs(Object.assign({}, params, { status: [BLOCKED] })));
+    : api('/api/tasks' + qs(Object.assign({}, params, slim, { status: [BLOCKED] })));
   const [results, sleeping, locked] = await Promise.all([Promise.all(calls), deferredCall, blockedCall]);
   const seen = new Set();
   const items = [];
@@ -313,7 +340,7 @@ function pruneSelection() {
 async function refreshAll() {
   try {
     const results = await Promise.all([
-      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1'), api('/api/today'),
+      loadTree(), loadItems(), api('/api/tasks?include_closed=true&limit=1&descriptions=false'), api('/api/today'),
     ]);
     state.total = results[2].count;
     state.plan = results[3].plan || { items: [], done: 0, total: 0 };
@@ -787,7 +814,22 @@ function renderTreeView() {
   const keep = new Set(items.map(function (t) { return t.id; }));
   const byId = {};
   items.forEach(function (t) { byId[t.id] = t; });
-  const n = renderTree(els.treeHost, state.tree,
+  let forest = state.tree;
+  if (needsClosed(state.filters)) {
+    // a closed task can only be drawn if it is a node (#309) — the open forest has none
+    if (!state.closedTree) {
+      ensureClosedTree();
+      els.treeHost.replaceChildren(closedTreeError
+        ? emptyCard('triangle-alert', 'Could not load closed tasks', {
+          actionLabel: 'Retry',
+          onAction: function () { closedTreeError = null; renderTreeView(); },
+        })
+        : emptyCard('refresh-cw', 'Loading closed tasks…'));
+      return;
+    }
+    forest = state.closedTree;
+  }
+  const n = renderTree(els.treeHost, forest,
     { onOpen: openTask, onPatch: patchTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect },
     Object.assign({ keep: keep, byId: byId, sort: state.filters.sort }, selectOpts()));
   if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));

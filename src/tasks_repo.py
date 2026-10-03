@@ -1267,6 +1267,7 @@ def list_tasks(
     updated_before: str | None = None,
     deferred: str | None = None,
     blocked: str | None = None,
+    descriptions: bool = True,
 ) -> list[dict[str, Any]]:
     """Filtered flat list (summaries), ordered due → priority → id.
 
@@ -1324,6 +1325,10 @@ def list_tasks(
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
     top ancestor — the Table's project column) and ``last_comment``.
+    ``descriptions=False`` leaves the ``description`` key off every item: the
+    web app's boot never reads one from the list (the drawer fetches its own
+    task) and it is most of the payload (#309); the default keeps today's
+    shape for the CLI and every other caller.
     """
     where: list[str] = []
     args: list[Any] = []
@@ -1458,6 +1463,9 @@ def list_tasks(
         sql += f" LIMIT {int(limit)}"
     items = _summaries(conn, [dict(r) for r in conn.execute(sql, args).fetchall()])
     _enrich_list(conn, items)
+    if not descriptions:
+        for it in items:
+            it.pop("description", None)
     return items
 
 
@@ -1582,6 +1590,29 @@ def tree(
     node["child_count"] = len(by_parent.get(root_id, []))
     node["is_project"] = node["child_count"] > 0
     return [node]
+
+
+def projects(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Every task that has children — ``{id, title, depth, status}`` in tree order.
+
+    The web app's project filter and *Move to…* list, closed projects
+    included: the boot's forest no longer carries closed tasks (#309), and a
+    project whose children are all closed is a leaf there, so this is the one
+    place that says what a project is (``tree()``'s ``is_project`` rule).
+    """
+    by_parent: dict[int | None, list[sqlite3.Row]] = {}
+    for r in conn.execute("SELECT id, parent_id, title, status FROM tasks ORDER BY id").fetchall():
+        by_parent.setdefault(r["parent_id"], []).append(r)
+    out: list[dict[str, Any]] = []
+
+    def walk(pid: int | None, depth: int) -> None:
+        for r in by_parent.get(pid, []):
+            if r["id"] in by_parent:
+                out.append({"id": r["id"], "title": r["title"], "depth": depth, "status": r["status"]})
+                walk(r["id"], depth + 1)
+
+    walk(None, 0)
+    return out
 
 
 # --------------------------------------------------------------- comments

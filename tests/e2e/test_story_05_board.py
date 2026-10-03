@@ -70,6 +70,7 @@ list and appears in the Board's Done today column.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import timedelta
 from pathlib import Path
@@ -686,6 +687,25 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#journalFilters .filter-desc")).to_contain_text("Family admin")
     page.click("#journalFilters .filter-clear")
     expect(page.locator("#journalHost .trow-project").first).not_to_have_text("Family admin")
+
+    # 5b. The boot forest no longer carries closed tasks (#309), so a project
+    #     whose children are all closed is a leaf there — the filter still
+    #     lists it, because the list comes from /api/projects. The project is
+    #     made and removed here, so the seed (and the gallery) stay as seeded.
+    json_h = {"content-type": "application/json"}
+    shut = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Spent project"}), headers=json_h).json()
+    child = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Spent step", "parent_id": shut["id"]}),
+                              headers=json_h).json()
+    closed = page.request.patch(f"{base}/api/tasks/{child['id']}", data=json.dumps({"status": "done"}), headers=json_h)
+    assert closed.ok, closed.text()
+    page.goto(f"{base}/?_e2e=spent#journal")     # a fresh boot reads /api/projects again
+    _open_filters(page, "journalFilters")
+    listed = [o.strip() for o in page.locator("#journalFilters select[name='project'] option").all_inner_texts()]
+    assert "Spent project" in listed, listed
+    assert page.request.delete(f"{base}/api/tasks/{shut['id']}").ok
+    page.goto(f"{base}/?_e2e=spent-gone#journal")   # the board in memory still held it
+    expect(page.locator("#paneJournal")).to_be_visible()
+    _open_filters(page, "journalFilters")             # …and the card is back as the walk left it
 
     # 6. Older weeks load on demand, down to the seed's first closing day —
     #    and only then does the journal say it has reached the end.
