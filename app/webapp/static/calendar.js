@@ -8,11 +8,16 @@
  *
  * The one rule this module owns: an empty lane never implies a free day. The
  * list is drawn as "No events today" only when the group's state is `ok`;
- * every other state — no calendar connected, the address refused, the server
- * unreachable, no answer in time, a feed that is not a calendar — says so in
- * words, and a good copy kept through a failure is shown with the failure and
+ * every other state — the address refused, the server unreachable, no answer
+ * in time, a feed that is not a calendar — says so in words, and a good copy kept through a failure is shown with the failure and
  * the time it was fetched beside it. Recurring events the server could not
  * expand, and events it could not read, are counted, never hidden.
+ *
+ * No calendar configured is not a state of the lane but its absence (#320):
+ * `calendarLane` answers null and Today's task column takes the width. How to
+ * connect one is the Settings → Calendar card's job, not a column of its own. A
+ * calendar that *is* configured and failing keeps the lane, so a broken feed
+ * stays visible rather than quietly disappearing.
  *
  * Built for every width and hidden below 1024 px by styles.css: the phone
  * skips the lane this pass (#96, out of scope).
@@ -48,9 +53,10 @@ function el(tag, className, text) {
 
 /**
  * @param {object|null} cal  GET /api/today's `calendar` group; null = unknown
- * @returns {HTMLElement}
+ * @returns {HTMLElement|null}  null when no calendar is configured (#320)
  */
 export function calendarLane(cal) {
+  if (cal && (!cal.configured || cal.state === 'off')) return null;
   const lane = el('aside', 'cal-lane');
   lane.setAttribute('aria-label', 'Calendar');
   const head = el('div', 'today-head');
@@ -68,17 +74,6 @@ export function calendarLane(cal) {
     return lane;
   }
   lane.dataset.state = cal.state;
-
-  if (!cal.configured || cal.state === 'off') {
-    meta.textContent = 'off';
-    lane.appendChild(emptyStateEl('calendar-days', 'No calendar connected'));
-    const hint = el('p', 'cal-hint');
-    hint.append('Set ');
-    hint.appendChild(el('code', null, 'calendar.ics_url'));
-    hint.append(' in the config to a private ICS address to see today’s events here.');
-    lane.appendChild(hint);
-    return lane;
-  }
 
   const events = cal.events || [];
   const allDay = cal.all_day || [];

@@ -7,7 +7,9 @@
     never as an empty lane that reads as a free day.
 
 Two disposable instances over the synthetic seed. The plain ``seeded_webapp``
-(blank ``calendar.ics_url``, like every other story) shows the lane **off**.
+(blank ``calendar.ics_url``, like every other story) draws **no lane at all**
+(#320): Today's task column takes the width, and how to connect a calendar is
+the Settings card's job.
 ``calendar_webapp`` points ``calendar.ics_url`` at
 :class:`tests.fixtures.calendar_fake.FakeCalendar` — a loopback server in this
 pytest process serving ``tests/fixtures/calendar/day.ics``, never a real
@@ -19,7 +21,7 @@ the real feed, then a failure *after* a good fetch (the copy stays, marked).
 The four states that need the feed to be broken before anything was fetched
 are asserted in text; the shots are the ones a reader needs to see:
 
-    docs/screenshots/story-28-calendar-1-desktop.png  lane off — no calendar connected
+    docs/screenshots/story-28-calendar-1-desktop.png  no calendar configured — no lane, tasks full width
     docs/screenshots/story-28-calendar-2-desktop.png  address refused, before any copy
     docs/screenshots/story-28-calendar-3-desktop.png  Settings → Calendar after Refresh now
     docs/screenshots/story-28-calendar-4-desktop.png  today's events beside the tasks
@@ -33,6 +35,7 @@ docs/validation/story-28-calendar.md until the owner does it.
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.request
 from collections.abc import Iterator
@@ -92,9 +95,13 @@ def _refresh(base: str) -> tuple[dict, float]:
     return body, time.perf_counter() - started
 
 
-def _open_today(page: Page, base: str) -> None:
+def _go_today(page: Page, base: str) -> None:
     page.goto(f"{base}/")
     page.click("nav.tabs .tab[data-tab='today']")
+
+
+def _open_today(page: Page, base: str) -> None:
+    _go_today(page, base)
     expect(page.locator("#paneToday .cal-lane")).to_be_visible()
 
 
@@ -111,22 +118,29 @@ def _open_calendar_card(page: Page):
 def test_today_calendar_lane(
     seeded_webapp: str, calendar_webapp: CalendarInstance, browser: Browser, shots: Path
 ) -> None:
-    # 1. No calendar connected: the lane is there and says so — with a reason
-    #    in the API, the Settings card and the lane itself.
+    # 1. No calendar configured: no lane (#320) — the reason is in the API and
+    #    the Settings card, where the hint to connect one lives.
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
         assert _get(seeded_webapp, "/api/today")["calendar"]["state"] == "off"
         assert _get(seeded_webapp, "/api/status")["calendar"]["configured"] is False
-        _open_today(page, seeded_webapp)
-        lane = page.locator("#paneToday .cal-lane")
-        expect(lane).to_have_attribute("data-state", "off")
-        expect(lane).to_contain_text("No calendar connected")
-        expect(lane.locator(".cal-counts")).to_have_text("off")
+        _go_today(page, seeded_webapp)
+        expect(page.locator("#paneToday .today-main")).to_be_visible()
+        expect(page.locator("#paneToday .cal-lane")).to_have_count(0)
+        expect(page.locator("#paneToday .today-layout")).not_to_have_class(re.compile(r"has-cal"))
         shot(page, shots / "story-28-calendar-1-desktop.png")
+        # …and at 1280 the task column fills the layout rather than leaving a
+        # lane-sized gap beside it.
+        page.set_viewport_size({"width": 1280, "height": 800})
+        widths = page.locator("#paneToday .today-layout").evaluate(
+            "el => [el.getBoundingClientRect().width, el.firstElementChild.getBoundingClientRect().width]")
+        assert widths[1] >= widths[0] - 1, widths
+        page.set_viewport_size(DESKTOP)
         card = _open_calendar_card(page)
         expect(card.locator("#calendarCardMeta")).to_have_text("off")
         expect(card.locator("#statusCalendar")).to_contain_text("not configured")
+        expect(card).to_contain_text("calendar.ics_url")   # the setup hint lives here
         expect(card.locator("#calendarRefresh")).to_be_disabled()
     finally:
         context.close()

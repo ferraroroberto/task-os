@@ -126,13 +126,18 @@ export function renderToday(host, items, handlers, opts) {
   const cands = planCandidates(items, t);
   host.innerHTML = '';
   const counts = data.counts;
-  // Tasks on the left, the calendar lane on the right (hidden < 1024 px).
+  // Tasks on the left, the calendar lane on the right (hidden < 1024 px) — and
+  // no lane at all, the tasks full width, while no calendar is configured (#320).
   const layout = document.createElement('div');
   layout.className = 'today-layout';
   const main = document.createElement('div');
   main.className = 'today-main';
   layout.appendChild(main);
-  layout.appendChild(calendarLane(o.calendar || null));
+  const lane = calendarLane(o.calendar || null);
+  if (lane) {
+    layout.classList.add('has-cal');
+    layout.appendChild(lane);
+  }
   host.appendChild(layout);
 
   if (plan.items.length || o.planMode) {
