@@ -152,6 +152,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         expect(gear).to_have_attribute("aria-current", "page")
         expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
         _open_palette_from_settings(page, tap=False)
+        _walk_text_size(page, tap=False)
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("#paneSettings")).to_be_hidden()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
@@ -211,6 +212,49 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     press("#paletteCard summary")
 
 
+#: The root font-size each Text size step computes to (text-size.css: 93.75% /
+#: 100% / 112.5% of the 16px default).
+TEXT_STEPS = {"small": 15.0, "default": 16.0, "large": 18.0}
+
+
+def _walk_text_size(page: Page, *, tap: bool) -> None:
+    """Settings' Text size card (#314): the escape from the viewport zoom lock.
+
+    Each step changes the root font-size, the choice is stored and stamped before
+    first paint on reload, an unreadable value falls back to default, and Large
+    does not push any pane past the viewport. Leaves the store clean."""
+    press = page.tap if tap else page.click
+    root_px = lambda: page.evaluate("parseFloat(getComputedStyle(document.documentElement).fontSize)")  # noqa: E731
+    html = page.locator("html")
+    expect(page.locator("#paneSettings")).to_be_visible()
+    assert root_px() == TEXT_STEPS["default"]
+    expect(html).to_have_attribute("data-textsize", "default")
+    press("#textSizeCard summary")
+    expect(page.locator("#textSizeControl")).to_be_visible()
+    if tap:
+        assert_min_target(page.locator("#textSizeControl .range-tab"))
+    for step, px in TEXT_STEPS.items():
+        press(f"#textSizeControl [data-textsize='{step}']")
+        expect(html).to_have_attribute("data-textsize", step)
+        assert root_px() == px, (step, root_px())
+        expect(page.locator(f"#textSizeControl [data-textsize='{step}']")).to_have_attribute("aria-pressed", "true")
+        expect(page.locator("#textSizeControl .range-tab.active")).to_have_count(1)
+        expect(page.locator("#textSizeMeta")).to_have_text(step.capitalize())
+        assert_no_horizontal_overflow(page)
+    # Large is the last step taken: it is stored, and the next load already wears it.
+    assert page.evaluate("localStorage.getItem('task-os.textsize')") == "large"
+    page.reload()
+    expect(html).to_have_attribute("data-textsize", "large")
+    assert root_px() == TEXT_STEPS["large"]
+    assert_no_horizontal_overflow(page)       # the landing pane at Large
+    # …and anything that is not a step falls back to default instead of sticking.
+    page.evaluate("localStorage.setItem('task-os.textsize', 'enormous')")
+    page.reload()
+    expect(html).to_have_attribute("data-textsize", "default")
+    assert root_px() == TEXT_STEPS["default"]
+    page.evaluate("localStorage.removeItem('task-os.textsize')")
+
+
 # ------------------------------------------------------------- phone leg
 
 def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> None:
@@ -250,6 +294,7 @@ def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> No
         page.tap("#settingsBtn")
         assert_min_target(page.locator("#paletteCard summary"))
         _open_palette_from_settings(page, tap=True)
+        _walk_text_size(page, tap=True)
         context.close()
     finally:
         wk.close()

@@ -12,6 +12,27 @@
   <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
   <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" href="/static/icons/icon-512.png">
+  <!-- Pre-paint stamp (vendored text-size/text-size-boot.html; the `app` prefix is the
+       one per-app edit): html[data-theme] from task-os.theme, else the OS scheme
+       (design.md "Theme switching"); html[data-textsize] from task-os.textsize, else
+       default (design.md "Text size"). Inline and before any stylesheet, so there is
+       no flash and no reflow. -->
+  <script>
+    (function () {
+      var app = 'task-os';
+      var root = document.documentElement;
+      var theme = null;
+      var size = null;
+      try {
+        theme = localStorage.getItem(app + '.theme');
+        size = localStorage.getItem(app + '.textsize');
+      } catch (e) {}
+      var dark = theme ? theme === 'dark'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.dataset.theme = dark ? 'dark' : 'light';
+      root.dataset.textsize = size === 'small' || size === 'large' ? size : 'default';
+    })();
+  </script>
   <!-- Vendored fleet components (project-scaffolding _vendored/, byte-for-byte;
        recorded in .fleet.toml [vendored]). home-head.css must load AFTER
        card.css — it overrides the card's padding for the 52px header row. -->
@@ -24,18 +45,11 @@
   <link rel="stylesheet" href="/static/_vendored/empty-state/empty-state.css">
   <link rel="stylesheet" href="/static/_vendored/select-native/select-native.css">
   <link rel="stylesheet" href="/static/_vendored/switch/switch.css">
+  <link rel="stylesheet" href="/static/_vendored/range-tab/range-tab.css">
+  <link rel="stylesheet" href="/static/_vendored/text-size/text-size.css">
   <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
   <link rel="stylesheet" href="/static/styles.css">
   <title>task-os</title>
-  <script>
-    // Pre-paint theme stamp (design.md "Theme switching"): localStorage
-    // override, prefers-color-scheme fallback — before first paint, no flash.
-    (function () {
-      var t = localStorage.getItem('task-os.theme');
-      var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    })();
-  </script>
 </head>
 <body>
   <!-- Lucide sprite — the per-app trim of _vendored/icons/icons-sprite.html.
@@ -575,6 +589,27 @@
                 Open command palette
               </button>
             </div>
+          </div>
+        </details>
+        <!-- Text size (#314): the escape from the viewport zoom lock (WCAG 1.4.4). The
+             vendored text-size control on the vendored range-tab row; text-size.js
+             persists the step to task-os.textsize and stamps html[data-textsize]. -->
+        <details class="card card--collapsible settings-card" id="textSizeCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
+              <h3 class="collapse-title">Text size</h3>
+              <span class="collapse-count" id="textSizeMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">Scales the text on this device. Rows, buttons and icons keep their size.</p>
+            <nav class="range-tabs" id="textSizeControl" aria-label="Text size">
+              <button type="button" class="range-tab" data-textsize="small">Small</button>
+              <button type="button" class="range-tab" data-textsize="default">Default</button>
+              <button type="button" class="range-tab" data-textsize="large">Large</button>
+            </nav>
           </div>
         </details>
         <!-- Phone access (Step 7): how this connection came in and what the
