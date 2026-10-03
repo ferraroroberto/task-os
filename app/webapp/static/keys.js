@@ -10,35 +10,22 @@
  * selection. The Tree is deliberately not a target: its keyboard model is
  * navigation-first (↑↓→← Enter) and stays that way.
  *
- * ONE table drives three surfaces. `ACTIONS` below is read by the keydown
- * handler, by the shortcuts sheet, and by the command palette (`commands()`,
- * which is how the keys are *visible* rather than folklore) — a key added
- * here shows up in all three or in none.
- *
- * Every write goes through POST /api/tasks/bulk, one id or fifty: the bulk
- * endpoint runs each id through the same repo path as a single-task edit
- * (activity row, recurrence roll, mirror hook), so one write path covers both
- * targets instead of two that must agree.
- *
- * Undo is the inverse write, not a client-side rollback: the server logs the
- * reversal as its own `new → old` activity row, which is the only version of
- * "undone" that survives a reload. It is single-level and expires with its
- * toast (`ACTION_TTL_MS`) — the offer on screen and the buffer in memory are
- * the same window, so `z` can never quietly revive a change scrolled past ten
- * minutes ago.
+ * The actions themselves, their one write path and the undo live in
+ * actions.js (#311), which the row's own controls read too. This file owns
+ * what is keyboard-only: which row a key means, putting focus back after the
+ * write, the snooze popover a key opens, the shortcuts sheet, and the palette
+ * entries (`commands()`, which is how the keys are *visible* rather than
+ * folklore) — a key added to the table shows up in all three or in none.
  */
 
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { fmtDay } from './format.js';
+import { ACTIONS } from './actions.js';
 import * as selection from './selection.js';
 import { snoozeMenu } from './snooze.js';
-import { ACTION_TTL_MS, toast } from './toast.js';
+import { toast } from './toast.js';
 
-/** Ascending, wrapping at the top — one press always moves, `none` included. */
-const PRIORITIES = ['none', 'low', 'medium', 'high'];
-const STATUS_KEYS = [['1', 'inbox'], ['2', 'todo'], ['3', 'standby']];
 /** A task row in a view whose rows are action targets. */
 const ROW = '.trow[data-id], tr.task-row[data-id]';
 /** The Tree keeps its own ↑↓→← outline walk, so its rows take no action key.
@@ -47,103 +34,6 @@ const NOT_A_TARGET = '#treeHost';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
 const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .msel, .folder-picker, .toast, .bulk-bar';
 
-// ------------------------------------------------------------- grouping
-/** `[{ids, changes}]` for one shared change. */
-function oneGroup(tasks, changes) {
-  return tasks.length ? [{ ids: tasks.map(function (t) { return t.id; }), changes: changes }] : [];
-}
-
-/**
- * Group tasks by what `fields` currently hold — the shape both the undo of
- * any action and the priority cycle need, because both apply a *different*
- * value per task and the endpoint takes one value per call.
- */
-function groupByCurrent(tasks, fields, valueFor) {
-  const out = new Map();
-  tasks.forEach(function (t) {
-    const changes = {};
-    fields.forEach(function (f) { changes[f] = valueFor ? valueFor(t, f) : (t[f] == null ? null : t[f]); });
-    const key = JSON.stringify(changes);
-    if (!out.has(key)) out.set(key, { ids: [], changes: changes });
-    out.get(key).ids.push(t.id);
-  });
-  return Array.from(out.values());
-}
-
-function nextPriority(p) {
-  const i = PRIORITIES.indexOf(p || 'none');
-  return PRIORITIES[(i < 0 ? 0 : i + 1) % PRIORITIES.length];
-}
-
-// -------------------------------------------------------------- actions
-/**
- * The keymap. Each action declares:
- *   plan(tasks, arg)   → the groups to write
- *   invert(tasks, arg) → the groups that put the prior values back
- *   message(tasks, arg)→ what the toast says (the count is prefixed by the caller)
- * `menu: true` means the action asks for a value first (snooze) and commits
- * from the popover instead of straight away.
- */
-export const ACTIONS = [
-  {
-    id: 'complete', key: 'e', kbd: 'E', icon: 'circle-check',
-    label: 'Complete task', hint: 'a recurring task rolls to its next date',
-    plan: function (tasks) { return oneGroup(tasks, { status: 'complete' }); },
-    invert: function (tasks) {
-      // The roll moved `due` and left the status alone (tasks_repo.done); a
-      // plain task closed instead. Two inverses, one per kind of task.
-      const rolled = tasks.filter(function (t) { return t.recurrence; });
-      const closed = tasks.filter(function (t) { return !t.recurrence; });
-      return groupByCurrent(rolled, ['due']).concat(groupByCurrent(closed, ['status']));
-    },
-    message: function () { return 'Completed'; },
-  },
-  {
-    id: 'due-tomorrow', key: 't', kbd: 'T', icon: 'calendar-days',
-    label: 'Due tomorrow', hint: null,
-    plan: function (tasks) { return oneGroup(tasks, { due: 'tomorrow' }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
-    message: function () { return 'Due tomorrow'; },
-  },
-  {
-    id: 'due-next-week', key: 'w', kbd: 'W', icon: 'calendar-days',
-    label: 'Due next week', hint: null,
-    plan: function (tasks) { return oneGroup(tasks, { due: 'next week' }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
-    message: function () { return 'Due next week'; },
-  },
-  {
-    id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: true,
-    label: 'Snooze…', hint: 'tomorrow · this weekend · next week · a date',
-    plan: function (tasks, phrase) { return oneGroup(tasks, { starts: phrase }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['starts']); },
-    message: function (tasks) {
-      const s = tasks.length === 1 ? tasks[0].starts : null;
-      return s ? 'Snoozed to ' + fmtDay(s) : 'Snoozed';
-    },
-  },
-  {
-    id: 'priority', key: 'p', kbd: 'P', icon: 'activity',
-    label: 'Cycle priority', hint: 'none → low → medium → high, each task from its own',
-    plan: function (tasks) {
-      return groupByCurrent(tasks, ['priority'], function (t) { return nextPriority(t.priority); });
-    },
-    invert: function (tasks) { return groupByCurrent(tasks, ['priority']); },
-    message: function (tasks) {
-      return tasks.length === 1 ? 'Priority ' + nextPriority(tasks[0].priority) : 'Priority cycled';
-    },
-  },
-];
-
-STATUS_KEYS.forEach(function (pair) {
-  ACTIONS.push({
-    id: 'status-' + pair[1], key: pair[0], kbd: pair[0], icon: 'circle-dot',
-    label: 'Status: ' + pair[1], hint: null,
-    plan: function (tasks) { return oneGroup(tasks, { status: pair[1] }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['status']); },
-    message: function () { return 'Status ' + pair[1]; },
-  });
-});
 
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
 const GETTING_AROUND = [
@@ -157,17 +47,16 @@ const GETTING_AROUND = [
 // ---------------------------------------------------------------- mount
 /**
  * @param {HTMLDialogElement} helpDialog   the (empty) shortcuts sheet shell
- * @param {{write: (ids:number[], changes:object) => Promise<any>,
- *          refresh: () => Promise<any>,
+ * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          resolveTask: (id:number) => Promise<object|null>,
  *          isBlocked: () => boolean}} handlers
- *        `write` is one POST /api/tasks/bulk; `isBlocked` is true while
- *        something else owns the keyboard (the drawer).
+ *        `actions` is the app's one runner (actions.js); `isBlocked` is true
+ *        while something else owns the keyboard (the drawer).
  * @returns {{commands: () => Array<object>, openHelp: () => void}}
  */
 export function mountKeys(helpDialog, handlers) {
-  let undo = null;          // {groups, at, label} — one level, expires with its toast
-  let busy = false;         // one action at a time; a held key must not double-post
+  const actions = handlers.actions;
+  let resolving = false;    // a key's tasks are being looked up; a held key must not double-post
   let lastRowId = null;     // the row that had focus before the palette took it
   let pop = null;           // the open snooze popover, if any
 
@@ -209,6 +98,11 @@ export function mountKeys(helpDialog, handlers) {
     el.scrollIntoView({ block: 'nearest' });
   }
 
+  /** The runner's options for a write whose focus belongs back on `rec`. */
+  function refocus(rec) {
+    return { afterRefresh: function () { restoreFocus(rec); } };
+  }
+
   /** The row the palette should act on: the live focus, else the last one. */
   function rememberedRow() {
     const live = rowOf(document.activeElement);
@@ -232,72 +126,8 @@ export function mountKeys(helpDialog, handlers) {
     return { ids: [Number(row.dataset.id)], row: row };
   }
 
-  // ------------------------------------------------------------- writing
-  async function writeGroups(groups) {
-    let updated = 0;
-    const failed = [];
-    const okIds = new Set();
-    for (const g of groups) {
-      if (!g.ids.length) continue;
-      let res;
-      try {
-        res = await handlers.write(g.ids, g.changes);
-      } catch (err) {
-        g.ids.forEach(function (id) { failed.push({ id: id, message: err.message || 'failed' }); });
-        continue;
-      }
-      (res.results || []).forEach(function (r) {
-        if (r.ok) { updated += 1; okIds.add(r.id); } else {
-          failed.push({ id: r.id, message: (r.error && r.error.message) || 'failed' });
-        }
-      });
-    }
-    return { updated: updated, failed: failed, okIds: okIds };
-  }
-
-  function failureText(out) {
-    const first = out.failed[0];
-    return out.updated + ' updated · ' + out.failed.length + ' failed (#' + first.id + ': ' + first.message + ')';
-  }
-
-  /** Write, refresh, put focus back, say what happened, arm the undo. */
-  async function commit(action, tasks, arg, rec) {
-    const out = await writeGroups(action.plan(tasks, arg));
-    await handlers.refresh();
-    restoreFocus(rec);
-    if (out.failed.length) {
-      toast(failureText(out), 'error');
-      undo = null;                       // a half-applied change is not one thing to undo
-      return;
-    }
-    // Only the tasks that actually changed are worth putting back.
-    const done = tasks.filter(function (t) { return out.okIds.has(t.id); });
-    const message = action.message(done.length ? done : tasks, arg);
-    const label = tasks.length > 1 ? tasks.length + ' tasks · ' + message.toLowerCase() : message;
-    undo = { groups: action.invert(done, arg), at: Date.now(), label: message.toLowerCase() };
-    toast(label, 'success', { label: 'Undo (Z)', onClick: runUndo });
-  }
-
-  async function runUndo() {
-    if (!undo || Date.now() - undo.at > ACTION_TTL_MS) {
-      toast('Nothing to undo — the last change is out of the undo window', 'error');
-      return;
-    }
-    if (busy) return;
-    busy = true;
-    const groups = undo.groups;
-    const label = undo.label;
-    undo = null;                          // single level: no undoing the undo
-    const rec = focusRecord(rowOf(document.activeElement));
-    try {
-      const out = await writeGroups(groups);
-      await handlers.refresh();
-      restoreFocus(rec);
-      if (out.failed.length) toast(failureText(out), 'error');
-      else toast('Undone — ' + label, 'success');
-    } finally {
-      busy = false;
-    }
+  function runUndo() {
+    return actions.undo(refocus(focusRecord(rowOf(document.activeElement))));
   }
 
   // -------------------------------------------------------- snooze popover
@@ -316,8 +146,7 @@ export function mountKeys(helpDialog, handlers) {
     pop.className = 'snooze-pop';
     pop.appendChild(snoozeMenu(tasks[0], function (phrase) {
       closePop();
-      busy = true;
-      commit(action, tasks, phrase, rec).finally(function () { busy = false; });
+      actions.run(action, tasks, phrase, refocus(rec));
     }));
     document.body.appendChild(pop);
     // The menu takes focus, so the row loses its :focus-within tint just as
@@ -333,31 +162,31 @@ export function mountKeys(helpDialog, handlers) {
 
   // ------------------------------------------------------------ perform
   async function perform(action, source) {
-    if (busy || pop) return;
+    if (resolving || pop || actions.isBusy()) return;
     const tgt = target(source);
     if (!tgt) {
       toast('Focus a task row first — Tab moves between rows, ? lists the keys', 'error');
       return;
     }
     const rec = focusRecord(tgt.row);
-    busy = true;
+    resolving = true;
+    let tasks;
     try {
       const resolved = await Promise.all(tgt.ids.map(function (id) { return handlers.resolveTask(id); }));
-      const tasks = resolved.filter(Boolean);
-      if (!tasks.length) {
-        toast('That task is no longer on the list', 'error');
-        return;
-      }
-      if (action.menu) {
-        openSnooze(action, tasks, rec, tgt.row || document.querySelector('.bulk-bar:not([hidden])'));
-        return;
-      }
-      await commit(action, tasks, undefined, rec);
+      tasks = resolved.filter(Boolean);
     } finally {
-      // The popover path releases the lock here and re-takes it when it
-      // commits; while it is up, `pop` is what blocks a second action.
-      busy = false;
+      resolving = false;
     }
+    if (!tasks.length) {
+      toast('That task is no longer on the list', 'error');
+      return;
+    }
+    // While the popover is up, `pop` is what blocks a second action.
+    if (action.menu) {
+      openSnooze(action, tasks, rec, tgt.row || document.querySelector('.bulk-bar:not([hidden])'));
+      return;
+    }
+    await actions.run(action, tasks, undefined, refocus(rec));
   }
 
   // --------------------------------------------------------- help sheet
@@ -504,7 +333,7 @@ export function mountKeys(helpDialog, handlers) {
       }).concat([{
         id: 'key-undo',
         label: 'Undo the last change',
-        hint: undo ? undo.label : 'nothing to undo',
+        hint: actions.undoLabel() || 'nothing to undo',
         icon: 'rotate-ccw',
         kbd: 'Z',
         run: runUndo,
