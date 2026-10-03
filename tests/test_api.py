@@ -663,3 +663,45 @@ def test_slim_tree_is_much_smaller_for_long_descriptions(client: TestClient) -> 
     full = client.get("/api/tasks/tree").content
     slim = client.get("/api/tasks/tree?descriptions=false").content
     assert len(slim) * 4 < len(full)
+
+
+# ------------------------- closed tasks on demand at boot (#309)
+
+def test_list_descriptions_are_opt_out_and_default_unchanged(client: TestClient) -> None:
+    """The boot list never reads a description either; the default shape (the
+    CLI's, every other caller's) keeps it."""
+    client.post("/api/tasks", json={"title": "Has text", "description": "long " * 50})
+
+    full = client.get("/api/tasks").json()["items"]
+    assert full[0]["description"] == "long " * 50
+
+    slim = client.get("/api/tasks?descriptions=false").json()["items"]
+    assert "description" not in slim[0]
+    assert {"id", "title", "status", "breadcrumb", "last_comment", "comment_count"} <= set(slim[0])
+
+
+def test_projects_lists_every_task_with_children_closed_ones_too(client: TestClient) -> None:
+    """A project whose children are all closed is a leaf in the open forest, so
+    the filter and Move-to read this list instead."""
+    open_p = client.post("/api/tasks", json={"title": "Open project"}).json()["id"]
+    client.post("/api/tasks", json={"title": "Open child", "parent_id": open_p})
+    sub = client.post("/api/tasks", json={"title": "Sub project", "parent_id": open_p}).json()["id"]
+    client.post("/api/tasks", json={"title": "Deep", "parent_id": sub})
+    shut = client.post("/api/tasks", json={"title": "Shut project"}).json()["id"]
+    kid = client.post("/api/tasks", json={"title": "Shut child", "parent_id": shut}).json()["id"]
+    client.post("/api/tasks", json={"title": "Plain leaf"})
+    client.patch(f"/api/tasks/{kid}", json={"status": "done"})
+    client.patch(f"/api/tasks/{shut}", json={"status": "done"})
+
+    items = client.get("/api/projects").json()["items"]
+    assert [(p["title"], p["depth"], p["status"]) for p in items] == [
+        ("Open project", 0, "todo"),
+        ("Sub project", 1, "todo"),
+        ("Shut project", 0, "done"),
+    ]
+    assert set(items[0]) == {"id", "title", "depth", "status"}
+
+    # the open forest no longer shows the closed project's child — the reason
+    # /api/projects exists
+    titles = [n["title"] for n in client.get("/api/tasks/tree?descriptions=false").json()["items"]]
+    assert "Shut project" not in titles

@@ -145,6 +145,12 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         blocked_sec = drawer.locator(".drawer-blocked")
         expect(blocked_sec.locator(".drawer-none")).to_have_text("Not blocked by anything.")
         sel_a = blocked_sec.locator(".blocker-form select")
+        # The picker offers open tasks only (#309): a done blocker gates nothing,
+        # so the boot no longer ships the closed tasks to offer.
+        offered = [o.strip() for o in sel_a.locator("option").all_inner_texts()]
+        assert "Cycle B" in offered and "Release v0.2" in offered, offered
+        assert offered[0] == "pick a task…", offered
+        assert not {"Order sensor", "Collect photos", "Buy a birthday gift"} & set(offered), offered
         sel_a.select_option(label="Cycle B")
         expect(sel_a).to_have_value(str(b_id))
         blocked_sec.locator(".blocker-form button[type='submit']").click()
