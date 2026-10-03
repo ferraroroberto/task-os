@@ -60,6 +60,7 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     desktop = browser.new_context(viewport=DESKTOP, color_scheme="light")
     page: Page = desktop.new_page()
     page.goto(base + "/")
+    page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
     expect(page.locator("#paneBoard")).to_be_visible()
 
     triage = page.locator(".board-col[data-col='inbox'] .board-triage")

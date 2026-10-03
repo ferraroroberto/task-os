@@ -6,7 +6,7 @@
     the link, no buttons — #48) → open a task from its row → the drawer
     beside the results → a folder hit's title hands its ref to the opener →
     ↓ ↓ Enter walks the rows → Ctrl+K → type a word → Enter opens the task →
-    `>` lists the commands → "Go to Board" switches the tab. On the phone the
+    `>` lists the commands, Today first as in the nav → "Go to Board" switches the tab. On the phone the
     same box and the palette as a full-width sheet.
 
 Walks the story against a **disposable seeded instance** whose four indexes
@@ -227,10 +227,12 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(palette).to_be_visible()
     pin.fill(">go to")
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
-    expect(cmds.first).to_contain_text("Go to Board")
+    expect(cmds.first).to_contain_text("Go to Today")   # nav order: Today leads (#319)
     # one per nav destination — five since #161 folded the Tree into the Table
     assert cmds.count() >= 5
     shot(page, shots / "story-10-search-5-desktop.png")
+    pin.fill(">go to board")
+    expect(cmds.first).to_contain_text("Go to Board")
     pin.press("Enter")
     expect(palette).to_be_hidden()
     expect(page.locator("#paneBoard")).to_be_visible()

@@ -66,7 +66,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         # 1. Settings → Sync now (the header carries no sync button since #301) →
         #    back on the Board, the two issues without a task are coding tasks in To do.
         page.goto(f"{base}/")
-        expect(page.locator("#paneBoard")).to_be_visible()
+        expect(page.locator("#paneToday")).to_be_visible()   # the landing tab (#319)
         expect(page.locator(".home-head #issuesSync")).to_have_count(0)
         _sync_now(page)
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
