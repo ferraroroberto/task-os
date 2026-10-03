@@ -1028,7 +1028,7 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
 # and handed to the app late — the order the network does not promise (#321).
 # In the page, not a Playwright route: a route handler that sleeps is a callback
 # in flight, and one still sleeping when the context closes fails the teardown.
-_HOLD_LIST_READS = """() => {
+_HOLD_LIST_READS = r"""() => {
   const real = window.fetch.bind(window);
   const hold = window.__hold = {on: false, held: 0, delivered: 0};
   window.fetch = function (input, init) {
