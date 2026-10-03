@@ -20,12 +20,12 @@ allowed on screen). What a browser can prove of the story:
 - a 430-wide leg (the larger phones) of the same carousel;
 - the vendored geometry contract at 320 / 390 / 430 / 772: no horizontal
   overflow, ≥ 44 px targets on the nav pill + the column strip;
-- a row's three meta-line tap targets (#107) — the due chip (which opens the
-  date picker), the folder and the AI conversation: none of them sharing a
-  pixel with another (also against `.trow-main` and `.trow-status`, #110),
-  all real 44px boxes (#301, the row budget raised to two 44px lines) inside
-  their own card and still inside the ≤96px row ceiling, and — on Tree, at
-  320/390/430/772 — the same trio not wrapping apart onto separate meta lines;
+- the slim row's tap targets (#311): the completion circle, the open target and
+  the kebab — real 44px boxes that share no pixel, the kebab at the row's right
+  edge, the whole row ≤ 61px — while the date, folder and AI conversation on its
+  meta line are passive (no button, no link); the date is changed through the
+  kebab's "Change date" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
+  and — on Tree, at 320/390/430/772 — the same three still apart;
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
   comes back and the shell loads. The non-loopback gate itself is unit-level
@@ -41,7 +41,7 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-6-phone.png    Board carousel at 430 wide
     docs/screenshots/story-07-phone-7-phone.png    /login on the phone
     docs/screenshots/story-07-phone-8-desktop.png  /login on the desktop
-    docs/screenshots/story-07-phone-9-phone.png    a row's three tap targets (#107)
+    docs/screenshots/story-07-phone-9-phone.png    a slim row's tap targets (#311)
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -109,25 +109,19 @@ def authed_webapp() -> Iterator[str]:
 
 
 def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
-    """The row's three tap targets on a phone: due chip · folder · AI (#107, #110).
+    """The slim row's tap targets on a phone: done circle · open · kebab (#311, #107).
 
-    Re-planning is the most frequent thing done while reading a list, so the
-    date on the row IS the picker's trigger — one tap, no drawer, no text box.
-    That makes three targets on one meta line, and the contract is that no two
-    of them share a pixel: before #107 the folder and the AI glyph overlapped
-    by 16px (two 18px glyphs, 13px of expansion each side, 10px of column gap),
-    so a tap just right of the folder opened the conversation instead. Before
-    #110 the folder/AI pair's upward expansion also reached past the title/
-    meta gap into `.trow-main` — the row-open target — on every row that
-    carried either chip, at every width and tab; that check is folded in below
-    against `.trow-main`/`.trow-status` too, not just the pair against itself.
+    The row is `[circle] [title + one passive meta line] [kebab]`. The date,
+    folder and AI conversation on the meta line are plain spans — nothing on it
+    is a button or a link, so a tap anywhere in the middle opens the drawer and
+    the three real targets (the circle, the open button, the kebab) can never
+    share a pixel with a meta chip. Re-planning stays one menu away: the kebab's
+    "Change date" opens the shared date picker, which on a coarse pointer is the
+    `dialog#dateDialog` sheet (the phone's own surface, not the desktop popover).
 
     The row it measures is built here rather than borrowed from the seed, and
-    deliberately bare — a date, a folder, an AI link and **nothing after them**,
-    so all three land side by side on one line. No seeded row carries all three
-    (and the seeded ones that carry two also carry comments or a person, which
-    pushes them apart), so the tight case would otherwise go unmeasured.
-    Deleted again at the end.
+    deliberately bare — a date, a folder and an AI link, so the meta line is as
+    full as a real row's gets. Deleted again at the end.
     """
     # Build the row *before* the only navigation: `page.request` talks to the
     # instance directly and needs no loaded document, and loading the app twice
@@ -148,47 +142,47 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         page.locator("nav.tabs .tab[data-tab='table']").tap()
         row = page.locator(f"#paneTable .trow[data-id='{task['id']}']")
         expect(row).to_be_visible()
-        chip = row.locator(".trow-due")
-        expect(chip).to_have_count(1)
-        assert chip.evaluate("el => el.tagName") == "BUTTON", "the date is not a control"
-        # the look is untouched: no pill, no fill, no border — only the
-        # invisible ::before grew (the folder's rule, applied to the date)
-        skin = chip.evaluate("el => { const cs = getComputedStyle(el);"
-                             " return [cs.backgroundColor, cs.borderTopWidth, cs.padding]; }")
-        assert skin[0] in ("rgba(0, 0, 0, 0)", "transparent") and skin[1] == "0px" and skin[2] == "0px", skin
-        targets = row.locator(".trow-due, .trow-folder, .trow-ai")
+        # the meta line is passive: date, folder and AI are glyph/text spans
+        meta = row.locator(".trow-meta")
+        expect(meta.locator(".trow-due")).to_have_count(1)
+        expect(meta.locator(".trow-folder")).to_have_attribute("title", "Folder {user}/code/garden-bot")
+        expect(meta.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
+        expect(meta.locator("button, a")).to_have_count(0)
+        assert row.locator(".trow-due").evaluate("el => el.tagName") != "BUTTON", "the date is a control again"
+        # the three real targets: 44px boxes that share no pixel, inside the card
+        targets = row.locator(".trow-done, .trow-main, .trow-kebab")
         expect(targets).to_have_count(3)
-        # the folder/AI pair against each other (#107's other half) AND each
-        # of the three against `.trow-main` (the row-open target) and
-        # `.trow-status` (#110) — the pair not overlapping itself says
-        # nothing about whether it reaches past the title into main.
-        assert_no_overlap(row.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
-        # #301: all three are real 44px boxes now — the folder and AI glyphs
-        # 44x44, the date 44 tall by its own text width (and at least 44 wide) —
-        # so the expansions #107/#110 traded against the ≤96px row budget are
-        # gone with the budget: the row grew to two 44px lines instead.
-        for t in effective_rects(targets):
-            assert t.effective.width >= 44 and t.effective.height >= 44, t
-        assert_min_target(targets)
-        # …and every one of them stays inside its own card, so none steals a
-        # tap from the row below (the #74 rule, now for three targets).
+        assert_no_overlap(targets)
+        assert_min_target(row.locator(".trow-done, .trow-kebab"))
         box = row.bounding_box()
+        assert box
         for t in effective_rects(targets):
+            assert t.effective.height >= 44, t
             assert t.effective.top >= box["y"] - 0.5, (t, box)
             assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
-        # two 44px lines and a hairline (#301), still inside the old ≤96px ceiling
-        assert 86 <= row.bounding_box()["height"] <= 96, row.bounding_box()
+        # one title line + one meta line and a hairline (<= 61px), the kebab at the right edge
+        assert box["height"] <= 61, box
+        kebab_box = row.locator(".trow-kebab").bounding_box()
+        assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
         shot(page, shots / "story-07-phone-9-phone.png")
 
-        # tapping it opens the picker: on a coarse pointer that is the reveal-
-        # and-click fallback (#50), since showPicker() opens nothing on touch
-        chip.tap()
-        expect(row.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
-        assert not page.locator("#taskDrawer").is_visible(), "the date tap opened the drawer"
-        # picking a day commits it — the row re-renders on the new date
+        # the date is changed through the kebab -> "Change date": on a coarse
+        # pointer that is the dialog sheet, and its "Pick a date..." is the
+        # reveal-and-click fallback (#50), since showPicker() opens nothing on touch
+        row.locator(".trow-kebab").tap()
+        page.locator(".row-menu [data-action='change-date']").tap()
+        sheet = page.locator("dialog#dateDialog")
+        expect(sheet).to_be_visible()
+        expect(sheet.locator("h2")).to_have_text("Change date")
+        expect(page.locator(".snooze-pop")).to_have_count(0)
+        assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
+        sheet.locator(".snooze-pick").tap()
+        expect(sheet.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
+        # picking a day commits it - the row re-renders on the new date
         new_due = (E2E_ANCHOR + timedelta(days=5)).isoformat()
-        row.locator(".due-date").evaluate(
+        sheet.locator(".due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
+        expect(sheet).to_be_hidden()
         expect(page.locator(f"#paneTable .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
             "title", new_due)
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
@@ -256,8 +250,8 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
         added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
         expect(added).to_be_visible()
-        # todo: the hand-made default (#148). The ONE row: status select on the line.
-        expect(added.locator(".trow-status")).to_have_value("todo")
+        # todo: the hand-made default (#148); the row carries it as data-status.
+        expect(added).to_have_attribute("data-status", "todo")
         new_id = int(added.get_attribute("data-id"))
         detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
         assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
@@ -290,53 +284,38 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #74 → #301: on the phone the row's folder chip is its bare glyph (the
-        # ref ellipsized at 180px said nothing) in a real 44x44 box — no
-        # invisible expansion, because three of these sit side by side and
-        # boxes that share a pixel make a tap a coin toss — and the row is two
-        # 44px lines: the open target and the status select on the first, the
-        # meta line's targets on the second.
-        fchip = kitchen.locator(".trow-meta .chip-folder")
-        expect(fchip).to_be_visible()
-        expect(fchip.locator(".chip-label")).to_be_hidden()
-        assert "{onedrive}/house/kitchen" in (fchip.get_attribute("aria-label") or "")
-        assert_min_target(fchip, 44.0)
+        # #311: on the phone the row's folder is a passive glyph on the meta line
+        # (the ref says nothing at that size, so it lives in the title attribute);
+        # the row's targets are the circle, the open button and the kebab.
+        fglyph = kitchen.locator(".trow-meta .trow-folder")
+        expect(fglyph).to_be_visible()
+        assert "{onedrive}/house/kitchen" in (fglyph.get_attribute("title") or "")
+        expect(kitchen.locator(".trow-meta button, .trow-meta a")).to_have_count(0)
         # One glyph size on the meta line: the folder reads no heavier than the
         # calendar or the repeat arrows beside it (round 2 of #74).
         sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect();"
             " return [Math.round(r.width), Math.round(r.height)]; })")
         assert sizes and all(sz == [16, 16] for sz in sizes), sizes
-        # The 44px box is INVISIBLE (no fill, no border - the accent glyph is the
-        # whole affordance) and stays inside this card: a target that reached
-        # into the next row would steal that row's taps.
-        skin = fchip.evaluate(
-            "el => { const cs = getComputedStyle(el);"
-            " return { bg: cs.backgroundColor, border: cs.borderTopColor,"
-            "  before: getComputedStyle(el, '::before').content }; }")
-        assert skin["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), skin
-        assert skin["border"] in ("rgba(0, 0, 0, 0)", "transparent"), skin
-        assert skin["before"] in ("none", "normal"), skin     # real geometry, no expansion left over
-        fbox = fchip.bounding_box()
-        row_box = kitchen.bounding_box()
-        assert fbox and row_box
-        assert fbox["y"] >= row_box["y"] - 0.5, (fbox, row_box)
-        assert fbox["y"] + fbox["height"] <= row_box["y"] + row_box["height"] + 0.5, (fbox, row_box)
-        sel = kitchen.locator(".trow-status")
         # ONE locator, so every rect is measured in a single evaluate_all:
         # the Board is a scroll-snapping carousel and two separate
         # measurements can land at different scroll offsets.
-        assert_no_overlap(kitchen.locator(".trow-meta .chip-folder, .trow-status, .trow-main"))
+        row_targets = kitchen.locator(".trow-done, .trow-main, .trow-kebab")
+        expect(row_targets).to_have_count(3)
+        assert_no_overlap(row_targets)
+        assert_min_target(kitchen.locator(".trow-done, .trow-kebab"))
+        row_box = kitchen.bounding_box()
+        assert row_box
+        for t in effective_rects(row_targets):
+            assert t.effective.top >= row_box["y"] - 0.5, (t, row_box)
+            assert t.effective.bottom <= row_box["y"] + row_box["height"] + 0.5, (t, row_box)
         main_box = kitchen.locator(".trow-main").bounding_box()
-        meta_box = kitchen.locator(".trow-meta").bounding_box()
-        sel_box = sel.bounding_box()
-        assert main_box and meta_box and sel_box
-        # the select is centred on the TITLE line, level with the open target
-        assert abs((sel_box["y"] + sel_box["height"] / 2) - (main_box["y"] + main_box["height"] / 2)) <= 1, (sel_box, main_box)
-        assert main_box["height"] >= 44 and meta_box["height"] >= 44, (main_box, meta_box)
-        assert abs(meta_box["y"] - (main_box["y"] + main_box["height"])) <= 1, (main_box, meta_box)
-        # two 44px lines and a hairline: the row budget #301 set (about 88px)
-        assert 86 <= row_box["height"] <= 96, row_box
+        kebab_box = kitchen.locator(".trow-kebab").bounding_box()
+        assert main_box and kebab_box
+        assert main_box["height"] >= 44, main_box
+        # one title line + one meta line and a hairline (<= 61px); the kebab at the right edge
+        assert row_box["height"] <= 61, row_box
+        assert abs((row_box["x"] + row_box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, row_box)
         kitchen.locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
@@ -387,8 +366,8 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert errors == [], errors
         context.close()
 
-        # 5b. The meta line's three tap targets (#107) — the due chip now opens
-        # the date picker, beside the folder and the AI conversation.
+        # 5b. The slim row's tap targets (#311) and the date changed through
+        # the kebab's sheet (#107) — the meta line itself is passive.
         context = _phone_context(wk, PHONE)
         page = context.new_page()
         errors = []
@@ -436,17 +415,16 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             assert_min_target(page.locator(".board-strip-btn"))
             assert_no_horizontal_overflow(page)
             # #110: on Tree, the row's own left indent eats into the width
-            # Table/Board/Today have to spare, so a row's due/folder/AI trio
-            # can wrap apart there where it would not elsewhere. Since #301 each
-            # target is a real 44px box on its own 44px line, so a wrapped line
-            # starts exactly where the one above it ends and nothing overlaps.
+            # Table/Board/Today have to spare, so the row's three targets must
+            # still sit apart there - the circle, the open button and the kebab
+            # are real 44px boxes, so nothing overlaps at any width.
             tree_view(page)
             drift = page.locator(
                 "#paneTable #treeHost .trow",
                 has=page.locator(".trow-title", has_text=re.compile(r"^Fix watering schedule drift$")),
             )
             expect(drift).to_be_visible()
-            assert_no_overlap(drift.locator(".trow-due, .trow-folder, .trow-ai, .trow-main, .trow-status"))
+            assert_no_overlap(drift.locator(".trow-done, .trow-main, .trow-kebab"))
             context.close()
     finally:
         wk.close()

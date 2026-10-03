@@ -149,18 +149,23 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
         _open_group(page, kind)
         expect(g.locator(".search-hit").first).to_be_visible()
     expect(page.locator("#searchMeta")).to_have_text(re.compile(r"^\d+ hits$"))   # no milliseconds anywhere
-    # task hits are the ONE shared row — title + status select + the meta line
+    # task hits are the ONE shared row — done circle + title + the passive meta
+    # line (no status word for "todo"; the folder is a glyph whose title names
+    # the ref) + the kebab
     kitchen_hit = _task_hit(page, "Kitchen")
     expect(kitchen_hit.locator(".trow-title")).to_contain_text("Kitchen")
-    expect(kitchen_hit.locator(".trow-status")).to_have_value("todo")
-    expect(kitchen_hit.locator(".trow-meta .chip-folder")).to_contain_text("kitchen")
+    expect(kitchen_hit).to_have_attribute("data-status", "todo")
+    expect(kitchen_hit.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
+    expect(kitchen_hit.locator(".trow-meta .trow-folder")).to_have_attribute("title", re.compile(r"Folder .*kitchen"))
+    expect(kitchen_hit.locator(".trow-kebab")).to_be_visible()
     # folder / email / issue hits are the same row shape (#48): a title line and
-    # one muted meta line, no glyphs, no buttons — the title IS the link
+    # one muted meta line (inside .trow-main), no glyphs, no buttons — the title
+    # IS the link, and no done circle or kebab (only task rows carry them)
     folder_hit = page.locator(".search-group[data-kind='folders'] .search-hit").first
     expect(folder_hit).to_have_class(re.compile(r"\btrow\b"))
     expect(folder_hit.locator(".trow-meta .search-hit-meta").first).to_contain_text("/house/kitchen")
     expect(folder_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", re.compile(r"^taskos://open\?ref="))
-    expect(folder_hit.locator("[data-act='new'], [data-act='attach'], .search-hit-icon, .search-hit-actions")).to_have_count(0)
+    expect(folder_hit.locator("[data-act='new'], [data-act='attach'], .search-hit-icon, .search-hit-actions, .trow-done, .trow-kebab")).to_have_count(0)
     email_hit = page.locator(".search-group[data-kind='emails'] .search-hit").first
     expect(email_hit.locator(".trow-title")).to_contain_text("Kitchen quotes from the installer")
     expect(email_hit.locator("a.search-hit-link[data-act='open']")).to_have_attribute("href", re.compile(r"^taskos://open\?ref="))

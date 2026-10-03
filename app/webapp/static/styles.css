@@ -71,6 +71,7 @@
   --font-heading-xl: 2rem;
   --font-heading-lg: 1.5rem;
   --font-body: 1rem;
+  --font-body-sm: 0.875rem;   /* typography.body-sm — a row's meta line (the vendored action-row) */
   --font-label: 0.92rem;
   --font-caption: 0.75rem;
   /* controls + rows */
@@ -961,263 +962,123 @@ a.chip:hover { text-decoration: underline; }
 .date-sheet .snooze-opt { min-height: var(--row-sm); font-size: var(--font-body); }
 
 /* ============================================================ the task row */
-/* `.trow` (rows.js): a tight grid — text column + control column. Line 1 is
-   the title ("main") with the status select ("ctrl") centered beside it;
-   line 2 ("meta") spans the width. Flat: a hairline between rows, no box.
-   A view that needs a prefix (the Tree's toggle) adds a third column. */
+/* `.trow` (rows.js) wears the vendored action-row (#311): a flat row whose tap
+   opens the task, one leading toggle (the completion circle), one trailing
+   44px ⋯ kebab. action-row.css owns the row's flex, its height (rows.md, or
+   rows.lg with a meta line: 60px), the stretched main button, the one-line
+   title and meta and the 44px accessories. This block adds only what a task
+   row has and a generic action row does not — the hairline above every row
+   but a list's first, the priority accent, the Tree's prefix and indent, the
+   Select checkbox, the pieces of the meta line, and a third line that wraps
+   under the row (a Search snippet, an AI suggestion, a plan candidate's
+   targets). The Search tab's folder / email / issue hits are `.trow`s without
+   the action-row parts (their titles are links), so the shared geometry is
+   restated here once for them. */
 .trows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .trow {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  /* Two explicit rows only. The optional third line (a Search snippet) flows
-     into an IMPLICIT row via .trow-extra's grid-column — declaring it here as
-     an "extra extra" area gave every row without one an empty track AND a
-     trailing row-gap, which pushed the card's centre 3px below the status
-     select's on touch, where the gap is 6px (#74). */
-  grid-template-areas:
-    "main ctrl"
-    "meta meta";
-  /* The row budget (#301): two 44px lines — the title and the status select on
-     the first, the meta line's targets on the second — so every control on a
-     row is a real 44px target, on every pointer, and none is squeezed into
-     the hairline between two others. About 88px with the row's hairline; a
-     row with no meta line is the first line alone, never shorter than
-     `rows.md`. This replaced the ≤96px, 30px-controls-plus-invisible-
-     expansion budget of #32/#74/#107/#110, whose notes said the budget had to
-     be raised before any of these could reach 44. */
-  grid-template-rows: minmax(var(--hit-min), auto) auto;
+  display: flex;
+  flex-wrap: wrap;              /* .trow-extra takes a line of its own */
   align-items: center;
-  column-gap: 10px;
-  row-gap: 0;
   min-height: var(--row-md);
-  padding: 0 var(--space-xs);
+  padding: 0 4px;
   border-top: 1px solid var(--line-muted);
   color: var(--fg);
 }
+.trow:has(.trow-meta) { min-height: var(--row-lg); }
 .trows > .trow:first-child { border-top: 0; }
-.trow.has-prefix {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "prefix main ctrl"
-    "prefix meta meta";
-}
-/* The prefix (the Tree's toggle, a plan row's grip) belongs to the title line:
-   a 44px box centred on it, not on the whole two-line row (#301). */
-.trow-prefix { grid-area: prefix; align-self: start; min-height: var(--hit-min); display: inline-flex; align-items: center; }
-/* Select mode (#81): a leading checkbox column, on the Board's cards and the
-   Table's phone rows alike — the same row, so the same affordance. Only the
-   selectable views set it, so the Tree's prefix column never meets it. */
-.trow.has-select {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "sel main ctrl"
-    "sel meta meta";
-  /* tighter than the row's 10px: a Board column is ~140px wide and the title
-     is already ellipsized — the checkbox should not cost it three characters */
-  column-gap: 6px;
-}
-/* Snooze (#87): its own column between the title and the status select, so the
-   two row controls sit side by side instead of fighting for the `ctrl` area.
-   Today is the only view that asks for it, and never together with Select
-   mode — a ticked row's gesture belongs to the selection. */
-.trow.has-snooze {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "main snooze ctrl"
-    "meta meta   meta";
-}
-/* Select mode on the Tree (#81 parity): the checkbox column joins the
-   prefix (chevron) column — declared after both singles so it wins. */
-.trow.has-prefix.has-select {
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "sel prefix main ctrl"
-    "sel prefix meta meta";
-}
-.trow-check { grid-area: sel; align-self: start; margin-top: 12px; }
 .trow:hover { background: var(--card-2); }
-.trow.is-high { border-left: 3px solid var(--danger); padding-left: 6px; }
+/* The accent is painted inside the row, so it costs no width and moves
+   nothing — the Tree's indent and a Board column's ellipsis stay put. */
+.trow.is-high { box-shadow: inset 3px 0 0 var(--danger); }
 .trow.is-dragging { opacity: 0.5; }
 .trow.is-new { background: var(--accent-soft); }
 /* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
 .trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
-/* The row's open target: the title line, a full 44px tall (#301). */
-.trow-main { grid-area: main; min-width: 0; min-height: var(--hit-min); display: flex; align-items: center; cursor: pointer; }
+/* The prefix (the Tree's toggle, a plan row's grip): a 44px band before the circle. */
+.trow-prefix { flex: none; display: inline-flex; align-items: center; min-height: var(--hit-min); }
+/* Select mode (#81): the checkbox takes the circle's place. */
+.trow-check { flex: none; margin: 0 var(--space-sm); }
+/* The row's open target. A task row's is the vendored .action-row-main
+   button; a search hit's is a div with the same shape. */
+.trow-main {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6px 10px;
+  cursor: pointer;
+}
 .trow-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-sm); }
-/* One line, ellipsized — a row never grows on the title (#32). */
-.trow-title {
+/* One line each, ellipsized — a row never grows on its text (#32). */
+.trow-title,
+.trow-meta {
   display: block;
   min-width: 0;
-  font-size: var(--font-label);
-  font-weight: 600;
-  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.trow-title { font-size: var(--font-body); font-weight: 600; line-height: 1.5; color: var(--fg); }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
 .tree-node.is-context > .trow .trow-title { color: var(--muted); font-weight: 500; }
-/* The status control: a select on the title line, right-aligned. It is the
-   shared 44px native-control box (the recipe above) with a 7px band, so what
-   is painted is the compact 30px it always was and what is tappable is 44. */
-.trow-status {
-  --control-inset: 7px;
-  grid-area: ctrl;
-  justify-self: end;
-  align-self: center;
-  width: auto;
-  padding: 0 var(--space-sm);
-  font-size: var(--font-caption);
-  font-weight: 600;
-}
-/* The title line's control cell (#311): the status select and the ⋯ kebab
-   side by side, one grid area, so every row template above keeps its shape.
-   The kebab is a real 44px square (the action-row accessory), muted at rest;
-   the vendored row-menu tints it accent while its menu is open. */
-.trow-ctrl { grid-area: ctrl; justify-self: end; align-self: center; display: inline-flex; align-items: center; }
-.trow-kebab {
-  flex: none;
-  width: var(--row-sm);
-  height: var(--row-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.trow-kebab .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.trow-kebab:hover { color: var(--fg); }
-/* The meta line (#301): a 44px line of its own. Its interactive parts — the
-   due chip, the folder and AI glyphs, the issue chip — are each 44px tall on
-   this line, either as real geometry (the due button, the icon-only glyphs) or,
-   for a painted pill, as an invisible ::before reaching the line's own top and
-   bottom edges. A wrapped second line starts exactly where the first ends
-   (row-gap 0), so the targets of two lines touch but never overlap. The
-   horizontal gap is 12px: a pill's ::before reaches at most 4px either side,
-   so the rectangles of two neighbours stay a pixel-clear 4px apart. */
-.trow-meta {
-  grid-area: meta;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  align-content: flex-start;
-  gap: 0 12px;
-  min-width: 0;
-  min-height: var(--hit-min);
-  color: var(--muted);
-  font-size: var(--font-caption);
-  line-height: 1.3;
-  cursor: pointer;
-}
-/* a wrapped line is a whole 44px line too: text parts and the due chip are 44
-   tall themselves, a painted pill (below) gets 15px of margin a side */
-.trow-meta > span { min-height: var(--hit-min); }
-.trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.trow-meta > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+/* The meta line: quiet text, one line, its parts joined by a middle dot.
+   Nothing on it is a target — the whole line belongs to the row's open. */
+.trow-meta { font-size: var(--font-body-sm); font-weight: 400; line-height: 1.45; color: var(--muted); }
+.trow-meta > span { white-space: nowrap; }
+.trow-meta > span:not(:last-child)::after { content: "·"; margin: 0 6px; color: var(--muted); }
+.trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
+.trow-kids .icon, .trow-comments .icon, .trow-person .icon, .trow-blocked .icon, .trow-starts .icon { margin-right: 2px; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
-/* inline-block (not the line's inline-flex) so the ellipsis works; its line-height
-   is the 44px line's, which centres the one-line text on it like its neighbours (#301) */
-.trow-project { max-width: 40%; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; line-height: var(--hit-min); }
 .trow-due { color: var(--fg); }
-/* The due chip is a real button now (#107) — clicking the date opens the same
-   picker the card's Due field opens. It must render exactly like the span it
-   replaced: `.trow-meta > span` above styles the informational parts and does
-   not reach a button, so the button restates that one rule and strips the UA
-   chrome rather than carrying a second, competing box. Nothing here is new
-   appearance; `.due-overdue` / `.due-today` still win on colour (they are
-   `!important`), and the picker input rides in the wrapper, out of flow. */
-.trow-due-box { position: relative; }
-.trow-meta button.trow-due {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  line-height: inherit;
-  white-space: nowrap;
-  color: var(--fg);
-  cursor: pointer;
-  /* real 44px geometry (#301), no padding, so the chip's look is still the
-     bare text: the target is simply the whole 44px line it sits on */
-  min-width: var(--hit-min);
-  min-height: var(--hit-min);
-}
-/* the shared .hit-target expansion would reach into the neighbours now that
-   the button is a real 44px box */
-.trow-meta button.trow-due::before { content: none; }
 /* The sleeping marker (#87) — muted like the rest of the meta line: it is a
-   statement of fact, not a state to warn about, so it takes no status colour. */
-.trow-starts { color: var(--muted); }
-/* The locked marker (#100) — same muted treatment as `.trow-starts`, which it
-   replaces on the meta line whenever both would otherwise show. */
-.trow-blocked { color: var(--muted); }
+   statement of fact, not a state to warn about, so it takes no status colour.
+   The locked marker (#100) takes the same treatment, and replaces it on the
+   line whenever both would otherwise show. */
+.trow-starts, .trow-blocked { color: var(--muted); }
 .trow-prio { text-transform: capitalize; }
 .trow-prio::before {
   content: "";
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-right: 1px;
+  margin-right: 3px;
+  vertical-align: 2px;
   border-radius: 50%;
   background: currentColor;
 }
 .trow-prio.prio-high { color: var(--danger); }
-/* chips on the meta line stay meta-sized: caption text, tight padding,
-   ellipsized — painted 16px tall, so a row with a folder chip is exactly as
-   tall as one without (the #74 rule: a chip never changes a card's height).
-   The glyph is the fleet's 16px `inline` step like every other icon on this
-   line (#129) — the same 16px as the chip's border box, so the chip does NOT
-   grow: a Lucide glyph carries its own stroke padding, so the ink stays
-   comfortably inside the hairline.
-   The tap target is a 44px band of the meta line (#301): an invisible
-   ::before reaches 15px above and below the pill and 4px either side (never
-   past the 12px column gap's midpoint, so two chips' targets stay apart). 15,
-   not 14: the box is placed from the PADDING box, 1px inside the chip's
-   border, so the real band is 14 + 30 = 44 — and the pill's 15px margin is
-   what keeps the band (measured from the border box by the design review) on
-   its own line, a line 46px tall, clear of the title line above and the next
-   row below. */
-.trow-meta .chip { position: relative; max-width: min(100%, 180px); margin: 15px 0; padding: 0 6px; height: var(--icon-inline); line-height: 1; }
-.trow-meta .chip::before { content: ""; position: absolute; inset: -15px -4px; }
-.trow-extra { grid-column: 1 / -1; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
-.trow.has-prefix .trow-extra { grid-column: 2 / -1; }
+/* The completion circle (the vendored .action-row-fav): outline at rest, the
+   check when closed. Done reads as success, not the favourite's attention. */
+.trow-done:hover { color: var(--success); }
+.trow-done[aria-pressed="true"] { color: var(--success); }
+.trow-kebab:hover { color: var(--fg); }
+/* A third line (a Search snippet, an AI suggestion strip, a plan candidate's
+   two targets): the row's full width, aligned with the title's text. */
+.trow-extra {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 0 10px 8px calc(var(--row-sm) + 10px);
+  font-size: var(--font-caption);
+  overflow-wrap: anywhere;
+}
+.trow.has-select .trow-extra { padding-left: 10px; }
 @media (pointer: coarse) {
-  /* The folder and AI chips are their bare glyph on touch — a ref ellipsized
-     at 180px says nothing and ate the meta line. No pill, no fill: the accent
-     colour already says "tappable", and a marked box read as heavier than the
-     calendar and repeat glyphs beside it, which are the same 16px. What is
-     tappable is a real 44x44 box around the glyph (#301) — real geometry, not
-     the invisible ::before the pill wears on a fine pointer, because three of
-     these sit side by side on one line (due · folder · AI) and expanded
-     rectangles that share a pixel make a tap a coin toss (#107, #110). The
-     12px column gap then separates them with nothing to tune.
-     The name is on aria-label (rows.js); the tap behaviour (web twin, else
-     the path popover) is unchanged. */
-  .trow-meta .trow-folder,
-  .trow-meta .trow-ai {
-    justify-content: center;
-    width: var(--hit-min);
-    height: var(--hit-min);
-    max-width: none;
-    margin: 0;
-    padding: 0;
-    background: none;
-    border-color: transparent;
-  }
-  .trow-meta .trow-folder::before,
-  .trow-meta .trow-ai::before { content: none; }
-  .trow-meta .trow-folder .chip-label,
-  .trow-meta .trow-ai .chip-label { display: none; }
-  /* a 20px box on the title line's own 44px band (12 + 20 + 12) */
-  .trow-check { width: 20px; height: 20px; margin: 12px var(--space-xs) 0; }
+  /* a 20px box centred on the row's own band */
+  .trow-check { width: 20px; height: 20px; margin: 0 var(--space-sm); }
+}
+
+/* The status select of the Table's desktop grid (rows.js statusSelect): the
+   shared 44px native-control box with a 7px band, so what is painted is the
+   compact 30px it always was and what is tappable is 44. */
+.trow-status {
+  --control-inset: 7px;
+  width: auto;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-caption);
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------- table */
@@ -1356,7 +1217,6 @@ a.chip:hover { text-decoration: underline; }
   background-position: 14px 0;
   background-size: calc(var(--depth, 0) * 22px) 100%;
 }
-.tree .trow.is-high { padding-left: calc(6px + var(--depth, 0) * 22px); }
 .tree-toggle {
   width: 28px;
   height: 28px;
@@ -2001,9 +1861,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------- plan my day (#89) */
 /* My plan on top of Today: the ordered commitment list. A plan row adds a
-   drag grip (prefix column) and a remove control between the title and the
-   status select — its own grid, because has-prefix and has-snooze each
-   declare template areas and a row can't wear both. */
+   drag grip (its prefix) and keeps one visible verb besides the circle —
+   Remove from plan, the dominant act in that group (#311) — before its ⋯. */
 .today-plan { margin-bottom: var(--space-md); }
 .today-plan .today-head { align-items: center; }
 /* Quiet inline icons like the snooze trigger (no button box — the boxed
@@ -2027,32 +1886,27 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 /* 24 + 2x10 = 44 on a fine pointer (#281); touch has its own 28 + 2x8 below.
    It stands alone at the end of the plan's heading line. */
 .plan-more::before { inset: -10px; }
-.trow.is-plan {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "prefix main unplan ctrl"
-    "prefix meta meta   meta";
-}
 .plan-grip { display: inline-flex; color: var(--muted); cursor: grab; }
 .plan-grip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .trow.is-plan.is-dragging { cursor: grabbing; }
+/* The row's one other visible action (the action-row's verb slot): a real
+   44px square beside the kebab, quiet like the kebab rather than tinted —
+   removing from the plan is a step back, not the row's call to action. */
 .plan-unplan {
-  grid-area: unplan;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--row-sm);
+  height: var(--row-sm);
   padding: 0;
   border: 0;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--muted);
-  align-self: center;
   cursor: pointer;
 }
-/* 28 + 8px a side = 44 on every pointer, like the snooze trigger beside it (#301) */
-.plan-unplan::before { inset: -8px; }
+.plan-unplan::before { content: none; }
 .plan-unplan .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .plan-unplan:hover { color: var(--danger); }
 
@@ -2107,15 +1961,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .plan-more::before { inset: -8px; }
   .plan-target { min-height: var(--row-sm); }
   /* The grip goes entirely on touch: HTML5 drag never fires there (the phone
-     plans in tap order), and its dead column was what wrapped a crowded meta
-     line. Declared here because the base .trow.is-plan template above would
-     otherwise win the cascade. */
-  .trow.is-plan {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      "main unplan ctrl"
-      "meta meta   meta";
-  }
+     plans in tap order), and its dead column only took width from the title. */
   .trow.is-plan .plan-grip { display: none; }
 }
 
