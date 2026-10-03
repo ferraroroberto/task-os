@@ -976,6 +976,15 @@ function openSettings() {
   settings.refreshSearchStatus();
 }
 
+/** A `#settings` (or Settings card) / `#journal` hash with its pane not open
+ *  yet: boot opens it at its end, unless a tab press came first (#328). */
+function dropPendingPaneHash() {
+  const h = location.hash;
+  if (h === SETTINGS_HASH || SETTINGS_HASH_CARDS[h] || JOURNAL_HASH.test(h)) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
+
 function hideSettings() {
   if (!state.settingsOpen) return;
   state.settingsOpen = false;
@@ -1358,6 +1367,11 @@ async function boot() {
       state.tab = tab;
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
       hideSettings();  // …and Settings, the same way (#281)
+      // …even before they have opened (#328): boot only opens them at its end,
+      // so a tab pressed while it loads would otherwise be covered again by the
+      // `#settings` / `#journal` hash it left behind. `nav` is still null for
+      // the init call that restores the stored tab, which must keep the hash.
+      if (nav) dropPendingPaneHash();
       if (tab === 'board' && board) board.show();
       if (tab === 'archive') archive.refresh();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }

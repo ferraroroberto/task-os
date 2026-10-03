@@ -153,7 +153,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
         _open_palette_from_settings(page, tap=False)
         _walk_text_size(page, tap=False)
-        page.click("nav.tabs .tab[data-tab='board']")
+        _walk_tab_during_boot(page, webapp)
         expect(page.locator("#paneSettings")).to_be_hidden()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         expect(gear).not_to_have_attribute("aria-current", "page")
@@ -231,6 +231,35 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
 #: The root font-size each Text size step computes to (text-size.css: 93.75% /
 #: 100% / 112.5% of the 16px default).
 TEXT_STEPS = {"small": 15.0, "default": 16.0, "large": 18.0}
+
+
+def _walk_tab_during_boot(page: Page, webapp: str) -> None:
+    """A tab pressed while boot still loads on `#settings` stays the tab (#328).
+
+    Boot opens Settings only at its very end, after the first reads. The
+    `/api/today` read is held here until the Board tab has been pressed, so the
+    press always lands in that window; before the fix the hash it left behind
+    made boot cover the Board with Settings again a moment later."""
+    held: list = []
+    page.route("**/api/today", lambda route: held.append(route))
+    try:
+        page.goto("about:blank")              # a real boot, not a same-document hash change
+        page.goto(f"{webapp}/#settings", wait_until="domcontentloaded")
+        page.wait_for_function("() => !!document.querySelector(\"nav.tabs .tab[data-tab='board']\")")
+        for _ in range(200):                 # boot asks for it within a second or two
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held, "boot never asked for /api/today"
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        for route in held:
+            route.continue_()
+    finally:
+        page.unroute("**/api/today")
+    # boot has finished once the home head says what it loaded
+    expect(page.locator("#homeHeadStatus")).to_have_text("No tasks yet")
+    page.wait_for_load_state("networkidle")
 
 
 def _walk_text_size(page: Page, *, tap: bool) -> None:
