@@ -1268,6 +1268,14 @@ a.chip:hover { text-decoration: underline; }
 .c-folder .chip { max-width: 200px; }
 .c-comment { max-width: 280px; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A chip in the comment text is a 44px target too (#305), by the same band as
+   the cell chips above. This line clips (the ellipsis), and a clipped band is
+   no target, so the 11px the band reaches above and below is the line's own
+   padding: it stays inside the clip box. The 3px side margin plus the space
+   between two chips keeps their 4px side bands apart. */
+.t-comment { padding-block: 11px; }
+.t-comment .chip { position: relative; margin: 0 3px; }
+.t-comment .chip::before { content: ""; position: absolute; inset: -11px -4px; }
 .t-comment-meta { color: var(--muted); font-size: var(--font-caption); }
 .c-next { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Due cell: a quiet inline button (icon + relative label) that opens the date

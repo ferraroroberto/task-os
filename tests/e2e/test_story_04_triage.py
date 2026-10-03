@@ -156,6 +156,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         comment_folder_chip = quotes.locator(".c-comment .chip-folder")
         expect(comment_folder_chip).to_contain_text("plans")
         expect(comment_folder_chip).to_have_attribute("title", "{onedrive}/house/kitchen/plans")
+        # #305: a chip in the comment text is a 44px target whose band stays
+        # inside the (clipping) comment line, and none shares a pixel
+        comment_chips = page.locator(".task-table .c-comment .chip")
+        assert_min_target(comment_chips)
+        assert_no_overlap(comment_chips)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
 
