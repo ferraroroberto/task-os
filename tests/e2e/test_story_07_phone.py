@@ -162,6 +162,9 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
             assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
         # one title line + one meta line and a hairline (<= 61px), the kebab at the right edge
         assert box["height"] <= 61, box
+        # full-bleed on the phone (#311): the row's hairline runs edge to edge
+        vw = page.viewport_size["width"]
+        assert box["x"] <= 0.5 and box["x"] + box["width"] >= vw - 0.5, (box, vw)
         kebab_box = row.locator(".trow-kebab").bounding_box()
         assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
         shot(page, shots / "story-07-phone-9-phone.png")

@@ -1069,6 +1069,18 @@ a.chip:hover { text-decoration: underline; }
   /* a 20px box centred on the row's own band */
   .trow-check { width: 20px; height: 20px; margin: 0 var(--space-sm); }
 }
+/* Full-bleed on the phone (#311): a list's hairlines run edge to edge, the
+   layout swipe gestures expect, while headings, the filter strip and cards
+   keep the page gutter. The row keeps its own inset — 4px of padding plus the
+   circle's and the kebab's 44px squares put both glyphs 18px from the edge.
+   Two lists stay inside their box: the Search tab's hits live in cards, and a
+   Board column is one page of a sideways carousel, so the carousel bleeds as
+   a whole instead (a column's own list would be clipped by it). */
+@media (max-width: 520px) {
+  .trows:not(.search-hits):not(.board-list),
+  .tree,
+  .board-columns { margin-inline: calc(-1 * var(--gap)); }
+}
 
 /* The status select of the Table's desktop grid (rows.js statusSelect): the
    shared 44px native-control box with a 7px band, so what is painted is the
