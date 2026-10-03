@@ -56,6 +56,7 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
  * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
+ *          onOpenPalette: () => void,
  *          onCaptured: () => void, onArchiveRun: () => void,
  *          onOpenArchive: () => void, onCalendar: (group: object) => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
@@ -87,6 +88,7 @@ export function mountSettings(opts) {
     statusIssues: document.getElementById('statusIssues'),
     statusIssuesSync: document.getElementById('statusIssuesSync'),
     issuesSyncNow: document.getElementById('issuesSyncNow'),
+    paletteOpen: document.getElementById('paletteOpen'),
     captureCardMeta: document.getElementById('captureCardMeta'),
     statusCapture: document.getElementById('statusCapture'),
     statusCaptureRun: document.getElementById('statusCaptureRun'),
@@ -646,6 +648,11 @@ export function mountSettings(opts) {
     els.issuesCardMeta.textContent = st.last_error ? 'error' : (st.last_sync ? 'synced' : 'on');
   }
 
+  /** The palette's phone entry (#316) — the card only hosts the button. */
+  function wirePaletteOpen() {
+    els.paletteOpen.addEventListener('click', function () { opts.onOpenPalette(); });
+  }
+
   function wireIssueSyncNow() {
     els.issuesSyncNow.addEventListener('click', function () {
       // the button is the app's one sync control now (#301): it spins while the pass runs
@@ -692,6 +699,7 @@ export function mountSettings(opts) {
   wireReindex();
   wireMirrorEventsClear();
   wireIssueSyncNow();
+  wirePaletteOpen();
   wireCaptureRunNow();
   wireArchiveCard();
   wireCalendarRefresh();

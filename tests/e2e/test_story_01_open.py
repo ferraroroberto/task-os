@@ -151,6 +151,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         gear = page.locator("#settingsBtn")
         expect(gear).to_have_attribute("aria-current", "page")
         expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+        _open_palette_from_settings(page, tap=False)
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("#paneSettings")).to_be_hidden()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
@@ -192,6 +193,24 @@ def _assert_widths(page: Page) -> None:
         assert MEASURE - 1 <= width <= MEASURE + 1, f"{tab} is one-dimensional and must hold the {MEASURE}px measure, got {width}px"
 
 
+def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
+    """Settings' Command palette card opens the palette (#316): Ctrl+K has no
+    phone equivalent since the header lost its palette button (#301). Leaves the
+    palette closed and the card shut, as it found them."""
+    press = page.tap if tap else page.click
+    expect(page.locator("#paneSettings")).to_be_visible()
+    press("#paletteCard summary")
+    expect(page.locator("#paletteOpen")).to_be_visible()
+    if tap:
+        assert_min_target(page.locator("#paletteOpen"))
+    press("#paletteOpen")
+    expect(page.locator("#palette")).to_be_visible()
+    expect(page.locator("#paletteInput")).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(page.locator("#palette")).not_to_be_visible()
+    press("#paletteCard summary")
+
+
 # ------------------------------------------------------------- phone leg
 
 def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> None:
@@ -227,6 +246,10 @@ def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> No
         shot(page, shots / "story-01-open-2-phone.png")
         page.reload()
         assert _theme(page) == "dark"
+        # The palette has a way in without a hardware keyboard (#316).
+        page.tap("#settingsBtn")
+        assert_min_target(page.locator("#paletteCard summary"))
+        _open_palette_from_settings(page, tap=True)
         context.close()
     finally:
         wk.close()
