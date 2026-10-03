@@ -599,7 +599,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.keyboard.press("Escape")
     page.click("#themeToggle")
 
-    page.click("#paletteBtn")
+    page.keyboard.press("Control+K")
     page.fill("#paletteInput", ">priority")
     expect(page.locator(".palette-item").first).to_contain_text("Cycle priority")
     expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
@@ -719,7 +719,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneBoard")).to_be_visible()
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
     assert page.evaluate("location.hash") == ""
-    page.click("#paletteBtn")
+    page.keyboard.press("Control+K")
     page.fill("#paletteInput", ">journal")
     expect(page.locator(".palette-item").first).to_contain_text("Journal")
     page.keyboard.press("Enter")

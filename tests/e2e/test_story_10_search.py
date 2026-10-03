@@ -223,7 +223,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     # 5. > commands → "Go to Board" (dark, for the record)
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    page.locator("#paletteBtn").click()
+    page.keyboard.press("Control+K")
     expect(palette).to_be_visible()
     pin.fill(">go to")
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
@@ -237,7 +237,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "board")
     # 5b. …and the Tree, which stopped being a destination when it became the
     #     Table's second view (#161): one command lands on the tab AND the view.
-    page.locator("#paletteBtn").click()
+    page.keyboard.press("Control+K")
     expect(palette).to_be_visible()
     pin.fill(">tree view")
     expect(cmds.first).to_contain_text("Table → Tree view")
@@ -267,7 +267,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     _open_group(p, "emails")
     expect(p.locator(".search-group[data-kind='emails'] .search-hit").first).to_be_visible()
     shot(p, shots / "story-10-search-6-phone.png")
-    p.locator("#paletteBtn").click()
+    p.keyboard.press("Control+K")
     expect(p.locator("#palette")).to_be_visible()
     p.locator("#paletteInput").fill("water")
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Pay water bill")

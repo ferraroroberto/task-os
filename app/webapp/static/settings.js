@@ -606,8 +606,8 @@ export function mountSettings(opts) {
   }
 
   // ------------------------------------------------------------ issue sync
-  /** The Settings card's half of the issue-provider status; the header ↻ and
-   *  the sync call itself stay with the bootstrap (they are not this tab's). */
+  /** The Settings card's half of the issue-provider status; the sync call
+   *  itself stays with the bootstrap (the drawer and the palette make it too). */
   function renderIssues(st) {
     const configured = !!(st && st.enabled);
     els.issuesSyncNow.disabled = !configured;
@@ -647,7 +647,11 @@ export function mountSettings(opts) {
   }
 
   function wireIssueSyncNow() {
-    els.issuesSyncNow.addEventListener('click', function () { opts.onSyncIssues().catch(function () {}); });
+    els.issuesSyncNow.addEventListener('click', function () {
+      // the button is the app's one sync control now (#301): it spins while the pass runs
+      els.issuesSyncNow.classList.add('is-busy');
+      opts.onSyncIssues().catch(function () {}).finally(function () { els.issuesSyncNow.classList.remove('is-busy'); });
+    });
   }
 
   // ---------------------------------------------------------- search card

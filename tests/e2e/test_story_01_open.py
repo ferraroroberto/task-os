@@ -130,7 +130,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         # the palette can still switch the view (#161) — and the host it
         # reveals carries the same prompt, never a blank pane.
         expect(page.locator("#tableViewToggle")).to_be_hidden()
-        page.click("#paletteBtn")
+        page.keyboard.press("Control+K")
         page.fill("#paletteInput", ">tree view")
         page.keyboard.press("Enter")
         expect(page.locator("#paneTable #treeHost .empty-state-message")).to_have_text("Add your first task")
@@ -155,6 +155,11 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         expect(page.locator("#paneSettings")).to_be_hidden()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         expect(gear).not_to_have_attribute("aria-current", "page")
+        # The header keeps the spec's two trailing icon buttons (#301): the theme
+        # toggle and the gear. Issue sync lives on the Settings card (story 08)
+        # and the command palette is Ctrl+K alone (stories 05 / 10 press it).
+        expect(page.locator(".home-head .home-toggle")).to_have_count(2)
+        expect(page.locator("#paletteBtn, #issuesSync")).to_have_count(0)
 
         page.click("#themeToggle")
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
