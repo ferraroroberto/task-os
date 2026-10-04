@@ -74,6 +74,7 @@ from tests.e2e.conftest import (
     _boot,
     _get,
     _terminate,
+    assert_grid_walk,
     dismiss_toasts,
     e2e_workdir,
     shot,
@@ -475,6 +476,11 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     dismiss_toasts(page)
     _pin_scroller(page)
     shot(page, shots / "story-24-archive-4-desktop.png")
+    # #339: the Archive table is an ARIA data grid too: a row's destination,
+    # file chips and its Accept / Move / Retry buttons are reached from the
+    # row by the arrow keys, every one of them, rather than counted as a
+    # list row's actions
+    assert assert_grid_walk(offering.first.locator("xpath=ancestor::tr[1]")) >= 2
 
     # 6. The mail the ranking would not decide: open its menu, the candidates it
     #    ranked are there, type why, and file it into one of them.

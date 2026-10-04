@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -704,6 +705,54 @@ _CONTROL_BOUNDARIES_JS = """(root) => {
   });
   return out;
 }"""
+
+
+#: A grid row's cell widgets, as gridnav.js walks them (the due picker's hidden
+#: native input is its proxy, not a stop).
+_GRID_CONTROLS = ('a[href], button:not([disabled]), select:not([disabled]), '
+                  'input:not([type="hidden"]):not(.due-date), textarea')
+
+
+# Every box on the page that is scrolled (the window's included) remembers
+# where, on itself; restoring puts each back and every other box at 0, 0.
+_SAVE_SCROLLS_JS = """() => [document.scrollingElement, ...document.querySelectorAll('body *')]
+  .forEach(el => { if (el.scrollLeft || el.scrollTop) el.dataset.e2eScroll = el.scrollLeft + ',' + el.scrollTop; })"""
+_RESTORE_SCROLLS_JS = """() => { document.activeElement.blur();
+  [document.scrollingElement, ...document.querySelectorAll('body *')].forEach(el => {
+    const [x, y] = (el.dataset.e2eScroll || '0,0').split(',').map(Number); delete el.dataset.e2eScroll;
+    if (el.scrollLeft !== x || el.scrollTop !== y) el.scrollTo(x, y); }); }"""
+
+
+def assert_grid_walk(row: Locator) -> int:
+    """*row* sits in an ARIA data grid and the keyboard reaches each of its controls (#339).
+
+    A data table's live cells are cell widgets, not a list row's action budget
+    (design.md action-row): from the focused row, → visits every visible
+    control in order and ← walks back to the row. Leaves nothing focused and every scroller
+    where it was, so a shot after the walk is the shot before it. Returns how
+    many controls the row holds.
+    """
+    page = row.page
+    page.evaluate(_SAVE_SCROLLS_JS)
+    assert row.evaluate("r => r.closest('table').getAttribute('role')") == "grid", "the table is not an ARIA grid"
+    expect(row.locator("xpath=ancestor::table[1]")).to_have_attribute("aria-label", re.compile(r"\S"))
+    controls = row.evaluate(
+        "(r, sel) => [...r.querySelectorAll(sel)].filter(c => c.getClientRects().length).length", _GRID_CONTROLS
+    )
+    assert controls, "the row holds no control to walk"
+    is_row = "r => document.activeElement === r"
+    nth = "(r, [sel, i]) => document.activeElement === [...r.querySelectorAll(sel)].filter(c => c.getClientRects().length)[i]"
+    row.focus()
+    for i in range(controls):
+        page.keyboard.press("ArrowRight")
+        assert row.evaluate(nth, [_GRID_CONTROLS, i]), f"→ #{i + 1} did not reach the row's control {i + 1}/{controls}"
+    for i in range(controls - 2, -1, -1):
+        page.keyboard.press("ArrowLeft")
+        assert row.evaluate(nth, [_GRID_CONTROLS, i]), f"← did not step back to control {i + 1}"
+    page.keyboard.press("ArrowLeft")
+    assert row.evaluate(is_row), "← from the first control did not return to the row"
+    page.evaluate(_RESTORE_SCROLLS_JS)
+    return controls
 
 
 def assert_control_boundaries(scope: Locator) -> list[float]:

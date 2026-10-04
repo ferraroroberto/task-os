@@ -13,6 +13,9 @@
  * task row (rows.js) — identical to the Board's rows. The caller decides
  * which (`opts.phone`) and re-renders when the breakpoint flips.
  *
+ * The desktop grid is an ARIA data grid (gridnav.js, #339): its live cells
+ * are cell widgets, reached from a focused row with the arrow keys.
+ *
  * Filters and sort live in the shared filter card (filters.js); the list
  * arrives already filtered and sorted.
  */
@@ -25,6 +28,7 @@ import {
   PRIORITIES, aiChip, blockedLabel, breadcrumbText, chipFor, isBlocked, isDeferred, issueChip,
   linkify, priorityLabel, relDue, startsLabel, statusPill,
 } from './format.js';
+import { markGrid } from './gridnav.js';
 import { recurrenceLabel } from './recurrence.js';
 import { rowList, statusSelect } from './rows.js';
 
@@ -71,6 +75,7 @@ export function renderTable(host, items, handlers, opts) {
   scroller.className = 'table-scroll';
   const table = document.createElement('table');
   table.className = 'task-table' + (selectable ? ' is-selectable' : '');
+  markGrid(table, 'Tasks');
   const thead = document.createElement('thead');
   const hr = document.createElement('tr');
   if (selectable) {
@@ -263,8 +268,7 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
   tr.addEventListener('keydown', function (ev) {
     if (ev.target !== tr) return;
     if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); activate(); }
-    if (ev.key === 'ArrowDown' && tr.nextElementSibling) { ev.preventDefault(); tr.nextElementSibling.focus(); }
-    if (ev.key === 'ArrowUp' && tr.previousElementSibling) { ev.preventDefault(); tr.previousElementSibling.focus(); }
+    // ↑ ↓ Home End and the walk into the cells: gridnav.js
   });
   return tr;
 }
