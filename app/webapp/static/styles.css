@@ -2311,8 +2311,11 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
   border-top: 1px solid var(--line-muted);
 }
 .row-actions-item:first-child { border-top: 0; }
-.row-actions-show { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-sm); min-height: var(--row-sm); font-size: var(--font-label); color: var(--fg); cursor: pointer; }
-.row-actions-show span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-actions-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); color: var(--fg); }
+.row-actions-tick .icon, /* listed: the tint recipe, so ticked reads at a glance and without hue (the
+   check glyph); locked by a swipe: the same, quiet, and inert */
+.row-actions-tick[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-border-soft); color: var(--accent-text); }
+.row-actions-tick:disabled { background: var(--card-off); border-color: var(--line); color: var(--muted); cursor: default; }
 .row-actions-hint { font-size: var(--font-caption); white-space: nowrap; }
 .row-actions-move .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .row-actions-move:disabled { color: var(--line); cursor: default; }
