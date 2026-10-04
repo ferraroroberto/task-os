@@ -15,8 +15,8 @@
  *
  * Each item shows only when it applies to the task (`applies()` on an action;
  * a link only when the task has one). Which actions the menu lists, and in
- * what order, comes from `order()` — the plan's default until Settings says
- * otherwise.
+ * what order, and what each swipe runs, come from Settings → Row actions
+ * (rowprefs.js) — the plan's defaults until the owner changes them.
  *
  * One menu per rendered list (`createTaskMenu` per view): `attach()` while the
  * list is built, `endRender()` once it is, so an open menu follows its row
@@ -30,28 +30,17 @@
 import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { actionById } from './actions.js';
 import { aiResumeHref, followLink, issueUrl, openTaskFolder, providerIcon, todayISO } from './format.js';
+import { menuOrder, rowPrefs } from './rowprefs.js';
 import { openDatePicker } from './snooze.js';
 import { bindSwipe } from './swipe.js';
 import { icon } from './_vendored/icons/icons.js';
-
-/** The actions the menu lists, in order, until Settings changes it (#311 plan §2). */
-export const MENU_DEFAULT = [
-  'complete', 'reopen', 'change-date', 'snooze',
-  'status-inbox', 'status-todo', 'status-standby', 'status-cancelled', 'priority',
-];
-
-/** What each swipe does until Settings changes it (#311 plan §3): right
- *  completes, left changes the date. An id of '' means that side does nothing. */
-export const SWIPE_DEFAULT = { right: 'complete', left: 'change-date' };
 
 const CLOSED = { done: 1, cancelled: 1 };
 
 /**
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          onOpen: (id:number) => void,
- *          onPlan?: (id:number) => any, onUnplan?: (id:number) => any,
- *          order?: () => string[], swipes?: () => {right: string, left: string}}} ctx
- *        order: the menu's action ids; swipes: each side's action id
+ *          onPlan?: (id:number) => any, onUnplan?: (id:number) => any}} ctx
  * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
  *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
@@ -86,14 +75,14 @@ export function createTaskMenu(ctx) {
   /** The action a swipe to `side` runs on `t`, or null when that side is
    *  set to nothing or its action does not apply to this task. */
   function swipeAction(t, side) {
-    const ids = ctx.swipes ? ctx.swipes() : SWIPE_DEFAULT;
+    const ids = rowPrefs();
     const a = actionById(ids[side] || '');
     return a && a.applies(t) ? a : null;
   }
 
   function items(t, kebab) {
     const open = !CLOSED[t.status];
-    const order = ctx.order ? ctx.order() : MENU_DEFAULT;
+    const order = menuOrder(rowPrefs());
     const list = order.map(actionById).filter(Boolean).map(function (a) {
       return {
         label: a.label, glyph: a.icon, dataset: { action: a.id },

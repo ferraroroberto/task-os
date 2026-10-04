@@ -128,6 +128,9 @@
   <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none">
     <path d="m6 9 6 6 6-6" />
   </symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none">
+    <path d="m18 15-6-6-6 6" />
+  </symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none">
     <path d="M18 6 6 18" />
     <path d="m6 6 12 12" />
@@ -621,6 +624,33 @@
               <button type="button" class="range-tab" data-textsize="default">Default</button>
               <button type="button" class="range-tab" data-textsize="large">Large</button>
             </nav>
+          </div>
+        </details>
+        <!-- Row actions (#311): what each swipe runs and what the row's ⋯ menu
+             lists, in order — per device, built by settings.js from the one
+             action table (actions.js); stored beside the text size. -->
+        <details class="card card--collapsible settings-card" id="rowActionsCard">
+          <summary class="collapse-summary">
+            <span class="collapse-main">
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
+              <h3 class="collapse-title">Row actions</h3>
+              <span class="collapse-count" id="rowActionsMeta"></span>
+            </span>
+            <span class="collapse-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="collapse-body">
+            <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
+            <label class="row-actions-field">
+              <span class="row-actions-label">Swipe right</span>
+              <select class="select-native" id="swipeRightSelect"></select>
+            </label>
+            <label class="row-actions-field">
+              <span class="row-actions-label">Swipe left</span>
+              <select class="select-native" id="swipeLeftSelect"></select>
+            </label>
+            <h4 class="row-actions-sub">The ⋯ menu</h4>
+            <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
+            <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
           </div>
         </details>
         <!-- Phone access (Step 7): how this connection came in and what the
