@@ -2496,7 +2496,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
    without the actions — the point of the screen — sliding off the right edge;
    the full value is the title, and narrower windows scroll in `.table-scroll`. */
 .archive-subject { display: block; font-weight: 600; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.archive-text { display: block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-who { display: block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-dest { display: block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* One line on the grid, the whole sentence in the title: a row keeps to its
    subject line (#339), and a reason is worth reading, not worth pushing every
@@ -2670,7 +2670,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
   }
 
   /* 4. Nothing in a card is allowed to set a width the pane must scroll to. */
-  .archive-subject, .archive-text, .archive-dest { max-width: 100%; }
+  .archive-subject, .archive-who, .archive-dest { max-width: 100%; }
 
   /* 7. Two lines per candidate — name and score on the first, path under it —
      and the *other folder* line as one box with the glyph inside its right

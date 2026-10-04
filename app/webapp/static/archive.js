@@ -689,7 +689,9 @@ export function mountArchive(opts) {
   }
 
   // -------------------------------------------------------- the two drawings
-  const COLUMNS = ['Subject', 'From', 'Sent', 'Destination', 'Files', 'Confidence', 'Why', 'State', ''];
+  // Who sent it and when ride under the subject (#339): two columns fewer is
+  // what lets the grid fit the window, the row's actions on screen.
+  const COLUMNS = ['Subject', 'Destination', 'Files', 'Confidence', 'Why', 'State', ''];
 
   function renderTable(items) {
     const wrap = document.createElement('div');
@@ -726,9 +728,7 @@ export function mountArchive(opts) {
         onToggle: function (open) { panelRow.hidden = !open; },
       });
       tr.append(
-        cell('c-subject', subjectEl(item)),
-        cell('c-sender', textEl(item.sender || '–')),
-        cell('c-sent', textEl(item.sent_at ? fmtTsShort(item.sent_at) : '–')),
+        cell('c-subject', subjectCellEl(item)),
         cell('c-dest', destinationEl(item)),
         cell('c-files', filesEl(item, { cap: true })),
         cell('c-conf', confidenceEl(item)),
@@ -757,12 +757,17 @@ export function mountArchive(opts) {
     return td;
   }
 
-  function textEl(text) {
-    const s = document.createElement('span');
-    s.className = 'archive-text';
-    s.textContent = text;
-    s.title = text;
-    return s;
+  /** The grid's first cell: the subject, then one muted line of who · when
+   *  — the phone card's first two lines, in one cell. */
+  function subjectCellEl(item) {
+    const box = document.createElement('div');
+    box.className = 'archive-subject-cell';
+    const who = document.createElement('span');
+    who.className = 'archive-who muted';
+    who.textContent = (item.sender || '–') + ' · ' + (item.sent_at ? fmtTsShort(item.sent_at) : '–');
+    who.title = who.textContent;
+    box.append(subjectEl(item), who);
+    return box;
   }
 
   function subjectEl(item) {
