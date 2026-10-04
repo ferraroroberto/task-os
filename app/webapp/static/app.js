@@ -1310,6 +1310,12 @@ async function boot() {
     onSyncIssues: syncIssues,
     // The phone's way into the palette (#316): Ctrl+K needs a hardware keyboard.
     onOpenPalette: function () { palette.open(''); },
+    // Row actions (#311): a row's menu reads its list when the row is drawn,
+    // so a new choice redraws the lists that are up.
+    onRowActions: function () {
+      if (state.total) renderAll();
+      if (state.journal.open) renderJournalPane();
+    },
     onSearchStatus: function () { if (search) search.reloadStatus(); },
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.

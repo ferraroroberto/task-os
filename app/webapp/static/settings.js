@@ -6,6 +6,9 @@
  * Every card is the vendored disclosure (issue #46) whose summary carries a
  * state word — on · synced · indexed · off — never a count.
  *
+ *   Row actions    what each touch swipe on a task row runs and what the
+ *                  row's ⋯ menu lists, in order (#311) — per device, from the
+ *                  one action table; `opts.onRowActions` redraws the rows.
  *   Phone access   https + auth (Step 7) — how this connection came in and
  *                  what the install accepts; "Sign out on this device".
  *   Mirror/backup  the markdown mirror and the dated .db copies (Step 6).
@@ -46,10 +49,13 @@
 
 'use strict';
 
+import { ACTIONS, actionById } from './actions.js';
 import { api } from './api.js';
 import { renderRunSummary } from './archive.js';
 import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
+import { isDefault, rowPrefs, setRowPrefs } from './rowprefs.js';
+import { icon } from './_vendored/icons/icons.js';
 import { bindTextSize } from './_vendored/text-size/text-size.js';
 
 const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
@@ -57,7 +63,7 @@ const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFol
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
  * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
- *          onOpenPalette: () => void,
+ *          onOpenPalette: () => void, onRowActions?: () => void,
  *          onCaptured: () => void, onArchiveRun: () => void,
  *          onOpenArchive: () => void, onCalendar: (group: object) => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
@@ -92,6 +98,11 @@ export function mountSettings(opts) {
     paletteOpen: document.getElementById('paletteOpen'),
     textSizeControl: document.getElementById('textSizeControl'),
     textSizeMeta: document.getElementById('textSizeMeta'),
+    rowActionsMeta: document.getElementById('rowActionsMeta'),
+    swipeRight: document.getElementById('swipeRightSelect'),
+    swipeLeft: document.getElementById('swipeLeftSelect'),
+    rowMenuList: document.getElementById('rowMenuList'),
+    rowActionsReset: document.getElementById('rowActionsReset'),
     captureCardMeta: document.getElementById('captureCardMeta'),
     statusCapture: document.getElementById('statusCapture'),
     statusCaptureRun: document.getElementById('statusCaptureRun'),
@@ -668,6 +679,115 @@ export function mountSettings(opts) {
     els.textSizeControl.addEventListener('click', word);
   }
 
+  // ------------------------------------------------------ row actions
+  /** Row actions (#311): the two swipes and the ⋯ menu's list, choices from
+   *  the one action table. Every change is stored at once (rowprefs.js) and
+   *  handed to `opts.onRowActions`, which redraws the rows — a menu reads its
+   *  list when its row is drawn. An action a swipe runs is ticked and locked
+   *  in the list, so the menu always keeps the tap path to it (WCAG 2.5.1). */
+  function renderRowActions(focusId, focusDir) {
+    const p = rowPrefs();
+    els.rowActionsMeta.textContent = isDefault(p) ? 'Default' : 'Custom';
+    [[els.swipeRight, p.right], [els.swipeLeft, p.left]].forEach(function (pair) {
+      const sel = pair[0];
+      sel.replaceChildren();
+      [['', 'Nothing']].concat(ACTIONS.map(function (a) { return [a.id, a.label]; })).forEach(function (o) {
+        const opt = document.createElement('option');
+        opt.value = o[0];
+        opt.textContent = o[1];
+        opt.selected = o[0] === pair[1];
+        sel.appendChild(opt);
+      });
+    });
+    // the chosen list in its order, then every other action, unticked
+    const rest = ACTIONS.map(function (a) { return a.id; }).filter(function (id) { return p.menu.indexOf(id) < 0; });
+    const ids = p.menu.concat(rest);
+    els.rowMenuList.replaceChildren();
+    ids.forEach(function (id, i) {
+      const a = actionById(id);
+      const shown = p.menu.indexOf(id) >= 0;
+      const swipe = id === p.right ? 'swipe right' : (id === p.left ? 'swipe left' : null);
+      const li = document.createElement('li');
+      li.className = 'row-actions-item';
+      li.dataset.action = id;
+      const label = document.createElement('label');
+      label.className = 'row-actions-show';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'check';
+      box.checked = shown || !!swipe;
+      box.disabled = !!swipe;
+      box.addEventListener('change', function () { toggleMenu(id, box.checked); });
+      const name = document.createElement('span');
+      name.textContent = a.label;
+      label.append(box, name);
+      li.appendChild(label);
+      if (swipe) {
+        const hint = document.createElement('span');
+        hint.className = 'row-actions-hint muted';
+        hint.textContent = 'used by ' + swipe;
+        li.appendChild(hint);
+      }
+      [['up', -1, 'chevron-up'], ['down', 1, 'chevron-down']].forEach(function (m) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'icon-btn row-actions-move';
+        b.dataset.move = m[0];
+        b.setAttribute('aria-label', 'Move ' + a.label + ' ' + m[0]);
+        b.innerHTML = icon(m[2]);
+        // only a listed action has a place to move; the first can't go up, the last can't go down
+        b.disabled = !shown || (m[1] < 0 ? i === 0 : i === p.menu.length - 1);
+        b.addEventListener('click', function () { move(id, m[1], m[0]); });
+        li.appendChild(b);
+      });
+      els.rowMenuList.appendChild(li);
+    });
+    if (focusId) {
+      const back = els.rowMenuList.querySelector('[data-action="' + focusId + '"] [data-move="' + focusDir + '"]:not(:disabled)')
+        || els.rowMenuList.querySelector('[data-action="' + focusId + '"] [data-move]:not(:disabled)');
+      if (back) back.focus();
+    }
+  }
+
+  function saveRowActions(next, focusId, focusDir) {
+    setRowPrefs(next);
+    renderRowActions(focusId, focusDir);
+    if (opts.onRowActions) opts.onRowActions();
+  }
+
+  function toggleMenu(id, on) {
+    const p = rowPrefs();
+    const menu = p.menu.filter(function (x) { return x !== id; });
+    if (on) menu.push(id);
+    saveRowActions(Object.assign({}, p, { menu: menu }));
+  }
+
+  function move(id, by, dir) {
+    const p = rowPrefs();
+    const menu = p.menu.slice();
+    const i = menu.indexOf(id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= menu.length) return;
+    menu.splice(i, 1);
+    menu.splice(j, 0, id);
+    saveRowActions(Object.assign({}, p, { menu: menu }), id, dir);
+  }
+
+  function wireRowActions() {
+    els.swipeRight.addEventListener('change', function () {
+      saveRowActions(Object.assign({}, rowPrefs(), { right: els.swipeRight.value }));
+    });
+    els.swipeLeft.addEventListener('change', function () {
+      saveRowActions(Object.assign({}, rowPrefs(), { left: els.swipeLeft.value }));
+    });
+    els.rowActionsReset.addEventListener('click', function () {
+      setRowPrefs(null);
+      renderRowActions();
+      if (opts.onRowActions) opts.onRowActions();
+    });
+    renderRowActions();
+  }
+
   function wireIssueSyncNow() {
     els.issuesSyncNow.addEventListener('click', function () {
       // the button is the app's one sync control now (#301): it spins while the pass runs
@@ -716,6 +836,7 @@ export function mountSettings(opts) {
   wireIssueSyncNow();
   wirePaletteOpen();
   wireTextSize();
+  wireRowActions();
   wireCaptureRunNow();
   wireArchiveCard();
   wireCalendarRefresh();

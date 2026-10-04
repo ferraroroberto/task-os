@@ -58,7 +58,7 @@ Its shots:
 kebab (the row has no clock any more) and read in full, through the shared
 action runner. Its shots:
 
-    docs/screenshots/story-29-row-actions-1-desktop.png
+    docs/screenshots/story-29-row-actions-{1,2}-desktop.png
 """
 
 from __future__ import annotations
@@ -98,6 +98,19 @@ def _trow(page: Page, title: str, scope: str = ""):
     """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``."""
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
 
+
+# A sideways touch on a row, as synthetic Pointer Events (swipe.js, #311): it
+# proves the wiring — which action a side runs — not the feel of the gesture,
+# which is the owner's iPhone walk (story 29).
+_SWIPE = """(el, [x0, x1]) => {
+  const r = el.getBoundingClientRect();
+  const y = r.top + r.height / 2;
+  const fire = (type, x) => el.dispatchEvent(new PointerEvent(type, {
+    pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: x, clientY: y }));
+  fire('pointerdown', x0);
+  for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
+  fire('pointerup', x1);
+}"""
 
 # A native date picker is an OS widget no browser automation can see or drive,
 # so `showPicker()` is recorded instead: the call is what "the picker opened"
@@ -900,6 +913,51 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(menu).to_be_hidden()
     expect(_trow(page, "School enrolment forms", "#paneToday").locator(".trow-kebab")).to_be_focused()
     dismiss_toasts(page)
+
+    # 4c. Story 29 (#311): Settings → Row actions sets, on this device, what a
+    #     swipe runs and what the menu lists. Swipe left → Snooze…, Cycle
+    #     priority out of the menu, Snooze… moved to the top: the row's menu
+    #     follows, a swipe left opens the snooze picker, and the action a
+    #     swipe runs cannot be taken out of the menu (WCAG 2.5.1). Reset puts
+    #     the plan's defaults back.
+    page.click("#settingsBtn")
+    card = page.locator("#rowActionsCard")
+    card.locator("summary").click()
+    meta = page.locator("#rowActionsMeta")
+    expect(meta).to_have_text("Default")
+    page.select_option("#swipeLeftSelect", "snooze")
+    lst = page.locator("#rowMenuList")
+    expect(lst.locator("[data-action='snooze'] input")).to_be_checked()
+    expect(lst.locator("[data-action='snooze'] input")).to_be_disabled()
+    expect(lst.locator("[data-action='snooze'] .row-actions-hint")).to_have_text("used by swipe left")
+    lst.locator("[data-action='priority'] input").uncheck()
+    for _ in range(3):                                   # 4th in the default list → 1st
+        lst.locator("[data-action='snooze'] [data-move='up']").click()
+    expect(lst.locator(".row-actions-item").first).to_have_attribute("data-action", "snooze")
+    expect(lst.locator("[data-action='snooze'] [data-move='up']")).to_be_disabled()
+    expect(meta).to_have_text("Custom")
+    stored = page.evaluate("JSON.parse(localStorage.getItem('task-os.rowactions'))")
+    assert stored["left"] == "snooze" and stored["menu"][0] == "snooze" and "priority" not in stored["menu"], stored
+    card.scroll_into_view_if_needed()
+    shot(page, shots / "story-29-row-actions-2-desktop.png")
+    page.click("nav.tabs .tab[data-tab='today']")
+    row = _trow(page, "School enrolment forms", "#paneToday")
+    row.locator(".trow-kebab").click()
+    actions = page.locator(".row-menu .row-menu-item").evaluate_all("els => els.map(e => e.dataset.action)")
+    assert actions[0] == "snooze" and "priority" not in actions, actions
+    page.keyboard.press("Escape")
+    expect(page.locator(".row-menu")).to_have_count(0)
+    row.locator(".trow-main").evaluate(_SWIPE, [900, 300])          # synthetic touch: the wiring
+    picker = page.locator(".snooze-pop .snooze-menu")
+    expect(picker).to_have_attribute("data-field", "starts")
+    page.keyboard.press("Escape")
+    expect(picker).to_have_count(0)
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None    # a cancelled pick writes nothing
+    page.click("#settingsBtn")
+    page.click("#rowActionsReset")
+    expect(meta).to_have_text("Default")
+    assert page.evaluate("localStorage.getItem('task-os.rowactions')") is None
+    page.click("nav.tabs .tab[data-tab='today']")
 
     # 5. The drawer edits Starts beside Due — the same control, one behaviour.
     page.goto(f"{base}/#task/{task_id}")

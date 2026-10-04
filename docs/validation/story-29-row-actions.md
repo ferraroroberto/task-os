@@ -16,12 +16,13 @@
 | 6 | On the phone, tap ⋯ → **Change date…** on a row (story 07) | The vendored modal (top-anchored) offers Today · Tomorrow · This weekend · Next week · Pick a date… · No date, and a pick re-dates the row |
 | 7 | Measure a phone row (stories 04, 05, 07) | The circle and the kebab are 44×44, the circle, the open target and the kebab share no pixel, the row is ≤ 61px with its hairline, and nothing on the meta line is a button or a link |
 | 8 | On the phone, swipe a Table row left, then right (story 07, synthetic touch pointers) | Left: the row springs back and the date sheet opens, nothing written. A swipe that starts in the 20px edge zone does nothing. Right: the row slides out, the task is done, the toast offers **Undo (Z)**, and Undo brings the row back |
+| 9 | Settings → **Row actions** (story 04): swipe left → *Snooze…*, untick *Cycle priority*, move *Snooze…* to the top | The card says **Custom**. *Snooze…* is ticked and locked ("used by swipe left") and so is *Complete task* ("used by swipe right"). The row's ⋯ menu now starts with Snooze… and has no priority item, and a swipe left opens the snooze picker. **Reset to the defaults** clears the stored choice and the card says **Default** again |
 
 ## Proof
 
-- Screenshots: [story-29-row-actions-1-desktop.png](../screenshots/story-29-row-actions-1-desktop.png) (the open menu on a Today row).
+- Screenshots: [story-29-row-actions-1-desktop.png](../screenshots/story-29-row-actions-1-desktop.png) (the open menu on a Today row) · [story-29-row-actions-2-desktop.png](../screenshots/story-29-row-actions-2-desktop.png) (Settings → Row actions, customised).
 - E2e: step 4b of `_walk_starts_and_snooze` inside `tests/e2e/test_story_04_triage.py`, the circle in `tests/e2e/test_story_05_board.py`, and the phone row in `tests/e2e/test_story_07_phone.py` (`_walk_row_tap_targets`). They ride existing stories, so the suite gains no test function.
-- Unit: `tests/test_row_actions.py`, the shared table's plans, inverses and messages under node. `tests/test_swipe.py`, the swipe classifier: edge zone, slop and direction lock, the 96px / 35 % threshold, flick.
+- Unit: `tests/test_row_actions.py`, the shared table's plans, inverses and messages under node. `tests/test_swipe.py`, the swipe classifier: edge zone, slop and direction lock, the 96px / 35 % threshold, flick. `tests/test_row_prefs.py`, the Row actions choice: defaults, normalising whatever storage returns, and a swipe's action always kept in the menu.
 
 ## Owner's iPhone checklist (not verified)
 

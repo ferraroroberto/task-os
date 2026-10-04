@@ -2294,6 +2294,30 @@ tr.task-row:focus-within > td { background: var(--card-2); }
 }
 tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
+/* Settings → Row actions (#311): two swipe pickers, then the menu's list —
+   one line per action: tick (listed), name, why it is locked, move up/down.
+   The move squares are .icon-btn (34px painted, 44px with its expansion), set
+   10px apart so their expanded targets touch but never overlap. */
+.row-actions-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--row-sm); }
+.row-actions-label { font-size: var(--font-label); color: var(--fg); }
+.row-actions-field .select-native { width: auto; min-width: 12rem; }
+.row-actions-sub { margin: var(--space-sm) 0 0; font-size: var(--font-label); font-weight: 600; color: var(--fg); }
+.row-actions-list { list-style: none; margin: 0; padding: 0; }
+.row-actions-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-sm);
+  border-top: 1px solid var(--line-muted);
+}
+.row-actions-item:first-child { border-top: 0; }
+.row-actions-show { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-sm); min-height: var(--row-sm); font-size: var(--font-label); color: var(--fg); cursor: pointer; }
+.row-actions-show span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-actions-hint { font-size: var(--font-caption); white-space: nowrap; }
+.row-actions-move .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.row-actions-move:disabled { color: var(--line); cursor: default; }
+.row-actions-reset { justify-self: start; }
+
 /* The shortcuts sheet — the vendored modal shell, read-only. */
 .detail-dialog.keys-dialog { width: min(560px, 94vw); margin-top: 6vh; }
 
