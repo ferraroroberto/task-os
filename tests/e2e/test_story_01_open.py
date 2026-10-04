@@ -204,6 +204,13 @@ def _assert_widths(page: Page) -> None:
     assert declared == WIDE_VIEWS, f".fleet.toml [design] wide_views is {declared}"
     for tab in WIDE_VIEWS:
         width = _pane_width(page, tab)
+        if tab == "today":
+            # Today is a split view (#336): the list takes the left half and the
+            # detail pane the right, so the view spans the window as the two
+            # of them, from the list's left edge to the pane's right edge.
+            width = page.evaluate(
+                "() => document.querySelector('#todayDetailEmpty').getBoundingClientRect().right"
+                " - document.querySelector('#paneToday').getBoundingClientRect().left")
         assert width >= DESKTOP["width"] * 0.6, f"{tab} is a declared wide view but is {width}px wide"
     for tab in MEASURED_VIEWS:
         width = _pane_width(page, tab)
