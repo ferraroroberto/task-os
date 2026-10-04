@@ -375,15 +375,18 @@
   </nav>
 
   <main class="app">
-    <!-- Vendored home-head: title glyph + app name + inline status, theme
+    <!-- Vendored home-head: title glyph + title + inline status, theme
          toggle pinned right. Shared across every tab (PC-first: one persistent
-         header row, not a per-pane repeat). Both glyphs ship; CSS keyed on
-         html[data-theme] shows the ACTION (moon in light, sun in dark). -->
+         header row, not a per-pane repeat), so its title names the view on
+         screen, as the contract asks of every pane's header: it is the page's
+         heading, the first thing read above each pane (#339; app.js
+         setHeadTitle). Both glyphs ship; CSS keyed on html[data-theme] shows
+         the ACTION (moon in light, sun in dark). -->
     <div class="card home-head">
-      <span class="home-title">
-        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
-        task-os
-      </span>
+      <h1 class="home-title">
+        <svg class="icon" aria-hidden="true" focusable="false"><use id="homeTitleIcon" href="#i-calendar-days"></use></svg>
+        <span id="homeTitleText">Today</span>
+      </h1>
       <span id="homeHeadStatus" class="status"></span>
       <!-- The header keeps the spec's two trailing icon buttons (#301): the
            theme toggle and the Settings gear. The issue sync lives on its
