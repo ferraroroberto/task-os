@@ -1005,13 +1005,16 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         # 11. § #81 on the phone: the same Select toggle, tap-to-select (no
         #     gesture — the horizontal swipe still belongs to the carousel),
         #     and the bulk bar sized for the strip, clear of the nav pill.
-        # the strip's two icon buttons are one pair: same square, both 44px on
-        # touch (the toggle used to keep the 36px control height here)
-        tog_box = page.locator("#paneBoard [data-select-toggle]").bounding_box()
+        # the strip's two buttons are one pair: the same height, 44px on touch
+        # (the toggle used to keep the 36px control height here); the toggle
+        # says "Select" in words, so it is as wide as its label (#339)
+        toggle = page.locator("#paneBoard [data-select-toggle]")
+        expect(toggle).to_have_text("Select")
+        tog_box = toggle.bounding_box()
         add_box = page.locator("#paneBoard [data-quick-add]").bounding_box()
         assert tog_box and add_box
-        assert (tog_box["width"], tog_box["height"]) == (add_box["width"], add_box["height"]), (tog_box, add_box)
-        assert tog_box["width"] == tog_box["height"] >= 44, tog_box
+        assert tog_box["height"] == add_box["height"] == add_box["width"] >= 44, (tog_box, add_box)
+        assert tog_box["width"] >= 44, tog_box
         assert_no_overlap(page.locator("#paneBoard .pane-top button"))
 
         page.locator("#paneBoard [data-select-toggle]").tap()

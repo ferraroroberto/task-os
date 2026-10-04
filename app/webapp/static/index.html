@@ -415,9 +415,10 @@
              ticked the bulk bar takes this strip over — see bulkbar.js. -->
         <div class="pane-top">
           <div class="filter-text" id="boardFilterText" hidden></div>
-          <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
+          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
                   title="Select tasks" aria-label="Select tasks" aria-pressed="false">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+            <span class="strip-label">Select</span>
           </button>
           <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
@@ -447,18 +448,21 @@
         <div class="pane-top">
           <div class="filter-text" id="tableFilterText" hidden></div>
           <div class="view-toggle" id="tableViewToggle" role="group" aria-label="Table view">
-            <button type="button" class="button-surface strip-square view-seg" data-view="table"
+            <button type="button" class="button-surface strip-square view-seg has-label" data-view="table"
                     title="Table" aria-label="Table view" aria-pressed="true">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-table"></use></svg>
+              <span class="strip-label">Table</span>
             </button>
-            <button type="button" class="button-surface strip-square view-seg" data-view="tree"
+            <button type="button" class="button-surface strip-square view-seg has-label" data-view="tree"
                     title="Tree" aria-label="Tree view" aria-pressed="false">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-tree"></use></svg>
+              <span class="strip-label">Tree</span>
             </button>
           </div>
-          <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
+          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
                   title="Select tasks" aria-label="Select tasks" aria-pressed="false">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+            <span class="strip-label">Select</span>
           </button>
           <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
@@ -480,9 +484,10 @@
              of the filters stay in the collapsed card below. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
-          <button type="button" class="button-surface select-toggle strip-square hit-target" data-select-toggle
+          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
                   title="Select tasks" aria-label="Select tasks" aria-pressed="false">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
+            <span class="strip-label">Select</span>
           </button>
           <button type="button" class="button-surface quick-add-btn hit-target" data-quick-add
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
