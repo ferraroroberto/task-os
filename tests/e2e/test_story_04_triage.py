@@ -82,7 +82,15 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot, table_view, tree_view
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    _get,
+    assert_grid_walk,
+    dismiss_toasts,
+    shot,
+    table_view,
+    tree_view,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -195,6 +203,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         assert_no_overlap(title_chips)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
+        # #339: the grid is an ARIA data grid, its live cells (the issue chip,
+        # due, status, the folder and AI chips) reached from the row by the
+        # arrow keys rather than counted as a list row's actions
+        coding = page.locator(".task-table .task-row", has=page.locator(".t-title a.chip")).first
+        assert assert_grid_walk(coding) >= 4
 
         # 2. Change a due date inline — one click on the cell opens the date
         # picker (#107), where it used to swap the cell for a text box you had

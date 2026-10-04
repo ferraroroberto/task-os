@@ -45,6 +45,7 @@ import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { codeEl, fmtTsShort, folderChip, pct, statusPart } from './format.js';
+import { markGrid } from './gridnav.js';
 import { toast } from './toast.js';
 
 const RUNS_LIMIT = 20;
@@ -697,6 +698,7 @@ export function mountArchive(opts) {
     scroll.className = 'table-scroll';
     const table = document.createElement('table');
     table.className = 'task-table archive-table';
+    markGrid(table, 'Archived mails');
     const thead = document.createElement('thead');
     const hrow = document.createElement('tr');
     COLUMNS.forEach(function (label) {
@@ -711,6 +713,8 @@ export function mountArchive(opts) {
       const tr = document.createElement('tr');
       tr.className = 'archive-row';
       tr.dataset.id = String(item.id);
+      tr.tabIndex = 0;       // a grid row: the arrow walk starts here (gridnav.js)
+      tr.setAttribute('aria-label', item.subject || '(no subject)');
       tr.dataset.status = item.status;
       // The panel's own full-width row, right under this one, so opening it
       // never changes a single column's width.
