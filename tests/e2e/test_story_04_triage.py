@@ -46,6 +46,12 @@ Its shots:
     docs/screenshots/story-15-plan-my-day-6-desktop.png   (dark)
     docs/screenshots/story-15-plan-my-day-7-phone.png
 
+**Story 30 — Today's split view (#336)** rides here as ``_walk_today_split``
+right after the plan walk, on the same Today surface: the list in the left
+half, the detail pane in the right (empty state until a task opens). Its shots:
+
+    docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
+
 **Story 25 — repeat every N (#229)** rides here too, as
 ``_walk_recurrence_interval`` right after the story-17 anchor walk it extends
 (the same drawer, the same seeded task) plus a phone assertion. Its shots:
@@ -379,6 +385,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
 
         # ------------------------------------------- plan my day (#89) ----
         _walk_plan_my_day(page, base, shots)
+
+        # -------------------------------------- today split view (#336) ----
+        _walk_today_split(page, base, shots)
 
         # --------------------------------------- recurrence anchor (#112) ----
         _walk_recurrence_anchor(page, base, shots)
@@ -761,6 +770,82 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
     assert _get(base, f"/api/tasks/{tap_id}")["status"] == "todo"
+
+
+# ------------------------------------------- story 30 — Today split (#336)
+
+def _walk_today_split(page: Page, base: str, shots: Path) -> None:
+    """Today at 1440: the list takes the left half, the detail pane the right.
+
+    With nothing open the right half says so (an empty state, not a blank), and
+    the list keeps its half width, so a row's ⋯ stays near its title. Opening a
+    task fills that same right half (no overlay), the ``#task/<id>`` link works
+    on a cold load, and closing returns to the empty state. Other tabs keep the
+    440px panel.
+
+    Screenshots: docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
+    """
+    page.goto(f"{base}/")
+    pane = page.locator("#paneToday")
+    drawer = page.locator("#taskDrawer")
+    empty = page.locator("#todayDetailEmpty")
+    expect(pane.locator(".today-group .trow").first).to_be_visible()
+
+    # 1. Nothing open: the empty state fills the right half, the list the left.
+    expect(drawer).to_be_hidden()
+    expect(empty).to_be_visible()
+    expect(empty).to_contain_text("Select a task to see its details")
+    list_box, empty_box = pane.bounding_box(), empty.bounding_box()
+    assert list_box and empty_box
+    assert list_box["x"] + list_box["width"] <= empty_box["x"] + 1, (list_box, empty_box)
+    assert 0.35 * DESKTOP["width"] <= list_box["width"] <= 0.6 * DESKTOP["width"], list_box
+    assert 0.35 * DESKTOP["width"] <= empty_box["width"] <= 0.6 * DESKTOP["width"], empty_box
+    kebab = pane.locator(".today-group .trow-kebab").first.bounding_box()
+    assert kebab and kebab["x"] + kebab["width"] <= empty_box["x"], "the ⋯ must sit inside the list half"
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-30-today-split-1-desktop.png")
+
+    # 2. ⋯ → Open details fills the right half in place of the empty state, and
+    #    the menu opens whole, inside the window.
+    row = pane.locator(".today-group .trow").first
+    task_id = int(row.get_attribute("data-id"))
+    row.locator(".trow-kebab").click()
+    menu = page.locator(".row-menu")
+    expect(menu).to_be_visible()
+    menu_box = menu.bounding_box()
+    assert menu_box and menu_box["x"] >= 0 and menu_box["x"] + menu_box["width"] <= DESKTOP["width"], menu_box
+    assert menu_box["y"] >= 0 and menu_box["y"] + menu_box["height"] <= DESKTOP["height"], menu_box
+    menu.locator("[data-action='open']").click()
+    expect(drawer).to_be_visible()
+    expect(empty).to_be_hidden()
+    expect(page).to_have_url(f"{base}/#task/{task_id}")
+    drawer_box, list_box = drawer.bounding_box(), pane.bounding_box()
+    assert drawer_box and list_box
+    assert abs(drawer_box["x"] - empty_box["x"]) <= 1 and abs(drawer_box["width"] - empty_box["width"]) <= 1, (
+        drawer_box, empty_box)
+    assert list_box["x"] + list_box["width"] <= drawer_box["x"] + 1, (list_box, drawer_box)
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-30-today-split-2-desktop.png")
+
+    # 3. Closing returns to the empty state, and the cold deep link opens the
+    #    pane on Today (the landing tab) without an overlay.
+    drawer.locator(".drawer-close").click()
+    expect(drawer).to_be_hidden()
+    expect(empty).to_be_visible()
+    page.goto(f"{base}/#task/{task_id}")
+    expect(drawer).to_be_visible()
+    expect(empty).to_be_hidden()
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+    shot(page, shots / "story-30-today-split-3-desktop.png")
+
+    # 4. The other tabs keep the 440px panel and show no empty pane.
+    page.click("nav.tabs .tab[data-tab='table']")
+    box = drawer.bounding_box()
+    assert box and 400 <= box["width"] <= 480, box
+    drawer.locator(".drawer-close").click()
+    expect(empty).to_be_hidden()
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(empty).to_be_visible()
 
 
 # ---------------------------------------------- story 13 — starts + snooze

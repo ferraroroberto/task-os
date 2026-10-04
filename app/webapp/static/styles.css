@@ -1361,6 +1361,36 @@ a.chip:hover { text-decoration: underline; }
   body[data-drawer="open"] { overflow: hidden; }
   body[data-drawer="open"] nav.tabs { visibility: hidden; }
 }
+/* Today's split view (#336): at the drawer's own desktop breakpoint the Today
+   tab is two columns, the list on the left and the detail pane on the right,
+   so a row's ⋯ stays near its title instead of at the far edge of the window.
+   The pane is the same fixed drawer, widened to half the content area; the
+   empty-state aside holds its place while no task is open. Other tabs keep the
+   440px panel that opens over nothing. Below 1024px none of this applies. */
+/* Its own compositor layer, always: a fixed box that only sometimes gets one
+   paints its text with LCD subpixel antialiasing on some frames and grayscale
+   on others, which made every shot with this pane on screen a coin toss. */
+.drawer-empty { display: none; will-change: transform; }
+@media (min-width: 1024px) {
+  .app:has(> #paneToday:not([hidden])) {
+    --split-w: calc((100vw - var(--split-rail, 0px)) / 2 - var(--gap) * 2);
+    padding-right: calc(var(--split-w) + var(--gap) * 2);
+  }
+  .app:has(> #paneToday:not([hidden])) > .drawer { --drawer-w: var(--split-w); box-shadow: none; }
+  body:not([data-drawer]) .app:has(> #paneToday:not([hidden])) > .drawer-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .drawer-empty .empty-state { padding: var(--space-md); }
+  /* A calendar lane no longer fits beside the tasks in half a window: it moves
+     above them, in view, and the rows keep the width. */
+  .app .today-layout.has-cal { grid-template-columns: minmax(0, 1fr); }
+  .app .today-layout.has-cal .cal-lane { order: -1; padding-left: 0; border-left: 0; padding-bottom: var(--space-md); border-bottom: 1px solid var(--line); }
+}
+@media (min-width: 1100px) and (pointer: fine) {
+  .app { --split-rail: var(--layout-rail, 80px); }
+}
 .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); margin-bottom: 6px; }
 .drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-xs); min-height: 34px; font-size: var(--font-caption); }
 .crumb {
