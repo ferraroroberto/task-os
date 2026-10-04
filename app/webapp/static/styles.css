@@ -2496,11 +2496,12 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-subject { display: block; font-weight: 600; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-text { display: block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-dest { display: block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Three lines on the grid, the whole sentence in the title: a reason is worth
-   reading, not worth pushing every other column off the screen. */
+/* One line on the grid, the whole sentence in the title: a row keeps to its
+   subject line (#339), and a reason is worth reading, not worth pushing every
+   other column off the screen. The phone reads it whole, behind Review. */
 .archive-reason {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--muted);
@@ -2591,10 +2592,13 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 .archive-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .archive-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
 .archive-card-head .archive-subject { min-width: 0; max-width: none; }
-.archive-card-meta, .archive-card-why { margin: 0; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.archive-card-why { margin: 0; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+/* who · when · where, one line: the destination is the end that ellipsizes */
+.archive-card-meta { margin: 0; min-width: 0; font-size: var(--font-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-card-meta .archive-dest { display: inline; max-width: none; }
 .archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); min-width: 0; font-size: var(--font-caption); }
 .archive-card-dest .archive-dest { min-width: 0; max-width: 100%; }
-.archive-card-why .archive-reason { max-width: none; overflow-wrap: anywhere; }
+.archive-card-why .archive-reason { display: block; max-width: none; overflow-wrap: anywhere; }
 /* A file chip is `.archive-files`' own flex item, which — like any flex item —
    defaults to an `auto` min-width, so a name longer than the card widened the
    row and the card together instead of being cut (#173). `min-width: 0` on
@@ -2606,7 +2610,8 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* the chip no longer clips (#305: its ::before band reaches outside it); the
    label already does — `.chip-label` is `overflow: hidden` with an ellipsis, so
    it is the part that shrinks */
-.archive-menu-body { padding-top: 6px; }
+/* the files, the reason and the actions, stacked under the toggle (#339) */
+.archive-menu-body { padding-top: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 @media (max-width: 520px) {
   .archive-other { grid-template-columns: minmax(0, 1fr); }
 }

@@ -624,6 +624,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # a card already has room to grow, and #173 already made every chip wrap
     # to its own line rather than widen the card).
     long_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, LONG_ID)}']")
+    long_card.locator(".archive-menu-toggle").tap()      # the files wait behind Review (#339)
     long_chips = long_card.locator(".archive-files .chip")
     expect(long_chips).to_have_count(5)
     card_box = _box(long_card)
@@ -636,6 +637,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert_min_target(long_chips)
     assert_no_overlap(long_chips)
     assert_no_horizontal_overflow(p)
+    long_card.locator(".archive-menu-toggle").tap()
 
     # 10a. The head is one line, and the three readings are one line each — no
     #      label column, short wording, and the bound compact beside the button
@@ -668,8 +670,15 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # 10c. …and the row that already had its human says so and asks nothing.
     reviewed_card = p.locator(f".archive-card[data-id='{reviewed_item['id']}']")
     expect(reviewed_card.locator(".archive-state")).to_have_text("reviewed")
-    expect(reviewed_card.locator(".archive-menu-toggle")).to_have_count(0)
+    expect(reviewed_card.locator(".archive-menu-toggle")).to_have_text("Details")
     expect(reviewed_card).to_contain_text("nothing left to do")
+    # #339: a card reads at a glance in two lines (the subject with its state,
+    # then who · when · where): the files and the reason wait behind its
+    # Review / Details disclosure
+    for card in p.locator(".archive-card").all():
+        assert _box(card.locator(".archive-card-meta"))["height"] < _ONE_LINE_PX, "the card's second line wraps"
+        expect(card.locator(".archive-card-why")).to_be_hidden()
+        expect(card.locator(".archive-files")).to_be_hidden()
     assert_no_horizontal_overflow(p)
     assert_min_target(p.locator("#archiveRun"))
     assert_min_target(p.locator("#archiveLimit"))
@@ -759,9 +768,11 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
         assert len({s[key] for s in stuck_shapes}) == 1, f"row actions differ in {key}: {stuck_shapes}"
     assert_min_target(retry)
     assert_no_horizontal_overflow(p)
-    retry.scroll_into_view_if_needed()
+    # the open card holds its files and reason too now (#339): seat the whole
+    # card, clear of the floating pill, not just its Retry
+    stuck_card.evaluate("el => el.scrollIntoView({block: 'center'})")
     seat = _box(stuck_card)
-    assert seat["y"] >= 0, seat
+    assert seat["y"] >= 0 and seat["y"] + seat["height"] <= PHONE["height"] - 90, seat
     dismiss_toasts(p)
     shot(p, shots / "story-24-archive-10-phone.png")
 
