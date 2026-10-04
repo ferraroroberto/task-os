@@ -1217,7 +1217,11 @@ a.chip:hover { text-decoration: underline; }
    one above without overlapping it. Sideways the band reaches 4px, and the
    10px column gap leaves 2px clear between two neighbours' bands. */
 .folder-chips .chip { position: relative; margin: 11px 0; }
-.folder-chips .chip::before { content: ""; position: absolute; inset: -11px -4px; }
+.folder-chips .chip::before, .t-title a.chip::before { content: ""; position: absolute; inset: -11px -4px; }
+/* The issue chip beside a grid title (#305) is the same pill and the same band.
+   The title cell does not clip and its row is at least 56px (the due button is
+   44px real), so no margin is needed: the band stays inside the row. */
+.t-title a.chip { position: relative; }
 .c-folder .chip { max-width: 200px; }
 .c-comment { max-width: 280px; }
 .t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
