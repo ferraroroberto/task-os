@@ -82,6 +82,8 @@ const els = {
   paneSettings: document.getElementById('paneSettings'),
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
+  homeTitleText: document.getElementById('homeTitleText'),
+  homeTitleIcon: document.getElementById('homeTitleIcon'),
   settingsSite: document.getElementById('settingsSite'),
   searchBox: document.getElementById('searchBox'),
   searchHost: document.getElementById('searchHost'),
@@ -939,6 +941,7 @@ function openJournal() {
     navEl.dataset.activeTab = 'journal';
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneJournal; });
     window.scrollTo(0, 0);
+    setHeadTitle('Done journal', 'i-book-open');
   }
   if (!JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#journal');
   return refreshJournal();
@@ -949,6 +952,21 @@ function hideJournal() {
   state.journal.open = false;
   els.paneJournal.hidden = true;
   if (JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+}
+
+// ------------------------------------------------------------ the header
+/** The header names the view on screen (#339): the vendored home-head's
+ *  title is each pane's heading, so every tab opens with one. */
+function setHeadTitle(text, iconId) {
+  els.homeTitleText.textContent = text;
+  els.homeTitleIcon.setAttribute('href', '#' + iconId);
+}
+
+/** …a tab's name and glyph, read off its own nav button (one source). */
+function setHeadTitleFromTab(tab) {
+  const btn = document.querySelector('nav.tabs .tab[data-tab="' + tab + '"]');
+  if (!btn) return;
+  setHeadTitle(btn.querySelector('.tab-label').textContent, btn.querySelector('use').getAttribute('href').slice(1));
 }
 
 // ------------------------------------------------------------- settings
@@ -966,6 +984,7 @@ function openSettings() {
     navEl.dataset.activeTab = 'settings';
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneSettings; });
     els.settingsBtn.setAttribute('aria-current', 'page');
+    setHeadTitle('Settings', 'i-settings');
     const scroller = document.querySelector('.app');
     if (scroller) scroller.scrollTop = 0;
     window.scrollTo(0, 0);
@@ -1371,6 +1390,7 @@ async function boot() {
     defaultTab: 'today',
     onChange: function (tab) {
       state.tab = tab;
+      setHeadTitleFromTab(tab);
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
       hideSettings();  // …and Settings, the same way (#281)
       // …even before they have opened (#328): boot only opens them at its end,

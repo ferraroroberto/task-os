@@ -34,6 +34,7 @@ from tests.e2e.conftest import assert_control_boundaries, shot
 # Five destinations: the Tree became a view of the Table (#161) and the slot it
 # freed went to Archive (#159). Today leads, and is where a first visit opens (#319).
 TABS = ["Today", "Board", "Table", "Archive", "Search"]   # Settings is the header gear (#281)
+VIEWS = ["today", "board", "table", "archive", "search"]  # the tabs' data-tab ids, in TABS order
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
@@ -55,7 +56,8 @@ def _assert_shell(page: Page, sha: str, landing: str = "today") -> None:
     expect(tabs).to_have_count(len(TABS))
     assert tabs.all_inner_texts() == TABS
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", landing)
-    expect(page.locator(".home-head .home-title")).to_contain_text("task-os")
+    # the header is the page's heading and names the view on screen (#339)
+    expect(page.locator(".home-head h1.home-title")).to_have_text(dict(zip(VIEWS, TABS))[landing])
     pane = "#paneToday" if landing == "today" else "#paneBoard"
     expect(page.locator(f"{pane} .empty-state-message")).to_have_text("Add your first task")
     expect(page.locator("#buildReadout")).to_contain_text(f"Build: {sha}")
@@ -192,10 +194,13 @@ def _pane_width(page: Page, tab: str) -> float:
         page.locator("#settingsBtn").click()
         pane = page.locator("#paneSettings")
         pane.wait_for()
+        expect(page.locator(".home-head h1.home-title")).to_have_text("Settings")
         return pane.evaluate("el => el.getBoundingClientRect().width")
     page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
     pane = page.locator("[role=tabpanel]:not([hidden])")
     pane.wait_for()
+    # every view opens with its heading: the header names it (#339)
+    expect(page.locator(".home-head h1.home-title")).to_have_text(dict(zip(VIEWS, TABS))[tab])
     return pane.evaluate("el => el.getBoundingClientRect().width")
 
 

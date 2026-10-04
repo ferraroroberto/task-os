@@ -183,6 +183,10 @@ button, input, select, textarea { font: inherit; }
 .tree-toggle::before { inset: -8px; }        /* 28x28 authored */
 .due-pick-btn::before { inset: -7px; }       /* 30x30 authored, overrides .icon-btn's 34px inset */
 
+/* The header title is the page's h1 (#339): the vendored rule sets its size
+   and weight, the UA's heading margin goes. */
+h1.home-title { margin: 0; }
+
 /* Native inputs/selects reach the 44px floor with real geometry (#281): the
    element box is --hit-min tall, the visible 36px control is its padding box
    inside a transparent vertical --control-inset border, and the 1px boundary
