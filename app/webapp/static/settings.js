@@ -710,18 +710,21 @@ export function mountSettings(opts) {
       const li = document.createElement('li');
       li.className = 'row-actions-item';
       li.dataset.action = id;
-      const label = document.createElement('label');
-      label.className = 'row-actions-show';
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.className = 'check';
-      box.checked = shown || !!swipe;
-      box.disabled = !!swipe;
-      box.addEventListener('change', function () { toggleMenu(id, box.checked); });
+      // A pressed-state square, not a bare checkbox: the .icon-btn box is a real
+      // 44px target (34 painted + its expansion), which a 16px checkbox is not.
+      const listed = shown || !!swipe;
+      const tick = document.createElement('button');
+      tick.type = 'button';
+      tick.className = 'icon-btn row-actions-tick';
+      tick.setAttribute('aria-pressed', listed ? 'true' : 'false');
+      tick.setAttribute('aria-label', 'Show ' + a.label + ' in the menu');
+      tick.innerHTML = icon(listed ? 'square-check' : 'square');
+      tick.disabled = !!swipe;
+      tick.addEventListener('click', function () { toggleMenu(id, !listed, 'tick'); });
       const name = document.createElement('span');
+      name.className = 'row-actions-name';
       name.textContent = a.label;
-      label.append(box, name);
-      li.appendChild(label);
+      li.append(tick, name);
       if (swipe) {
         const hint = document.createElement('span');
         hint.className = 'row-actions-hint muted';
@@ -743,8 +746,12 @@ export function mountSettings(opts) {
       els.rowMenuList.appendChild(li);
     });
     if (focusId) {
-      const back = els.rowMenuList.querySelector('[data-action="' + focusId + '"] [data-move="' + focusDir + '"]:not(:disabled)')
-        || els.rowMenuList.querySelector('[data-action="' + focusId + '"] [data-move]:not(:disabled)');
+      // the control just used, on its rebuilt row (a move keeps its direction
+      // while it still can go that way)
+      const row = '[data-action="' + focusId + '"] ';
+      const back = focusDir === 'tick' ? els.rowMenuList.querySelector(row + '.row-actions-tick')
+        : (els.rowMenuList.querySelector(row + '[data-move="' + focusDir + '"]:not(:disabled)')
+          || els.rowMenuList.querySelector(row + '[data-move]:not(:disabled)'));
       if (back) back.focus();
     }
   }
@@ -759,7 +766,7 @@ export function mountSettings(opts) {
     const p = rowPrefs();
     const menu = p.menu.filter(function (x) { return x !== id; });
     if (on) menu.push(id);
-    saveRowActions(Object.assign({}, p, { menu: menu }));
+    saveRowActions(Object.assign({}, p, { menu: menu }), id, 'tick');
   }
 
   function move(id, by, dir) {
