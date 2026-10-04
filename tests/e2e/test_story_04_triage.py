@@ -89,6 +89,7 @@ from tests.e2e.conftest import (
     dismiss_toasts,
     shot,
     table_view,
+    text_contrast,
     tree_view,
 )
 
@@ -1129,6 +1130,10 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         # (#161) and the + sit side by side, all at the touch floor, with
         # effective rectangles that never overlap — the segmented pair joins on
         # a shared hairline, so its halves touch without their hit rects doing
+        # the pressed view says its name in accent-text on the accent tint,
+        # 4.5:1 (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
+        pressed = page.locator("#paneTable .view-seg[aria-pressed='true'] .strip-label")
+        assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
         strip = page.locator("#paneTable .filter-q, #paneTable .view-seg, #paneTable .quick-add-btn")
         assert_min_target(strip)
         assert_no_overlap(strip)
