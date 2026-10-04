@@ -49,7 +49,7 @@ const DEFAULT_STATUS = 'todo';
 /**
  * @param {HTMLDialogElement} dialog  the `#quickAdd` shell (index.html)
  * @param {{onCreated: (task: object) => void}} opts
- * @returns {{open: () => void, close: () => void}}
+ * @returns {{open: (preset?: {status?: string, due?: string}) => void, close: () => void}}
  */
 export function createQuickAdd(dialog, opts) {
   const form = dialog.querySelector('.quickadd-card');
@@ -326,7 +326,14 @@ export function createQuickAdd(dialog, opts) {
     isLive: function () { return dialog.open; },
   });
 
-  function open() {
+  /** @param {{status?: string, due?: string}} [preset] where the add came
+   *  from (#339): an empty Board column presets its status, Today's empty
+   *  list today's date. A preset date is a choice already made, so the
+   *  parse of the typed line does not clear it (the field still edits). */
+  function open(preset) {
+    const p = preset || {};
+    if (p.status && STATUSES.indexOf(p.status) >= 0) status.value = p.status;
+    if (p.due) { showDate(due, p.due, ''); touched.due = true; }
     if (!dialog.open) dialog.showModal();
     voice.refresh();
     input.focus();

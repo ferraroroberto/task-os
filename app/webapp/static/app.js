@@ -751,6 +751,7 @@ function renderBoardPane() {
       onAcceptSuggestion: acceptAISuggestion,
       onRejectSuggestion: rejectAISuggestion,
       onOpenArchive: function () { nav.setTab('archive'); },
+      onAdd: addTask,
     });
   }
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
@@ -767,7 +768,7 @@ function renderTodayPane() {
   renderToday(els.todayHost, viewItems(), {
     onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onSnooze: snoozeTask,
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
-    onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today,
+    onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
     sort: state.filters.sort, plan: state.plan, planMode: state.planMode, calendar: state.calendar,
   }, selectOpts()));
@@ -1117,6 +1118,11 @@ function wireQuickAdd() {
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) {
     btn.addEventListener('click', function () { quickAdd.open(); });
   });
+}
+
+/** An empty list's way forward (#339): the quick-add, preset to the list. */
+function addTask(preset) {
+  quickAdd.open(preset);
 }
 
 // ---------------------------------------------------------- build identity

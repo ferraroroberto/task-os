@@ -168,7 +168,10 @@ export function renderToday(host, items, handlers, opts) {
   section.appendChild(head);
 
   if (!data.due.length) {
-    section.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear'));
+    // …with its way forward (#339): a task due today
+    section.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear', handlers.onAdd ? {
+      actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
+    } : undefined));
   } else {
     data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers, o)); });
   }
@@ -183,7 +186,9 @@ export function renderToday(host, items, handlers, opts) {
   });
   later.card.open = true;
   if (!data.week.length) {
-    later.body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days'));
+    later.body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
+      actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
+    } : undefined));
   } else {
     data.week.forEach(function (g) { later.body.appendChild(buildGroup(g, handlers, o)); });
   }

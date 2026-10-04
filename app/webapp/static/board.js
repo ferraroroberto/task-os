@@ -31,10 +31,11 @@ import { icon } from './_vendored/icons/icons.js';
 import { sortItems, taskRow } from './rows.js';
 
 export const BOARD_COLUMNS = [
-  { key: 'inbox', label: 'Inbox', short: 'Inbox', empty: 'Inbox is empty' },
-  { key: 'todo', label: 'Todo', short: 'Todo', empty: 'Nothing queued' },
-  { key: 'standby', label: 'Standby', short: 'Standby', empty: 'Nothing on standby' },
-  { key: 'done', label: 'Done today', short: 'Done', empty: 'Nothing done today yet' },
+  { key: 'inbox', label: 'Inbox', short: 'Inbox', empty: 'Inbox is empty', add: 'Add to Inbox' },
+  { key: 'todo', label: 'Todo', short: 'Todo', empty: 'Nothing queued', add: 'Add a task' },
+  { key: 'standby', label: 'Standby', short: 'Standby', empty: 'Nothing on standby', add: 'Add to Standby' },
+  // nothing is added straight to Done: the sentence names what fills it
+  { key: 'done', label: 'Done today', short: 'Done', empty: "Nothing done today yet — tick a task's circle to close it" },
 ];
 const PHONE_MQ = '(max-width: 1023px)';
 
@@ -131,7 +132,10 @@ export function mountBoard(handlers) {
     const empty = document.createElement('div');
     empty.className = 'board-empty';
     empty.dataset.col = col.key;
-    empty.appendChild(emptyStateEl('square-kanban', col.empty));
+    // an empty column offers its way forward (#339): a task added straight into it
+    empty.appendChild(emptyStateEl('square-kanban', col.empty, col.add && handlers.onAdd ? {
+      actionLabel: col.add, onAction: function () { handlers.onAdd({ status: col.key }); },
+    } : undefined));
     section.appendChild(empty);
     wireDropTarget(section, col.key, handlers);
     columns.appendChild(section);
