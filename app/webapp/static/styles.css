@@ -603,6 +603,15 @@ a.chip:hover { text-decoration: underline; }
    inset is for the Table's 30px cell button, which has no neighbour.) */
 .strip-square, .quick-add-btn { position: relative; }
 .strip-square::before, .quick-add-btn::before { content: ""; position: absolute; inset: -4px; }
+/* The Select toggle and the view toggle's two halves say what they are beside
+   the glyph (#339): no convention fixes a checklist or a tree glyph's meaning,
+   and a tooltip never shows on touch. Same height as the squares, the width
+   follows the label; the + keeps its square, a glyph everyone reads. */
+.strip-square.has-label { width: auto; gap: 6px; padding: 0 10px; font-size: var(--font-label); font-weight: 600; }
+/* A phone strip has no room for glyph and word on three buttons and still a
+   usable filter field: there the word stays and the glyph goes (iOS's own
+   "Select" is a text button). */
+@media (max-width: 520px) { .strip-square.has-label .icon { display: none; } }
 
 /* --------------------------------------- the Table pane's view toggle (#161) */
 /* The grid and the outliner are two drawings of ONE filtered list, so they
