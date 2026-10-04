@@ -35,6 +35,7 @@ from tests.e2e.conftest import assert_control_boundaries, shot
 # freed went to Archive (#159). Today leads, and is where a first visit opens (#319).
 TABS = ["Today", "Board", "Table", "Archive", "Search"]   # Settings is the header gear (#281)
 VIEWS = ["today", "board", "table", "archive", "search"]  # the tabs' data-tab ids, in TABS order
+HEADINGS = dict(zip(VIEWS, TABS, strict=True))             # what the header names each view (#339)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
@@ -57,7 +58,7 @@ def _assert_shell(page: Page, sha: str, landing: str = "today") -> None:
     assert tabs.all_inner_texts() == TABS
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", landing)
     # the header is the page's heading and names the view on screen (#339)
-    expect(page.locator(".home-head h1.home-title")).to_have_text(dict(zip(VIEWS, TABS))[landing])
+    expect(page.locator(".home-head h1.home-title")).to_have_text(HEADINGS[landing])
     pane = "#paneToday" if landing == "today" else "#paneBoard"
     expect(page.locator(f"{pane} .empty-state-message")).to_have_text("Add your first task")
     expect(page.locator("#buildReadout")).to_contain_text(f"Build: {sha}")
@@ -200,7 +201,7 @@ def _pane_width(page: Page, tab: str) -> float:
     pane = page.locator("[role=tabpanel]:not([hidden])")
     pane.wait_for()
     # every view opens with its heading: the header names it (#339)
-    expect(page.locator(".home-head h1.home-title")).to_have_text(dict(zip(VIEWS, TABS))[tab])
+    expect(page.locator(".home-head h1.home-title")).to_have_text(HEADINGS[tab])
     return pane.evaluate("el => el.getBoundingClientRect().width")
 
 
