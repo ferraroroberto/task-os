@@ -934,6 +934,10 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(lst.locator("[data-action='priority'] .row-actions-tick")).to_have_attribute("aria-pressed", "false")
     # every control on the card is a real 44px target (the design review's TOUCH-01)
     assert_min_target(lst.locator(".row-actions-tick, .row-actions-move"))
+    # …and their glyphs sit on the icons.size inline step (the design review's COMP-02)
+    sizes = lst.locator(".row-actions-tick svg, .row-actions-move svg").evaluate_all(
+        "els => els.map(e => Math.round(e.getBoundingClientRect().width))")
+    assert set(sizes) == {16}, sizes
     for _ in range(3):                                   # 4th in the default list → 1st
         lst.locator("[data-action='snooze'] [data-move='up']").click()
     expect(lst.locator(".row-actions-item").first).to_have_attribute("data-action", "snooze")
