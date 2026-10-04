@@ -679,7 +679,10 @@ _SCROLL_ATTEMPTS = 5
 # Read from the computed style, so an engine that drops a declaration (WebKit
 # paints no box-shadow on a native <select>, #339) fails here as it renders.
 _BOUNDARY_MIN = 3.0
-_CONTROL_BOUNDARIES_JS = """(root) => {
+# The colour maths both contrast checks share: a CSS colour as RGBA (through a
+# canvas, so any syntax the engine paints), compositing, WCAG luminance and
+# ratio, and the background an element sits on, composited up its ancestors.
+_COLOR_JS = """
   const cv = document.createElement('canvas').getContext('2d');
   const rgba = (c) => { cv.clearRect(0,0,1,1); cv.fillStyle = '#000'; cv.fillStyle = c; cv.fillRect(0,0,1,1);
     const d = cv.getImageData(0,0,1,1).data; return [d[0], d[1], d[2], d[3] / 255]; };
@@ -690,6 +693,8 @@ _CONTROL_BOUNDARIES_JS = """(root) => {
   const bgOf = (el) => { const stack = []; for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
       const c = rgba(getComputedStyle(n).backgroundColor); if (c[3] > 0) { stack.push(c); if (c[3] >= 0.999) break; } }
     let base = [255, 255, 255, 1]; for (let i = stack.length - 1; i >= 0; i--) base = over(stack[i], base); return base; };
+"""
+_CONTROL_BOUNDARIES_JS = """(root) => {""" + _COLOR_JS + """
   const border = (s) => (parseFloat(s.borderTopWidth) || 0) > 0 && rgba(s.borderTopColor)[3] > 0 ? rgba(s.borderTopColor) : null;
   const inset = (s) => { const m = /^(rgba?\\([^)]*\\)) 0px 0px 0px [1-9][\\d.]*px inset$/.exec(s.boxShadow); return m ? rgba(m[1]) : null; };
   const out = [];
@@ -753,6 +758,17 @@ def assert_grid_walk(row: Locator) -> int:
     assert row.evaluate(is_row), "← from the first control did not return to the row"
     page.evaluate(_RESTORE_SCROLLS_JS)
     return controls
+
+
+_TEXT_CONTRAST_JS = """(el) => {""" + _COLOR_JS + """
+  const bg = bgOf(el);
+  return Math.round(ratio(over(rgba(getComputedStyle(el).color), bg), bg) * 100) / 100;
+}"""
+
+
+def text_contrast(text: Locator) -> float:
+    """WCAG contrast of *text*'s colour against the background it sits on (#339)."""
+    return text.evaluate(_TEXT_CONTRAST_JS)
 
 
 def assert_control_boundaries(scope: Locator) -> list[float]:

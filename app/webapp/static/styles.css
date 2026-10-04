@@ -631,11 +631,13 @@ a.chip:hover { text-decoration: underline; }
   border-left-color: transparent;
 }
 /* Engaged wears the accent-soft tint the Select toggle wears when it is on —
-   one "this is the state you are in" tone across the whole strip. */
+   one "this is the state you are in" tone across the whole strip. The halves
+   carry a word since #339, and text on a tint is accent-text (design.md: the
+   base accent on accent-soft falls under 4.5:1). */
 .view-seg[aria-pressed="true"] {
   background: var(--accent-soft);
   border-color: var(--accent-border-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .view-seg:last-child[aria-pressed="true"] { border-left-color: transparent; }
 /* The two halves share an edge, so neither expands across it (#281): each
@@ -654,7 +656,7 @@ a.chip:hover { text-decoration: underline; }
 .select-toggle.is-on {
   background: var(--accent-soft);
   border-color: var(--accent-border-soft);
-  color: var(--accent);
+  color: var(--accent-text);   /* its word on the tint, as the view toggle's */
 }
 .filter-text.is-superseded { display: none; }
 /* ONE line, never wrapped: the bar stands in for the strip it replaced, and a
