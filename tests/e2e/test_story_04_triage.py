@@ -188,6 +188,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         comment_chips = page.locator(".task-table .c-comment .chip")
         assert_min_target(comment_chips)
         assert_no_overlap(comment_chips)
+        # #305: the issue chip beside a coding task's title is one too
+        title_chips = page.locator(".task-table .t-title a.chip")
+        assert title_chips.count() >= 1, "the seed shows no issue chip in the grid's title cell"
+        assert_min_target(title_chips)
+        assert_no_overlap(title_chips)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
 
