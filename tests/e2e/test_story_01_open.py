@@ -29,7 +29,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import shot
+from tests.e2e.conftest import assert_control_boundaries, shot
 
 # Five destinations: the Tree became a view of the Table (#161) and the slot it
 # freed went to Archive (#159). Today leads, and is where a first visit opens (#319).
@@ -132,6 +132,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         expect(page.locator("#tableViewToggle")).to_be_hidden()
         page.keyboard.press("Control+K")
         page.fill("#paletteInput", ">tree view")
+        assert_control_boundaries(page.locator(".palette-input-row"))   # a field box, not a divider (#339)
         page.keyboard.press("Enter")
         expect(page.locator("#paneTable #treeHost .empty-state-message")).to_have_text("Add your first task")
         expect(page.locator("#paneTable .empty-state-message")).to_have_count(1)
