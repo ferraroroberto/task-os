@@ -361,6 +361,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     pane = page.locator("#paneArchive")
     expect(pane).to_be_visible()
     expect(pane.locator("#statusArchive .status-ok")).to_have_text("ready")
+    # the reading is in words, not config ids (#339): the model by name, the batch in mails
+    expect(pane.locator("#statusArchive")).to_contain_text("sorted by Claude Haiku · 8 mails a batch")
     expect(pane.locator("#statusArchiveRun")).to_have_text("never")
     expect(pane.locator("#statusArchiveRecent")).to_have_text("no finished run yet")
     expect(pane.locator("#archiveLimit")).to_have_value("")
@@ -641,7 +643,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     head_run, head_limit = _box(p.locator("#archiveRun")), _box(p.locator(".archive-limit"))
     assert abs(_mid_y(head_run) - _mid_y(head_limit)) < 6, "the head wrapped onto two lines"
     assert head_run["width"] > head_limit["width"], "the button did not take the free width"
-    expect(p.locator("#statusArchive")).to_contain_text("/batch")
+    expect(p.locator("#statusArchive")).to_contain_text("Claude Haiku · 8 a batch")
     expect(p.locator("#archiveRecentLabel")).to_have_text("Recent")
     # `09/09 09:00`, not `9/9/26, 9:00 AM` — no year, a 24-hour clock, and the
     # day still in the locale's own order (the date moves, so the shape is what

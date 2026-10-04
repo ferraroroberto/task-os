@@ -44,7 +44,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
-import { codeEl, fmtTsShort, folderChip, pct, statusPart } from './format.js';
+import { fmtTsShort, folderChip, modelName, pct, statusPart } from './format.js';
 import { markGrid } from './gridnav.js';
 import { toast } from './toast.js';
 
@@ -217,13 +217,13 @@ export function mountArchive(opts) {
       els.status.append(statusPart(status.last_error ? 'warn' : 'ok', status.running ? 'running' : 'ready'));
       if (narrow()) {
         els.status.append(
-          ' · ' + (status.model || 'no model')
-          + ' · ' + status.batch_size + '/batch · ' + status.examples + ' remembered'
+          ' · ' + (status.model ? modelName(status.model) : 'no model')
+          + ' · ' + status.batch_size + ' a batch · ' + status.examples + ' remembered'
         );
       } else {
         els.status.append(
-          ' · model ', codeEl(status.model || 'none'),
-          ' · batches of ' + status.batch_size + ' · ' + status.examples + ' corrections remembered'
+          ' · ' + (status.model ? 'sorted by ' + modelName(status.model) : 'no model')
+          + ' · ' + status.batch_size + ' mails a batch · ' + status.examples + ' corrections remembered'
         );
       }
       if (status.last_error) els.status.append(' · last error: ' + status.last_error);

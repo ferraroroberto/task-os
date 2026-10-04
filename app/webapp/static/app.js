@@ -1127,7 +1127,7 @@ async function fetchVersion() {
     const body = await res.json();
     els.buildReadout.textContent = buildReadoutText(body.git_sha || 'unknown', body.built_at || '');
     if (els.settingsSite && body.schema_version != null) {
-      els.settingsSite.textContent = 'schema v' + body.schema_version;
+      els.settingsSite.textContent = 'database version ' + body.schema_version;   // plain words (#339)
     }
   } catch (err) {
     // An unreachable version endpoint is its own visible state, never blank.

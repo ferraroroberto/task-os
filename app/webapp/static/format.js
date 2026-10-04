@@ -579,6 +579,15 @@ export function codeEl(text) {
   return c;
 }
 
+/** A model id in words, for a reading outside Settings (#339): `claude_haiku`
+ *  reads "Claude Haiku". Settings keeps the exact id (codeEl): there it is the
+ *  config value you would look for. */
+export function modelName(id) {
+  return String(id).split('_').filter(Boolean).map(function (w) {
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ');
+}
+
 /** A 0–1 ratio as whole percent, for every reading that shows one. */
 export function pct(value) {
   return Math.round(Number(value) * 100) + '%';

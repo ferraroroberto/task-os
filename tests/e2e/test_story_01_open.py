@@ -16,6 +16,7 @@ and dark, saving the numbered proof shots the validation record links to:
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 import urllib.request
 from pathlib import Path
@@ -196,6 +197,8 @@ def _pane_width(page: Page, tab: str) -> float:
         pane = page.locator("#paneSettings")
         pane.wait_for()
         expect(page.locator(".home-head h1.home-title")).to_have_text("Settings")
+        # the install card's summary says what it is in words, not "schema v17" (#339)
+        expect(page.locator("#settingsSite")).to_have_text(re.compile(r"^database version \d+$"))
         return pane.evaluate("el => el.getBoundingClientRect().width")
     page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
     pane = page.locator("[role=tabpanel]:not([hidden])")
