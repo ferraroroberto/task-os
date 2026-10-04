@@ -165,7 +165,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert counts == {k: len(api[k]) for k in COLUMNS}, counts
         assert counts["done"] == 0                                    # seed's done tasks are old
         expect(_col(page, "done").locator(".board-col-title")).to_have_text(re.compile(r"^Done today"))
-        expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_be_visible()
+        expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_contain_text("tick a task's circle")
         # a row = circle · title · kebab, with one passive meta line under the
         # title: project · due · priority · glyphs for the folder / AI / issue
         # it carries · children · comment COUNT · person — never the comment
@@ -207,6 +207,18 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(_card(page, "Renew passports")).to_be_visible()
         expect(_card(page, "Repair fence")).to_have_count(0)
         assert not filter_card.evaluate("el => el.open")        # never had to open
+        # #339: a column the filter empties offers its way forward: a task
+        # added straight into it, the quick-add preset to that column's status
+        adds = {"inbox": "Add to Inbox", "todo": "Add a task", "standby": "Add to Standby"}
+        empty_cols = [k for k, n in _counts(page).items() if n == 0 and k in adds]
+        assert empty_cols, "the filter left no Board column empty to show"
+        for k in empty_cols:
+            expect(_col(page, k).locator(".board-empty .empty-state-action")).to_have_text(adds[k])
+        _col(page, empty_cols[0]).locator(".board-empty .empty-state-action").click()
+        expect(page.locator("#quickAdd")).to_be_visible()
+        expect(page.locator("#quickAddStatus")).to_have_value(empty_cols[0])
+        page.keyboard.press("Escape")
+        expect(page.locator("#quickAdd")).to_be_hidden()
         q.fill("")
         expect(page).to_have_url(f"{base}/")
         page.locator("#paneBoard .quick-add-btn").click()
