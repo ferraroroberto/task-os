@@ -221,12 +221,14 @@ def test_today_calendar_lane(
         expect(lane.locator(".cal-counts")).to_have_text("6 events")
         shot(page, shots / "story-28-calendar-4-desktop.png")
 
-        # 7. Plan mode picks against that day: the lane stays alongside the candidates.
+        # 7. Plan mode picks against that day: the lane stays with the candidates —
+        #    above them since Today became a split view (#336), where half a
+        #    window leaves no room to put it beside the rows.
         page.locator("#paneToday .plan-more").click()
         expect(page.locator("#paneToday .plan-picker")).to_be_visible()
         expect(lane.locator(".cal-event")).to_have_count(4)
         pick_box, lane_box = page.locator("#paneToday .plan-picker").bounding_box(), lane.bounding_box()
-        assert pick_box and lane_box and lane_box["x"] >= pick_box["x"] + pick_box["width"]
+        assert pick_box and lane_box and lane_box["y"] + lane_box["height"] <= pick_box["y"] + 1
         shot(page, shots / "story-28-calendar-5-desktop.png")
         page.locator("#paneToday .plan-done-btn").click()
         expect(page.locator("#paneToday .plan-picker")).to_have_count(0)

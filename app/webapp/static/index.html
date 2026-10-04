@@ -922,6 +922,15 @@
          on the phone. Deep-linkable as #task/<id>. Body built by drawer.js. -->
     <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
            aria-labelledby="drawerTitle" hidden></aside>
+    <!-- Today's split view (#336): on desktop the right half is always the
+         detail pane. While no task is open this is what sits there; styles.css
+         shows it only on Today at >= 1024px with the drawer closed. -->
+    <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
+      <div class="empty-state">
+        <svg class="icon empty-state-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
+        <p class="empty-state-message">Select a task to see its details</p>
+      </div>
+    </aside>
   </main>
 
   <!-- Command palette (Step 10): the vendored editor-modal shell (native
