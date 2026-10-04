@@ -73,7 +73,15 @@ from tests.e2e._geometry import (
     assert_no_overlap,
     effective_rects,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, e2e_workdir, shot, tree_view
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    _boot,
+    _terminate,
+    assert_control_boundaries,
+    e2e_workdir,
+    shot,
+    tree_view,
+)
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -286,6 +294,9 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         page.locator("#paneToday .quick-add-btn").tap()
         quick_add = page.locator("#quickAdd")
         expect(quick_add).to_be_visible()
+        # WebKit paints no box-shadow on a native <select>: every field here
+        # draws a real 3:1 boundary instead (#339, WCAG 1.4.11)
+        assert_control_boundaries(quick_add)
         qa = quick_add.locator(".quick-add-input")
         qa.fill("Water the balcony plants today")
         # the parse lands in the Due field, where it can still be corrected (#80)

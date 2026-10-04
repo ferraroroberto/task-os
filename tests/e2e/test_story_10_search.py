@@ -50,6 +50,7 @@ from tests.e2e.conftest import (
     _get,
     _post,
     _terminate,
+    assert_control_boundaries,
     e2e_workdir,
     shot,
 )
@@ -136,6 +137,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     page.get_by_role("tab", name="Search").click()
     box = page.locator("#searchInput")
     expect(box).to_be_focused()
+    assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
 
     # 1. type a word → four groups (collapsed disclosures, the count on the
     #    summary), all populated; opened, every group shows its hits

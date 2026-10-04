@@ -194,8 +194,8 @@ button, input, select, textarea { font: inherit; }
    inputs had no recipe at all. Textareas keep their own height. The task
    row's status select wears the same recipe with a wider band (its own
    `--control-inset`, so it still paints the compact 30px it always did, #301),
-   and touch controls that are already 44px tall drop the band
-   (`--control-inset: 0px`, the coarse block below). */
+   and on touch every native control drops the band and is 44px painted, so
+   the strip and the filter card keep one height (the coarse block below). */
 input.input-native {
   font-size: var(--font-label);
   padding: 0 10px;
@@ -212,6 +212,26 @@ summary.select-native {
   border-radius: var(--radius-md) / calc(var(--radius-md) + var(--control-inset));
   background: var(--input-bg) padding-box;
   box-shadow: inset 0 0 0 1px var(--control-border);
+}
+/* WebKit paints no box-shadow on a native <select> (iOS Safari; Playwright's
+   WebKit computes `box-shadow: none`), so the inset edge above left every
+   select on the iPhone with no boundary but its 1.06:1 fill (#339). Wherever
+   the band is zero (the drawer on every pointer, every native control on
+   touch, which is 44px painted there), the boundary is the element's own 1px
+   border instead, which every engine draws. Only the desktop band keeps the
+   inset edge. */
+.drawer :is(input.input-native, select.select-native, summary.select-native) {
+  border: 1px solid var(--control-border);
+  box-shadow: none;
+}
+@media (pointer: coarse) {
+  :root { --control-inset: 0px; }
+  input.input-native,
+  select.select-native,
+  summary.select-native {
+    border: 1px solid var(--control-border);
+    box-shadow: none;
+  }
 }
 /* A textarea is as tall as its rows, so it needs no band: the same surface,
    boundary and radius, drawn on its own border. */
@@ -707,7 +727,7 @@ a.chip:hover { text-decoration: underline; }
   align-items: center;
   gap: var(--space-sm);
   background: var(--card);
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-border);   /* the field's boundary (#339) */
   border-radius: var(--radius-md);
   padding: var(--space-xs) var(--gap);
 }
@@ -1730,10 +1750,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .strip-square::before, .view-seg:first-child::before, .view-seg:last-child::before,
   .filter-clear::before { inset: 0; }
   .view-seg { width: var(--row-sm); }
-  /* …and the native controls that stand beside them are 44px painted too, so
-     the strip and the filter card keep one height on touch: no inset band. */
-  .bulk-status, .filter-select, .filter-q, .msel-summary,
-  .drawer .select-native, .drawer .input-native { --control-inset: 0px; }
+  /* (the native controls beside them are 44px painted too, with no inset
+     band: the touch block under the native-control recipe above) */
   .tree-toggle::before { inset: -5px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -2168,8 +2186,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    only: modal.css is untouched — the palette variation lives on its own class. */
 
 /* ------------------------------------------------------------ search */
-/* The box is the header bar's height (52px, home-head) — one size of bar. */
-.search-box { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; }
+/* The box is the header bar's height (52px, home-head) — one size of bar. The
+   card is the field, so its edge is the input's boundary: control-border, not
+   the card hairline (design.md, #339). */
+.search-box { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border-color: var(--control-border); }
 .search-box > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
 .search-input {
   flex: 1 1 auto;
@@ -2246,7 +2266,10 @@ kbd {
    the max-height math). */
 .detail-dialog.palette-dialog { width: min(640px, 94vw); margin-top: 12vh; }
 .palette-card { padding: var(--space-sm); }
-.palette-input-row { display: flex; align-items: center; gap: var(--space-sm); padding: 2px var(--space-xs) 6px 10px; border-bottom: 1px solid var(--line-muted); }
+/* The input row is a field box, drawn like quick-add's line 1: a
+   control-border boundary that turns accent while it holds focus (#339). */
+.palette-input-row { display: flex; align-items: center; gap: var(--space-sm); padding: 0 var(--space-xs) 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: var(--card); }
+.palette-input-row:focus-within { border-color: var(--accent); }
 .palette-input-row > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
 .palette-input {
   flex: 1 1 auto;

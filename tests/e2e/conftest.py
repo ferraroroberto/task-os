@@ -672,6 +672,53 @@ def hold_toasts(page: Page) -> None:
 _SCROLL_ATTEMPTS = 5
 
 
+# WCAG 1.4.11's floor for a field boundary, and how /design-review's COLOR-03
+# finds one: the field's own border, else its inset 1px edge, else the bordered
+# wrapper hugging it (two levels up, at most twice its height), else its fill.
+# Read from the computed style, so an engine that drops a declaration (WebKit
+# paints no box-shadow on a native <select>, #339) fails here as it renders.
+_BOUNDARY_MIN = 3.0
+_CONTROL_BOUNDARIES_JS = """(root) => {
+  const cv = document.createElement('canvas').getContext('2d');
+  const rgba = (c) => { cv.clearRect(0,0,1,1); cv.fillStyle = '#000'; cv.fillStyle = c; cv.fillRect(0,0,1,1);
+    const d = cv.getImageData(0,0,1,1).data; return [d[0], d[1], d[2], d[3] / 255]; };
+  const over = (f, b) => [0,1,2].map(i => f[i] * f[3] + b[i] * (1 - f[3])).concat([1]);
+  const lum = (c) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const bgOf = (el) => { const stack = []; for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const c = rgba(getComputedStyle(n).backgroundColor); if (c[3] > 0) { stack.push(c); if (c[3] >= 0.999) break; } }
+    let base = [255, 255, 255, 1]; for (let i = stack.length - 1; i >= 0; i--) base = over(stack[i], base); return base; };
+  const border = (s) => (parseFloat(s.borderTopWidth) || 0) > 0 && rgba(s.borderTopColor)[3] > 0 ? rgba(s.borderTopColor) : null;
+  const inset = (s) => { const m = /^(rgba?\\([^)]*\\)) 0px 0px 0px [1-9][\\d.]*px inset$/.exec(s.boxShadow); return m ? rgba(m[1]) : null; };
+  const out = [];
+  root.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea').forEach((el) => {
+    const r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
+    let host = el, s = getComputedStyle(el);
+    if (!border(s) && !inset(s) && rgba(s.backgroundColor)[3] === 0) {
+      for (let a = el.parentElement, i = 0; a && i < 2; a = a.parentElement, i++) { const as = getComputedStyle(a);
+        if (border(as) && a.getBoundingClientRect().height <= r.height * 2 + 2) { host = a; s = as; break; } } }
+    const surface = bgOf(host.parentElement || host);
+    const edge = border(s) || inset(s) || (rgba(s.backgroundColor)[3] > 0 ? rgba(s.backgroundColor) : null);
+    out.push({field: el.id || el.className || el.tagName, ratio: edge ? Math.round(ratio(over(edge, surface), surface) * 100) / 100 : 1});
+  });
+  return out;
+}"""
+
+
+def assert_control_boundaries(scope: Locator) -> list[float]:
+    """Every visible field under *scope* draws a boundary of at least 3:1 against its surface.
+
+    Returns the measured ratios (so a story can name them); fails on the first
+    field under the floor, or when *scope* holds no visible field at all.
+    """
+    found = scope.evaluate(_CONTROL_BOUNDARIES_JS)
+    assert found, "no visible input, select or textarea to measure"
+    low = [f for f in found if f["ratio"] < _BOUNDARY_MIN]
+    assert not low, f"field boundary under {_BOUNDARY_MIN}:1 (WCAG 1.4.11): {low}"
+    return [f["ratio"] for f in found]
+
+
 def scroll_to_bottom(page: Page, target: Locator) -> None:
     """Park *target* at the end of its own scroll — and prove it stayed there.
 
