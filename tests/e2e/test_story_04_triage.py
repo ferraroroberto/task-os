@@ -206,6 +206,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # #339: the grid is an ARIA data grid, its live cells (the issue chip,
         # due, status, the folder and AI chips) reached from the row by the
         # arrow keys rather than counted as a list row's actions
+        # …and a row leads with its name, the code after it (#339)
+        heads = page.locator(".task-table thead th").all_inner_texts()
+        assert heads[:2] == ["Title", "Code"], heads
         coding = page.locator(".task-table .task-row", has=page.locator(".t-title a.chip")).first
         assert assert_grid_walk(coding) >= 4
 

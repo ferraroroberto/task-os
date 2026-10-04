@@ -789,13 +789,20 @@ export function mountArchive(opts) {
       head.className = 'archive-card-head';
       head.append(subjectEl(item), stateChip(item));
 
+      // Two lines at a glance (#339): the subject with its state, then one
+      // line of who · when · where it went. The files, the confidence and the
+      // reason are what a review reads, so they sit behind the card's own
+      // disclosure with the actions.
       const meta = document.createElement('div');
       meta.className = 'archive-card-meta muted';
-      meta.textContent = (item.sender || '–') + ' · ' + (item.sent_at ? fmtTsShort(item.sent_at) : '–');
+      meta.append(
+        (item.sender || '–') + ' · ' + (item.sent_at ? fmtTsShort(item.sent_at) : '–') + ' · ',
+        destinationEl(item)
+      );
 
       const dest = document.createElement('div');
       dest.className = 'archive-card-dest';
-      dest.append(destinationEl(item), confidenceEl(item), filesEl(item));
+      dest.append(confidenceEl(item), filesEl(item));
 
       const why = document.createElement('p');
       why.className = 'archive-card-why muted';
@@ -804,34 +811,32 @@ export function mountArchive(opts) {
       // *Review* is the fourth review level, so it wears the same button as
       // the three behind it (#168) — a disclosure, not a link, and not a
       // `<summary>` whose shape nothing else on the row shares.
+      // A card with nothing left to press still has its details to read, so
+      // the same disclosure says Details there and holds no actions.
       const actions = actionsFor(item);
-      let foot = actions.el;
-      if (actions.controls) {
-        const menu = document.createElement('div');
-        menu.className = 'archive-menu';
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'button-ghost archive-action archive-menu-toggle';
-        toggle.setAttribute('aria-expanded', 'false');
-        toggle.innerHTML = icon('eye');
-        const label = document.createElement('span');
-        label.textContent = 'Review';
-        toggle.appendChild(label);
-        const body = document.createElement('div');
-        body.className = 'archive-menu-body';
-        body.hidden = true;
-        body.appendChild(actions.el);
-        if (actions.body) body.appendChild(actions.body);
-        toggle.addEventListener('click', function () {
-          const open = body.hidden;
-          body.hidden = !open;
-          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        });
-        menu.append(toggle, body);
-        foot = menu;
-      }
+      const menu = document.createElement('div');
+      menu.className = 'archive-menu';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'button-ghost archive-action archive-menu-toggle';
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.innerHTML = icon(actions.controls ? 'eye' : 'file-text');
+      const label = document.createElement('span');
+      label.textContent = actions.controls ? 'Review' : 'Details';
+      toggle.appendChild(label);
+      const body = document.createElement('div');
+      body.className = 'archive-menu-body';
+      body.hidden = true;
+      body.append(dest, why, actions.el);
+      if (actions.body) body.appendChild(actions.body);
+      toggle.addEventListener('click', function () {
+        const open = body.hidden;
+        body.hidden = !open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      menu.append(toggle, body);
 
-      card.append(head, meta, dest, why, foot);
+      card.append(head, meta, menu);
       list.appendChild(card);
     });
     return list;

@@ -1,7 +1,7 @@
 /* task-os — the Table tab: the shared list as a grid.
  *
  * Desktop: a full-width flat grid (no card wrapper — hairline rows under a
- * sticky header, issue #46) with columns code · title (+ breadcrumb) · due
+ * sticky header, issue #46) with columns title (+ breadcrumb) · code · due
  * (relative, ISO tooltip, overdue tinted — the cell opens the date picker,
  * #107) · status (the shared status select) · priority · person · project (top
  * ancestor) · folder chip · last comment (links as chips) · next action. Due
@@ -35,7 +35,7 @@ import { rowList, statusSelect } from './rows.js';
 const COMMENT_MAX = 90;
 
 const COLUMNS = [
-  ['code', 'Code'], ['title', 'Title'], ['due', 'Due'], ['status', 'Status'], ['priority', 'Priority'],
+  ['title', 'Title'], ['code', 'Code'], ['due', 'Due'], ['status', 'Status'], ['priority', 'Priority'],
   ['person', 'Person'], ['project', 'Project'], ['folder', 'Folder'], ['comment', 'Last comment'], ['next', 'Next action'],
 ];
 
@@ -133,13 +133,7 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
     tr.appendChild(sel);
   }
 
-  // code
-  const code = td('code', 'Code');
-  code.textContent = t.code || ('#' + t.id);
-  if (!t.code) code.classList.add('muted');
-  tr.appendChild(code);
-
-  // title + breadcrumb
+  // title + breadcrumb — the row leads with its name (#339); the code follows
   const title = td('title', 'Title');
   const tt = document.createElement('div');
   tt.className = 't-title';
@@ -190,6 +184,12 @@ function buildRow(t, handlers, rowHandlers, selectable, selected) {
     title.appendChild(st);
   }
   tr.appendChild(title);
+
+  // code
+  const code = td('code', 'Code');
+  code.textContent = t.code || ('#' + t.id);
+  if (!t.code) code.classList.add('muted');
+  tr.appendChild(code);
 
   // due — inline editable
   const due = td('due', 'Due');
