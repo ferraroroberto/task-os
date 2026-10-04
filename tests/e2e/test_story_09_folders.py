@@ -163,6 +163,8 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(cmd).to_contain_text(base + "/opener/opener.cmd")
     expect(cmd).to_contain_text("HKCU:\\Software\\Classes\\taskos")
     expect(card.locator("#statusIndex")).to_contain_text("folder(s)")
+    # the disclosure says what it holds in words, no file name (#339)
+    expect(card.locator("details.opener-more summary")).to_have_text("Uninstall · folder paths for each PC · rescan folders")
     card.locator("details.opener-more summary").click()
     expect(card.locator("#openerEnv")).to_contain_text("onedrive=")
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
