@@ -899,18 +899,21 @@
             </div>
             <pre class="opener-cmd" id="openerInstall">Loading…</pre>
             <details class="opener-more">
-              <summary>Uninstall · <code>opener.env</code> template · reindex</summary>
-              <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your <code>opener.env</code>):</p>
+              <!-- Labels in plain words (#339); the file's name and place are
+                   the instruction under its heading, not the heading. -->
+              <summary>Uninstall · folder paths for each PC · rescan folders</summary>
+              <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your folder paths file):</p>
               <pre class="opener-cmd" id="openerUninstall"></pre>
               <div class="opener-block-head">
-                <span class="opener-block-title"><code>%LOCALAPPDATA%\task-os\opener.env</code> — this install's placeholders (edit the paths for that PC)</span>
+                <span class="opener-block-title">Folder paths for each PC</span>
                 <button type="button" id="openerEnvCopy" class="button-ghost">
                   <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copy
                 </button>
               </div>
+              <p class="card-meta">This install's folder placeholders: save them as <code>%LOCALAPPDATA%\task-os\opener.env</code> on that PC and edit the paths there.</p>
               <pre class="opener-cmd" id="openerEnv"></pre>
               <div class="access-actions">
-                <button type="button" id="reindexBtn" class="button-ghost" hidden>Reindex folders now</button>
+                <button type="button" id="reindexBtn" class="button-ghost" hidden>Rescan folders now</button>
               </div>
             </details>
           </div>

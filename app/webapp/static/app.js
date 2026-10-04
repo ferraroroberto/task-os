@@ -1253,7 +1253,7 @@ function paletteCommands() {
     onFilterChange(Object.assign({}, DEFAULT_FILTERS));
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
-  cmds.push({ id: 'reindex-folders', label: 'Reindex folders', hint: 'rescan search.folder_roots', icon: 'folder', run: async function () {
+  cmds.push({ id: 'reindex-folders', label: 'Rescan folders', hint: 'refresh the folder index now', icon: 'folder', run: async function () {
     try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); settings.refreshStatus(); }
     catch (err) { toast(err.message || 'Reindex failed', 'error'); }
   } });
