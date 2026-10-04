@@ -434,11 +434,17 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert abs(_mid_y(subject_box) - _mid_y(files_box)) < 2, (
         f"the file-chip cell is not vertically centred on the row ({files_box} vs {subject_box})"
     )
-    for col in (".c-sent", ".c-conf", ".c-state", ".c-act"):
+    for col in (".c-dest", ".c-conf", ".c-state", ".c-act"):
         box = _box(long_row.locator(f"{col} > *"))
         assert abs(_mid_y(subject_box) - _mid_y(box)) < 2, (
             f"{col} is not vertically centred on the row ({box} vs subject {subject_box})"
         )
+
+    # #339: the grid fits the window, so every row's labelled actions are on
+    # screen rather than scrolled past the right edge with only a glyph showing
+    scroller = page.locator("#paneArchive .table-scroll")
+    fit = scroller.evaluate("el => [el.scrollWidth, el.clientWidth]")
+    assert fit[0] <= fit[1] + 1, f"the Archive grid scrolls sideways at {DESKTOP['width']}px: {fit}"
 
     stuck_row, _ = _row(page, STUCK_ID, items)
     expect(stuck_row.locator(".archive-state")).to_have_text("failed")
