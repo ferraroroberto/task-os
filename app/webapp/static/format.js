@@ -208,7 +208,14 @@ function popEl() {
   document.addEventListener('click', function (ev) {
     if (!pop.hidden && !pop.contains(ev.target) && !ev.target.closest('.chip-folder, .chip-ai')) hideFolderPopover();
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') hideFolderPopover(); });
+  // Escape closes the popover and stops there (#339): the capture phase runs
+  // before app.js's document-level Escape, which would also close the drawer
+  // the popover sits on. A hidden popover lets the key through untouched.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape' || pop.hidden) return;
+    ev.stopPropagation();
+    hideFolderPopover();
+  }, true);
   window.addEventListener('scroll', hideFolderPopover, true);
   window.addEventListener('resize', hideFolderPopover);
   return pop;
