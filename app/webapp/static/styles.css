@@ -1050,6 +1050,11 @@ a.chip:hover { text-decoration: underline; }
    check when closed. Done reads as success, not the favourite's attention. */
 .trow-done:hover { color: var(--success); }
 .trow-done[aria-pressed="true"] { color: var(--success); }
+/* A touch screen closes a task by swiping it right, or by opening it and
+   setting its status (#350): the circle only repeated the swipe, so it is not
+   drawn there. A mouse, a trackpad and the keyboard keep it. The drawer is
+   the non-gesture way, so WCAG 2.5.1 still holds. */
+@media (pointer: coarse) { .trow-done { display: none; } }
 .trow-kebab:hover { color: var(--fg); }
 /* A third line (a Search snippet, an AI suggestion strip, a plan candidate's
    two targets): the row's full width, aligned with the title's text. */

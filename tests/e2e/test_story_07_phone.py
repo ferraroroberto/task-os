@@ -162,11 +162,14 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         expect(meta.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
         expect(meta.locator("button, a")).to_have_count(0)
         assert row.locator(".trow-due").evaluate("el => el.tagName") != "BUTTON", "the date is a control again"
-        # the three real targets: 44px boxes that share no pixel, inside the card
-        targets = row.locator(".trow-done, .trow-main, .trow-kebab")
-        expect(targets).to_have_count(3)
+        # the real targets: 44px boxes that share no pixel, inside the card —
+        # the open target and the kebab; a touch screen draws no completion
+        # circle (#350: swipe right, or the drawer's status, closes a task)
+        expect(row.locator(".trow-done")).to_be_hidden()
+        targets = row.locator(".trow-main, .trow-kebab")
+        expect(targets).to_have_count(2)
         assert_no_overlap(targets)
-        assert_min_target(row.locator(".trow-done, .trow-kebab"))
+        assert_min_target(row.locator(".trow-kebab"))
         box = row.bounding_box()
         assert box
         for t in effective_rects(targets):
@@ -357,10 +360,11 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         # ONE locator, so every rect is measured in a single evaluate_all:
         # the Board is a scroll-snapping carousel and two separate
         # measurements can land at different scroll offsets.
-        row_targets = kitchen.locator(".trow-done, .trow-main, .trow-kebab")
-        expect(row_targets).to_have_count(3)
+        expect(kitchen.locator(".trow-done")).to_be_hidden()      # no circle on touch (#350)
+        row_targets = kitchen.locator(".trow-main, .trow-kebab")
+        expect(row_targets).to_have_count(2)
         assert_no_overlap(row_targets)
-        assert_min_target(kitchen.locator(".trow-done, .trow-kebab"))
+        assert_min_target(kitchen.locator(".trow-kebab"))
         row_box = kitchen.bounding_box()
         assert row_box
         for t in effective_rects(row_targets):
