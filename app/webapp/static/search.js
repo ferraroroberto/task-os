@@ -122,6 +122,14 @@ export function mountSearch(box, host, opts) {
     return p;
   }
 
+  // An empty group always names what fills it (design rubric J-09, #339): the
+  // search box above for a query, the filter card for filtered-out tasks.
+  const TRY_BOX = 'try other words in the search box above.';
+  function idleText(k, st) {
+    return 'Type in the search box above to search ' + k.label.toLowerCase()
+      + (st && st.note ? ' — ' + st.note : '') + '.';
+  }
+
   function offRow(p, reason) {
     p.textContent = 'not configured — ' + (reason || 'unknown') + ' · ';
     const a = document.createElement('a');
@@ -151,8 +159,7 @@ export function mountSearch(box, host, opts) {
       const st = (status || []).find(function (a) { return a.kind === k.kind; });
       const card = groupCard(k, !status ? '' : (st && st.configured ? 'ready' : 'not configured'));
       const body = card.querySelector('.search-body');
-      if (!status) body.appendChild(note('search-none muted', 'Type to search.'));
-      else if (st && st.configured) body.appendChild(note('search-none muted', 'Type to search' + (st.note ? ' — ' + st.note : '') + '.'));
+      if (!status || (st && st.configured)) body.appendChild(note('search-none muted', idleText(k, st)));
       else { const p = note('search-off muted', ''); offRow(p, st ? st.reason : 'unknown'); body.appendChild(p); }
       wrap.appendChild(card);
     });
@@ -202,7 +209,11 @@ export function mountSearch(box, host, opts) {
       } else if (g.error) {
         body.appendChild(note('search-err', 'error — ' + g.error));
       } else if (k.kind === 'tasks') {
-        if (!rows.length) body.appendChild(note('search-none muted', g.hits.length ? 'No task matches the filters.' : 'No tasks match.'));
+        if (!rows.length) {
+          body.appendChild(note('search-none muted', g.hits.length
+            ? 'No task matches the filters — loosen them in the Filters card above.'
+            : 'No tasks match — ' + TRY_BOX));
+        }
         else {
           const ul = document.createElement('ul');
           ul.className = 'trows search-hits';
@@ -211,7 +222,7 @@ export function mountSearch(box, host, opts) {
           body.appendChild(ul);
         }
       } else if (!g.hits.length) {
-        body.appendChild(note('search-none muted', 'No ' + k.label.toLowerCase() + ' match.'));
+        body.appendChild(note('search-none muted', 'No ' + k.label.toLowerCase() + ' match — ' + TRY_BOX));
       } else {
         const ul = document.createElement('ul');
         ul.className = 'trows search-hits';
