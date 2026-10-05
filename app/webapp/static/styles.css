@@ -90,8 +90,14 @@
   --icon-inline: 16px;
   --icon-title: 18px;
   --icon-feature: 24px;
-  /* vendored component fills */
-  --close-bg: var(--card-2);         /* home-head toggle + modal × */
+  /* the icon button's painted-nothing box: the hover and focus area around
+     its glyph; the ::before grows it to --hit-min (#357) */
+  --icon-btn-box: 28px;
+  /* two icon buttons side by side: their 44px targets touch, never overlap */
+  --icon-btn-gap: calc(var(--hit-min) - var(--icon-btn-box));
+  /* vendored component fills. The header toggles and the modal × are icon
+     buttons, unshaded at rest like every other one (#357). */
+  --close-bg: transparent;           /* home-head toggle + modal × */
   --input-bg: var(--card-off);       /* select-native / modal controls */
   --toggle-track: var(--line);       /* switch.css */
   --toggle-knob: #ffffff;
@@ -174,13 +180,47 @@ button, input, select, textarea { font: inherit; }
 
 /* 44px hit-area expansion for an isolated compact control (the 34px theme
    toggle, a filter pill): visual stays compact, the invisible ::before grows
-   the target. The app's own compact controls (drawer icon button, toast close)
-   opt in on this one rule rather than re-inlining the expansion — design.md
-   "Touch targets" ships the utility once. Insets are per-control because the
-   authored squares differ: 34 + 2x5 = 44, 30 + 2x7 = 44. */
-.hit-target, .icon-btn, .toast-close { position: relative; }
-.hit-target::before, .icon-btn::before, .toast-close::before { content: ""; position: absolute; inset: -5px; }
-.due-pick-btn::before { inset: -7px; }       /* 30x30 authored, overrides .icon-btn's 34px inset */
+   the target — design.md "Touch targets" ships the utility once. */
+.hit-target { position: relative; }
+.hit-target::before { content: ""; position: absolute; inset: -5px; }
+
+/* ONE icon button app-wide (#357): every glyph-only control — a drawer's
+   trash and pencils, the date calendars, the strip's +, the bulk bar, a
+   toast's ×, Settings' row-action ticks and arrows, the dictation mic —
+   wears this and nothing else. A glyph on nothing: no fill, border or shadow
+   at rest, and hover only darkens the glyph, so a control never reads as a
+   painted square. The box is invisible; its ::before grows it to the 44px
+   floor whatever box a context picks (--icon-btn-box), and two icon buttons
+   side by side sit --icon-btn-gap apart so their targets touch but never
+   overlap. Focus is the app's one ring (:focus-visible above). The
+   vendored ⋮ (action-row) is the same recipe at a real 44px; the vendored
+   header toggles and modal × reach it through --close-bg. */
+.icon-btn {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-btn-box);
+  height: var(--icon-btn-box);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.icon-btn::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--icon-btn-box) - var(--hit-min)) / 2);
+}
+.icon-btn .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.icon-btn:hover { color: var(--fg); }
+/* destructive: quiet until hovered, then the danger tone (state, not decoration) */
+.icon-btn.is-danger:hover { color: var(--danger); }
+.icon-btn[aria-pressed="true"] { color: var(--accent-text); }
+.icon-btn:disabled { color: var(--line); cursor: default; }
 
 /* The header title is the page's h1 (#339): the vendored rule sets its size
    and weight, the UA's heading margin goes. */
@@ -352,7 +392,8 @@ html, body {
 /* ============================================================ theme toggle */
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
    ACTION: moon in light (tap → dark), sun in dark (tap → light). */
-.home-head .home-toggle:active { background: var(--card-2); color: var(--fg); }
+/* pressed darkens the glyph only — an icon button never paints a square (#357) */
+.home-head .home-toggle:is(:hover, :active) { color: var(--fg); }
 /* The Settings gear while its pane is up (#281): the active nav tab's
    accent-soft + accent-text, since it stands in for the tab it replaced. */
 .home-head .home-toggle[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
@@ -420,24 +461,30 @@ html, body {
 .check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ------------------------------------------------------------- chips */
-/* Chips = pill radius, inset canvas-subtle fill, hairline. A link chip is
-   an <a target=_blank rel=noopener> in accent; folder / issue / date / parent
-   chips are the same shape with their glyph. */
-.chip {
+/* ONE pill app-wide (#357): every chip (a reference, a tag, a calendar
+   event) and every status pill is this shape — pill radius, hairline, the
+   caption step, one padding — and only its colours say what it is. The
+   reference pill (folder, AI conversation, issue, link: an <a>) is the AI
+   pill's look, accent-text on the accent tint; anything that is not a link
+   is the neutral chip; a status pill wears its status colour. No context
+   resizes it into a box. */
+.chip, .pill {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   max-width: 100%;
   padding: 2px var(--space-sm);
   border-radius: var(--radius-pill);
-  background: var(--neutral-soft);   /* design.md chip — never canvas-subtle inside a card (#281) */
   border: 1px solid var(--line);
-  color: var(--fg);
   font-size: var(--font-caption);
   line-height: 1.5;
-  text-decoration: none;
   vertical-align: middle;
   white-space: nowrap;
+}
+.chip {
+  background: var(--neutral-soft);   /* design.md chip — never canvas-subtle inside a card (#281) */
+  color: var(--fg);
+  text-decoration: none;
 }
 .chip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; }
@@ -449,7 +496,6 @@ a.chip:hover { text-decoration: underline; }
 /* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
    link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
-.chip-project { padding: 0 6px; }
 /* No muted chip text: fg-muted on the neutral-soft fill is under 4.5:1 in both
    themes (design.md chip — the fill is what makes it quiet, #281). */
 
@@ -498,24 +544,16 @@ a.chip:hover { text-decoration: underline; }
    edge on the input's. The resolved path is not repeated here: it is the
    chip's own title, and the phone reads it from the chip's copy popover. */
 .folder-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
-/* The chip wears the shared control recipe (_vendored/modal.css .input-native:
-   --control-h, radius-md, 10px side padding) so line 1 sits at exactly the same
-   height as line 2 and reads as its pair — the accent fill is the only
-   difference. A long ref therefore ellipsizes on one line like the input below
-   it rather than wrapping the chip taller than its own row: the full ref is on
-   the chip's title, in the input, and in the copy popover. (Fixed height, not a
-   floor — the point of #74 round 2 is that it never grows past a control.) */
-.folder-current .chip {
-  min-width: 0;
-  height: var(--hit-min);   /* the drawer's control height (#281) */
-  padding: 0 10px;
-  border-radius: var(--radius-md);
-  font-size: var(--font-label);
-}
+/* The chip is the one reference pill (#357), the AI pill's twin on the Links
+   rows below — never a control-height box. It starts on the input's left
+   edge and a long ref ellipsizes on one line rather than wrapping: the full
+   ref is on the chip's title, in the input, and in the copy popover. */
+.folder-current .chip { justify-self: start; min-width: 0; }
 .folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
 .folder-form .button-surface, .folder-pick { white-space: nowrap; }
 .folder-pick { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.folder-pick .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .folder-picker { display: grid; gap: 6px; padding: var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-off); }
 .folder-picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
 .folder-picker-btn {
@@ -546,19 +584,12 @@ a.chip:hover { text-decoration: underline; }
 .opener-more > summary { padding-block: 12px; line-height: 20px; }
 .opener-more { display: grid; gap: var(--space-sm); }
 
-/* Status pills — status colors signal state (design.md). One size everywhere. */
+/* Status pills — the one pill's shape (the chips rule above); status colors
+   signal state (design.md). */
 .pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px var(--space-sm);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-caption);
   font-weight: 600;
-  line-height: 1.5;
-  border: 1px solid var(--line);
   background: var(--card-off);
   color: var(--muted);
-  white-space: nowrap;
 }
 .pill-todo { color: var(--fg); }
 .pill-open { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
@@ -578,12 +609,13 @@ a.chip:hover { text-decoration: underline; }
    where there is nothing to filter and the text box is hidden with the card. */
 .pane-top { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
 .filter-text { flex: 1 1 auto; min-width: 0; }
-/* Every square icon button that sits on the top strip — the quick-add +, the
-   Select toggle, and the bulk bar's date and ✕ — is ONE geometry, declared
-   once. They stand side by side, so a per-button size is immediately visible
-   as a mismatch (and was: the toggle kept the 36px control height on touch
-   while the + went to 44px). */
-.quick-add-btn, .strip-square {
+/* The top strip's icon buttons — the quick-add +, the bulk bar's date,
+   delete and ✕ — are the one icon button (#357) on the strip's own box: the
+   control height, so their 4px of invisible expansion meets the Select
+   toggle's in the 8px gap (and 44px real on touch, where the strip is 44px
+   tall). The Select toggle is a labelled button and keeps its square. */
+.pane-top .icon-btn { --icon-btn-box: var(--control-h); }
+.strip-square {
   flex: none;
   width: var(--control-h);
   height: var(--control-h);
@@ -592,14 +624,14 @@ a.chip:hover { text-decoration: underline; }
   justify-content: center;
   border-radius: var(--radius-md);
 }
-.quick-add-btn .icon, .strip-square .icon { width: var(--icon-title); height: var(--icon-title); }
+.strip-square .icon { width: var(--icon-title); height: var(--icon-title); }
 /* They stand shoulder to shoulder with an 8px gap, so each may take exactly
    half of it: 4px of invisible expansion on every side makes the 36px square
    44px effective with neighbouring hit rects edge to edge, never overlapping —
    design.md's "adjacent cluster" rule (#281). On touch the squares are 44px
    real and the expansion resets (the coarse block). */
-.strip-square, .quick-add-btn { position: relative; }
-.strip-square::before, .quick-add-btn::before { content: ""; position: absolute; inset: -4px; }
+.strip-square { position: relative; }
+.strip-square::before { content: ""; position: absolute; inset: -4px; }
 /* The Select toggle says what it is beside the glyph (#339): no convention
    fixes a checklist glyph's meaning,
    and a tooltip never shows on touch. Same height as the squares, the width
@@ -647,13 +679,7 @@ a.chip:hover { text-decoration: underline; }
 /* Grows to fill a phone strip, but capped so it never reads as a banner
    across a 1440px board — it is a control, and the ✕ keeps the right edge. */
 .bulk-status { flex: 1 1 auto; min-width: 0; max-width: 220px; height: var(--control-h); }
-.bulk-due, .bulk-exit { color: var(--muted); }
-.bulk-due:hover { color: var(--accent); }
 .bulk-exit { margin-left: auto; }
-.bulk-exit:hover { color: var(--fg); }
-/* Delete (#121): quiet until hovered, then the danger tone — state, not decoration */
-.bulk-delete { color: var(--muted); }
-.bulk-delete:hover { color: var(--danger); }
 @media (max-width: 360px) {
   /* the narrowest phones: drop the WORD so the select keeps a readable width
      and the row still never wraps — the count itself always stays, it is what
@@ -686,7 +712,6 @@ a.chip:hover { text-decoration: underline; }
 /* The picker's own toggle sits on the label line, so the ref input keeps the
    full width; the hit list drops under both. */
 .quick-add-pick { position: relative; min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
-.quick-add-pick .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* 28 + 2x8 = 44 (#281): the label line keeps its height, the 12px row padding
    above and the 8px row gap below hold the expansion clear of the divider and
    of the input under it. */
@@ -729,31 +754,11 @@ a.chip:hover { text-decoration: underline; }
    reason lives in `.quick-add-voice-hint` right below, never in a tooltip
    alone. */
 .quick-add-mic {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--hit-min);
-  height: var(--hit-min);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
+  --icon-btn-box: var(--hit-min);   /* the one icon button (#357), 44px real */
   transition: color 120ms ease, background-color 120ms ease;
 }
-.quick-add-mic .icon { width: var(--icon-title); height: var(--icon-title); }
-/* Idle only. A click leaves the pointer sitting on the button, so hover is
-   true for the whole recording — without the exclusions its plain specificity
-   (0,3,0) outranks `.is-recording` (0,2,0) and the tint never appears. */
-.quick-add-mic:not(:disabled):not(.is-recording):not(.is-working):hover,
-.quick-add-mic:not(.is-recording):not(.is-working):focus-visible { color: var(--fg); background: var(--card-off); }
-/* The vendored disabled recipe (button.css): a flat card-off / line / muted
-   trio, never opacity — opacity over a solid fill blends sub-AA in one theme
-   or the other. `--line` on the glyph is what makes it read greyed next to
-   the muted `+` beside it. */
-.quick-add-mic:disabled { background: var(--card-off); color: var(--line); cursor: default; }
+/* Idle, it is the icon button as-is: hover darkens the glyph, disabled greys
+   it to --line (never a fill, never opacity). Only recording paints. */
 /* Recording is a *state you are in*, not a keypress: the mic is a toggle
    (#146), so this has to read from across the room and stay put until the
    second click. The glyph itself becomes a stop square (swapped in voice.js),
@@ -1178,10 +1183,6 @@ a.chip:hover { text-decoration: underline; }
    10px column gap leaves 2px clear between two neighbours' bands. */
 .folder-chips .chip { position: relative; margin: 11px 0; }
 .folder-chips .chip::before { content: ""; position: absolute; inset: -11px -4px; }
-/* the shared pair (dueinput.js): calendar button + hidden date input — the
-   bulk bar's strip square and the snooze menu's "Pick a date…" both wear it */
-.due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
-.due-pick-btn:hover { color: var(--accent); }
 /* hidden by default — the calendar button opens it (showPicker() or the
    coarse-pointer fallback in dueinput.js). The drawer's Due/Starts rows wear
    it too, revealed at their own control height (.field-due-row below). */
@@ -1321,13 +1322,12 @@ a.chip:hover { text-decoration: underline; }
 .field-control { width: 100%; min-width: 0; }
 /* Due: text input + a calendar button that opens the native date picker
    (the picker input itself is visually hidden; it only supplies the dialog). */
-/* gap 6px, not 4: the due button's 44px hit rect grows 5px past its 34px box,
-   so a tighter gap would put it over the text input (design.md "Touch targets"). */
-.field-due-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The gap is the calendar icon button's own expansion (half of
+   --icon-btn-gap), so its 44px target reaches the text input and never
+   covers it (design.md "Touch targets"). */
+.field-due-row { position: relative; display: flex; align-items: center; gap: calc(var(--icon-btn-gap) / 2); min-width: 0; }
 .field-due-row .field-control { flex: 1 1 auto; }
-.field-due-btn { width: var(--hit-min); height: var(--hit-min); border-radius: var(--radius-md); color: var(--muted); }
 .drawer .button-surface, .drawer .button-ghost { min-height: var(--hit-min); }
-.field-due-btn:hover { color: var(--accent); }
 .field-due-row .due-date.is-visible { height: var(--control-h); }
 /* Every: the interval input + its unit ("weeks"), read as one phrase (#229). */
 .field-interval-row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
@@ -1358,46 +1358,18 @@ a.chip:hover { text-decoration: underline; }
 .markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
-/* The remove button is borderless and chip-height (#77 — the 34px bordered
-   square dwarfed the link pill); its ::before restores the 44px hit rect, so
-   the ROW floor is one --row-sm pitch less the 10px gap = 34px, and the
-   expanded rects of stacked rows never overlap (design.md "Touch targets").
-   Written as that subtraction rather than a bare 34px: design.md's list-row
-   wants the rows scale "via var(--row-*) or a calc() derivation, never an ad
-   hoc literal", and the pitch is the whole reason for the number. */
+/* A link row's edit and delete are the one icon button (#357, first drawn
+   here for #77: a bordered square dwarfed the link pill). Its ::before
+   carries the 44px hit rect, so the ROW floor is one --row-sm pitch less the
+   10px gap = 34px, and the expanded rects of stacked rows never overlap
+   (design.md "Touch targets"). Written as that subtraction rather than a bare
+   34px: design.md's list-row wants the rows scale "via var(--row-*) or a
+   calc() derivation, never an ad hoc literal", and the pitch is the whole
+   reason for the number. */
 .drawer-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--space-sm); }
 .link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: calc(var(--row-sm) - 10px); }
-.link-rm {
-  width: 26px;
-  height: 26px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  position: relative;
-}
-.link-rm::before { content: ""; position: absolute; inset: -9px; }   /* 26 + 2x9 = 44 */
-.link-rm:hover { color: var(--danger); }
-.link-actions { display: flex; align-items: center; gap: var(--space-xs); flex: none; }
+.link-actions { display: flex; align-items: center; gap: var(--icon-btn-gap); flex: none; }
 .link-label-edit { flex: 1 1 auto; min-width: 0; }
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--card-off);
-  color: var(--muted);
-  cursor: pointer;
-}
 /* Add-link: ONE line — url · label · Add — on every width (#46). */
 .link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
@@ -1441,9 +1413,8 @@ a.chip:hover { text-decoration: underline; }
 .comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-caption); margin-bottom: 2px; }
 .comment-meta strong { color: var(--fg); }
 /* Pencil + trash park at the right end of the meta line (#155) — the Links
-   row's borderless chip-height button, whose ::before carries the 44px hit
-   rect; `margin-left: auto` is the only thing this pair adds. */
-.comment-actions { display: flex; align-items: center; gap: var(--space-xs); flex: none; margin-left: auto; }
+   row's pair of icon buttons; `margin-left: auto` is the only thing it adds. */
+.comment-actions { display: flex; align-items: center; gap: var(--icon-btn-gap); flex: none; margin-left: auto; }
 /* The inline editor is the composer, re-pointed at an existing body: it wears
    `.comment-composer` + `.comment-input` + `.comment-send` and adds only what
    the composer has no need for — a hairline of air under the meta line, and a
@@ -1460,7 +1431,6 @@ a.chip:hover { text-decoration: underline; }
   color: var(--accent);
   border-color: var(--accent-border-soft);
 }
-.comment-origin { border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 0 6px; font-size: var(--font-caption); }
 .comment-body { font-size: var(--font-label); white-space: pre-wrap; overflow-wrap: anywhere; }
 .comment-body .chip { white-space: nowrap; margin: 1px 0; }
 .activity-list { display: flex; flex-direction: column; }
@@ -1508,7 +1478,6 @@ a.chip:hover { text-decoration: underline; }
 .issue-panel { display: flex; flex-direction: column; gap: var(--space-sm); font-size: var(--font-label); }
 .issue-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .issue-labels { display: inline-flex; flex-wrap: wrap; gap: var(--space-xs); }
-.chip-label-tag { color: var(--muted); font-size: var(--font-caption); padding: 0 6px; }
 .issue-meta { font-size: var(--font-caption); }
 .issue-actions { display: flex; gap: 6px; }
 .issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
@@ -1570,29 +1539,25 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   white-space: nowrap;
 }
 @media (pointer: coarse) { .toast-action { min-height: var(--row-sm); } }
-.toast-close { width: 34px; height: 34px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); }
 @media (pointer: coarse) and (max-width: 520px) {
   .toasts { left: var(--gap); right: var(--gap); bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); max-width: none; }
 }
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
-  .quick-add-input, .quick-add-btn, .strip-square, .bulk-status, .filter-select, .filter-q,
+  .quick-add-input, .strip-square, .bulk-status, .filter-select, .filter-q,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
-  .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb, .msel-summary {
+  .drawer-tools .button-ghost, .filter-clear, .crumb, .msel-summary {
     min-height: var(--row-sm);
   }
   .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary,
   .bulk-status { height: var(--row-sm); }
-  .folder-current .chip { height: var(--row-sm); }   /* pairs with line 2's 44px controls */
-  .icon-btn, .toast-close { width: var(--row-sm); height: var(--row-sm); }
   /* the strip's square buttons are one family — same square, always (#81) */
-  .quick-add-btn, .strip-square { width: var(--row-sm); height: var(--row-sm); }
-  .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
+  .strip-square { width: var(--row-sm); height: var(--row-sm); }
+  .pane-top .icon-btn { --icon-btn-box: var(--row-sm); }
   /* These already carry real 44px geometry here, so the invisible expansion
      would push the effective rect past its neighbour — design.md forbids
      overlapping tap rectangles. */
-  .icon-btn::before, .toast-close::before, .quick-add-btn::before,
   .strip-square::before, .filter-clear::before { inset: 0; }
   /* (the native controls beside them are 44px painted too, with no inset
      band: the touch block under the native-control recipe above) */
@@ -1601,9 +1566,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Folder line 2 stays ONE line at 390px (#74): the picker drops to its
-     glyph. aria-label + title still say "Pick from folder index". */
+     glyph. aria-label + title still say "Pick from folder index". A glyph
+     alone is an icon button, so it loses the ghost hairline too (#357). */
   .folder-pick-label { display: none; }
-  .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; }
+  .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; border-color: transparent; }
 }
 @media (prefers-reduced-motion: reduce) {
   /* `.is-enriching` keeps its underline, just still: the state still has to be
@@ -1723,15 +1689,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .ai-suggestion-summary { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .ai-suggestion-actions { display: grid; grid-template-columns: repeat(2, 44px); }
-.ai-suggestion-action {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
-  border-color: transparent;
-}
-.ai-suggestion-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.ai-suggestion-action { --icon-btn-box: var(--row-sm); }   /* the one icon button (#357), 44px real */
 
 /* Desktop / wide: all columns side by side using the full width, equal
    widths, each scrolling on its own under a sticky header with the count.
@@ -1825,50 +1783,16 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    Remove from plan, the dominant act in that group (#311) — before its ⋯. */
 .today-plan { margin-bottom: var(--space-md); }
 .today-plan .today-head { align-items: center; }
-/* Quiet inline icons like the snooze trigger (no button box — the boxed
-   squares made the plan rows read heavier than their text): icon-sized
-   visible footprint, .hit-target ::before for the real click area. */
-.plan-more {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  cursor: pointer;
-}
-.plan-more .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.plan-more:hover { color: var(--fg); }
-/* 24 + 2x10 = 44 on a fine pointer (#281); touch has its own 28 + 2x8 below.
-   It stands alone at the end of the plan's heading line. */
-.plan-more::before { inset: -10px; }
+/* The plan's + (end of its heading line) and each row's × are the one icon
+   button (#357): no box — the boxed squares made the plan rows read heavier
+   than their text. */
 .plan-grip { display: inline-flex; color: var(--muted); cursor: grab; }
 .plan-grip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .trow.is-plan.is-dragging { cursor: grabbing; }
 /* The row's one other visible action (the action-row's verb slot): a real
-   44px square beside the kebab, quiet like the kebab rather than tinted —
+   44px box beside the kebab, quiet like the kebab rather than tinted —
    removing from the plan is a step back, not the row's call to action. */
-.plan-unplan {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--row-sm);
-  height: var(--row-sm);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-md);
-  color: var(--muted);
-  cursor: pointer;
-}
-.plan-unplan::before { content: none; }
-.plan-unplan .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.plan-unplan:hover { color: var(--danger); }
+.plan-unplan { --icon-btn-box: var(--row-sm); }
 
 /* The banner: one line + the button, accent-washed like a quiet callout. */
 .plan-banner {
@@ -1915,10 +1839,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .plan-later .snooze-summary.plan-target { width: auto; height: auto; }
 .plan-note { color: var(--attention); font-size: var(--font-caption); font-weight: 600; }
 @media (pointer: coarse) {
-  /* 44px effective on touch through the invisible expansion, like the snooze
-     trigger — the visible icon never grows back into a box */
-  .plan-more { width: 28px; height: 28px; }
-  .plan-more::before { inset: -8px; }
   .plan-target { min-height: var(--row-sm); }
   /* The grip goes entirely on touch: HTML5 drag never fires there (the phone
      plans in tap order), and its dead column only took width from the title. */
@@ -1965,7 +1885,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .cal-allday { display: grid; gap: var(--space-xs); padding: var(--space-sm) var(--space-xs); border-top: 1px solid var(--line); }
 .cal-allday-label { color: var(--muted); font-size: var(--font-caption); }
 .cal-allday-list { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
-.cal-chip { padding: 2px var(--space-sm); border-radius: var(--radius-pill); background: var(--accent-soft); font-size: var(--font-caption); font-weight: 600; }
 .cal-events { margin: 0; padding: 0; list-style: none; }
 .cal-event {
   display: grid;
@@ -2194,8 +2113,7 @@ kbd {
 
 /* Settings → Row actions (#311): two swipe pickers, then the menu's list —
    one line per action: tick (listed), name, why it is locked, move up/down.
-   The move squares are .icon-btn (34px painted, 44px with its expansion), set
-   10px apart so their expanded targets touch but never overlap. */
+   The tick and the arrows are the one icon button (#357). */
 .row-actions-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--row-sm); }
 .row-actions-label { font-size: var(--font-label); color: var(--fg); }
 .row-actions-field .select-native { width: auto; min-width: 12rem; }
@@ -2210,15 +2128,14 @@ kbd {
 }
 .row-actions-item:first-child { border-top: 0; }
 .row-actions-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); color: var(--fg); }
-/* listed: the tint recipe, so ticked reads at a glance and without hue (the
-   check glyph); locked by a swipe: the same, quiet, and inert */
-.row-actions-tick[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-border-soft); color: var(--accent-text); }
-.row-actions-tick:disabled { background: var(--card-off); border-color: var(--line); color: var(--muted); cursor: default; }
+/* listed: the checked glyph in accent-text (the icon button's pressed
+   state), so ticked reads at a glance and without hue; locked by a swipe:
+   the same glyph, muted and inert. No fill either way (#357). */
+.row-actions-tick:disabled[aria-pressed="true"] { color: var(--muted); }
 .row-actions-hint { font-size: var(--font-caption); white-space: nowrap; }
-/* both squares' glyphs on the icons.size inline step — not 1em of the card's
-   caption-sized text (12px) */
-.row-actions-tick .icon, .row-actions-move .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.row-actions-move:disabled { color: var(--line); cursor: default; }
+/* the two arrows stand side by side: one icon-button gap apart, so their
+   44px targets touch and never overlap (the row's own gap is 10px) */
+.row-actions-move + .row-actions-move { margin-left: calc(var(--icon-btn-gap) - 10px); }
 .row-actions-reset { justify-self: start; }
 
 /* The shortcuts sheet — the vendored modal shell, read-only. */

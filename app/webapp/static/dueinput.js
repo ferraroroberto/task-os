@@ -32,10 +32,10 @@ export function duePicker(opts) {
   const button = document.createElement('button');
   button.type = 'button';
   // `className` is the WHOLE class list, not a modifier stacked on a default:
-  // the default button is a 30px `.icon-btn`, the strip's is a 36/44px
-  // `.button-surface .strip-square`, and letting both stacks land on one
-  // element just makes their size rules fight (34px vs 36px, silently).
-  button.className = o.className || 'icon-btn due-pick-btn';
+  // the default is the one icon button (#357), the snooze menu's is a
+  // labelled menu option, and letting both stacks land on one element just
+  // makes their rules fight.
+  button.className = o.className || 'icon-btn';
   button.title = o.title || 'Pick a date';
   button.setAttribute('aria-label', o.ariaLabel || 'Pick a due date');
   button.innerHTML = icon('calendar-days');

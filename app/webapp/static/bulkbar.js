@@ -81,7 +81,7 @@ export function mountBulkBar(host, handlers) {
   // API still takes the natural phrases — the drawer and the CLI are where
   // you type them.
   const due = duePicker({
-    className: 'button-surface strip-square bulk-due',
+    className: 'icon-btn bulk-due',
     title: 'Set the due date of the selected tasks',
     ariaLabel: 'Set the due date of the selected tasks',
     onPick: function (value) { apply({ due: value }, function () { due.picker.value = ''; }); },
@@ -91,7 +91,7 @@ export function mountBulkBar(host, handlers) {
   // bar while that runs, exactly like an apply.
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'button-surface strip-square bulk-delete';
+  del.className = 'icon-btn is-danger bulk-delete';
   del.title = 'Delete the selected tasks';
   del.setAttribute('aria-label', 'Delete the selected tasks');
   del.innerHTML = icon('trash-2');
@@ -106,9 +106,9 @@ export function mountBulkBar(host, handlers) {
 
   const exit = document.createElement('button');
   exit.type = 'button';
-  // the same class stack the strip's + and Select toggle wear, so all four
-  // squares are one control by construction, not by two rules agreeing
-  exit.className = 'button-surface strip-square bulk-exit';
+  // the one icon button the strip's + wears too (#357), so the bar's three
+  // glyphs are one control by construction, not by three rules agreeing
+  exit.className = 'icon-btn bulk-exit';
   exit.title = 'Leave select mode';
   exit.setAttribute('aria-label', 'Leave select mode');
   exit.innerHTML = icon('x');

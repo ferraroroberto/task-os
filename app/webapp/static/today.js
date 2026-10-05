@@ -237,7 +237,7 @@ function buildPlanSection(plan, cands, handlers, o) {
   if (!o.planMode && cands.length && handlers.onPlanMode) {
     const more = document.createElement('button');
     more.type = 'button';
-    more.className = 'plan-more hit-target';
+    more.className = 'icon-btn plan-more';
     more.title = 'Plan more';
     more.setAttribute('aria-label', 'Plan more tasks');
     more.innerHTML = icon('plus');
@@ -287,7 +287,7 @@ function buildPlanSection(plan, cands, handlers, o) {
     if (handlers.onUnplan) {
       const un = document.createElement('button');
       un.type = 'button';
-      un.className = 'plan-unplan hit-target';
+      un.className = 'icon-btn is-danger plan-unplan';
       un.title = 'Remove from plan';
       un.setAttribute('aria-label', 'Remove ' + t.title + ' from the plan');
       un.innerHTML = icon('x');

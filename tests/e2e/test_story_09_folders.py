@@ -30,7 +30,7 @@ per-PC opener, kept inside the <15-test budget): the AI-conversation chip —
 bot glyph on the row and its ⋯ menu's Open / Resume, the drawer chip's desktop
 popover with "Open conversation" +
 "Resume in CLI on this PC" (taskos://resume?session=…), kind inferred when an
-AI URL is pasted, the borderless chip-height delete button, and the phone tap
+AI URL is pasted, the link row's unshaded icon buttons (#357), and the phone tap
 that opens the conversation directly:
 
     docs/screenshots/story-11-ai-links-1-desktop.png  Board: the bot glyph on the row, its ⋯ menu
@@ -53,6 +53,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
+from tests.e2e._uniform import assert_focus_ring, assert_icon_buttons_uniform, pill_style
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
@@ -197,10 +198,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         drawer.locator(".folder-form .button-surface"),
         drawer.locator("button.folder-pick"),
     )
-    # Round 2: line 1 wears line 2's control geometry - the chip's left edge on the
-    # input's, the delete button's right edge on the picker's, and EXACTLY the
-    # control height (it was a short pill first, then a wrapping one taller than
-    # its own row; a long ref ellipsizes on one line now, like the input does).
+    # Line 1 starts on the input's left edge and ends on the picker's right
+    # edge. The chip is the reference pill every other reference wears (#357,
+    # the AI pill's look, compared in step 8), never a control-height box, and
+    # a long ref still ellipsizes on one line rather than wrapping.
     align = drawer.locator("div.drawer-folder").evaluate(
         "el => { const q = s => { const r = el.querySelector(s).getBoundingClientRect();"
         " return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; };"
@@ -208,10 +209,15 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         "  input: q('#drawerFolder'), pick: q('button.folder-pick') }; }")
     assert align["chip"][0] == align["input"][0], align
     assert align["trash"][1] == align["pick"][1], align
-    assert align["chip"][2] == align["input"][2], align
-    # ... which means a ref far too long for the chip does not grow it
+    assert align["chip"][2] < align["input"][2], align
     assert drawer.locator(".folder-current a.chip-folder .chip-label").evaluate(
         "el => el.scrollWidth > el.clientWidth || getComputedStyle(el).textOverflow === 'ellipsis'")
+    folder_pill = pill_style(fchip)
+    # #357: every icon button in the drawer (close, the date calendars, the
+    # folder's trash) is unshaded at rest, one glyph size, 44px to the pointer,
+    # and shows a focus ring.
+    assert_icon_buttons_uniform(page, "#taskDrawer", min_count=4)
+    assert_focus_ring(page, trash)
     assert_no_horizontal_overflow(page)
     field = drawer.locator("#drawerFolder")
     hold_toasts(page)                  # shot 5 frames this step's toast and the next one's
@@ -267,6 +273,8 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.click("nav.tabs .tab[data-tab='board']")
     wrow = page.locator(f"#paneBoard .trow[data-id='{watering['id']}']")
     expect(wrow.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
+    # #357: the same icon-button rule across the Board (header, strip +, rows' ⋮)
+    assert_icon_buttons_uniform(page, "body", min_count=5)
     # the row's ⋯ menu opens it — and, for a Claude Code session, resumes it
     wrow.locator(".trow-kebab").click()
     menu = page.locator(".row-menu")
@@ -296,23 +304,19 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert page.evaluate("window.__taskosClicks")[-1] == "taskos://resume?session=session_01SeedExampleDriftFix000"
     assert len(page.evaluate("window.__taskosClicks")) == clicks_before + 1
     expect(pop).to_be_hidden()
-    # the drawer: the ai link row wears the bot chip, and the delete button is
-    # borderless at the chip's own height (#77 — the bordered 34px square
-    # dwarfed the pill) while its hit rect stays 44px via ::before.
+    # the drawer: the ai link row wears the bot chip, and its edit and delete
+    # are the one icon button the folder's trash is too (#357).
     page.goto(base + "/#task/" + str(watering["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     ai_row = drawer.locator(".link-row", has=page.locator("a.chip-ai"))
     expect(ai_row).to_have_count(1)
-    geom = ai_row.evaluate(
-        "el => { const chip = el.querySelector('a.chip-ai').getBoundingClientRect();"
-        " const rm = el.querySelector('button.link-rm'); const r = rm.getBoundingClientRect();"
-        " const cs = getComputedStyle(rm), ps = getComputedStyle(rm, '::before');"
-        " return { chip: chip.height, rm: r.height, border: cs.borderStyle,"
-        "  bg: cs.backgroundColor, hit: r.height - 2 * parseFloat(ps.top) }; }")
-    assert geom["rm"] <= geom["chip"] + 2, geom               # same height as the pill
-    assert geom["border"] == "none" and geom["bg"] == "rgba(0, 0, 0, 0)", geom
-    assert geom["hit"] >= 44, geom                            # ::before restores the target
+    expect(ai_row.locator("button.icon-btn")).to_have_count(2)
+    found = assert_icon_buttons_uniform(page, "#taskDrawer", min_count=6)
+    trash_glyph = next(b["glyph"] for b in found if b["cls"].startswith("icon-btn") and "Remove link" in b["name"])
+    assert trash_glyph == 16, found                         # the Links row's glyph is the one size
+    # one reference pill: the folder chip IS the AI pill's look (#357)
+    assert pill_style(ai_row.locator("a.chip-ai")) == folder_pill
     # pasting an AI conversation URL infers kind=ai — no manual kind anywhere
     drawer.locator(".link-form .input-native").first.fill("https://chatgpt.com/c/synthetic-e2e")
     drawer.locator(".link-form .button-surface").click()
@@ -337,6 +341,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     p.goto(base + "/#task/" + str(kitchen["id"]))
     d = p.locator("#taskDrawer")
     expect(d).to_be_visible()
+    # #357 on the phone: the glyph-only picker and every other icon button are
+    # unshaded too, and the folder pill keeps the desktop's look
+    assert_icon_buttons_uniform(p, "#taskDrawer", min_count=5)
+    assert pill_style(d.locator(".drawer-folder a.chip-folder")) == folder_pill
     d.locator(".drawer-folder a.chip-folder").click()
     pop = p.locator("#folderPop")
     expect(pop).to_be_visible()
