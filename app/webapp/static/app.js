@@ -689,7 +689,8 @@ function renderTodayPane() {
     onPlan: planTask, onUnplan: unplanTask, onReorder: reorderPlan, onPlanMode: setPlanMode,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
-    sort: state.filters.sort, plan: state.plan, planMode: state.planMode, calendar: state.calendar,
+    sort: state.filters.sort, query: state.filters.q, plan: state.plan, planMode: state.planMode,
+    calendar: state.calendar,
   }, selectOpts()));
   menus.today.endRender();
 }

@@ -123,7 +123,7 @@ function groupByRoot(items, sort) {
  *          onPlan?: (id:number)=>Promise<any>, onUnplan?: (id:number)=>Promise<any>,
  *          onReorder?: (ids:number[])=>Promise<any>, onPlanMode?: (on:boolean)=>void,
  *          onToggleSelect?: (id:number)=>void}} handlers
- * @param {{sort?: string, today?: string,
+ * @param {{sort?: string, today?: string, query?: string,
  *          plan?: {items: Array<object>, done: number, total: number},
  *          planMode?: boolean, calendar?: object|null,
  *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
@@ -178,11 +178,18 @@ export function renderToday(host, items, handlers, opts) {
   head.appendChild(meta);
   section.appendChild(head);
 
+  // Under a text filter an empty section says the filter hid it, never "all
+  // clear": the day may be full (#339). The way forward is the box it names.
+  const q = (o.query || '').trim();
+  const noMatch = function (what) {
+    return 'No task ' + what + ' matches “' + q + '” — change the filter text above';
+  };
   if (!data.due.length) {
     // …with its way forward (#339): a task due today
-    section.appendChild(emptyStateEl('circle-check', 'Nothing due today — all clear', handlers.onAdd ? {
-      actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
-    } : undefined));
+    section.appendChild(q ? emptyStateEl('search', noMatch('due today'))
+      : emptyStateEl('circle-check', 'Nothing due today — all clear', handlers.onAdd ? {
+        actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
+      } : undefined));
   } else {
     data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers, o)); });
   }
@@ -191,9 +198,10 @@ export function renderToday(host, items, handlers, opts) {
   // Soon always shows, with its way forward when it is empty; Later and No
   // date only when they hold something — an empty far horizon says nothing.
   main.appendChild(horizon('today-soon', 'calendar-days', 'Soon', data.week, counts.week, handlers, o,
-    emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
-      actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
-    } : undefined)));
+    q ? emptyStateEl('search', noMatch('due in the next seven days'))
+      : emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
+        actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
+      } : undefined)));
   if (counts.later) main.appendChild(horizon('today-far', 'clock', 'Later', data.later, counts.later, handlers, o));
   if (counts.nodate) main.appendChild(horizon('today-nodate', 'circle-dot', 'No date', data.nodate, counts.nodate, handlers, o));
 }
