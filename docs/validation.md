@@ -53,6 +53,7 @@ Check the capture with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism
 | 28 | [Plan the day against the real calendar (#96)](validation/story-28-calendar.md) | `tests/e2e/test_story_28_calendar.py` · `tests/test_calendar.py` (31) · `tests/test_views.py::test_routes_shape` · `tests/test_cli.py` (status keys) | verified (e2e desktop light + dark over a loopback fake feed, every failure state walked · unit/API · headed Chrome walk on this PC against the fake feed) · **today against the owner's own calendar not verified** (owner's walk) | 2026-09-13 |
 | 29 | [Act on a row from its menu (#311)](validation/story-29-row-actions.md) | inside `tests/e2e/test_story_04_triage.py` (`_walk_starts_and_snooze`, step 4b) · `tests/test_row_actions.py` | verified in the browser (e2e desktop) · **real phone not verified** | 2026-10-04 |
 | 30 | [Today as a split view (#336)](validation/story-30-today-split.md) | inside `tests/e2e/test_story_04_triage.py` (`_walk_today_split`) | verified in the browser (e2e desktop) | 2026-10-04 |
+| 31 | [Every open task within Today's reach (#350)](validation/story-31-today-horizons.md) | inside `tests/e2e/test_story_05_board.py` (`_walk_today_horizons`) | verified in the browser (e2e desktop) | 2026-10-05 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 

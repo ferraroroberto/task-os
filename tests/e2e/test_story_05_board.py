@@ -59,6 +59,14 @@ Story 19 points here.
 
     docs/screenshots/story-19-delete-task-{1,2}-desktop.png
 
+§ #350 (``_walk_today_horizons``, same reason): with the Table gone no open
+task may be out of reach, so Today lists them all in four horizons — Today,
+Soon, Later, No date — and a task due a year out and a task with no date are
+both reached from Today, by scrolling and by the text filter. Story 31 points
+here.
+
+    docs/screenshots/story-31-today-horizons-{1,2}-desktop.png
+
 § #321 (``_walk_edit_refresh``, same reason): an edit the server confirmed shows
 on every visible row without a reload even when an earlier refresh is still in
 flight — the title edited with the list reads held back, the due date edited
@@ -107,7 +115,7 @@ def _card(page: Page, title: str):
 
 
 def _today_row(page: Page, title: str):
-    # the due list only — "Later this week" is the sibling disclosure
+    # the due list only — Soon / Later / No date are the sibling disclosures
     return _trow(page, "#paneToday section.today", title)
 
 
@@ -330,15 +338,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator("#paneToday section.today .trow .snooze-summary")).to_have_count(0)
         expect(school.locator(".trow-person")).to_contain_text("Jordan Lee")
         expect(page.locator("#paneToday .trow-project")).to_have_count(0)
-        later = page.locator(".today-later")
-        assert later.evaluate("el => el.open") is True                # open by default (#253)
-        expect(later.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
+        soon = page.locator(".today-soon")
+        assert soon.evaluate("el => el.open") is True                 # open by default (#253)
+        expect(soon.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
         shot(page, shots / "story-05-board-5-desktop.png")
 
         # 7. Mark a recurring task complete (the row's circle: on a recurring
         #    task it rolls instead of closing, issue #54) → its due rolls a
         #    cadence forward, it leaves the due list and shows up under
-        #    "Later this week" with the new date.
+        #    Soon with the new date.
         vocab = _today_row(page, "Vocabulary review")
         vid = int(vocab.get_attribute("data-id"))
         assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
@@ -351,7 +359,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         rolled = _get(base, f"/api/tasks/{vid}")
         assert rolled["due"] == next_due and rolled["status"] == "todo"
         assert rolled["activity"][0]["field"] == "due"
-        rolled_row = later.locator(f".trow[data-id='{vid}']")
+        rolled_row = soon.locator(f".trow[data-id='{vid}']")
         expect(rolled_row).to_be_visible()
         expect(rolled_row).to_have_attribute("data-status", "todo")
         expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
@@ -369,7 +377,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         drawer.locator("select[data-field='status']").select_option("done")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
-        expect(later.locator(f".trow[data-id='{vid}']")).to_have_count(0)
+        expect(soon.locator(f".trow[data-id='{vid}']")).to_have_count(0)
         closed = _get(base, f"/api/tasks/{vid}")
         assert closed["status"] == "done" and closed["due"] == next_due
         assert closed["done_at"] is not None
@@ -480,6 +488,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         _walk_done_journal(page, base, shots)
         _walk_delete_task(page, base, shots)
         _walk_edit_refresh(page, base)
+        _walk_today_horizons(page, base, shots)
         assert errors == [], errors
     finally:
         context.close()
@@ -1091,6 +1100,65 @@ _HOLD_LIST_READS = r"""() => {
     });
   };
 }"""
+
+
+def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
+    """§ #350 (story 31) — no open task is out of Today's reach.
+
+    With the Table gone, Today lists every open task in four horizons — Today,
+    Soon (the next seven days), Later and No date — and the filter card's text
+    works across all of them. A task due a year out and a task with no date are
+    reached from Today by scrolling, then each by its text alone. The walk makes
+    both over the API and deletes them after, so the seed stays whole.
+    """
+    def make(body: dict) -> int:
+        return page.evaluate(
+            "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
+            "body: JSON.stringify(b)}).then(r => r.json()).then(t => t.id)", body)
+
+    far_due = (E2E_ANCHOR + timedelta(days=365)).isoformat()
+    far = make({"title": "Renew the residence card", "due": far_due, "status": "todo"})
+    loose = make({"title": "Sort the attic boxes", "status": "todo"})
+    try:
+        page.goto(f"{base}/")
+        page.click("nav.tabs .tab[data-tab='today']")
+        pane = page.locator("#paneToday")
+        # 1. Scrolling: Later and No date sit open under Soon, each holding its task
+        later = pane.locator(".today-far")
+        nodate = pane.locator(".today-nodate")
+        assert later.evaluate("el => el.open") is True and nodate.evaluate("el => el.open") is True
+        far_row = later.locator(f".trow[data-id='{far}']")
+        loose_row = nodate.locator(f".trow[data-id='{loose}']")
+        far_row.scroll_into_view_if_needed()
+        expect(far_row).to_be_in_viewport()
+        expect(far_row.locator(".trow-due")).to_have_attribute("title", far_due)
+        loose_row.scroll_into_view_if_needed()
+        expect(loose_row).to_be_in_viewport()
+        expect(loose_row.locator(".trow-due")).to_have_count(0)
+        # the horizons come in order, nearest first, and every open task the
+        # filter shows is in exactly one of them (or the plan)
+        order = pane.locator(".today-horizon .collapse-title").all_inner_texts()
+        assert order == ["Soon", "Later", "No date"], order
+        _clear_toasts(page)
+        nodate.scroll_into_view_if_needed()
+        shot(page, shots / "story-31-today-horizons-1-desktop.png")
+        # 2. The text filter reaches both from the top strip (My plan stays
+        #    whole whatever the filters, #89, so it is left out of the count)
+        q = page.locator("#todayFilterText .filter-q")
+        listed = pane.locator(".today-group .trow[data-id]")
+        q.fill("residence card")
+        expect(listed).to_have_count(1)
+        expect(later.locator(f".trow[data-id='{far}']")).to_be_visible()
+        q.fill("attic")
+        expect(listed).to_have_count(1)
+        expect(nodate.locator(f".trow[data-id='{loose}']")).to_be_visible()
+        expect(page).to_have_url(re.compile(r"[?&]q=attic"))
+        nodate.locator(f".trow[data-id='{loose}']").scroll_into_view_if_needed()
+        shot(page, shots / "story-31-today-horizons-2-desktop.png")
+        q.fill("")
+    finally:
+        for tid in (far, loose):
+            page.evaluate("id => fetch('/api/tasks/' + id, {method: 'DELETE'})", tid)
 
 
 def _walk_edit_refresh(page: Page, base: str) -> None:
