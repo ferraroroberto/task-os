@@ -1151,6 +1151,11 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         expect(listed).to_have_count(1)
         expect(nodate.locator(f".trow[data-id='{loose}']")).to_be_visible()
         expect(page).to_have_url(re.compile(r"[?&]q=attic"))
+        # under a text filter an empty section says nothing matches it, never
+        # "all clear": the day may be full, the filter just hides it (#339)
+        for empty in (pane.locator("section.today .empty-state"), pane.locator(".today-soon .empty-state")):
+            expect(empty).to_contain_text("matches “attic”")
+            expect(empty).not_to_contain_text("all clear")
         nodate.locator(f".trow[data-id='{loose}']").scroll_into_view_if_needed()
         shot(page, shots / "story-31-today-horizons-2-desktop.png")
         q.fill("")
