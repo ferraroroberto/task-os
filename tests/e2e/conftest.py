@@ -70,6 +70,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
+from tests.e2e._host_identity import RENDERED_TEXT_JS, describe, leaks
 from tests.e2e._work_root_lock import WorkRootBusy, boot_lock
 from tests.e2e._work_root_lock import acquire as acquire_work_root
 
@@ -131,7 +132,19 @@ E2E_BUILD_SHA = "e2e0000"
 #: system temp dir on purpose: a repo-local root put the SQLite file on the
 #: checkout's own drive and slowed writes enough to lose races the stories were
 #: already winning only narrowly.
-E2E_WORK_ROOT = Path(tempfile.gettempdir()) / "taskos-e2e"
+#:
+#: On Windows the root is the all-users Public folder, not the system temp dir
+#: (#351): temp sits inside the user profile, so the paths stories 06, 09, 10
+#: and 24 put on screen carried the account name of whoever ran the suite into
+#: a public gallery. Public is on the same system drive as temp, so the #134
+#: write speed holds, and its path names no one. `shot()` refuses a page that
+#: renders the home directory or account name all the same.
+def _work_root_base() -> Path:
+    public = os.environ.get("PUBLIC") if sys.platform == "win32" else None
+    return Path(public) if public and Path(public).is_dir() else Path(tempfile.gettempdir())
+
+
+E2E_WORK_ROOT = _work_root_base() / "taskos-e2e"
 
 
 def worker_suffix() -> str:
@@ -605,10 +618,23 @@ def _assert_pinned_clock(page: Page) -> None:
         )
 
 
+def _assert_no_host_identity(page: Page) -> None:
+    """Refuse to capture a page that shows who ran the suite (#351).
+
+    The gallery is committed to a public repo, and the e2e work root sits in
+    the system temp dir, inside the user profile on Windows: a story that
+    paints one of its own paths would photograph the account name.
+    """
+    found = leaks(page.evaluate(RENDERED_TEXT_JS))
+    if found:
+        raise AssertionError(describe(found))
+
+
 def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
     _assert_pinned_clock(page)
+    _assert_no_host_identity(page)
     page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
 
 
