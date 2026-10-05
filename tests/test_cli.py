@@ -375,8 +375,15 @@ def test_server_probe_false_on_closed_port() -> None:
 def test_pick_backend_falls_back_to_local_when_app_is_down(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from src import certs
+
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "t.db"))
     monkeypatch.delenv(cli.SERVER_ENV, raising=False)
+    # the scheme asserted below is the no-cert one (#365): the checkout's own
+    # webapp/certificates/ is real state this test must not read — a live
+    # install holds the pair, a fresh clone or worktree does not. The https
+    # leg is the sibling test (#259) further down.
+    monkeypatch.setattr(certs, "cert_paths", lambda project_root=None: None)
     monkeypatch.setattr(cli, "server_answers", lambda base, timeout=0.0: False)
     args = cli.build_parser().parse_args(["ls"])
     assert isinstance(cli.pick_backend(args), cli.LocalBackend)
