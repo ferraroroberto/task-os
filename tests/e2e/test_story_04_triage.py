@@ -1073,14 +1073,15 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         lefts = sorted(set(b[0] for b in boxes))
         assert len(lefts) == 2, boxes                                  # two columns
         assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
-        # rows are >=44px tall, and the row's two controls — the completion
-        # circle and the ⋯ kebab — are real 44x44 boxes that never overlap the
-        # open target between them (#311)
+        # rows are >=44px tall; a touch screen draws no completion circle
+        # (#350: a swipe right or the drawer's status closes a task), so the
+        # row's one control is the ⋯ kebab, a real 44x44 box that never
+        # overlaps the open target (#311)
         assert_min_target(rows)
-        assert_min_target(rows.locator(".trow-done"))
+        expect(rows.locator(".trow-done").first).to_be_hidden()
         assert_min_target(rows.locator(".trow-kebab"))
-        assert_no_overlap(rows.locator(".trow-done, .trow-main, .trow-kebab"))
-        sizes = rows.locator(".trow-done, .trow-kebab").evaluate_all(
+        assert_no_overlap(rows.locator(".trow-main, .trow-kebab"))
+        sizes = rows.locator(".trow-kebab").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
         assert sizes and all(w == 44 and h == 44 for w, h in sizes), sizes
         # #74 round 2: a folder never makes a card taller. It is a passive glyph
@@ -1095,19 +1096,16 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         # the claim is that a folder row is no taller than a plain one)
         plain_h = {h for f, h in by_folder if not f}
         assert {h for f, h in by_folder if f} <= plain_h, by_folder
-        # #311: the row is circle · title-over-meta · kebab, level with each
-        # other, no taller than 60px (+ the hairline) with its meta line, and
-        # the kebab sits at the row's right edge
-        done_box = watering.locator(".trow-done").bounding_box()
+        # #311: the row is title-over-meta · kebab, level with each other, no
+        # taller than 60px (+ the hairline) with its meta line, the kebab at
+        # the row's right edge
         main_box = watering.locator(".trow-main").bounding_box()
         kebab_box = watering.locator(".trow-kebab").bounding_box()
         row_box = watering.bounding_box()
-        assert done_box and main_box and kebab_box and row_box
+        assert main_box and kebab_box and row_box
         assert row_box["height"] <= 61, row_box
         row_mid = row_box["y"] + row_box["height"] / 2
-        for box in (done_box, kebab_box):
-            assert abs((box["y"] + box["height"] / 2) - row_mid) <= 8, (box, row_box)
-        assert done_box["x"] + done_box["width"] <= main_box["x"] + 1, (done_box, main_box)
+        assert abs((kebab_box["y"] + kebab_box["height"] / 2) - row_mid) <= 8, (kebab_box, row_box)
         assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
         assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
         shot(page, shots / "story-04-triage-9-phone.png")
@@ -1145,10 +1143,9 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         today_row = page.locator("#paneToday .today-group .trow").first
         expect(today_row).to_be_visible()
         # the row has no clock any more (#311): snooze lives in the ⋯ menu,
-        # whose kebab is a touch target clear of the circle and the open target
+        # whose kebab is a touch target clear of the open target
         assert_min_target(page.locator("#paneToday .today-group .trow-kebab"))
-        assert_no_overlap(page.locator("#paneToday .today-group .trow-done, "
-                                       "#paneToday .today-group .trow-main, "
+        assert_no_overlap(page.locator("#paneToday .today-group .trow-main, "
                                        "#paneToday .today-group .trow-kebab"))
         today_row.locator(".trow-kebab").tap()
         page.locator(".row-menu [data-action='snooze']").tap()

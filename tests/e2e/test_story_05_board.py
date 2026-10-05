@@ -916,17 +916,17 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         rows = page.locator("#paneToday section.today .trow")
         expect(rows.first).to_be_visible()
-        # the ONE row on the phone: ≥44px tall, the circle and the ⋯ kebab real
-        # 44px boxes (#311) and never overlapping each other or the row's open
-        # target
+        # the ONE row on the phone: ≥44px tall, no completion circle on a
+        # touch screen (#350 — the swipe and the drawer's status close a task),
+        # the ⋯ kebab a real 44px box (#311) never overlapping the open target
         assert_min_target(rows)
-        for ctrl in (".trow-done", ".trow-kebab"):
-            assert_min_target(rows.locator(ctrl))
-            assert_no_overlap(rows.locator(ctrl))
-            heights = rows.locator(ctrl).evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
-            assert heights and all(h == 44 for h in heights), (ctrl, heights)
+        expect(rows.locator(".trow-done").first).to_be_hidden()
+        assert_min_target(rows.locator(".trow-kebab"))
+        assert_no_overlap(rows.locator(".trow-kebab"))
+        heights = rows.locator(".trow-kebab").evaluate_all("els => els.map(e => e.getBoundingClientRect().height)")
+        assert heights and all(h == 44 for h in heights), heights
         first_today = rows.first
-        assert_no_overlap([first_today.locator(c) for c in (".trow-done", ".trow-main", ".trow-kebab")])
+        assert_no_overlap([first_today.locator(c) for c in (".trow-main", ".trow-kebab")])
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-8-phone.png")
 
@@ -962,21 +962,19 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 61 for h in heights), heights
         # touch fallback for the drag: the row's ⋯ kebab menu carries the status
-        # items (#311) — the circle, the open target and the kebab are three
-        # separate 44px-tall cells in a line, the kebab flush with the row's
-        # right edge (UX rounds 1-3, issues #27/#32/#46)
+        # items (#311) — the open target and the kebab are separate 44px-tall
+        # cells in a line, the kebab flush with the row's right edge (UX rounds
+        # 1-3, issues #27/#32/#46); no circle on a touch screen (#350)
         first_item = _col(page, "standby").locator(".trow").first
-        done_box = first_item.locator(".trow-done").bounding_box()
+        expect(first_item.locator(".trow-done")).to_be_hidden()
         main_box = first_item.locator(".trow-main").bounding_box()
         kebab_box = first_item.locator(".trow-kebab").bounding_box()
         item_box = first_item.bounding_box()
-        assert done_box and main_box and kebab_box and item_box
-        assert (done_box["width"], done_box["height"]) == (44, 44), done_box
+        assert main_box and kebab_box and item_box
         assert (kebab_box["width"], kebab_box["height"]) == (44, 44), kebab_box
-        assert done_box["x"] + done_box["width"] <= main_box["x"] + 1, (done_box, main_box)
         assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
         assert item_box["x"] + item_box["width"] - (kebab_box["x"] + kebab_box["width"]) <= 8, (kebab_box, item_box)
-        assert_no_overlap([first_item.locator(c) for c in (".trow-done", ".trow-main", ".trow-kebab")])
+        assert_no_overlap([first_item.locator(c) for c in (".trow-main", ".trow-kebab")])
         first_item.locator(".trow-kebab").tap()
         menu = page.locator(".row-menu")
         expect(menu).to_be_visible()

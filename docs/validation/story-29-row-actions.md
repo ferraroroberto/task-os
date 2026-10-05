@@ -50,3 +50,5 @@ Walk these in the **installed standalone PWA** on the iPhone. Record each item a
 verified in the browser (e2e, desktop light). **Real phone not verified**: the gesture and touch checks for the whole #311 redesign are on the owner's checklist once the swipe step lands. Date: 2026-10-04.
 
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The phone swipe walk (story 07) runs on a Today row.
+
+**2026-10-05 (#350):** a touch screen draws no completion circle any more: a task closes by swiping it right, or by opening it and setting its status in the drawer (the non-gesture way, so WCAG 2.5.1 holds), and a closed one reopens from the drawer. A mouse, a trackpad and the keyboard keep the circle and `e`. The phone legs of stories 04, 05 and 07 assert the circle is hidden and that the open target and the ⋮ are the row's 44px targets; red first against the build that still drew it.
