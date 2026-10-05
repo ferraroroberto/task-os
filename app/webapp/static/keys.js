@@ -34,7 +34,6 @@ const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .row-menu, .msel, .folder-picker, .
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
 const GETTING_AROUND = [
   ['Tab', 'move between rows'],
-  ['→ ←', 'walk the focused row\'s cells in the Archive'],
   ['Enter', 'open the focused task'],
   ['Space', 'tick the row while Select mode is on'],
   ['Ctrl K', 'the command palette (Cmd K on a Mac)'],
