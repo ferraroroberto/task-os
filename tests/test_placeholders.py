@@ -14,7 +14,7 @@ from src.config import load_config
 from src.placeholders import is_ref, normalize_path, opener_url, resolve, to_ref, web_url
 from tests.conftest import write_test_config
 
-PH = {"onedrive": "E:/onedrive", "user": "rober", "sharepoint:docs": "E:/onedrive/Tenant/docs - Documents"}
+PH = {"onedrive": "E:/onedrive", "user": "sam", "sharepoint:docs": "E:/onedrive/Tenant/docs - Documents"}
 WR = {"onedrive": "https://cloud.example/od/", "sharepoint:docs": "https://tenant.example/sites/docs"}
 
 
@@ -23,7 +23,7 @@ def test_resolve_known_tokens() -> None:
     assert r.resolved and r.path == "E:/onedrive/house/kitchen" and r.unresolved == []
     assert r.href == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
     assert resolve("{sharepoint:docs}/plans", PH).path == "E:/onedrive/Tenant/docs - Documents/plans"
-    assert resolve("{user}/code/garden-bot", PH).path == "rober/code/garden-bot"
+    assert resolve("{user}/code/garden-bot", PH).path == "sam/code/garden-bot"
 
 
 def test_resolve_unknown_token_is_flagged_not_guessed() -> None:
@@ -106,7 +106,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
     cfg = write_test_config(
         tmp_path / "config.json",
-        placeholders={"onedrive": "E:/onedrive", "user": "rober"},
+        placeholders={"onedrive": "E:/onedrive", "user": "sam"},
         web_roots={"onedrive": "https://cloud.example/od"},
     )
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(cfg))
@@ -169,7 +169,7 @@ def test_status_carries_folders_opener_and_placeholders(client: TestClient) -> N
     assert st["opener"]["install"].startswith("$d=") and "<base-url>" in st["opener"]["install"]
     assert st["opener"]["uninstall"].startswith("Remove-Item")
     assert "# onedrive=E:\\onedrive" in st["opener"]["env_template"]
-    assert st["placeholders"] == {"onedrive": "E:/onedrive", "user": "rober"}
+    assert st["placeholders"] == {"onedrive": "E:/onedrive", "user": "sam"}
     assert st["opener"]["installed_here"] in (True, False, None)
     # which registration shape is in use is its own state, never folded into
     # installed_here — the fallback hands the URL to a command interpreter,
