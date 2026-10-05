@@ -1216,8 +1216,38 @@ def _walk_edit_refresh(page: Page, base: str) -> None:
     page.evaluate("window.__hold.on = false")
     due = drawer.locator("input[data-field='due']")
     due.fill("in 30 days")
-    due.press("Enter")
     later = (E2E_ANCHOR + timedelta(days=30)).isoformat()
+    # (#364) Enter fires a PATCH, and a read taken right after the key can beat
+    # it on a busy box and see the old date. The walk waits on that PATCH's
+    # response — and parks the request first, so the stale window is certain
+    # rather than occasional: the read below must still see the old date, and
+    # only the answered PATCH may make it the new one.
+    parked: list = []
+
+    def park_patch(route):
+        if route.request.method == "PATCH":
+            parked.append(route)
+        else:
+            route.continue_()
+
+    page.route(f"**/api/tasks/{tid}", park_patch)
+    try:
+        with page.expect_response(
+            lambda r: r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{tid}")
+        ) as patched:
+            due.press("Enter")
+            for _ in range(100):
+                if parked:
+                    break
+                page.wait_for_timeout(50)
+            assert parked, "the due edit never sent its PATCH"
+            assert _get(base, f"/api/tasks/{tid}")["due"] != later, "the PATCH was not held"
+            parked.pop().continue_()
+        assert patched.value.ok, patched.value.status
+    finally:
+        for route in parked:
+            route.continue_()
+        page.unroute(f"**/api/tasks/{tid}", park_patch)
     assert _get(base, f"/api/tasks/{tid}")["due"] == later
 
     # 3. Let every held answer land, then settle — the stale overwrite, if there
