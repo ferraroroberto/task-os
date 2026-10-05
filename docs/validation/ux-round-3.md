@@ -38,7 +38,7 @@ Phone: [board](../screenshots/ux-round-3-1-phone-board.png) · [table](../screen
 
 ## Round 4 (issue #48)
 
-Follow-up review on the phone, same method (seeded instance, screenshots read back, e2e). Phone: [filter card open](../screenshots/ux-round-4-1-phone-filters.png) · [search](../screenshots/ux-round-4-2-phone-search.png) · [settings](../screenshots/ux-round-4-3-phone-settings.png). Desktop: [search hits](../screenshots/ux-round-4-4-desktop-search.png).
+Follow-up review on the phone, same method (seeded instance, screenshots read back, e2e). Phone: [filter card open](../screenshots/ux-round-4-1-phone-filters.png) · [search](../screenshots/ux-round-4-2-phone-search.png) · [settings](../screenshots/ux-round-4-3-phone-settings.png). Desktop: [search hits](../screenshots/ux-round-4-4-desktop-search.png) (the folder and email path lines are greyed out up to the e2e work folder: the capture ran under the profile's temp dir and named the account, #351).
 
 | # | Asked | Done | Seen in |
 | --- | --- | --- | --- |

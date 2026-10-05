@@ -1,6 +1,6 @@
 """One e2e run at a time over the suite's shared work root (#244).
 
-``E2E_WORK_ROOT`` is a fixed directory under the system temp dir (#134), so it
+``E2E_WORK_ROOT`` is a fixed directory (#134; the Public folder on Windows, #351), so it
 is per *machine*, not per checkout: the primary checkout and a
 ``task-os-wt-<N>`` worktree running ``pytest tests/e2e`` at the same time would
 boot their instances in the same folders, and ``e2e_workdir()`` clears a
