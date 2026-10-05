@@ -101,7 +101,7 @@ export function calendarLane(cal) {
     const strip = el('div', 'cal-allday');
     strip.appendChild(el('span', 'cal-allday-label', 'All day'));
     const ul = el('ul', 'cal-allday-list');
-    allDay.forEach(function (ev) { ul.appendChild(el('li', 'cal-chip', ev.summary)); });
+    allDay.forEach(function (ev) { ul.appendChild(el('li', 'chip cal-chip', ev.summary)); });
     strip.appendChild(ul);
     lane.appendChild(strip);
   }

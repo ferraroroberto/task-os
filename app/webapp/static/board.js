@@ -339,7 +339,7 @@ function suggestionStrip(suggestion, handlers) {
     ['x', 'Reject suggestion', handlers.onRejectSuggestion]].forEach(function (entry) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'button-ghost ai-suggestion-action';
+    button.className = 'icon-btn ai-suggestion-action';
     button.setAttribute('aria-label', entry[1] + ' for ' + suggestion.task_title);
     button.title = entry[1];
     button.innerHTML = icon(entry[0]);
