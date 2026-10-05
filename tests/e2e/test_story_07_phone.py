@@ -25,8 +25,7 @@ allowed on screen). What a browser can prove of the story:
   edge, the whole row ≤ 61px — while the date, folder and AI conversation on its
   meta line are passive (no button, no link); the date is changed through the
   kebab's "Change date" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
-  rows run edge to edge; and — on Tree, at 320/390/430/772 — the same three
-  still apart;
+  rows run edge to edge;
 - the row's swipes, with synthetic touch pointers (#311): left opens the date
   sheet and writes nothing, a touch starting in the 20px edge zone is ignored,
   right completes with Undo. The feel of the gesture on a real iPhone is the
@@ -80,7 +79,6 @@ from tests.e2e.conftest import (
     assert_control_boundaries,
     e2e_workdir,
     shot,
-    tree_view,
 )
 
 PHONE = {"width": 390, "height": 844}
@@ -142,7 +140,9 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
     # `pageerror` assertion below then (intermittently) caught as a page error.
     made = page.request.post(f"{base}/api/tasks", data=json.dumps({
         "title": "Wire the moisture sensor",
-        "due": (E2E_ANCHOR + timedelta(days=3)).isoformat(),
+        # overdue, so Today lists it: the phone's own list, and the one whose
+        # rows swipe (the phone Board's columns swipe sideways already)
+        "due": (E2E_ANCHOR - timedelta(days=1)).isoformat(),
         "folder_ref": "{user}/code/garden-bot",
     }), headers={"content-type": "application/json"})
     assert made.ok, made.text()
@@ -152,8 +152,8 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
     }), headers={"content-type": "application/json"})
     try:
         page.goto(f"{base}/")
-        page.locator("nav.tabs .tab[data-tab='table']").tap()
-        row = page.locator(f"#paneTable .trow[data-id='{task['id']}']")
+        page.locator("nav.tabs .tab[data-tab='today']").tap()
+        row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
         expect(row).to_be_visible()
         # the meta line is passive: date, folder and AI are glyph/text spans
         meta = row.locator(".trow-meta")
@@ -194,12 +194,13 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
         sheet.locator(".snooze-pick").tap()
         expect(sheet.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
-        # picking a day commits it - the row re-renders on the new date
-        new_due = (E2E_ANCHOR + timedelta(days=5)).isoformat()
+        # picking a day commits it - the row re-renders on the new date (today,
+        # so it stays on Today)
+        new_due = E2E_ANCHOR.isoformat()
         sheet.locator(".due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
         expect(sheet).to_be_hidden()
-        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
+        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
             "title", new_due)
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
         page.wait_for_load_state("networkidle")
@@ -218,7 +219,7 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
           for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
           fire('pointerup', x1);
         }"""
-        row = page.locator(f"#paneTable .trow[data-id='{task['id']}']")
+        row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
         expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
         row.locator(".trow-main").evaluate(swipe, [300, 100])
         expect(sheet).to_be_visible()
@@ -234,10 +235,10 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         toast = page.locator(".toast-success").last
         expect(toast).to_contain_text("Completed")
         expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
-        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}']")).to_have_count(0)
+        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
         toast.locator(".toast-action").tap()
-        expect(page.locator(f"#paneTable .trow[data-id='{task['id']}']")).to_be_visible()
+        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "todo"
         # Let the re-renders the writes kicked off finish before the row's task is
         # deleted below: pulling it out from under the in-flight GETs aborts
@@ -456,31 +457,17 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
             tabs = page.locator("nav.tabs .tab")
             # The vendored nav is the floating pill on the phone widths (fixed)
             # and the desktop segmented control at 772 (its own, smaller
-            # geometry). Six pill tabs at 320 wide are ~42px across — the
-            # component's auto-fit, not this app's — so the 44px floor is
-            # asserted on the pill from 390 up and the height floor at 320.
+            # geometry). Four tabs (#350) leave every pill tab past the 44px
+            # floor even at 320 wide.
             pill = page.locator("nav.tabs").evaluate("el => getComputedStyle(el).position") == "fixed"
             assert pill == (width < 772), (width, pill)
-            if pill and width >= 390:
+            if pill:
                 assert_min_target(tabs)
-            elif pill:
-                assert all(b["height"] >= 44 for b in tabs.evaluate_all("els => els.map(e => e.getBoundingClientRect().toJSON())"))
             assert_no_overlap(tabs)
             page.locator("nav.tabs .tab[data-tab='board']").tap()
             expect(page.locator(".board-strip-btn").first).to_be_visible()
             assert_min_target(page.locator(".board-strip-btn"))
             assert_no_horizontal_overflow(page)
-            # #110: on Tree, the row's own left indent eats into the width
-            # Table/Board/Today have to spare, so the row's three targets must
-            # still sit apart there - the circle, the open button and the kebab
-            # are real 44px boxes, so nothing overlaps at any width.
-            tree_view(page)
-            drift = page.locator(
-                "#paneTable #treeHost .trow",
-                has=page.locator(".trow-title", has_text=re.compile(r"^Fix watering schedule drift$")),
-            )
-            expect(drift).to_be_visible()
-            assert_no_overlap(drift.locator(".trow-done, .trow-main, .trow-kebab"))
             context.close()
     finally:
         wk.close()

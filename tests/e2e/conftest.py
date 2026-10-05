@@ -859,32 +859,6 @@ def _press(page: Page, target: Locator) -> None:
         target.click()
 
 
-def _table_pane_view(page: Page, view: str, host: str) -> None:
-    """Put the Table pane on one of its two drawings (#161).
-
-    The Tree stopped being a nav destination when it became the Table pane's
-    second view: reaching it is *tab, then toggle*, and it is the strip's
-    segmented control that switches — never a `data-tab='tree'` click, which
-    no longer matches anything.
-    """
-    _press(page, page.locator("nav.tabs .tab[data-tab='table']"))
-    expect(page.locator("#paneTable")).to_be_visible()
-    seg = page.locator(f"#tableViewToggle .view-seg[data-view='{view}']")
-    _press(page, seg)
-    expect(seg).to_have_attribute("aria-pressed", "true")
-    expect(page.locator(host)).to_be_visible()
-
-
-def tree_view(page: Page) -> None:
-    """Open the Table tab on its Tree view; the outline is on screen after."""
-    _table_pane_view(page, "tree", "#paneTable #treeHost")
-
-
-def table_view(page: Page) -> None:
-    """Open the Table tab on its grid/rows view — the other half of the pair."""
-    _table_pane_view(page, "table", "#paneTable #tableHost")
-
-
 #: Chromium switches every capture needs. Only Chromium: WebKit and Firefox
 #: reject unknown switches at launch.
 _CHROMIUM_CAPTURE_ARGS = ("--disable-partial-raster",)

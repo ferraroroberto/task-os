@@ -11,7 +11,7 @@
  * PC-first and full-width (plan §06/§07) — `.app` has no 772px column cap on
  * desktop; the phone gets the same views as an adaptive second rendering.
  *
- * Issue #46: Board, Table, Tree, Today and Search render the ONE task row
+ * Issue #46: Board, Today and Search render the ONE task row
  * (`.trow`, rows.js) on flat hairlines, edited through the ONE filter card
  * (`.filter-card`, filters.js). Titles are never uppercase.
  */
@@ -174,13 +174,12 @@ button, input, select, textarea { font: inherit; }
 
 /* 44px hit-area expansion for an isolated compact control (the 34px theme
    toggle, a filter pill): visual stays compact, the invisible ::before grows
-   the target. The app's own compact controls (drawer icon button, toast close,
-   tree toggle) opt in on this one rule rather than re-inlining the expansion —
-   design.md "Touch targets" ships the utility once. Insets are per-control
-   because the authored squares differ: 34 + 2x5 = 44, 28 + 2x8 = 44. */
-.hit-target, .icon-btn, .toast-close, .tree-toggle { position: relative; }
-.hit-target::before, .icon-btn::before, .toast-close::before, .tree-toggle::before { content: ""; position: absolute; inset: -5px; }
-.tree-toggle::before { inset: -8px; }        /* 28x28 authored */
+   the target. The app's own compact controls (drawer icon button, toast close)
+   opt in on this one rule rather than re-inlining the expansion — design.md
+   "Touch targets" ships the utility once. Insets are per-control because the
+   authored squares differ: 34 + 2x5 = 44, 30 + 2x7 = 44. */
+.hit-target, .icon-btn, .toast-close { position: relative; }
+.hit-target::before, .icon-btn::before, .toast-close::before { content: ""; position: absolute; inset: -5px; }
 .due-pick-btn::before { inset: -7px; }       /* 30x30 authored, overrides .icon-btn's 34px inset */
 
 /* The header title is the page's h1 (#339): the vendored rule sets its size
@@ -286,7 +285,7 @@ html, body {
 }
 
 /* Every pane body is a single-column stack pinned to minmax(0, 1fr) so a
-   wide child (the Table grid, a Board row) scrolls inside its own box
+   wide child (the Archive grid, a Board row) scrolls inside its own box
    instead of widening the page (design.md Layout). */
 .pane-body {
   display: grid;
@@ -301,8 +300,8 @@ html, body {
 .pane-body .card { margin: 0; }
 
 /* Width follows the shape of the view (design.md Layout, fleet-config#1113): the
-   Board, Table, Today and Archive tabs are two-dimensional (lanes, a many-field
-   grid, a calendar lane, a run report) and span the window; Search (results as
+   Board, Today and Archive tabs are two-dimensional (lanes, a calendar lane,
+   a run report) and span the window; Search (results as
    cards) and Settings (collapsible cards) are one-dimensional and keep the
    centred measure. The declaration is .fleet.toml [design] wide_views. One
    measure per view: the persistent header row and the build footer are capped
@@ -451,7 +450,6 @@ a.chip:hover { text-decoration: underline; }
    link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
 .chip-project { padding: 0 6px; }
-.chip-type { padding: 2px 5px; }
 /* No muted chip text: fg-muted on the neutral-soft fill is under 4.5:1 in both
    themes (design.md chip — the fill is what makes it quiet, #281). */
 
@@ -573,7 +571,7 @@ a.chip:hover { text-decoration: underline; }
 .due-today { color: var(--attention) !important; }
 
 /* ------------------------------------------- the pane's top strip (#80) */
-/* Board / Table / Tree / Today open with the filter reached for most — the
+/* Board / Today open with the filter reached for most — the
    live text box — plus the + that opens the quick-add dialog. Everything else
    stays in the collapsed filter card below. */
 /* justify-end so the + keeps its right-hand seat in the true-empty state,
@@ -599,54 +597,18 @@ a.chip:hover { text-decoration: underline; }
    half of it: 4px of invisible expansion on every side makes the 36px square
    44px effective with neighbouring hit rects edge to edge, never overlapping —
    design.md's "adjacent cluster" rule (#281). On touch the squares are 44px
-   real and the expansion resets (the coarse block). (.due-pick-btn's own -7px
-   inset is for the Table's 30px cell button, which has no neighbour.) */
+   real and the expansion resets (the coarse block). */
 .strip-square, .quick-add-btn { position: relative; }
 .strip-square::before, .quick-add-btn::before { content: ""; position: absolute; inset: -4px; }
-/* The Select toggle and the view toggle's two halves say what they are beside
-   the glyph (#339): no convention fixes a checklist or a tree glyph's meaning,
+/* The Select toggle says what it is beside the glyph (#339): no convention
+   fixes a checklist glyph's meaning,
    and a tooltip never shows on touch. Same height as the squares, the width
    follows the label; the + keeps its square, a glyph everyone reads. */
 .strip-square.has-label { width: auto; gap: 6px; padding: 0 10px; font-size: var(--font-label); font-weight: 600; }
-/* A phone strip has no room for glyph and word on three buttons and still a
-   usable filter field: there the word stays and the glyph goes (iOS's own
+/* A phone strip has no room for glyph and word and still a usable filter
+   field: there the word stays and the glyph goes (iOS's own
    "Select" is a text button). */
 @media (max-width: 520px) { .strip-square.has-label .icon { display: none; } }
-
-/* --------------------------------------- the Table pane's view toggle (#161) */
-/* The grid and the outliner are two drawings of ONE filtered list, so they
-   share one pane, one strip and one filter card — a segmented pair in the
-   strip, not a second nav destination. Both halves are .strip-square, so the
-   control is exactly the square the Select toggle and the + beside it are, at
-   every width (36px fine pointer, 44px touch — the one geometry above). The
-   pair joins by squaring the inner corners and dropping the second half's left
-   hairline: no negative margin, because two overlapping 44px hit rects is what
-   design.md's adjacent-cluster rule forbids, and the shared edge is already one
-   visible line. */
-.view-toggle { flex: none; display: inline-flex; align-items: center; }
-.view-seg:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.view-seg:last-child {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left-color: transparent;
-}
-/* Engaged wears the accent-soft tint the Select toggle wears when it is on —
-   one "this is the state you are in" tone across the whole strip. The halves
-   carry a word since #339, and text on a tint is accent-text (design.md: the
-   base accent on accent-soft falls under 4.5:1). */
-.view-seg[aria-pressed="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent-border-soft);
-  color: var(--accent-text);
-}
-.view-seg:last-child[aria-pressed="true"] { border-left-color: transparent; }
-/* The two halves share an edge, so neither expands across it (#281): each
-   takes the strip's 4px on its three outer sides only, and is 40px wide so
-   that 40 + 4 still reaches the 44px floor. Touch resets this with the
-   rest of the strip (44px real squares, coarse block). */
-.view-seg { width: 40px; }
-.view-seg:first-child::before { inset: -4px 0 -4px -4px; }
-.view-seg:last-child::before { inset: -4px -4px -4px 0; }
 
 /* ------------------------------------------------- select mode (#81) */
 /* The Select toggle sits beside the +, same geometry. Once tasks are ticked
@@ -1003,7 +965,7 @@ a.chip:hover { text-decoration: underline; }
    rows.lg with a meta line: 60px), the stretched main button, the one-line
    title and meta and the 44px accessories. This block adds only what a task
    row has and a generic action row does not — the hairline above every row
-   but a list's first, the priority accent, the Tree's prefix and indent, the
+   but a list's first, the priority accent, a plan row's prefix, the
    Select checkbox, the pieces of the meta line, and a third line that wraps
    under the row (a Search snippet, an AI suggestion, a plan candidate's
    targets). The Search tab's folder / email / issue hits are `.trow`s without
@@ -1024,13 +986,13 @@ a.chip:hover { text-decoration: underline; }
 .trows > .trow:first-child { border-top: 0; }
 .trow:hover { background: var(--card-2); }
 /* The accent is painted inside the row, so it costs no width and moves
-   nothing — the Tree's indent and a Board column's ellipsis stay put. */
+   nothing — a Board column's ellipsis stays put. */
 .trow.is-high { box-shadow: inset 3px 0 0 var(--danger); }
 .trow.is-dragging { opacity: 0.5; }
 .trow.is-new { background: var(--accent-soft); }
 /* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
 .trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
-/* The prefix (the Tree's toggle, a plan row's grip): a 44px band before the circle. */
+/* The prefix (a plan row's grip): a 44px band before the circle. */
 .trow-prefix { flex: none; display: inline-flex; align-items: center; min-height: var(--hit-min); }
 /* Select mode (#81): the checkbox takes the circle's place. */
 .trow-check { flex: none; margin: 0 var(--space-sm); }
@@ -1058,7 +1020,6 @@ a.chip:hover { text-decoration: underline; }
 }
 .trow-title { font-size: var(--font-body); font-weight: 600; line-height: 1.5; color: var(--fg); }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
-.tree-node.is-context > .trow .trow-title { color: var(--muted); font-weight: 500; }
 /* The meta line: quiet text, one line, its parts joined by a middle dot.
    Nothing on it is a target — the whole line belongs to the row's open. */
 .trow-meta { font-size: var(--font-body-sm); font-weight: 400; line-height: 1.45; color: var(--muted); }
@@ -1113,7 +1074,6 @@ a.chip:hover { text-decoration: underline; }
    a whole instead (a column's own list would be clipped by it). */
 @media (max-width: 520px) {
   .trows:not(.search-hits):not(.board-list),
-  .tree,
   .board-columns { margin-inline: calc(-1 * var(--gap)); }
 }
 /* Swipe (#311, swipe.js). On touch the browser keeps the vertical scroll
@@ -1170,23 +1130,10 @@ a.chip:hover { text-decoration: underline; }
   .trow:is(.is-settling, .is-leaving) > :not(.trow-reveal) { transition-duration: 0.01ms; }
 }
 
-/* The status select of the Table's desktop grid (rows.js statusSelect): the
-   shared 44px native-control box with a 7px band, so what is painted is the
-   compact 30px it always was and what is tappable is 44. */
-.trow-status {
-  --control-inset: 7px;
-  width: auto;
-  padding: 0 var(--space-sm);
-  font-size: var(--font-caption);
-  font-weight: 600;
-}
-
-/* ------------------------------------------------------------- table */
-/* Desktop: a flat grid (no card wrapper) that scrolls inside its own box
-   (both axes) — the page never grows sideways; the sticky header sticks to
-   the scroller's top. Phone: the shared rows (`.table-rows`). No line of its
-   own under the filter card (#48): the header row / the first row's hairline
-   is the only separation. */
+/* ------------------------------------------------------- data table */
+/* The Archive report's desktop grid: flat (no card wrapper), scrolling inside
+   its own box (both axes) — the page never grows sideways; the sticky header
+   sticks to the scroller's top. */
 .table-wrap { border-top: 0; }
 .table-scroll { overflow: auto; max-height: calc(100vh - 230px); }
 .task-table {
@@ -1214,36 +1161,9 @@ a.chip:hover { text-decoration: underline; }
   vertical-align: middle;
 }
 .task-table tbody tr:first-child td { border-top: 0; }
-.task-row { cursor: pointer; }
-.task-row:hover td { background: var(--card-2); }
-.task-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.task-row.is-new td { background: var(--accent-soft); }
-/* Select mode (#81): the desktop grid is a real <table>, so its checkbox is
-   its own leading column — the rows.js one belongs to the phone rendering.
-   After :hover so a ticked row stays visibly ticked under the cursor. */
-.c-sel { width: 1%; white-space: nowrap; }
-.task-row.is-selected td, .task-row.is-selected:hover td { background: var(--accent-soft); }
-.c-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
-.c-title { min-width: 220px; max-width: 420px; }
-.t-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-.t-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.t-crumb { color: var(--muted); font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The sleeping marker in the desktop grid's title cell — the shared row's
-   `.trow-starts` twin (#87), same muted weight, no status colour. */
-.t-starts { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
-.t-starts .icon { width: var(--icon-inline); height: var(--icon-inline); }
-/* The locked marker (#100) — same shape as `.t-starts`, which it replaces on
-   the title cell whenever both would otherwise show. */
-.t-blocked { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
-.t-blocked .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.c-due { white-space: nowrap; }
-.c-priority { text-transform: capitalize; }
-.prio-high { color: var(--danger); font-weight: 600; }
-.prio-none { color: var(--muted); }
-.c-person, .c-project { white-space: nowrap; }
 .folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
-/* The chips of a cell — the Table grid's folder and AI chips, the Archive
-   report's file chips and its "+N more" — are 44px targets (#305), the recipe
+/* The chips of a cell — the Archive report's file chips and its "+N more" —
+   are 44px targets (#305), the recipe
    the task row's meta pills settled on (#303): the pill paints 24px, an
    invisible ::before reaches 11px above and below it (the box is placed from
    the PADDING box, 22px, so that is 22 + 22 = 44), and the 11px margin is what
@@ -1252,45 +1172,7 @@ a.chip:hover { text-decoration: underline; }
    one above without overlapping it. Sideways the band reaches 4px, and the
    10px column gap leaves 2px clear between two neighbours' bands. */
 .folder-chips .chip { position: relative; margin: 11px 0; }
-.folder-chips .chip::before, .t-title a.chip::before { content: ""; position: absolute; inset: -11px -4px; }
-/* The issue chip beside a grid title (#305) is the same pill and the same band.
-   The title cell does not clip and its row is at least 56px (the due button is
-   44px real), so no margin is needed: the band stays inside the row. */
-.t-title a.chip { position: relative; }
-.c-folder .chip { max-width: 200px; }
-.c-comment { max-width: 280px; }
-.t-comment { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A chip in the comment text is a 44px target too (#305), by the same band as
-   the cell chips above. This line clips (the ellipsis), and a clipped band is
-   no target, so the 11px the band reaches above and below is the line's own
-   padding: it stays inside the clip box. The 3px side margin plus the space
-   between two chips keeps their 4px side bands apart. */
-.t-comment { padding-block: 11px; }
-.t-comment .chip { position: relative; margin: 0 3px; }
-.t-comment .chip::before { content: ""; position: absolute; inset: -11px -4px; }
-.t-comment-meta { color: var(--muted); font-size: var(--font-caption); }
-.c-next { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Due cell: a quiet inline button (icon + relative label) that opens the date
-   picker (#107). Positioned so the hidden date input it owns has an anchor. */
-.due-cell { position: relative; }
-.due-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: var(--hit-min);   /* a real 44px target (#301); the cell's own padding sits outside it */
-  padding: 0 var(--space-sm);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--fg);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--font-label);
-}
-.due-btn:hover { border-color: var(--line); background: var(--card-off); }
-.due-btn.due-none { color: var(--muted); }
-.due-recur { color: var(--muted); display: inline-flex; }
-.due-recur .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.folder-chips .chip::before { content: ""; position: absolute; inset: -11px -4px; }
 /* the shared pair (dueinput.js): calendar button + hidden date input — the
    bulk bar's strip square and the snooze menu's "Pick a date…" both wear it */
 .due-pick-btn { width: 30px; height: 30px; border-radius: var(--radius-md); color: var(--muted); }
@@ -1300,61 +1182,6 @@ a.chip:hover { text-decoration: underline; }
    it too, revealed at their own control height (.field-due-row below). */
 .due-date { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .due-date.is-visible { position: static; width: auto; height: 30px; opacity: 1; pointer-events: auto; }
-
-/* -------------------------------------------------------------- tree */
-/* Flat outliner: the shared rows with an indent per depth and a subtle
-   vertical guide per level; the toggle is the row's prefix column. */
-/* No leading divider: the container used to add its own border-top on top of
-   the first row's hairline — a doubled line under the filter card that the
-   Board and the Table don't have. The first row drops its hairline instead,
-   exactly like `.trows > .trow:first-child` does on the other tabs. */
-.tree { display: flex; flex-direction: column; }
-.tree > .tree-node:first-child > .trow { border-top: 0; }
-.tree-node { display: block; }
-.tree .trow {
-  padding-left: calc(var(--space-xs) + var(--depth, 0) * 22px);
-  /* Indent guides: one hairline per depth level (a 22px cycle matching the
-     padding step, clipped to the row's own depth). Hover/drop tints use
-     background-color so they never wipe the guide image. */
-  background-image: repeating-linear-gradient(to right, var(--line-muted) 0 1px, transparent 1px 22px);
-  background-repeat: no-repeat;
-  background-position: 14px 0;
-  background-size: calc(var(--depth, 0) * 22px) 100%;
-}
-.tree-toggle {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.tree-toggle.is-leaf { visibility: hidden; }
-.tree-toggle:hover { background: var(--card-off); color: var(--fg); }
-.trow.is-drop-target, .tree-root-drop.is-drop-target {
-  background-color: var(--accent-soft);
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
-}
-/* Top-level drop zone: hidden until a drag is live (the .tree container
-   gains .is-dragging from the capture-phase dragstart in tree.js). */
-.tree-root-drop { display: none; }
-.tree.is-dragging .tree-root-drop {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin: var(--space-sm) var(--space-xs) 6px;
-  padding: 10px var(--gap);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-md);
-  color: var(--muted);
-  font-size: var(--font-caption);
-}
 
 /* ------------------------------------------------------------ drawer */
 /* Desktop: fixed right-hand panel below the sticky nav (level with the page
@@ -1745,7 +1572,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
-  .quick-add-input, .quick-add-btn, .strip-square, .bulk-status, .filter-select, .filter-q, .due-btn,
+  .quick-add-input, .quick-add-btn, .strip-square, .bulk-status, .filter-select, .filter-q,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
   .drawer-tools .button-ghost, .icon-btn, .toast-close, .filter-clear, .crumb, .msel-summary {
     min-height: var(--row-sm);
@@ -1757,17 +1584,13 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   /* the strip's square buttons are one family — same square, always (#81) */
   .quick-add-btn, .strip-square { width: var(--row-sm); height: var(--row-sm); }
   .field-due-btn { width: var(--row-sm); height: var(--row-sm); }
-  .tree-toggle { width: 34px; height: 34px; }
   /* These already carry real 44px geometry here, so the invisible expansion
      would push the effective rect past its neighbour — design.md forbids
-     overlapping tap rectangles. The 34px tree toggle still needs its 5px. */
+     overlapping tap rectangles. */
   .icon-btn::before, .toast-close::before, .quick-add-btn::before,
-  .strip-square::before, .view-seg:first-child::before, .view-seg:last-child::before,
-  .filter-clear::before { inset: 0; }
-  .view-seg { width: var(--row-sm); }
+  .strip-square::before, .filter-clear::before { inset: 0; }
   /* (the native controls beside them are 44px painted too, with no inset
      band: the touch block under the native-control recipe above) */
-  .tree-toggle::before { inset: -5px; }
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {
@@ -1781,7 +1604,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   /* `.is-enriching` keeps its underline, just still: the state still has to be
      visible, it is the movement that is opted out of. */
   .is-busy .icon, .quick-add-mic.is-recording, .quick-add-input.is-enriching { animation: none; }
-  .task-row, .trow, .toast, .check, .quick-add-mic { transition: none; }
+  .trow, .toast, .check, .quick-add-mic { transition: none; }
 }
 
 /* ======================================================= Step 5 surfaces */
@@ -2353,7 +2176,6 @@ kbd {
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
-tr.task-row:focus-within > td { background: var(--card-2); }
 /* …and a ticked row stays visibly ticked while focused, same as under the
    cursor (#81) — this block is later in the file, so it has to say so. */
 .trow.is-selected:focus-within { background: var(--accent-soft); }
@@ -2364,7 +2186,6 @@ tr.task-row:focus-within > td { background: var(--card-2); }
 [data-theme="dark"] .trow:is(:hover, :focus-within, .is-key-target):not(.is-selected) {
   --muted: color-mix(in srgb, var(--fg) 12%, #7d8590);
 }
-tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 
 /* Settings → Row actions (#311): two swipe pickers, then the menu's list —
    one line per action: tick (listed), name, why it is locked, move up/down.
@@ -2459,7 +2280,7 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 /* ---- Archive tab (#159) — the batch run and its report. Full-width like
    every other PC-first pane: the head card carries the one button, the bound
    that makes a first run safe and the service's own state; the report is the
-   shared `.task-table` grid on a wide screen and stacked cards under 768 px,
+   `.task-table` grid on a wide screen and stacked cards under 768 px,
    where nine columns do not fit and the actions are the point. Tokens only —
    the state words reuse the Settings card's `.status-ok/-warn/-off`. ---- */
 /* `minmax(0, …)`, like every other stack here: an implicit `auto` track is
@@ -2519,8 +2340,8 @@ tr.task-row.is-selected:focus-within > td { background: var(--accent-soft); }
 }
 .archive-state { font-weight: 600; white-space: nowrap; }
 /* Enough room per column that a long reason or a wrapped action pair cannot
-   squeeze a neighbour to one word a line; the shared `.table-scroll` takes the
-   overflow the way the Table pane's grid already does. */
+   squeeze a neighbour to one word a line; `.table-scroll` takes the
+   overflow. */
 .c-subject { min-width: 10rem; }
 .c-why { min-width: 13rem; }
 .c-act { min-width: 13.5rem; }

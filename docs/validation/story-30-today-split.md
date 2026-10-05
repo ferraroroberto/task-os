@@ -2,7 +2,7 @@
 
 **Story.** On a desktop window, Today is two columns. The task list takes the left half and the right half is the detail pane, so a row's ⋯ menu sits beside the title instead of at the far edge of the window. With nothing open, the right half says *Select a task to see its details*, and the list keeps its half width. Opening a task (a tap on the row, Enter, or ⋯ → **Open details**) fills that same right half with the task drawer's content: the same drawer, no second detail view, no overlay. `#task/<id>` opens it from a cold load, and closing returns to the empty state.
 
-The split applies on the Today tab from 1024px up, the drawer's own desktop breakpoint. The phone and narrow windows are unchanged (the drawer stays a full-screen sheet). Board, Table and Archive keep the 440px panel that opens beside their list. With a calendar configured, its lane no longer fits beside the rows in half a window, so on Today it moves above them.
+The split applies on the Today tab from 1024px up, the drawer's own desktop breakpoint. The phone and narrow windows are unchanged (the drawer stays a full-screen sheet). Board and Archive keep the 440px panel that opens beside their list. With a calendar configured, its lane no longer fits beside the rows in half a window, so on Today it moves above them.
 
 ## Steps and expected
 
@@ -13,7 +13,7 @@ The split applies on the Today tab from 1024px up, the drawer's own desktop brea
 | 3 | Choose **Open details** | The empty state is replaced by the task's drawer in the same box (same x and width), beside the list, and the URL is `#task/<id>` |
 | 4 | Close the drawer | The empty state is back |
 | 5 | Load `#task/<id>` cold | Today is the active tab with the drawer filling the right half |
-| 6 | Switch to the Table with a task open, close it, return to Today | The Table's panel is the 440px side panel, no empty pane shows there, and Today shows the empty state again |
+| 6 | Switch to the Board with a task open, close it, return to Today | The Board's panel is the 440px side panel, no empty pane shows there, and Today shows the empty state again |
 
 ## Proof
 
@@ -29,3 +29,5 @@ The split applies on the Today tab from 1024px up, the drawer's own desktop brea
 ## Result
 
 verified in the browser (e2e, desktop Chromium, light and dark shots seen). Date: 2026-10-04.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 6 switches to the Board.

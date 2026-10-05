@@ -32,15 +32,15 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import assert_control_boundaries, shot
 
-# Five destinations: the Tree became a view of the Table (#161) and the slot it
-# freed went to Archive (#159). Today leads, and is where a first visit opens (#319).
-TABS = ["Today", "Board", "Table", "Archive", "Search"]   # Settings is the header gear (#281)
-VIEWS = ["today", "board", "table", "archive", "search"]  # the tabs' data-tab ids, in TABS order
+# Four destinations: the Table tab (grid and Tree) went in #350. Today leads,
+# and is where a first visit opens (#319).
+TABS = ["Today", "Board", "Archive", "Search"]   # Settings is the header gear (#281)
+VIEWS = ["today", "board", "archive", "search"]  # the tabs' data-tab ids, in TABS order
 HEADINGS = dict(zip(VIEWS, TABS, strict=True))             # what the header names each view (#339)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
-WIDE_VIEWS = ["board", "table", "today", "archive"]
+WIDE_VIEWS = ["board", "today", "archive"]
 MEASURED_VIEWS = ["search", "settings"]
 
 
@@ -127,22 +127,29 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         assert _theme(page) == "dark", "theme did not persist across reload"
 
         # Tab switch persists too (nav-tabs storageKey), then back to light.
-        page.click("nav.tabs .tab[data-tab='table']")
-        expect(page.locator("#paneTable")).to_be_visible()
-        expect(page.locator("#paneTable .empty-state-message")).to_have_text("Add your first task")
-        # The Table's view toggle is hidden while there is nothing to draw, but
-        # the palette can still switch the view (#161) — and the host it
-        # reveals carries the same prompt, never a blank pane.
-        expect(page.locator("#tableViewToggle")).to_be_hidden()
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("#paneBoard")).to_be_visible()
+        expect(page.locator("#paneBoard .empty-state-message")).to_have_text("Add your first task")
         page.keyboard.press("Control+K")
-        page.fill("#paletteInput", ">tree view")
+        page.fill("#paletteInput", ">go to")
         assert_control_boundaries(page.locator(".palette-input-row"))   # a field box, not a divider (#339)
-        page.keyboard.press("Enter")
-        expect(page.locator("#paneTable #treeHost .empty-state-message")).to_have_text("Add your first task")
-        expect(page.locator("#paneTable .empty-state-message")).to_have_count(1)
-        page.evaluate("() => localStorage.removeItem('task-os.tableView')")
+        page.keyboard.press("Escape")
         page.reload()
-        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        # The Table tab is gone (#350): a browser that stored it, or an old
+        # `?view=` / `#table` link, lands on Today with no error, and the keys
+        # only that tab read are dropped.
+        errors: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.evaluate("() => { localStorage.setItem('task-os.tab', 'table');"
+                      " localStorage.setItem('task-os.tableView', 'tree');"
+                      " localStorage.setItem('task-os.tree.collapsed', '[1]'); }")
+        page.goto(f"{webapp}/?view=table#table")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+        expect(page.locator("#paneToday")).to_be_visible()
+        assert page.evaluate("() => [localStorage.getItem('task-os.tableView'),"
+                             " localStorage.getItem('task-os.tree.collapsed')]") == [None, None]
+        assert errors == [], errors
         page.click("nav.tabs .tab[data-tab='board']")
 
         # Width follows the shape of the view (fleet-config#1113, design.md Layout):

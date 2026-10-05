@@ -1,6 +1,6 @@
 """Story 09 — open a folder (Step 9/13, issue #10).
 
-    A task carries {onedrive}/house/kitchen → the folder chip on the Table is a
+    A task carries {onedrive}/house/kitchen → the folder chip in its drawer is a
     taskos://open?ref=… link whose tooltip is the path this server resolves →
     click it: the browser hands the URL to the per-PC opener (Explorer opens
     on that PC — proven by hand, see the validation record) and, once, a hint
@@ -17,7 +17,7 @@ folder index has something to index — never a real synced folder), 1440×900
 Chromium then a 390-wide touch context, saving the proof shots the validation
 record links to:
 
-    docs/screenshots/story-09-folders-1-desktop.png   Table: folder chips (taskos:// links)
+    docs/screenshots/story-09-folders-1-desktop.png   drawer: the folder chip (a taskos:// link)
     docs/screenshots/story-09-folders-2-desktop.png   the one-time hint under the chip
     docs/screenshots/story-09-folders-3-desktop.png   Settings: Folder opener card + install command
     docs/screenshots/story-09-folders-4-desktop.png   drawer: absolute path → {onedrive}/… ref
@@ -27,12 +27,13 @@ record links to:
 
 Issue #77 rides this walk (same surface: a chip that opens things through the
 per-PC opener, kept inside the <15-test budget): the AI-conversation chip —
-bot glyph on the row, desktop popover with "Open conversation" +
+bot glyph on the row and its ⋯ menu's Open / Resume, the drawer chip's desktop
+popover with "Open conversation" +
 "Resume in CLI on this PC" (taskos://resume?session=…), kind inferred when an
 AI URL is pasted, the borderless chip-height delete button, and the phone tap
 that opens the conversation directly:
 
-    docs/screenshots/story-11-ai-links-1-desktop.png  Table: the bot chip on the row
+    docs/screenshots/story-11-ai-links-1-desktop.png  Board: the bot glyph on the row, its ⋯ menu
     docs/screenshots/story-11-ai-links-2-desktop.png  the open / resume popover
     docs/screenshots/story-11-ai-links-3-desktop.png  drawer: ai link rows + inferred kind
     docs/screenshots/story-11-ai-links-4-phone.png    phone drawer: the tap opens the web page
@@ -43,6 +44,7 @@ be routed by Playwright); the real hand-off to Explorer is the headed walk.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -121,15 +123,15 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
     ctx.add_init_script(INTERCEPT)
     page: Page = ctx.new_page()
-    page.goto(base + "/?status=todo,standby&project=" + str(kitchen["parent_id"]))
-    page.get_by_role("tab", name="Table").click()
-
-    # 1. the chip: taskos:// href + resolved-path tooltip
-    row = page.locator(f".task-row[data-id='{kitchen['id']}']")
-    chip = row.locator("a.chip-folder")
+    # 1. the chip (the drawer's — a row's meta glyph is passive since #311, and
+    #    the Table grid that also carried one went in #350): taskos:// href +
+    #    resolved-path tooltip
+    page.goto(base + "/#task/" + str(kitchen["id"]))
+    expect(page.locator("#taskDrawer")).to_be_visible()
+    chip = page.locator("#taskDrawer .drawer-folder a.chip-folder")
     expect(chip).to_be_visible()
     assert chip.get_attribute("href") == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
-    assert chip.get_attribute("title") == inst.od_fwd + "/house/kitchen"
+    assert chip.get_attribute("title") == inst.od_fwd + "/house/kitchen — the path this server resolves the ref to"
     assert chip.get_attribute("target") is None                             # same tab → the OS handler
     shot(page, shots / "story-09-folders-1-desktop.png")
 
@@ -141,9 +143,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(pop).to_have_attribute("data-mode", "hint")
     expect(pop).to_contain_text("Nothing opened? Install the opener")
     expect(pop.locator(".folder-pop-path")).to_have_text(inst.od_fwd + "/house/kitchen")
-    expect(page.locator("#taskDrawer")).to_be_hidden()                       # the chip never opens the row
+    assert page.evaluate("location.hash") == f"#task/{kitchen['id']}"       # the page stayed put
     shot(page, shots / "story-09-folders-2-desktop.png")
-    page.keyboard.press("Escape")
+    page.locator("#drawerTitle").click()                                    # an outside click closes it
     expect(pop).to_be_hidden()
     chip.click()                                                            # second click: no hint (one-time)
     page.wait_for_timeout(600)                                              # past the hint's own 350 ms delay (format.js)
@@ -169,7 +171,11 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(card.locator("#openerEnv")).to_contain_text("onedrive=")
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
-    # 4. drawer: the Folder editor folds an absolute path onto the placeholder
+    # 4. drawer: the Folder editor folds an absolute path onto the placeholder.
+    #    Leave Settings first: from `/#settings/opener` the goto below is only a
+    #    hash change, and the install command (this run's port) would stay
+    #    behind the drawer in every shot.
+    page.click("nav.tabs .tab[data-tab='board']")
     page.goto(base + "/#task/" + str(kitchen["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
@@ -258,19 +264,28 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert watering["ai_url"] == ai_url                       # the summary carries it
     assert watering["ai_label"] == "drift-fix session"
     page.goto(base + "/?status=todo")
-    page.get_by_role("tab", name="Table").click()
-    wrow = page.locator(f".task-row[data-id='{watering['id']}']")
-    ai_chip = wrow.locator("a.chip-ai")
+    page.click("nav.tabs .tab[data-tab='board']")
+    wrow = page.locator(f"#paneBoard .trow[data-id='{watering['id']}']")
+    expect(wrow.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
+    # the row's ⋯ menu opens it — and, for a Claude Code session, resumes it
+    wrow.locator(".trow-kebab").click()
+    menu = page.locator(".row-menu")
+    expect(menu.locator("[data-action='ai']")).to_be_visible()
+    expect(menu.locator("[data-action='resume']")).to_be_visible()
+    shot(page, shots / "story-11-ai-links-1-desktop.png")
+    page.keyboard.press("Escape")
+    expect(menu).to_have_count(0)
+    # the drawer's link row carries the bot chip itself
+    page.goto(base + "/#task/" + str(watering["id"]))
+    ai_chip = page.locator("#taskDrawer .link-row a.chip-ai")
     expect(ai_chip).to_be_visible()
     assert ai_chip.get_attribute("href") == ai_url
     assert ai_chip.locator("svg use").first.get_attribute("href") == "#i-bot"
-    shot(page, shots / "story-11-ai-links-1-desktop.png")
     clicks_before = len(page.evaluate("window.__taskosClicks || []"))
     ai_chip.click()                                            # fine pointer → popover, no navigation
     pop = page.locator("#folderPop")
     expect(pop).to_be_visible()
     expect(pop).to_have_attribute("data-mode", "ai")
-    expect(page.locator("#taskDrawer")).to_be_hidden()         # the chip never opens the row
     web_btn = pop.locator("a.ai-pop-open")
     assert web_btn.get_attribute("href") == ai_url
     assert web_btn.get_attribute("target") == "_blank"

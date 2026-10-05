@@ -6,7 +6,7 @@
 
 | # | Step | Expected |
 | --- | --- | --- |
-| 1 | Table → open the filter card → *Modified* select | The select now carries the three inverse windows: *Untouched > 30/60/90 days* under the existing *Modified …* options |
+| 1 | Board → open the filter card → *Modified* select | The select now carries the three inverse windows: *Untouched > 30/60/90 days* under the existing *Modified …* options |
 | 2 | Pick *Untouched > 30 days* | Only tasks last touched strictly before today−30 remain (the seed's dormant task, last touched 45 days back); the collapsed summary reads `untouched > 30 days · … · 1 task`; the URL becomes `?updated=stale30` |
 | 3 | Reload the URL | Same view — the token round-trips; the API only ever received the plain date the client computed (`updated_before=YYYY-MM-DD`, no relative magic server-side) |
 | 4 | Pick *Untouched > 60 days* | Honest empty list — nothing is that old |
@@ -23,3 +23,5 @@
 verified — e2e walk + screenshots on the seeded instance, unit suite green, live walk on the real install (filter applied read-only, result seen on screen). Date: 2026-08-30.
 
 **Honesty caveat (by design):** `updated_at` moves on *any* write — GitHub issue sync and mirror imports included — so a synced task never looks stale even if you personally ignore it. Stated in the README where the filter is described.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Walked on the Board.

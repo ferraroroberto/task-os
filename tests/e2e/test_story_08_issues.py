@@ -1,8 +1,8 @@
 """Story 08 — an issue becomes a task (Step 8/13, issue #9).
 
     Settings → Sync now → my open issues appear as coding tasks in To do → open one: the
-    drawer's issue panel (repo#N, state, labels, last synced) → nest it under
-    a project in the Tree → the issue is closed on the forge → Sync now → the task
+    drawer's issue panel (repo#N, state, labels, last synced) → file it under
+    a project with the drawer's Move to → the issue is closed on the forge → Sync now → the task
     is done and the log says ``sync`` → "Create issue" on a plain task → it
     turns coding with the new number, chip on the Board.
 
@@ -13,7 +13,7 @@ Walks the story against the **issues** disposable instance (conftest
 
     docs/screenshots/story-08-issues-1-desktop.png   Board after Sync now: two new coding rows in To do, toast
     docs/screenshots/story-08-issues-2-desktop.png   drawer: issue panel — chip, open, label, last synced
-    docs/screenshots/story-08-issues-3-desktop.png   Tree: the issue task nested under the project
+    docs/screenshots/story-08-issues-3-desktop.png   drawer + Board row: the issue task under the project
     docs/screenshots/story-08-issues-4-desktop.png   drawer after the close: done · activity by sync · closed chip
     docs/screenshots/story-08-issues-5-desktop.png   drawer: a plain task's issue panel — Create issue / Link existing
     docs/screenshots/story-08-issues-6-desktop.png   drawer: after "Create issue" — linked, code, open chip
@@ -30,7 +30,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, Page, expect
 
-from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot, tree_view
+from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -110,26 +110,25 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
-        # 3. Tree (the Table pane's second view, #161): nest it under the
-        #    garden-bot project (drag), the chip travels with it.
-        tree_view(page)
-        bot = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Side project: garden-bot")).first
-        bot_id = int(bot.get_attribute("data-id"))
-        for pid in page.locator(".tree-node[aria-level='1'][aria-expanded='true']").evaluate_all("els => els.map(e => e.dataset.id)"):
-            page.locator(f".tree-node[data-id='{pid}'] > .tree-row > .tree-toggle").click()
-        source = page.locator(f".tree-node[data-id='{sensor['id']}']")
-        expect(source).to_be_visible()
-        expect(source.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
-        source.locator(":scope > .tree-row").drag_to(bot.locator(":scope > .tree-row"))
+        # 3. File it under the garden-bot project with the drawer's Move to
+        #    (#350: the one re-parent path since the Tree went); the code
+        #    travels with it, and the Board row names its new project.
+        bot_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Side project: garden-bot")
+        row = page.locator(f"#paneBoard .trow[data-id='{sensor['id']}']")
+        row.locator(".trow-main").click()
+        expect(drawer).to_be_visible()
+        drawer.locator("select[data-field='parent']").select_option(str(bot_id))
         expect(page.locator(".toast-success").last).to_contain_text("under Side project: garden-bot")
         moved = _get(base, f"/api/tasks/{sensor['id']}")
         assert moved["parent_id"] == bot_id and moved["activity"][0]["field"] == "parent"
-        bot = page.locator(f".tree-node[data-id='{bot_id}']")
-        bot.locator(":scope > .tree-row > .tree-toggle").click()
-        nested = bot.locator(f".tree-children .tree-node[data-id='{sensor['id']}']")
-        expect(nested).to_be_visible()
-        expect(nested.locator(":scope > .tree-row .trow-code")).to_have_text("garden-bot#14")
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Side project: garden-bot"])
+        expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
+        expect(row.locator(".trow-project")).to_have_text("Side project: garden-bot")
+        expect(row.locator(".trow-code")).to_have_text("garden-bot#14")
+        dismiss_toasts(page)
         shot(page, shots / "story-08-issues-3-desktop.png")
+        page.keyboard.press("Escape")
+        expect(drawer).to_be_hidden()
 
         # 4. The issue is closed on the forge → Sync now → the task is done, the log says sync.
         inst.set_issue("example/garden-bot", 14, state="closed")

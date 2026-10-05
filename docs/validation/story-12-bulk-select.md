@@ -2,7 +2,7 @@
 
 > Monday morning, four things I queued last week are stale. I flip the Board into Select mode, tick them across whatever columns they sit in, and set them all to standby in one go. Then I tick two more and push their due dates out two weeks. If one of them has gone missing, the app tells me which — it does not quietly drop it.
 
-Not a numbered build step — a feature issue validated story-style. The automated walk lives **inside `tests/e2e/test_story_05_board.py`** (same surface — the Board and Table over the shared list; the suite stays under 15 tests), sections "§ #81".
+Not a numbered build step — a feature issue validated story-style. The automated walk lives **inside `tests/e2e/test_story_05_board.py`** (same surface — the Board and Today over the shared list; the suite stays under 15 tests), sections "§ #81".
 
 ## Steps and expected
 
@@ -10,7 +10,7 @@ Not a numbered build step — a feature issue validated story-style. The automat
 | --- | --- | --- | --- |
 | 1 | Seeded Board (1440×900) → the Select toggle in the pane's top strip | Every card grows a leading checkbox; the toggle reads pressed; drag is off (a card that both drags and ticks turns a slightly-moved tap into a status change) | [10-desktop](../screenshots/story-05-board-10-desktop.png) |
 | 2 | Tick three cards sitting in three different columns | "3 selected" appears in the bulk bar, which **takes the top strip over** — the text filter and the `+` step aside, the pane gains no third row | [10-desktop](../screenshots/story-05-board-10-desktop.png) |
-| 3 | Switch to the Table mid-selection | The same three rows are ticked, in the Table's own leading checkbox column, and its bulk bar reads "3 selected" — one selection store, not two | [11-desktop](../screenshots/story-05-board-11-desktop.png) |
+| 3 | Switch to Today mid-selection | Today's own bulk bar is up and reads "3 selected" — one selection store, not two | [11-desktop](../screenshots/story-05-board-11-desktop.png) |
 | 4 | Bulk bar → *Set status…* → `standby` | All three move; each gets its own `activity` row (`status`, old → new), exactly as three single-task edits would; the selection clears and Select mode **stays on** for the next pick | — |
 | 5 | Tick two, pick a date from the bar's calendar button | Both land on that date. The bar carries the **picker only** — one square button, so the row stays one line; the natural phrases stay on the Table's inline cell, the drawer and the CLI (the API still accepts them) | — |
 | 6 | Tick two, delete one behind the app's back, then bulk-change the status | Toast: `1 updated · 1 failed (#N: task N not found)` in the error tone; the surviving task **is** updated. The batch neither aborts nor silently drops the bad id | [12-desktop](../screenshots/story-05-board-12-desktop.png) |
@@ -33,3 +33,5 @@ Chrome against a disposable seeded instance (never the live `:8448`), light and 
 - **Phone geometry: not walked by hand** — this machine's Chrome window will not go below ~1072px. It is covered by the e2e phone leg above (390×844 WebKit, touch, asserting the 44px floor, no overlapping hit rects, nav-pill clearance, and the one-line/one-height bar). The owner caught two things there that the desktop walk could not: the Select toggle kept the 36px control height while the `+` went to 44px, and the bar wrapped to two lines with a due *phrase box* — both fixed, and both now pinned by assertions. A real-device check stays on the owner's checklist, as for every other story.
 
 Result: **verified** (e2e desktop + phone legs · unit · headed desktop walk in both themes, including the partial-failure path) · real phone = owner's checklist. Date: 2026-08-29.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The selection is carried to Today (the Table's checkbox column is gone); the bulk status, due and partial-failure steps run on the Board's bar.

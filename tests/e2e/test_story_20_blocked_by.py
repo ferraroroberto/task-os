@@ -1,7 +1,7 @@
 """Story 20 — Blocked-by dependencies (issue #100).
 
     Board hides "Release v0.2" — it's blocked on "Write sensor driver" — while
-    the Tree still shows it, wearing a lock and "blocked by 1" → open its
+    Search still finds it, wearing a lock and "blocked by 1" → open its
     drawer: the "Blocked by" section lists the blocker as a removable row →
     the filter card's `blocked` pseudo-filter narrows the Board to exactly the
     locked task → a fresh pair of tasks demonstrates the cycle guard: blocking
@@ -14,7 +14,7 @@ v0.2" ↔ "Write sensor driver" pair, added for this issue) at 1440×900
 desktop, saving the proof shots the validation record links to:
 
     docs/screenshots/story-20-blocked-by-1-desktop.png   Board: no "Release v0.2" row
-    docs/screenshots/story-20-blocked-by-2-desktop.png   Tree: locked row, lock + "blocked by 1"
+    docs/screenshots/story-20-blocked-by-2-desktop.png   Search: locked hit, lock + "blocked by 1"
     docs/screenshots/story-20-blocked-by-3-desktop.png   drawer: Blocked by section
     docs/screenshots/story-20-blocked-by-4-desktop.png   Board filtered to `blocked` — exactly one row
     docs/screenshots/story-20-blocked-by-5-desktop.png   drawer (dark): cycle rejected toast + the picker
@@ -29,7 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get, shot, tree_view
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -72,17 +72,22 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(_trow(page, "Write sensor driver", "#paneBoard")).to_be_visible()
         release_id = release["id"]
         # Scoped to the Board: every pane is in the DOM from the first paint and
-        # the Tree legitimately carries this row (step 2 below). Unscoped, the
-        # assertion only ever passed because nothing had rendered yet.
+        # a Search hit legitimately carries this row (step 2 below). Unscoped,
+        # the assertion only ever passed because nothing had rendered yet.
         expect(page.locator(f"#paneBoard .trow[data-id='{release_id}']")).to_have_count(0)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-20-blocked-by-1-desktop.png")
 
-        # 2. Tree: still findable — the map of everything — wearing a lock and
-        #    "blocked by 1" instead of any starts marker (blocked wins, #100's
-        #    explicit precedence over #87's deferred clock).
-        tree_view(page)
-        locked = _trow(page, "Release v0.2", "#paneTable #treeHost")
+        # 2. Search: still findable — search shows everything — wearing a lock
+        #    and "blocked by 1" instead of any starts marker (blocked wins,
+        #    #100's explicit precedence over #87's deferred clock).
+        page.click("nav.tabs .tab[data-tab='search']")
+        page.fill("#searchInput", "Release v0.2")
+        tasks_group = page.locator(".search-group[data-kind='tasks']")
+        expect(tasks_group).to_be_visible()
+        if not tasks_group.evaluate("el => el.open"):
+            tasks_group.locator("summary.collapse-summary").click()
+        locked = _trow(page, "Release v0.2", "#paneSearch")
         expect(locked).to_be_visible()
         expect(locked.locator(".trow-blocked")).to_have_text("blocked by 1")
         expect(locked.locator(".trow-starts")).to_have_count(0)

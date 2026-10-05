@@ -1,8 +1,8 @@
 /* task-os — the ONE selection, shared by every view that can multi-select (#81).
  *
  * Select mode turns a card/row from "open the task" into "tick the task", and
- * the ticked set is state, not DOM: Board and Table read the same store, so
- * picking three cards on the Board and switching to Table finds the same three
+ * the ticked set is state, not DOM: Board and Today read the same store, so
+ * picking three cards on the Board and switching to Today finds the same three
  * ticked — the acceptance criterion that rules out a per-view set.
  *
  * A module singleton, deliberately: the app has exactly one selection the way

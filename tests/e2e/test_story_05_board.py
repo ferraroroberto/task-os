@@ -3,7 +3,7 @@
     Board tab: four columns visible at once on the laptop → the top strip's
     text filter narrows the board without opening any disclosure and the +
     opens the quick-add dialog (#80) → project chip
-    filters to one project (shared with the Table, encoded in the URL) → drag
+    filters to one project (shared with Today, encoded in the URL) → drag
     a row todo → standby → the counts update and the activity log has the
     row → Today tab lists due / overdue grouped by project, sorted by due
     then priority within a group → mark a recurring task complete → its due
@@ -28,7 +28,7 @@ Board as a one-column scroll-snap carousel — with the geometry checks:
     docs/screenshots/story-05-board-10-phone.png  (§ #81 Select mode + bulk bar)
 
 § #81 (multi-select, folded into this story rather than a 15th e2e test, the
-way #77 rides inside story 09): Select mode across Board and Table over ONE
+way #77 rides inside story 09): Select mode across Board and Today over ONE
 selection store, the bulk status / due actions, and the partial-failure
 report. Story 12 in ``docs/validation.md`` points here.
 
@@ -70,8 +70,8 @@ task row (``.trow`` — completion circle, title with its one-line passive meta,
 ⋯ kebab) and shares ONE filter card; "ticking" is the row's circle, on every
 pointer, and every other action (status, date, snooze, priority, plan, folder,
 AI, issue) is a ⋯ menu item. Today's done tasks ride in the shared list only
-for the Board's Done today column: Table, Tree and Today keep showing open
-tasks (as the filter card says), so a task finished today leaves the Today
+for the Board's Done today column: Today keeps showing open tasks (as the
+filter card says), so a task finished today leaves the Today
 list and appears in the Board's Done today column.
 """
 
@@ -233,7 +233,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
                        for col in _get(base, "/api/board")["columns"].values() for t in col)
 
         # 3. Project filter → only that project's descendants; the URL carries it;
-        #    the Table's card shows the same selection (one shared state).
+        #    Today's card shows the same selection (one shared state).
         home = next(t for t in api["todo"] if t["title"] == "Home renovation")
         card = _open_filters(page, "boardFilters")
         card.locator("select[name='project']").select_option(str(home["id"]))
@@ -247,10 +247,9 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert shown and set(shown) <= allowed
         expect(card.locator(".filter-clear")).to_be_visible()
         shot(page, shots / "story-05-board-2-desktop.png")
-        page.click("nav.tabs .tab[data-tab='table']")
-        expect(page.locator("#tableFilters select[name='project']")).to_have_value(str(home["id"]))
-        expect(page.locator("#tableFilters .filter-desc")).to_contain_text("Home renovation")
-        expect(page.locator(".task-row").first).to_be_visible()
+        page.click("nav.tabs .tab[data-tab='today']")
+        expect(page.locator("#todayFilters select[name='project']")).to_have_value(str(home["id"]))
+        expect(page.locator("#todayFilters .filter-desc")).to_contain_text("Home renovation")
         page.click("nav.tabs .tab[data-tab='board']")
         _open_filters(page, "boardFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
@@ -393,7 +392,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         # ---------------------------------------------- § #81 bulk select
         # 9. Select mode: tick three cards across three columns, bulk-change
         #    their status, and prove the selection is ONE store — it survives
-        #    the trip to the Table, where the same three rows are ticked.
+        #    the trip to Today, whose bar counts the same three.
         page.click("#paneBoard [data-select-toggle]")
         expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
         picks = ["Compare phone plans", "Choose worktop material", "Get three quotes"]
@@ -426,54 +425,56 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-10-desktop.png")
 
-        # 10. The selection carries to the Table, checkbox column and all.
-        page.click("nav.tabs .tab[data-tab='table']")
-        expect(page.locator("#tableHost th.c-sel")).to_be_visible()
-        expect(page.locator("#tableBulk .bulk-count")).to_have_attribute("aria-label", "3 selected")
-        for i in ids:
-            expect(page.locator(f"#tableHost .task-row[data-id='{i}'] .row-check")).to_be_checked()
+        # 10. The selection carries to Today: its own Select bar is up, counting
+        #     the same three — one store, not a set per view.
+        page.click("nav.tabs .tab[data-tab='today']")
+        expect(page.locator("#paneToday [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+        expect(page.locator("#todayBulk .bulk-count")).to_have_attribute("aria-label", "3 selected")
+        _clear_toasts(page)
         shot(page, shots / "story-05-board-11-desktop.png")
+        page.click("nav.tabs .tab[data-tab='board']")
 
         # 11. Bulk-change the status → all three move, each with its own
         #     activity row, exactly as three single-task edits would have.
-        page.locator("#tableBulk .bulk-status").select_option("standby")
-        expect(page.locator("#tableBulk")).to_be_hidden()          # applied, selection cleared
+        page.locator("#boardBulk .bulk-status").select_option("standby")
+        expect(page.locator("#boardBulk")).to_be_hidden()          # applied, selection cleared
         for i in ids:
             detail = _get(base, f"/api/tasks/{i}")
             assert detail["status"] == "standby", detail
             log = next(a for a in detail["activity"] if a["field"] == "status")
             assert log["new_value"] == "standby", log
         # Select mode is still on — the next pick needs no second trip to the toggle
-        expect(page.locator("#paneTable [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+        expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
 
         # 12. A bulk due date. The bar carries the native picker alone (no
-        #     phrase box — that lives on the Table's own cell), and the picker
+        #     phrase box — the drawer is where a phrase is typed), and the picker
         #     dialog is OS chrome Playwright cannot open, so the walk sets the
         #     date input and fires the change the picker itself would.
-        page.locator(f"#tableHost .task-row[data-id='{ids[0]}'] .row-check").check()
-        page.locator(f"#tableHost .task-row[data-id='{ids[1]}'] .row-check").check()
-        expect(page.locator("#tableBulk .bulk-due")).to_be_visible()
-        expect(page.locator("#tableBulk .due-text")).to_have_count(0)
+        page.locator(f"#paneBoard .trow[data-id='{ids[0]}'] .trow-check").check()
+        page.locator(f"#paneBoard .trow[data-id='{ids[1]}'] .trow-check").check()
+        expect(page.locator("#boardBulk .bulk-due")).to_be_visible()
+        expect(page.locator("#boardBulk .due-text")).to_have_count(0)
         target = (E2E_ANCHOR + timedelta(days=14)).isoformat()
-        page.locator("#tableBulk input.due-date").evaluate(
+        page.locator("#boardBulk input.due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", target)
-        expect(page.locator("#tableBulk")).to_be_hidden()
+        expect(page.locator("#boardBulk")).to_be_hidden()
         assert [_get(base, f"/api/tasks/{i}")["due"] for i in ids[:2]] == [target, target]
 
         # 13. A batch that partially fails names the id rather than dropping
         #     it silently — the task deleted in another tab (#81).
-        page.locator(f"#tableHost .task-row[data-id='{ids[0]}'] .row-check").check()
-        page.locator(f"#tableHost .task-row[data-id='{ids[1]}'] .row-check").check()
+        page.locator(f"#paneBoard .trow[data-id='{ids[0]}'] .trow-check").check()
+        page.locator(f"#paneBoard .trow[data-id='{ids[1]}'] .trow-check").check()
         page.evaluate(f"fetch('/api/tasks/{ids[1]}', {{method: 'DELETE'}})")
-        page.locator("#tableBulk .bulk-status").select_option("todo")
+        page.locator("#boardBulk .bulk-status").select_option("todo")
         expect(page.locator(".toasts")).to_have_text(re.compile(rf"1 updated .* 1 failed .*#{ids[1]}"))
         assert _get(base, f"/api/tasks/{ids[0]}")["status"] == "todo"
         shot(page, shots / "story-05-board-12-desktop.png")
 
         # 14. Leaving Select mode puts the pane back exactly as it was.
-        page.click("#paneTable [data-select-toggle]")
-        expect(page.locator("#tableHost th.c-sel")).to_have_count(0)
-        expect(page.locator("#paneTable [data-quick-add]")).to_be_visible()
+        page.click("#paneBoard [data-select-toggle]")
+        expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+        expect(page.locator("#paneBoard .trow-check")).to_have_count(0)
+        expect(page.locator("#paneBoard [data-quick-add]")).to_be_visible()
 
         _walk_keyboard_actions(page, base, shots)
         _walk_done_journal(page, base, shots)
@@ -602,20 +603,6 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator(f"#paneBoard .trow[data-id='{ids[0]}']")).to_have_class(re.compile("is-selected"))
     page.keyboard.press("Escape")
     expect(page.locator("#boardBulk")).to_be_hidden()
-
-    # 21. The Table's desktop grid is a different element (a <tr>, not the
-    #     shared .trow) — the keys reach it too.
-    page.click("nav.tabs .tab[data-tab='table']")
-    trow = page.locator(f"#tableHost .task-row[data-id='{rid}']")
-    trow.focus()
-    _clear_toasts(page)
-    page.keyboard.press("3")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Status standby"))
-    assert _get(base, f"/api/tasks/{rid}")["status"] == "standby"
-    _clear_toasts(page)
-    page.keyboard.press("z")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
-    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
 
     # 22. …and a Search hit, which may be a task outside the filtered list —
     #     the prior values then come from a fetch, not from what is on screen.
@@ -878,27 +865,27 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     assert _status(page, base, f"/api/tasks/{kid}") == 404
     expect(page.locator(f"#boardHost .trow[data-id='{fence}']")).to_have_count(0)
 
-    # 4. A batch of mistakes from the Table's Select bar: one dialog with the count.
+    # 4. A batch of mistakes from the Board's Select bar: one dialog with the count.
     _clear_toasts(page)
-    page.click("nav.tabs .tab[data-tab='table']")
-    expect(page.locator(f"#tableHost .task-row[data-id='{dupe}']")).to_be_visible()
-    page.click("#paneTable [data-select-toggle]")
-    page.locator(f"#tableHost .task-row[data-id='{dupe}'] .row-check").check()
-    page.locator(f"#tableHost .task-row[data-id='{test}'] .row-check").check()
-    page.locator("#tableBulk .bulk-delete").click()
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator(f"#boardHost .trow[data-id='{dupe}']")).to_be_visible()
+    page.click("#paneBoard [data-select-toggle]")
+    page.locator(f"#boardHost .trow[data-id='{dupe}'] .trow-check").check()
+    page.locator(f"#boardHost .trow[data-id='{test}'] .trow-check").check()
+    page.locator("#boardBulk .bulk-delete").click()
     expect(dialog).to_be_visible()
     expect(dialog.locator("#confirmTitle")).to_have_text("Delete 2 tasks?")
     shot(page, shots / "story-19-delete-task-2-desktop.png")
     dialog.locator(".confirm-danger").click()
     expect(dialog).to_be_hidden()
     expect(page.locator(".toasts")).to_contain_text("2 tasks deleted")
-    expect(page.locator(f"#tableHost .task-row[data-id='{dupe}']")).to_have_count(0)
-    expect(page.locator(f"#tableHost .task-row[data-id='{test}']")).to_have_count(0)
+    expect(page.locator(f"#boardHost .trow[data-id='{dupe}']")).to_have_count(0)
+    expect(page.locator(f"#boardHost .trow[data-id='{test}']")).to_have_count(0)
     assert _status(page, base, f"/api/tasks/{dupe}") == 404
     # a clean batch clears the selection but stays in Select mode; leave it as found
-    expect(page.locator("#tableBulk")).to_be_hidden()
-    page.click("#paneTable [data-select-toggle]")
-    expect(page.locator("#paneTable [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+    expect(page.locator("#boardBulk")).to_be_hidden()
+    page.click("#paneBoard [data-select-toggle]")
+    expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
 
 
 def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwright, shots: Path) -> None:
@@ -961,9 +948,7 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         # inside the ≤61px ceiling. #32's own acceptance criterion names this a phone-width
         # (390px, PHONE above) Board-row contract — not asserted at 320px
         # (#110's geometry sweep found rows over budget there, e.g. a long
-        # title whose meta line wraps to more lines at the narrower width) and
-        # not a Tree contract either (Tree's own left indent costs it width
-        # the other tabs don't spend, so its rows run taller still).
+        # title whose meta line wraps to more lines at the narrower width).
         heights = _col(page, "standby").locator(".trow").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect().height)")
         assert heights and all(h <= 61 for h in heights), heights

@@ -17,7 +17,7 @@
  * action, delete (#121), is the one that asks first — the caller owns the
  * confirmation and the request; the bar only locks while it runs.
  *
- * Mounted once per pane (Board, Table); every instance reads the one selection
+ * Mounted once per pane (Board, Today); every instance reads the one selection
  * store, so both bars always say the same number.
  */
 
@@ -78,8 +78,8 @@ export function mountBulkBar(host, handlers) {
 
   // Date = the native picker alone: the bar is one line on the strip, and a
   // phrase box beside a status select would be the widest thing on it. The
-  // API still takes the natural phrases — the Table's inline cell, the drawer
-  // and the CLI are where you type them.
+  // API still takes the natural phrases — the drawer and the CLI are where
+  // you type them.
   const due = duePicker({
     className: 'button-surface strip-square bulk-due',
     title: 'Set the due date of the selected tasks',

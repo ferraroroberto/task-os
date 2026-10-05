@@ -9,7 +9,7 @@
 | 1 | Open a project's drawer (`#task/<id>`), click **Delete task** at the foot | The dialog: *Delete "Repaint the garden fence"?* · *Its 2 child tasks go with it.* · *This cannot be undone …*; no warning line (not a synced coding task); the single primary is the danger-tinted **Delete**; focus is on the × so Enter cannot confirm unread |
 | 2 | Press Escape | The dialog closes, the drawer stays open, `GET /api/tasks/<id>` is still 200 |
 | 3 | **Delete task** → **Delete** | The drawer closes, the hash clears, the toast reads `Deleted "Repaint the garden fence" · 3 tasks`, the task and its children answer 404, the Board no longer shows them |
-| 4 | Table → Select mode → tick two rows → the bar's trash square | *Delete 2 tasks?* with the no-undo line; confirm → `2 tasks deleted`, the rows are gone, the selection is empty but Select mode stays on |
+| 4 | Board → Select mode → tick two rows → the bar's trash square | *Delete 2 tasks?* with the no-undo line; confirm → `2 tasks deleted`, the rows are gone, the selection is empty but Select mode stays on |
 | 5 | A synced coding task with an open issue → **Delete task** | The dialog carries the red warning: the next issue sync recreates it while `repo#N` stays open — unlink first, or close the issue |
 | 6 | Terminal: `tasks rm N` | stderr: the task line, `and its N child tasks`, the coding warning when it applies, `delete? This cannot be undone. [y/N]`; `n` → `error: #N not deleted`, exit 1 (`{"error": {"code": "cancelled"}}` under `--json`); `y` → `#N deleted (3 tasks)`; `--yes` asks nothing; `delete` is the alias; an unknown id → exit 1, `not_found` |
 | 7 | Mirror | The deleted subtree's markdown files are removed on the next export tick (existing behaviour, `tests/test_mirror.py`) |
@@ -25,3 +25,5 @@
 verified — e2e walk + screenshots on the seeded instance (desktop light), unit suite green, headed walk on the real install with a throwaway task (drawer dialog, cancel, confirm, toast; the Select bar's dialog opened and cancelled). Steps 5 and 6's warning line: unit-tested on the CLI (the dialogue text), read in the code for the drawer — the seed's one synced coding task rides the other walks, so it was not deleted on screen. Date: 2026-09-02.
 
 **Deliberate limits:** no trash, no restore, no activity record of the deletion (nothing is left to hang it on); no delete key in the keymap (a destructive action stays a click plus a confirmation); the open-issue case warns rather than refuses — the delete is the owner's call, the warning is what keeps a resurrection from looking like a failed delete; the confirmation keeps no state — every ask is built fresh into the one dialog shell.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The batch delete runs from the Board's Select bar.

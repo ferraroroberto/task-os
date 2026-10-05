@@ -1,6 +1,6 @@
 /* task-os — the ONE task row every view renders (issue #46, #311).
  *
- * Board, Table (phone), Tree, Today, the done journal and the Search tab's
+ * Board, Today, the done journal and the Search tab's
  * task hits are different *renderings* of the same list, not different
  * features — so they share one row and one sort, built here. The row is the
  * fleet's vendored action-row (#311): tapping it opens the task, and
@@ -21,7 +21,7 @@
  *
  * Select mode swaps the circle for the checkbox and drops the kebab: there the
  * row's one job is to tick and the bulk bar owns the actions. A view may pass a
- * `prefix` (the Tree's expand toggle, a plan row's grip) and/or an `extra`
+ * `prefix` (a plan row's grip) and/or an `extra`
  * line (a Search snippet, an AI suggestion, a plan candidate's targets) that
  * wraps under the row — the row itself never changes shape. Flat hairlines
  * between rows, no per-row box, the priority accent on the left edge of a
@@ -52,7 +52,7 @@ function cmpDue(a, b) {
 function cmpPrio(a, b) { return (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3); }
 
 /** The comparator behind `sort` — one rule for flat lists, board columns,
- *  Today groups and every Tree level, so "sorted by due" means the same
+ *  and Today groups, so "sorted by due" means the same
  *  thing on every tab. */
 export function compareItems(sort) {
   switch (sort) {
@@ -92,30 +92,6 @@ export function statusOptions(t) {
   return opts;
 }
 
-/**
- * The status select — the desktop Table grid's status cell (the shared row
- * carries status in its ⋯ menu and its completion circle, #311).
- * @param {object} t
- * @param {(id:number, status:string) => Promise<any>} onStatus
- */
-export function statusSelect(t, onStatus) {
-  const sel = document.createElement('select');
-  sel.className = 'select-native trow-status';
-  sel.setAttribute('aria-label', 'Status of ' + t.title);
-  statusOptions(t).forEach(function (v) {
-    const o = document.createElement('option');
-    o.value = v[0]; o.textContent = v[1]; o.selected = v[0] === t.status;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function () {
-    sel.disabled = true;
-    Promise.resolve(onStatus(t.id, sel.value))
-      .catch(function () { sel.value = t.status; })
-      .finally(function () { sel.disabled = false; });
-  });
-  return sel;
-}
-
 // ------------------------------------------------------------------- row
 function metaPart(cls, iconName, text, title) {
   const el = document.createElement('span');
@@ -150,7 +126,7 @@ export function metaLine(t, opts) {
   }
   // Blocked wins over deferred (#100) — it's the harder gate: a task both
   // asleep and blocked shows the lock, not the clock, wherever either still
-  // shows (the Tree, a search hit, the Deferred/blocked filters). Right after
+  // shows (a search hit, the Deferred/blocked filters). Right after
   // the date, because it says when the task can be worked at all, and a
   // narrow Board column must not ellipsize it away.
   if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
@@ -235,7 +211,7 @@ function rowKebab(t, menu, li) {
  * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
  *          selected?: boolean, swipe?: boolean}} [opts]
- *          prefix     = an element before the circle (the Tree's toggle, a plan grip);
+ *          prefix     = an element before the circle (a plan grip);
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on (#81): the checkbox replaces the
@@ -253,8 +229,8 @@ export function taskRow(t, handlers, opts) {
   if (o.draggable) li.draggable = true;
 
   // In Select mode the whole row is a tick target — the same gesture that
-  // opens the task otherwise. One affordance for the Board's cards AND the
-  // Table's phone rows, because both render this row.
+  // opens the task otherwise. One affordance for the Board's cards AND
+  // Today's rows, because both render this row.
   const activate = function () {
     if (o.selectable) handlers.onToggleSelect(t.id); else handlers.onOpen(t.id);
   };

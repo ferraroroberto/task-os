@@ -6,7 +6,7 @@
 
 1. Board → **↻** in the header (visible only when the provider is configured) → toast *Issues synced: 3 open · 2 new* → the two open issues without a task become **coding** tasks in **To do** (title = issue title, `code = repo#N`, description = the issue body, an `issue` link, `created_by = sync`), each with a GitHub chip; the seeded coding task (`garden-bot#12`, already linked) is matched, not duplicated.
 2. Open one → the drawer's **Issue** panel: provider glyph, `repo#N` chip linking to the issue, `open` pill, the labels from the last sync (`enhancement`), *github · last synced …*, **Sync now**, **Unlink**.
-3. Tree → drag it under *Side project: garden-bot* → nested, the chip travels with it, activity `parent`.
+3. The drawer's **Move to** → *Side project: garden-bot* → filed under it: the breadcrumb, the code `garden-bot#14` and the Board row's project all follow, activity `parent`.
 4. The issue is **closed on the forge** (the test edits the fake's file) → **↻** → toast *… 1 closed* → the task is **done** (`done_at` set, ref `closed`); activity `status todo → done · sync` and `issue_state open → closed · sync`; the drawer shows status *done*, the `closed` pill and the muted chip with a check. The seeded coding task, still open on the forge, is untouched.
 5. A plain task's Issue panel offers **Create issue** (repo from the last-seen list or typed) and **Link existing** (`owner/repo#N` or URL) → *Create issue* in `example/garden-bot` → toast *Created example/garden-bot#15* → the task is coding, `code = garden-bot#15`, the chip is in the panel and on its Board card; the forge file gained issue 15 with the task's title.
 6. Settings (dark) → *Issues as tasks* card: **enabled · github · every 10 min · next …**, last sync with the counts (*2 open issue(s) · 0 new · 0 retitled · 0 reopened · 1 closed*), the repos seen, **Sync now** enabled.
@@ -17,7 +17,7 @@
 | --- | --- |
 | 1 Board after ↻: two coding cards in To do, toast | [story-08-issues-1-desktop.png](../screenshots/story-08-issues-1-desktop.png) |
 | 2 drawer: issue panel — chip, open, label, last synced | [story-08-issues-2-desktop.png](../screenshots/story-08-issues-2-desktop.png) |
-| 3 Tree: the issue task nested under the project | [story-08-issues-3-desktop.png](../screenshots/story-08-issues-3-desktop.png) |
+| 3 the issue task filed under the project (drawer + Board row) | [story-08-issues-3-desktop.png](../screenshots/story-08-issues-3-desktop.png) |
 | 4 drawer after the close: done · activity by `sync` · closed chip | [story-08-issues-4-desktop.png](../screenshots/story-08-issues-4-desktop.png) |
 | 5 drawer: a plain task's panel — Create issue / Link existing | [story-08-issues-5-desktop.png](../screenshots/story-08-issues-5-desktop.png) |
 | 5 drawer after Create issue: linked, code, open chip | [story-08-issues-6-desktop.png](../screenshots/story-08-issues-6-desktop.png) |
@@ -54,3 +54,5 @@
 **Proof.** With the pane nudged 28 px back once, five frames after it first reaches the end (a scratch run, not a suite member): the shipped pattern captured `scrollTop 483` and produced a file differing from the calm one by **142089 px, worst channel delta 224** — the reported flake, to within 0.8 %. The same nudge through `scroll_to_bottom()` captured `scrollTop 511`, at the end, and its file was indistinguishable from the calm one. With no nudge, the two patterns produce byte-identical files.
 
 **Result — 2026-09-09: verified.** All four drawer captures in this story now go through `tests/e2e/conftest.py`'s `scroll_to_bottom()` (settle → scroll → settle → accept only at the end with an unmoved height, else scroll again), and `docs/validation.md`'s capture rules carry it as rule 3. `scripts/shot_determinism` came back `0 moved` on three consecutive invocations.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 3 files the task with the drawer's Move to instead of the Tree's drag.

@@ -7,7 +7,7 @@
 | # | Step | Expected |
 | --- | --- | --- |
 | 1 | Seed: "Release v0.2" blocked by "Write sensor driver" → Board | The row is absent from every column (hidden by default, like a deferred task) |
-| 2 | Tree | "Release v0.2" is there, wearing a lock glyph + "blocked by 1" instead of any starts marker |
+| 2 | Search `Release v0.2` | The hit is there, wearing a lock glyph + "blocked by 1" instead of any starts marker |
 | 3 | Open its drawer | The "Blocked by" section lists "Write sensor driver" as a removable row with its status pill |
 | 4 | Filter card → status multi-select → `blocked` | The Board narrows to exactly "Release v0.2" |
 | 5 | Two fresh tasks, block B on A via the drawer picker, then try to block A back on B | The first add succeeds; the second is refused — a toast naming the cycle, nothing applied, `blocked_by` stays empty on B |
@@ -19,7 +19,7 @@
 
 ## Proof
 
-- Screenshots: [1](../screenshots/story-20-blocked-by-1-desktop.png) (Board without the locked task) · [2](../screenshots/story-20-blocked-by-2-desktop.png) (Tree, lock + count) · [3](../screenshots/story-20-blocked-by-3-desktop.png) (drawer's Blocked by section) · [4](../screenshots/story-20-blocked-by-4-desktop.png) (the `blocked` filter, one row) · [5](../screenshots/story-20-blocked-by-5-desktop.png) (drawer, dark, the picker mid-cycle-attempt).
+- Screenshots: [1](../screenshots/story-20-blocked-by-1-desktop.png) (Board without the locked task) · [2](../screenshots/story-20-blocked-by-2-desktop.png) (Search hit, lock + count) · [3](../screenshots/story-20-blocked-by-3-desktop.png) (drawer's Blocked by section) · [4](../screenshots/story-20-blocked-by-4-desktop.png) (the `blocked` filter, one row) · [5](../screenshots/story-20-blocked-by-5-desktop.png) (drawer, dark, the picker mid-cycle-attempt).
 - E2e: `tests/e2e/test_story_20_blocked_by.py` — desktop only (Chromium, light + one dark shot); no separate phone leg, since the feature rides the already phone-verified shared row (`rows.js`) and filter-card multi-select (both proven on the phone in story 04).
 - Unit: `tests/test_repo.py` (`test_seeded_blocked_pair`, `test_add_blocker_refuses_self_and_cycle`, `test_add_and_remove_blocker_logs_both_sides_and_is_idempotent`, `test_a_closed_blocker_does_not_block`, `test_delete_a_blocker_logs_unblock_on_the_survivor`) · `tests/test_mirror.py::test_blocked_by_round_trips_and_rejects_a_cycle` · `tests/test_api.py::test_blockers_add_remove_cycle_and_the_blocked_filter` · `tests/test_cli.py::test_block_unblock_and_ls_blocked_over_both_backends` · `tests/test_schema.py` (the v11 migration, `task_blocks` in `EXPECTED_TABLES`).
 
@@ -32,3 +32,5 @@ verified (e2e walk on the seeded instance, screenshots read back, both themes re
 **2026-09-13 (#234):** shot 5 was bistable. Its layout was identical in every run, yet Chromium's partial raster left the drawer's rounded control corners in one of three renderings (44 isolated runs: 34 / 2 / 8), about 100 px apart at delta 3, one level outside the gallery's raster band. The suite now launches Chromium with `--disable-partial-raster`, which collapses it to one rendering; that rendering is 154 px at delta 3 from the old file, so shot 5 was re-baselined once, deliberately. No other shot was re-baselined.
 
 **Deliberate limits (from the issue):** edges only, no ordering/critical-path view, no auto-surfaced "next action" beyond the hide itself, no cross-project rollups, no unblock notification.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 2 finds the locked task through Search; the Board under the `blocked` pill (step 4) is unchanged.

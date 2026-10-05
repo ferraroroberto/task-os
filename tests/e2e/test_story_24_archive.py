@@ -615,7 +615,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     phone.add_init_script(INTERCEPT)
     p = phone.new_page()
     p.goto(base + "/")
-    expect(p.locator("nav.tabs .tab")).to_have_count(5)
+    expect(p.locator("nav.tabs .tab")).to_have_count(4)
     p.get_by_role("tab", name="Archive").tap()
     expect(p.locator("#paneArchive")).to_be_visible()
     expect(p.locator(".archive-card")).to_have_count(7)

@@ -20,7 +20,7 @@
  * typed) and "Link existing" (owner/repo#N).
  *
  * Every write goes through the API and then `refresh()`, and the caller's
- * `onChanged` re-renders the Table / Tree so the three surfaces never drift.
+ * `onChanged` re-renders the lists so the surfaces never drift.
  */
 
 'use strict';
