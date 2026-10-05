@@ -138,6 +138,16 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     box = page.locator("#searchInput")
     expect(box).to_be_focused()
     assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
+    # an empty group says what fills it: the sentence names the search box
+    # (design rubric J-09, #339) — before any query and after one that matches nothing
+    for kind in ("tasks", "folders", "emails", "issues"):
+        expect(_open_group(page, kind).locator(".search-none")).to_contain_text("search box above")
+    box.fill("zzqxnothing")
+    expect(page.locator("#searchMeta")).to_have_text("0 hits")
+    for kind in ("tasks", "folders", "emails", "issues"):
+        expect(_open_group(page, kind).locator(".search-none")).to_contain_text("search box above")
+    for kind in ("tasks", "folders", "emails", "issues"):          # back to the collapsed default
+        _open_group(page, kind).locator("summary.collapse-summary").click()
 
     # 1. type a word → four groups (collapsed disclosures, the count on the
     #    summary), all populated; opened, every group shows its hits
