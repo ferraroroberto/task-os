@@ -146,12 +146,20 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(pop.locator(".folder-pop-path")).to_have_text(inst.od_fwd + "/house/kitchen")
     assert page.evaluate("location.hash") == f"#task/{kitchen['id']}"       # the page stayed put
     shot(page, shots / "story-09-folders-2-desktop.png")
+    # Escape closes the popover and nothing under it: the drawer stays (#339)
+    page.keyboard.press("Escape")
+    expect(pop).to_be_hidden()
+    expect(page.locator("#taskDrawer")).to_be_visible()
+    assert page.evaluate("location.hash") == f"#task/{kitchen['id']}"
+    page.evaluate("localStorage.removeItem('task-os.opener-hint')")         # the hint again, for the click below
+    chip.click()
+    expect(pop).to_be_visible()
     page.locator("#drawerTitle").click()                                    # an outside click closes it
     expect(pop).to_be_hidden()
     chip.click()                                                            # second click: no hint (one-time)
     page.wait_for_timeout(600)                                              # past the hint's own 350 ms delay (format.js)
     expect(pop).to_be_hidden()
-    assert len(page.evaluate("window.__taskosClicks")) == 2
+    assert len(page.evaluate("window.__taskosClicks")) == 3
 
     # 3. the hint's link → Settings → Folder opener card with the command for this address
     page.evaluate("localStorage.removeItem('task-os.opener-hint')")

@@ -96,3 +96,5 @@ The story is unchanged (click a folder chip → Explorer opens **this** PC's syn
 - [x] `opener.env` and the disposable instance were reverted / stopped after the walk — this PC's opener is left on the real, correct (non-stale) registration with an empty `opener.env`, same as before the walk except upgraded.
 
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Steps 1–3 click the drawer's folder chip: a row's folder glyph is passive since #311, and the grid's clickable chip went with the Table. Its one-time hint and the Settings hand-off are unchanged.
+
+**2026-10-05 (#339):** Escape on the folder popover closes the popover and stops there; the drawer under it stays open. The popover registered its Escape listener on first open, after app.js's document-level one, so the same key also closed the drawer. It now takes Escape in the capture phase while it is open. Step 2 presses Escape on the hint and checks the drawer and the `#task/N` hash survive, seen red first (the drawer closed).
