@@ -1,12 +1,12 @@
 """Story 04 — Monday triage (Step 4/13, issue #5).
 
-    Table filtered status:todo → click the due cell → the date picker opens
-    and the pick lands → the activity log
-    shows old → new with time → open a drawer → add a comment containing a
-    link → the link is a clickable chip → the + opens the quick-add dialog
-    (#80) → "renew passport next friday" → the parsed date shows as a chip →
-    create → drag it under a project in the Tree → the breadcrumb appears in
-    the Table.
+    Board filtered status:todo → a row's ⋯ → Change date → Pick a date… opens
+    the date picker and the pick lands → the activity log shows old → new with
+    time → open a drawer → add a comment containing a link → the link is a
+    clickable chip → the + opens the quick-add dialog (#80) → "renew passport
+    next friday" → the parsed date shows as a chip → create → file it under a
+    project with the drawer's Move to → the breadcrumb appears (the Table and
+    its Tree, where this story used to run, were removed in #350).
 
 Walks the story against the **seeded** disposable instance (conftest
 ``seeded_webapp`` over ``tests/fixtures/seed.py`` — synthetic data, the only
@@ -19,14 +19,13 @@ shots the validation record links to:
 then — in the same test function since #96 — the drawer at 390×844 (WebKit,
 touch) with the geometry checks:
 
-    docs/screenshots/story-04-triage-9-phone.png   (table as the shared rows)
+    docs/screenshots/story-04-triage-9-phone.png   (the Board's rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
 
 UX round 3 (issue #46): the filter state is ONE card shared by every tab and
-lives in the URL (``?status=todo`` is the same view on the Board, Table,
-Tree, Today), so a shared URL no longer moves the tab by itself — the story
-opens the Table explicitly. On the phone the Table renders the ONE shared
-task row (``.trow``) instead of a card-ified grid.
+lives in the URL (``?status=todo`` is the same view on the Board and
+Today), so a shared URL no longer moves the tab by itself — the story opens
+the Board explicitly.
 
 **Story 13 — start date + snooze (#87)** rides in this file too, as
 ``_walk_starts_and_snooze`` at the end of the desktop leg plus the phone
@@ -35,7 +34,7 @@ assertions in the phone leg. It is a story of its own in
 (CLAUDE.md) and already held 14, and this story walks the same surface —
 the filter card, the quick-add dialog, a Today row, the drawer. Its shots:
 
-    docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
+    docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
     docs/screenshots/story-13-starts-snooze-{6,7}-phone.png
 
 **Story 15 — plan my day (#89)** rides here the same way, as
@@ -85,12 +84,9 @@ from tests.e2e._geometry import (
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
-    assert_grid_walk,
     dismiss_toasts,
     shot,
-    table_view,
     text_contrast,
-    tree_view,
 )
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -103,14 +99,9 @@ def _next_friday(today: date) -> date:
     return coming + timedelta(days=7)
 
 
-def _row(page: Page, title: str):
-    """A desktop Table grid row by exact title (the seed has both "Renew
-    passports" and the story's "renew passport")."""
-    return page.locator(".task-row", has=page.locator(".t-title-text", has_text=re.compile(rf"^{re.escape(title)}$"))).first
-
-
 def _trow(page: Page, title: str, scope: str = ""):
-    """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``."""
+    """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``
+    (the seed has both "Renew passports" and the story's "renew passport")."""
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
 
 
@@ -163,93 +154,73 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         page = context.new_page()
         page.add_init_script(_RECORD_SHOW_PICKER)
 
-        # 1. Table filtered status:todo — via the URL, the shareable view. The
-        #    filter is shared by every tab (UX round 3), so the URL never moves
-        #    the tab by itself: open the Table, the query survives the switch.
-        todo_count = _get(base, "/api/tasks?status=todo")["count"]
+        # 1. The Board filtered status:todo — via the URL, the shareable view.
+        #    The filter is shared by every tab (UX round 3), so the URL never
+        #    moves the tab by itself: open the Board, the query survives the switch.
+        todo = _get(base, "/api/tasks?status=todo")
+        todo_count = todo["count"]
         page.goto(f"{base}/?status=todo")
-        page.click("nav.tabs .tab[data-tab='table']")
-        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         expect(page).to_have_url(f"{base}/?status=todo")
-        card = _open_filters(page, "tableFilters")
+        card = _open_filters(page, "boardFilters")
         # status is a multi-select (#48): the summary reads the one status picked
         status_sel = card.locator(".msel[data-name='status']")
         expect(status_sel.locator(".msel-text")).to_have_text("todo")
         expect(status_sel.locator("input[name='status']:checked")).to_have_count(1)
         expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
         expect(card.locator(".filter-desc")).to_contain_text("todo")
-        rows = page.locator(".task-row")
-        expect(rows).to_have_count(todo_count)
         expect(card.locator(".filter-desc")).to_contain_text(f"{todo_count} tasks")
-        statuses = page.locator(".task-row .trow-status").evaluate_all("els => els.map(e => e.value)")
-        assert set(statuses) == {"todo"}
-        # breadcrumb under a nested title, project = top ancestor
-        quotes = _row(page, "Get three quotes")
-        expect(quotes.locator(".t-crumb")).to_have_text("Home renovation › Kitchen")
-        expect(quotes.locator(".c-project")).to_have_text("Home renovation")
-        # last comment renders its folder placeholder as a chip, labeled with
-        # just the last path segment (the full ref lives in the title)
-        comment_folder_chip = quotes.locator(".c-comment .chip-folder")
-        expect(comment_folder_chip).to_contain_text("plans")
-        expect(comment_folder_chip).to_have_attribute("title", "{onedrive}/house/kitchen/plans")
-        # #305: a chip in the comment text is a 44px target whose band stays
-        # inside the (clipping) comment line, and none shares a pixel
-        comment_chips = page.locator(".task-table .c-comment .chip")
-        assert_min_target(comment_chips)
-        assert_no_overlap(comment_chips)
-        # #305: the issue chip beside a coding task's title is one too
-        title_chips = page.locator(".task-table .t-title a.chip")
-        assert title_chips.count() >= 1, "the seed shows no issue chip in the grid's title cell"
-        assert_min_target(title_chips)
-        assert_no_overlap(title_chips)
+        # a real status pill narrows the columns: only Todo is up, holding the list
+        expect(page.locator("#paneBoard .board-col:not([hidden])")).to_have_count(1)
+        rows = page.locator("#paneBoard .trow[data-id]")
+        expect(rows).to_have_count(todo_count)
+        shown = {int(i) for i in rows.evaluate_all("els => els.map(e => e.dataset.id)")}
+        assert shown == {t["id"] for t in todo["items"]}
+        quotes = _trow(page, "Get three quotes", "#paneBoard")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
-        # #339: the grid is an ARIA data grid, its live cells (the issue chip,
-        # due, status, the folder and AI chips) reached from the row by the
-        # arrow keys rather than counted as a list row's actions
-        # …and a row leads with its name, the code after it (#339)
-        heads = page.locator(".task-table thead th").all_inner_texts()
-        assert heads[:2] == ["Title", "Code"], heads
-        coding = page.locator(".task-table .task-row", has=page.locator(".t-title a.chip")).first
-        assert assert_grid_walk(coding) >= 4
 
-        # 2. Change a due date inline — one click on the cell opens the date
-        # picker (#107), where it used to swap the cell for a text box you had
-        # to type a phrase into. `showPicker()` opens a native calendar no
-        # browser automation can drive, so the walk proves the two halves that
-        # are observable: the click really does call it (stubbed at page load
-        # in `_count_show_picker`), and the pick it commits really does PATCH.
+        # 2. Change a due date from the row — ⋯ → Change date → Pick a date…
+        #    opens the native calendar (#107, #311). `showPicker()` opens an OS
+        #    widget no browser automation can drive, so the walk proves the two
+        #    halves that are observable: the pick really does call it (stubbed at
+        #    page load in `_RECORD_SHOW_PICKER`), and the day it commits really
+        #    does PATCH.
         task_id = int(quotes.get_attribute("data-id"))
         old_due = _get(base, f"/api/tasks/{task_id}")["due"]
         page.evaluate("window.__pickerOpens = []")
-        quotes.locator(".due-btn").click()
-        assert page.evaluate("window.__pickerOpens") == ["due-date"], "the cell did not open the picker"
-        assert quotes.locator(".due-text").count() == 0, "the cell still swaps in a text box"
+        quotes.locator(".trow-kebab").click()
+        page.locator(".row-menu [data-action='change-date']").click()
+        dates = page.locator(".snooze-pop .snooze-menu")
+        expect(dates).to_have_attribute("data-field", "due")
+        dates.locator(".snooze-pick").click()
+        assert page.evaluate("window.__pickerOpens") == ["due-date"], "Pick a date… did not open the picker"
         new_due = (E2E_ANCHOR + timedelta(days=14)).isoformat()
-        quotes.locator(".due-date").evaluate(
+        dates.locator(".due-date").evaluate(
             "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due
         )
-        expect(page.locator(f".task-row[data-id='{task_id}'] .due-btn")).to_have_attribute(
-            "title", f"{new_due} — click to change"
-        )
+        expect(page.locator(f"#paneBoard .trow[data-id='{task_id}'] .trow-due")).to_have_attribute("title", new_due)
         assert _get(base, f"/api/tasks/{task_id}")["due"] == new_due
+        dismiss_toasts(page)
         shot(page, shots / "story-04-triage-2-desktop.png")
 
         # 3. Open the drawer → activity shows due: old → new with actor + time.
-        page.locator(f".task-row[data-id='{task_id}']").click()
+        page.locator(f"#paneBoard .trow[data-id='{task_id}'] .trow-main").click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         expect(page).to_have_url(f"{base}/?status=todo#task/{task_id}")
         expect(drawer.locator("#drawerTitle")).to_have_value("Get three quotes")
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Home renovation", "Kitchen"])
         first_act = drawer.locator(".activity-row").first
         expect(first_act).to_have_attribute("data-field", "due")
         expect(first_act.locator(".activity-old")).to_have_text(old_due)
         expect(first_act.locator(".activity-new")).to_have_text(new_due)
         expect(first_act.locator(".activity-meta")).to_contain_text("Roberto")  # X-Actor default from the sample config
         # The list stays visible beside the drawer (side panel, not an overlay).
-        table_box = page.locator(".table-wrap").bounding_box()
+        board_box = page.locator("#boardHost").bounding_box()
         drawer_box = drawer.bounding_box()
-        assert table_box and drawer_box and table_box["x"] + table_box["width"] <= drawer_box["x"] + 1
+        assert board_box and drawer_box and board_box["x"] + board_box["width"] <= drawer_box["x"] + 1
         assert drawer_box["width"] >= 400
         shot(page, shots / "story-04-triage-3-desktop.png")
 
@@ -269,8 +240,6 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(newest.locator(".comment-origin")).to_have_text("ui")
         comments = _get(base, f"/api/tasks/{task_id}/comments")["items"]
         assert comments[-1]["origin"] == "ui" and LINK in comments[-1]["body"]
-        # …and the Table's last-comment column picked it up
-        expect(page.locator(f".task-row[data-id='{task_id}'] .c-comment a.chip")).to_have_attribute("href", LINK)
         shot(page, shots / "story-04-triage-4-desktop.png")
         # click the chip: opens the link in a new tab (the target is stubbed —
         # the suite never depends on the network)
@@ -289,7 +258,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         #    and the rest of the first-moment fields are right there — no second
         #    trip through the drawer to set a description, a status, a folder
         #    or a link.
-        page.locator("#paneTable .quick-add-btn").click()
+        page.locator("#paneBoard .quick-add-btn").click()
         quick_add = page.locator("#quickAdd")
         expect(quick_add).to_be_visible()
         qa = quick_add.locator(".quick-add-input")
@@ -314,10 +283,10 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
         # the todo filter hides a standby task — clear to see it, as a user would
-        _open_filters(page, "tableFilters").locator(".filter-clear").click()
+        _open_filters(page, "boardFilters").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
-        expect(page.locator("#tableFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
-        new_row = _row(page, "renew passport")
+        expect(page.locator("#boardFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
+        new_row = _trow(page, "renew passport", "#paneBoard section.board-col[data-col='standby']")
         expect(new_row).to_be_visible()
         new_id = int(new_row.get_attribute("data-id"))
         created = _get(base, f"/api/tasks/{new_id}")
@@ -329,72 +298,43 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         assert [(link_["url"], link_["label"]) for link_ in created["links"]] == [
             ("https://example.com/passport-form", "application form")
         ]
-        expect(new_row.locator(".due-btn")).to_have_attribute("title", f"{friday} — click to change")
+        expect(new_row.locator(".trow-due")).to_have_attribute("title", friday)
+        dismiss_toasts(page)
         shot(page, shots / "story-04-triage-6-desktop.png")
 
-        # 7. Tree (the Table pane's second view, #161): drag it under a project
-        #    (Family admin) → moved, toast, rollup.
-        tree_view(page)
-        family = page.locator(".tree-node", has=page.locator(":scope > .tree-row .trow-title", has_text="Family admin")).first
-        family_id = int(family.get_attribute("data-id"))
-        kids_before = int(family.locator(":scope > .tree-row .trow-kids").inner_text())
-        # Collapse the four top-level projects so source and target share the
-        # viewport (a real user does the same on a long tree); the state persists.
-        project_ids = page.locator(".tree-node[aria-level='1'][aria-expanded='true']").evaluate_all(
-            "els => els.map(e => e.dataset.id)"
-        )
-        for pid in project_ids:
-            page.locator(f".tree-node[data-id='{pid}'] > .tree-row > .tree-toggle").click()
-        expect(page.locator(".tree-node[aria-level='1'][aria-expanded='false']")).to_have_count(4)
-        assert page.evaluate("JSON.parse(localStorage.getItem('task-os.tree.collapsed')).length") == 4
-        source = page.locator(f".tree-node[data-id='{new_id}']")
-        expect(source).to_be_visible()
-        expect(source).to_have_attribute("aria-level", "1")
-        # UX round 1 (issue #27): the top-level drop zone only shows during a drag
-        expect(page.locator(".tree-root-drop")).to_be_hidden()
-        source.locator(":scope > .tree-row").drag_to(family.locator(":scope > .tree-row"))
+        # 7. File it under a project from the drawer's Move to (#350: the Tree
+        #    and its drag are gone; this is the one re-parent path, on every
+        #    pointer) → moved, toast, breadcrumb, activity.
+        family_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Family admin")
+        new_row.locator(".trow-main").click()
+        expect(drawer).to_be_visible()
+        expect(drawer.locator("select[data-field='parent']")).to_have_value("")   # top level
+        drawer.locator("select[data-field='parent']").select_option(str(family_id))
         expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
         moved = _get(base, f"/api/tasks/{new_id}")
         assert moved["parent_id"] == family_id
         assert [c["title"] for c in moved["breadcrumb"]] == ["Family admin"]
         assert moved["activity"][0]["field"] == "parent"
-        # the re-render kept the collapse state; expand Family admin to see it nested
-        family = page.locator(f".tree-node[data-id='{family_id}']")
-        expect(family).to_have_attribute("aria-expanded", "false")
-        family.locator(":scope > .tree-row > .tree-toggle").click()
-        nested = family.locator(f".tree-children .tree-node[data-id='{new_id}']")
-        expect(nested).to_be_visible()
-        expect(nested).to_have_attribute("aria-level", "2")
-        # the row's children count (the shared row's rollup) grew by one
-        expect(family.locator(":scope > .tree-row .trow-kids")).to_have_text(str(kids_before + 1))
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Family admin"])
+        # …and the row says where it lives now (the meta line's project part)
+        expect(_trow(page, "renew passport", "#paneBoard").locator(".trow-project")).to_have_text("Family admin")
         shot(page, shots / "story-04-triage-7-desktop.png")
-        # a cycle is refused and surfaced as a toast, nothing changes (the
-        # two-line rows push the nested one below the fold — bring both into
-        # the viewport first, as a user scrolling would; a drag that starts
-        # while the page scrolls under the pointer would pick up another row)
-        nested.locator(":scope > .tree-row").evaluate("el => el.scrollIntoView({block: 'end'})")
-        family.locator(":scope > .tree-row").drag_to(nested.locator(":scope > .tree-row"))
+        # a cycle is refused and surfaced as a toast, nothing changes: Home
+        # renovation is offered its own child project, Kitchen, and refuses it
+        projects = {p["title"]: p["id"] for p in _get(base, "/api/projects")["items"]}
+        home_id = projects["Home renovation"]
+        page.goto(f"{base}/#task/{home_id}")
+        expect(drawer.locator("#drawerTitle")).to_have_value("Home renovation")
+        drawer.locator("select[data-field='parent']").select_option(str(projects["Kitchen"]))
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
-        assert _get(base, f"/api/tasks/{family_id}")["parent_id"] is None
+        assert _get(base, f"/api/tasks/{home_id}")["parent_id"] is None
 
-        # 8. Back on the Table's grid view the breadcrumb is there.
-        table_view(page)
-        moved_row = page.locator(f".task-row[data-id='{new_id}']")
-        expect(moved_row.locator(".t-crumb")).to_have_text("Family admin")
-        expect(moved_row.locator(".c-project")).to_have_text("Family admin")
-        assert_no_horizontal_overflow(page)
-        # #305: the folder cell's folder and AI chips are 44px targets that
-        # share no pixel — measured over every chip the grid shows
-        grid_chips = page.locator(".task-table .c-folder .chip")
-        assert grid_chips.count() >= 2, "the seed shows no folder/AI chips in the grid"
-        assert_min_target(grid_chips)
-        assert_no_overlap(grid_chips)
-        shot(page, shots / "story-04-triage-8-desktop.png")
-
-        # Deep link: a fresh load of #task/<id> opens the drawer with the breadcrumb.
+        # 8. Deep link: a fresh load of #task/<id> opens the drawer with the breadcrumb.
         page.goto(f"{base}/#task/{new_id}")
         expect(page.locator("#taskDrawer")).to_be_visible()
         expect(page.locator("#taskDrawer .drawer-crumbs .crumb")).to_have_text(["Family admin"])
+        dismiss_toasts(page)
+        shot(page, shots / "story-04-triage-8-desktop.png")
 
         # ------------------------------- closed tasks on demand (#309) ----
         _walk_closed_on_demand(page, base)
@@ -435,14 +375,13 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
     finally:
         dark_ctx.close()
 
-    _walk_phone_table_cards_and_drawer_sheet(base, playwright, shots)
+    _walk_phone_rows_and_drawer_sheet(base, playwright, shots)
 
 
 # ------------------------------------------ closed tasks on demand (#309)
 #
-# Riding inside this test because it is the Tree's story and the suite is
-# capped (CLAUDE.md): no shots, the default views are unchanged, so the gallery
-# does not move. It runs in its own context — a cold boot, an empty HTTP cache
+# Riding inside this test because the suite is capped (CLAUDE.md): no shots,
+# the default views are unchanged, so the gallery does not move. It runs in its own context — a cold boot, an empty HTTP cache
 # — so every recorded response is a 200 with a body to read.
 
 def _flatten(nodes: list[dict]) -> list[dict]:
@@ -454,8 +393,8 @@ def _flatten(nodes: list[dict]) -> list[dict]:
 
 
 def _walk_closed_on_demand(page: Page, base: str) -> None:
-    """The boot no longer ships closed tasks or descriptions; the Tree loads the
-    closed forest only when a closed status is filtered, and only once."""
+    """The boot ships no closed tasks and no descriptions; a closed status in
+    the filter is the list's to answer, never a second forest (#309, #350)."""
     ctx = page.context.browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         p = ctx.new_page()
@@ -487,26 +426,16 @@ def _walk_closed_on_demand(page: Page, base: str) -> None:
         # the closed tasks are still there for whoever asks: the default shape
         assert any(t["status"] == "done" for t in _get(base, "/api/tasks?include_closed=true")["items"])
 
-        # 2. The default Tree view pays nothing for them.
-        tree_view(p)
-        expect(p.locator("#paneTable #treeHost .tree")).to_be_visible()
-        closed_calls = lambda: [r for r in calls("/api/tasks/tree") if "include_closed" in query(r)]  # noqa: E731
-        assert closed_calls() == []
-        expect(_trow(p, "Buy a birthday gift", "#paneTable #treeHost")).to_have_count(0)
-
-        # 3. A closed status in the filter loads the closed forest — once — and
-        #    the closed task is on the Tree; the next closed status reuses it.
-        card = _open_filters(p, "tableFilters")
+        # 2. A closed status in the filter: the Board shows the closed task off
+        #    the filtered list, and nothing ever reads the closed forest.
+        p.click("nav.tabs .tab[data-tab='board']")
+        expect(_trow(p, "Buy a birthday gift", "#paneBoard")).to_have_count(0)
+        card = _open_filters(p, "boardFilters")
         status_sel = card.locator(".msel[data-name='status']")
         status_sel.locator("summary.msel-summary").click()
         status_sel.locator("input[name='status'][value='done']").check()
-        expect(_trow(p, "Buy a birthday gift", "#paneTable #treeHost")).to_be_visible()
-        # its ancestor is context, not a hole: a done task under an open project
-        expect(_trow(p, "Collect photos", "#paneTable #treeHost")).to_be_visible()
-        assert len(closed_calls()) == 1, [r.url for r in closed_calls()]
-        status_sel.locator("input[name='status'][value='cancelled']").check()
-        expect(_trow(p, "Sell the old bikes", "#paneTable #treeHost")).to_be_visible()
-        assert len(closed_calls()) == 1, [r.url for r in closed_calls()]
+        expect(_trow(p, "Buy a birthday gift", "#paneBoard")).to_be_visible()
+        assert [r.url for r in calls("/api/tasks/tree") if "include_closed" in query(r)] == []
     finally:
         ctx.close()
 
@@ -628,23 +557,23 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     Screenshot: docs/screenshots/story-04-triage-11-desktop.png
     """
     page.goto(f"{base}/")
-    page.click("nav.tabs .tab[data-tab='table']")
-    card = _open_filters(page, "tableFilters")
+    page.click("nav.tabs .tab[data-tab='board']")
+    card = _open_filters(page, "boardFilters")
     card.locator("select[name='updated']").select_option("stale30")
     expect(page).to_have_url(f"{base}/?updated=stale30")
-    rows = page.locator(".task-row")
+    rows = page.locator("#paneBoard .trow[data-id]")
     expect(rows).to_have_count(1)
-    expect(rows.locator(".t-title-text")).to_have_text("Sort the garage shelves")
+    expect(rows.locator(".trow-title")).to_have_text("Sort the garage shelves")
     expect(card.locator(".filter-desc")).to_contain_text("untouched > 30 days")
     expect(card.locator(".filter-desc")).to_contain_text("1 task")
     shot(page, shots / "story-04-triage-11-desktop.png")
     # the token round-trips: a fresh load of the shared URL is the same view
     page.goto(f"{base}/?updated=stale30")
-    page.click("nav.tabs .tab[data-tab='table']")
-    expect(page.locator(".task-row")).to_have_count(1)
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(rows).to_have_count(1)
     # 60 days back nothing is that old — an honest empty list, not an error
-    _open_filters(page, "tableFilters").locator("select[name='updated']").select_option("stale60")
-    expect(page.locator(".task-row")).to_have_count(0)
+    _open_filters(page, "boardFilters").locator("select[name='updated']").select_option("stale60")
+    expect(rows).to_have_count(0)
 
 
 # ------------------------------------------------- story 15 — plan my day
@@ -861,7 +790,7 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     shot(page, shots / "story-30-today-split-3-desktop.png")
 
     # 4. The other tabs keep the 440px panel and show no empty pane.
-    page.click("nav.tabs .tab[data-tab='table']")
+    page.click("nav.tabs .tab[data-tab='board']")
     box = drawer.bounding_box()
     assert box and 400 <= box["width"] <= 480, box
     drawer.locator(".drawer-close").click()
@@ -881,7 +810,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     """A task created asleep stays out of the working views until its day, is
     findable under *Deferred*, and a Today row can be pushed away and undone.
 
-    Screenshots: docs/screenshots/story-13-starts-snooze-{1..5}-desktop.png
+    Screenshots: docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
     """
     today = E2E_ANCHOR
     starts = (today + timedelta(days=30)).isoformat()
@@ -907,49 +836,32 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
                    if t["title"] == "renew insurance")
     assert (created["due"], created["starts"]) == (due, starts)
 
-    # 2. It is nowhere in the working views — Today, the Board, the Table.
+    # 2. It is nowhere in the working views — Today, the Board.
     expect(_trow(page, "renew insurance", "#paneToday")).to_have_count(0)
-    for tab, pane in (("board", "#paneBoard"), ("table", "#paneTable")):
-        page.click(f"nav.tabs .tab[data-tab='{tab}']")
-        expect(page.locator(pane)).to_be_visible()
-        expect(page.locator(pane).get_by_text("renew insurance", exact=True)).to_have_count(0)
-    # …but the Tree still has it, wearing the marker that says why it is quiet
-    # (the Table pane's second view since #161 — one pane, two drawings)
-    tree_view(page)
-    sleeping = _trow(page, "renew insurance", "#paneTable #treeHost")
-    expect(sleeping).to_be_visible()
-    expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
-    shot(page, shots / "story-13-starts-snooze-2-desktop.png")
-    # the view is remembered: a reload comes back on the tree, not the grid (#161)
-    page.reload()
-    expect(page.locator("#paneTable #treeHost .tree")).to_be_visible()
-    expect(page.locator("#paneTable #tableHost")).to_be_hidden()
-    # …and a tab a pre-#161 build stored as `tree` lands in the same place
-    # rather than dropping the user back on the default tab
-    page.evaluate("() => { localStorage.setItem('task-os.tab', 'tree');"
-                  " localStorage.removeItem('task-os.tableView'); }")
-    page.reload()
-    expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "table")
-    expect(page.locator("#paneTable #treeHost .tree")).to_be_visible()
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(page.locator("#paneBoard")).to_be_visible()
+    expect(page.locator("#paneBoard").get_by_text("renew insurance", exact=True)).to_have_count(0)
 
     # 3. Deferred is a visible state, not an absence: the status multi-select's
-    #    pseudo-value lists exactly the sleeping tasks, and the state is the URL.
-    table_view(page)
-    card = _open_filters(page, "tableFilters")
+    #    pseudo-value lists exactly the sleeping tasks, each wearing the marker
+    #    that says why the working views are quiet about it, and the state is
+    #    the URL.
+    card = _open_filters(page, "boardFilters")
     status_sel = card.locator(".msel[data-name='status']")
     status_sel.locator("summary.msel-summary").click()
     status_sel.locator("input[name='status'][value='deferred']").check()
     expect(page).to_have_url(f"{base}/?status=deferred")
     expect(status_sel.locator(".msel-text")).to_have_text("deferred")
-    rows = page.locator("#paneTable .task-row")
-    titles = rows.locator(".t-title-text").all_inner_texts()
+    page.keyboard.press("Escape")
+    rows = page.locator("#paneBoard .trow[data-id]")
     # the seed's own deferred task plus the one just created — and nothing else
+    expect(rows).to_have_count(2)
+    titles = rows.locator(".trow-title").all_inner_texts()
     assert sorted(titles) == ["Book boiler service", "renew insurance"], titles
-    # the desktop grid has its own cells, so it carries the marker explicitly —
-    # the list of sleeping tasks is exactly where the start day matters
-    expect(rows.locator(".t-starts")).to_have_count(2)
-    expect(rows.locator(".t-starts").first).to_have_text(re.compile(r"^starts \d"))
-    shot(page, shots / "story-13-starts-snooze-3-desktop.png")
+    expect(rows.locator(".trow-starts")).to_have_count(2)
+    expect(_trow(page, "renew insurance", "#paneBoard").locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
+    dismiss_toasts(page)
+    shot(page, shots / "story-13-starts-snooze-2-desktop.png")
     card.locator(".filter-clear").click()
     expect(page).to_have_url(f"{base}/")
 
@@ -1097,9 +1009,9 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
 
 # ------------------------------------------------------------- phone leg
 
-def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, shots: Path) -> None:
-    """390-wide WebKit (iOS-class): the Table as the shared rows, drawer
-    full-screen, 44px targets (the row's completion circle and ⋯ kebab are
+def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: Path) -> None:
+    """390-wide WebKit (iOS-class): the Board's Todo column as the shared rows,
+    drawer full-screen, 44px targets (the row's completion circle and ⋯ kebab are
     each a full 44x44 box either side of the open target, #311)."""
     try:
         wk = playwright.webkit.launch(headless=True)
@@ -1112,32 +1024,32 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         )
         page = context.new_page()
         page.goto(f"{base}/?status=todo")
-        page.locator("nav.tabs .tab[data-tab='table']").tap()
-        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "table")
-        rows = page.locator("#paneTable .table-rows .trow")
+        page.locator("nav.tabs .tab[data-tab='board']").tap()
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        rows = page.locator("#paneBoard .trow[data-id]")
         expect(rows).to_have_count(_get(base, "/api/tasks?status=todo")["count"])
-        # phone: the grid is not rendered at all — the Table is the ONE shared
-        # row (circle + title, the one passive meta line with the project in it,
-        # the ⋯ menu — no status select on the row since #311)
-        expect(page.locator(".task-table")).to_have_count(0)
-        watering = _trow(page, "Fix watering schedule drift", "#paneTable")
+        # the ONE shared row (circle + title, the one passive meta line with the
+        # project in it, the ⋯ menu — no status select on the row since #311)
+        watering = _trow(page, "Fix watering schedule drift", "#paneBoard")
         expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
         expect(watering.locator(".trow-due")).to_be_visible()
         expect(watering).to_have_attribute("data-status", "todo")
         expect(rows.locator(".trow-status")).to_have_count(0)
         assert_no_horizontal_overflow(page)
-        # the top strip (#80): the text filter, the view toggle's two halves
-        # (#161) and the + sit side by side, all at the touch floor, with
-        # effective rectangles that never overlap — the segmented pair joins on
-        # a shared hairline, so its halves touch without their hit rects doing
-        # the pressed view says its name in accent-text on the accent tint,
-        # 4.5:1 (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
-        pressed = page.locator("#paneTable .view-seg[aria-pressed='true'] .strip-label")
-        assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
-        strip = page.locator("#paneTable .filter-q, #paneTable .view-seg, #paneTable .quick-add-btn")
+        # the top strip (#80): the text filter, the Select toggle and the + sit
+        # side by side, all at the touch floor, with effective rectangles that
+        # never overlap; pressed, the toggle says its name in accent-text on the
+        # accent tint, 4.5:1 (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
+        strip = page.locator("#paneBoard .filter-q, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
         assert_min_target(strip)
         assert_no_overlap(strip)
-        page.locator("#paneTable .quick-add-btn").tap()
+        page.locator("#paneBoard [data-select-toggle]").tap()
+        pressed = page.locator("#paneBoard [data-select-toggle][aria-pressed='true'] .strip-label")
+        expect(pressed).to_be_visible()
+        assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
+        page.locator("#paneBoard [data-select-toggle]").tap()
+        expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+        page.locator("#paneBoard .quick-add-btn").tap()
         expect(page.locator("#quickAdd")).to_be_visible()
         assert_min_target(page.locator("#quickAdd .quick-add-input"))
         page.keyboard.press("Escape")
@@ -1145,7 +1057,7 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         # the shared filter card: the status multi-select holds the five statuses,
         # the URL's one checked; on the phone the controls sit two per line,
         # equal widths (#48)
-        card = _open_filters(page, "tableFilters")
+        card = _open_filters(page, "boardFilters")
         status_sel = card.locator(".msel[data-name='status']")
         status_sel.locator("summary.msel-summary").click()
         # five statuses + `deferred` (#87) + `blocked` (#100), the pseudo-values
@@ -1198,11 +1110,10 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
         assert done_box["x"] + done_box["width"] <= main_box["x"] + 1, (done_box, main_box)
         assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
         assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
-        assert page.locator("#paneTable .table-rows").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
         shot(page, shots / "story-04-triage-9-phone.png")
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
-        _trow(page, "Get three quotes", "#paneTable").locator(".trow-main").tap()
+        _trow(page, "Get three quotes", "#paneBoard").locator(".trow-main").tap()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         box = drawer.bounding_box()
@@ -1251,8 +1162,9 @@ def _walk_phone_table_cards_and_drawer_sheet(base: str, playwright: Playwright, 
 
         # the sleeping seed task wears its marker wherever it still shows
         page.goto(f"{base}/?status=deferred")
-        page.locator("nav.tabs .tab[data-tab='table']").tap()
-        sleeping = _trow(page, "Book boiler service", "#paneTable")
+        page.locator("nav.tabs .tab[data-tab='board']").tap()
+        page.locator("#paneBoard .board-strip-btn[data-col='todo']").tap()   # it is a todo task
+        sleeping = _trow(page, "Book boiler service", "#paneBoard")
         expect(sleeping).to_be_visible()
         expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
         assert_no_horizontal_overflow(page)

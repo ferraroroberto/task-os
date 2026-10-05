@@ -8,7 +8,7 @@ Not a numbered build step — a feature issue validated story-style. The automat
 
 | # | Step | Expected | Shot |
 | --- | --- | --- | --- |
-| 1 | Seeded Table, `status:todo` — the garden-bot task carries an `ai` link | The row's chips cell shows the **bot chip** (`drift-fix session`), href = the conversation URL | [1-desktop](../screenshots/story-11-ai-links-1-desktop.png) |
+| 1 | Seeded Board, `status:todo` — the garden-bot task carries an `ai` link | The row's meta line shows the **bot glyph**, and its ⋯ menu offers **Open AI conversation** and **Resume in CLI** | [1-desktop](../screenshots/story-11-ai-links-1-desktop.png) |
 | 2 | Click the chip (fine pointer) | No navigation, no drawer — the popover: **Open conversation** (new tab) + **Resume in CLI on this PC** (`taskos://resume?session=…`, shown because the URL is a `claude.ai/code/session_…`) | [2-desktop](../screenshots/story-11-ai-links-2-desktop.png) |
 | 3 | Click *Resume in CLI* | The `taskos://` URL is handed to the OS (intercepted in the test; live hand-off proven below); popover closes | — |
 | 4 | Drawer → Links; paste `https://chatgpt.com/c/…` with no kind | The row wears the bot chip too; the API stored `kind: "ai"` (inferred); the delete button is borderless at the chip's height with the 44px hit rect on `::before` | [3-desktop](../screenshots/story-11-ai-links-3-desktop.png) |
@@ -42,3 +42,5 @@ Re-walked on this PC against the #227 build, non-dry, real transcript store (12,
 The probe terminal was closed afterwards. The worst case — no owner anywhere in the store — is now a single full traversal, measured at 9–25 s on this corpus depending on page-cache state, against the ~5–6 minutes two traversals used to cost.
 
 Result: **verified** (one-tab spawn + repo cwd + both echoes + timing, all observed). Date: 2026-09-12.
+
+**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 1 reads the Board row and its ⋯ menu; the open / resume popover is opened from the drawer's link-row chip, the grid's chip cell having gone with the Table.

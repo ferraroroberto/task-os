@@ -1,6 +1,6 @@
 /* task-os — app bootstrap and the one place state lives.
  *
- * Nav + theme (Step 1); the views — Board, Table (grid or tree, #161), Today — are
+ * Nav + theme (Step 1); the views — Today and Board — are
  * renderings of ONE shared list (`state.items`, /api/tasks under the shared
  * filter state) drawn with the ONE task row (rows.js) and edited through the
  * ONE filter card (filters.js) that every tab mounts (issue #46): status ·
@@ -16,7 +16,7 @@
  * the views never drift.
  *
  * Every tab is its own module and this file is the wiring: board.js ·
- * table.js · tree.js · today.js · search.js · archive.js (the batch-archiving
+ * today.js · search.js · archive.js (the batch-archiving
  * run and its report, #159 — the one tab that is not a rendering of the task
  * list) · settings.js (issue #37 — the
  * Settings cards used to live here) · journal.js (the done journal, #102 —
@@ -43,8 +43,7 @@ import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
-  BLOCKED, DEFAULT_FILTERS, DEFERRED, filtersFromSearch, filtersToSearch, isDefaultFilters,
-  listParams, mountFilters,
+  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, mountFilters,
 } from './filters.js';
 import { STATUSES, fmtDay, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
@@ -52,22 +51,18 @@ import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
-import { CLOSED, sortItems } from './rows.js';
+import { CLOSED } from './rows.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
-import { renderTable as renderTableGrid } from './table.js';
 import { toast } from './toast.js';
 import { renderToday } from './today.js';
-import { renderTree } from './tree.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
-// Which of the Table pane's two drawings is on screen (#161) — `table` (the
-// grid) or `tree` (the outliner that used to own a nav slot). Remembered so an
-// installed PWA reopens in the view you left it in.
-const TABLE_VIEW_KEY = 'task-os.tableView';
-const PHONE_TABLE_MQ = '(max-width: 767px)';
+// What the Table tab (grid and Tree) remembered before #350 removed it. A
+// stored `table` / `tree` tab needs nothing: the nav falls back to Today.
+const RETIRED_KEYS = ['task-os.tableView', 'task-os.tree.collapsed'];
 // Settings is a pane with no tab (#281): the header gear opens it, `#settings`
 // keeps it across a reload, and these deep links open it on one card.
 const SETTINGS_HASH = '#settings';
@@ -94,12 +89,6 @@ const els = {
   boardBulk: document.getElementById('boardBulk'),
   todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
-  tableFilters: document.getElementById('tableFilters'),
-  tableFilterText: document.getElementById('tableFilterText'),
-  tableBulk: document.getElementById('tableBulk'),
-  tableViewToggle: document.getElementById('tableViewToggle'),
-  tableHost: document.getElementById('tableHost'),
-  treeHost: document.getElementById('treeHost'),
   todayFilters: document.getElementById('todayFilters'),
   todayFilterText: document.getElementById('todayFilterText'),
   todayHost: document.getElementById('todayHost'),
@@ -117,17 +106,13 @@ const state = {
   people: [],
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
-  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned), minus the text only the drawer reads (#309)
-  closedTree: null, // the full forest incl. closed tasks, loaded only while a closed status is filtered (#309); null = not loaded
+  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the header's count and the blocker picker (#309)
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
-  deferred: [],     // the sleeping tasks (#87) — the Tree only; never merged into items
-  blocked: [],      // the locked tasks (#100) — same shape as deferred, the Tree only
   plan: { items: [], done: 0, total: 0 },  // /api/today's plan group (#89) — unfiltered on purpose
   calendar: null,   // /api/today's calendar group (#96) — the lane beside Today; null = not loaded
   planMode: false,  // Today's plan-my-day picker is open (UI state; the plan itself is server state)
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'today',
-  tableView: 'table',  // which host the Table pane shows: 'table' | 'tree' (#161)
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
   // /api/status's `archive` block (#159) — the Archive tab renders it in full
@@ -155,7 +140,7 @@ let actions = null;       // the one row-action runner + its undo (actions.js, #
 let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 const filterCards = {};   // tab → mountFilters() handle
-const bulkBars = [];      // one per pane strip (Board · Table · Today), all over one selection (#81)
+const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -181,23 +166,10 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  // The Table pane owns two hosts (#161) and only the one on screen ever holds
-  // content — here too, or the pane would carry the prompt twice.
-  (state.tableView === 'tree' ? els.tableHost : els.treeHost).replaceChildren();
-  ['boardFilters', 'boardFilterText', 'tableFilters', 'tableFilterText',
-    'todayFilters', 'todayFilterText', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilters', 'boardFilterText', 'todayFilters', 'todayFilterText', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
-  // …and nothing to draw two ways: an empty list is the same prompt either way
-  els.tableViewToggle.hidden = true;
-}
-
-function noMatchCard(iconName, message) {
-  return emptyCard(iconName, message, {
-    actionLabel: isDefaultFilters(state.filters) ? undefined : 'Clear filters',
-    onAction: function () { onFilterChange(Object.assign({}, DEFAULT_FILTERS)); },
-  });
 }
 
 // ------------------------------------------------------------------ data
@@ -258,76 +230,32 @@ const loadSeq = { tree: 0, items: 0, today: 0 };
 function beginLoad(resource) { return ++loadSeq[resource]; }
 function isLatest(resource, seq) { return loadSeq[resource] === seq; }
 
-const CLOSED_TREE_URL = '/api/tasks/tree?include_closed=true&descriptions=false';
-
-/** The Tree needs closed nodes only when a closed task can be in its `keep`
- *  set — a done / cancelled status in the filter (#309). */
-function needsClosed(f) {
-  return f.status.some(function (s) { return CLOSED[s]; });
-}
-
 /** The boot reads the open forest plus the project list (closed projects
- *  included, so the filter and Move-to lose nothing). While a closed status
- *  is filtered the closed forest rides along, so a write does not flash the
- *  Tree's loading block — otherwise it loads lazily, see ensureClosedTree. */
+ *  included, so the filter and Move-to lose nothing). */
 async function loadTree(seq) {
-  const calls = [api('/api/tasks/tree?descriptions=false'), api('/api/projects')];
-  if (needsClosed(state.filters)) calls.push(api(CLOSED_TREE_URL).catch(function () { return null; }));
-  const res = await Promise.all(calls);
+  const res = await Promise.all([api('/api/tasks/tree?descriptions=false'), api('/api/projects')]);
   if (!isLatest('tree', seq)) return;
   state.tree = res[0].items || [];
   state.projects = res[1].items || [];
   state.taskIndex = flattenOpen(state.tree);
-  state.closedTree = res[2] ? (res[2].items || []) : null;   // every write drops the cache
-  closedTreeError = null;
-}
-
-let closedTreeLoading = false;
-let closedTreeError = null;
-
-/** Lazily fetch the closed forest the first time a closed status is
- *  filtered; renderTreeView shows the loading / error block meanwhile. */
-function ensureClosedTree() {
-  if (closedTreeLoading || state.closedTree) return;
-  closedTreeLoading = true;
-  closedTreeError = null;
-  api(CLOSED_TREE_URL).then(function (res) {
-    state.closedTree = res.items || [];
-  }).catch(function (err) {
-    closedTreeError = err;
-  }).then(function () {
-    closedTreeLoading = false;
-    if (state.tableView === 'tree') renderTablePane();
-  });
 }
 
 /** The shared list: the filters as sent to /api/tasks; when no status is
  *  picked, today's done tasks ride along (the Board's Done-today column).
  *
- *  Deferred (#87) and blocked (#100) tasks are each fetched **separately**,
- *  never merged into `state.items`: the working views are supposed to be rid
- *  of them, and the one view that must still show them — the Tree, which
- *  prunes to the ids in the filtered list — reads `state.deferred` /
- *  `state.blocked` on top. Merging them here would put a sleeping or locked
- *  task back on the Board the moment anyone forgot to filter. */
+ *  Deferred (#87) and blocked (#100) tasks are in it only while their pill is
+ *  pressed — the server leaves them out otherwise, so a sleeping or locked
+ *  task never lands back on the Board by itself. */
 async function loadItems(seq) {
   const f = state.filters;
   const params = listParams(f);
-  const showsDeferred = f.status.indexOf(DEFERRED) >= 0;
-  const showsBlocked = f.status.indexOf(BLOCKED) >= 0;
   // No view reads a description off the list (the drawer fetches its own task), #309.
   const slim = { descriptions: false };
   const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
   if (!f.status.length) {
     calls.push(api('/api/tasks' + qs(Object.assign({}, params, slim, { status: ['done'], done_on: todayISO() }))));
   }
-  const deferredCall = showsDeferred
-    ? Promise.resolve({ items: [] })   // already the whole list — no second call
-    : api('/api/tasks' + qs(Object.assign({}, params, slim, { status: [DEFERRED] })));
-  const blockedCall = showsBlocked
-    ? Promise.resolve({ items: [] })   // already the whole list — no second call
-    : api('/api/tasks' + qs(Object.assign({}, params, slim, { status: [BLOCKED] })));
-  const [results, sleeping, locked] = await Promise.all([Promise.all(calls), deferredCall, blockedCall]);
+  const results = await Promise.all(calls);
   if (!isLatest('items', seq)) return false;
   const seen = new Set();
   const items = [];
@@ -335,8 +263,6 @@ async function loadItems(seq) {
     (r.items || []).forEach(function (t) { if (!seen.has(t.id)) { seen.add(t.id); items.push(t); } });
   });
   state.items = items;
-  state.deferred = showsDeferred ? items.slice() : (sleeping.items || []);
-  state.blocked = showsBlocked ? items.slice() : (locked.items || []);
   return true;
 }
 
@@ -355,10 +281,7 @@ function countOpen(forest) {
  *  out — so a bulk POST never carries an id the user cannot see (#81). */
 function pruneSelection() {
   if (!selection.isActive()) return;
-  // deferred + blocked ids included: the Tree's rows are tickable too (#81 parity)
-  selection.keepOnly(new Set(
-    state.items.concat(state.deferred, state.blocked).map(function (t) { return t.id; })
-  ));
+  selection.keepOnly(new Set(state.items.map(function (t) { return t.id; })));
 }
 
 async function refreshAll() {
@@ -545,9 +468,8 @@ function setPlanMode(on) {
 async function bulkDelete() {
   const ids = selection.selectedIds();
   if (!ids.length) return;
-  const loaded = state.items.concat(state.deferred, state.blocked);
   const known = ids.map(function (id) {
-    return loaded.find(function (t) { return t.id === id; });
+    return state.items.find(function (t) { return t.id === id; });
   }).filter(Boolean);
   const projects = known.filter(function (t) { return t.child_count > 0; }).length;
   const coding = known.filter(function (t) { return t.issue_ref && t.issue_ref.state === 'open'; }).length;
@@ -624,7 +546,7 @@ async function bulkApply(changes) {
  *  filtered list, and undo needs that task's real prior values, not a guess. */
 async function resolveTask(id) {
   const n = Number(id);
-  const local = state.items.concat(state.deferred, state.blocked, state.plan.items || [], state.journal.items)
+  const local = state.items.concat(state.plan.items || [], state.journal.items)
     .find(function (t) { return t.id === n; });
   if (local) return local;
   try { return await api('/api/tasks/' + n); } catch (_) { return null; }
@@ -632,7 +554,7 @@ async function resolveTask(id) {
 
 /** What the list views show: the filtered list — minus the closed tasks that
  *  ride along for the Board's "Done today" column when no status pill is
- *  pressed (Table / Tree / Today default to open tasks, as the filter card says). */
+ *  pressed (Today defaults to open tasks, as the filter card says). */
 function viewItems() {
   if (state.filters.status.length) return state.items;
   return state.items.filter(function (t) { return !CLOSED[t.status]; });
@@ -666,8 +588,7 @@ function renderFilters() {
   const options = { projects: state.projects, people: state.people, count: viewItems().length };
   // [tab, the card's host, the top strip that holds the text input (#80) —
   // Search has none: its own box owns the text]
-  [['board', els.boardFilters, els.boardFilterText], ['table', els.tableFilters, els.tableFilterText],
-    ['today', els.todayFilters, els.todayFilterText],
+  [['board', els.boardFilters, els.boardFilterText], ['today', els.todayFilters, els.todayFilterText],
     ['search', els.searchFilters, null], ['journal', els.journalFilters, els.journalFilterText]]
     .forEach(function (pair) {
       const host = pair[1];
@@ -691,7 +612,6 @@ function renderAll() {
   renderFilters();
   renderSelectMode();
   renderBoardPane();
-  renderTablePane();
   renderTodayPane();
   if (search) search.refilter();
 }
@@ -709,8 +629,7 @@ function renderSelectMode() {
     btn.hidden = busy;
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) { btn.hidden = busy; });
-  els.tableViewToggle.hidden = busy;
-  [els.boardFilterText, els.tableFilterText, els.todayFilterText].forEach(function (host) {
+  [els.boardFilterText, els.todayFilterText].forEach(function (host) {
     if (host) host.classList.toggle('is-superseded', busy);
   });
   bulkBars.forEach(function (bar) { bar.render(); });
@@ -718,17 +637,17 @@ function renderSelectMode() {
 
 /** Reflect a membership change on the rows already on screen, in place.
  *
- *  Ticking a row must not rebuild four views: a full re-render would also
+ *  Ticking a row must not rebuild two views: a full re-render would also
  *  destroy the checkbox the keyboard is on, so Space-Space-Space down a column
  *  would lose focus after the first tick. Mode changes still rebuild — there
  *  the rows genuinely change shape. */
 function syncSelectionMarks() {
-  [els.boardHost, els.tableHost, els.treeHost, els.todayHost].forEach(function (host) {
+  [els.boardHost, els.todayHost].forEach(function (host) {
     if (!host) return;
-    host.querySelectorAll('.trow[data-id], .task-row[data-id]').forEach(function (row) {
+    host.querySelectorAll('.trow[data-id]').forEach(function (row) {
       const on = selection.has(row.dataset.id);
       row.classList.toggle('is-selected', on);
-      const box = row.querySelector('.trow-check, .row-check');
+      const box = row.querySelector('.trow-check');
       if (box) box.checked = on;
     });
   });
@@ -773,102 +692,6 @@ function renderTodayPane() {
     sort: state.filters.sort, plan: state.plan, planMode: state.planMode, calendar: state.calendar,
   }, selectOpts()));
   menus.today.endRender();
-}
-
-/** The Table pane draws the one filtered list two ways (#161) — the grid and
- *  the outliner that used to be its own tab. Only the host on screen is
- *  rendered and the other is emptied, so a query scoped to the pane never
- *  finds rows nobody can see. Both read the state already loaded: switching
- *  views re-renders, it never refetches. */
-function renderTablePane() {
-  if (state.tableView === 'tree') {
-    els.tableHost.replaceChildren();
-    renderTreeView();
-  } else {
-    els.treeHost.replaceChildren();
-    renderTableGridView();
-  }
-}
-
-/** The toggle's pressed state and which host is on screen — chrome, kept apart
- *  from the render above so the true-empty path (which renders no rows at all,
- *  just the first-task prompt in both hosts) still shows the chosen one. */
-function applyTableView() {
-  const tree = state.tableView === 'tree';
-  els.tableHost.hidden = tree;
-  els.treeHost.hidden = !tree;
-  els.tableViewToggle.querySelectorAll('[data-view]').forEach(function (btn) {
-    btn.setAttribute('aria-pressed', btn.dataset.view === state.tableView ? 'true' : 'false');
-  });
-}
-
-/** Switch the Table pane's view (the toggle, the palette). */
-function setTableView(view) {
-  const next = view === 'tree' ? 'tree' : 'table';
-  const changed = next !== state.tableView;
-  state.tableView = next;
-  try { localStorage.setItem(TABLE_VIEW_KEY, next); } catch (_) { /* private mode */ }
-  applyTableView();
-  if (!changed) return;
-  // Only the host on screen ever holds content, so the one just revealed has
-  // to be filled: the rows, or — on a still-empty install, reachable here
-  // through the palette while the toggle itself is hidden — the first-task
-  // prompt. `total === null` is "not read yet", where the pending refresh
-  // renders; never a silently blank pane.
-  if (state.total) renderTablePane();
-  else if (state.total === 0) renderNoTasks();
-}
-
-function wireTableView() {
-  els.tableViewToggle.querySelectorAll('[data-view]').forEach(function (btn) {
-    btn.addEventListener('click', function () { setTableView(btn.dataset.view); });
-  });
-  applyTableView();
-}
-
-function renderTableGridView() {
-  const items = viewItems();
-  if (!items.length) {
-    els.tableHost.replaceChildren(noMatchCard('list-filter', 'No tasks match these filters'));
-    menus.table.endRender();
-    return;
-  }
-  const phone = window.matchMedia(PHONE_TABLE_MQ).matches;
-  renderTableGrid(els.tableHost, sortItems(items, state.filters.sort),
-    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect, menu: menus.table },
-    Object.assign({ phone: phone }, selectOpts()));
-  menus.table.endRender();
-}
-
-function renderTreeView() {
-  // The Tree is the map of everything, so a deferred (#87) or blocked (#100)
-  // task stays on it — with the marker saying why the working views are
-  // quiet about it.
-  const items = viewItems().concat(state.deferred, state.blocked);
-  const keep = new Set(items.map(function (t) { return t.id; }));
-  const byId = {};
-  items.forEach(function (t) { byId[t.id] = t; });
-  let forest = state.tree;
-  if (needsClosed(state.filters)) {
-    // a closed task can only be drawn if it is a node (#309) — the open forest has none
-    if (!state.closedTree) {
-      ensureClosedTree();
-      els.treeHost.replaceChildren(closedTreeError
-        ? emptyCard('triangle-alert', 'Could not load closed tasks', {
-          actionLabel: 'Retry',
-          onAction: function () { closedTreeError = null; renderTreeView(); },
-        })
-        : emptyCard('refresh-cw', 'Loading closed tasks…'));
-      menus.tree.endRender();
-      return;
-    }
-    forest = state.closedTree;
-  }
-  const n = renderTree(els.treeHost, forest,
-    { onOpen: openTask, onPatch: patchTask, onMove: moveTask, onStatus: setStatus, onToggleSelect: selectHandlers.onToggleSelect, menu: menus.tree },
-    Object.assign({ keep: keep, byId: byId, sort: state.filters.sort }, selectOpts()));
-  if (!n) els.treeHost.replaceChildren(noMatchCard('list-tree', 'No tasks match these filters'));
-  menus.tree.endRender();
 }
 
 // ---------------------------------------------------------------- journal
@@ -1072,17 +895,16 @@ function focusRow(task) {
   // The new row in whichever surface is showing; the drawer stays closed so
   // the eye lands on the row, not a panel.
   const tab = nav.getTab();
-  // The Table pane's host is whichever of its two views is up (#161).
-  const tableHost = state.tableView === 'tree' ? els.treeHost : els.tableHost;
-  const hosts = { table: tableHost, board: els.boardHost, today: els.todayHost };
-  // Settings covers the nav's tab (#281): land on the Table, as a non-list tab does.
+  const hosts = { board: els.boardHost, today: els.todayHost };
+  // Settings covers the nav's tab (#281): land on the Board, as a non-list tab
+  // does — a new task opens in Inbox, which is a Board column.
   let host = state.settingsOpen ? null : hosts[tab];
-  if (!host) { nav.setTab('table'); host = tableHost; }
-  const target = host.querySelector('.trow[data-id="' + task.id + '"] .trow-main, .task-row[data-id="' + task.id + '"]');
+  if (!host) { nav.setTab('board'); host = els.boardHost; }
+  const target = host.querySelector('.trow[data-id="' + task.id + '"] .trow-main');
   if (target) {
     target.tabIndex = 0;
     target.focus({ preventScroll: false });
-    (target.closest('.trow') || target).classList.add('is-new');
+    target.closest('.trow').classList.add('is-new');
     target.scrollIntoView({ block: 'nearest' });
   }
 }
@@ -1092,7 +914,7 @@ function wireSelectMode() {
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () { selection.setActive(!selection.isActive()); });
   });
-  [els.boardBulk, els.tableBulk, els.todayBulk].forEach(function (host) {
+  [els.boardBulk, els.todayBulk].forEach(function (host) {
     if (!host) return;
     bulkBars.push(mountBulkBar(host, {
       onApply: bulkApply,
@@ -1102,8 +924,8 @@ function wireSelectMode() {
   });
   // One store, two views. Entering/leaving Select mode changes the rows'
   // shape, so it rebuilds; a tick only changes which rows are marked, so it
-  // is reflected in place (and the Table, rebuilt on its next render, reads
-  // the same store — which is what carries a Board selection across the tab).
+  // is reflected in place (and Today, rebuilt on its next render, reads the
+  // same store — which is what carries a Board selection across the tab).
   selection.subscribe(function (kind) {
     if (kind === 'mode' && state.total) renderAll();
     else syncSelectionMarks();
@@ -1221,9 +1043,6 @@ function archiveHint() {
 /** The palette's command list — built per open so hints reflect the moment. */
 function paletteCommands() {
   const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
-  // The Table pane's two views (#161): land on the tab AND on the drawing asked
-  // for, so the palette reaches the tree the way the removed tab used to.
-  const goView = function (view) { return function () { nav.setTab('table'); setTableView(view); }; };
   const cmds = [
     { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
       if (quickAdd) quickAdd.open();
@@ -1236,8 +1055,6 @@ function paletteCommands() {
     ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
-    { id: 'go-table', label: 'Go to Table', icon: 'table', run: goView('table') },
-    { id: 'go-tree', label: 'Table → Tree view', icon: 'list-tree', run: goView('tree') },
     { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: go('archive') },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
@@ -1289,7 +1106,7 @@ function wireActions() {
   // menu that is open on another's row.
   const ctx = { actions: actions, onOpen: openTask, onPlan: planTask, onUnplan: unplanTask };
   menus = {};
-  ['board', 'today', 'table', 'tree', 'journal', 'search'].forEach(function (view) {
+  ['board', 'today', 'journal', 'search'].forEach(function (view) {
     menus[view] = createTaskMenu(ctx);
   });
 }
@@ -1374,19 +1191,9 @@ async function boot() {
   // ?q= belongs to the Search tab when the page lands there (#search deep
   // link, or the last tab was Search); otherwise it is the filter card's text.
   let storedTab = null;
-  try { storedTab = localStorage.getItem(TAB_KEY); } catch (_) { /* private mode */ }
-  // A stored `tree` tab predates #161, when the Tree became a view of the Table
-  // rather than a nav destination. Carry it over instead of dropping the user
-  // on the default tab: same place, same drawing, one slot fewer in the pill.
-  if (storedTab === 'tree') {
-    storedTab = 'table';
-    try {
-      localStorage.setItem(TAB_KEY, 'table');
-      localStorage.setItem(TABLE_VIEW_KEY, 'tree');
-    } catch (_) { /* private mode */ }
-  }
   try {
-    state.tableView = localStorage.getItem(TABLE_VIEW_KEY) === 'tree' ? 'tree' : 'table';
+    storedTab = localStorage.getItem(TAB_KEY);
+    RETIRED_KEYS.forEach(function (k) { localStorage.removeItem(k); });
   } catch (_) { /* private mode */ }
   const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search');
   let searchQ = '';
@@ -1419,7 +1226,6 @@ async function boot() {
   els.settingsBtn.addEventListener('click', openSettings);
   wireQuickAdd();
   wireSelectMode();
-  wireTableView();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
     currentTaskId: function () { return drawer.currentId(); },
@@ -1452,9 +1258,6 @@ async function boot() {
   });
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
-  // The Table flips between the grid and the shared rows at the phone breakpoint.
-  const phoneMq = window.matchMedia(PHONE_TABLE_MQ);
-  if (phoneMq.addEventListener) phoneMq.addEventListener('change', function () { if (state.total) renderTablePane(); });
   fetchVersion();
   settings.refreshStatus();
   await loadPeople();

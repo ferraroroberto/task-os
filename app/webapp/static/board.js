@@ -11,8 +11,7 @@
  * and every refresh only swaps the rows, so the carousel position survives.
  *
  * Rows are the ONE task row (rows.js, issue #46) — title + status select on
- * line 1, the meta line under it — the same row the Table, Tree, Today and
- * Search render. Drag a row onto another column (HTML5 DnD, fine pointers)
+ * line 1, the meta line under it — the same row Today and Search render. Drag a row onto another column (HTML5 DnD, fine pointers)
  * or change its status select → the caller's `onStatus` → PATCH.
  *
  * `render(items, filters)` takes the shared filtered list: the status pills

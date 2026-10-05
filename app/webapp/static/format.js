@@ -1,4 +1,4 @@
-/* task-os — formatting helpers shared by the Table, Tree and drawer.
+/* task-os — formatting helpers shared by the rows, the drawer and the panes.
  *
  * Relative dates, timestamps, link chips (URLs / folder placeholders /
  * repo#N inside comment bodies), the small parts a status row is built from
@@ -40,7 +40,7 @@ function parseISO(iso) {
 
 /**
  * Relative due label + tone. `{text, tone}` where tone ∈ '' | 'today' |
- * 'overdue' — the Table tints overdue with the danger token.
+ * 'overdue' — a row tints overdue with the danger token.
  */
 export function relDue(iso, now) {
   const d = parseISO(iso);
@@ -591,10 +591,6 @@ export function modelName(id) {
 /** A 0–1 ratio as whole percent, for every reading that shows one. */
 export function pct(value) {
   return Math.round(Number(value) * 100) + '%';
-}
-
-export function priorityLabel(p) {
-  return p && p !== 'none' ? p : '—';
 }
 
 export function breadcrumbText(crumbs) {

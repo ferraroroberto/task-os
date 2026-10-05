@@ -1,14 +1,13 @@
 /* task-os — single-key row actions, one-level undo, and the shortcuts sheet (#99).
  *
- * Triage speed without a mouse: with a row focused (Board · Table · Today ·
- * the Search tab's task hits) one key does the thing —
+ * Triage speed without a mouse: with a row focused (Board · Today · the
+ * Search tab's task hits) one key does the thing —
  *
  *   e  complete   1-3 status   t/w due tomorrow / next week
  *   s  snooze     p   priority cycle          z undo     ? this list
  *
  * and with tasks ticked (Select mode, #81) the same key does it to the whole
- * selection. The Tree is deliberately not a target: its keyboard model is
- * navigation-first (↑↓→← Enter) and stays that way.
+ * selection.
  *
  * The actions themselves, their one write path and the undo live in
  * actions.js (#311), which the row's own controls read too. This file owns
@@ -27,10 +26,7 @@ import { closeDatePicker, isDatePickerOpen, openDatePicker } from './snooze.js';
 import { toast } from './toast.js';
 
 /** A task row in a view whose rows are action targets. */
-const ROW = '.trow[data-id], tr.task-row[data-id]';
-/** The Tree keeps its own ↑↓→← outline walk, so its rows take no action key.
- *  It is a host inside the Table pane since #161, not a pane of its own. */
-const NOT_A_TARGET = '#treeHost';
+const ROW = '.trow[data-id]';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
 const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .row-menu, .msel, .folder-picker, .toast, .bulk-bar';
 
@@ -38,7 +34,7 @@ const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .row-menu, .msel, .folder-picker, .
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
 const GETTING_AROUND = [
   ['Tab', 'move between rows'],
-  ['→ ←', 'walk the focused row\'s cells in the Table and Archive'],
+  ['→ ←', 'walk the focused row\'s cells in the Archive'],
   ['Enter', 'open the focused task'],
   ['Space', 'tick the row while Select mode is on'],
   ['Ctrl K', 'the command palette (Cmd K on a Mac)'],
@@ -63,8 +59,7 @@ export function mountKeys(helpDialog, handlers) {
   // ------------------------------------------------------------ targets
   function rowOf(el) {
     const row = el && el.closest ? el.closest(ROW) : null;
-    if (!row || row.closest(NOT_A_TARGET)) return null;
-    return row;
+    return row || null;
   }
 
   function paneIdOf(row) {
@@ -108,8 +103,8 @@ export function mountKeys(helpDialog, handlers) {
     const live = rowOf(document.activeElement);
     if (live) return live;
     if (lastRowId == null) return null;
-    const all = document.querySelectorAll('.trow[data-id="' + lastRowId + '"], tr.task-row[data-id="' + lastRowId + '"]');
-    return Array.from(all).find(function (r) { return !r.closest(NOT_A_TARGET) && r.offsetParent !== null; }) || null;
+    const all = document.querySelectorAll('.trow[data-id="' + lastRowId + '"]');
+    return Array.from(all).find(function (r) { return r.offsetParent !== null; }) || null;
   }
 
   /** `{ids, row}` — the selection when there is one, else the focused row.
@@ -216,7 +211,7 @@ export function mountKeys(helpDialog, handlers) {
 
     const lead = document.createElement('p');
     lead.className = 'keys-lead muted';
-    lead.textContent = 'With a row focused these act on that task; with tasks ticked they act on the whole selection. Not on the Tree, where the arrows walk the outline.';
+    lead.textContent = 'With a row focused these act on that task; with tasks ticked they act on the whole selection.';
     card.appendChild(lead);
 
     const acts = document.createElement('div');

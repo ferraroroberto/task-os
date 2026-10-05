@@ -1,9 +1,8 @@
 /* task-os — the keyboard walk of a data grid (#339).
  *
- * The desktop Table and the Archive table are data tables, not action lists:
- * every cell holds a value, and some values are live — the due picker, the
- * status select, a link chip, a mail's Accept / Move buttons. They are ARIA
- * grids, so those controls are the cells' widgets rather than a list row's
+ * The desktop Archive table is a data table, not an action list: every cell
+ * holds a value, and some values are live — a file chip, a mail's Accept /
+ * Move buttons. It is an ARIA grid, so those controls are the cells' widgets rather than a list row's
  * action budget (design.md action-row: "a list is not a spreadsheet"), and
  * the keyboard reaches them the grid way:
  *
