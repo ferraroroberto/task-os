@@ -2339,14 +2339,15 @@ kbd {
   color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft);
 }
 .archive-state { font-weight: 600; white-space: nowrap; }
-/* Enough room per column that a long reason or a wrapped action pair cannot
-   squeeze a neighbour to one word a line; `.table-scroll` takes the
-   overflow. */
+/* Enough room per column that a long reason cannot squeeze a neighbour to
+   one word a line; `.table-scroll` takes the overflow. The action column is
+   the row's ⋮ alone since #350 (or its "nothing left to do"), as narrow as
+   that. */
 .c-subject { min-width: 10rem; }
 .c-why { min-width: 13rem; }
-.c-act { min-width: 13.5rem; }
+.c-act { width: 1%; white-space: nowrap; }
 
-/* ---- the per-row actions (both drawings) ---- */
+/* ---- the per-row actions (the phone card's; the desktop row has its ⋮) ---- */
 .archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
 .archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-caption); }
 .archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }

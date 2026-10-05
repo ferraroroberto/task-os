@@ -41,11 +41,11 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
+import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { fmtTsShort, folderChip, modelName, pct, statusPart } from './format.js';
-import { markGrid } from './gridnav.js';
 import { toast } from './toast.js';
 
 const RUNS_LIMIT = 20;
@@ -75,10 +75,12 @@ const STATE_TONE = {
 };
 const MAX_HINT = 500;
 //: The desktop table caps a row's file chips so five real files (and their
-//: attachments) cannot force a subject/state row several lines tall (#178);
-//: the phone card keeps showing every file — its own width already wraps
-//: each chip to its own line (#173) and a card has room to grow.
-const FILES_CAP = 4;
+//: attachments) cannot force a subject/state row several lines tall (#178).
+//: One since #339's J-10: a row reads in two lines, and one chip + "+N more" +
+//: the ⋮ is exactly the action-row budget (#350). The phone card keeps
+//: showing every file — its own width already wraps each chip to its own
+//: line (#173) and a card has room to grow.
+const FILES_CAP = 1;
 
 /** `09/09 01:03` — the head's compact stamp: the locale's own day/month
  *  order, no year, and a 24-hour clock, because `9/9/26, 1:03 AM` is 30px of
@@ -180,6 +182,8 @@ export function mountArchive(opts) {
   // not start a second chain that double-polls and double-toasts.
   let polling = false;
   let busy = false;     // a run or a review action is in flight
+  // The desktop rows' ⋮ menus (#350): one controller, at most one menu open.
+  const rowMenu = createRowMenu({ className: 'archive-row-menu' });
 
   // ------------------------------------------------------------- the head
   /** `3 runs`, `1 run` — the head's short wording says the number and the noun,
@@ -675,17 +679,66 @@ export function mountArchive(opts) {
       wrap.appendChild(actionButton('rotate-ccw', 'Revert', function () { return revertItem(item); }));
     }
     const controls = wrap.childElementCount > 0;
-    if (!controls) {
-      const none = document.createElement('span');
-      none.className = 'muted';
-      // A reverted mail is back in the Inbox and free to be filed by the next
-      // run; a decided one has already had its human. Nothing to press, said
-      // out loud rather than left as an empty cell.
-      none.textContent = item.status === 'reverted' ? 'back in the Inbox'
-        : isDecided(item) ? 'nothing left to do' : '–';
-      wrap.appendChild(none);
-    }
+    if (!controls) wrap.appendChild(nothingToPress(item));
     return { el: wrap, body: body, controls: controls };
+  }
+
+  /** A reverted mail is back in the Inbox and free to be filed by the next
+   *  run; a decided one has already had its human. Nothing to press, said out
+   *  loud rather than left as an empty cell. */
+  function nothingToPress(item) {
+    const none = document.createElement('span');
+    none.className = 'muted';
+    none.textContent = item.status === 'reverted' ? 'back in the Inbox'
+      : isDecided(item) ? 'nothing left to do' : '–';
+    return none;
+  }
+
+  /** The desktop row's review levels behind one ⋮ (#350, design.md
+   *  action-row): the same Accept · Move to… / File it… · Retry · Revert the
+   *  phone card holds, as the vendored row menu's items, so the row itself
+   *  carries only its file chips and the kebab. *Move to…* opens the move
+   *  panel in its own full-width row under the mail (`hooks.onToggle`), where
+   *  focus lands on its first control. */
+  function rowMenuFor(item, hooks) {
+    const items = [];
+    let body = null;
+    const kebab = document.createElement('button');
+    kebab.type = 'button';
+    kebab.className = 'archive-kebab action-row-kebab';
+    kebab.setAttribute('aria-label', 'Review ' + (item.subject || '(no subject)'));
+    kebab.innerHTML = icon('ellipsis-vertical');
+    if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
+      items.push({ label: 'Accept', glyph: 'check', dataset: { action: 'accept' },
+        onTap: function () { runAction(kebab, function () { return acceptItem(item, null); }); } });
+    }
+    if (canMove(item)) {
+      const panel = movePanel(item, hooks);
+      body = panel.body;
+      const word = isFiled(item) ? 'Move to…' : 'File it…';
+      items.push({
+        label: function () { return body.hidden ? word : 'Close ' + word.replace('…', ''); },
+        glyph: 'folder', dataset: { action: 'move' },
+        onTap: function () {
+          panel.toggle.click();
+          if (!body.hidden) {
+            const first = body.querySelector('button, input');
+            if (first) first.focus();
+          }
+        },
+      });
+    }
+    if (canRetry(item)) {
+      items.push({ label: 'Retry', glyph: 'refresh-cw', dataset: { action: 'retry' },
+        onTap: function () { runAction(kebab, function () { return retryItem(item); }); } });
+    }
+    if (isFiled(item)) {
+      items.push({ label: 'Revert', glyph: 'rotate-ccw', danger: true, dataset: { action: 'revert' },
+        onTap: function () { runAction(kebab, function () { return revertItem(item); }); } });
+    }
+    if (!items.length) return { el: nothingToPress(item), body: null };
+    rowMenu.attach(String(item.id), kebab, items);
+    return { el: kebab, body: body };
   }
 
   // -------------------------------------------------------- the two drawings
@@ -700,7 +753,6 @@ export function mountArchive(opts) {
     scroll.className = 'table-scroll';
     const table = document.createElement('table');
     table.className = 'task-table archive-table';
-    markGrid(table, 'Archived mails');
     const thead = document.createElement('thead');
     const hrow = document.createElement('tr');
     COLUMNS.forEach(function (label) {
@@ -715,8 +767,6 @@ export function mountArchive(opts) {
       const tr = document.createElement('tr');
       tr.className = 'archive-row';
       tr.dataset.id = String(item.id);
-      tr.tabIndex = 0;       // a grid row: the arrow walk starts here (gridnav.js)
-      tr.setAttribute('aria-label', item.subject || '(no subject)');
       tr.dataset.status = item.status;
       // The panel's own full-width row, right under this one, so opening it
       // never changes a single column's width.
@@ -724,7 +774,7 @@ export function mountArchive(opts) {
       panelRow.className = 'archive-move-row';
       panelRow.dataset.id = String(item.id);
       panelRow.hidden = true;
-      const actions = actionsFor(item, {
+      const actions = rowMenuFor(item, {
         onToggle: function (open) { panelRow.hidden = !open; },
       });
       tr.append(
@@ -847,7 +897,13 @@ export function mountArchive(opts) {
     return list;
   }
 
+  /** Redraw the report; a row menu whose row did not come back closes. */
   function renderReport() {
+    drawReport();
+    rowMenu.endRender();
+  }
+
+  function drawReport() {
     els.host.replaceChildren();
     if (status && !status.configured) {
       els.host.appendChild(emptyCard('archive', status.reason || 'Batch archiving is not configured here'));

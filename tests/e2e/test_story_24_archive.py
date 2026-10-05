@@ -74,7 +74,7 @@ from tests.e2e.conftest import (
     _boot,
     _get,
     _terminate,
-    assert_grid_walk,
+    assert_action_row_budget,
     dismiss_toasts,
     e2e_workdir,
     shot,
@@ -266,6 +266,32 @@ def _row(page: Page, message_id: str, items: list[dict]):
     return page.locator(f".archive-row[data-id='{item['id']}']"), item
 
 
+def _menu(page: Page, row) -> list[str]:
+    """The actions a desktop row's ⋮ offers, in order (#350); the menu is closed again after."""
+    row.locator(".archive-kebab").click()
+    items = page.locator(".row-menu .row-menu-item")
+    expect(items.first).to_be_visible()
+    actions = items.evaluate_all("els => els.map(e => e.dataset.action)")
+    page.keyboard.press("Escape")
+    expect(page.locator(".row-menu")).to_have_count(0)
+    return actions
+
+
+def _choose(page: Page, row, action: str) -> None:
+    """Run one of a desktop row's review levels from its ⋮ (#350)."""
+    row.locator(".archive-kebab").click()
+    page.locator(f".row-menu [data-action='{action}']").click()
+
+
+def _menus(page: Page) -> dict[int, list[str]]:
+    """Every desktop row's ⋮ actions by item id; a row with nothing to press has no ⋮."""
+    out = {}
+    for row in page.locator(".archive-row").all():
+        rid = int(row.get_attribute("data-id"))
+        out[rid] = _menu(page, row) if row.locator(".archive-kebab").count() else []
+    return out
+
+
 def _items(base: str, run_id: int) -> list[dict]:
     return _get(base, f"/api/archive/runs/{run_id}")["items"]
 
@@ -400,26 +426,30 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     )
     long_row, long_item = _row(page, LONG_ID, items)
     expect(long_row.locator(".archive-state")).to_have_text("filed")
-    # Five files on this mail: the desktop table caps the chip stack at four
-    # and folds the rest behind a "+1 more" chip rather than showing every
-    # one (#178) — the phone card, checked further down, still shows all five.
-    expect(long_row.locator(".archive-files a.chip")).to_have_count(4)
-    expect(long_row.locator(".archive-files-more")).to_have_text("+1 more")
+    # Five files on this mail: the desktop table shows one chip and folds the
+    # rest behind a "+4 more" chip (#178; one since #339's J-10, so a row reads
+    # in two lines and keeps to the action-row budget with its ⋮, #350) — the
+    # phone card, checked further down, still shows all five.
+    expect(long_row.locator(".archive-files a.chip")).to_have_count(1)
+    expect(long_row.locator(".archive-files-more")).to_have_text("+4 more")
     # Desktop keeps the full name, date prefix and all (#173) — the phone-only
     # trim is a card-width concession, not a change to what the desktop shows.
     expect(long_row.locator(".archive-files a.chip").first).to_have_text(
         "2026-09-08 - 0006 - School enrolment forms for the autumn term and the after-school club.msg"
     )
 
-    # 5c. The "+1 more" chip expands the rest in place, one click, no
+    # 5c. The "+4 more" chip expands the rest in place, one click, no
     #     re-render — and once all five chips are on screen the file column
     #     wraps onto a second line, taller than every other cell in the row.
     #     That used to read as the row's other cells having drifted to the
     #     top; centred vertical alignment (#178) keeps them level with it.
-    # #305: the file chips are 44px targets (the "+1 more" one too), and on the
+    # #305: the file chips are 44px targets (the "+4 more" one too), and on the
     # wrapped second line they touch the first without overlapping it.
     assert_min_target(long_row.locator(".archive-files .chip"))
     assert_no_overlap(long_row.locator(".archive-files .chip"))
+    # #350: at rest a row carries its file chip, the "+N more" and the ⋮ —
+    # the action-row budget (design.md) — with the review levels in the menu
+    assert_action_row_budget(page.locator(".archive-table tr.archive-row"))
     long_row.locator(".archive-files-more").click()
     expect(long_row.locator(".archive-files a.chip")).to_have_count(5)
     expect(long_row.locator(".archive-files-more")).to_have_count(0)
@@ -440,8 +470,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
             f"{col} is not vertically centred on the row ({box} vs subject {subject_box})"
         )
 
-    # #339: the grid fits the window, so every row's labelled actions are on
-    # screen rather than scrolled past the right edge with only a glyph showing
+    # #339: the table fits the window, so every row's ⋮ is on screen rather
+    # than scrolled past the right edge
     scroller = page.locator("#paneArchive .table-scroll")
     fit = scroller.evaluate("el => [el.scrollWidth, el.clientWidth]")
     assert fit[0] <= fit[1] + 1, f"the Archive grid scrolls sideways at {DESKTOP['width']}px: {fit}"
@@ -453,9 +483,9 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # one row that can be *finished* rather than only undone (#174). No other
     # row offers it: a retry re-sends a decision, which anywhere else would file
     # a mail twice.
-    expect(stuck_row.locator(".archive-action", has_text="Retry")).to_have_count(1)
-    expect(stuck_row.locator(".archive-action", has_text="Revert")).to_have_count(1)
-    expect(page.locator(".archive-row-actions .archive-action", has_text="Retry")).to_have_count(1)
+    menus = _menus(page)
+    assert menus[int(stuck_row.get_attribute("data-id"))] == ["accept", "move", "retry", "revert"]
+    assert [rid for rid, acts in menus.items() if "retry" in acts] == [int(stuck_row.get_attribute("data-id"))]
 
     # 5b. The mail whose `.msg` the archiver's index already had, still sitting
     #     in the Inbox: the run finished it — the folder is the one its file
@@ -474,28 +504,31 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # An `archived` row is finished, not reviewed: the API answers 409 on
     # accept, so the screen does not offer it.
-    expect(filed_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
-    expect(reused_row.locator(".archive-action", has_text="Accept")).to_have_count(0)
+    assert "accept" not in menus[filed_item["id"]] and "accept" not in menus[reused_item["id"]]
     # The bulk button's N is the rows that really do offer *Accept*, not a
     # second count that drifts from them (#168).
-    offering = page.locator(".archive-row-actions .archive-action", has_text="Accept")
-    expect(offering).to_have_count(4)
+    assert len([rid for rid, acts in menus.items() if "accept" in acts]) == 4
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 4 that need you")
     dismiss_toasts(page)
     _pin_scroller(page)
     shot(page, shots / "story-24-archive-4-desktop.png")
-    # #339: the Archive table is an ARIA data grid too: a row's destination,
-    # file chips and its Accept / Move / Retry buttons are reached from the
-    # row by the arrow keys, every one of them, rather than counted as a
-    # list row's actions
-    assert assert_grid_walk(offering.first.locator("xpath=ancestor::tr[1]")) >= 2
+    # #350: the table is no ARIA grid any more — its rows are list rows
+    expect(page.locator(".archive-table")).not_to_have_attribute("role", "grid")
+    assert_min_target(page.locator(".archive-kebab"))
+    # the menu names the levels the row allows, Revert last behind its divider
+    stuck_row.locator(".archive-kebab").click()
+    expect(stuck_row.locator(".archive-kebab")).to_have_attribute("aria-expanded", "true")
+    expect(page.locator(".row-menu .row-menu-item")).to_have_text(["Accept", "Move to…", "Retry", "Revert"])
+    expect(page.locator(".row-menu .row-menu-divider")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(stuck_row.locator(".archive-kebab")).to_be_focused()
 
     # 6. The mail the ranking would not decide: open its menu, the candidates it
     #    ranked are there, type why, and file it into one of them.
     unsure_row, unsure_item = _row(page, UNSURE_ID, items)
     expect(unsure_row.locator(".archive-state")).to_have_text("needs you")
     expect(unsure_row.locator(".archive-dest")).to_have_text("archive › admin › bills")
-    unsure_row.locator(".archive-move-toggle").click()
+    _choose(page, unsure_row, "move")
     # the panel is a full-width row of its own, under the mail's
     panel = page.locator(f".archive-move-row[data-id='{unsure_item['id']}']")
     expect(panel).to_be_visible()
@@ -519,13 +552,13 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert [c["verb"] for c in calls(inst.repo)] == ["plan", "apply", "apply"]
 
     # 7. Accept the row the archiver broke on — "I have seen this", no file moved
-    stuck_row.locator(".archive-action", has_text="Accept").click()
+    _choose(page, stuck_row, "accept")
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 2 that need you")
     assert next(i for i in _items(base, run_id) if i["message_id"] == STUCK_ID)["decided_at"]
     # Seeing it is not finishing it: the mail is still in the Inbox, so the
     # offer to finish it stands and the error text stays on screen until a
     # retry actually succeeds (#174).
-    expect(stuck_row.locator(".archive-action", has_text="Retry")).to_have_count(1)
+    assert _menu(page, stuck_row) == ["move", "retry", "revert"]
     expect(stuck_row.locator(".archive-reason")).to_contain_text("move_failed")
 
     # 7b. A `needs_review` row that has had its human stops asking for one
@@ -534,12 +567,12 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #     them — the run with three *needs you* rows used to say *Accept all 2*.
     reviewed_row, reviewed_item = _row(page, REVIEWED_ID, items)
     expect(reviewed_row.locator(".archive-state")).to_have_text("needs you")
-    reviewed_row.locator(".archive-action", has_text="Accept").click()
+    _choose(page, reviewed_row, "accept")
     reviewed_row = page.locator(f".archive-row[data-id='{reviewed_item['id']}']")
     expect(reviewed_row.locator(".archive-state")).to_have_text("reviewed")
     expect(reviewed_row.locator(".c-act")).to_have_text("nothing left to do")
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 1 that need you")
-    expect(page.locator(".archive-row-actions .archive-action", has_text="Accept")).to_have_count(1)
+    assert len([rid for rid, acts in _menus(page).items() if "accept" in acts]) == 1
 
     # 7c. Cancelling the bulk confirmation hands the button back (#187): it is a
     #     static element, and only the report's redraw re-enables it — it used
@@ -556,7 +589,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # 8. Undo the one the run filed: the files go, the mail is back in the Inbox
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    filed_row.locator(".archive-action", has_text="Revert").click()
+    _choose(page, filed_row, "revert")
     _confirm(page, "Undo it")
     expect(page.locator(f".archive-row[data-id='{filed_item['id']}'] .archive-state")).to_have_text(
         "reverted"

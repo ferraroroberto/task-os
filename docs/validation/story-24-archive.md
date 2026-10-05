@@ -122,3 +122,5 @@ phone leg opens the failed card's review menu, checks the four buttons share one
 tag, height, font size and padding, shoots it (shot 10) and taps it — so the
 gesture is proven on the rendering it was reported from. The suite did not grow:
 16 tests across 13 files, one story test per step.
+
+**2026-10-05 (#350, #339 J-10):** on the desktop the review levels moved behind each row's **⋮** (the vendored row menu: *Accept* · *Move to… / File it…* · *Retry* · *Revert*, Revert last behind its divider), and the table is no longer an ARIA grid (#341's cell walk, `gridnav.js`, is gone with it). A row shows one file chip and folds the rest behind *+N more* (the cap was four, #178), so at rest it carries its chip, *+N more* and the ⋮: the action-row budget, asserted in the e2e as the design review counts it. The phone cards are unchanged. Re-walked by the e2e suite; shots re-baselined.

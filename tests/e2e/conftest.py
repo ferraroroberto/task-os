@@ -49,7 +49,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import signal
 import socket
@@ -738,52 +737,32 @@ _CONTROL_BOUNDARIES_JS = """(root) => {""" + _COLOR_JS + """
 }"""
 
 
-#: A grid row's cell widgets, as gridnav.js walks them (the due picker's hidden
-#: native input is its proxy, not a stop).
-_GRID_CONTROLS = ('a[href], button:not([disabled]), select:not([disabled]), '
-                  'input:not([type="hidden"]):not(.due-date), textarea')
+#: What counts as a row's control, as the design review's LAYOUT-03 counts it.
+_ROW_CONTROLS = 'a[href], button, select, input:not([type="hidden"]), textarea, [role=button]'
+
+#: The action-row budget besides the row itself: a leading toggle, one extra
+#: action and a trailing accessory (design.md action-row).
+ROW_CONTROLS_MAX = 3
+
+_ROW_EXTRAS_JS = """(rows, sel) => rows.map(row => {
+  const vis = c => { const r = c.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const ctl = [...row.querySelectorAll(sel)].filter(vis);
+  const rw = row.getBoundingClientRect().width;
+  const main = ctl.reduce((a, c) => (!a || c.getBoundingClientRect().width > a.getBoundingClientRect().width) ? c : a, null);
+  return (main && main.getBoundingClientRect().width >= rw * 0.5) ? ctl.length - 1 : ctl.length;
+})"""
 
 
-# Every box on the page that is scrolled (the window's included) remembers
-# where, on itself; restoring puts each back and every other box at 0, 0.
-_SAVE_SCROLLS_JS = """() => [document.scrollingElement, ...document.querySelectorAll('body *')]
-  .forEach(el => { if (el.scrollLeft || el.scrollTop) el.dataset.e2eScroll = el.scrollLeft + ',' + el.scrollTop; })"""
-_RESTORE_SCROLLS_JS = """() => { document.activeElement.blur();
-  [document.scrollingElement, ...document.querySelectorAll('body *')].forEach(el => {
-    const [x, y] = (el.dataset.e2eScroll || '0,0').split(',').map(Number); delete el.dataset.e2eScroll;
-    if (el.scrollLeft !== x || el.scrollTop !== y) el.scrollTo(x, y); }); }"""
+def assert_action_row_budget(rows: Locator) -> list[int]:
+    """Every row in *rows* carries at most the action-row budget of controls (#350).
 
-
-def assert_grid_walk(row: Locator) -> int:
-    """*row* sits in an ARIA data grid and the keyboard reaches each of its controls (#339).
-
-    A data table's live cells are cell widgets, not a list row's action budget
-    (design.md action-row): from the focused row, → visits every visible
-    control in order and ← walks back to the row. Leaves nothing focused and every scroller
-    where it was, so a shot after the walk is the shot before it. Returns how
-    many controls the row holds.
+    Counted the way the design review's LAYOUT-03 counts them: every visible
+    interactive element in the row, minus a main one that spans half of it.
+    Returns the per-row counts.
     """
-    page = row.page
-    page.evaluate(_SAVE_SCROLLS_JS)
-    assert row.evaluate("r => r.closest('table').getAttribute('role')") == "grid", "the table is not an ARIA grid"
-    expect(row.locator("xpath=ancestor::table[1]")).to_have_attribute("aria-label", re.compile(r"\S"))
-    controls = row.evaluate(
-        "(r, sel) => [...r.querySelectorAll(sel)].filter(c => c.getClientRects().length).length", _GRID_CONTROLS
-    )
-    assert controls, "the row holds no control to walk"
-    is_row = "r => document.activeElement === r"
-    nth = "(r, [sel, i]) => document.activeElement === [...r.querySelectorAll(sel)].filter(c => c.getClientRects().length)[i]"
-    row.focus()
-    for i in range(controls):
-        page.keyboard.press("ArrowRight")
-        assert row.evaluate(nth, [_GRID_CONTROLS, i]), f"→ #{i + 1} did not reach the row's control {i + 1}/{controls}"
-    for i in range(controls - 2, -1, -1):
-        page.keyboard.press("ArrowLeft")
-        assert row.evaluate(nth, [_GRID_CONTROLS, i]), f"← did not step back to control {i + 1}"
-    page.keyboard.press("ArrowLeft")
-    assert row.evaluate(is_row), "← from the first control did not return to the row"
-    page.evaluate(_RESTORE_SCROLLS_JS)
-    return controls
+    counts = rows.evaluate_all(_ROW_EXTRAS_JS, _ROW_CONTROLS)
+    assert counts and max(counts) <= ROW_CONTROLS_MAX, f"rows over the action-row budget: {counts}"
+    return counts
 
 
 _TEXT_CONTRAST_JS = """(el) => {""" + _COLOR_JS + """
