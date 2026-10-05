@@ -322,7 +322,7 @@ html, body {
 }
 
 /* A flat disclosure: the vendored details/summary without the card box —
-   a hairline above, no radius, no border (Today's "Later this week"). */
+   a hairline above, no radius, no border (Today's Soon / Later / No date). */
 .card.disclosure-flat {
   border: 0;
   border-top: 1px solid var(--line);
@@ -1772,7 +1772,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------------------- today */
 /* Flat: a heading line, project groups on hairlines, the shared rows,
-   "Later this week" as a flat disclosure below with breathing room. */
+   Soon / Later / No date as flat disclosures below with breathing room (#350). */
 .today { display: flex; flex-direction: column; }
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
 .today-title { display: inline-flex; align-items: center; gap: 0.4em; margin: 0; font-size: var(--font-body); font-weight: 700; }
@@ -1811,7 +1811,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-group-link::before { content: ""; position: absolute; inset: -10px 0; }
 .today-group-count { color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
 .today-list > .trow:first-child { border-top: 0; }
-.today-later .today-group:first-child { border-top: 0; }
+.today-horizon .today-group:first-child { border-top: 0; }
 .today .empty-state { padding: var(--space-lg) var(--space-md); }
 
 /* ------------------------------------------------- plan my day (#89) */

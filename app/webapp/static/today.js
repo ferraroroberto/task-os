@@ -1,10 +1,12 @@
-/* task-os — the Today tab: what is due, from the shared list.
+/* task-os — the Today tab: every open task, by when it is due.
  *
- * Tasks due ≤ today (overdue first, then today), grouped by root project
- * with the shared due-first sort inside each group (#116 — a task's date
- * always decides its position, recurring or not); "Later this week"
- * (tomorrow … +7 days) sits open by default below as a flat disclosure,
- * collapsible via its own chevron (#253). Rows are
+ * Four horizons, nearest first (#350 — with the Table gone, Today is where
+ * any open task is found, by scrolling or by the filter card's text): Today
+ * (due ≤ today, overdue first), Soon (tomorrow … +7 days), Later (further
+ * out) and No date. Each is grouped by root project with the shared due-first
+ * sort inside each group (#116 — a task's date always decides its position,
+ * recurring or not); the three after Today sit open below as flat
+ * disclosures, each collapsible via its own chevron (#253). Rows are
  * the ONE task row (rows.js, issue #46) — the completion circle, the title
  * over its meta line (project hidden — the group already names it) and the
  * ⋯ menu, where Snooze… and Change date… live since #311. Flat hairline
@@ -42,8 +44,9 @@ import { fmtDay, relDue, todayISO } from './format.js';
 import { compareItems, rowList, taskRow } from './rows.js';
 import { snoozeButton } from './snooze.js';
 
-/** Split the list into {due, week, counts} — exported for tests. A task
- *  planned today is excluded (it renders in My plan instead, #89). */
+/** Split the list into the four horizons {due, week, later, nodate, counts}
+ *  — exported for tests. Every task lands in exactly one, except a task
+ *  planned today, which renders in My plan instead (#89). */
 export function bucketToday(items, today, sort) {
   const t = today || todayISO();
   const end = new Date(t + 'T00:00:00');
@@ -51,19 +54,27 @@ export function bucketToday(items, today, sort) {
   const weekEnd = todayISO(end);
   const due = [];
   const week = [];
+  const later = [];
+  const nodate = [];
   (items || []).forEach(function (it) {
-    if (!it.due || it.planned_on === t) return;
-    if (it.due <= t) due.push(it);
+    if (it.planned_on === t) return;
+    if (!it.due) nodate.push(it);
+    else if (it.due <= t) due.push(it);
     else if (it.due <= weekEnd) week.push(it);
+    else later.push(it);
   });
   return {
     today: t,
     due: groupByRoot(due, sort),
     week: groupByRoot(week, sort),
+    later: groupByRoot(later, sort),
+    nodate: groupByRoot(nodate, sort),
     counts: {
       overdue: due.filter(function (it) { return it.due < t; }).length,
       today: due.filter(function (it) { return it.due === t; }).length,
       week: week.length,
+      later: later.length,
+      nodate: nodate.length,
     },
   };
 }
@@ -177,22 +188,29 @@ export function renderToday(host, items, handlers, opts) {
   }
   main.appendChild(section);
 
-  // Later this week — a flat disclosure (vendored markup, hairline instead of a card box).
-  // Open by default (#253) — renderToday rebuilds the host from scratch every
-  // call, so there is no user-toggle state to preserve across a re-render.
-  const later = collapsibleCard({
-    className: 'disclosure-flat today-later', icon: 'calendar-days', title: 'Later this week',
-    count: counts.week + (counts.week === 1 ? ' task' : ' tasks'),
-  });
-  later.card.open = true;
-  if (!data.week.length) {
-    later.body.appendChild(emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
+  // Soon always shows, with its way forward when it is empty; Later and No
+  // date only when they hold something — an empty far horizon says nothing.
+  main.appendChild(horizon('today-soon', 'calendar-days', 'Soon', data.week, counts.week, handlers, o,
+    emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
       actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
-    } : undefined));
-  } else {
-    data.week.forEach(function (g) { later.body.appendChild(buildGroup(g, handlers, o)); });
-  }
-  main.appendChild(later.card);
+    } : undefined)));
+  if (counts.later) main.appendChild(horizon('today-far', 'clock', 'Later', data.later, counts.later, handlers, o));
+  if (counts.nodate) main.appendChild(horizon('today-nodate', 'circle-dot', 'No date', data.nodate, counts.nodate, handlers, o));
+}
+
+/** One horizon after Today — a flat disclosure (vendored markup, hairline
+ *  instead of a card box). Open by default (#253): renderToday rebuilds the
+ *  host from scratch every call, so there is no user-toggle state to keep,
+ *  and every open task stays reachable by scrolling (#350). */
+function horizon(cls, glyph, title, groups, n, handlers, o, empty) {
+  const card = collapsibleCard({
+    className: 'disclosure-flat today-horizon ' + cls, icon: glyph, title: title,
+    count: n + (n === 1 ? ' task' : ' tasks'),
+  });
+  card.card.open = true;
+  if (!groups.length && empty) card.body.appendChild(empty);
+  groups.forEach(function (g) { card.body.appendChild(buildGroup(g, handlers, o)); });
+  return card.card;
 }
 
 // ------------------------------------------------------------ My plan (#89)
