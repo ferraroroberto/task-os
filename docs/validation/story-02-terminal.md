@@ -93,5 +93,3 @@ Walked headed against a disposable seeded instance, all three surfaces in one si
 - **CLI:** `tasks add "Descale the kettle"` → `added #53  Descale the kettle` (no status named, because it is the default) · `tasks add "Read this later" --status inbox` → `added #54  Read this later  (inbox)`.
 
 `tasks add` had **no `--status` flag at all** before this. The create default was the CLI's only status, so flipping it would have left the terminal with no way to file something for later triage; the flag was added with the change rather than after it.
-
-**One consequence, stated rather than discovered later:** [plan my day](../../README.md#plan-my-day) offers *overdue + due today + **Inbox***, so a hand-made task with no due date is no longer offered there. That is the same rule as before meeting a different default, not a regression in the rule — but it is a real narrowing of the candidate pool, and widening it to To Do would be its own change to story 15, not a side effect of this one.

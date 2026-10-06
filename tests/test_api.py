@@ -36,7 +36,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 17
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 18
 
 
 def test_story_02_over_http(client: TestClient) -> None:
@@ -222,33 +222,12 @@ def test_updated_before_lists_the_dormant_task(seeded: TestClient) -> None:
     assert seeded.get("/api/tasks?updated_before=someday").status_code == 422
 
 
-def test_plan_my_day_over_http(client: TestClient) -> None:
-    """#89 over HTTP: `planned_on` takes the same phrases `due` does, the
-    /api/today plan group is server-ordered, candidates exclude the planned,
-    and reorder takes the full permutation or 422s."""
-    t = date.today().isoformat()
-    a = client.post("/api/tasks", json={"title": "One", "status": "todo", "due": "today"}).json()
-    b = client.post("/api/tasks", json={"title": "Two", "status": "inbox"}).json()
-    r = client.patch(f"/api/tasks/{a['id']}", json={"planned_on": "today"})
-    assert r.status_code == 200
-    assert (r.json()["planned_on"], r.json()["plan_order"]) == (t, 1)
-    client.patch(f"/api/tasks/{b['id']}", json={"planned_on": "today"})
-    view = client.get("/api/today").json()
-    assert [x["title"] for x in view["plan"]["items"]] == ["One", "Two"]
-    assert (view["plan"]["done"], view["plan"]["total"]) == (0, 2)
-    assert client.get("/api/plan/candidates").json()["count"] == 0
-
-    r = client.post("/api/plan/reorder", json={"ids": [b["id"], a["id"]]})
-    assert r.status_code == 200 and r.json() == {"planned": 2}
-    view = client.get("/api/today").json()
-    assert [x["title"] for x in view["plan"]["items"]] == ["Two", "One"]
-    assert client.post("/api/plan/reorder", json={"ids": [a["id"]]}).status_code == 422
-    assert client.patch(f"/api/tasks/{a['id']}", json={"planned_on": "someday"}).status_code == 422
-
-    # unplanning with null puts the due-today task back among the candidates
-    assert client.patch(f"/api/tasks/{a['id']}", json={"planned_on": None}).json()["planned_on"] is None
-    cands = client.get("/api/plan/candidates").json()
-    assert [x["title"] for x in cands["items"]] == ["One"]
+def test_the_plan_routes_are_gone(client: TestClient) -> None:
+    """#369: My plan was removed — no plan endpoints, no ``plan`` group in the
+    Today payload."""
+    assert client.get("/api/plan/candidates").status_code == 404
+    assert client.post("/api/plan/reorder", json={"ids": [1]}).status_code == 404
+    assert "plan" not in client.get("/api/today").json()
 
 
 def test_starts_accepts_phrases_and_the_deferred_filter(client: TestClient) -> None:

@@ -9,7 +9,7 @@
  *                                   the keys, the palette and the swipes read,
  *                                   committed through the same runner, so a
  *                                   menu tap gets the same toast and Undo
- *   the row's own links             plan for today, open folder, open the AI
+ *   the row's own links             open folder, open the AI
  *                                   conversation (resume it in a CLI on a PC),
  *                                   open the issue, open details
  *
@@ -29,7 +29,7 @@
 
 import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { actionById } from './actions.js';
-import { aiResumeHref, followLink, issueUrl, openTaskFolder, providerIcon, todayISO } from './format.js';
+import { aiResumeHref, followLink, issueUrl, openTaskFolder, providerIcon } from './format.js';
 import { menuOrder, rowPrefs } from './rowprefs.js';
 import { openDatePicker } from './snooze.js';
 import { bindSwipe } from './swipe.js';
@@ -39,8 +39,7 @@ const CLOSED = { done: 1, cancelled: 1 };
 
 /**
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
- *          onOpen: (id:number) => void,
- *          onPlan?: (id:number) => any, onUnplan?: (id:number) => any}} ctx
+ *          onOpen: (id:number) => void}} ctx
  * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
  *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
@@ -81,7 +80,6 @@ export function createTaskMenu(ctx) {
   }
 
   function items(t, kebab) {
-    const open = !CLOSED[t.status];
     const order = menuOrder(rowPrefs());
     const list = order.map(actionById).filter(Boolean).map(function (a) {
       return {
@@ -90,15 +88,6 @@ export function createTaskMenu(ctx) {
         onTap: function () { run(a, t, kebab); },
       };
     });
-    const planned = t.planned_on === todayISO();
-    if (ctx.onPlan && open && !planned) {
-      list.push({ label: 'Plan for today', glyph: 'list-checks', dataset: { action: 'plan' },
-        onTap: function () { ctx.onPlan(t.id); } });
-    }
-    if (ctx.onUnplan && planned) {
-      list.push({ label: 'Remove from plan', glyph: 'x', dataset: { action: 'unplan' },
-        onTap: function () { ctx.onUnplan(t.id); } });
-    }
     if (t.folder_ref) {
       list.push({ label: 'Open folder', glyph: 'folder', dataset: { action: 'folder' },
         onTap: function () { openTaskFolder(t, kebab); } });

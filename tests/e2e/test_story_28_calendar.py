@@ -1,4 +1,4 @@
-"""Story 28 — plan the day against the real calendar (issue #96).
+"""Story 28 — read the day against the real calendar (issue #96).
 
     Today, on the desktop, shows today's events from a private ICS address in
     a slim lane beside the task list: all-day events as a strip, timed ones
@@ -25,8 +25,7 @@ are asserted in text; the shots are the ones a reader needs to see:
     docs/screenshots/story-28-calendar-2-desktop.png  address refused, before any copy
     docs/screenshots/story-28-calendar-3-desktop.png  Settings → Calendar after Refresh now
     docs/screenshots/story-28-calendar-4-desktop.png  today's events beside the tasks
-    docs/screenshots/story-28-calendar-5-desktop.png  plan mode with the lane alongside
-    docs/screenshots/story-28-calendar-6-desktop.png  a failure after a good fetch (dark)
+    docs/screenshots/story-28-calendar-5-desktop.png  a failure after a good fetch (dark)
 
 The walk against the owner's own calendar is recorded **not verified** in
 docs/validation/story-28-calendar.md until the owner does it.
@@ -221,18 +220,6 @@ def test_today_calendar_lane(
         expect(lane.locator(".cal-counts")).to_have_text("6 events")
         shot(page, shots / "story-28-calendar-4-desktop.png")
 
-        # 7. Plan mode picks against that day: the lane stays with the candidates —
-        #    above them since Today became a split view (#336), where half a
-        #    window leaves no room to put it beside the rows.
-        page.locator("#paneToday .plan-more").click()
-        expect(page.locator("#paneToday .plan-picker")).to_be_visible()
-        expect(lane.locator(".cal-event")).to_have_count(4)
-        pick_box, lane_box = page.locator("#paneToday .plan-picker").bounding_box(), lane.bounding_box()
-        assert pick_box and lane_box and lane_box["y"] + lane_box["height"] <= pick_box["y"] + 1
-        shot(page, shots / "story-28-calendar-5-desktop.png")
-        page.locator("#paneToday .plan-done-btn").click()
-        expect(page.locator("#paneToday .plan-picker")).to_have_count(0)
-
         # The address is a secret: nothing the page or the API holds names it.
         assert SECRET not in page.content()
         assert SECRET not in json.dumps(_get(base, "/api/status")) + json.dumps(_get(base, "/api/today"))
@@ -240,7 +227,7 @@ def test_today_calendar_lane(
     finally:
         context.close()
 
-    # 8. A failure after a good fetch: the copy stays on screen, marked, with the
+    # 7. A failure after a good fetch: the copy stays on screen, marked, with the
     #    failure and the time it was fetched beside it (dark).
     fake.mode = "404"
     group, _ = _refresh(base)
@@ -254,7 +241,7 @@ def test_today_calendar_lane(
         expect(lane.locator(".cal-notice-detail").last).to_have_text("Showing the copy from 09:00.")
         expect(lane.locator(".cal-event")).to_have_count(4)
         expect(lane.locator(".cal-counts")).to_have_text("stale")
-        shot(page, shots / "story-28-calendar-6-desktop.png")
+        shot(page, shots / "story-28-calendar-5-desktop.png")
     finally:
         dark.close()
 

@@ -76,7 +76,7 @@ answers land. No screenshots: the proof is the rows.
 UX round 3 (issue #46, the row slimmed by #311): every view renders the ONE
 task row (``.trow`` — completion circle, title with its one-line passive meta,
 ⋯ kebab) and shares ONE filter card; "ticking" is the row's circle, on every
-pointer, and every other action (status, date, snooze, priority, plan, folder,
+pointer, and every other action (status, date, snooze, priority, folder,
 AI, issue) is a ⋯ menu item. Today's done tasks ride in the shared list only
 for the Board's Done today column: Today keeps showing open tasks (as the
 filter card says), so a task finished today leaves the Today
@@ -307,8 +307,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.click("nav.tabs .tab[data-tab='today']")
         expect(page.locator("#paneToday")).to_be_visible()
         today = _get(base, "/api/today")
-        # scoped: My plan (#89) has a .today-counts of its own above this one
-        due_counts = page.locator("section.today:not(.today-plan) > .today-head .today-counts")
+        due_counts = page.locator("section.today > .today-head .today-counts")
         expect(due_counts).to_have_text(
             f"{today['counts']['overdue']} overdue · {today['counts']['today']} due today"
         )
@@ -1134,14 +1133,13 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         expect(loose_row).to_be_in_viewport()
         expect(loose_row.locator(".trow-due")).to_have_count(0)
         # the horizons come in order, nearest first, and every open task the
-        # filter shows is in exactly one of them (or the plan)
+        # filter shows is in exactly one of them
         order = pane.locator(".today-horizon .collapse-title").all_inner_texts()
         assert order == ["Soon", "Later", "No date"], order
         _clear_toasts(page)
         nodate.scroll_into_view_if_needed()
         shot(page, shots / "story-31-today-horizons-1-desktop.png")
-        # 2. The text filter reaches both from the top strip (My plan stays
-        #    whole whatever the filters, #89, so it is left out of the count)
+        # 2. The text filter reaches both from the top strip
         q = page.locator("#todayFilterText .filter-q")
         listed = pane.locator(".today-group .trow[data-id]")
         q.fill("residence card")

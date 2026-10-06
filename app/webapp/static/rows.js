@@ -16,13 +16,12 @@
  *             person. Passive text: nothing on it is its own tap target, so
  *             the whole line opens the task
  *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
- *             change date, snooze, priority, plan, folder, AI, issue). Right-
+ *             change date, snooze, priority, folder, AI, issue). Right-
  *             click and the keyboard's menu key open the same menu
  *
  * Select mode swaps the circle for the checkbox and drops the kebab: there the
- * row's one job is to tick and the bulk bar owns the actions. A view may pass a
- * `prefix` (a plan row's grip) and/or an `extra`
- * line (a Search snippet, an AI suggestion, a plan candidate's targets) that
+ * row's one job is to tick and the bulk bar owns the actions. A view may pass an
+ * `extra` line (a Search snippet, an AI suggestion) that
  * wraps under the row — the row itself never changes shape. Flat hairlines
  * between rows, no per-row box, the priority accent on the left edge of a
  * high-priority row.
@@ -208,10 +207,9 @@ function rowKebab(t, menu, li) {
  *                  toggleDone: (t:object, el:HTMLElement)=>void}}} handlers
  *          menu (optional) is the view's row menu (rowmenu.js, #311) — the kebab
  *          and the circle both commit through it
- * @param {{prefix?: HTMLElement, depth?: number, extra?: HTMLElement, hideProject?: boolean,
+ * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
  *          selected?: boolean, swipe?: boolean}} [opts]
- *          prefix     = an element before the circle (a plan grip);
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on (#81): the checkbox replaces the
@@ -222,7 +220,7 @@ export function taskRow(t, handlers, opts) {
   const o = opts || {};
   const li = document.createElement(o.tag || 'li');
   li.className = 'trow action-row' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
-    + (o.prefix ? ' has-prefix' : '') + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
+    + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
   li.dataset.id = String(t.id);
   li.dataset.status = t.status;
   if (o.depth != null) li.style.setProperty('--depth', String(o.depth));
@@ -243,11 +241,6 @@ export function taskRow(t, handlers, opts) {
     box.setAttribute('aria-label', 'Select ' + t.title);
     box.addEventListener('change', function () { handlers.onToggleSelect(t.id); });
     li.appendChild(box);
-  }
-
-  if (o.prefix) {
-    o.prefix.classList.add('trow-prefix');
-    li.appendChild(o.prefix);
   }
 
   if (!o.selectable) li.appendChild(doneToggle(t, handlers));

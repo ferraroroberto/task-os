@@ -16,8 +16,6 @@ cancelled, one ``coding`` task with an issue_ref, one ``note``, and one
 **deferred** task (a ``starts`` date 20 days out — #87) so the sleeping state
 is on screen without anyone having to create it, one **dormant** task
 last touched 45 days back (#101) so the stale filter has something to show,
-a **plan** (#89): two tasks committed to the anchor day plus one planned
-the day before and left unfinished (the "planned yesterday" candidate),
 five tasks **closed on known days** (#102) — yesterday, two days back (one
 of them cancelled) and nine days back — so the done journal has days to
 group, a cancelled row to mute and an older week to load, and one
@@ -243,17 +241,6 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         # driver" — make that literal: it cannot ship before the driver task
         # is written, so the working views hide it (lock glyph everywhere else).
         repo.add_blocker(conn, ids["release"], ids["driver"], actor="seed")
-
-        # ---- today's plan (#89) --------------------------------------------
-        # Two inbox tasks committed to the anchor day (My plan renders
-        # ordered, "0 of 2 done"; picking inbox items leaves every due/week
-        # bucket exactly as the pre-#89 assertions expect) and one task
-        # planned the day BEFORE and left unfinished — the candidate that
-        # wears the "planned yesterday" note. Updates, not new tasks, so
-        # every seeded id keeps its position.
-        repo.plan_task(conn, ids["inbox1"], d(0), actor="seed")
-        repo.plan_task(conn, ids["inbox2"], d(0), actor="seed")
-        repo.plan_task(conn, ids["tap"], d(-1), actor="seed")
 
     return {"ids": ids, "counts": repo.counts(conn)}
 

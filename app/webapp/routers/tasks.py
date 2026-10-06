@@ -47,7 +47,7 @@ takes ``blocked`` (#100), the same shape: narrows to tasks with an open
 blocker instead of following the default hide rule; ``list_tasks(blocked=…)``
 owns the rule.
 
-``due``, ``starts`` and ``planned_on`` on create / update accept the same
+``due`` and ``starts`` on create / update accept the same
 natural phrases the CLI does (``tomorrow``, ``next friday``, ``this
 weekend``, ``in 2 weeks``, ISO) — resolved here through
 ``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
@@ -91,7 +91,6 @@ class TaskCreate(BaseModel):
     priority: str | None = None
     due: str | None = None
     starts: str | None = None
-    planned_on: str | None = None
     recurrence: str | None = None
     recurrence_anchor: str | None = None
     recurrence_interval: int | None = None
@@ -113,7 +112,6 @@ class TaskUpdate(BaseModel):
     priority: str | None = None
     due: str | None = None
     starts: str | None = None
-    planned_on: str | None = None
     recurrence: str | None = None
     recurrence_anchor: str | None = None
     recurrence_interval: int | None = None
