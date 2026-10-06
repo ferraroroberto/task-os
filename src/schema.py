@@ -82,6 +82,9 @@ Version history:
        ``tasks_repo.capture_task`` answers ``dismissed`` rather than landing it
        again. Backfilled from every keyed task that was not *imported* (an
        import reconciles on purpose and has no tombstone).
+    18 drops tasks.planned_on, tasks.plan_order and v8's index         (issue #369)
+       — the "My plan" feature was removed. Every other column and row is
+       untouched; v8 stays as shipped so an old database still reaches here.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -519,10 +522,22 @@ INSERT INTO capture_keys(external_id, captured_at)
                         WHERE a.task_id = tasks.id AND a.field = 'imported');
 """
 
+# "My plan" is gone (#369): v8's two columns and its index are dropped. v8
+# itself stays frozen above — a database that already passed it still runs it
+# on a fresh install, and this step then undoes it. The index goes first
+# because SQLite refuses to drop an indexed column. DROP COLUMN rewrites no
+# row and touches no other column; the activity rows that mention
+# ``planned_on`` stay as history.
+_V18 = """
+DROP INDEX idx_tasks_planned_on;
+ALTER TABLE tasks DROP COLUMN planned_on;
+ALTER TABLE tasks DROP COLUMN plan_order;
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17,
+    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17, 18: _V18,
 }
 
 #: The version a freshly migrated database carries.

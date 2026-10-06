@@ -22,7 +22,7 @@ flowchart LR
     tasksr["routers/tasks<br/>/api/tasks… (POST: external_id → idempotent capture, #98) (+done_from/done_to — the journal's window, #102) · POST /api/tasks/bulk (#81; +starts/priority #99) · POST /api/tasks/bulk/delete (#121)<br/>/api/activity · /api/parse (quick-add)"]
     peopler["routers/people<br/>/api/people…"]
     searchr["routers/search<br/>/api/search?q=&kinds= (federated)<br/>/api/search/status"]
-    viewsr["routers/views<br/>/api/board · /api/today (+ plan group, #89; + calendar group, #96)<br/>/api/plan/candidates · POST /api/plan/reorder<br/>POST /api/calendar/refresh (#96)"]
+    viewsr["routers/views<br/>/api/board · /api/today (+ calendar group, #96)<br/>POST /api/calendar/refresh (#96)"]
     mirrorr["routers/mirror<br/>/api/status (+ folders · capture · AI · calendar · opener · placeholders)<br/>/api/mirror/export|import · GET/DELETE /api/mirror/events · /api/backup"]
     air["routers/ai (#95)<br/>GET /api/ai/suggestions<br/>POST /api/ai/triage<br/>POST /api/ai/suggestions/{id}/accept|reject"]
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
@@ -62,7 +62,7 @@ flowchart LR
   end
 
   subgraph storage["SQLite (WAL) · data/tasks.db"]
-    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)<br/>planned_on · plan_order (v8)<br/>recurrence_anchor (v9) · recurrence_interval (v16)<br/>done_at = closed-at, cancelled too (v10)"]
+    t["tasks ⟲ parent_id<br/>external_id (v3) · starts (v7)<br/>recurrence_anchor (v9) · recurrence_interval (v16)<br/>done_at = closed-at, cancelled too (v10)"]
     l["links"]
     c["comments<br/>external_id (v3)"]
     a["activity"]

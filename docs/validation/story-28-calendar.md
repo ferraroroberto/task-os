@@ -1,4 +1,4 @@
-# Story 28 — Plan the day against the real calendar
+# Story 28 — Read the day against the real calendar
 
 **Issue:** #96. Numbered 28 as the index's next free slot (see `docs/validation.md`).
 
@@ -14,9 +14,8 @@ The e2e budget: adding this file would have taken the suite to 17 collected test
 4. A server that hangs: *Refresh now* answers within the 2 s bound with *Calendar did not answer in time*; Today itself answers at once meanwhile.
 5. A dropped connection: *Calendar unreachable since 09:00*.
 6. The real feed: *Refresh now* → Settings reads *reading · 6 event(s) today · 1 recurring not checked*, source `127.0.0.1` (the host, never the address). Today shows *School holiday* and *Team offsite* on the all-day strip; *09:30–09:45 Standup*, *14:00–14:30 1:1 with Sam Rivera (moved)* (the moved occurrence once, where it moved to), *16:30–17:15 Dentist, check-up*, *23:00–06:00 Night train · ends tomorrow*; no *Gym* (excluded that day) and no cancelled lunch; *1 recurring event could not be checked* for the monthly rule it does not expand.
-7. *Plan more* opens plan mode: the candidates list and the lane stay side by side.
-8. The address starts failing again after a good fetch: the lane keeps the events, with *Calendar address refused since 09:00* and *Showing the copy from 09:00.* above them; the head reads *stale*.
-9. At phone width the lane is not drawn (out of scope this pass).
+7. The address starts failing again after a good fetch: the lane keeps the events, with *Calendar address refused since 09:00* and *Showing the copy from 09:00.* above them; the head reads *stale*.
+8. At phone width the lane is not drawn (out of scope this pass).
 
 **Screenshots** (synthetic seed and synthetic feed only)
 
@@ -25,9 +24,8 @@ The e2e budget: adding this file would have taken the suite to 17 collected test
 | 1 | [story-28-calendar-1-desktop](../screenshots/story-28-calendar-1-desktop.png) | Today with the lane off — *No calendar connected* and the config key that connects one |
 | 2 | [story-28-calendar-2-desktop](../screenshots/story-28-calendar-2-desktop.png) | the address refused before any copy exists: the red callout with *HTTP 404* and *since 09:00*, no list |
 | 3 | [story-28-calendar-3-desktop](../screenshots/story-28-calendar-3-desktop.png) | Settings → *Calendar* after *Refresh now*: *reading · 6 event(s) today · 1 recurring not checked*, source host, last fetched |
-| 4 | [story-28-calendar-4-desktop](../screenshots/story-28-calendar-4-desktop.png) | today's events beside My plan and the due groups: the all-day strip, four timed events, the skipped-rule note |
-| 5 | [story-28-calendar-5-desktop](../screenshots/story-28-calendar-5-desktop.png) | plan mode — the candidates with *Today* / *Later* and the lane alongside |
-| 6 | [story-28-calendar-6-desktop](../screenshots/story-28-calendar-6-desktop.png) | dark: a failure after a good fetch — the kept copy under *Calendar address refused since 09:00 · Showing the copy from 09:00.* |
+| 4 | [story-28-calendar-4-desktop](../screenshots/story-28-calendar-4-desktop.png) | today's events beside the due groups: the all-day strip, four timed events, the skipped-rule note |
+| 5 | [story-28-calendar-5-desktop](../screenshots/story-28-calendar-5-desktop.png) | dark: a failure after a good fetch — the kept copy under *Calendar address refused since 09:00 · Showing the copy from 09:00.* |
 
 **Result**
 

@@ -33,10 +33,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 17
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 18
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 17
+        assert schema.current_version(conn) == 18
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
@@ -51,13 +51,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 17
-        assert schema.migrate(conn) == 17
+        assert schema.migrate(conn) == 18
+        assert schema.migrate(conn) == 18
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -71,10 +71,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 17
+        assert schema.current_version(conn) == 18
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -94,7 +94,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -139,7 +139,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -201,7 +201,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -228,10 +228,13 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         # Same reason for everything v13 and later added: the marker is about to
         # be rewound to 12, so the file has to look like a v12 file or the
         # replayed migrations collide with their own tables and columns (#157's
-        # v14, #158's v15, #229's v16, #254's v17).
+        # v14, #158's v15, #229's v16, #254's v17) — and put back what v18
+        # (#369) drops, so its replay has something to drop.
         conn.executescript(
             "DROP TABLE archive_corrections; DROP TABLE archive_items; DROP TABLE archive_runs;"
             " ALTER TABLE tasks DROP COLUMN recurrence_interval; DROP TABLE capture_keys;"
+            " ALTER TABLE tasks ADD COLUMN planned_on TEXT; ALTER TABLE tasks ADD COLUMN plan_order INTEGER;"
+            " CREATE INDEX idx_tasks_planned_on ON tasks(planned_on);"
         )
         conn.execute("PRAGMA ignore_check_constraints = ON")
         conn.execute("UPDATE settings SET value = '12' WHERE key = 'schema_version'")
@@ -253,7 +256,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
     finally:
         conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         task = conn.execute(
@@ -267,7 +270,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
             )
-        assert schema.migrate(conn) == 17
+        assert schema.migrate(conn) == 18
     finally:
         conn.close()
 
@@ -325,11 +328,15 @@ def test_v16_adds_the_interval_without_touching_existing_recurring_tasks(_temp_d
             (tid,),
         )
     conn.commit()
-    before_rows = [tuple(r) for r in conn.execute("SELECT * FROM tasks ORDER BY id")]
+    # v18 (#369) later drops the plan columns from this same file, so the
+    # before/after comparison is over everything else
+    kept = [r["name"] for r in conn.execute("PRAGMA table_info(tasks)") if r["name"] not in ("planned_on", "plan_order")]
+    before_rows = [tuple(r) for r in conn.execute(f"SELECT {', '.join(kept)} FROM tasks ORDER BY id")]
     before_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
+    before_sql = before_sql.replace(", planned_on TEXT", "").replace(", plan_order INTEGER", "")
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         after_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
@@ -377,7 +384,7 @@ def test_v17_backfills_the_capture_keys_of_tasks_captured_before_it(_temp_db: Pa
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 17
+    assert dbmod.init_db() == 18
     conn = dbmod.connect()
     try:
         keys = dict(conn.execute("SELECT external_id, captured_at FROM capture_keys").fetchall())
@@ -389,5 +396,57 @@ def test_v17_backfills_the_capture_keys_of_tasks_captured_before_it(_temp_db: Pa
         assert tasks_repo.capture_task(
             conn, external_id="email:{onedrive}/mail/a.msg", title="Captured mail", actor="t"
         ) == (None, "dismissed")
+    finally:
+        conn.close()
+
+
+def test_v18_drops_the_plan_columns_and_keeps_every_task(_temp_db: Path) -> None:
+    """#369: a v17 file that planned tasks loses only ``planned_on``,
+    ``plan_order`` and v8's index — every task, its other fields, its
+    children and its history survive, and the stamp reads 18."""
+    conn = _open(_temp_db)
+    conn.execute("PRAGMA foreign_keys = ON")
+    for target in range(1, 18):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '17')")
+    rows = [
+        (1, "Planned today", "2026-08-17", "todo", "high", 1),
+        (2, "Planned yesterday", "2026-08-10", "inbox", "none", 2),
+        (3, "Never planned", None, "standby", "low", None),
+    ]
+    for tid, title, due, status, priority, order in rows:
+        conn.execute(
+            "INSERT INTO tasks(id, title, due, status, priority, planned_on, plan_order, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, 'created', 'updated')",
+            (tid, title, due, status, priority, "2026-08-17" if order else None, order),
+        )
+        conn.execute("INSERT INTO comments(task_id, ts, body) VALUES (?, 'ts', 'keep me')", (tid,))
+        conn.execute(
+            "INSERT INTO activity(task_id, ts, field, old_value, new_value)"
+            " VALUES (?, 'ts', 'planned_on', NULL, '2026-08-17')",
+            (tid,),
+        )
+    conn.commit()
+    conn.close()
+
+    assert dbmod.init_db() == 18
+    conn = dbmod.connect()
+    try:
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
+        assert "planned_on" not in columns and "plan_order" not in columns
+        assert "recurrence_interval" in columns
+        index_names = {r["name"] for r in conn.execute("PRAGMA index_list(tasks)")}
+        assert "idx_tasks_planned_on" not in index_names
+        kept = [
+            (r["id"], r["title"], r["due"], r["status"], r["priority"])
+            for r in conn.execute("SELECT * FROM tasks ORDER BY id")
+        ]
+        assert kept == [(tid, title, due, status, priority) for tid, title, due, status, priority, _ in rows]
+        # the history rows that mention the dropped field stay as history
+        assert conn.execute("SELECT COUNT(*) FROM activity WHERE field = 'planned_on'").fetchone()[0] == 3
+        assert conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0] == 3
+        # the FTS triggers still fire on the rewritten table
+        tasks_repo.update_task(conn, 3, title="Renamed task")
+        assert [t["id"] for t in tasks_repo.search(conn, "Renamed")] == [3]
     finally:
         conn.close()

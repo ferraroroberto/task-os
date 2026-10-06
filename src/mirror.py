@@ -7,7 +7,7 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
 
     ---                       YAML frontmatter (flat scalars + a links list)
     id: 42 · external_id · parent · title · code · type · status · priority
-    due · starts · planned_on · recurrence · recurrence_anchor · recurrence_interval
+    due · starts · recurrence · recurrence_anchor · recurrence_interval
     person (name)
     folder_ref · next_action
     blocked_by: [id, id]     the tasks that must close first (#100)
@@ -33,13 +33,11 @@ differs from the recorded one, parses them and applies:
 
 - changed **scalar frontmatter fields** through the repo with ``actor="md"``
   (so activity rows are written like any other change) — ``title``, ``code``,
-  ``status``, ``priority``, ``due``, ``starts`` and ``planned_on`` (natural
+  ``status``, ``priority``, ``due`` and ``starts`` (natural
   phrases welcome), ``recurrence`` + ``recurrence_anchor`` +
   ``recurrence_interval``, ``person`` (by
   name), ``folder_ref``, ``next_action``, ``parent``; and the
-  ``## Description`` body. ``plan_order``
-  is deliberately not mirrored (#89): it is presentation-level ordering, and
-  mirroring it would churn every synced file on every drag;
+  ``## Description`` body;
 - ``blocked_by: [ids]`` (#100) — a relation, not a scalar field, diffed
   against the stored edges and applied add/remove through
   :func:`src.tasks_repo.add_blocker` / :func:`~src.tasks_repo.remove_blocker`
@@ -132,7 +130,7 @@ _PLAIN_SAFE_RE = re.compile(r"^[A-Za-z0-9_./ ,+():@%\u00c0-\uffff-]*$")
 #: Frontmatter keys, in the order they are written.
 FRONTMATTER_KEYS = (
     "id", "external_id", "parent", "title", "code", "type", "status", "priority", "due",
-    "starts", "planned_on", "recurrence", "recurrence_anchor", "recurrence_interval", "person",
+    "starts", "recurrence", "recurrence_anchor", "recurrence_interval", "person",
     "folder_ref", "next_action", "blocked_by", "links",
     "created_at", "updated_at", "done_at", "exported_at",
 )
@@ -140,7 +138,7 @@ FRONTMATTER_KEYS = (
 #: ``blocked_by`` is importable but not a scalar task field — it goes through
 #: :meth:`Mirror._apply_blocked_by`, not the generic per-field loop below.
 IMPORTABLE_KEYS = (
-    "title", "code", "status", "priority", "due", "starts", "planned_on", "recurrence",
+    "title", "code", "status", "priority", "due", "starts", "recurrence",
     "recurrence_anchor", "recurrence_interval", "person", "folder_ref", "next_action", "parent",
 )
 #: file key → activity field name (the conflict baseline lookup).
@@ -227,7 +225,6 @@ def render(task: dict[str, Any], *, exported_at: str) -> str:
         "priority": task.get("priority"),
         "due": task.get("due"),
         "starts": task.get("starts"),
-        "planned_on": task.get("planned_on"),
         "recurrence": task.get("recurrence"),
         "recurrence_anchor": task.get("recurrence_anchor"),
         "recurrence_interval": task.get("recurrence_interval"),
@@ -698,7 +695,7 @@ class Mirror:
         """Normalise a frontmatter value into what the repo stores for ``key``."""
         if raw is None or (isinstance(raw, str) and raw.strip() == ""):
             return None
-        if key in ("due", "starts", "planned_on"):
+        if key in ("due", "starts"):
             try:
                 d = parse_date(str(raw))
             except DateParseError as exc:

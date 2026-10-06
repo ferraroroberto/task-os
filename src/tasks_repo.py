@@ -25,13 +25,6 @@ Rules enforced here (plan §04):
   hides it by default, so every working view (Board, Today, Table, the CLI)
   inherits one rule from one clause — :func:`tree` and :func:`search` read
   the table directly and keep showing it (#87);
-- ``planned_on`` is the day a task was committed to — "My plan" on Today
-  (#89). Planning appends the task to that day's plan (``plan_order``),
-  unplanning clears the order; snoozing to a future day un-plans (Later means
-  "not today"), and planning a deferred task wakes it (a future ``starts`` is
-  moot once you decide to do it today) — explicit values in the same change
-  win over both implicit rules. ``plan_order`` itself is presentation, not a
-  field: :func:`plan_reorder` rewrites it wholesale, nothing PATCHes it;
 - ``coding`` ⇔ an ``issue_refs`` row exists: attaching one sets the type,
   detaching reverts it, and setting ``type='coding'`` by hand is rejected;
 - full-text search hits title / description / comment bodies via the two
@@ -98,16 +91,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_ACTOR = "me"
 
 # Columns a client may set on create / update (everything else is derived).
-# ``plan_order`` is deliberately absent: it is presentation-level ordering this
-# module manages itself (appended on plan, cleared on unplan, rewritten by
-# :func:`plan_reorder`) — never PATCHed, never activity-logged, never mirrored.
 _TASK_FIELDS = (
     "parent_id", "code", "title", "type", "status", "priority", "due", "starts", "recurrence",
-    "recurrence_anchor", "recurrence_interval", "planned_on", "description", "folder_ref",
+    "recurrence_anchor", "recurrence_interval", "description", "folder_ref",
     "next_action", "person_id",
 )
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
-DATE_FIELDS = ("due", "starts", "planned_on")
+DATE_FIELDS = ("due", "starts")
 _TASK_COLUMNS = ("id", *_TASK_FIELDS, "created_by", "created_at", "updated_at", "done_at")
 _ENUMS: dict[str, tuple[str, ...]] = {
     "type": TASK_TYPES,
@@ -298,16 +288,6 @@ def _require_person(conn: sqlite3.Connection, person_id: int) -> dict[str, Any]:
     if row is None:
         raise NotFound(f"person {person_id} not found")
     return dict(row)
-
-
-def _next_plan_order(conn: sqlite3.Connection, day: str, exclude: int | None = None) -> int:
-    """The position a task planned for ``day`` is appended at (#89)."""
-    sql = "SELECT COALESCE(MAX(plan_order), 0) FROM tasks WHERE planned_on = ?"
-    args: list[Any] = [day]
-    if exclude is not None:
-        sql += " AND id != ?"
-        args.append(exclude)
-    return int(conn.execute(sql, args).fetchone()[0]) + 1
 
 
 def _log(
@@ -542,7 +522,7 @@ def create_task(
     values: dict[str, Any] = {
         "parent_id": None, "code": None, "type": "task", "status": DEFAULT_STATUS,
         "priority": "none", "due": None, "starts": None, "recurrence": None,
-        "recurrence_anchor": None, "recurrence_interval": None, "planned_on": None,
+        "recurrence_anchor": None, "recurrence_interval": None,
         "description": "", "folder_ref": None, "next_action": None, "person_id": None,
     }
     values.update({k: v for k, v in fields.items() if k != "title"})
@@ -578,19 +558,16 @@ def create_task(
     cur = conn.execute(
         """
         INSERT INTO tasks(parent_id, code, title, type, status, priority, due, starts, recurrence,
-                          recurrence_anchor, recurrence_interval, planned_on, plan_order,
+                          recurrence_anchor, recurrence_interval,
                           description, folder_ref, next_action, person_id, created_by,
                           created_at, updated_at, done_at)
         VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :starts, :recurrence,
-                :recurrence_anchor, :recurrence_interval, :planned_on, :plan_order, :description,
+                :recurrence_anchor, :recurrence_interval, :description,
                 :folder_ref,
                 :next_action, :person_id, :created_by, :ts, :ts, :done_at)
         """,
         {
             **values,
-            "plan_order": (
-                _next_plan_order(conn, values["planned_on"]) if values["planned_on"] else None
-            ),
             "created_by": actor,
             "ts": ts,
             "done_at": ts if values["status"] in CLOSED_STATUSES else None,
@@ -687,23 +664,6 @@ def update_task(
         if sets["type"] != "coding" and has_ref:
             raise ValidationError("a task with an issue_ref is 'coding' — detach the issue first")
 
-    # Plan rules (#89) — snoozing to a future day un-plans (Later means "not
-    # today"), planning a deferred task wakes it (the gate is moot once you
-    # decide to do it today). A field named explicitly in the same change is
-    # never overridden by either rule. plan_order follows planned_on: appended
-    # on plan, cleared on unplan — managed here, never a client field.
-    day = today().isoformat()
-    if "starts" in sets and "planned_on" not in changes:
-        if sets["starts"] and sets["starts"] > day and current["planned_on"]:
-            sets["planned_on"] = None
-    if "planned_on" in sets:
-        if sets["planned_on"]:
-            if "starts" not in changes and current["starts"] and current["starts"] > day:
-                sets["starts"] = None
-            sets["plan_order"] = _next_plan_order(conn, sets["planned_on"], exclude=task_id)
-        else:
-            sets["plan_order"] = None
-
     if not sets:
         return get_task(conn, task_id)
 
@@ -719,7 +679,7 @@ def update_task(
     assignments = ", ".join(f"{k} = :{k}" for k in sets)
     conn.execute(f"UPDATE tasks SET {assignments} WHERE id = :id", {**sets, "id": task_id})
     for field, value in sets.items():
-        if field in ("updated_at", "done_at", "plan_order"):
+        if field in ("updated_at", "done_at"):
             continue
         _log(conn, task_id, actor, field, current[field], value, ts)
     conn.commit()
@@ -735,19 +695,6 @@ def set_starts(conn: sqlite3.Connection, task_id: int, starts: str | date | None
     """Set (or clear, with ``None``) the day the task starts mattering — what
     the Today row's snooze control and ``tasks starts`` both do (#87)."""
     return update_task(conn, task_id, actor=actor, starts=starts)
-
-
-def plan_task(
-    conn: sqlite3.Connection,
-    task_id: int,
-    on: str | date | None,
-    *,
-    actor: str | None = None,
-) -> dict[str, Any]:
-    """Commit a task to a day's plan (or clear the commitment with ``None``) —
-    what the Today tab's plan mode and ``tasks plan`` both do (#89). The plan
-    rules in :func:`update_task` handle ``plan_order`` and the wake."""
-    return update_task(conn, task_id, actor=actor, planned_on=on)
 
 
 def set_status(conn: sqlite3.Connection, task_id: int, status: str, *, actor: str | None = None) -> dict[str, Any]:
@@ -2241,50 +2188,19 @@ def _group_by_root(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dict[str, Any]:
     """The Today tab: open tasks due ≤ today (overdue first, then today),
     grouped by root project, plus a *later this week* bucket (tomorrow …
-    +7 days) in the same shape — and *My plan* (#89):
-    the tasks committed to today, ordered by ``plan_order``, done ones
-    included so the "n of m" progress line is computable. A task planned
-    today leaves the due/week buckets (it moved up into the plan), so the
-    counts describe what is still unplanned. The plan reads the table
-    directly (like :func:`tree`): it is your commitment list, not a filtered
-    projection, so ``person_id`` never thins it."""
+    +7 days) in the same shape."""
     t = today()
     iso = t.isoformat()
-    plan_rows = _summaries(
+    due = list_tasks(conn, status="open", due_to=iso, person_id=person_id)
+    week = list_tasks(
         conn,
-        [
-            dict(r)
-            for r in conn.execute(
-                "SELECT * FROM tasks WHERE planned_on = ? "
-                "ORDER BY plan_order IS NULL, plan_order, id",
-                (iso,),
-            ).fetchall()
-        ],
+        status="open",
+        due_from=(t + timedelta(days=1)).isoformat(),
+        due_to=(t + timedelta(days=7)).isoformat(),
+        person_id=person_id,
     )
-    _enrich_list(conn, plan_rows)
-    due = [
-        it
-        for it in list_tasks(conn, status="open", due_to=iso, person_id=person_id)
-        if it.get("planned_on") != iso
-    ]
-    week = [
-        it
-        for it in list_tasks(
-            conn,
-            status="open",
-            due_from=(t + timedelta(days=1)).isoformat(),
-            due_to=(t + timedelta(days=7)).isoformat(),
-            person_id=person_id,
-        )
-        if it.get("planned_on") != iso
-    ]
     return {
         "today": iso,
-        "plan": {
-            "items": plan_rows,
-            "done": sum(1 for it in plan_rows if it["status"] in CLOSED_STATUSES),
-            "total": len(plan_rows),
-        },
         "due": _group_by_root(due),
         "week": _group_by_root(week),
         "counts": {
@@ -2293,55 +2209,6 @@ def today_view(conn: sqlite3.Connection, *, person_id: int | None = None) -> dic
             "week": len(week),
         },
     }
-
-
-def plan_candidates(
-    conn: sqlite3.Connection, *, person_id: int | None = None
-) -> list[dict[str, Any]]:
-    """What plan-my-day offers (#89): open overdue + due-today + inbox tasks
-    not already planned today, deferral-respecting, in the list order. A
-    candidate whose ``planned_on`` is an earlier day was planned and not
-    finished — the caller renders that as the "planned yesterday" note, never
-    re-plans it silently."""
-    iso = today().isoformat()
-    due = list_tasks(conn, status="open", due_to=iso, person_id=person_id)
-    inbox = list_tasks(conn, status=["inbox"], person_id=person_id)
-    seen: set[int] = set()
-    out: list[dict[str, Any]] = []
-    for it in due + inbox:
-        if it["id"] in seen or it.get("planned_on") == iso:
-            continue
-        seen.add(it["id"])
-        out.append(it)
-    return out
-
-
-def plan_reorder(
-    conn: sqlite3.Connection, ids: Iterable[int], *, actor: str | None = None
-) -> dict[str, Any]:
-    """Rewrite today's plan order to match ``ids`` — a permutation of *every*
-    task planned today (#89). ``plan_order`` is presentation, so no activity
-    rows; the write still touches ``updated_at`` (any write is a touch, #101)
-    and notifies the write listeners."""
-    iso = today().isoformat()
-    ids = [int(i) for i in ids]
-    have = {
-        int(r["id"])
-        for r in conn.execute("SELECT id FROM tasks WHERE planned_on = ?", (iso,)).fetchall()
-    }
-    if len(ids) != len(set(ids)) or set(ids) != have:
-        raise ValidationError(
-            f"ids must be a permutation of every task planned today "
-            f"(got {len(ids)} ids for {len(have)} planned tasks)"
-        )
-    ts = now_iso()
-    for n, tid in enumerate(ids, start=1):
-        conn.execute(
-            "UPDATE tasks SET plan_order = ?, updated_at = ? WHERE id = ?", (n, ts, tid)
-        )
-    conn.commit()
-    _touched(*ids)
-    return {"planned": len(ids)}
 
 
 def counts(conn: sqlite3.Connection) -> dict[str, int]:

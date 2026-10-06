@@ -104,7 +104,7 @@ _SETTLE_NETWORK_MS = 5000
 # one Board shot moving 23,955 px over `in 9d` → `in 13d`). A baseline that
 # expires overnight is not a baseline.
 #
-# A Monday, so "plan your day" and the weekday-snapping recurrence rolls land
+# A Monday, so the weekday-snapping recurrence rolls land
 # where a reader expects; in the recent past, so nothing on screen is dated in
 # the future. Changing it re-baselines the whole gallery — a deliberate act,
 # never a side effect.

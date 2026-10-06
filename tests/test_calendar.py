@@ -300,7 +300,7 @@ def test_today_carries_the_calendar_group_and_status_and_refresh_agree(
 ) -> None:
     body = client.get("/api/today").json()
     assert body["calendar"]["state"] == "ok" and body["calendar"]["events"]
-    assert "plan" in body and "due" in body
+    assert "due" in body and "plan" not in body
     assert client.get("/api/status").json()["calendar"]["events_today"] == 6
     fake.mode = "404"
     refreshed = client.post("/api/calendar/refresh").json()

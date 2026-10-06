@@ -37,16 +37,8 @@ the filter card, the quick-add dialog, a Today row, the drawer. Its shots:
     docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
     docs/screenshots/story-13-starts-snooze-{6,7}-phone.png
 
-**Story 15 — plan my day (#89)** rides here the same way, as
-``_walk_plan_my_day`` after the stale-window walk plus a phone assertion.
-Its shots:
-
-    docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
-    docs/screenshots/story-15-plan-my-day-6-desktop.png   (dark)
-    docs/screenshots/story-15-plan-my-day-7-phone.png
-
 **Story 30 — Today's split view (#336)** rides here as ``_walk_today_split``
-right after the plan walk, on the same Today surface: the list in the left
+right after the stale-window walk, on the same Today surface: the list in the left
 half, the detail pane in the right (empty state until a task opens). Its shots:
 
     docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
@@ -345,8 +337,8 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # ------------------------------------------- stale window (#101) ----
         _walk_stale_window(page, base, shots)
 
-        # ------------------------------------------- plan my day (#89) ----
-        _walk_plan_my_day(page, base, shots)
+        # ------------------------------ one task load per hash open (#236) ----
+        _walk_hash_open_loads_once(page, base)
 
         # -------------------------------------- today split view (#336) ----
         _walk_today_split(page, base, shots)
@@ -367,11 +359,6 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         dark_page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
         expect(dark_page.locator("#paneBoard")).to_be_visible()
         shot(dark_page, shots / "story-13-starts-snooze-5-desktop.png")
-        # Today in dark: My plan on top with the restored seeded plan (#89)
-        dark_page.goto(f"{base}/")
-        dark_page.click("nav.tabs .tab[data-tab='today']")
-        expect(dark_page.locator("#paneToday .today-plan")).to_be_visible()
-        shot(dark_page, shots / "story-15-plan-my-day-6-desktop.png")
     finally:
         dark_ctx.close()
 
@@ -576,127 +563,25 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     expect(rows).to_have_count(0)
 
 
-# ------------------------------------------------- story 15 — plan my day
+# ------------------------------------- one task load per hash open (#236)
 #
-# #89, riding here like stories 13 and 14: the suite is capped at 15 tests
-# and this story walks the same Today surface. The seeded instance is
-# shared with the phone leg below, so the walk restores what it changed
-# (statuses, starts, the seeded plan) before returning.
+# Riding here because the suite is capped (CLAUDE.md): no shots. This used to
+# close the plan-my-day walk (story 15, removed in #369), which is where the
+# race was found, so the check outlived the feature.
 
 
-def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
-    """The morning ritual: My plan sits on top of Today with a progress line;
-    emptied, the banner offers plan mode, where every candidate takes two
-    large targets — Today (commits it) and Later (the #87 snooze popover) —
-    and a task planned the day before wears its "planned yesterday" note.
-    Committed tasks reorder by drag; completing one moves the progress line.
-
-    Screenshots: docs/screenshots/story-15-plan-my-day-{1..5}-desktop.png
-    (6 = dark, in the dark context; 7 = phone, in the phone leg).
-    """
-    today = E2E_ANCHOR.isoformat()
-
-    # 1. The seed's plan renders ordered on top of Today, with the progress line.
+def _walk_hash_open_loads_once(page: Page, base: str) -> None:
+    """One hash navigation, one load (#236): it fires `popstate` and
+    `hashchange`, and while both opened the drawer the slower of the two
+    loads — read before an edit — could paint over the edit's own refresh,
+    leaving the label on "Starts · in 7d" for a task the server had already
+    cleared (1 run in 8, and the rest of the gallery drifted after it)."""
+    # Today is the landing tab and the last tab is remembered, so leave the app
+    # where the next walk (Today's split view) expects to find it
     page.goto(f"{base}/")
     page.click("nav.tabs .tab[data-tab='today']")
-    plan = page.locator("#paneToday .today-plan")
-    expect(plan).to_be_visible()
-    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
-    expect(plan.locator(".plan-list .trow .trow-title")).to_have_text(
-        ["Look into a standing desk", "Try the new bakery"])
-    shot(page, shots / "story-15-plan-my-day-1-desktop.png")
-
-    # 2. Unplan both (a conscious act, activity-logged, undoable) — the plan
-    #    empties and the banner appears with the candidate counts.
-    for title in ("Look into a standing desk", "Try the new bakery"):
-        row = _trow(page, title, "#paneToday .plan-list")
-        rid = int(row.get_attribute("data-id"))
-        row.locator(".plan-unplan").click()
-        expect(page.locator(".toast-success").last).to_contain_text("Removed from today")
-        assert _get(base, f"/api/tasks/{rid}")["planned_on"] is None
-        assert "planned_on" in [a["field"] for a in _get(base, f"/api/tasks/{rid}")["activity"]]
-    banner = page.locator("#paneToday .plan-banner")
-    expect(banner).to_be_visible()
-    # 4 in Inbox: the seed's three plus the "renew passport" this story's own
-    # quick-add walk created a few steps back
-    expect(banner.locator(".plan-banner-text")).to_have_text(
-        "Plan your day — 3 overdue · 5 due today · 4 new in Inbox")
-    shot(page, shots / "story-15-plan-my-day-2-desktop.png")
-
-    # 3. Plan mode: every candidate carries the two targets; the task planned
-    #    yesterday and not finished says so — never silently re-planned.
-    banner.locator(".plan-banner-btn").click()
-    picker = page.locator("#paneToday .plan-picker")
-    expect(picker).to_be_visible()
-    expect(picker.locator(".today-counts")).to_have_text("12 candidates")
-    tap_row = _trow(page, "Fix leaking tap", "#paneToday .plan-cands")
-    expect(tap_row.locator(".plan-note")).to_have_text("planned yesterday — not finished")
-    tap_id = int(tap_row.get_attribute("data-id"))
-    assert _get(base, f"/api/tasks/{tap_id}")["planned_on"] < today
-    shot(page, shots / "story-15-plan-my-day-3-desktop.png")
-
-    # 4. Commit two (the standing desk, then the tap — re-committing the
-    #    carry-over is the conscious act) and push one away with Later, the
-    #    same #87 snooze popover, then leave plan mode.
-    _trow(page, "Look into a standing desk", "#paneToday .plan-cands").locator("button.plan-target").click()
-    expect(_trow(page, "Look into a standing desk", "#paneToday .plan-cands")).to_have_count(0)
-    expect(_trow(page, "Look into a standing desk", "#paneToday .plan-list")).to_be_visible()
-    _trow(page, "Fix leaking tap", "#paneToday .plan-cands").locator("button.plan-target").click()
-    expect(_trow(page, "Fix leaking tap", "#paneToday .plan-list")).to_be_visible()
-    assert _get(base, f"/api/tasks/{tap_id}")["planned_on"] == today
-    lib_row = _trow(page, "Return library books", "#paneToday .plan-cands")
-    lib_id = int(lib_row.get_attribute("data-id"))
-    lib_row.locator(".snooze-summary").click()
-    lib_row.locator(".snooze-menu").get_by_text("Next week", exact=True).click()
-    expect(page.locator(".toast-success").last).to_contain_text("Snoozed to")
-    expect(_trow(page, "Return library books", "#paneToday .plan-cands")).to_have_count(0)
-    page.locator("#paneToday .plan-done-btn").click()
-    expect(page.locator("#paneToday .plan-picker")).to_have_count(0)
-
-    # 5. Drag to reorder — the tap first — and complete it: the progress line
-    #    moves, the done item stays on the list, struck through.
-    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
-    tap_planned = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
-    desk_planned = _trow(page, "Look into a standing desk", "#paneToday .plan-list")
-    # The rows swap in the DOM while the drag is still over them (`dragover`),
-    # but the new order is POSTed only on `dragend`, so the DOM matching says
-    # nothing yet about the server. Wait for the write itself before reading
-    # it back (#236: the read below once returned the old order).
-    def reordered(r) -> bool:  # noqa: ANN001 — a Playwright Response
-        return r.request.method == "POST" and r.url.endswith("/api/plan/reorder")
-
-    with page.expect_response(reordered):
-        tap_planned.drag_to(desk_planned)
-    expect(page.locator("#paneToday .plan-list .trow .trow-title").first).to_have_text("Fix leaking tap")
-    api_plan = _get(base, "/api/today")["plan"]
-    assert [t["title"] for t in api_plan["items"]] == ["Fix leaking tap", "Look into a standing desk"]
-    shot(page, shots / "story-15-plan-my-day-4-desktop.png")
-    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".trow-done").click()
-    expect(plan.locator(".today-counts")).to_have_text("1 of 2 done")
-    done_row = _trow(page, "Fix leaking tap", "#paneToday .plan-list")
-    expect(done_row).to_have_class(re.compile(r"\bis-closed\b"))
-    api_plan = _get(base, "/api/today")["plan"]
-    assert (api_plan["done"], api_plan["total"]) == (1, 2)
-    shot(page, shots / "story-15-plan-my-day-5-desktop.png")
-
-    # ---- restore: the file's seeded instance serves the phone leg ---------
-    # tap back to todo and out of the plan; the bakery back in (the seeded
-    # plan's shape); the library awake again via the drawer (story-13 idiom).
-    done_row.locator(".trow-done").click()   # a closed row: the circle reopens it
-    expect(plan.locator(".today-counts")).to_have_text("0 of 2 done")
-    _trow(page, "Fix leaking tap", "#paneToday .plan-list").locator(".plan-unplan").click()
-    expect(_trow(page, "Fix leaking tap", "#paneToday .plan-list")).to_have_count(0)
-    page.locator("#paneToday .plan-more").click()
-    _trow(page, "Try the new bakery", "#paneToday .plan-cands").locator("button.plan-target").click()
-    expect(_trow(page, "Try the new bakery", "#paneToday .plan-list")).to_be_visible()
-    page.locator("#paneToday .plan-done-btn").click()
-    expect(page.locator("#paneToday .plan-list .trow .trow-title")).to_have_text(
-        ["Look into a standing desk", "Try the new bakery"])
-    # One hash navigation, one load (#236): it fires `popstate` and
-    # `hashchange`, and while both opened the drawer the slower of the two
-    # loads — read before the edit below — could paint over the edit's own
-    # refresh, leaving the label on "Starts · in 7d" for a task the server had
-    # already cleared (1 run in 8, and the rest of the gallery drifted after it).
+    lib_id = int(_get(base, "/api/tasks?q=Return%20library%20books")["items"][0]["id"])
+    page.request.patch(f"{base}/api/tasks/{lib_id}", data={"starts": "next week"})
     loads: list[str] = []
     task_path = f"/api/tasks/{lib_id}"
 
@@ -720,7 +605,6 @@ def _walk_plan_my_day(page: Page, base: str, shots: Path) -> None:
     # API read below race the write.
     expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
-    assert _get(base, f"/api/tasks/{tap_id}")["status"] == "todo"
 
 
 # ------------------------------------------- story 30 — Today split (#336)
@@ -1166,18 +1050,6 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-13-starts-snooze-7-phone.png")
-
-        # --------------------------------------------- story 15 (#89) ----
-        # Today is the phone's landing tab — My plan sits on top with real
-        # touch targets on its controls, and nothing pushes the page sideways.
-        page.goto(f"{base}/")
-        page.locator("nav.tabs .tab[data-tab='today']").tap()
-        plan = page.locator("#paneToday .today-plan")
-        expect(plan).to_be_visible()
-        expect(plan.locator(".plan-list .trow")).to_have_count(2)
-        assert_min_target(plan.locator(".plan-unplan"))
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-15-plan-my-day-7-phone.png")
 
         # --------------------------------------------- story 25 (#229) ----
         # "Every [7] weeks" on the phone the PWA lives on: the interval input
