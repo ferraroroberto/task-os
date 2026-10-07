@@ -35,7 +35,7 @@ export function duePicker(opts) {
   // the default is the one icon button (#357), the snooze menu's is a
   // labelled menu option, and letting both stacks land on one element just
   // makes their rules fight.
-  button.className = o.className || 'icon-btn';
+  button.className = o.className || 'icon-button';
   button.title = o.title || 'Pick a date';
   button.setAttribute('aria-label', o.ariaLabel || 'Pick a due date');
   button.innerHTML = icon('calendar-days');

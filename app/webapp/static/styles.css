@@ -90,8 +90,9 @@
   --icon-inline: 16px;
   --icon-title: 18px;
   --icon-feature: 24px;
-  /* the icon button's painted-nothing box: the hover and focus area around
-     its glyph; the ::before grows it to --hit-min (#357) */
+  /* the vendored icon-button's painted-nothing box: the hover and focus area
+     around its glyph; its ::before grows it to --hit-min. Set here so the gap
+     below reads the same value as the buttons (#357, #377) */
   --icon-btn-box: 28px;
   /* two icon buttons side by side: their 44px targets touch, never overlap */
   --icon-btn-gap: calc(var(--hit-min) - var(--icon-btn-box));
@@ -183,44 +184,6 @@ button, input, select, textarea { font: inherit; }
    the target — design.md "Touch targets" ships the utility once. */
 .hit-target { position: relative; }
 .hit-target::before { content: ""; position: absolute; inset: -5px; }
-
-/* ONE icon button app-wide (#357): every glyph-only control — a drawer's
-   trash and pencils, the date calendars, the strip's +, the bulk bar, a
-   toast's ×, Settings' row-action ticks and arrows, the dictation mic —
-   wears this and nothing else. A glyph on nothing: no fill, border or shadow
-   at rest, and hover only darkens the glyph, so a control never reads as a
-   painted square. The box is invisible; its ::before grows it to the 44px
-   floor whatever box a context picks (--icon-btn-box), and two icon buttons
-   side by side sit --icon-btn-gap apart so their targets touch but never
-   overlap. Focus is the app's one ring (:focus-visible above). The
-   vendored ⋮ (action-row) is the same recipe at a real 44px; the vendored
-   header toggles and modal × are the same recipe, from the vendored CSS. */
-.icon-btn {
-  position: relative;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--icon-btn-box);
-  height: var(--icon-btn-box);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.icon-btn::before {
-  content: "";
-  position: absolute;
-  inset: calc((var(--icon-btn-box) - var(--hit-min)) / 2);
-}
-.icon-btn .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.icon-btn:hover { color: var(--fg); }
-/* destructive: quiet until hovered, then the danger tone (state, not decoration) */
-.icon-btn.is-danger:hover { color: var(--danger); }
-.icon-btn[aria-pressed="true"] { color: var(--accent-text); }
-.icon-btn:disabled { color: var(--line); cursor: default; }
 
 /* The header title is the page's h1 (#339): the vendored rule sets its size
    and weight, the UA's heading margin goes. */
@@ -614,7 +577,7 @@ a.chip:hover { text-decoration: underline; }
    control height, so their 4px of invisible expansion meets the Select
    toggle's in the 8px gap (and 44px real on touch, where the strip is 44px
    tall). The Select toggle is a labelled button and keeps its square. */
-.pane-top .icon-btn { --icon-btn-box: var(--control-h); }
+.pane-top .icon-button { --icon-btn-box: var(--control-h); }
 .strip-square {
   flex: none;
   width: var(--control-h);
@@ -763,13 +726,17 @@ a.chip:hover { text-decoration: underline; }
    (#146), so this has to read from across the room and stay put until the
    second click. The glyph itself becomes a stop square (swapped in voice.js),
    which is what makes the button say what clicking it will do. */
+/* The :not(:disabled) twin matches the vendored icon-button hover specificity, so
+   a hovered mic keeps its state colour instead of falling back to --ink. */
+.quick-add-mic.is-recording,
+.quick-add-mic.is-recording:not(:disabled) { color: var(--danger); }
 .quick-add-mic.is-recording {
-  color: var(--danger);
   background: color-mix(in srgb, var(--danger) 16%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
   animation: quick-add-mic-pulse 1.2s ease-in-out infinite;
 }
-.quick-add-mic.is-working { color: var(--accent); }
+.quick-add-mic.is-working,
+.quick-add-mic.is-working:not(:disabled) { color: var(--accent); }
 @keyframes quick-add-mic-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
@@ -1523,7 +1490,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .bulk-status { height: var(--row-sm); }
   /* the strip's square buttons are one family — same square, always (#81) */
   .strip-square { width: var(--row-sm); height: var(--row-sm); }
-  .pane-top .icon-btn { --icon-btn-box: var(--row-sm); }
+  .pane-top .icon-button { --icon-btn-box: var(--row-sm); }
   /* These already carry real 44px geometry here, so the invisible expansion
      would push the effective rect past its neighbour — design.md forbids
      overlapping tap rectangles. */

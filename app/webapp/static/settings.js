@@ -710,12 +710,12 @@ export function mountSettings(opts) {
       const li = document.createElement('li');
       li.className = 'row-actions-item';
       li.dataset.action = id;
-      // A pressed-state square, not a bare checkbox: the .icon-btn box is a real
+      // A pressed-state square, not a bare checkbox: the .icon-button box is a real
       // 44px target (34 painted + its expansion), which a 16px checkbox is not.
       const listed = shown || !!swipe;
       const tick = document.createElement('button');
       tick.type = 'button';
-      tick.className = 'icon-btn row-actions-tick';
+      tick.className = 'icon-button row-actions-tick';
       tick.setAttribute('aria-pressed', listed ? 'true' : 'false');
       tick.setAttribute('aria-label', 'Show ' + a.label + ' in the menu');
       tick.innerHTML = icon(listed ? 'square-check' : 'square');
@@ -734,7 +734,7 @@ export function mountSettings(opts) {
       [['up', -1, 'chevron-up'], ['down', 1, 'chevron-down']].forEach(function (m) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'icon-btn row-actions-move';
+        b.className = 'icon-button row-actions-move';
         b.dataset.move = m[0];
         b.setAttribute('aria-label', 'Move ' + a.label + ' ' + m[0]);
         b.innerHTML = icon(m[2]);
