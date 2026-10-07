@@ -57,31 +57,21 @@ from __future__ import annotations
 
 import json
 import logging
-import socket
 import threading
 import time
 import uuid
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import urlsplit
 
 import requests
 
 from src import clock
 from src.config import AppConfig
+from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
 from src.pooled_http import pooled_request
 
 logger = logging.getLogger(__name__)
 
-#: How long a reachability verdict is trusted before the port is touched again.
-#: Long enough that opening the quick-add dialog repeatedly costs one connect,
-#: short enough that starting whisper shows up on the next open.
-PROBE_TTL_S = 15.0
-#: Generous for a loopback connect on purpose. The verdict is cached and the
-#: mic is disabled until it lands, so a slow probe costs a moment of "checking"
-#: — while a probe that gives up too early costs a *wrong* "not reachable" on
-#: an endpoint that is simply on another machine.
-PROBE_TIMEOUT_S = 1.5
 #: A phrase is seconds of speech, but a cold model on CPU is slow to answer.
 TRANSCRIBE_TIMEOUT_S = 120.0
 #: 16 kHz mono PCM is 32 KB/s, so this is ~13 minutes — far past a quick-add
@@ -107,21 +97,6 @@ class VoiceError(RuntimeError):
         self.code = code
         self.http_status = http_status
         self.detail = detail
-
-
-def endpoint_of(url: str) -> tuple[str, int] | None:
-    """``(host, port)`` to connect to — ``None`` when *url* is not addressable."""
-    try:
-        parts = urlsplit(url)
-    except ValueError:
-        return None
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        return None
-    try:
-        port = parts.port or (443 if parts.scheme == "https" else 80)
-    except ValueError:      # a non-numeric port in the URL
-        return None
-    return parts.hostname, port
 
 
 def build_multipart(
@@ -193,34 +168,6 @@ def _text_of(payload: bytes) -> str:
 HUB = "hub"
 FALLBACK = "fallback"
 _LABELS = {HUB: "the hub", FALLBACK: "the local whisper server"}
-
-
-def connect_failure(url: str) -> str | None:
-    """``None`` when *url*'s host/port accepts a connection, else why not.
-
-    :mod:`src.enrich` probes its endpoint with this too — same connect, same
-    three distinct answers.
-    """
-    target = endpoint_of(url)
-    if target is None:
-        return f"not an http(s) URL: {url}"
-    host, port = target
-    try:
-        with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_S):
-            pass
-    except TimeoutError:
-        # A timeout does NOT establish which failure it is, so it must not
-        # claim to. Windows takes ~2 s to report a refusal on a dead loopback
-        # port (measured here), which is longer than a probe the UI waits on
-        # should take — so "nothing there" and "held but silent" (:8090 is
-        # mutex-shared with automation/audio/transcribe_voice) both land here,
-        # and the reason names both rather than picking one.
-        return (f"{host}:{port} did not answer within {PROBE_TIMEOUT_S:g}s — it may be down, "
-                f"or the port may be busy")
-    except OSError as exc:
-        # A refusal *is* established: there is nothing listening.
-        return f"nothing is listening on {host}:{port} ({exc.__class__.__name__}: {exc})"
-    return None
 
 
 class VoiceClient:

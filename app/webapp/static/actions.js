@@ -179,6 +179,31 @@ export function actionById(id) {
   return ACTIONS.find(function (a) { return a.id === id; }) || null;
 }
 
+// --------------------------------------------------------------- results
+/**
+ * The failed rows of a bulk call's per-id `results` (a batch is not
+ * all-or-nothing), as `{id, message}`.
+ * @param {Array<object>|undefined} results
+ * @returns {Array<{id:number, message:string}>}
+ */
+export function failedOf(results) {
+  return (results || []).filter(function (r) { return !r.ok; }).map(function (r) {
+    return { id: r.id, message: (r.error && r.error.message) || 'failed' };
+  });
+}
+
+/**
+ * The toast every bulk path shows when part of a batch failed — how many went
+ * through, how many did not, and the first reason.
+ * @param {number} count   how many succeeded
+ * @param {string} verb    what happened to them ("updated", "deleted")
+ * @param {Array<{id:number, message:string}>} failed   non-empty, from failedOf
+ */
+export function failureText(count, verb, failed) {
+  const first = failed[0];
+  return count + ' ' + verb + ' · ' + failed.length + ' failed (#' + first.id + ': ' + first.message + ')';
+}
+
 // --------------------------------------------------------------- runner
 /**
  * The one runner every surface commits through: write, refresh, say what
@@ -206,17 +231,11 @@ export function createActions(handlers) {
         continue;
       }
       (res.results || []).forEach(function (r) {
-        if (r.ok) { updated += 1; after.set(r.id, r.task || null); } else {
-          failed.push({ id: r.id, message: (r.error && r.error.message) || 'failed' });
-        }
+        if (r.ok) { updated += 1; after.set(r.id, r.task || null); }
       });
+      failed.push(...failedOf(res.results));
     }
     return { updated: updated, failed: failed, after: after };
-  }
-
-  function failureText(out) {
-    const first = out.failed[0];
-    return out.updated + ' updated · ' + out.failed.length + ' failed (#' + first.id + ': ' + first.message + ')';
   }
 
   /**
@@ -237,7 +256,7 @@ export function createActions(handlers) {
       await handlers.refresh();
       if (opts && opts.afterRefresh) opts.afterRefresh();
       if (out.failed.length) {
-        toast(failureText(out), 'error');
+        toast(failureText(out.updated, 'updated', out.failed), 'error');
         undoBuf = null;                    // a half-applied change is not one thing to undo
         return true;
       }
@@ -269,7 +288,7 @@ export function createActions(handlers) {
       const out = await writeGroups(groups);
       await handlers.refresh();
       if (opts && opts.afterRefresh) opts.afterRefresh();
-      if (out.failed.length) toast(failureText(out), 'error');
+      if (out.failed.length) toast(failureText(out.updated, 'updated', out.failed), 'error');
       else toast('Undone — ' + label, 'success');
     } finally {
       busy = false;

@@ -15,12 +15,16 @@ never an empty list masquerading as "no issues".
 
 from __future__ import annotations
 
+import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
+
+from src.no_window import NO_WINDOW
 
 __all__ = [
-    "IssueInfo", "IssueProvider", "IssueProviderError", "NotConfigured", "NullProvider",
-    "short_repo",
+    "CliHints", "IssueInfo", "IssueProvider", "IssueProviderError", "NotConfigured", "NullProvider",
+    "run_cli", "short_repo",
 ]
 
 
@@ -69,6 +73,58 @@ class IssueInfo:
             "url": self.url, "state": self.state, "labels": list(self.labels),
             "updated_at": self.updated_at, "body": self.body,
         }
+
+
+class CliHints(NamedTuple):
+    """The stderr fragments a forge CLI uses for each condition (lower-case)."""
+
+    auth: tuple[str, ...]
+    rate: tuple[str, ...]
+    not_found: tuple[str, ...]
+
+    def classify(self, stderr: str) -> str:
+        """The error ``code`` a failed call's stderr names; ``error`` when none match."""
+        text = (stderr or "").lower()
+        if any(h in text for h in self.auth):
+            return "not_authenticated"
+        if any(h in text for h in self.rate):
+            return "rate_limited"
+        if any(h in text for h in self.not_found):
+            return "not_found"
+        return "error"
+
+
+def run_cli(
+    tool: str, args: Sequence[str], *, timeout: float, label: str, install: str, hints: CliHints,
+) -> str:
+    """Run ``<tool> <args>`` and return stdout; :class:`IssueProviderError` on any failure.
+
+    The one subprocess-and-classify routine behind both forge CLIs: a missing
+    binary is ``not_installed``, a timeout is ``timeout``, and a non-zero exit
+    is classified from stderr by ``hints`` and carries its first line.
+    """
+    try:
+        proc = subprocess.run(
+            [tool, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            creationflags=NO_WINDOW,
+        )
+    except FileNotFoundError as exc:
+        raise IssueProviderError(f"{tool} not on PATH — install {install}", code="not_installed") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise IssueProviderError(f"{label}: timed out after {timeout:.0f}s", code="timeout") from exc
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise IssueProviderError(f"{label}: {exc}", code="error") from exc
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
+        first = lines[0].strip() if lines else "no output"
+        code = hints.classify(proc.stderr or proc.stdout or "")
+        raise IssueProviderError(f"{label} exited {proc.returncode}: {first}", code=code)
+    return proc.stdout
 
 
 def short_repo(repo: str) -> str:

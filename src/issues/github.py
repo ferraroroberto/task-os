@@ -23,12 +23,10 @@ import json
 import logging
 import re
 import shutil
-import subprocess
 from collections.abc import Sequence
 from typing import Any
 
-from src.issues.base import IssueInfo, IssueProviderError
-from src.no_window import NO_WINDOW
+from src.issues.base import CliHints, IssueInfo, IssueProviderError, run_cli
 
 logger = logging.getLogger(__name__)
 
@@ -37,47 +35,19 @@ SEARCH_LIMIT = 300
 _FIELDS = "number,title,url,state,labels,updatedAt,body"
 _ISSUE_URL_RE = re.compile(r"https?://[^/\s]+/([^/\s]+/[^/\s]+)/issues/(\d+)")
 
-_AUTH_HINTS = ("gh auth login", "not logged in", "authentication", "http 401", "bad credentials")
-_RATE_HINTS = ("rate limit", "secondary rate", "abuse detection")
-_NOT_FOUND_HINTS = ("could not resolve", "not found", "http 404", "no issues matched")
-
-
-def _classify(stderr: str) -> str:
-    text = (stderr or "").lower()
-    if any(h in text for h in _AUTH_HINTS):
-        return "not_authenticated"
-    if any(h in text for h in _RATE_HINTS):
-        return "rate_limited"
-    if any(h in text for h in _NOT_FOUND_HINTS):
-        return "not_found"
-    return "error"
+_HINTS = CliHints(
+    auth=("gh auth login", "not logged in", "authentication", "http 401", "bad credentials"),
+    rate=("rate limit", "secondary rate", "abuse detection"),
+    not_found=("could not resolve", "not found", "http 404", "no issues matched"),
+)
 
 
 def run_gh(args: Sequence[str], *, timeout: float = GH_TIMEOUT_S) -> str:
     """Run ``gh <args>`` and return stdout; :class:`IssueProviderError` on any failure."""
-    label = "gh " + " ".join(args[:2])
-    try:
-        proc = subprocess.run(
-            ["gh", *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            creationflags=NO_WINDOW,
-        )
-    except FileNotFoundError as exc:
-        raise IssueProviderError("gh not on PATH — install the GitHub CLI", code="not_installed") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise IssueProviderError(f"{label}: timed out after {timeout:.0f}s", code="timeout") from exc
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise IssueProviderError(f"{label}: {exc}", code="error") from exc
-    if proc.returncode != 0:
-        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
-        first = lines[0].strip() if lines else "no output"
-        code = _classify(proc.stderr or proc.stdout or "")
-        raise IssueProviderError(f"{label} exited {proc.returncode}: {first}", code=code)
-    return proc.stdout
+    return run_cli(
+        "gh", args, timeout=timeout, label="gh " + " ".join(args[:2]),
+        install="the GitHub CLI", hints=_HINTS,
+    )
 
 
 def _json(out: str) -> Any:
