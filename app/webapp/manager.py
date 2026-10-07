@@ -14,6 +14,12 @@ Same shape as the sister trays (photo-ocr / voice-transcriber / app-launcher):
   externally started uvicorn is left alone (``tray.bat --restart`` reclaims
   those by port, scoped to this repo's ``.venv``).
 
+The spawned child's stdout and stderr go to ``webapp/webapp.log`` (append,
+rolled to ``webapp.log.1`` past 1 MB): file logging only starts inside
+``create_app()``, so a webapp that dies at boot — an import error after a
+pull, a port bind failure, a migration exception — would otherwise leave its
+traceback nowhere. The "exited before becoming ready" error names that file.
+
 Health probes use ``http.client`` directly — one short-lived loopback request
 per watchdog tick (60 s), no session needed at that cadence.
 """
@@ -29,8 +35,9 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from app.tray.single_instance import cross_process_lock
 from app.webapp.event_loop import LOOP_FACTORY
@@ -40,6 +47,9 @@ from src.no_window import NO_WINDOW
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+#: The spawned webapp's stdout + stderr — beside the tray's ``watchdog.log``.
+WEBAPP_LOG = PROJECT_ROOT / "webapp" / "webapp.log"
+WEBAPP_LOG_MAX_BYTES = 1_000_000
 
 OWNERSHIP_NONE = "none"
 OWNERSHIP_OURS = "ours"
@@ -69,6 +79,28 @@ def _loopback_host(host: str) -> str:
     return "127.0.0.1" if host in ("0.0.0.0", "") else host
 
 
+def _open_child_log(path: Path, max_bytes: int = WEBAPP_LOG_MAX_BYTES) -> IO[bytes] | None:
+    """The append-mode log the webapp child writes to; ``None`` when it cannot be opened.
+
+    A log already past ``max_bytes`` is rolled to ``<name>.1`` first (one
+    generation), so the file stays bounded without a rotating handler in a
+    process that only ever hands its descriptor to the child. An unwritable
+    checkout must not stop the app from starting — the caller falls back to
+    discarding the output, as before.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > max_bytes:
+            os.replace(path, path.with_name(path.name + ".1"))
+        handle = path.open("ab")
+        handle.write(f"\n--- webapp start {datetime.now().isoformat(timespec='seconds')} ---\n".encode())
+        handle.flush()
+        return handle
+    except OSError as exc:
+        logger.warning("⚠️ webapp output log unavailable (%s) — child output is discarded", exc)
+        return None
+
+
 def stop_process(proc: subprocess.Popen, name: str) -> None:
     """CTRL_BREAK (Windows) → terminate → kill after 5 s. Best-effort."""
     try:
@@ -90,8 +122,11 @@ def stop_process(proc: subprocess.Popen, name: str) -> None:
 class WebappManager:
     """Start / stop / health-check the webapp uvicorn process."""
 
-    def __init__(self, config: WebappManagerConfig | None = None) -> None:
+    def __init__(
+        self, config: WebappManagerConfig | None = None, *, log_path: Path | None = None,
+    ) -> None:
         self.config = config or WebappManagerConfig()
+        self.log_path = log_path or WEBAPP_LOG
         self._proc: subprocess.Popen | None = None
 
     @property
@@ -175,10 +210,11 @@ class WebappManager:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
+            child_log = _open_child_log(self.log_path)
             popen_kwargs: dict[str, Any] = dict(
                 cwd=str(PROJECT_ROOT),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=child_log if child_log else subprocess.DEVNULL,
+                stderr=subprocess.STDOUT if child_log else subprocess.DEVNULL,
                 env=env,
             )
             if sys.platform == "win32":
@@ -189,6 +225,9 @@ class WebappManager:
                 raise RuntimeError(f"python launcher not found: {exc}") from exc
             except Exception as exc:
                 raise RuntimeError(f"failed to launch webapp: {exc}") from exc
+            finally:
+                if child_log:
+                    child_log.close()   # the child holds its own inherited copy
 
             if wait:
                 self._wait_until_ready()
@@ -232,7 +271,9 @@ class WebappManager:
         deadline = time.time() + self.config.startup_timeout_seconds
         while time.time() < deadline:
             if self._proc is None or self._proc.poll() is not None:
-                raise RuntimeError("webapp uvicorn exited before becoming ready")
+                raise RuntimeError(
+                    f"webapp uvicorn exited before becoming ready — see {self.log_path}"
+                )
             if self.is_reachable():
                 logger.info("✅ Webapp ready at %s", self.base_url)
                 return
