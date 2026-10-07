@@ -73,8 +73,7 @@ function countText(done, cancelled) {
 /**
  * @param {HTMLElement} host
  * @param {Array<object>} items  the window's closed tasks, newest closing first
- * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
- *          onPatch?: (id:number, patch:object)=>Promise<any>}} handlers
+ * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>}} handlers
  * @param {{today?: string, from: string, weeks: number, hasOlder: boolean|null,
  *          cancelled: boolean, onOlder: () => void, onCancelled: (on:boolean) => void}} opts
  */

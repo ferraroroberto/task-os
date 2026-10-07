@@ -45,7 +45,7 @@ import { createDrawer } from './drawer.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, mountFilters,
 } from './filters.js';
-import { STATUSES, fmtDay, todayISO } from './format.js';
+import { STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
@@ -395,29 +395,6 @@ async function setStatus(id, status) {
   if (!(await actions.run(actionById('complete'), [task]))) throw new Error('busy');
 }
 
-/** Snooze one task from a Today row (#87): set `starts` to the phrase the menu
- *  sent — the server resolves it, so the CLI, quick-add and this control share
- *  one date vocabulary — then say where it went, with the undo that puts the
- *  previous value back. The undo is the inverse PATCH, not a stored command
- *  stack: the old value is the only state it needs. */
-async function snoozeTask(id, phrase) {
-  const before = (state.items.find(function (x) { return x.id === id; }) || {}).starts || null;
-  let t;
-  try {
-    t = await api('/api/tasks/' + id, { method: 'PATCH', body: { starts: phrase } });
-  } catch (err) {
-    toast(err.message || 'Could not snooze the task', 'error');
-    throw err;
-  }
-  await refreshAll();
-  if (drawer.currentId() === id) drawer.refresh();
-  toast('Snoozed to ' + fmtDay(t.starts), 'success', {
-    label: 'Undo',
-    onClick: function () { return patchTask(id, { starts: before }); },
-  });
-  return t;
-}
-
 /** Delete every ticked task (#121) — POST /api/tasks/bulk/delete, after the
  *  one confirmation names the count, the projects whose children go too and
  *  the synced coding tasks the next sync would bring back. Per-id results as
@@ -620,7 +597,7 @@ function selectOpts() {
 function renderBoardPane() {
   if (!board) {
     board = mountBoard({
-      onOpen: openTask, onPatch: patchTask, onStatus: setStatus,
+      onOpen: openTask, onStatus: setStatus,
       onToggleSelect: selectHandlers.onToggleSelect, menu: menus.board,
       onTriage: triageInbox,
       onAcceptSuggestion: acceptAISuggestion,
@@ -641,7 +618,7 @@ function renderBoardPane() {
 
 function renderTodayPane() {
   renderToday(els.todayHost, viewItems(), {
-    onOpen: openTask, onPatch: patchTask, onStatus: setStatus, onSnooze: snoozeTask,
+    onOpen: openTask, onStatus: setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
     sort: state.filters.sort, query: state.filters.q,
@@ -691,7 +668,7 @@ async function loadJournal() {
 function renderJournalPane() {
   const w = journalWindow();
   renderJournal(els.journalHost, state.journal.items,
-    { onOpen: openTask, onPatch: patchTask, onStatus: setStatus, menu: menus.journal },
+    { onOpen: openTask, onStatus: setStatus, menu: menus.journal },
     {
       from: w.from, weeks: state.journal.weeks, hasOlder: state.journal.older, cancelled: state.journal.cancelled,
       onOlder: function () { state.journal.weeks += 1; refreshJournal(); },
@@ -1184,9 +1161,6 @@ async function boot() {
   wireSelectMode();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
-    currentTaskId: function () { return drawer.currentId(); },
-    onTaskChanged: function (id) { refreshAll(); if (drawer.currentId() === id) drawer.refresh(); },
-    onCreated: function (task) { refreshAll().then(function () { openTask(task.id); }); },
     onQuery: syncSearchUrl,
     filters: function () { return state.filters; },
     onStatus: setStatus,

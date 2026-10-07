@@ -40,7 +40,7 @@ names who is acting (activity / comment author); default = the configured
 first team member.
 
 A task whose ``--starts`` day has not arrived is *deferred*: ``tasks ls``
-leaves it out (as do the web app's Board, Today and Table), ``tasks ls
+leaves it out (as do the web app's Board and Today), ``tasks ls
 --deferred`` is the list of exactly those, ``tasks ls --status all`` shows
 everything including them, and ``tasks show`` / ``tasks tree`` / ``tasks
 search`` always find it.
@@ -214,9 +214,6 @@ class HttpBackend:
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._call("PATCH", f"/api/tasks/{task_id}", {"starts": starts, "actor": self.actor})
 
-    def today_view(self) -> dict[str, Any]:
-        return self._call("GET", "/api/today")
-
     def done(self, task_id: int) -> dict[str, Any]:
         return self._call("POST", f"/api/tasks/{task_id}/done", {"actor": self.actor})
 
@@ -374,9 +371,6 @@ class LocalBackend:
 
     def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
         return self._wrap(self._repo.set_starts, task_id, starts, actor=self.actor)
-
-    def today_view(self) -> dict[str, Any]:
-        return self._wrap(self._repo.today_view)
 
     def done(self, task_id: int) -> dict[str, Any]:
         return self._wrap(self._repo.done, task_id, actor=self.actor)

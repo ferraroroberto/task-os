@@ -890,37 +890,10 @@ a.chip:hover { text-decoration: underline; }
   .msel-summary { line-height: calc(var(--row-sm) - 2px); }
 }
 
-/* -------------------------------------------------- snooze (issue #87)
-   The Today row's "not today" control: the same <details> popover idiom as
-   the filter card's multi-select above (summary opens a menu, Escape and an
-   outside click close it), so the app has ONE popover, not one per feature.
-   The trigger is a QUIET inline icon — no button box (the meta folder-glyph
-   pattern): boxed 30/44px squares beside the status select made every row
-   read taller and heavier than its text. The visible footprint stays
-   icon-sized; the shared .hit-target ::before expansion supplies the real
-   click area (28 + 8px a side = 44 on every pointer, #301, centred on the
-   title line's own 44px band so it meets neither the select beside it nor the
-   meta line under it). Plan mode's Later target re-adds `button-surface` —
-   there a large boxed target is the point. */
-.snooze { grid-area: snooze; position: relative; align-self: center; }
-.snooze-summary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  list-style: none;
-  cursor: pointer;
-  color: var(--muted);
-  border-radius: var(--radius-sm);
-}
-.snooze-summary::before { inset: -8px; }
-.snooze-summary::-webkit-details-marker { display: none; }
-.snooze-summary .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.snooze-summary:hover { color: var(--fg); }
-.snooze[open] > .snooze-summary { color: var(--accent); }
-.snooze-summary[aria-busy="true"] { opacity: 0.6; pointer-events: none; }
+/* -------------------------------------------------- the date menu (issues #87, #311)
+   The options list `dateMenu()` builds (snooze.js): the same popover idiom as
+   the filter card's multi-select above, shown beside the row that asked
+   (`.snooze-pop`) or, on a phone, inside the vendored modal (`.date-sheet`). */
 .snooze-menu {
   position: absolute;
   top: calc(100% + 4px);

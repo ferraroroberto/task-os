@@ -17,7 +17,7 @@
           now*), still bounded by the timeout.
 
 The GETs are read-only projections of ``tasks_repo.list_tasks`` (the same
-enriched summaries the Table gets); the bucketing rules live in
+enriched summaries the Board and Search rows get); the bucketing rules live in
 ``src.tasks_repo.board`` / ``today_view`` so the CLI can reuse them later.
 """
 

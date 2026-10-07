@@ -22,7 +22,7 @@ Rules enforced here (plan §04):
   ``done`` or ``cancelled`` sets it, reopening clears it — the done journal
   groups both by that local day;
 - a task whose ``starts`` has not arrived is *deferred*: :func:`list_tasks`
-  hides it by default, so every working view (Board, Today, Table, the CLI)
+  hides it by default, so every working view (Board, Today, the CLI)
   inherits one rule from one clause — :func:`tree` and :func:`search` read
   the table directly and keep showing it (#87);
 - ``coding`` ⇔ an ``issue_refs`` row exists: attaching one sets the type,
@@ -1263,7 +1263,7 @@ def list_tasks(
       would quietly omit the sleeping ones and report a number nobody could
       reconcile.
       This is the ONE place the working views' deferral rule lives: Board,
-      Today, Table and the CLI are all projections of this function, so they
+      Today and the CLI are all projections of this function, so they
       inherit it. :func:`tree` and :func:`search` do not go through here on
       purpose — a deferred task stays findable.
     - ``blocked``: what to do with a task that has an open blocker (#100) —
@@ -1283,7 +1283,7 @@ def list_tasks(
       either default in either kind of view.
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
-    top ancestor — the Table's project column) and ``last_comment``.
+    top ancestor — the project the Board, Today and Search rows and the filter card name) and ``last_comment``.
     ``descriptions=False`` leaves the ``description`` key off every item: the
     web app's boot never reads one from the list (the drawer fetches its own
     task) and it is most of the payload (#309); the default keeps today's
@@ -1429,7 +1429,7 @@ def list_tasks(
 
 
 def _enrich_list(conn: sqlite3.Connection, items: list[dict[str, Any]]) -> None:
-    """Add what the Table needs per row — ``breadcrumb`` (root → parent),
+    """Add what the task rows need — ``breadcrumb`` (root → parent),
     ``root`` (the top ancestor, i.e. the project column), ``last_comment``
     and ``comment_count`` (the Board shows the count, never the body)
     — in four queries total instead of four per row."""

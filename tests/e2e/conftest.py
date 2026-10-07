@@ -830,14 +830,6 @@ def scroll_to_bottom(page: Page, target: Locator) -> None:
     )
 
 
-def _press(page: Page, target: Locator) -> None:
-    """Tap on a touch context, click otherwise — the gesture a real user makes."""
-    if page.evaluate("() => 'ontouchstart' in window"):
-        target.tap()
-    else:
-        target.click()
-
-
 #: Chromium switches every capture needs. Only Chromium: WebKit and Firefox
 #: reject unknown switches at launch.
 _CHROMIUM_CAPTURE_ARGS = ("--disable-partial-raster",)
