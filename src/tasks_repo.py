@@ -589,9 +589,11 @@ def update_task(
 ) -> dict[str, Any]:
     """Apply field changes; one ``activity`` row per field that actually changed.
 
-    ``parent_id`` goes through :func:`move` (cycle guard); ``type='coding'``
-    is refused unless an issue_ref exists; ``status='done'`` stamps
-    ``done_at`` (and leaving ``done`` clears it).
+    ``parent_id`` is checked by :func:`move`'s cycle guard up front but written
+    last, in the same transaction as the other fields — a rejected field never
+    leaves the task re-parented; ``type='coding'`` is refused unless an
+    issue_ref exists; ``status='done'`` stamps ``done_at`` (and leaving
+    ``done`` clears it).
     """
     unknown = set(changes) - set(_TASK_FIELDS)
     if unknown:
@@ -599,12 +601,11 @@ def update_task(
     current = _require_task(conn, task_id)
     actor = actor or DEFAULT_ACTOR
 
+    reparent = False
+    new_parent: int | None = None
     if "parent_id" in changes:
-        new_parent = changes.pop("parent_id")
-        new_parent = int(new_parent) if new_parent is not None else None
-        if new_parent != current["parent_id"]:
-            move(conn, task_id, new_parent, actor=actor)
-            current = _require_task(conn, task_id)
+        new_parent = _check_reparent(conn, task_id, changes.pop("parent_id"))
+        reparent = new_parent != current["parent_id"]
 
     sets: dict[str, Any] = {}
     for field, value in changes.items():
@@ -664,10 +665,12 @@ def update_task(
         if sets["type"] != "coding" and has_ref:
             raise ValidationError("a task with an issue_ref is 'coding' — detach the issue first")
 
-    if not sets:
+    if not sets and not reparent:
         return get_task(conn, task_id)
 
     ts = now_iso()
+    if reparent:
+        sets["parent_id"] = new_parent
     if "status" in sets:
         # closed-at (#102): any move into done / cancelled stamps the moment,
         # any move back out clears it (a reopened task has no closing day)
@@ -681,9 +684,9 @@ def update_task(
     for field, value in sets.items():
         if field in ("updated_at", "done_at"):
             continue
-        _log(conn, task_id, actor, field, current[field], value, ts)
+        _log(conn, task_id, actor, "parent" if field == "parent_id" else field, current[field], value, ts)
     conn.commit()
-    _touched(task_id)
+    _touched(task_id, *((current["parent_id"], new_parent) if reparent else ()))
     return get_task(conn, task_id)
 
 
@@ -777,6 +780,25 @@ def would_cycle(
     return new_parent_id in _descendant_ids(conn, task_id)
 
 
+def _check_reparent(
+    conn: sqlite3.Connection, task_id: int, new_parent_id: int | str | None
+) -> int | None:
+    """Validate a proposed parent with no side effects; returns it as an int/None."""
+    if new_parent_id is None:
+        return None
+    new_parent_id = int(new_parent_id)
+    # Self and descendant stay two messages: "you picked yourself" and
+    # "you picked something below you" have different fixes.
+    if new_parent_id == task_id:
+        raise CycleError(f"task {task_id} cannot be its own parent")
+    _require_task(conn, new_parent_id)
+    if would_cycle(conn, task_id, new_parent_id):
+        raise CycleError(
+            f"task {new_parent_id} is a descendant of task {task_id} — that would be a cycle"
+        )
+    return new_parent_id
+
+
 def move(
     conn: sqlite3.Connection,
     task_id: int,
@@ -790,17 +812,7 @@ def move(
     descendants.
     """
     current = _require_task(conn, task_id)
-    if new_parent_id is not None:
-        new_parent_id = int(new_parent_id)
-        # Self and descendant stay two messages: "you picked yourself" and
-        # "you picked something below you" have different fixes.
-        if new_parent_id == task_id:
-            raise CycleError(f"task {task_id} cannot be its own parent")
-        _require_task(conn, new_parent_id)
-        if would_cycle(conn, task_id, new_parent_id):
-            raise CycleError(
-                f"task {new_parent_id} is a descendant of task {task_id} — that would be a cycle"
-            )
+    new_parent_id = _check_reparent(conn, task_id, new_parent_id)
     if new_parent_id == current["parent_id"]:
         return get_task(conn, task_id)
     ts = now_iso()

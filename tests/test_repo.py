@@ -115,6 +115,25 @@ def test_move_and_cycle_guard(conn: sqlite3.Connection, seeded: dict) -> None:
     assert len(repo.list_activity(conn, quotes)) == n
 
 
+def test_update_task_validates_every_field_before_it_re_parents(
+    conn: sqlite3.Connection, seeded: dict
+) -> None:
+    """A PATCH with a good parent and a bad field changes nothing, not half of it."""
+    quotes, family = seeded["quotes"], seeded["family"]
+    before = repo.get_task(conn, quotes)
+    n = len(repo.list_activity(conn, quotes))
+    for bad in ({"title": ""}, {"priority": "nope"}, {"person_id": 9999}):
+        with pytest.raises(repo.RepoError):
+            repo.update_task(conn, quotes, parent_id=family, **bad)
+        assert repo.get_task(conn, quotes)["parent_id"] == before["parent_id"]
+        assert len(repo.list_activity(conn, quotes)) == n
+
+    both = repo.update_task(conn, quotes, parent_id=family, title="Quotes v2", actor="tester")
+    assert both["parent_id"] == family and both["title"] == "Quotes v2"
+    logged = {f for f, _, _ in _fields(both["activity"])}
+    assert {"parent", "title"} <= logged
+
+
 def test_would_cycle_is_exactly_the_verdict_move_enforces(
     conn: sqlite3.Connection, seeded: dict
 ) -> None:

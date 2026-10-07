@@ -26,6 +26,7 @@ from src import db as dbmod
 from src import tasks_repo as repo
 from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService, ArchiveError
+from src.archive_renumber import apply_renumber_map
 from src.config import AIConfig, AppConfig, ArchiveConfig
 from tests.conftest import write_test_config
 from tests.fixtures.archiver_fake import (
@@ -1264,6 +1265,34 @@ def test_a_folder_the_archiver_refused_to_renumber_is_said_out_loud(
         item = _one_archived_item(conn, svc)
     assert item["files"] == [ARCHIVED_FILE] and "renumbered" not in (item["reason"] or "")
     assert "refused to renumber bills" in caplog.text
+
+
+def test_a_chained_renumber_moves_each_row_once(conn: sqlite3.Connection) -> None:
+    """An older mail filed into a folder shifts its neighbours: 003→001, 001→002, 002→003.
+
+    Healing pair by pair carried the link on the original 001 through 002 on to
+    003 and hit the unique capture key; every row must land on its own new ref.
+    """
+    folder = "E:\\archive\\house\\heating\\"
+    names = {n: f"{folder}{n:04d} - mail.msg" for n in (1, 2, 3)}
+    tasks = {n: _capture_the_email(conn, names[n]) for n in (1, 2, 3)}
+    entries = [
+        {"from": names[3], "to": names[1]},
+        {"from": names[1], "to": names[2]},
+        {"from": names[2], "to": names[3]},
+    ]
+
+    dry = apply_renumber_map(conn, folder, entries, placeholders_map={"archive": "E:/archive"}, dry_run=True)
+    assert dry["links"] == 3 and dry["tasks"] == 3
+
+    done = apply_renumber_map(conn, folder, entries, placeholders_map={"archive": "E:/archive"})
+    assert (done["links"], done["tasks"]) == (3, 3)
+    expected = {1: 2, 2: 3, 3: 1}  # old number -> the number it now carries
+    for old, new in expected.items():
+        link = repo.list_links(conn, tasks[old]["id"])[0]["url"]
+        assert link.endswith(f"{new:04d} - mail.msg")
+        key = repo.get_task(conn, tasks[old]["id"])["external_id"]
+        assert key.endswith(f"{new:04d} - mail.msg")
 
 
 def test_a_saved_map_heals_the_same_way_and_a_dry_run_writes_nothing(

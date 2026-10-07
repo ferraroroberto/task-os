@@ -60,8 +60,7 @@ function saveOpen(map) {
  * @param {HTMLElement} host  where the result groups render
  * @param {{onOpenTask: (id:number) => void, onQuery: (q:string) => void,
  *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>,
- *          menu?: object,   (the Search tab's row menu, rowmenu.js — #311)
- *          onPatch?: (id:number, patch:object) => Promise<any>}} opts
+ *          menu?: object}} opts   (menu: the Search tab's row menu, rowmenu.js — #311)
  */
 export function mountSearch(box, host, opts) {
   const input = box.querySelector('#searchInput');
@@ -79,17 +78,19 @@ export function mountSearch(box, host, opts) {
     timer = setTimeout(function () { run(input.value); }, DEBOUNCE_MS);
   }
 
-  async function run(raw) {
+  // `quiet` = a re-read of the query already on screen after a write: no
+  // "searching…" flash, and a failure keeps the rows that are showing.
+  async function run(raw, quiet) {
     const q = String(raw || '').trim();
-    opts.onQuery(q);
+    if (!quiet) opts.onQuery(q);
     const my = ++seq;
     if (!q) { last = null; renderIdle(); return; }
-    meta.textContent = 'searching…';
+    if (!quiet) meta.textContent = 'searching…';
     let res;
     try {
       res = await api('/api/search?q=' + encodeURIComponent(q) + '&limit=' + LIMIT);
     } catch (err) {
-      if (my !== seq) return;
+      if (my !== seq || quiet) return;
       meta.textContent = 'search failed';
       host.replaceChildren(errCard(err.message || 'Search failed'));
       return;
@@ -250,17 +251,10 @@ export function mountSearch(box, host, opts) {
   function taskHitRow(t, idx) {
     const h = t._hit;
     const extra = snippetLine(h, t.title);
-    // Re-planning from the row (#107) has to land on the hit cache too: a hit's
-    // row is rebuilt from `h.task` on every render, so a patch that only went
-    // to the server would snap back to the date the query returned.
-    const onPatch = opts.onPatch && function (id, patch) {
-      return opts.onPatch(id, patch).then(function (r) {
-        if (h.task) Object.assign(h.task, patch);
-        if (last) render(last);
-        return r;
-      });
-    };
-    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, onPatch: onPatch, menu: opts.menu },
+    // A hit's row is rebuilt from `h.task` on every render, so a write from the
+    // row (#107) reaches it through `rerun()` — the app re-reads the query once
+    // the write has landed, instead of patching this cache by hand.
+    const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, menu: opts.menu },
       extra ? { extra: extra } : undefined);
     li.classList.add('search-hit');
     li.dataset.kind = 'tasks';
@@ -413,6 +407,8 @@ export function mountSearch(box, host, opts) {
     focus() { input.focus(); input.select(); },
     /** The shared filters changed: re-apply them to the task hits. */
     refilter() { if (last) render(last); },
+    /** Re-run the query on screen against the server (after a write), quietly. */
+    rerun() { if (last) return run(input.value, true); return Promise.resolve(); },
     reloadStatus: loadStatus,
   };
 }

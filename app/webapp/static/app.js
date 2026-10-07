@@ -303,6 +303,9 @@ async function refreshAll() {
       return;
     }
     renderAll();
+    // Search rows are drawn from the answer it cached, not from `state.items`:
+    // re-read the query so a completed / re-dated hit does not snap back.
+    if (search) search.rerun();
     els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
     if (state.journal.open) refreshJournal();
   } catch (err) {
@@ -1189,7 +1192,6 @@ async function boot() {
     onQuery: syncSearchUrl,
     filters: function () { return state.filters; },
     onStatus: setStatus,
-    onPatch: patchTask,
     menu: menus.search,
   });
   if (searchQ) search.setQuery(searchQ);
