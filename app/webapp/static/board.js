@@ -327,7 +327,7 @@ function suggestionStrip(suggestion, handlers) {
   const summary = document.createElement('span');
   summary.className = 'ai-suggestion-summary';
   const bits = [
-    '→ ' + (suggestion.parent ? suggestion.parent.title : 'top level'),
+    suggestion.parent ? 'under ' + suggestion.parent.title : 'top level',
     suggestion.priority,
     'due: ' + (suggestion.due || 'none'),
     suggestion.person ? suggestion.person.name : 'unassigned',

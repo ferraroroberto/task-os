@@ -122,6 +122,22 @@
   <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none">
     <path d="m6 9 6 6 6-6" />
   </symbol>
+  <!-- keycaps and the activity log's old-to-new arrow (replace text glyphs, #377) -->
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none">
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none">
+    <path d="m5 12 7-7 7 7" />
+    <path d="M12 19V5" />
+  </symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24" fill="none">
+    <path d="M12 5v14" />
+    <path d="m19 12-7 7-7-7" />
+  </symbol>
+  <symbol id="i-command" viewBox="0 0 24 24" fill="none">
+    <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
+  </symbol>
   <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none">
     <path d="m18 15-6-6-6 6" />
   </symbol>
@@ -544,7 +560,7 @@
             <span class="collapse-chevron" aria-hidden="true">›</span>
           </summary>
           <div class="collapse-body">
-            <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>⌘</kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
+            <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
             <div class="card-actions">
               <button type="button" id="paletteOpen" class="button-surface">
                 <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
@@ -899,7 +915,7 @@
         </button>
       </div>
       <ul id="paletteList" class="palette-list" role="listbox"></ul>
-      <p class="palette-foot muted"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> run · <kbd>&gt;</kbd> commands · <kbd>Esc</kbd> close</p>
+      <p class="palette-foot muted"><kbd aria-label="Up"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up"></use></svg></kbd><kbd aria-label="Down"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"></use></svg></kbd> move · <kbd>Enter</kbd> run · <kbd>&gt;</kbd> commands · <kbd>Esc</kbd> close</p>
     </div>
   </dialog>
 
