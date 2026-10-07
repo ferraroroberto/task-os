@@ -1,13 +1,12 @@
 /* task-os — the one outside-click / Escape closer for `<details>` popovers.
  *
- * The filter card's multi-select (filters.js) and the row snooze menu
- * (snooze.js) are the same shadcn Select/Popover shape: a summary that opens a
- * list, a click outside or Escape closes it. Each had grown its own private
- * `wireOutside()` — verbatim twins differing only by the selector and the name
- * of the already-wired flag — so the page carried two identical pairs of
- * document listeners, and a third popover would have added a third (#191).
- * This is that behaviour in one place: a caller registers its selector, and
- * exactly one pair of document listeners closes every family registered.
+ * The filter card's multi-select (filters.js) is the shadcn Select/Popover
+ * shape: a summary that opens a list, a click outside or Escape closes it. A
+ * second popover (the row snooze menu, since removed) once had its own private
+ * `wireOutside()` — a verbatim twin differing only by the selector — so the page
+ * carried two identical pairs of document listeners (#191). This is that
+ * behaviour in one place: a caller registers its selector, and exactly one pair
+ * of document listeners closes every family registered, however many there are.
  *
  * Popover-shaped disclosures only. A `card--collapsible` (collapsible.js) is a
  * section the reader opens and means to keep open — closing it on the next
@@ -36,11 +35,10 @@ function closeOpen(ev) {
 /**
  * Register a `<details>` popover family for outside-click / Escape close.
  *
- * Idempotent, and cheap enough to call once per element built (both callers
- * do): the selector lands in a set, and the document listeners are wired on
+ * Idempotent, and cheap enough to call once per element built: the selector lands in a set, and the document listeners are wired on
  * the first call only, for the whole app.
  *
- * @param {string} selector  the family, e.g. `.msel` / `.snooze` — matched
+ * @param {string} selector  the family, e.g. `.msel` — matched
  *                           with `[open]` appended, so only open ones are read
  */
 export function closeOnOutside(selector) {

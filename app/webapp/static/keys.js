@@ -28,7 +28,7 @@ import { toast } from './toast.js';
 /** A task row in a view whose rows are action targets. */
 const ROW = '.trow[data-id]';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
-const OWNS_ITS_KEYS = '.snooze, .snooze-pop, .row-menu, .msel, .folder-picker, .toast, .bulk-bar';
+const OWNS_ITS_KEYS = '.snooze-pop, .row-menu, .msel, .folder-picker, .toast, .bulk-bar';
 
 
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
@@ -85,7 +85,7 @@ export function mountKeys(helpDialog, handlers) {
     if (!rows.length) return;
     const same = rows.find(function (r) { return Number(r.dataset.id) === rec.id; });
     const row = same || rows[Math.min(rec.index, rows.length - 1)];
-    const el = row.matches('tr') ? row : row.querySelector('.trow-main');
+    const el = row.querySelector('.trow-main');
     if (!el) return;
     el.tabIndex = 0;
     el.focus({ preventScroll: true });
@@ -230,7 +230,7 @@ export function mountKeys(helpDialog, handlers) {
   /** `.` opens the focused row's ⋯ menu — its kebab's own toggle, so the
    *  keyboard gets exactly the menu a tap gets (the menu key and Shift F10
    *  arrive as a contextmenu event on the row, which rows.js routes the same
-   *  way). A desktop grid row has no menu; the key then does nothing. */
+   *  way). A row without a kebab has no menu; the key then does nothing. */
   function openRowMenu(ev) {
     const row = rowOf(document.activeElement);
     const kebab = row ? row.querySelector('.trow-kebab') : null;
@@ -287,7 +287,7 @@ export function mountKeys(helpDialog, handlers) {
     commands: function () {
       const tgt = target('palette');
       const n = tgt ? tgt.ids.length : 0;
-      const title = tgt && tgt.row ? tgt.row.querySelector('.trow-title, .t-title-text') : null;
+      const title = tgt && tgt.row ? tgt.row.querySelector('.trow-title') : null;
       const where = !tgt ? 'focus a row first'
         : (n > 1 ? n + ' selected' : (title ? title.textContent : '#' + tgt.ids[0]));
       return ACTIONS.map(function (a) {

@@ -52,8 +52,3 @@ def configure_logging(level: int = logging.INFO, log_file: Path | None = None) -
     except OSError as exc:  # a read-only checkout must not kill startup
         root.warning("⚠️ logging: file handler unavailable (%s)", exc)
 
-
-def get_logger(name: str) -> logging.Logger:
-    """``logging.getLogger`` after making sure the process is configured."""
-    configure_logging()
-    return logging.getLogger(name)

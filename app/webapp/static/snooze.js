@@ -1,21 +1,18 @@
 /* task-os — snooze and change-date: the one date picker a row action opens (#87, #311).
  *
- * Snooze is not a field of its own — it is `starts` worn as a row control. The
- * button opens a four-option menu; picking one PATCHes `{starts: <phrase>}` and
- * the task leaves the working views until that day. Re-dating (#311) is the
+ * Snooze is not a field of its own — it is `starts` worn as a row action. The
+ * menu offers four options; picking one PATCHes `{starts: <phrase>}` and the
+ * task leaves the working views until that day. Re-dating (#311) is the
  * same menu over `due`, with Today in front and a way to clear the date. The
  * options send the *phrase*, not a date the browser computed: `src/dates.py`
  * owns the date vocabulary for the CLI, quick-add, the drawer and the mirror,
  * and a second implementation here would be a second set of rules to keep in
  * step.
  *
- * The menu is the `<details>` disclosure the filter card's multi-select already
- * uses (shadcn Select/Popover shape: a summary that opens a grouped list,
- * Escape closes, a click outside closes), so the app has one popover idiom
- * rather than a bespoke one per feature — and one implementation of it too:
- * the close-on-outside half lives in popover.js, registered per family rather
- * than re-wired here (#191). `Pick a date…` hands off to
- * `duePicker()` from dueinput.js — the calendar button with the coarse-pointer
+ * The menu is the shadcn Select/Popover shape the filter card's multi-select
+ * also uses (a grouped list, Escape closes, a click outside closes), so the app
+ * has one popover idiom rather than a bespoke one per feature. `Pick a date…`
+ * hands off to `duePicker()` from dueinput.js — the calendar button with the coarse-pointer
  * branch — instead of hand-rolling a third native-picker call site.
  *
  * A row action that asks for a date (the `s` and `d` keys, the ⋯ menu's
@@ -29,7 +26,6 @@
 import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
 import { closeOnBackdrop, modalCard } from './modal.js';
-import { closeOnOutside } from './popover.js';
 
 /** [phrase sent to the API, what the button says]. */
 export const SNOOZE_OPTIONS = [
@@ -60,11 +56,10 @@ const FIELDS = {
 /**
  * One date field's options as a menu, with no trigger attached.
  *
- * One options list, one commit path: the Today row's button below mounts it
- * inside its `<details>`, and `openDatePicker()` mounts the same element
- * beside whatever row asked — on a tab whose rows carry no date control at
- * all. A second list would be a second date vocabulary to keep in step, which
- * is the whole reason the phrases go to the server.
+ * One options list, one commit path: `openDatePicker()` mounts it beside
+ * whatever row asked (a popover on a fine pointer, the modal on a phone). A
+ * second list would be a second date vocabulary to keep in step, which is the
+ * whole reason the phrases go to the server.
  *
  * @param {object} t                          a task summary (`title`, and `due` for the clear option)
  * @param {'starts'|'due'} field
@@ -113,51 +108,6 @@ export function dateMenu(t, field, onPick) {
     menu.appendChild(clear);
   }
   return menu;
-}
-
-/** The snooze menu — `dateMenu` over `starts`. */
-export function snoozeMenu(t, onPick) {
-  return dateMenu(t, 'starts', onPick);
-}
-
-/**
- * The snooze control for one row.
- * @param {object} t                                     a task summary
- * @param {(id:number, phrase:string) => Promise<any>} onSnooze
- *        resolves once the PATCH landed; the caller owns the toast + undo.
- * @returns {HTMLElement} a `<details class="snooze">`
- */
-export function snoozeButton(t, onSnooze) {
-  closeOnOutside('.snooze');
-  const d = document.createElement('details');
-  d.className = 'snooze';
-  d.dataset.id = String(t.id);
-  // One snooze menu open at a time across the list (an exclusive `<details
-  // name>` group), the same rule popover.js applies on an outside click (#281).
-  d.setAttribute('name', 'task-os-snooze');
-
-  // A quiet inline icon, not a boxed button (the folder-glyph pattern): the
-  // visible footprint stays icon-sized so rows keep their height, while the
-  // .hit-target ::before expansion supplies the real click/touch area.
-  const summary = document.createElement('summary');
-  summary.className = 'snooze-summary hit-target';
-  summary.setAttribute('role', 'button');
-  summary.setAttribute('aria-haspopup', 'dialog');
-  summary.setAttribute('aria-label', 'Snooze ' + t.title);
-  summary.title = 'Snooze';
-  summary.innerHTML = icon('clock');
-  d.appendChild(summary);
-
-  function commit(phrase) {
-    d.open = false;
-    summary.setAttribute('aria-busy', 'true');
-    Promise.resolve(onSnooze(t.id, phrase))
-      .catch(function () { /* the caller toasts the failure */ })
-      .finally(function () { summary.removeAttribute('aria-busy'); });
-  }
-
-  d.appendChild(snoozeMenu(t, commit));
-  return d;
 }
 
 // ------------------------------------------------------- the open picker

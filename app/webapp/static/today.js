@@ -93,7 +93,6 @@ function groupByRoot(items, sort) {
  * @param {HTMLElement} host
  * @param {Array<object>} items  the shared filtered list
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
- *          onSnooze?: (id:number, phrase:string)=>Promise<any>,
  *          onToggleSelect?: (id:number)=>void}} handlers
  * @param {{sort?: string, today?: string, query?: string,
  *          calendar?: object|null,

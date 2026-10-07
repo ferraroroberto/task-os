@@ -123,7 +123,7 @@ class TaskUpdate(BaseModel):
 
 
 class BulkBody(BaseModel):
-    """One change applied to many tasks — the Board/Table selection (issue #81).
+    """One change applied to many tasks — the Board/Today selection (issue #81).
 
     ``status`` takes the same vocabulary as the row select, ``complete``
     included; ``due``, ``starts`` and ``priority`` take the same values as a
