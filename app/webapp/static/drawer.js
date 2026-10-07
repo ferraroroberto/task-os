@@ -730,7 +730,7 @@ export function createDrawer(el, opts) {
       oldV.textContent = a.old_value == null ? '∅' : a.old_value;
       const arrow = document.createElement('span');
       arrow.className = 'activity-arrow';
-      arrow.textContent = ' → ';
+      arrow.innerHTML = ' ' + icon('arrow-right') + ' ';
       const newV = document.createElement('span');
       newV.className = 'activity-new';
       newV.textContent = a.new_value == null ? '∅' : a.new_value;

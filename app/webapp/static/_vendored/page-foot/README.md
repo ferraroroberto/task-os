@@ -52,7 +52,7 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 | Token | Light value | Used for |
 | --- | --- | --- |
 | `--muted` | `#656d76` | readout text color |
-| `--font-caption` | `0.78rem` | readout text size |
+| `--font-caption` | `0.75rem` | readout text size |
 | `--space-md` | `16px` | outer vertical margin |
 | `--space-xs` | `4px` | outer horizontal margin |
 

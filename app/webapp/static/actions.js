@@ -148,7 +148,7 @@ export const ACTIONS = [
   },
   {
     id: 'priority', key: 'p', kbd: 'P', icon: 'activity',
-    label: 'Cycle priority', hint: 'none → low → medium → high, each task from its own',
+    label: 'Cycle priority', hint: 'none, low, medium, then high; each task from its own',
     plan: function (tasks) {
       return groupByCurrent(tasks, ['priority'], function (t) { return nextPriority(t.priority); });
     },

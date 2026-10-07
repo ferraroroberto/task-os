@@ -72,7 +72,7 @@
   --font-heading-lg: 1.5rem;
   --font-body: 1rem;
   --font-body-sm: 0.875rem;   /* typography.body-sm — a row's meta line (the vendored action-row) */
-  --font-label: 0.92rem;
+  --font-label: 0.875rem;
   --font-caption: 0.75rem;
   /* controls + rows */
   --control-h: 36px;
@@ -96,8 +96,8 @@
   /* two icon buttons side by side: their 44px targets touch, never overlap */
   --icon-btn-gap: calc(var(--hit-min) - var(--icon-btn-box));
   /* vendored component fills. The header toggles and the modal × are icon
-     buttons, unshaded at rest like every other one (#357). */
-  --close-bg: transparent;           /* home-head toggle + modal × */
+     buttons, unshaded at rest like every other one (#357): --close-bg is left
+     unset, so the vendored default (transparent) applies. */
   --input-bg: var(--card-off);       /* select-native / modal controls */
   --toggle-track: var(--line);       /* switch.css */
   --toggle-knob: #ffffff;
@@ -194,7 +194,7 @@ button, input, select, textarea { font: inherit; }
    side by side sit --icon-btn-gap apart so their targets touch but never
    overlap. Focus is the app's one ring (:focus-visible above). The
    vendored ⋮ (action-row) is the same recipe at a real 44px; the vendored
-   header toggles and modal × reach it through --close-bg. */
+   header toggles and modal × are the same recipe, from the vendored CSS. */
 .icon-btn {
   position: relative;
   flex: none;
@@ -562,7 +562,7 @@ a.chip:hover { text-decoration: underline; }
 }
 .folder-picker-btn .icon { grid-row: 1 / span 2; width: 16px; height: 16px; color: var(--muted); }
 .folder-picker-name { font-weight: 600; font-size: var(--font-body); }
-.folder-picker-ref { color: var(--muted); font-size: var(--font-caption); word-break: break-all; }
+.folder-picker-ref { color: var(--muted); font-size: var(--font-caption); overflow-wrap: anywhere; }
 .folder-picker-item.is-active .folder-picker-btn, .folder-picker-btn:hover { background: var(--accent-soft); border-color: var(--accent-border-soft); }
 .folder-picker-note { margin: 0; font-size: var(--font-caption); }
 
