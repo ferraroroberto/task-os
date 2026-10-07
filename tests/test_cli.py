@@ -226,6 +226,20 @@ def test_ls_updated_before_over_both_backends(run: Runner) -> None:
     assert code == 1 and "cannot parse date" in err
 
 
+def test_updated_before_and_journal_windows_follow_the_pinned_clock(run: Runner) -> None:
+    """The look-back windows are measured from `src.clock`, not the machine's calendar."""
+    from datetime import datetime
+
+    from src import clock
+
+    pinned = datetime(2031, 3, 15, 9, 0).astimezone()
+    with clock.use_clock(lambda: pinned):
+        assert cli._parse_before_arg("30d") == "2031-02-13"
+        code, out, _ = run("journal", "--weeks", "1", "--json")
+        assert code == 0
+        assert _json(out)["from"] == "2031-03-09" and _json(out)["to"] == "2031-03-15"
+
+
 def test_ls_filters_done_move_search_people(run: Runner) -> None:
     run("add", "Project")
     run("add", "Child A", "--parent", "1", "--due", "today", "--priority", "high")
