@@ -130,7 +130,7 @@ docs/                     validation.md (the story index + phase gates) + valida
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
 data/                     tasks.db, folder_index.txt, logs, avatars, backups — gitignored, never committed
-webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log — gitignored
+webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log, webapp.log (the tray-spawned webapp's stdout/stderr — a boot traceback lands here) — gitignored
 ```
 
 ## Configuration — `config/config.json`
