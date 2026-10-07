@@ -50,7 +50,7 @@ export function toast(message, kind, action) {
   }
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'icon-btn toast-close';   // the one icon button (#357)
+  close.className = 'icon-button toast-close';   // the one icon button (#357)
   close.setAttribute('aria-label', 'Dismiss');
   close.innerHTML = icon('x');
   close.addEventListener('click', function () { el.remove(); });

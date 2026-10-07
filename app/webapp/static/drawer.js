@@ -286,7 +286,7 @@ export function createDrawer(el, opts) {
     });
     input.addEventListener('blur', function () { commit(input.value.trim()); });
     const pick = duePicker({
-      className: 'icon-btn field-due-btn',     // the one icon button (#357)
+      className: 'icon-button field-due-btn',     // the one icon button (#357)
       value: value,
       ariaLabel: 'Pick a ' + label.toLowerCase() + ' date',
       onPick: commit,
@@ -554,14 +554,14 @@ export function createDrawer(el, opts) {
       actions.className = 'link-actions';
       const edit = document.createElement('button');
       edit.type = 'button';
-      edit.className = 'icon-btn';   // the one icon button (#357): unshaded, 44px via ::before
+      edit.className = 'icon-button';   // the one icon button (#357): unshaded, 44px via ::before
       edit.setAttribute('aria-label', 'Edit label for ' + (l.label || l.url));
       edit.innerHTML = icon('pencil');
       edit.addEventListener('click', function () { editingLinkId = l.id; render(); });
       actions.appendChild(edit);
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'icon-btn is-danger';
+      rm.className = 'icon-button danger';
       rm.setAttribute('aria-label', 'Remove link ' + (l.label || l.url));
       rm.innerHTML = icon('trash-2');
       rm.addEventListener('click', async function () {
@@ -673,14 +673,14 @@ export function createDrawer(el, opts) {
       actions.className = 'comment-actions';
       const edit = document.createElement('button');
       edit.type = 'button';
-      edit.className = 'icon-btn';
+      edit.className = 'icon-button';
       edit.setAttribute('aria-label', 'Edit comment by ' + c.author);
       edit.title = 'Edit';
       edit.innerHTML = icon('pencil');
       edit.addEventListener('click', function () { editingCommentId = c.id; render(); });
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'icon-btn is-danger';
+      rm.className = 'icon-button danger';
       rm.setAttribute('aria-label', 'Delete comment by ' + c.author);
       rm.title = 'Delete';
       rm.innerHTML = icon('trash-2');
@@ -1092,7 +1092,7 @@ export function createDrawer(el, opts) {
       row.appendChild(statusPill(b.status));
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'icon-btn is-danger';
+      rm.className = 'icon-button danger';
       rm.setAttribute('aria-label', 'Remove blocker ' + b.title);
       rm.innerHTML = icon('trash-2');
       rm.addEventListener('click', async function () {
@@ -1172,7 +1172,7 @@ export function createDrawer(el, opts) {
       cur.appendChild(chip);
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'icon-btn is-danger';
+      remove.className = 'icon-button danger';
       remove.setAttribute('aria-label', 'Remove folder link');
       remove.innerHTML = icon('trash-2');
       remove.addEventListener('click', function () { commitFolder(''); });

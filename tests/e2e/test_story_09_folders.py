@@ -198,7 +198,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(drawer.locator(".folder-resolved")).to_have_count(0)
     expect(drawer.locator(".folder-copy")).to_have_count(0)
     expect(drawer.locator("div.drawer-folder > *:not([hidden])")).to_have_count(2)
-    trash = drawer.locator(".folder-current .icon-btn")
+    trash = drawer.locator(".folder-current .icon-button")
     expect(trash).to_be_visible()
     _centers_align(fchip, trash)                      # delete is ON the chip's line, centred on it
     _centers_align(
@@ -213,7 +213,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     align = drawer.locator("div.drawer-folder").evaluate(
         "el => { const q = s => { const r = el.querySelector(s).getBoundingClientRect();"
         " return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; };"
-        " return { chip: q('a.chip-folder'), trash: q('.folder-current .icon-btn'),"
+        " return { chip: q('a.chip-folder'), trash: q('.folder-current .icon-button'),"
         "  input: q('#drawerFolder'), pick: q('button.folder-pick') }; }")
     assert align["chip"][0] == align["input"][0], align
     assert align["trash"][1] == align["pick"][1], align
@@ -319,9 +319,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(drawer).to_be_visible()
     ai_row = drawer.locator(".link-row", has=page.locator("a.chip-ai"))
     expect(ai_row).to_have_count(1)
-    expect(ai_row.locator("button.icon-btn")).to_have_count(2)
+    expect(ai_row.locator("button.icon-button")).to_have_count(2)
     found = assert_icon_buttons_uniform(page, "#taskDrawer", min_count=6)
-    trash_glyph = next(b["glyph"] for b in found if b["cls"].startswith("icon-btn") and "Remove link" in b["name"])
+    trash_glyph = next(b["glyph"] for b in found if b["cls"].startswith("icon-button") and "Remove link" in b["name"])
     assert trash_glyph == 16, found                         # the Links row's glyph is the one size
     # one reference pill: the folder chip IS the AI pill's look (#357)
     assert pill_style(ai_row.locator("a.chip-ai")) == folder_pill
