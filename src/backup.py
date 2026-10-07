@@ -145,19 +145,25 @@ class BackupScheduler:
         self.last_file = target.name
         return target
 
-    def due_now(self, now: datetime | None = None) -> bool:
-        """Today's file is missing and today was not tried yet, or the scheduled time has passed.
+    def missing_today(self, now: datetime | None = None) -> bool:
+        """Today's file is missing and today was not tried yet — the startup catch-up test.
 
-        A failed attempt (a disconnected or read-only sync folder) leaves today's
-        file missing; without the attempted-day check the 30 s tick would retry
-        it — and log a failure — forever. It waits for ``next_run`` instead.
+        Asked once, before the tick loop: a PC that was off at 03:00 still gets
+        a copy when the webapp starts. Asked on every tick it would also fire at
+        midnight (the new day's file does not exist yet) and again at the
+        scheduled hour, doubling every night's copy. A failed attempt leaves
+        today's file missing; the attempted-day check keeps it from being retried.
         """
         if self.dir is None:
             return False
+        today = (now or datetime.now()).date()
+        return not (self.dir / backup_name(today)).exists() and self._attempted != today
+
+    def due_now(self, now: datetime | None = None) -> bool:
+        """The scheduled time has passed — the only thing the 30 s tick decides on."""
+        if self.dir is None:
+            return False
         now = now or datetime.now()
-        today = now.date()
-        if not (self.dir / backup_name(today)).exists() and self._attempted != today:
-            return True
         return self.next_run is not None and now >= self.next_run
 
     def start(self) -> None:
@@ -177,7 +183,7 @@ class BackupScheduler:
 
     def _run(self) -> None:
         # startup: today's copy if missing (a PC that was off at 03:00 still gets one)
-        if self.due_now():
+        if self.missing_today():
             self.run_now()
         while not self._stop.wait(30):
             now = datetime.now()

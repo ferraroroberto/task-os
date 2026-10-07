@@ -132,6 +132,10 @@ def rename_files(files: list[str], index: dict[str, str]) -> list[str]:
     return [index.get(placeholders.normalize_path(f).casefold(), f) for f in files]
 
 
+#: Parks a chained rename's row between its two hops; never a real ref.
+_TEMP_SUFFIX = "#renumbering"
+
+
 def apply_renumber_map(
     conn: sqlite3.Connection,
     folder: str,
@@ -149,9 +153,11 @@ def apply_renumber_map(
     ``scripts/apply_renumber_map.py --dry-run`` previews against the live
     database before it is asked to touch it.
 
-    **Idempotent by construction**: a pair whose old path is no longer stored
-    anywhere matches nothing, so re-running a map is a no-op and a heal
-    interrupted half-way is finished simply by running it again.
+    **Idempotent for a map with no chains**: a pair whose old path is no longer
+    stored anywhere matches nothing, so re-running it is a no-op and a heal
+    interrupted half-way is finished simply by running it again. A chained map
+    (``003→001, 001→002``) is applied once: a re-run would walk the rows on
+    another hop, so it is not repeated blindly.
     """
     pairs = renumber_pairs(entries)
     counts = {"renames": len(pairs), "items": 0, "links": 0, "tasks": 0}
@@ -174,15 +180,32 @@ def apply_renumber_map(
             )
 
     known = dict(placeholders_map or {})
-    for old, new in pairs:
-        moved = email_capture.rename_ref(
-            conn,
+    refs = [
+        (
             placeholders.to_ref(placeholders.normalize_path(old), known),
             placeholders.to_ref(placeholders.normalize_path(new), known),
-            dry_run=dry_run,
         )
+        for old, new in pairs
+    ]
+    # A shifting renumber chains (an older mail filed in: 003→001, 001→002,
+    # 002→003), so renaming pair by pair would carry one row through two hops
+    # and collide with the unique capture key. A pair whose target is no other
+    # pair's source is safe to rename straight away; the rest go through a
+    # temporary ref so every row moves exactly once.
+    sources = {old for old, _ in refs}
+    direct = [(old, new) for old, new in refs if new not in sources]
+    chained = [(old, new) for old, new in refs if new in sources]
+    for old, new in direct:
+        moved = email_capture.rename_ref(conn, old, new, dry_run=dry_run)
         counts["links"] += moved["links"]
         counts["tasks"] += moved["tasks"]
+    for old, _new in chained:
+        moved = email_capture.rename_ref(conn, old, old + _TEMP_SUFFIX, dry_run=dry_run)
+        counts["links"] += moved["links"]
+        counts["tasks"] += moved["tasks"]
+    if not dry_run:
+        for old, new in chained:
+            email_capture.rename_ref(conn, old + _TEMP_SUFFIX, new)
 
     if not dry_run:
         conn.commit()

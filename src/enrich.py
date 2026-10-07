@@ -308,8 +308,11 @@ def enrich_line(
         out["reason"] = exc.reason
         return out
 
-    title = (fields.get("title") or "").strip()
-    description = (fields.get("description") or "").strip()
+    # Only a string counts: a list of bullets or a number is "missing", the same
+    # rule resolve_phrase applies to the phrases — never an AttributeError.
+    title, description = (
+        v.strip() if isinstance(v, str) else "" for v in (fields.get("title"), fields.get("description"))
+    )
     due, due_phrase = resolve_phrase(fields.get("due_phrase"), text, today)
     starts, starts_phrase = resolve_phrase(fields.get("starts_phrase"), text, today)
     # An empty title is the one thing that cannot be used — the line has to say

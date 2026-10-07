@@ -83,7 +83,7 @@ def test_scheduler_status_run_now_and_due_logic(db: Path, tmp_path: Path) -> Non
     assert s.enabled and s.dir == dest and dest.is_dir()
     st = s.status()
     assert st["enabled"] and st["files"] == 0 and st["last_file"] is None and st["next_run"] is None
-    assert s.due_now(datetime(2026, 8, 17, 12, 0))  # today's copy missing
+    assert s.missing_today(datetime(2026, 8, 17, 12, 0))  # today's copy missing
     target = s.run_now()
     assert target is not None and target.name == backup_name()
     st = s.status()
@@ -112,11 +112,21 @@ def test_a_failed_day_is_not_retried_every_tick(tmp_path: Path, monkeypatch: pyt
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "missing.db"))
     s = BackupScheduler(load_config(write_test_config(tmp_path / "c.json", backup_dir=str(tmp_path / "b"))))
     now = datetime.now()
-    assert s.due_now(now)
+    assert s.missing_today(now)
     assert s.run_now() is None and s.last_error
-    assert not s.due_now(now)  # today already tried — the 30 s tick must not retry it
+    assert not s.missing_today(now) and not s.due_now(now)  # today already tried — the 30 s tick must not retry it
     s.next_run = now.replace(microsecond=0)
     assert s.due_now(now)  # the schedule still gets its try
+
+
+def test_a_new_day_without_a_file_is_not_due_before_the_scheduled_hour(db: Path, tmp_path: Path) -> None:
+    """A webapp left up past midnight must not back up at 00:00 — only at BACKUP_HOUR."""
+    s = BackupScheduler(load_config(write_test_config(tmp_path / "c.json", backup_dir=str(tmp_path / "b"))))
+    s.next_run = datetime(2026, 8, 18, 3, 0)
+    midnight = datetime(2026, 8, 18, 0, 0, 30)
+    assert not (s.dir / backup_name(midnight.date())).exists()
+    assert not s.due_now(midnight)  # the new day's file is missing, but the schedule decides
+    assert s.due_now(datetime(2026, 8, 18, 3, 0, 30))
 
 
 def test_scheduler_thread_starts_and_stops(db: Path, tmp_path: Path) -> None:

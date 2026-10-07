@@ -265,6 +265,22 @@ def test_the_parser_is_the_floor_and_says_when_it_answered(chat: FakeChat) -> No
     assert titleless["reason"] == "the model returned no title"
 
 
+def test_a_non_string_title_or_description_is_missing_not_a_crash(chat: FakeChat) -> None:
+    """A model that answers with bullet points or a number must fall back, not 500."""
+    line = "renew passport friday"
+    chat.says(title=["Renew", "passport"], description="x", due_phrase=None, starts_phrase=None)
+    listed = enrich_line(EnrichClient(config_for(chat.url)), line, today=TODAY)
+    assert listed["source"] == PARSER and listed["reason"] == "the model returned no title"
+
+    chat.says(title="Renew the passport", description=["a", "b"], due_phrase=None, starts_phrase=None)
+    bulleted = enrich_line(EnrichClient(config_for(chat.url)), line, today=TODAY)
+    assert bulleted["source"] == LLM and bulleted["description"] == ""
+
+    chat.says(title=42, description=7, due_phrase=None, starts_phrase=None)
+    numeric = enrich_line(EnrichClient(config_for(chat.url)), line, today=TODAY)
+    assert numeric["source"] == PARSER
+
+
 def test_the_parent_reference_stays_the_parsers(chat: FakeChat) -> None:
     """``#12`` and ``› garden-bot`` are syntax, not language — the model was
     never asked about them, so it cannot lose them."""
