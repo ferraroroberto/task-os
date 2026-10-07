@@ -15,11 +15,13 @@ from src.dates import (
     DateParseError,
     IntervalError,
     add_months,
+    days_ago,
     describe_recurrence,
     next_due,
     normalise_anchor,
     normalise_interval,
     parse_date,
+    parse_days_ago,
     parse_interval,
 )
 
@@ -409,3 +411,20 @@ def test_the_default_today_is_the_process_clock_not_the_machine() -> None:
         assert parse_date("tomorrow") == date(2026, 8, 18)
         assert parse_date("next friday") == date(2026, 8, 28)
         assert next_due(None, "weekly", "fri") == FRI
+
+
+def test_nd_looks_back_in_parse_days_ago_and_ahead_in_parse_date() -> None:
+    """One token, two questions: ``--updated-before 30d`` is a look-back, ``--due 30d`` a plan."""
+    assert parse_days_ago("30d", today=MON) == MON - timedelta(days=30)
+    assert parse_date("30d", today=MON) == MON + timedelta(days=30)
+    assert days_ago(0, today=MON) == MON
+    for text in (None, "", "d", "3w", "tomorrow", "2026-09-01", "-3d"):
+        assert parse_days_ago(text, today=MON) is None, text
+
+
+def test_days_ago_reads_the_process_clock() -> None:
+    """A pinned process (the e2e instances) gets windows measured from its own today."""
+    pinned = datetime(2026, 8, 17, 12, 0).astimezone()
+    with clock.use_clock(lambda: pinned):
+        assert days_ago(7) == date(2026, 8, 10)
+        assert parse_days_ago("30d") == date(2026, 7, 18)

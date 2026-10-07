@@ -445,6 +445,28 @@ def _month_day(text: str, today: date) -> date | None:
     return None
 
 
+_DAYS_AGO_RE = re.compile(r"^(\d+)d$")
+
+
+def days_ago(n: int, today: date | None = None) -> date:
+    """The day *n* days before today (``src.clock``'s, unless *today* is given)."""
+    return (today or clock.today()) - timedelta(days=n)
+
+
+def parse_days_ago(text: str | None, today: date | None = None) -> date | None:
+    """``"30d"`` → the day 30 days **before** today; ``None`` when *text* is not that form.
+
+    The look-back vocabulary of ``tasks ls --updated-before`` (and the web
+    filter card's modified window, #101). It is deliberately a separate function
+    from :func:`parse_date`, where the same ``Nd`` token means N days *ahead*
+    (``--due 3d``): a caller asks for "a date to look back from" or "a date to
+    plan for", and the direction is that choice, not something to guess from the
+    token.
+    """
+    m = _DAYS_AGO_RE.match((text or "").strip().lower())
+    return days_ago(int(m.group(1)), today) if m else None
+
+
 def parse_date(text: str | None, today: date | None = None) -> date | None:
     """Turn a natural or ISO phrase into a :class:`date`; ``None`` for "no date".
 

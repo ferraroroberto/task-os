@@ -62,11 +62,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
+from src import clock
 from src.config import load_config
-from src.dates import DateParseError, describe_recurrence, parse_date
+from src.dates import DateParseError, days_ago, describe_recurrence, parse_date, parse_days_ago
 from src.schema import (
     CLOSED_STATUSES,
     DEFAULT_STATUS,
@@ -940,11 +941,13 @@ def _parse_date_arg(text: str | None) -> str | None:
 def _parse_before_arg(text: str) -> str:
     """``--updated-before`` vocabulary: ``Nd`` = N days ago, else a date.
 
-    The relative form is resolved here, CLI-side — the wire (and the repo
-    layer) only ever see a plain date, same as the web filter card (#101).
+    The relative form is :func:`src.dates.parse_days_ago`'s, resolved CLI-side —
+    the wire (and the repo layer) only ever see a plain date, same as the web
+    filter card (#101).
     """
-    if text.endswith("d") and text[:-1].isdigit():
-        return (date.today() - timedelta(days=int(text[:-1]))).isoformat()
+    ago = parse_days_ago(text)
+    if ago is not None:
+        return ago.isoformat()
     parsed = _parse_date_arg(text)
     if parsed is None:
         raise CliError(f"cannot parse date {text!r}", code="bad_date")
@@ -1118,8 +1121,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
         return items, fmt_ls(items)
     if cmd == "journal":
         weeks = args.weeks if args.weeks and args.weeks > 0 else 1
-        done_to = date.today().isoformat()
-        done_from = (date.today() - timedelta(days=7 * weeks - 1)).isoformat()
+        done_to = clock.today().isoformat()
+        done_from = days_ago(7 * weeks - 1).isoformat()
         filters = {"status": "done,cancelled", "done_from": done_from, "done_to": done_to}
         if args.project is not None:
             filters["project"] = args.project
