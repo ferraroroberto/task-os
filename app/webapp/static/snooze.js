@@ -28,6 +28,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import { duePicker } from './dueinput.js';
+import { closeOnBackdrop, modalCard } from './modal.js';
 import { closeOnOutside } from './popover.js';
 
 /** [phrase sent to the API, what the button says]. */
@@ -213,33 +214,22 @@ function openPopover(t, field, anchor, onPick) {
 function openDialog(t, field, onPick) {
   const dialog = document.getElementById('dateDialog');
   if (!dialog) return;
-  const card = document.createElement('div');
-  card.className = 'detail-card date-card';
-  const head = document.createElement('div');
-  head.className = 'detail-header';
-  const h = document.createElement('h2');
-  h.id = 'dateDialogTitle';
-  h.textContent = FIELDS[field].heading;
-  const x = document.createElement('button');
-  x.type = 'button';
-  x.className = 'detail-close';
-  x.setAttribute('aria-label', 'Cancel');
-  x.innerHTML = icon('x');
-  x.addEventListener('click', function () { dialog.close(); });
-  head.append(h, x);
+  const card = modalCard({
+    cardClass: 'date-card', title: FIELDS[field].heading, titleId: 'dateDialogTitle',
+    closeLabel: 'Cancel', onClose: function () { dialog.close(); },
+  }).card;
   const name = document.createElement('p');
   name.className = 'date-card-task muted';
   name.textContent = t.title;
   let picked;   // undefined = nothing picked; null is a pick ("No date")
   const menu = dateMenu(t, field, function (phrase) { picked = phrase; dialog.close(); });
   menu.classList.add('date-sheet');
-  card.append(head, name, menu);
-  function onBackdrop(ev) { if (ev.target === dialog) dialog.close(); }
+  card.append(name, menu);
   const handle = { close: function () { dialog.close(); } };
-  dialog.addEventListener('click', onBackdrop);
+  const offBackdrop = closeOnBackdrop(dialog);
   dialog.addEventListener('close', function onClose() {
     dialog.removeEventListener('close', onClose);
-    dialog.removeEventListener('click', onBackdrop);
+    offBackdrop();
     dialog.replaceChildren();
     if (open === handle) open = null;
     if (picked !== undefined) onPick(picked);

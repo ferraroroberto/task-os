@@ -326,7 +326,7 @@ def gh(monkeypatch: pytest.MonkeyPatch):
             raise nxt
         return nxt
 
-    monkeypatch.setattr("src.issues.github.subprocess.run", fake_run)
+    monkeypatch.setattr("src.issues.base.subprocess.run", fake_run)
     monkeypatch.setattr("src.issues.github.shutil.which", lambda _: "C:/gh.exe")
 
     class Handle:

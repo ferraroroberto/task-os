@@ -90,7 +90,7 @@ app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tok
                           today.js, drawer.js, quickadd.js, search.js (the Search tab),
                           rows.js (the one task row), filters.js (the one filter card), journal.js (the done journal),
                           selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), rowmenu.js (the row's ⋯ menu), keys.js (the one keymap), snooze.js (the one date picker),
-                          confirm.js, folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
+                          confirm.js + modal.js (the editor-modal card shell and backdrop close), folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
                           archive.js (the Archive tab: the batch run + its report, retry a refused move), settings.js (the Settings pane — the header gear, no tab, #281),
                           calendar.js (the calendar lane beside Today), popover.js (the one outside-click / Escape closer for `<details>` popovers),
                           recurrence.js (the recurrence vocabulary — the picker's mirror of src/dates.py),
@@ -99,13 +99,13 @@ app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tok
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
-                          voice.py (voice quick-add: the hub transcribes, local whisper only as fallback) · enrich.py (the
+                          hub_probe.py (the cached TCP reachability probe the AI, voice and enrich clients share) · voice.py (voice quick-add: the hub transcribes, local whisper only as fallback) · enrich.py (the
                           spoken sentence → title + description through the hub's light model; dates stay src/dates.py's)
                           clock.py (the one process clock, pinned by TASKOS_CLOCK) · runtime_data.py (resolves where the SQLite
                           file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
                           mirror.py (markdown mirror: export / watcher import) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
-                          issues/ (IssueProvider contract · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)
+                          issues/ (IssueProvider contract + the one CLI runner · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)
                           placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
                           (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
                           search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·

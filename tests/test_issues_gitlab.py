@@ -50,7 +50,7 @@ def glab(monkeypatch: pytest.MonkeyPatch):
             raise nxt
         return nxt
 
-    monkeypatch.setattr("src.issues.gitlab.subprocess.run", fake_run)
+    monkeypatch.setattr("src.issues.base.subprocess.run", fake_run)
     monkeypatch.setattr("src.issues.gitlab.shutil.which", lambda _: "C:/glab.exe")
 
     class Handle:

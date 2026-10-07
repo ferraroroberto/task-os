@@ -33,6 +33,7 @@
 
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
+import { closeOnBackdrop } from './modal.js';
 import { STATUSES, relDue } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { toast } from './toast.js';
@@ -357,10 +358,7 @@ export function createQuickAdd(dialog, opts) {
     folder.focus();
   }, true);
   dialog.querySelector('.detail-close').addEventListener('click', close);
-  dialog.addEventListener('click', function (ev) {
-    // click on the backdrop (outside the card) closes
-    if (ev.target === dialog) close();
-  });
+  closeOnBackdrop(dialog, close);
   // Escape / backdrop / × / a successful add all discard the draft (the
   // editor-modal contract: nothing persists but the primary action).
   dialog.addEventListener('close', function () {

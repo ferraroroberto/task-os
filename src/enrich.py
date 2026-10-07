@@ -66,15 +66,14 @@ from src import clock, quick_add
 from src.ai.json_payload import json_payload
 from src.config import AppConfig
 from src.dates import DateParseError, parse_date
+from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
 from src.pooled_http import pooled_request
-from src.voice import connect_failure, endpoint_of
 
 logger = logging.getLogger(__name__)
 
-#: Same shape and reasoning as ``src.voice``'s probe — whose connect this
+#: Same shape and reasoning as ``src.hub_probe``'s probe — whose connect this
 #: reuses, timeout included: a cached TCP connect, so opening the dialog
 #: repeatedly costs one connect and starting the hub shows up on the next open.
-PROBE_TTL_S = 15.0
 #: Warm this is ~1.5 s; a cold model load took 4.4 s in the probe. Generous
 #: enough for a cold one, short enough that a wedged hub does not hold the
 #: dialog's "tidying…" state for a minute.

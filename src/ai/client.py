@@ -16,14 +16,12 @@ from typing import TYPE_CHECKING, Any
 
 from src import clock
 from src.config import AppConfig
-from src.voice import connect_failure, endpoint_of
+from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
 
 if TYPE_CHECKING:
     import anthropic
 
 logger = logging.getLogger(__name__)
-
-PROBE_TTL_SECONDS = 15.0
 
 
 class AIError(RuntimeError):
@@ -89,7 +87,7 @@ class AIClient:
         public_reason = None if detail is None else "local AI hub unavailable"
         with self._lock:
             self._verdict = (
-                time.monotonic() + PROBE_TTL_SECONDS,
+                time.monotonic() + PROBE_TTL_S,
                 detail is None,
                 public_reason,
             )

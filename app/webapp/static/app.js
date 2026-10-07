@@ -35,7 +35,7 @@
 import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
-import { actionById, createActions } from './actions.js';
+import { actionById, createActions, failedOf, failureText } from './actions.js';
 import { api, qs } from './api.js';
 import { mountArchive } from './archive.js';
 import { mountBoard } from './board.js';
@@ -452,14 +452,13 @@ async function bulkDelete() {
     toast(err.message || 'Delete failed', 'error');
     throw err;
   }
-  const failed = (res.results || []).filter(function (r) { return !r.ok; });
+  const failed = failedOf(res.results);
   if (!failed.length) {
     toast(res.deleted + ' task' + (res.deleted === 1 ? '' : 's') + ' deleted', 'success');
     selection.clear();
   } else {
-    const first = failed[0];
-    toast(res.deleted + ' deleted · ' + failed.length + ' failed (#' + first.id + ': ' + first.error.message + ')', 'error');
-    selection.keepOnly(new Set(failed.map(function (r) { return r.id; })));
+    toast(failureText(res.deleted, 'deleted', failed), 'error');
+    selection.keepOnly(new Set(failed.map(function (f) { return f.id; })));
   }
   if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) closeTask();
   await refreshAll();
@@ -485,14 +484,13 @@ async function bulkApply(changes) {
     toast(err.message || 'Bulk change failed', 'error');
     throw err;
   }
-  const failed = (res.results || []).filter(function (r) { return !r.ok; });
+  const failed = failedOf(res.results);
   if (!failed.length) {
     toast(res.updated + ' task' + (res.updated === 1 ? '' : 's') + ' updated', 'success');
     selection.clear();
   } else {
-    const first = failed[0];
-    toast(res.updated + ' updated · ' + failed.length + ' failed (#' + first.id + ': ' + first.error.message + ')', 'error');
-    selection.keepOnly(new Set(failed.map(function (r) { return r.id; })));
+    toast(failureText(res.updated, 'updated', failed), 'error');
+    selection.keepOnly(new Set(failed.map(function (f) { return f.id; })));
   }
   await refreshAll();
   if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) drawer.refresh();

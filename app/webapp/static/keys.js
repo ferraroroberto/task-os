@@ -19,8 +19,8 @@
 
 'use strict';
 
-import { icon } from './_vendored/icons/icons.js';
 import { ACTIONS } from './actions.js';
+import { modalCard } from './modal.js';
 import * as selection from './selection.js';
 import { closeDatePicker, isDatePickerOpen, openDatePicker } from './snooze.js';
 import { toast } from './toast.js';
@@ -191,22 +191,10 @@ export function mountKeys(helpDialog, handlers) {
   }
 
   function buildHelp() {
-    const card = document.createElement('div');
-    card.className = 'detail-card keys-card';
-
-    const head = document.createElement('div');
-    head.className = 'detail-header';
-    const h = document.createElement('h2');
-    h.id = 'keysHelpTitle';
-    h.textContent = 'Keyboard shortcuts';
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'detail-close';
-    close.setAttribute('aria-label', 'Close');
-    close.innerHTML = icon('x');
-    close.addEventListener('click', function () { helpDialog.close(); });
-    head.append(h, close);
-    card.appendChild(head);
+    const card = modalCard({
+      cardClass: 'keys-card', title: 'Keyboard shortcuts', titleId: 'keysHelpTitle',
+      closeLabel: 'Close', onClose: function () { helpDialog.close(); },
+    }).card;
 
     const lead = document.createElement('p');
     lead.className = 'keys-lead muted';

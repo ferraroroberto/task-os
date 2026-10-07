@@ -40,13 +40,11 @@ import json
 import logging
 import re
 import shutil
-import subprocess
 from collections.abc import Sequence
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from src.issues.base import IssueInfo, IssueProviderError
-from src.no_window import NO_WINDOW
+from src.issues.base import CliHints, IssueInfo, IssueProviderError, run_cli
 
 logger = logging.getLogger(__name__)
 
@@ -56,46 +54,18 @@ PER_PAGE = 100
 _WEB_URL_RE = re.compile(r"^https?://[^/\s]+/(.+?)/-/issues/(\d+)")
 _REF_SUFFIX_RE = re.compile(r"#\d+$")
 
-_AUTH_HINTS = ("glab auth login", "401", "unauthorized", "not authenticated", "no token", "invalid token")
-_RATE_HINTS = ("429", "too many requests", "rate limit")
-_NOT_FOUND_HINTS = ("404", "not found")
-
-
-def _classify(stderr: str) -> str:
-    text = (stderr or "").lower()
-    if any(h in text for h in _AUTH_HINTS):
-        return "not_authenticated"
-    if any(h in text for h in _RATE_HINTS):
-        return "rate_limited"
-    if any(h in text for h in _NOT_FOUND_HINTS):
-        return "not_found"
-    return "error"
+_HINTS = CliHints(
+    auth=("glab auth login", "401", "unauthorized", "not authenticated", "no token", "invalid token"),
+    rate=("429", "too many requests", "rate limit"),
+    not_found=("404", "not found"),
+)
 
 
 def run_glab(args: Sequence[str], *, timeout: float = GLAB_TIMEOUT_S, label: str = "glab") -> str:
     """Run ``glab <args>`` and return stdout; :class:`IssueProviderError` on any failure."""
-    try:
-        proc = subprocess.run(
-            ["glab", *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            creationflags=NO_WINDOW,
-        )
-    except FileNotFoundError as exc:
-        raise IssueProviderError("glab not on PATH — install the GitLab CLI", code="not_installed") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise IssueProviderError(f"{label}: timed out after {timeout:.0f}s", code="timeout") from exc
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise IssueProviderError(f"{label}: {exc}", code="error") from exc
-    if proc.returncode != 0:
-        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
-        first = lines[0].strip() if lines else "no output"
-        code = _classify(proc.stderr or proc.stdout or "")
-        raise IssueProviderError(f"{label} exited {proc.returncode}: {first}", code=code)
-    return proc.stdout
+    return run_cli(
+        "glab", args, timeout=timeout, label=label, install="the GitLab CLI", hints=_HINTS,
+    )
 
 
 def _json_values(out: str) -> list[Any]:

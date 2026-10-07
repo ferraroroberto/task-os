@@ -239,7 +239,7 @@ def test_disabled_and_unreachable_are_distinct_statuses(
     unreachable = AIClient(AppConfig(ai=AIConfig(
         enabled=True, base_url="http://127.0.0.1:1", model="fake", timeout_seconds=1,
     )))
-    monkeypatch.setattr("src.voice.PROBE_TIMEOUT_S", 0.01)
+    monkeypatch.setattr("src.hub_probe.PROBE_TIMEOUT_S", 0.01)
     with caplog.at_level("INFO", logger="src.ai.client"):
         status = unreachable.status()
     assert status["configured"] is True

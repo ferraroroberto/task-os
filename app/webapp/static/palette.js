@@ -19,6 +19,7 @@
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 import { breadcrumbText, statusPill } from './format.js';
+import { closeOnBackdrop } from './modal.js';
 
 const DEBOUNCE_MS = 150;
 const TASK_LIMIT = 8;
@@ -157,10 +158,7 @@ export function createPalette(dialog, opts) {
     else if (ev.key === 'End' && items.length) { ev.preventDefault(); active = items.length - 1; paint(); }
   });
   dialog.querySelector('.detail-close').addEventListener('click', close);
-  dialog.addEventListener('click', function (ev) {
-    // click on the backdrop (outside the card) closes
-    if (ev.target === dialog) close();
-  });
+  closeOnBackdrop(dialog, close);
   dialog.addEventListener('close', function () { clearTimeout(timer); seq++; });
 
   return {

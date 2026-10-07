@@ -13,7 +13,7 @@
 
 'use strict';
 
-import { icon } from './_vendored/icons/icons.js';
+import { closeOnBackdrop, modalCard } from './modal.js';
 
 /**
  * @param {{title: string, lines?: Array<string|null|undefined>, warn?: string|null,
@@ -26,22 +26,12 @@ export function confirmDialog(o) {
   if (!dialog) return Promise.resolve(false);
   return new Promise(function (resolve) {
     let answer = false;
-    const card = document.createElement('div');
-    card.className = 'detail-card confirm-card';
-
-    const head = document.createElement('div');
-    head.className = 'detail-header';
-    const h = document.createElement('h2');
-    h.id = 'confirmTitle';
-    h.textContent = o.title;
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'detail-close';
-    close.setAttribute('aria-label', 'Cancel');
-    close.innerHTML = icon('x');
-    close.addEventListener('click', function () { dialog.close(); });
-    head.append(h, close);
-    card.appendChild(head);
+    const shell = modalCard({
+      cardClass: 'confirm-card', title: o.title, titleId: 'confirmTitle', closeLabel: 'Cancel',
+      onClose: function () { dialog.close(); },
+    });
+    const card = shell.card;
+    const close = shell.close;
 
     const body = document.createElement('div');
     body.className = 'confirm-body';
@@ -71,11 +61,10 @@ export function confirmDialog(o) {
     actions.appendChild(go);
     card.appendChild(actions);
 
-    function onBackdrop(ev) { if (ev.target === dialog) dialog.close(); }
-    dialog.addEventListener('click', onBackdrop);
+    const offBackdrop = closeOnBackdrop(dialog);
     dialog.addEventListener('close', function onClose() {
       dialog.removeEventListener('close', onClose);
-      dialog.removeEventListener('click', onBackdrop);
+      offBackdrop();
       dialog.replaceChildren();
       resolve(answer);
     });
