@@ -16,8 +16,9 @@ It also needs two glyphs from the vendored `icons/` sprite: `i-ellipsis-vertical
 ## How to vendor
 
 1. Copy this `action-row/` folder **verbatim** into your app's static dir (`app/webapp/static/_vendored/action-row/`). Do **not** edit `action-row.css` per-app.
-2. Link it (any order relative to `card.css`; the list-card rule uses two classes, so it wins either way):
+2. Link it with `icon-button.css`, which owns the accessories' look (any order relative to `card.css` and `icon-button.css`; every override here is at higher specificity, so it wins either way):
    ```html
+   <link rel="stylesheet" href="/static/_vendored/icon-button/icon-button.css">
    <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
    ```
 3. Paste the skeleton, drop the optional parts your rows don't have, and wire the behaviour (below).
@@ -32,7 +33,7 @@ It also needs two glyphs from the vendored `icons/` sprite: `i-ellipsis-vertical
   </label>
   <ul class="action-rows">
     <li class="action-row">
-      <button type="button" class="action-row-fav" aria-pressed="false" aria-label="Favorite">  <!-- optional -->
+      <button type="button" class="icon-button action-row-fav" aria-pressed="false" aria-label="Favorite">  <!-- optional -->
         <svg class="icon action-row-fav-off" aria-hidden="true"><use href="#i-star"></use></svg>
         <svg class="icon action-row-fav-on" aria-hidden="true"><use href="#i-star-fill"></use></svg>
       </button>
@@ -40,8 +41,8 @@ It also needs two glyphs from the vendored `icons/` sprite: `i-ellipsis-vertical
         <span class="action-row-title">journal-daily</span>
         <span class="action-row-meta">Last run yesterday</span>  <!-- optional -->
       </button>
-      <button type="button" class="action-row-verb" aria-label="Run">…</button>  <!-- optional, dominant verb only -->
-      <button type="button" class="action-row-kebab" aria-label="More actions"
+      <button type="button" class="icon-button action-row-verb" aria-label="Run">…</button>  <!-- optional, dominant verb only -->
+      <button type="button" class="icon-button action-row-kebab" aria-label="More actions"
               aria-haspopup="menu" aria-expanded="false">
         <svg class="icon" aria-hidden="true"><use href="#i-ellipsis-vertical"></use></svg>
       </button>
@@ -54,6 +55,7 @@ It also needs two glyphs from the vendored `icons/` sprite: `i-ellipsis-vertical
 - **`.action-row-main`** is the primary action: a `<button>`, or an `<a>` when the row only navigates. It stretches to the row's full height, so the tap target is the row, not the words. The kebab (and the favorite, and the verb) are **siblings** of it, never children, so a tap on one never also fires the row.
 - **Height** comes from the `rows` scale: a title-only row is `--row-md` (52px), a row with an `.action-row-meta` line is `--row-lg` (60px). Never a literal.
 - **`.action-row-title` / `.action-row-meta`** are one line each, ellipsized. Put one context line at most; a row that needs more is a detail view.
+- **The accessories are `.icon-button`s.** `.action-row-fav`, `.action-row-verb` and `.action-row-kebab` each carry `icon-button` as well (`class="icon-button action-row-kebab"`): [`icon-button/`](../icon-button/) owns the unpainted box, the glyph colour states and the target, and `action-row.css` sets their box to the 44px `--row-sm` (`--icon-btn-box`), so no expansion is needed. Only the rules below are the row's own.
 - **`.action-row-fav`** is the one leading toggle. The caller flips `aria-pressed` only; CSS swaps the outline star for the filled one and colors it `--attention`. The fill is what reads without hue.
 - **`.action-row-verb`** is the one extra visible action, the tint recipe at 44px. Use it only for the row's dominant verb (Run on a job row); everything else goes in the menu.
 - **`.action-row-kebab`** opens the row menu. Keep `aria-expanded` in step with the menu; the kebab takes `--accent` while it is open.
@@ -74,11 +76,11 @@ This component ships the **anchor**, not the floating menu. The reference implem
 | `--row-lg` | `60px` | row height with a context line |
 | `--line-muted` | `#d8dee4` | hairline between rows (`border-muted`) |
 | `--ink` | `#1f2328` | title text |
-| `--muted` | `#656d76` | context line, resting accessory glyphs, filter glyph |
+| `--muted` | `#656d76` | context line, filter glyph (resting accessory glyphs come from `icon-button/`) |
 | `--font-body` | `1rem` | title, filter input |
 | `--font-body-sm` | `0.875rem` | context line (`typography.body-sm`) |
-| `--icon-inline` | `16px` | accessory and filter glyphs (`icons.size.inline`) |
-| `--radius-md` | `12px` | accessories, filter, main-button press shape |
+| `--icon-inline` | `16px` | filter glyph (the accessory glyphs take it through `icon-button/`; `icons.size.inline`) |
+| `--radius-md` | `12px` | verb, filter, main-button press shape |
 | `--space-sm` | `8px` | filter glyph ↔ input |
 | `--gap` | `12px` | filter margin |
 | `--accent` | `#0969da` | open kebab, filter focus ring |

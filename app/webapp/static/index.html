@@ -389,14 +389,14 @@
       <!-- The header keeps the spec's two trailing icon buttons (#301): the
            theme toggle and the Settings gear. The issue sync lives on its
            Settings card ("Sync now"); the command palette is Ctrl+K / ⌘K. -->
-      <button type="button" id="themeToggle" class="home-toggle hit-target"
+      <button type="button" id="themeToggle" class="icon-button home-toggle hit-target"
               title="Toggle theme" aria-label="Toggle dark mode">
         <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
         <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
       </button>
       <!-- Settings (#281): the header gear, not a sixth tab. aria-current
            while its pane is up; any tab press leaves it, as for the journal. -->
-      <button type="button" id="settingsBtn" class="home-toggle hit-target"
+      <button type="button" id="settingsBtn" class="icon-button home-toggle hit-target"
               title="Settings" aria-label="Settings" aria-controls="paneSettings">
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
       </button>
@@ -911,7 +911,7 @@
         <input id="paletteInput" class="palette-input" type="text" autocomplete="off" spellcheck="false"
                placeholder="Jump to a task… or type > for commands" aria-label="Command palette"
                role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
-        <button type="button" class="detail-close" aria-label="Close">
+        <button type="button" class="icon-button detail-close" aria-label="Close">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
         </button>
       </div>
@@ -932,7 +932,7 @@
     <form class="detail-card quickadd-card" autocomplete="off">
       <div class="detail-header">
         <h2 id="quickAddTitle">Add task</h2>
-        <button type="button" class="detail-close" aria-label="Close">
+        <button type="button" class="icon-button detail-close" aria-label="Close">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
         </button>
       </div>

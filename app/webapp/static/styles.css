@@ -990,8 +990,11 @@ a.chip:hover { text-decoration: underline; }
 .trow-prio.prio-high { color: var(--danger); }
 /* The completion circle (the vendored .action-row-fav): outline at rest, the
    check when closed. Done reads as success, not the favourite's attention. */
-.trow-done:hover { color: var(--success); }
-.trow-done[aria-pressed="true"] { color: var(--success); }
+/* The vendored action-row and icon-button colour the toggle 2-5 classes deep
+   (attention when pressed, ink on hover), so these stay deeper than any of them. */
+.trow .trow-done.icon-button:not(:disabled):hover,
+.trow .trow-done.icon-button[aria-pressed="true"],
+.trow .trow-done.icon-button[aria-pressed="true"]:not(:disabled):hover { color: var(--success); }
 /* A touch screen closes a task by swiping it right, or by opening it and
    setting its status (#350): the circle only repeated the swipe, so it is not
    drawn there. A mouse, a trackpad and the keyboard keep it. The drawer is

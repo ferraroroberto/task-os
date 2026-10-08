@@ -164,7 +164,7 @@ function doneToggle(t, handlers) {
   const closed = !!CLOSED[t.status];
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'trow-done action-row-fav';
+  btn.className = 'icon-button trow-done action-row-fav';
   btn.setAttribute('aria-pressed', closed ? 'true' : 'false');
   btn.setAttribute('aria-label', 'Complete ' + t.title);
   btn.title = closed ? 'Reopen' : (t.recurrence ? 'Complete — rolls to the next date' : 'Complete');
@@ -185,7 +185,7 @@ function doneToggle(t, handlers) {
 function rowKebab(t, menu, li) {
   const kebab = document.createElement('button');
   kebab.type = 'button';
-  kebab.className = 'trow-kebab action-row-kebab';
+  kebab.className = 'icon-button trow-kebab action-row-kebab';
   kebab.setAttribute('aria-label', 'More actions for ' + t.title);
   kebab.innerHTML = icon('ellipsis-vertical');
   menu.attach(t, kebab);
