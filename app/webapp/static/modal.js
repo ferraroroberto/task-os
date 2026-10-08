@@ -28,7 +28,7 @@ export function modalCard(o) {
   h.textContent = o.title;
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'detail-close';
+  close.className = 'icon-button detail-close';
   close.setAttribute('aria-label', o.closeLabel);
   close.innerHTML = icon('x');
   close.addEventListener('click', o.onClose);

@@ -705,7 +705,7 @@ export function mountArchive(opts) {
     let body = null;
     const kebab = document.createElement('button');
     kebab.type = 'button';
-    kebab.className = 'archive-kebab action-row-kebab';
+    kebab.className = 'icon-button archive-kebab action-row-kebab';
     kebab.setAttribute('aria-label', 'Review ' + (item.subject || '(no subject)'));
     kebab.innerHTML = icon('ellipsis-vertical');
     if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {

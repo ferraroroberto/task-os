@@ -755,6 +755,17 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     row = _trow(page, "School enrolment forms", "#paneToday")
     expect(row).to_be_visible()
     task_id = int(row.get_attribute("data-id"))
+    # The completion circle is an .icon-button over the vendored action-row (project-scaffolding#339);
+    # it keeps its own success tone, pressed and on hover, over their attention / ink.
+    done = row.locator(".trow-done")
+    want = page.evaluate("""() => { const p = document.createElement('i'); p.style.color = 'var(--success)';
+      document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; }""")
+    done.hover()
+    assert done.evaluate("el => getComputedStyle(el).color") == want
+    page.mouse.move(0, 0)
+    pressed = done.evaluate("""el => { el.setAttribute('aria-pressed', 'true'); const c = getComputedStyle(el).color;
+      el.setAttribute('aria-pressed', 'false'); return c; }""")
+    assert pressed == want
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
     row.locator(".trow-kebab").click()
     page.locator(".row-menu [data-action='snooze']").click()

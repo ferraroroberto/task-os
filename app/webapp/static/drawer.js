@@ -358,7 +358,7 @@ export function createDrawer(el, opts) {
     }
     const close = document.createElement('button');
     close.type = 'button';
-    close.className = 'detail-close drawer-close';
+    close.className = 'icon-button detail-close drawer-close';
     close.setAttribute('aria-label', 'Close');
     close.innerHTML = icon('x');
     close.addEventListener('click', function () { opts.onClose(); });

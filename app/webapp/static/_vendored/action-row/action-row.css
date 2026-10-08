@@ -17,6 +17,13 @@
  * muted. No vertical rules between controls. Destructive actions live in the
  * row menu, never on the row (the menu is app-side, see README).
  *
+ * The accessories are `.icon-button`s (icon-button/, fleet-config#1259): the
+ * markup carries both classes and icon-button.css, linked alongside, owns the
+ * unpainted box, the glyph states and the target. Here each takes the 44px
+ * row box (--icon-btn-box: --row-sm, so the target needs no expansion) and
+ * only the row-specific rules below remain: the favorite's glyph swap, the
+ * verb's tint and the open kebab's accent.
+ *
  * Geometry: the accessories are real 44x44 boxes sitting side by side with no
  * gap, so their hit rectangles touch but never overlap (design.md "Touch
  * targets", adjacent cluster). Heights come from the rows scale: a one-line
@@ -89,51 +96,42 @@
 }
 
 /* Accessories: the leading toggle, the dominant verb and the kebab share one
- * 44px square. */
+ * 44px square (icon-button's box; the glyph is its 16px --icon-inline). */
 .action-row-fav,
 .action-row-verb,
-.action-row-kebab {
-  flex: none;
-  width: var(--row-sm);
-  height: var(--row-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  line-height: normal;
-  cursor: pointer;
-}
-.action-row-fav .icon,
-.action-row-verb .icon,
-.action-row-kebab .icon {
-  width: var(--icon-inline);
-  height: var(--icon-inline);
-}
+.action-row-kebab { --icon-btn-box: var(--row-sm); }
 
 /* Favorite: an outline star at rest, a filled one when pressed. The fill is
  * the channel that reads without hue (a CSS fill cannot reach the sprite's
  * fill="none" symbols, hence the two glyphs); the caller flips aria-pressed
- * only. */
+ * only. `.action-row` in the selectors lifts them above icon-button's own
+ * pressed/hover colours whatever the link order. */
 .action-row-fav .action-row-fav-on { display: none; }
-.action-row-fav[aria-pressed="true"] { color: var(--attention); }
+.action-row .action-row-fav[aria-pressed="true"],
+.action-row .action-row-fav[aria-pressed="true"]:not(:disabled):hover {
+  color: var(--attention);
+}
 .action-row-fav[aria-pressed="true"] .action-row-fav-off { display: none; }
 .action-row-fav[aria-pressed="true"] .action-row-fav-on { display: inline-block; }
 
 /* The one visible dominant verb (Run on a job row): the tint recipe at the
- * 44px square. */
-.action-row-verb {
-  margin-right: 4px;
-  border: 1px solid var(--accent-border-soft);
-  background: var(--accent-soft);
+ * 44px square — the one accessory that is painted, so it overrides
+ * icon-button's border, fill, radius and hover glyph colour. */
+.action-row .action-row-verb,
+.action-row .action-row-verb:not(:disabled):hover {
   color: var(--accent-text);
 }
+.action-row .action-row-verb {
+  margin-right: 4px;
+  border: 1px solid var(--accent-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
 
-.action-row-kebab[aria-expanded="true"] { color: var(--accent); }
+.action-row .action-row-kebab[aria-expanded="true"],
+.action-row .action-row-kebab[aria-expanded="true"]:not(:disabled):hover {
+  color: var(--accent);
+}
 
 /* Filter field above a list that can exceed ~12 rows: 44px, a control-border
  * boundary on card, one ring around the whole field on keyboard focus. */
