@@ -465,9 +465,12 @@ export function mountFilters(opts) {
     if (!hidden.has('updated')) card.appendChild(row('updated', 'Modified', selectEl('updated', 'Modified window', UPDATED_WINDOWS, f.updated, set('updated'))));
 
     // Applied as they change, so the footer's one primary only closes; Clear
-    // sits beside it while there is something to clear.
+    // sits beside it while there is something to clear. Not the modal's
+    // sticky `detail-actions` bar: on a phone the sheet scrolls, and a bar
+    // pinned over the last rows overlapped their selects' tap areas (TOUCH-02
+    // on the live walk) — closing never needs to be pinned, the × is.
     const actions = document.createElement('div');
-    actions.className = 'detail-actions filter-actions';
+    actions.className = 'filter-actions';
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'button-ghost filter-clear';

@@ -865,8 +865,17 @@ a.chip:hover { text-decoration: underline; }
 .filter-check .check { position: relative; flex: none; }
 .filter-check .check::after { content: ""; position: absolute; inset: -14px; }
 /* Applied as they change: the footer is Clear (while there is something to
-   clear) beside the one primary, which only closes. */
-.filter-actions { display: flex; align-items: center; gap: var(--space-sm); }
+   clear) beside the one primary, which only closes. It ends the sheet in the
+   flow rather than pinned over the rows (filters.js), with the modal footer's
+   divider and spacing. */
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
 .filter-actions .filter-done { flex: 1 1 auto; }
 .filter-clear { position: relative; min-height: var(--control-h); }
 /* 36 + 2x4 = 44, the 8px gap from the primary halved (#281); 44px painted on

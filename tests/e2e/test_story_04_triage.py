@@ -1075,6 +1075,12 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
             "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
         assert len(lefts) == 2, lefts                                   # two columns
         assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
+        # a sheet that outgrows the phone scrolls: its footer ends the sheet
+        # rather than riding pinned over the last rows, where it overlapped a
+        # select's tap area (TOUCH-02, the live walk after #404 — the seed's
+        # sheet fits, so the cause is asserted, not the overlap)
+        assert sheet.locator(".filter-actions").evaluate("el => getComputedStyle(el).position") == "static"
+        assert_no_overlap(sheet.locator(".filter-select, .filter-check, .filter-done"))
         close_filter_sheet(page)
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
