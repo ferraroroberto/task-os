@@ -1,11 +1,15 @@
 /* task-os — the Today tab: every open task, by when it is due.
  *
  * Four horizons, nearest first (#350 — with the Table gone, Today is where
- * any open task is found, by scrolling or by the filter card's text): Today
- * (due ≤ today, overdue first), Soon (tomorrow … +7 days), Later (further
- * out) and No date. Each horizon is headed by an `overline` section header
- * with its count (#391); the three after Today sit open below as flat
- * disclosures, each collapsible via its own chevron (#253). Inside a horizon
+ * any open task is found, from the filter card's text or one tap on a
+ * horizon): what is due (≤ today, overdue first), Soon (tomorrow … +7 days),
+ * Later (further out) and No date. The tab opens on what is due (#393): those
+ * rows come first with no header of their own, because the page header above
+ * already names them ("2 overdue · 1 due today") — one header, one count. The
+ * three after it are flat disclosures headed by an `overline` with their count
+ * (#391); Soon sits open, Later and No date start closed with their counts
+ * (decision 6 of #390) and keep whatever the user toggled across re-renders.
+ * Under a text filter all three open, so a match is never folded away. Inside a horizon
  * the tasks are grouped by root project with the shared due-first sort inside
  * each group (#116 — a task's date always decides its position, recurring or
  * not), and the project sub-headers are drawn only when there are two or more
@@ -34,6 +38,11 @@ import { calendarLane } from './calendar.js';
 import { collapsibleCard } from './collapsible.js';
 import { relDue, todayISO } from './format.js';
 import { compareItems, rowList } from './rows.js';
+
+/** Later and No date's open state as the user left it (#393): closed until
+ *  toggled, kept across the re-renders a refresh or a filter change makes,
+ *  reset by a reload. Soon is always drawn open. */
+const horizonOpen = { 'today-far': false, 'today-nodate': false };
 
 /** Split the list into the four horizons {due, week, later, nodate, counts}
  *  — exported for tests. Every task lands in exactly one. */
@@ -68,6 +77,19 @@ export function bucketToday(items, today, sort) {
   };
 }
 
+/** The page header's line on Today (#393): the exceptions, named from the
+ *  counts the horizons were drawn from, so the header and the list never
+ *  disagree. Overdue and due today are the attention tone (the row's own due
+ *  tone); with neither, the plain fact. Exported for tests.
+ *  @param {{overdue: number, today: number}} counts  `bucketToday(...).counts`
+ *  @returns {{text: string, attention: boolean}} */
+export function headLine(counts) {
+  const bits = [];
+  if (counts.overdue) bits.push(counts.overdue + ' overdue');
+  if (counts.today) bits.push(counts.today + ' due today');
+  return bits.length ? { text: bits.join(' · '), attention: true } : { text: 'Nothing due today', attention: false };
+}
+
 /** [{root, items}] — by top ancestor (null = no project); groups ordered by
  *  earliest due then title; inside a group, the shared sort — same as every
  *  other view, so editing a task's due date always reorders it correctly
@@ -100,6 +122,9 @@ function groupByRoot(items, sort) {
  * @param {{sort?: string, today?: string, query?: string,
  *          calendar?: object|null,
  *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
+ * @returns {{overdue: number, today: number, week: number, later: number, nodate: number}}
+ *          the horizon counts drawn — the page header's exceptions line reads
+ *          these, so the header and the list never disagree (#393)
  */
 export function renderToday(host, items, handlers, opts) {
   const o = opts || {};
@@ -123,21 +148,7 @@ export function renderToday(host, items, handlers, opts) {
 
   const section = document.createElement('section');
   section.className = 'today';
-  const head = document.createElement('div');
-  head.className = 'today-head';
-  const h = document.createElement('h2');
-  h.className = 'today-title overline';
-  h.textContent = 'Today';
-  head.appendChild(h);
-  const meta = document.createElement('span');
-  meta.className = 'today-counts';
-  const bits = [];
-  if (counts.overdue) bits.push(counts.overdue + ' overdue');
-  if (counts.today) bits.push(counts.today + ' due today');
-  meta.textContent = bits.length ? bits.join(' · ') : 'nothing due';
-  if (counts.overdue) meta.classList.add('has-overdue');
-  head.appendChild(meta);
-  section.appendChild(head);
+  section.setAttribute('aria-label', 'Due');
 
   // Under a text filter an empty section says the filter hid it, never "all
   // clear": the day may be full (#339). The way forward is the box it names.
@@ -148,7 +159,7 @@ export function renderToday(host, items, handlers, opts) {
   if (!data.due.length) {
     // …with its way forward (#339): a task due today
     section.appendChild(q ? emptyStateEl('search', noMatch('due today'))
-      : emptyStateEl('circle-check', 'Nothing due today — all clear', handlers.onAdd ? {
+      : emptyStateEl('circle-check', 'All clear', handlers.onAdd ? {
         actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
       } : undefined));
   } else {
@@ -158,26 +169,31 @@ export function renderToday(host, items, handlers, opts) {
 
   // Soon always shows, with its way forward when it is empty; Later and No
   // date only when they hold something — an empty far horizon says nothing.
-  main.appendChild(horizon('today-soon', 'Soon', data.week, counts.week, handlers, o,
+  main.appendChild(horizon('today-soon', 'Soon', data.week, counts.week, handlers, o, null,
     q ? emptyStateEl('search', noMatch('due in the next seven days'))
       : emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
         actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
       } : undefined)));
-  if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o));
-  if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o));
+  if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o, !!q));
+  if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o, !!q));
+  return counts;
 }
 
-/** One horizon after Today — a flat disclosure (vendored markup, hairline
- *  instead of a card box). Open by default (#253): renderToday rebuilds the
- *  host from scratch every call, so there is no user-toggle state to keep,
- *  and every open task stays reachable by scrolling (#350). */
-function horizon(cls, title, groups, n, handlers, o, empty) {
+/** One horizon after the due rows — a flat disclosure (vendored markup,
+ *  hairline instead of a card box). `forceOpen` null = always open (Soon);
+ *  otherwise the horizon keeps the user's toggle (`horizonOpen`), and `true`
+ *  (a text filter is on) opens it without recording that as their choice. */
+function horizon(cls, title, groups, n, handlers, o, forceOpen, empty) {
   const card = collapsibleCard({
     className: 'disclosure-flat today-horizon ' + cls, title: title, titleClass: 'overline',
     count: String(n), countClass: 'section-count',
   });
   card.count.setAttribute('aria-label', n + (n === 1 ? ' task' : ' tasks'));
-  card.card.open = true;
+  if (forceOpen === null) card.card.open = true;
+  else {
+    card.card.open = forceOpen || horizonOpen[cls];
+    if (!forceOpen) card.card.addEventListener('toggle', function () { horizonOpen[cls] = card.card.open; });
+  }
   if (!groups.length && empty) card.body.appendChild(empty);
   appendGroups(card.body, groups, handlers, o);
   return card.card;

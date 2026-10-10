@@ -163,7 +163,10 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(status_sel.locator("input[name='status']:checked")).to_have_count(1)
         expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
         expect(card.locator(".filter-desc")).to_contain_text("todo")
-        expect(card.locator(".filter-desc")).to_contain_text(f"{todo_count} tasks")
+        # the count's one home is the text field's placeholder (#393), not the card's line
+        expect(card.locator(".filter-desc")).not_to_contain_text("tasks")
+        expect(page.locator("#boardFilterText .filter-q")).to_have_attribute(
+            "placeholder", f"Filter {todo_count} tasks…")
         # a real status pill narrows the columns: only Todo is up, holding the list
         expect(page.locator("#paneBoard .board-col:not([hidden])")).to_have_count(1)
         rows = page.locator("#paneBoard .trow[data-id]")
@@ -401,7 +404,8 @@ def _walk_closed_on_demand(page: Page, base: str) -> None:
 
         # 1. The cold boot: open forest, slim list, the project list.
         p.goto(f"{base}/")
-        expect(p.locator("#homeHeadStatus")).to_have_text(re.compile(r"^\d+ open$"))
+        # the header names Today's exceptions, never a bare open count (#393)
+        expect(p.locator("#homeHeadStatus")).to_have_text(re.compile(r"^\d+ overdue · \d+ due today$"))
         trees = calls("/api/tasks/tree")
         assert trees, "the boot read no forest"
         for r in trees:
@@ -557,7 +561,7 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     expect(rows).to_have_count(1)
     expect(rows.locator(".trow-title")).to_have_text("Sort the garage shelves")
     expect(card.locator(".filter-desc")).to_contain_text("untouched > 30 days")
-    expect(card.locator(".filter-desc")).to_contain_text("1 task")
+    expect(page.locator("#boardFilterText .filter-q")).to_have_attribute("placeholder", "Filter 1 task…")
     shot(page, shots / "story-04-triage-11-desktop.png")
     # the token round-trips: a fresh load of the shared URL is the same view
     page.goto(f"{base}/?updated=stale30")
@@ -617,11 +621,13 @@ def _walk_hash_open_loads_once(page: Page, base: str) -> None:
 def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     """Today at 1440: the list takes the left half, the detail pane the right.
 
-    With nothing open the right half says so (an empty state, not a blank), and
-    the list keeps its half width, so a row's ⋯ stays near its title. Opening a
-    task fills that same right half (no overlay), the ``#task/<id>`` link works
-    on a cold load, and closing returns to the empty state. Other tabs keep the
-    440px panel.
+    The right half is never empty while a task is due (#393, decision 8 of
+    #390): a cold load opens the first due task there by itself, with no hash
+    written, and the row keymap keeps working beside it. Closing it shows the
+    empty state, and the list keeps its half width, so a row's ⋯ stays near its
+    title. Opening a task fills that same right half (no overlay), the
+    ``#task/<id>`` link works on a cold load. Other tabs keep the 440px panel,
+    and the task Today opened by itself does not follow you there.
 
     Screenshots: docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
     """
@@ -629,24 +635,39 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     pane = page.locator("#paneToday")
     drawer = page.locator("#taskDrawer")
     empty = page.locator("#todayDetailEmpty")
-    expect(pane.locator(".today-group .trow").first).to_be_visible()
+    first = pane.locator("section.today .trow[data-id]").first
+    expect(first).to_be_visible()
 
-    # 1. Nothing open: the empty state fills the right half, the list the left.
+    # 1. The first due task fills the right half on its own; the URL is still bare.
+    expect(drawer).to_be_visible()
+    expect(empty).to_be_hidden()
+    expect(drawer.locator("#drawerTitle")).to_have_value(first.locator(".trow-title").inner_text())
+    expect(page).to_have_url(f"{base}/")
+    list_box, drawer_box = pane.bounding_box(), drawer.bounding_box()
+    assert list_box and drawer_box
+    assert list_box["x"] + list_box["width"] <= drawer_box["x"] + 1, (list_box, drawer_box)
+    assert 0.35 * DESKTOP["width"] <= list_box["width"] <= 0.6 * DESKTOP["width"], list_box
+    assert 0.35 * DESKTOP["width"] <= drawer_box["width"] <= 0.6 * DESKTOP["width"], drawer_box
+    kebab = pane.locator(".today-group .trow-kebab").first.bounding_box()
+    assert kebab and kebab["x"] + kebab["width"] <= drawer_box["x"], "the ⋯ must sit inside the list half"
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-30-today-split-1-desktop.png")
+    # the keymap stays on beside it: a focused row still takes a key
+    first.locator(".trow-main").focus()
+    page.keyboard.press("?")
+    expect(page.locator("#keysHelp")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.locator("#keysHelp")).to_be_hidden()
+    expect(drawer).to_be_visible()
+
+    # 2. Closed, the empty state holds the right half; ⋯ → Open details fills
+    #    it again, and the menu opens whole, inside the window.
+    drawer.locator(".drawer-close").click()
     expect(drawer).to_be_hidden()
     expect(empty).to_be_visible()
     expect(empty).to_contain_text("Select a task to see its details")
-    list_box, empty_box = pane.bounding_box(), empty.bounding_box()
-    assert list_box and empty_box
-    assert list_box["x"] + list_box["width"] <= empty_box["x"] + 1, (list_box, empty_box)
-    assert 0.35 * DESKTOP["width"] <= list_box["width"] <= 0.6 * DESKTOP["width"], list_box
-    assert 0.35 * DESKTOP["width"] <= empty_box["width"] <= 0.6 * DESKTOP["width"], empty_box
-    kebab = pane.locator(".today-group .trow-kebab").first.bounding_box()
-    assert kebab and kebab["x"] + kebab["width"] <= empty_box["x"], "the ⋯ must sit inside the list half"
-    assert_no_horizontal_overflow(page)
-    shot(page, shots / "story-30-today-split-1-desktop.png")
-
-    # 2. ⋯ → Open details fills the right half in place of the empty state, and
-    #    the menu opens whole, inside the window.
+    empty_box = empty.bounding_box()
+    assert empty_box and abs(empty_box["x"] - drawer_box["x"]) <= 1, (empty_box, drawer_box)
     row = pane.locator(".today-group .trow").first
     task_id = int(row.get_attribute("data-id"))
     row.locator(".trow-kebab").click()
@@ -667,25 +688,35 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-2-desktop.png")
 
-    # 3. Closing returns to the empty state, and the cold deep link opens the
-    #    pane on Today (the landing tab) without an overlay.
+    # 3. The cold deep link opens its own task on Today (the landing tab),
+    #    not the first due one, without an overlay.
     drawer.locator(".drawer-close").click()
     expect(drawer).to_be_hidden()
-    expect(empty).to_be_visible()
-    page.goto(f"{base}/#task/{task_id}")
+    last_id = int(pane.locator("section.today .trow[data-id]").last.get_attribute("data-id"))
+    page.goto(f"{base}/#task/{last_id}")
     expect(drawer).to_be_visible()
     expect(empty).to_be_hidden()
+    expect(drawer.locator("#drawerTitle")).to_have_value(
+        pane.locator(f"section.today .trow[data-id='{last_id}'] .trow-title").inner_text())
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
     shot(page, shots / "story-30-today-split-3-desktop.png")
 
-    # 4. The other tabs keep the 440px panel and show no empty pane.
+    # 4. The other tabs keep the 440px panel for a task you opened and show no
+    #    empty pane; back on Today with nothing open, the first due task again.
     page.click("nav.tabs .tab[data-tab='board']")
     box = drawer.bounding_box()
     assert box and 400 <= box["width"] <= 480, box
     drawer.locator(".drawer-close").click()
     expect(empty).to_be_hidden()
     page.click("nav.tabs .tab[data-tab='today']")
-    expect(empty).to_be_visible()
+    expect(drawer).to_be_visible()
+    expect(empty).to_be_hidden()
+    expect(page).to_have_url(f"{base}/")
+    # 5. …and the task Today opened by itself stays on Today.
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(drawer).to_be_hidden()
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(drawer).to_be_visible()
 
 
 # ---------------------------------------------- story 13 — starts + snooze
@@ -1048,9 +1079,10 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         expect(today_row).to_be_visible()
         # the row has no clock any more (#311): snooze lives in the ⋯ menu,
         # whose kebab is a touch target clear of the open target
-        assert_min_target(page.locator("#paneToday .today-group .trow-kebab"))
-        assert_no_overlap(page.locator("#paneToday .today-group .trow-main, "
-                                       "#paneToday .today-group .trow-kebab"))
+        # (the rows on screen: Later and No date start folded, #393)
+        assert_min_target(page.locator("#paneToday .today-group .trow-kebab:visible"))
+        assert_no_overlap(page.locator("#paneToday .today-group .trow-main:visible, "
+                                       "#paneToday .today-group .trow-kebab:visible"))
         today_row.locator(".trow-kebab").tap()
         page.locator(".row-menu [data-action='snooze']").tap()
         menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
