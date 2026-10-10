@@ -62,6 +62,7 @@ from tests.e2e.conftest import (
     _terminate,
     e2e_workdir,
     hold_toasts,
+    open_more_fields,
     shot,
 )
 
@@ -125,10 +126,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page: Page = ctx.new_page()
     # 1. the chip (the drawer's — a row's meta glyph is passive since #311, and
     #    the Table grid that also carried one went in #350): taskos:// href +
-    #    resolved-path tooltip
+    #    resolved-path tooltip. It leads the drawer's row of link pills (#394).
     page.goto(base + "/#task/" + str(kitchen["id"]))
     expect(page.locator("#taskDrawer")).to_be_visible()
-    chip = page.locator("#taskDrawer .drawer-folder a.chip-folder")
+    chip = page.locator("#taskDrawer .drawer-pill-row a.chip-folder").first
     expect(chip).to_be_visible()
     assert chip.get_attribute("href") == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
     assert chip.get_attribute("title") == inst.od_fwd + "/house/kitchen — the path this server resolves the ref to"
@@ -187,6 +188,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.goto(base + "/#task/" + str(kitchen["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    open_more_fields(drawer)          # the Folder editor is under More fields (#394)
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen")
     # #74: the section is exactly TWO lines - [chip + delete] then
     # [ref + Change + Pick]. The resolved path is the chip's own tooltip, not a
@@ -290,9 +292,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     shot(page, shots / "story-11-ai-links-1-desktop.png")
     page.keyboard.press("Escape")
     expect(menu).to_have_count(0)
-    # the drawer's link row carries the bot chip itself
+    # the drawer's link pills carry the bot chip itself (#394)
     page.goto(base + "/#task/" + str(watering["id"]))
-    ai_chip = page.locator("#taskDrawer .link-row a.chip-ai")
+    ai_chip = page.locator("#taskDrawer .drawer-pill-row a.chip-ai")
     expect(ai_chip).to_be_visible()
     assert ai_chip.get_attribute("href") == ai_url
     assert ai_chip.locator("svg use").first.get_attribute("href") == "#i-bot"
@@ -316,6 +318,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.goto(base + "/#task/" + str(watering["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    open_more_fields(drawer)          # the link editor is under More fields (#394)
     ai_row = drawer.locator(".link-row", has=page.locator("a.chip-ai"))
     expect(ai_row).to_have_count(1)
     expect(ai_row.locator("button.icon-button")).to_have_count(2)
@@ -348,6 +351,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     p.goto(base + "/#task/" + str(kitchen["id"]))
     d = p.locator("#taskDrawer")
     expect(d).to_be_visible()
+    open_more_fields(d)
     # #357 on the phone: the glyph-only picker and every other icon button are
     # unshaded too, and the folder pill keeps the desktop's look
     assert_icon_buttons_uniform(p, "#taskDrawer", min_count=5)

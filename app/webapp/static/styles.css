@@ -983,8 +983,12 @@ a.chip:hover { text-decoration: underline; }
 .trow.is-new { background: var(--accent-soft); }
 /* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
 .trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
-/* Select mode (#81): the checkbox takes the circle's place. */
-.trow-check { flex: none; margin: 0 var(--space-sm); }
+/* Select mode (#81): the checkbox takes the circle's place. The box is 16px;
+   an invisible band makes it the 44px target (16 + 2x14, the filter
+   multi-select's recipe), and the 14px side margins keep that band inside the
+   row and off the open target beside it (#394: the first walk of Select mode). */
+.trow-check { position: relative; flex: none; margin: 0 14px; }
+.trow-check::after { content: ""; position: absolute; inset: -14px; }
 /* The row's open target. A task row's is the vendored .action-row-main
    button; a search hit's is a div with the same shape. */
 .trow-main {
@@ -1068,8 +1072,9 @@ a.chip:hover { text-decoration: underline; }
 }
 .trow.has-select .trow-extra { padding-left: 10px; }
 @media (pointer: coarse) {
-  /* a 20px box centred on the row's own band */
-  .trow-check { width: 20px; height: 20px; margin: 0 var(--space-sm); }
+  /* a 20px box centred on the row's own band, its band 12px each way */
+  .trow-check { width: 20px; height: 20px; margin: 0 12px; }
+  .trow-check::after { inset: -12px; }
 }
 /* Full-bleed on the phone (#311): a list's hairlines run edge to edge, the
    layout swipe gestures expect, while headings, the filter strip and cards
@@ -1260,13 +1265,20 @@ a.chip:hover { text-decoration: underline; }
   .app { --split-rail: var(--layout-rail, 80px); }
 }
 .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); margin-bottom: 6px; }
-.drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-xs); min-height: 34px; font-size: var(--font-caption); }
+/* The drawer's secondary text — crumbs, field labels, comment and activity
+   meta, the empty lines — is the 14px body-sm role, not the 12px caption: on
+   a task with a history the caption runs were over half the text on screen
+   (TYPE-01, #394). Its glyphs sit on the 16px inline step unless a rule below
+   names another (COMP-02: a bare `.icon` is 1em, 12px in a caption button). */
+.drawer .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.drawer .button-ghost { font-size: var(--font-body-sm); }
+.drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-xs); min-height: 34px; font-size: var(--font-body-sm); }
 .crumb {
   border: 0;
   background: transparent;
   color: var(--accent);
   font: inherit;
-  font-size: var(--font-caption);
+  font-size: var(--font-body-sm);
   padding: var(--space-xs) var(--space-xs);
   min-height: 28px;
   border-radius: var(--radius-sm);
@@ -1276,22 +1288,24 @@ a.chip:hover { text-decoration: underline; }
 .crumb-root { color: var(--muted); cursor: default; }
 .crumb-sep { color: var(--muted); }
 .drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
-.drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-caption); white-space: nowrap; }
+.drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long
-   title wraps to 2–3 lines, never an ellipsis and never a sideways clip (#32). */
+   title wraps to 2–3 lines, never an ellipsis and never a sideways clip (#32).
+   It is a field, so it draws a field's boundary at rest (#394, COLOR-03 —
+   WCAG 1.4.11): a border that only appeared on hover hid that the title is
+   editable, and a phone has no hover at all. */
 .drawer-title {
   flex: 1 1 auto;
   min-width: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
   color: var(--fg);
   font-family: inherit;
   font-size: var(--font-heading-lg);
   font-weight: 700;
   line-height: 1.25;
-  padding: 2px 6px;
-  margin-left: -6px;
+  padding: var(--space-xs) 10px;
   resize: none;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -1303,8 +1317,7 @@ a.chip:hover { text-decoration: underline; }
   .drawer-title-row { flex-wrap: wrap; gap: 2px var(--space-sm); }
   .drawer-code { flex: 1 1 100%; }
 }
-.drawer-title:hover { border-color: var(--line); }
-.drawer-title:focus { border-color: var(--accent); background: var(--card-off); outline: none; }
+.drawer-title:focus { border-color: var(--accent); outline: none; }
 .drawer-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1313,8 +1326,39 @@ a.chip:hover { text-decoration: underline; }
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
+/* The fields that lead (#394): Due across the row with its quick moves under
+   it, then status and priority side by side, on every width. The rest of the
+   fields keep the grid above, under More fields. */
+.drawer-fields.drawer-fields-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.drawer-fields-main > .field-due, .drawer-fields-main > .quick-moves { grid-column: 1 / -1; }
+/* The date sheet's phrases (snooze.js phraseButtons) as one-tap buttons: the
+   phrase over the date it resolves to, two by two, four across once the
+   drawer is wide enough that "This weekend" still fits one line (Today's
+   split half; the 440px panel and the phone keep two). The fields block is
+   the query container, so the drawer's own width decides, not the window's.
+   A labelled utility button on the button-surface recipe, 44px or taller. */
+.drawer-fields-main { container-type: inline-size; }
+.quick-moves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+@container (min-width: 540px) {
+  .quick-moves { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.snooze-opt.quick-move {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-xs) 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-off);
+  text-align: center;
+  white-space: normal;
+}
+.snooze-opt.quick-move:hover { background: var(--card-2); border-color: var(--control-border); }
+.quick-move .snooze-opt-label { font-weight: 600; }
+.quick-move .snooze-opt-date { margin: 0; padding: 0; }
 .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.field-label { color: var(--muted); font-size: var(--font-caption); font-weight: 600; }
+.field-label { color: var(--muted); font-size: var(--font-body-sm); font-weight: 600; }
 .field-control { width: 100%; min-width: 0; }
 /* Due: text input + a calendar button that opens the native date picker
    (the picker input itself is visually hidden; it only supplies the dialog). */
@@ -1328,7 +1372,7 @@ a.chip:hover { text-decoration: underline; }
 /* Every: the interval input + its unit ("weeks"), read as one phrase (#229). */
 .field-interval-row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 .field-interval-row .field-control { flex: 1 1 auto; }
-.field-unit { color: var(--muted); font-size: var(--font-caption); white-space: nowrap; }
+.field-unit { color: var(--muted); font-size: var(--font-body-sm); white-space: nowrap; }
 /* Section headings: the app's title font (vendored card-title metrics) with
    the section glyph — never uppercase (#46). */
 .drawer-section { padding: 14px 0 6px; }
@@ -1343,9 +1387,9 @@ a.chip:hover { text-decoration: underline; }
   font-weight: 700;
 }
 .drawer-section-title > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
-.drawer-tools { margin-left: auto; font-size: var(--font-caption); font-weight: 600; }
+.drawer-tools { margin-left: auto; font-size: var(--font-body-sm); font-weight: 600; }
 .drawer-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
-.drawer-none { margin: 0; font-size: var(--font-caption); }
+.drawer-none { margin: 0; font-size: var(--font-body-sm); }
 .drawer-desc-edit { width: 100%; height: auto; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; }
 .drawer-desc-save { margin-top: 6px; min-height: var(--control-h); padding: 0 14px; font-size: var(--font-label); }
 .markdown { font-size: var(--font-label); line-height: 1.5; }
@@ -1406,7 +1450,7 @@ a.chip:hover { text-decoration: underline; }
 /* Repeating entries = flat list rows on a hairline (design.md list-row). */
 .comment { padding: var(--space-sm) 0; border-top: 1px solid var(--line-muted); }
 .comment:first-child { border-top: 0; }
-.comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-caption); margin-bottom: 2px; }
+.comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-body-sm); margin-bottom: 2px; }
 .comment-meta strong { color: var(--fg); }
 /* Pencil + trash park at the right end of the meta line (#155) — the Links
    row's pair of icon buttons; `margin-left: auto` is the only thing it adds. */
@@ -1436,7 +1480,7 @@ a.chip:hover { text-decoration: underline; }
   gap: var(--space-sm);
   padding: 6px 0;
   border-top: 1px solid var(--line-muted);
-  font-size: var(--font-caption);
+  font-size: var(--font-body-sm);
 }
 .activity-row:first-child { border-top: 0; }
 /* One weight for the whole line (no bold): the field name and arrows read
@@ -1446,6 +1490,17 @@ a.chip:hover { text-decoration: underline; }
 .activity-old { color: var(--muted); }
 .activity-arrow { color: var(--muted); }
 .activity-meta { color: var(--muted); white-space: nowrap; }
+.activity-sync-toggle { margin-top: var(--space-xs); }
+/* Links as pills (#394): the folder, the issue and every link on one wrapping
+   row of 44px pills (the .folder-chips recipe), nothing to edit on it. */
+.drawer-pill-row { margin-top: -11px; }
+/* More fields: a flat disclosure after the activity log. Its summary names
+   what is set inside (starts, repeats, a person, blockers, children) in the
+   count slot, so a closed disclosure never hides that a field holds a value. */
+.drawer-more { margin-top: var(--space-md); }
+.drawer-more > .collapse-summary .collapse-main { align-items: center; overflow: hidden; }
+.drawer-more-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--font-body-sm); }
+.drawer-more > .collapse-body > .drawer-fields { border-top: 0; padding-top: var(--space-xs); }
 .children-list { display: flex; flex-direction: column; margin-bottom: var(--space-sm); }
 .child-row {
   display: flex;
@@ -1466,7 +1521,7 @@ a.chip:hover { text-decoration: underline; }
 .child-row:first-child { border-top: 0; }
 .child-row:hover { background: var(--card-2); }
 .child-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.child-due { color: var(--muted); font-size: var(--font-caption); }
+.child-due { color: var(--muted); font-size: var(--font-body-sm); }
 /* ------------------------------------------------------- issue panel */
 /* Step 8: the linked issue (chip · state pill · labels · meta · unlink) or
    the create / link forms for a plain task. Chips carry the state: an open
@@ -1474,7 +1529,7 @@ a.chip:hover { text-decoration: underline; }
 .issue-panel { display: flex; flex-direction: column; gap: var(--space-sm); font-size: var(--font-label); }
 .issue-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .issue-labels { display: inline-flex; flex-wrap: wrap; gap: var(--space-xs); }
-.issue-meta { font-size: var(--font-caption); }
+.issue-meta { font-size: var(--font-body-sm); }
 .issue-actions { display: flex; gap: 6px; }
 .issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .issue-form { display: flex; gap: 6px; }

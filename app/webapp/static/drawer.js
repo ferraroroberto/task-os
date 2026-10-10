@@ -2,22 +2,28 @@
  *
  * A right-hand side panel on desktop (>= 1024px; the content shrinks so the
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
- * #task/<id> (app.js owns the hash). Top to bottom: breadcrumb → editable
- * title → fields row (status, priority, due, starts, recurrence + its every-N
+ * #task/<id> (app.js owns the hash).
+ *
+ * Ordered by how often each part is used (#394, decision 7 on #390): most
+ * edits are a due date pushed out, so Due comes first with its quick moves.
+ * Top to bottom: breadcrumb → editable title → Due (the field, then the date
+ * sheet's phrases as one-tap moves, push-outs first, each with its date) →
+ * status and priority → links as pills (the folder, the linked issue, every
+ * link: open-only, the editors are under More fields) → description
+ * (markdown, edit/preview) → comments newest-first with URLs as clickable
+ * chips + composer (Ctrl+Enter sends, origin=ui) — each row carries a pencil
+ * (edit the body in place; the author, time and origin stay) and a trash
+ * (asks first) → activity log (field old → new · actor · time; the issue
+ * sync's rows fold behind one toggle) → **More fields**, closed until opened
+ * and then kept open for the page's life: starts, recurrence + its every-N
  * interval + its fixed-day anchor when the cadence takes one, person, code,
- * move-to — re-parent without the tree drag, the phone's path) →
- * folder (the ref as an opener chip + resolved path, an editor that folds a
- * pasted absolute path onto the placeholders, a picker over the folder
- * index — Step 9) → description (markdown, edit/preview) → links (add/remove)
- * → blocked by (#100: the open blockers, a Move-to-style picker to add one,
- * remove per row) → comments
- * newest-first with URLs as clickable chips + composer (Ctrl+Enter sends,
- * origin=ui) — each row carries the Links pair, a pencil (edit the body in
- * place; the author, time and origin stay) and a trash (asks first) → activity log (field old → new · actor · time) → children
- * (click to navigate, add child) → issue panel: the linked issue (provider
- * glyph, repo#N link, state, labels from the last sync, last synced, unlink)
- * or — for a plain task — "Create issue…" (repo from the last-seen list or
- * typed) and "Link existing" (owner/repo#N).
+ * move-to (re-parent without the tree drag, the phone's path) → folder (the
+ * ref as an opener chip, an editor that folds a pasted absolute path onto the
+ * placeholders, a picker over the folder index — Step 9) → link editor
+ * (label edit, remove, add) → blocked by (#100) → children (click to
+ * navigate, add child) → issue panel: the linked issue (provider glyph,
+ * repo#N link, state, labels from the last sync, last synced, unlink) or —
+ * for a plain task — "Create issue…" and "Link existing" → delete.
  *
  * Every write goes through the API and then `refresh()`, and the caller's
  * `onChanged` re-renders the lists so the surfaces never drift.
@@ -27,6 +33,7 @@
 
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
+import { collapsibleCard } from './collapsible.js';
 import { confirmDialog } from './confirm.js';
 import { duePicker } from './dueinput.js';
 import {
@@ -36,7 +43,15 @@ import {
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { RECURRENCES, anchorOptions, intervalUnit } from './recurrence.js';
 import { statusOptions } from './rows.js';
+import { DUE_OPTIONS, phraseButtons } from './snooze.js';
 import { toast } from './toast.js';
+
+/** The issue sync's actor (src/issue_sync.py SYNC_ACTOR): its activity rows fold. */
+const SYNC_ACTOR = 'sync';
+
+// More fields stays as the owner left it for the page's life, across every
+// task and every re-render a write causes; a reload closes it again (#394).
+let moreOpen = false;
 
 /**
  * @param {HTMLElement} el     the <aside id="taskDrawer">
@@ -64,6 +79,7 @@ export function createDrawer(el, opts) {
   let pickerOpen = false;  // the folder-index picker under the Folder field
   let editingLinkId = null;
   let editingCommentId = null;  // the comment whose body sits in the inline editor (#155)
+  let syncShown = false;        // the issue sync's activity rows, unfolded (#394)
 
   function section(name, title, iconName) {
     const s = document.createElement('section');
@@ -76,6 +92,28 @@ export function createDrawer(el, opts) {
     h.appendChild(t);
     s.appendChild(h);
     return s;
+  }
+
+  /** A sub-form's labelled button: Add link, Set folder, Add blocker, Add
+   *  child, Create issue, Link, Send. Each is a utility at the control height
+   *  (`button-surface` / `button-ghost`), never the view's primary action, so
+   *  none is a submit button — the design measure reads every
+   *  `button[type=submit]` as the primary and holds it to button-primary's
+   *  48px (#394). The click and Enter in any of the form's inputs both submit
+   *  the form, so its one submit handler stays the one write path; a disabled
+   *  button stops Enter as it stopped the native submit. */
+  function formButton(form, className, html) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = className;
+    b.innerHTML = html;
+    b.addEventListener('click', function () { form.requestSubmit(); });
+    form.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' || ev.target.tagName !== 'INPUT') return;
+      ev.preventDefault();
+      if (!b.disabled) form.requestSubmit();
+    });
+    return b;
   }
 
   async function patch(changes) {
@@ -404,13 +442,121 @@ export function createDrawer(el, opts) {
     }
     el.appendChild(titleRow);
 
-    // ---- fields row
+    // ---- Due first, with its quick moves, then status and priority
     const fields = document.createElement('div');
-    fields.className = 'drawer-fields';
+    fields.className = 'drawer-fields drawer-fields-main';
+    fields.appendChild(dateField(t, 'due', 'Due', relDue(t.due).text));
+    fields.appendChild(quickMoves());
     fields.appendChild(statusField(t));
     fields.appendChild(selectField('Priority', 'priority', PRIORITIES, t.priority));
-    fields.appendChild(dateField(t, 'due', 'Due', relDue(t.due).text));
-    // Starts sits right after Due — the two dates of a task, read together.
+    el.appendChild(fields);
+
+    el.appendChild(linkPills(t));
+    el.appendChild(descriptionSection(t));
+    el.appendChild(commentsSection(t));
+    el.appendChild(activitySection(t));
+    el.appendChild(moreSection(t));
+
+    // ---- delete (#121): the one destructive control, last and quiet
+    el.appendChild(renderDeleteFoot(t));
+  }
+
+  /** The date sheet's phrases as one-tap moves under Due (#394): push-outs
+   *  first, each with the date it resolves to, sent as the phrase so
+   *  `src/dates.py` stays the one date vocabulary. */
+  function quickMoves() {
+    const row = document.createElement('div');
+    row.className = 'quick-moves';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Move the due date');
+    phraseButtons(DUE_OPTIONS, function (phrase) { patch({ due: phrase }); }).forEach(function (b) {
+      b.classList.add('quick-move');
+      row.appendChild(b);
+    });
+    return row;
+  }
+
+  /** The folder ref as its opener chip. An unresolvable ref keeps its warning
+   *  ON the chip: a placeholder this server does not know is a config fault,
+   *  not a silent one. */
+  function folderChip(t) {
+    const chip = chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url });
+    if (t.folder_resolved) {
+      chip.title = t.folder_resolved + ' — the path this server resolves the ref to';
+    } else {
+      chip.classList.add('chip-missing');
+      chip.title = t.folder_ref + ' — placeholder not configured on this server; add it to config.placeholders';
+      chip.insertAdjacentHTML('beforeend', icon('triangle-alert'));
+    }
+    return chip;
+  }
+
+  function linkChip(l) {
+    // an email link is a .msg ref the opener opens as a file — same chip, mail glyph;
+    // an ai link keeps the bot chip + open/resume popover regardless of URL shape
+    return l.kind === 'ai'
+      ? aiChip(l.url, l.label || null)
+      : chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined);
+  }
+
+  /** Everything the task points at, one row of pills that only open: the
+   *  folder, the linked issue, then every link (one home per fact, #390).
+   *  Changing any of them is under More fields. */
+  function linkPills(t) {
+    const sec = section('pills', 'Links', 'link');
+    const pills = document.createElement('div');
+    pills.className = 'drawer-pill-row folder-chips';
+    if (t.folder_ref) pills.appendChild(folderChip(t));
+    let issueHref = null;
+    if (t.issue_ref) {
+      const ic = issueChip(t.issue_ref);
+      issueHref = ic.href;
+      pills.appendChild(ic);
+    }
+    (t.links || []).forEach(function (l) {
+      // linking an issue also stores it as an `issue` link; the issue chip
+      // above already is that link, with its state
+      if (l.kind === 'issue' && issueHref && new URL(l.url, location.href).href === issueHref) return;
+      pills.appendChild(linkChip(l));
+    });
+    if (!pills.childElementCount) {
+      const none = document.createElement('p');
+      none.className = 'muted drawer-none';
+      none.textContent = 'No links. Add one under More fields.';
+      sec.appendChild(none);
+    } else {
+      sec.appendChild(pills);
+    }
+    return sec;
+  }
+
+  /** What More fields holds that is set, so its summary says it while closed. */
+  function moreHint(t) {
+    const parts = [];
+    if (isDeferred(t)) parts.push('starts ' + relDue(t.starts).text);
+    if (t.recurrence) parts.push('repeats');
+    if (t.person_id != null) {
+      const p = (opts.people() || []).find(function (x) { return x.id === t.person_id; });
+      if (p) parts.push(p.name);
+    }
+    const blockers = (t.blocked_by || []).length;
+    if (blockers) parts.push(blockers + (blockers === 1 ? ' blocker' : ' blockers'));
+    const kids = (t.children || []).length;
+    if (kids) parts.push(kids + (kids === 1 ? ' child' : ' children'));
+    return parts.join(' · ');
+  }
+
+  /** The rarely used fields and editors (#394, decision 7), one disclosure. */
+  function moreSection(t) {
+    const more = collapsibleCard({
+      className: 'disclosure-flat drawer-more', title: 'More fields',
+      count: moreHint(t), countClass: 'drawer-more-hint',
+    });
+    more.card.open = moreOpen;
+    more.card.addEventListener('toggle', function () { moreOpen = more.card.open; });
+
+    const fields = document.createElement('div');
+    fields.className = 'drawer-fields';
     fields.appendChild(dateField(t, 'starts', 'Starts',
       isDeferred(t) ? relDue(t.starts).text : 'passed'));
     // Repeat is a composer (#112): the cadence, then — once there is one — how
@@ -429,34 +575,14 @@ export function createDrawer(el, opts) {
     }));
     fields.appendChild(textField('Code', 'code', t.code, 'optional'));
     fields.appendChild(moveField(t));
-    el.appendChild(fields);
-
-    // ---- folder (Step 9)
-    el.appendChild(folderSection(t));
-
-    // ---- description
-    el.appendChild(descriptionSection(t));
-
-    // ---- links
-    el.appendChild(linksSection(t));
-
-    // ---- blocked by (#100)
-    el.appendChild(blockedBySection(t));
-
-    // ---- comments (newest first) + composer
-    el.appendChild(commentsSection(t));
-
-    // ---- activity
-    el.appendChild(activitySection(t));
-
-    // ---- children
-    el.appendChild(childrenSection(t));
-
-    // ---- issue panel
-    el.appendChild(renderIssuePanel(t));
-
-    // ---- delete (#121): the one destructive control, last and quiet
-    el.appendChild(renderDeleteFoot(t));
+    more.body.append(
+      fields,
+      folderSection(t),        // Step 9
+      linksSection(t),
+      blockedBySection(t),     // #100
+      childrenSection(t),
+      renderIssuePanel(t));
+    return more.card;
   }
 
   function descriptionSection(t) {
@@ -504,8 +630,10 @@ export function createDrawer(el, opts) {
     return desc;
   }
 
+  /** The link editor under More fields: each link with its label edit and
+   *  remove, then the add form. The pills at the top only open them. */
   function linksSection(t) {
-    const links = section('links', 'Links', 'link');
+    const links = section('links', 'Edit links', 'link');
     const linkList = document.createElement('div');
     linkList.className = 'drawer-links';
     (t.links || []).forEach(function (l) {
@@ -545,11 +673,7 @@ export function createDrawer(el, opts) {
         requestAnimationFrame(function () { editInput.focus(); editInput.select(); });
         return;
       }
-      // an email link is a .msg ref the opener opens as a file — same chip, mail glyph;
-      // an ai link keeps the bot chip + open/resume popover regardless of URL shape
-      row.appendChild(l.kind === 'ai'
-        ? aiChip(l.url, l.label || null)
-        : chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined));
+      row.appendChild(linkChip(l));
       const actions = document.createElement('div');
       actions.className = 'link-actions';
       const edit = document.createElement('button');
@@ -593,11 +717,7 @@ export function createDrawer(el, opts) {
     label.className = 'input-native';
     label.placeholder = 'label (optional)';
     label.setAttribute('aria-label', 'Link label');
-    const addLink = document.createElement('button');
-    addLink.type = 'submit';
-    addLink.className = 'button-surface';
-    addLink.textContent = 'Add link';
-    linkForm.append(url, label, addLink);
+    linkForm.append(url, label, formButton(linkForm, 'button-surface', 'Add link'));
     linkForm.addEventListener('submit', async function (ev) {
       ev.preventDefault();
       const u = url.value.trim();
@@ -622,13 +742,10 @@ export function createDrawer(el, opts) {
     ta.placeholder = 'Add a comment… (Ctrl+Enter to send)';
     ta.setAttribute('aria-label', 'New comment');
     ta.title = 'Ctrl+Enter to send; links become chips';
-    const send = document.createElement('button');
-    send.type = 'submit';
     // Same tier and metrics as the Description "Edit" button — quiet, not a
     // full-height primary block.
-    send.className = 'button-ghost comment-send';
+    const send = formButton(composer, 'button-ghost comment-send', icon('send-horizontal') + ' Send');
     send.setAttribute('aria-label', 'Send comment');
-    send.innerHTML = icon('send-horizontal') + ' Send';
     composer.append(ta, send);
     composer.addEventListener('submit', async function (ev) {
       ev.preventDefault();
@@ -708,11 +825,17 @@ export function createDrawer(el, opts) {
     return comments;
   }
 
+  /** The log, newest first. The issue sync writes most of it on a synced task
+   *  (#390: 85% of all activity), so its rows fold behind one toggle and the
+   *  owner's own changes lead (#394, decision 7). */
   function activitySection(t) {
     const activity = section('activity', 'Activity', 'activity');
     const alist = document.createElement('div');
     alist.className = 'activity-list';
-    (t.activity || []).forEach(function (a) {
+    const all = t.activity || [];
+    const synced = all.filter(function (a) { return a.actor === SYNC_ACTOR; }).length;
+    all.forEach(function (a) {
+      if (a.actor === SYNC_ACTOR && !syncShown) return;
       const row = document.createElement('div');
       row.className = 'activity-row';
       row.dataset.field = a.field;
@@ -743,6 +866,17 @@ export function createDrawer(el, opts) {
       alist.appendChild(row);
     });
     activity.appendChild(alist);
+    if (synced) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'button-ghost activity-sync-toggle';
+      toggle.setAttribute('aria-expanded', String(syncShown));
+      toggle.textContent = syncShown
+        ? 'Hide sync updates'
+        : 'Show ' + synced + ' sync update' + (synced === 1 ? '' : 's');
+      toggle.addEventListener('click', function () { syncShown = !syncShown; render(); });
+      activity.appendChild(toggle);
+    }
     return activity;
   }
 
@@ -778,11 +912,7 @@ export function createDrawer(el, opts) {
     ci.className = 'input-native';
     ci.placeholder = 'Add child task…';
     ci.setAttribute('aria-label', 'Add child task');
-    const cb = document.createElement('button');
-    cb.type = 'submit';
-    cb.className = 'button-surface';
-    cb.textContent = 'Add child';
-    addChild.append(ci, cb);
+    addChild.append(ci, formButton(addChild, 'button-surface', 'Add child'));
     addChild.addEventListener('submit', async function (ev) {
       ev.preventDefault();
       const v = ci.value.trim();
@@ -1019,10 +1149,7 @@ export function createDrawer(el, opts) {
       dl.replaceChildren();
       repos.forEach(function (r) { const o = document.createElement('option'); o.value = r; dl.appendChild(o); });
       if (repos.length === 1) repoInput.value = repos[0];
-      const createBtn = document.createElement('button');
-      createBtn.type = 'submit';
-      createBtn.className = 'button-surface';
-      createBtn.innerHTML = icon('plus') + ' Create issue';
+      const createBtn = formButton(createForm, 'button-surface', icon('plus') + ' Create issue');
       createBtn.disabled = !configured;
       createBtn.title = configured ? "Open an issue with this task's title and description, then link it" : 'Issue provider not configured';
       createForm.append(repoInput, createBtn);
@@ -1052,11 +1179,7 @@ export function createDrawer(el, opts) {
       refInput.className = 'input-native';
       refInput.placeholder = 'link existing: owner/repo#12 or its URL';
       refInput.setAttribute('aria-label', 'Existing issue reference');
-      const linkBtn = document.createElement('button');
-      linkBtn.type = 'submit';
-      linkBtn.className = 'button-surface';
-      linkBtn.innerHTML = icon('link') + ' Link';
-      linkForm.append(refInput, linkBtn);
+      linkForm.append(refInput, formButton(linkForm, 'button-surface', icon('link') + ' Link'));
       linkForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const v = refInput.value.trim();
@@ -1138,11 +1261,7 @@ export function createDrawer(el, opts) {
       o.textContent = (p.depth ? ' '.repeat(p.depth) : '') + p.title;
       sel.appendChild(o);
     });
-    const add = document.createElement('button');
-    add.type = 'submit';
-    add.className = 'button-surface';
-    add.textContent = 'Add blocker';
-    form.append(sel, add);
+    form.append(sel, formButton(form, 'button-surface', 'Add blocker'));
     form.addEventListener('submit', async function (ev) {
       ev.preventDefault();
       const v = sel.value;
@@ -1160,8 +1279,7 @@ export function createDrawer(el, opts) {
   // ---- folder section: two lines — [chip + delete] / [ref + Change + Pick]
   // The resolved path is NOT repeated as a third line: it is already the chip's
   // own `title` (format.js), and the phone reaches it through the chip's copy
-  // popover (#74). An unresolvable ref keeps its warning ON the chip — a
-  // placeholder this server does not know is a config fault, not a silent one.
+  // popover (#74).
   function folderSection(t) {
     const sec = section('folder', 'Folder', 'folder');
     const body = document.createElement('div');
@@ -1169,15 +1287,7 @@ export function createDrawer(el, opts) {
     if (t.folder_ref) {
       const cur = document.createElement('div');
       cur.className = 'folder-current';
-      const chip = chipFor(t.folder_ref, null, { resolved: t.folder_resolved, url: t.folder_url });
-      if (t.folder_resolved) {
-        chip.title = t.folder_resolved + ' — the path this server resolves the ref to';
-      } else {
-        chip.classList.add('chip-missing');
-        chip.title = t.folder_ref + ' — placeholder not configured on this server; add it to config.placeholders';
-        chip.insertAdjacentHTML('beforeend', icon('triangle-alert'));
-      }
-      cur.appendChild(chip);
+      cur.appendChild(folderChip(t));
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'icon-button danger';
@@ -1196,10 +1306,7 @@ export function createDrawer(el, opts) {
     input.value = t.folder_ref || '';
     input.placeholder = '{onedrive}/folder  — or paste an absolute path';
     input.setAttribute('aria-label', 'Folder ref');
-    const save = document.createElement('button');
-    save.type = 'submit';
-    save.className = 'button-surface';
-    save.textContent = t.folder_ref ? 'Change' : 'Set folder';
+    const save = formButton(form, 'button-surface', t.folder_ref ? 'Change' : 'Set folder');
     const pick = document.createElement('button');
     pick.type = 'button';
     pick.className = 'button-ghost folder-pick';
@@ -1269,6 +1376,7 @@ export function createDrawer(el, opts) {
       pickerOpen = false;
       editingLinkId = null;
       editingCommentId = null;
+      syncShown = false;
       try {
         const data = await api('/api/tasks/' + id);
         if (seq !== loads) return;   // a newer open, or a close, took over meanwhile

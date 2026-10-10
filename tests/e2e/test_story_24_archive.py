@@ -370,7 +370,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     inbox.locator(".trow-main", has_text=KITCHEN).first.click()
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
-    chip = drawer.locator(".link-row a.chip").first
+    chip = drawer.locator(".drawer-pill-row a.chip", has_text="Kitchen quotes.msg")   # the link pills (#394)
     expect(chip).to_contain_text("2026-08-10 Kitchen quotes.msg")
     expect(chip).to_have_attribute(
         "href",

@@ -167,3 +167,28 @@ path = "LICENSE"
 tab = "board"
 id = "settings"
 click = "#settingsBtn"
+
+# The task drawer, its row menu and Select mode (#394): read-only clicks on the
+# Today list's first row. Opening a drawer or a menu writes nothing; the walk
+# types nothing, so the drawer's fields never commit. Desktop Today already
+# shows the drawer (it pre-selects the first due task); the phone walks it as
+# its full-screen sheet, and `drawer-more` opens More fields as well.
+[[design.review.extra_steps]]
+tab = "today"
+id = "drawer"
+click = "#paneToday .trow .trow-main"
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "drawer-more"
+clicks = ["#paneToday .trow .trow-main", "#taskDrawer details.drawer-more > summary"]
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "row-menu"
+click = "#paneToday .trow .trow-kebab"
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "select"
+click = "#paneToday [data-select-toggle]"

@@ -29,7 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import _get, open_more_fields, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -99,6 +99,10 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         locked.locator(".trow-main").click()
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
+        # Blocked by is under More fields (#394), whose summary names the
+        # blocker while it is still closed
+        expect(drawer.locator(".drawer-more-hint")).to_have_text("1 blocker")
+        open_more_fields(drawer)
         blockers = drawer.locator(".drawer-blocked .drawer-blockers .blocker-row")
         expect(blockers).to_have_count(1)
         expect(blockers.locator(".blocker-title")).to_have_text("Write sensor driver")
@@ -152,6 +156,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         page.goto(f"{base}/?_e2e=1#task/{a_id}")
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         blocked_sec = drawer.locator(".drawer-blocked")
         expect(blocked_sec.locator(".drawer-none")).to_have_text("Not blocked by anything.")
         sel_a = blocked_sec.locator(".blocker-form select")
@@ -163,18 +168,19 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         assert not {"Order sensor", "Collect photos", "Buy a birthday gift"} & set(offered), offered
         sel_a.select_option(label="Cycle B")
         expect(sel_a).to_have_value(str(b_id))
-        blocked_sec.locator(".blocker-form button[type='submit']").click()
+        blocked_sec.locator(".blocker-form button").click()
         expect(blocked_sec.locator(".blocker-row .blocker-title")).to_have_text("Cycle B")
         assert _get(base, f"/api/tasks/{a_id}")["blocked"] is True
 
         page.goto(f"{base}/?_e2e=2#task/{b_id}")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         blocked_sec = drawer.locator(".drawer-blocked")
         sel_b = blocked_sec.locator(".blocker-form select")
         sel_b.select_option(label="Cycle A")
         expect(sel_b).to_have_value(str(a_id))
         shot(page, shots / "story-20-blocked-by-5-desktop.png")
-        blocked_sec.locator(".blocker-form button[type='submit']").click()
+        blocked_sec.locator(".blocker-form button").click()
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{b_id}")["blocked"] is False
         assert _get(base, f"/api/tasks/{b_id}")["blocked_by"] == []
@@ -182,6 +188,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         # remove the real edge: Cycle A unblocks
         page.goto(f"{base}/#task/{a_id}")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         drawer.locator(".drawer-blocked .blocker-row .icon-button").click()
         expect(drawer.locator(".drawer-blocked .drawer-none")).to_have_text("Not blocked by anything.")
         assert _get(base, f"/api/tasks/{a_id}")["blocked"] is False

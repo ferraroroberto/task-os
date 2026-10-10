@@ -73,10 +73,10 @@ export function loadPhraseDates() {
 }
 
 /** Fill each option's date, now if today's answer is cached, else when it lands. */
-function fillDates(menu) {
+function fillDates(buttons) {
   const fill = function (dates) {
     if (!dates) return;
-    menu.querySelectorAll('.snooze-opt[data-phrase]').forEach(function (b) {
+    buttons.forEach(function (b) {
       const iso = dates[b.dataset.phrase];
       const slot = b.querySelector('.snooze-opt-date');
       if (iso && slot) { slot.textContent = fmtDay(iso); slot.dataset.date = iso; }
@@ -84,6 +84,34 @@ function fillDates(menu) {
   };
   if (phraseDates && phraseDates.day === todayISO()) fill(phraseDates.dates);
   else loadPhraseDates().then(fill);
+}
+
+/**
+ * The phrases as buttons: each one's label, and the date it resolves to today
+ * once that is known. The sheet below lists them; the drawer lays the same
+ * buttons out as its quick moves under Due (#394), so a phrase means one date
+ * wherever it is offered.
+ * @param {Array<[string,string]>} options   [phrase, label] pairs
+ * @param {(phrase:string) => void} onPick
+ * @returns {HTMLButtonElement[]}
+ */
+export function phraseButtons(options, onPick) {
+  const buttons = options.map(function (opt) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'snooze-opt';
+    b.dataset.phrase = opt[0];
+    const label = document.createElement('span');
+    label.className = 'snooze-opt-label';
+    label.textContent = opt[1];
+    const when = document.createElement('span');
+    when.className = 'snooze-opt-date';
+    b.append(label, when);
+    b.addEventListener('click', function () { onPick(opt[0]); });
+    return b;
+  });
+  fillDates(buttons);
+  return buttons;
 }
 
 /** What each date field's menu says about itself. */
@@ -126,21 +154,7 @@ export function dateMenu(t, field, onPick) {
   menu.setAttribute('role', 'dialog');
   menu.setAttribute('aria-label', spec.name(t));
 
-  spec.options.forEach(function (opt) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'snooze-opt';
-    b.dataset.phrase = opt[0];
-    const label = document.createElement('span');
-    label.className = 'snooze-opt-label';
-    label.textContent = opt[1];
-    const when = document.createElement('span');
-    when.className = 'snooze-opt-date';
-    b.append(label, when);
-    b.addEventListener('click', function () { onPick(opt[0]); });
-    menu.appendChild(b);
-  });
-  fillDates(menu);
+  menu.append(...phraseButtons(spec.options, onPick));
 
   // "Pick a date…" — the same calendar button every other date control opens.
   const pick = duePicker({
