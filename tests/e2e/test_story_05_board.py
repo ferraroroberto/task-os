@@ -934,7 +934,37 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         first_today = rows.first
         assert_no_overlap([first_today.locator(c) for c in (".trow-main", ".trow-kebab")])
         assert_no_horizontal_overflow(page)
+        # #399: the scope switch is on the phone's Today, the row's full width,
+        # its segments real touch targets
+        _assert_scope_switch_spans_row(page)
+        assert_min_target(page.locator("#todayScope .segmented-item"))
+        assert_no_overlap(page.locator("#todayScope .segmented-item"))
         shot(page, shots / "story-05-board-8-phone.png")
+
+        # …and raised in dark when the theme follows the system: nothing is
+        # stored, so the pre-paint stamp reads the OS scheme (#399)
+        dark = wk.new_context(
+            viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True,
+            color_scheme="dark",
+        )
+        try:
+            dpage = dark.new_page()
+            dpage.goto(f"{base}/")
+            expect(dpage.locator("html")).to_have_attribute("data-theme", "dark")
+            _assert_scope_switch_spans_row(dpage)
+            lums = dpage.evaluate(
+                """() => {
+                  const lum = c => { const m = c.match(/\\d+(\\.\\d+)?/g).map(Number);
+                                     return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]; };
+                  const sw = document.querySelector('#todayScope .scope-switch');
+                  return {track: lum(getComputedStyle(sw).backgroundColor),
+                          picked: lum(getComputedStyle(
+                            sw.querySelector('.segmented-item[aria-pressed="true"]')).backgroundColor)};
+                }"""
+            )
+            assert lums["picked"] > lums["track"], lums   # raised, not sunk
+        finally:
+            dark.close()
 
         # 10. Board: strip of four counts + one column per screen (scroll-snap).
         page.locator("nav.tabs .tab[data-tab='board']").tap()
@@ -1176,6 +1206,34 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
             page.evaluate("id => fetch('/api/tasks/' + id, {method: 'DELETE'})", tid)
 
 
+_SWITCH_BOXES_JS = """() => {
+  const box = e => { const r = e.getBoundingClientRect(); return {x: r.x, w: r.width, h: r.height}; };
+  const host = document.getElementById('todayScope');
+  const group = host.querySelector('.scope-switch');
+  return {host: box(host), group: box(group),
+          items: [...group.querySelectorAll('.segmented-item')].map(box)};
+}"""
+
+
+def _assert_scope_switch_spans_row(page: Page) -> None:
+    """§ #399 — the switch is on screen and spans the width of its row.
+
+    The row is the switch's host (the pane's own width); the three segments
+    share the track equally. Pixel tolerance 1 (sub-pixel layout), never the
+    360px the switch used to stop at.
+    """
+    switch = page.locator("#todayScope .segmented.scope-switch")
+    expect(switch).to_be_visible()
+    expect(switch.locator(".segmented-item")).to_have_count(3)
+    b = page.evaluate(_SWITCH_BOXES_JS)
+    assert abs(b["group"]["w"] - b["host"]["w"]) <= 1, b
+    assert abs(b["group"]["x"] - b["host"]["x"]) <= 1, b
+    widths = [i["w"] for i in b["items"]]
+    assert max(widths) - min(widths) <= 1, widths
+    # the track's 3px inset on each side is the only width the segments do not use
+    assert abs(sum(widths) + 6 - b["group"]["w"]) <= 1, b
+
+
 def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     """§ #391 — Today's Mine · Issues · All switch, one URL key, Mine by default.
 
@@ -1195,6 +1253,7 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     # 1. Mine is the default: on screen, and absent from the URL
     expect(pressed).to_have_text("Mine")
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
+    _assert_scope_switch_spans_row(page)   # #399: the row's full width on desktop
     for tid in issue_ids:
         expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(0)
     # 2. Issues: only the synced tasks, the pick written to the URL

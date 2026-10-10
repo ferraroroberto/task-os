@@ -590,15 +590,18 @@ a.chip:hover { text-decoration: underline; }
 }
 .section-count { color: var(--muted); font-size: var(--font-caption); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* The scope switch (#391): the vendored segmented control, no wider than its
-   three one-word segments need; the row under the strip on every width. */
-.scope-switch { max-width: 360px; }
+/* The scope switch (#391): the vendored segmented control, the full width of
+   its row on every width with the three segments sharing it equally (the
+   control's own equal columns; #399 dropped the 360px cap that stopped it
+   short of the row). The row under the strip on every width. */
+.scope-switch { width: 100%; }
 /* Dark only: the switch sits on the canvas, not in a card, and there the dark
    `card` (#161b22) is DARKER than the neutral-soft track over the canvas, so
    the selected segment read sunk instead of raised; card-2 (#21262d) is
    still within a shade of the track. A token value scoped to this switch (the
    vendored file stays verbatim): the lift is the dark hairline grey #30363d,
-   fg on it 11:1. */
+   fg on it 11:1. The pre-paint stamp writes data-theme from the OS scheme
+   when no choice is stored, so "follows the system" lands on this rule too. */
 [data-theme="dark"] .scope-switch { --card: var(--line); }
 
 /* ------------------------------------------- the pane's top strip (#80) */
