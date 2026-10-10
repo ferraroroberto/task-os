@@ -1,32 +1,30 @@
-/* task-os — the ONE filter card every tab shares (issue #46, #48).
+/* task-os — the ONE filter state every tab shares, and its sheet (#46, #48, #395).
  *
- * Board, Today and Search are renderings of the same list, so
+ * Board, Today, Search and the journal are renderings of the same list, so
  * they read one filter state — this module owns its shape, its URL encoding
  * (`?status=todo&project=12&person=3,5&sort=updated` is the same shareable
- * view on every tab) and the card that edits it:
+ * view on every tab) and the controls that edit it:
  *
  *   <input class="filter-q">          the live text filter, always visible in
- *                                     the pane's own top strip (#80)
+ *                                     the pane's own top strip (#80); the
+ *                                     list's count is its placeholder (#393)
+ *   <button class="filter-open">      beside it: the filter glyph and how many
+ *                                     settings are on (#395)
+ *   <dialog id="filterSheet">         what the button opens — the vendored
+ *                                     editor modal: sort first, then status ·
+ *                                     project · person · due · modified;
+ *                                     status and person are ticks in place
  *
- *   <details class="card card--collapsible filter-card">   (vendored disclosure)
- *     summary   "Filters" · what is active, in words · "42 tasks"
- *     body      project | person · due | modified · status | sort — one
- *               control each, equal widths, two per line on the phone (#48);
- *               person and status are multi-selects (one click each, several
- *               allowed: "Anyone" / the name / "2 people")
- *
- * The card is collapsed by default: the summary line says what is applied, so
- * it never has to be open to read the state. The text input lives outside it
- * (#80) — the filter reached for most is one keystroke away — and is built
- * once, so a re-render never moves the caret. `mountFilters` keeps the open /
- * closed state and an open dropdown across re-renders.
+ * Nothing about the state needs the sheet open to read: the count is on the
+ * button, and the button's name says what is on in words. The text input is
+ * built once, so a re-render never moves the caret.
  */
 
 'use strict';
 
-import { collapsibleCard } from './collapsible.js';
+import { icon } from './_vendored/icons/icons.js';
 import { STATUSES, todayISO } from './format.js';
-import { closeOnOutside } from './popover.js';
+import { closeOnBackdrop, modalCard } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine' };
@@ -34,9 +32,9 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  * Whose tasks a list shows (#391, decision 1 of #390): the owner's own, the
  * issues the forge sync brings in, or both. A task is an issue when it carries
  * an `issue_ref` — the coding task the sync made (`coding` ⇔ issue_ref). One
- * URL key, `scope`, absent for the default Mine. It is not a filter-card
- * control: the segmented switch above the list owns it (scope.js), so the
- * card neither describes it nor resets it on Clear.
+ * URL key, `scope`, absent for the default Mine. It is not a sheet control:
+ * the segmented switch under the strip owns it (scope.js), so the sheet
+ * neither counts it nor resets it on Clear.
  */
 export const SCOPES = [['mine', 'Mine'], ['issues', 'Issues'], ['all', 'All']];
 /**
@@ -93,12 +91,6 @@ export function filtersToSearch(f) {
   if (f.scope && f.scope !== 'mine') p.set('scope', f.scope);
   const s = p.toString();
   return s ? '?' + s : '';
-}
-
-/** No filter applied — the scope is the switch's, not the card's, so it
- *  never makes the filters non-default. */
-export function isDefaultFilters(f) {
-  return filtersToSearch(Object.assign({}, f, { scope: 'mine' })) === '';
 }
 
 /** Is `t` in `scope`? — the one rule every list that shows the switch reads. */
@@ -195,19 +187,20 @@ export function matchesFilters(t, f, today) {
 }
 
 // ------------------------------------------------------------ summary
-/** What is active, in words — the collapsed card's one line. The text is not
- * in it: whichever box owns the text is always on screen (the top strip, or
- * the Search tab's own box), so repeating it under that box is noise (#80). */
+/** What is active, in words — the filter button's accessible name and title,
+ * so the line the old card's summary carried is still one hover or one
+ * screen-reader stop away (#395). The text is not in it: it is in the field
+ * beside the button. A hidden control's value is not applied, so not described. */
 export function describeFilters(f, options) {
   const o = options || {};
-  const hidden = new Set(o.hide || []);   // a hidden control's value is not applied, so not described
+  const hidden = new Set(o.hide || []);
   const bits = [];
   if (f.status.length && !hidden.has('status')) bits.push(f.status.join(', '));
-  if (f.project) {
+  if (f.project && !hidden.has('project')) {
     const p = (o.projects || []).find(function (x) { return String(x.id) === String(f.project); });
     bits.push(p ? p.title : 'project #' + f.project);
   }
-  if (f.person.length) {
+  if (f.person.length && !hidden.has('person')) {
     bits.push(f.person.map(function (id) {
       const p = (o.people || []).find(function (x) { return String(x.id) === String(id); });
       return p ? p.name : 'person #' + id;
@@ -215,9 +208,33 @@ export function describeFilters(f, options) {
   }
   if (f.due && !hidden.has('due')) bits.push((DUE_WINDOWS.find(function (w) { return w[0] === f.due; }) || [])[1].toLowerCase());
   if (f.updated && !hidden.has('updated')) bits.push((UPDATED_WINDOWS.find(function (w) { return w[0] === f.updated; }) || [])[1].toLowerCase());
-  if (!hidden.has('sort')) bits.push('sorted by ' + sortLabel(f.sort));
+  if (f.sort && f.sort !== 'due' && !hidden.has('sort')) bits.push('sorted by ' + sortLabel(f.sort));
   return bits;
 }
+
+/** How many settings the sheet's Clear would reset — the number on the filter
+ *  button (#395). Neither the text (the field beside the button shows it) nor
+ *  the scope (the switch's) counts; a non-default sort does, since Clear
+ *  resets it too. A hidden control's value is not applied, so not counted. */
+export function activeFilterCount(f, hide) {
+  const hidden = new Set(hide || []);
+  let n = 0;
+  if (f.status.length && !hidden.has('status')) n += 1;
+  if (f.project && !hidden.has('project')) n += 1;
+  if (f.person.length && !hidden.has('person')) n += 1;
+  if (f.due && !hidden.has('due')) n += 1;
+  if (f.updated && !hidden.has('updated')) n += 1;
+  if (f.sort && f.sort !== 'due' && !hidden.has('sort')) n += 1;
+  return n;
+}
+
+/** Do two states draw the same sheet? (the text and the scope are not on it) */
+function sameControls(a, b) {
+  const strip = { q: '', scope: 'mine' };
+  return filtersToSearch(Object.assign({}, a, strip)) === filtersToSearch(Object.assign({}, b, strip));
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ---------------------------------------------------------------- controls
 function selectEl(name, label, values, current, onChange) {
@@ -237,47 +254,24 @@ function selectEl(name, label, values, current, onChange) {
 }
 
 /**
- * A multi-select: a select-looking summary that opens a checklist. One click
- * per option, several allowed; the summary reads `none` / the one label /
- * `N <many>` (#48).
+ * Several-allowed choices as ticks in place (#395): the sheet has the room the
+ * old card's popover checklist lacked, so status and person are a group of
+ * checkboxes, one tap each.
  * @param {string} name
- * @param {string} label      aria label
+ * @param {string} labelId   the id of the row label that names the group
  * @param {Array<[string,string]>} values   [value, label]
  * @param {Array<string>} selected
  * @param {(next: Array<string>) => void} onChange
- * @param {{none: string, many: string, open?: boolean}} texts  many = the plural noun ("people", "statuses")
  */
-export function multiSelect(name, label, values, selected, onChange, texts) {
-  closeOnOutside('.msel');
-  const d = document.createElement('details');
-  d.className = 'msel' + (selected.length ? ' has-value' : '');
-  d.dataset.name = name;
-  // One open at a time, by the platform (an exclusive `<details name>` group):
-  // opening a second multi-select closes the first even when nothing clicked
-  // outside, so two menus never stack over the rows at once (#281).
-  d.setAttribute('name', 'task-os-msel');
-  d.open = !!texts.open;
-  const summary = document.createElement('summary');
-  summary.className = 'select-native msel-summary';
-  summary.setAttribute('aria-label', label);
-  summary.setAttribute('role', 'button');
-  summary.setAttribute('aria-haspopup', 'dialog');
-  const txt = document.createElement('span');
-  txt.className = 'msel-text';
-  const picked = values.filter(function (v) { return selected.indexOf(String(v[0])) >= 0; });
-  txt.textContent = !picked.length ? texts.none : (picked.length === 1 ? picked[0][1] : picked.length + ' ' + texts.many);
-  summary.appendChild(txt);
-  d.appendChild(summary);
-  const menu = document.createElement('div');
-  menu.className = 'msel-menu';
-  // shadcn Popover's content role (Radix renders role="dialog"): a non-modal
-  // panel floating over the page, holding its own group of checkboxes. It is
-  // also what tells a reader the open menu is a layer above the rows (#281).
-  menu.setAttribute('role', 'dialog');
-  menu.setAttribute('aria-label', label);
+function checkGroup(name, labelId, values, selected, onChange) {
+  const group = document.createElement('div');
+  group.className = 'filter-checks';
+  group.dataset.name = name;
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-labelledby', labelId);
   values.forEach(function (v) {
     const opt = document.createElement('label');
-    opt.className = 'msel-opt';
+    opt.className = 'filter-check';
     opt.dataset.value = String(v[0]);
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -286,56 +280,58 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
     cb.value = String(v[0]);
     cb.checked = selected.indexOf(String(v[0])) >= 0;
     cb.addEventListener('change', function () {
-      const next = selected.filter(function (s) { return s !== String(v[0]); });
-      if (cb.checked) next.push(String(v[0]));
-      onChange(next);
+      const ticked = [];
+      group.querySelectorAll('input:checked').forEach(function (el) { ticked.push(el.value); });
+      onChange(ticked);
     });
-    opt.appendChild(cb);
-    opt.appendChild(document.createTextNode(v[1]));
-    menu.appendChild(opt);
+    opt.append(cb, document.createTextNode(v[1]));
+    group.appendChild(opt);
   });
-  if (!values.length) {
-    const none = document.createElement('p');
-    none.className = 'msel-none muted';
-    none.textContent = 'nothing to pick';
-    menu.appendChild(none);
-  }
-  d.appendChild(menu);
-  return d;
+  return group;
 }
 
-// ---------------------------------------------------------------- card
+// ---------------------------------------------------------------- sheet
+const SHEET_ID = 'filterSheet';
+let sheetOwner = null;   // the mountFilters handle whose controls the one sheet shows
+
 /**
- * Mount the filter card into `host`; call `render(filters, options)` on every
- * state change. One instance per tab (each tab has its own host), all reading
- * the same state.
- * @param {HTMLElement} host
- * @param {{onChange: (next: object) => void, textHost?: HTMLElement, countLabel?: string}} opts
- *        textHost — where the always-visible text input goes (the pane's top
- *        strip, #80). Omitted on the Search tab: its own box owns the text,
- *        so there is no second text field and `Clear` leaves the query alone.
- * @returns {{render: (filters: object, options: {projects: Array, people: Array, count: number}) => void,
- *            setOpen: (open: boolean) => void}}
- */
-/**
- * @param {HTMLElement} host
- * @param {{onChange: (f: object) => void, textHost?: HTMLElement, hide?: string[],
- *          countLabel?: string}} opts
- *          countLabel = the word before "tasks" in the text field's
+ * Mount one tab's filter controls; call `render(filters, options)` on every
+ * state change. One instance per tab, all reading the same state (#46, #48).
+ *
+ * The strip (#395): the text field and, beside it, the filter button carrying
+ * the active-filter count; the button opens the sheet — the vendored editor
+ * modal (`#filterSheet`, static in index.html like the date sheet) with sort
+ * first, then status · project · person · due · modified, applied as they
+ * change. The tabs share the one `<dialog>`; whichever instance opened it
+ * draws its controls.
+ * @param {{onChange: (f: object) => void, textHost?: HTMLElement, buttonHost?: HTMLElement,
+ *          hide?: string[], countLabel?: string}} opts
+ *          textHost — where the always-visible text input goes (the pane's top
+ *          strip, #80). Omitted on the Search tab: its own box owns the text,
+ *          so there is no second text field and Clear leaves the query alone.
+ *          buttonHost — where the filter button goes; defaults to `textHost`
+ *          (Search passes its own box).
+ *          countLabel — the word before "tasks" in the text field's
  *          placeholder, which carries the list's count ("Filter 12 closed
- *          tasks…", #393); the card's summary line no longer repeats it
- *          hide = control names this card leaves out (`status` · `due` ·
- *          `updated` · `sort` · `project` · `person`) — the journal (#102)
- *          drops the four that say nothing about a closed task; a hidden
- *          control's value is neither drawn nor described
+ *          tasks…", #393)
+ *          hide — control names this tab leaves out (`status` · `due` ·
+ *          `updated` · `sort` · `project` · `person`); the journal (#102)
+ *          drops the four that say nothing about a closed task. A hidden
+ *          control's value is neither drawn, counted nor described.
+ * @returns {{render: (filters: object, options: {projects: Array, people: Array, count?: number}) => void,
+ *            openSheet: () => void}}
  */
-export function mountFilters(host, opts) {
+export function mountFilters(opts) {
   const hidden = new Set(opts.hide || []);
-  let open = false;
-  let openMenu = null;       // the multi-select left open across a re-render
   let textTimer = 0;
   let textEl = null;         // the strip's input — built once, never re-rendered
-  let current = DEFAULT_FILTERS;   // the state the controls were last drawn from
+  let button = null;         // the filter button — built once, updated in place
+  let badge = null;
+  let current = DEFAULT_FILTERS;   // the state last rendered
+  let options = {};
+  let drawn = null;          // the state the open sheet's controls show; null while closed
+  let sheetClear = null;     // the open sheet's Clear button
+  const handle = { render: render, openSheet: openSheet };
 
   /** The live text filter, in the pane's top strip (#80). */
   function renderText(filters) {
@@ -344,7 +340,6 @@ export function mountFilters(host, opts) {
       textEl = document.createElement('input');
       textEl.type = 'search';
       textEl.className = 'input-native filter-q';
-      textEl.placeholder = 'Filter text…';
       textEl.setAttribute('aria-label', 'Filter text');
       textEl.addEventListener('input', function () {
         window.clearTimeout(textTimer);
@@ -357,73 +352,164 @@ export function mountFilters(host, opts) {
     // Never yank the value out from under the typist: their keystrokes are
     // already in the box and the debounce means `filters.q` trails them.
     if (document.activeElement !== textEl && textEl.value !== filters.q) textEl.value = filters.q;
+    // The count's one home is the text field's placeholder (#393).
+    textEl.placeholder = options.count == null ? 'Filter text…'
+      : 'Filter ' + options.count + ' ' + (opts.countLabel ? opts.countLabel + ' ' : '') + (options.count === 1 ? 'task' : 'tasks') + '…';
   }
 
-  function render(filters, options) {
-    const o = options || {};
+  /** The filter button: the glyph, plus how many settings are on. */
+  function renderButton(filters) {
+    const host = opts.buttonHost || opts.textHost;
+    if (!host) return;
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'icon-button filter-open';
+      button.setAttribute('aria-haspopup', 'dialog');
+      button.innerHTML = icon('list-filter');
+      badge = document.createElement('span');
+      badge.className = 'filter-count';
+      button.appendChild(badge);
+      button.addEventListener('click', openSheet);
+      host.appendChild(button);
+    }
+    const n = activeFilterCount(filters, opts.hide);
+    badge.textContent = n ? String(n) : '';
+    badge.hidden = !n;
+    button.classList.toggle('has-value', n > 0);
+    const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: opts.hide });
+    const name = n ? 'Filters, ' + n + ' on: ' + words.join(' · ') : 'Filters';
+    button.setAttribute('aria-label', name);
+    button.title = name;
+  }
+
+  function render(filters, o) {
     current = filters;
+    options = o || {};
     renderText(filters);
-    const wasOpen = host.querySelector('.msel[open]');
-    if (wasOpen) openMenu = wasOpen.dataset.name;
-
-    host.replaceChildren();
-    host.hidden = false;
-    // The count's one home is the text field's placeholder (#393): the
-    // summary line used to repeat it under a header that said another number.
-    if (textEl) {
-      textEl.placeholder = o.count == null ? 'Filter text…'
-        : 'Filter ' + o.count + ' ' + (opts.countLabel ? opts.countLabel + ' ' : '') + (o.count === 1 ? 'task' : 'tasks') + '…';
+    renderButton(filters);
+    // A change from outside the sheet (the palette's filter commands) redraws
+    // an open sheet; one the sheet itself made already shows, so it is left
+    // alone and the control the user is on keeps the focus.
+    const dialog = document.getElementById(SHEET_ID);
+    if (sheetOwner === handle && dialog && dialog.open && drawn && !sameControls(filters, drawn)) {
+      const hadFocus = dialog.contains(document.activeElement);
+      drawn = filters;
+      drawSheet(dialog);
+      if (hadFocus) focusClose(dialog);
     }
-    const bits = describeFilters(filters, { projects: o.projects, people: o.people, hide: opts.hide });
-    const parts = collapsibleCard({
-      className: 'filter-card', icon: 'list-filter', title: 'Filters',
-      count: bits.join(' · '), countClass: 'filter-desc', bodyClass: 'filter-body',
-    });
-    const card = parts.card;
-    const body = parts.body;
-    card.open = open;
-    card.addEventListener('toggle', function () { open = card.open; if (!open) openMenu = null; });
-
-    const row = document.createElement('div');
-    row.className = 'filter-row';
-    function change(name) {
-      return function (value) { const next = Object.assign({}, filters); next[name] = value; opts.onChange(next); };
-    }
-    // 1. project | person  (the text is the strip's, #80)
-    const projectValues = [['', 'All projects']].concat((o.projects || []).map(function (p) {
-      return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
-    }));
-    if (!hidden.has('project')) row.appendChild(selectEl('project', 'Project', projectValues, filters.project, change('project')));
-    if (!hidden.has('person')) {
-      row.appendChild(multiSelect('person', 'Person', (o.people || []).map(function (p) { return [String(p.id), p.name]; }),
-        filters.person, change('person'), { none: 'Anyone', many: 'people', open: openMenu === 'person' }));
-    }
-    // 2. due | modified
-    if (!hidden.has('due')) row.appendChild(selectEl('due', 'Due window', DUE_WINDOWS, filters.due, change('due')));
-    if (!hidden.has('updated')) row.appendChild(selectEl('updated', 'Modified window', UPDATED_WINDOWS, filters.updated, change('updated')));
-    // 3. status | sort
-    // `deferred` and `blocked` ride the end of the status list — the one
-    // visible way to see the sleeping (#87) and the locked (#100) tasks the
-    // working views leave out.
-    const statusValues = STATUSES.map(function (s) { return [s, s]; }).concat([[DEFERRED, DEFERRED], [BLOCKED, BLOCKED]]);
-    if (!hidden.has('status')) {
-      row.appendChild(multiSelect('status', 'Status', statusValues,
-        filters.status, change('status'), { none: 'Open tasks', many: 'statuses', open: openMenu === 'status' }));
-    }
-    if (!hidden.has('sort')) row.appendChild(selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), filters.sort, change('sort')));
-    if (!isDefaultFilters(Object.assign({}, filters, { q: opts.textHost ? filters.q : '' }))) {
-      const clear = document.createElement('button');
-      clear.type = 'button';
-      clear.className = 'button-ghost filter-clear';
-      clear.textContent = 'Clear';
-      clear.addEventListener('click', function () {
-        opts.onChange(Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : filters.q, scope: filters.scope }));
-      });
-      row.appendChild(clear);
-    }
-    body.appendChild(row);
-    host.appendChild(card);
   }
 
-  return { render: render, setOpen: function (v) { open = !!v; } };
+  function focusClose(dialog) {
+    const c = dialog.querySelector('.detail-close');
+    if (c) c.focus();
+  }
+
+  /** Commit one sheet change: built on what the sheet shows, so two quick
+   *  changes never lose the first to a render still on its way. The controls
+   *  already show it; only Clear follows. */
+  function commit(patch) {
+    drawn = Object.assign({}, drawn || current, patch);
+    if (sheetClear) sheetClear.hidden = !activeFilterCount(drawn, opts.hide);
+    opts.onChange(drawn);
+  }
+
+  function row(name, label, control) {
+    const r = document.createElement('div');
+    r.className = 'row filter-sheet-row';
+    r.dataset.name = name;
+    const l = document.createElement('span');
+    l.id = 'filterSheet-' + name;
+    l.textContent = label;
+    r.append(l, control);
+    return r;
+  }
+
+  function drawSheet(dialog) {
+    const f = drawn || current;
+    drawn = f;
+    const card = modalCard({
+      cardClass: 'filter-card', title: 'Filters', titleId: 'filterSheetTitle',
+      closeLabel: 'Close filters', onClose: function () { dialog.close(); },
+    }).card;
+    function set(name) { return function (value) { const p = {}; p[name] = value; commit(p); }; }
+    // 1. sort first (#395): it orders every list, filtered or not
+    if (!hidden.has('sort')) {
+      card.appendChild(row('sort', 'Sort', selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], cap(s[1])]; }), f.sort, set('sort'))));
+    }
+    // 2. status — `deferred` and `blocked` ride the end: the one visible way
+    //    to see the sleeping (#87) and the locked (#100) tasks the working views
+    //    leave out. None ticked = the open tasks.
+    if (!hidden.has('status')) {
+      const statusValues = STATUSES.concat([DEFERRED, BLOCKED]).map(function (s) { return [s, cap(s)]; });
+      const r = row('status', 'Status', checkGroup('status', 'filterSheet-status', statusValues, f.status, set('status')));
+      r.classList.add('is-stacked');
+      card.appendChild(r);
+    }
+    // 3. project · person
+    if (!hidden.has('project')) {
+      const projectValues = [['', 'All projects']].concat((options.projects || []).map(function (p) {
+        return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
+      }));
+      card.appendChild(row('project', 'Project', selectEl('project', 'Project', projectValues, f.project, set('project'))));
+    }
+    const people = options.people || [];
+    if (!hidden.has('person') && (people.length || f.person.length)) {
+      const r = row('person', 'Person', checkGroup('person', 'filterSheet-person',
+        people.map(function (p) { return [String(p.id), p.name]; }), f.person, set('person')));
+      r.classList.add('is-stacked');
+      card.appendChild(r);
+    }
+    // 4. due · modified
+    if (!hidden.has('due')) card.appendChild(row('due', 'Due', selectEl('due', 'Due window', DUE_WINDOWS, f.due, set('due'))));
+    if (!hidden.has('updated')) card.appendChild(row('updated', 'Modified', selectEl('updated', 'Modified window', UPDATED_WINDOWS, f.updated, set('updated'))));
+
+    // Applied as they change, so the footer's one primary only closes; Clear
+    // sits beside it while there is something to clear.
+    const actions = document.createElement('div');
+    actions.className = 'detail-actions filter-actions';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'button-ghost filter-clear';
+    clear.textContent = 'Clear';
+    clear.hidden = !activeFilterCount(f, opts.hide);
+    clear.addEventListener('click', function () {
+      const base = drawn || f;
+      drawn = Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : base.q, scope: base.scope });
+      opts.onChange(drawn);
+      drawSheet(dialog);
+      focusClose(dialog);
+    });
+    sheetClear = clear;
+    actions.appendChild(clear);
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'button-primary filter-done';
+    done.textContent = 'Done';
+    done.addEventListener('click', function () { dialog.close(); });
+    actions.appendChild(done);
+    card.appendChild(actions);
+    dialog.replaceChildren(card);
+  }
+
+  function openSheet() {
+    const dialog = document.getElementById(SHEET_ID);
+    if (!dialog) return;
+    if (dialog.open) dialog.close();
+    sheetOwner = handle;
+    drawn = null;
+    const offBackdrop = closeOnBackdrop(dialog);
+    dialog.addEventListener('close', function onClose() {
+      dialog.removeEventListener('close', onClose);
+      offBackdrop();
+      dialog.replaceChildren();
+      drawn = null;
+      sheetClear = null;
+      if (sheetOwner === handle) sheetOwner = null;
+    });
+    drawSheet(dialog);
+    dialog.showModal();
+  }
+
+  return handle;
 }

@@ -28,7 +28,7 @@ import { toast } from './toast.js';
 /** A task row in a view whose rows are action targets. */
 const ROW = '.trow[data-id]';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
-const OWNS_ITS_KEYS = '.snooze-pop, .row-menu, .msel, .folder-picker, .toast, .bulk-bar';
+const OWNS_ITS_KEYS = '.snooze-pop, .row-menu, .folder-picker, .toast, .bulk-bar';
 
 
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */

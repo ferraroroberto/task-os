@@ -12,8 +12,8 @@
  * desktop; the phone gets the same views as an adaptive second rendering.
  *
  * Issue #46: Board, Today and Search render the ONE task row
- * (`.trow`, rows.js) on flat hairlines, edited through the ONE filter card
- * (`.filter-card`, filters.js). Titles are never uppercase.
+ * (`.trow`, rows.js) on flat hairlines, narrowed through the ONE filter state
+ * (the strip's filter button and its sheet, filters.js). Titles are never uppercase.
  */
 
 /* ============================================================ design tokens */
@@ -203,7 +203,7 @@ h1.home-title { margin: 0; }
    row's status select wears the same recipe with a wider band (its own
    `--control-inset`, so it still paints the compact 30px it always did, #301),
    and on touch every native control drops the band and is 44px painted, so
-   the strip and the filter card keep one height (the coarse block below). */
+   the strip and the filter sheet keep one height (the coarse block below). */
 input.input-native {
   font-size: var(--font-label);
   padding: 0 10px;
@@ -610,8 +610,9 @@ a.chip:hover { text-decoration: underline; }
 
 /* ------------------------------------------- the pane's top strip (#80) */
 /* Board / Today open with the filter reached for most — the
-   live text box — plus the + that opens the quick-add dialog. Everything else
-   stays in the collapsed filter card below. */
+   live text box, with the filter button beside it (#395) — plus the Select
+   toggle and the + that opens the quick-add dialog. Every other filter is in
+   the sheet the button opens. */
 /* justify-end so the + keeps its right-hand seat in the true-empty state,
    where there is nothing to filter and the text box is hidden with the card. */
 .pane-top { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
@@ -816,94 +817,69 @@ a.chip:hover { text-decoration: underline; }
 .quick-add-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-sm); padding: 0 var(--space-xs); }
 .quick-add-chips:empty { display: none; }
 
-/* ======================================================== the filter card */
-/* One collapsible card (vendored disclosure) on every tab. The summary says
-   what is active; the body is one row of controls at the control height —
-   project | person · due | modified · status | sort — which the phone lays
-   out two per line, equal widths (#48). The text filter is not in it: it
-   lives in the always-visible top strip above (#80). */
-.filter-card .collapse-main { min-width: 0; flex: 1 1 auto; }
-.filter-card .filter-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.filter-body { display: grid; gap: 10px; }
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-}
-.filter-select, .filter-row .msel { max-width: 200px; }
-.filter-q { width: 100%; }      /* the strip's own width (#80) */
-.filter-clear { position: relative; min-height: var(--control-h); }
-/* 36 + 2x4 = 44 beside the filter row's other controls, 8px apart (#281);
-   44px painted on touch, where the expansion resets (coarse block). */
-.filter-clear::before { content: ""; position: absolute; inset: -4px; }
-@media (max-width: 767px) {
-  .filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
-  .filter-select, .filter-row .msel { width: 100%; max-width: none; }
-  .filter-clear { grid-column: 1 / -1; }
-}
-/* Multi-select: a select-looking summary that opens a checklist (filters.js).
-   Several picks allowed; the summary reads "Anyone" / the name / "2 people". */
-.msel { position: relative; min-width: 0; }
-.msel-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ======================================================= the filter sheet */
+/* The strip (#395): the text field and the filter button beside it, one
+   field-and-button pair at the control height; the button carries how many
+   settings are on. The sheet it opens is the vendored editor modal — sort
+   first, then status · project · person · due · modified — the label/value
+   rows of the modal contract, status and person as ticks in place. */
+.filter-text { display: flex; align-items: center; gap: var(--space-sm); }
+.filter-q { flex: 1 1 auto; min-width: 0; width: 100%; }
+/* The filter button is the one icon button (vendored, #357): a glyph on
+   nothing at rest, on the strip's box like the + beside it. With filters on
+   it is a selected state, which may draw itself: the count beside the glyph
+   on the accent tint, the button widening to hold it as the Select toggle
+   widens for its word — so a narrowed list is never mistaken for the whole. */
+.filter-open.has-value {
+  width: auto;
   gap: 6px;
-  list-style: none;
-  cursor: pointer;
-  white-space: nowrap;
-  line-height: calc(var(--control-h) - 2px);
+  padding: 0 10px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
 }
-.msel-summary::-webkit-details-marker { display: none; }
-.msel-summary::after { content: "\2304"; color: var(--muted); font-size: 0.9em; line-height: 1; transform: translateY(-2px); }
-.msel-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.msel.has-value .msel-summary { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border-soft); }
-.msel-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 25;
-  min-width: 100%;
-  /* Tall enough for the whole status list (seven 44px options, #281): a menu
-     that scrolls hides its last tick boxes under its own edge, where they sit
-     over the rows yet take no tap. A long people list still scrolls. */
-  max-height: 360px;
-  overflow: auto;
-  display: grid;
-  gap: 2px;
-  padding: var(--space-xs);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow);
-}
-.msel-opt {
+.filter-count { font-size: var(--font-label); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* In the Search box (a 52px bar, #339) it takes the strip's box too. */
+.search-box .filter-open { --icon-btn-box: var(--control-h); }
+@media (pointer: coarse) { .search-box .filter-open { --icon-btn-box: var(--row-sm); } }
+
+.detail-dialog.filter-dialog { width: min(520px, 94vw); margin-top: 8vh; }
+.filter-card .row .select-native { width: 55%; }
+/* Status and person: the label over a wrap of ticks. */
+.filter-card .row.is-stacked { flex-direction: column; align-items: stretch; gap: var(--space-xs); }
+.filter-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 2px var(--space-xs); }
+.filter-check {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   min-height: var(--hit-min);
-  padding: var(--space-xs) var(--space-sm) var(--space-xs) 14px;
+  padding: 0 var(--space-sm) 0 14px;
   border-radius: var(--radius-sm);
   font-size: var(--font-label);
-  white-space: nowrap;
   cursor: pointer;
 }
-.msel-opt:hover { background: var(--card-2); }
+.filter-check:hover { background: var(--card-2); }
 /* The tick box is 16px; the option row is the 44px it lives in (#281). Its
    invisible expansion fills exactly that row (16 + 2x14) — the rows stand 2px
    apart, so no two boxes' rects meet — and the 14px left padding keeps it
-   inside the menu. The label already ticks on a click anywhere in the row. */
-.msel-opt .check { position: relative; }
-.msel-opt .check::after { content: ""; position: absolute; inset: -14px; }
-.msel-none { margin: 0; padding: 6px var(--space-sm); font-size: var(--font-caption); }
-@media (pointer: coarse) {
-  .msel-summary { line-height: calc(var(--row-sm) - 2px); }
+   inside the option. The label already ticks on a click anywhere in it. */
+.filter-check .check { position: relative; flex: none; }
+.filter-check .check::after { content: ""; position: absolute; inset: -14px; }
+/* Applied as they change: the footer is Clear (while there is something to
+   clear) beside the one primary, which only closes. */
+.filter-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.filter-actions .filter-done { flex: 1 1 auto; }
+.filter-clear { position: relative; min-height: var(--control-h); }
+/* 36 + 2x4 = 44, the 8px gap from the primary halved (#281); 44px painted on
+   touch, where the expansion resets (coarse block). */
+.filter-clear::before { content: ""; position: absolute; inset: -4px; }
+.filter-clear[hidden] { display: none; }
+@media (max-width: 520px) {
+  .filter-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* -------------------------------------------------- the date menu (issues #87, #311)
-   The options list `dateMenu()` builds (snooze.js): the same popover idiom as
-   the filter card's multi-select above, shown beside the row that asked
+   The options list `dateMenu()` builds (snooze.js): a popover list, shown
+   beside the row that asked
    (`.snooze-pop`) or, on a phone, inside the vendored modal (`.date-sheet`). */
 .snooze-menu {
   position: absolute;
@@ -985,7 +961,7 @@ a.chip:hover { text-decoration: underline; }
 .trow.is-selected, .trow.is-selected:hover { background: var(--accent-soft); }
 /* Select mode (#81): the checkbox takes the circle's place. The box is 16px;
    an invisible band makes it the 44px target (16 + 2x14, the filter
-   multi-select's recipe), and the 14px side margins keep that band inside the
+   sheet's ticks' recipe), and the 14px side margins keep that band inside the
    row and off the open target beside it (#394: the first walk of Select mode). */
 .trow-check { position: relative; flex: none; margin: 0 14px; }
 .trow-check::after { content: ""; position: absolute; inset: -14px; }
@@ -1598,10 +1574,10 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 @media (pointer: coarse) {
   .quick-add-input, .strip-square, .bulk-status, .filter-select, .filter-q,
   .drawer .select-native, .drawer .input-native, .drawer .button-surface, .drawer .button-ghost,
-  .drawer-tools .button-ghost, .filter-clear, .crumb, .msel-summary {
+  .drawer-tools .button-ghost, .filter-clear, .crumb {
     min-height: var(--row-sm);
   }
-  .filter-select, .drawer .select-native, .drawer .input-native, .msel-summary,
+  .filter-select, .drawer .select-native, .drawer .input-native,
   .bulk-status { height: var(--row-sm); }
   /* the strip's square buttons are one family — same square, always (#81) */
   .strip-square { width: var(--row-sm); height: var(--row-sm); }
@@ -1947,10 +1923,12 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .search-input::placeholder { color: var(--muted); }
 .search-input::-webkit-search-cancel-button { cursor: pointer; }
-.search-meta { font-size: var(--font-caption); white-space: nowrap; }
-.search-groups { display: grid; gap: var(--gap); }
+.search-meta { font-size: var(--font-label); white-space: nowrap; }
+/* The results (#395): before a query, the hint and the folded line; with
+   one, a flat section per kind that has hits (the overline header Today's
+   horizons use, #391), then the folded line for the rest. */
+.search-host { display: grid; gap: var(--space-sm); }
 .search-group { margin: 0; }
-.search-body { padding: 0 14px var(--space-sm); }
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
 .search-hit:first-child { border-top: 0; }
@@ -1978,13 +1956,15 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .search-hit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; max-width: 100%; }
 .search-hit-snippet { font-size: var(--font-caption); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
-.search-off, .search-none, .search-err { margin: 0; padding: 10px 0; font-size: var(--font-caption); }
-.search-off a { color: var(--accent); }
-/* The inline Settings link is a caption-sized word: 14px of padding around
-   its line is the room its 44px target takes, invisibly (#281). */
-.search-off { padding: 14px 0; }
-.search-off a { position: relative; }
-.search-off a::before { content: ""; position: absolute; inset: -14px -4px; }
+/* The hint and the folded line are sentences, read at the label size — never
+   the caption, which the type rubric holds to a minority of the text. */
+.search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-label); }
+.search-fold a { color: var(--accent); }
+/* The inline Settings link is one word: 14px of padding around its line is
+   the room its 44px target takes, invisibly (#281). */
+.search-fold { padding-top: 14px; padding-bottom: 14px; }
+.search-fold a { position: relative; }
+.search-fold a::before { content: ""; position: absolute; inset: -14px -4px; }
 .search-err { color: var(--danger); }
 kbd {
   display: inline-block;

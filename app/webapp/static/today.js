@@ -1,7 +1,7 @@
 /* task-os — the Today tab: every open task, by when it is due.
  *
  * Four horizons, nearest first (#350 — with the Table gone, Today is where
- * any open task is found, from the filter card's text or one tap on a
+ * any open task is found, from the strip's text filter or one tap on a
  * horizon): what is due (≤ today, overdue first), Soon (tomorrow … +7 days),
  * Later (further out) and No date. The tab opens on what is due (#393): those
  * rows come first with no header of their own, because the page header above
@@ -27,7 +27,7 @@
  * is read-only and never filtered.
  *
  * Everything else is derived in the browser from the shared filtered list,
- * so the filter card (status · project · person · sort …) applies here like
+ * so the filter sheet (status · project · person · sort …) applies here like
  * on every other tab.
  */
 

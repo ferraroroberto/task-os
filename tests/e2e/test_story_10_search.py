@@ -1,9 +1,11 @@
 """Story 10 — find anything (Step 10/13, issue #11).
 
-    Type a word in the Search tab → results grouped in four collapsible
-    groups, Tasks · Folders · Emails · Issues (task hits are the ONE shared
-    row; folder / email / issue hits are the same row shape, the title IS
-    the link, no buttons — #48) → open a task from its row → the drawer
+    The Search tab opens on one box and a hint, no group waiting empty
+    (#395) → a word that matches nothing folds every kind into one line →
+    type a word → one open group per kind with hits, Tasks · Folders · Emails
+    · Issues (task hits are the ONE shared row, narrowed by the scope switch
+    and the filter sheet; folder / email / issue hits are the same row shape,
+    the title IS the link, no buttons — #48) → open a task from its row → the drawer
     beside the results → a folder hit's title hands its ref to the opener →
     ↓ ↓ Enter walks the rows → Ctrl+K → type a word → Enter opens the task →
     `>` lists the commands, Today first as in the nav → "Go to Board" switches the tab. On the phone the
@@ -17,7 +19,7 @@ mailbox), the issue provider → the file-backed fake (never ``gh``). 1440×900
 Chromium then a 390-wide touch context, saving the proof shots the
 validation record links to:
 
-    docs/screenshots/story-10-search-1-desktop.png   "kitchen": four groups, in the centred 772px measure
+    docs/screenshots/story-10-search-1-desktop.png   "kitchen": four open groups, in the centred 772px measure
     docs/screenshots/story-10-search-2-desktop.png   drawer open beside the results
     docs/screenshots/story-10-search-4-desktop.png   Ctrl+K: jump to a task
     docs/screenshots/story-10-search-5-desktop.png   Ctrl+K: > commands (dark)
@@ -51,7 +53,9 @@ from tests.e2e.conftest import (
     _post,
     _terminate,
     assert_control_boundaries,
+    close_filter_sheet,
     e2e_workdir,
+    open_filter_sheet,
     shot,
 )
 
@@ -109,11 +113,9 @@ def _task_by_title(base: str, title: str) -> dict:
 
 
 def _open_group(page: Page, kind: str):
-    """A result group is a collapsed disclosure (#46) — open it like a user would."""
+    """A result group: there only when its kind has hits, and open (#395)."""
     g = page.locator(f".search-group[data-kind='{kind}']")
     expect(g).to_be_visible()
-    if not g.evaluate("el => el.open"):
-        g.locator("summary.collapse-summary").click()
     expect(g).to_have_attribute("open", "")
     return g
 
@@ -138,29 +140,49 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     box = page.locator("#searchInput")
     expect(box).to_be_focused()
     assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
-    # an empty group says what fills it: the sentence names the search box
-    # (design rubric J-09, #339) — before any query and after one that matches nothing
-    for kind in ("tasks", "folders", "emails", "issues"):
-        expect(_open_group(page, kind).locator(".search-none")).to_contain_text("search box above")
+    # before a query: one box and a hint — no group shells waiting empty, and
+    # with every index set up, nothing to fold (J-09, #395)
+    expect(page.locator(".search-hint")).to_have_text(re.compile(r"^Searches your tasks, folders, emails and issues"))
+    expect(page.locator(".search-group")).to_have_count(0)
+    expect(page.locator(".search-fold")).to_have_count(0)
+    # a word that matches nothing: no group at all, every kind named on the one
+    # folded line instead of four cards each saying "nothing"
     box.fill("zzqxnothing")
     expect(page.locator("#searchMeta")).to_have_text("0 hits")
-    for kind in ("tasks", "folders", "emails", "issues"):
-        expect(_open_group(page, kind).locator(".search-none")).to_contain_text("search box above")
-    for kind in ("tasks", "folders", "emails", "issues"):          # back to the collapsed default
-        _open_group(page, kind).locator("summary.collapse-summary").click()
+    expect(page.locator(".search-group")).to_have_count(0)
+    expect(page.locator(".search-fold")).to_have_text("No matches in tasks, folders, emails and issues")
+    # the box carries the filter button (the sheet narrows the task hits), the
+    # scope switch is the line under it; the sheet leads with the sort and
+    # holds every filter (#395)
+    sheet = open_filter_sheet(page, "paneSearch")
+    names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
+    assert names == ["sort", "status", "project", "person", "due", "updated"], names
+    close_filter_sheet(page)
+    expect(page.locator("#searchScope .segmented-item[aria-pressed='true']")).to_have_text("Mine")
 
-    # 1. type a word → four groups (collapsed disclosures, the count on the
-    #    summary), all populated; opened, every group shows its hits
+    # 1. type a word → four groups, open, each headed by its kind and count,
+    #    all populated. Mine is the default scope: the synced issue's task is
+    #    cut from the task hits (the Issues group still lists it), which the
+    #    count says as "N of M"
     box.fill("kitchen")
     groups = page.locator(".search-group")
     expect(groups).to_have_count(4)
     for kind in ("tasks", "folders", "emails", "issues"):
-        g = page.locator(f".search-group[data-kind='{kind}']")
-        assert g.evaluate("el => el.open") is False                 # collapsed by default
-        expect(g.locator(".search-group-count")).to_have_text(re.compile(r"^\d+ hits?$"))
-        _open_group(page, kind)
+        g = _open_group(page, kind)
+        expect(g.locator(".search-group-count")).to_have_text(re.compile(r"^\d+( of \d+)?$"))
+        expect(g.locator(".search-group-count")).to_have_attribute("aria-label", re.compile(r"^\d+ hits?$"))
         expect(g.locator(".search-hit").first).to_be_visible()
     expect(page.locator("#searchMeta")).to_have_text(re.compile(r"^\d+ hits$"))   # no milliseconds anywhere
+    expect(page.locator(".search-fold")).to_have_count(0)            # every kind has hits
+    issue_task = _task_hit(page, "Kitchen lights automation")
+    expect(issue_task).to_have_count(0)
+    expect(page.locator(".search-group[data-kind='tasks'] .search-group-count")).to_have_text(re.compile(r"^\d+ of \d+$"))
+    # All brings it back into the task hits; the switch is the shared URL key
+    page.locator("#searchScope .segmented-item[data-scope='all']").click()
+    expect(issue_task).to_be_visible()
+    expect(page.locator(".search-group[data-kind='tasks'] .search-group-count")).to_have_text(re.compile(r"^\d+$"))
+    page.locator("#searchScope .segmented-item[data-scope='mine']").click()
+    expect(issue_task).to_have_count(0)
     # task hits are the ONE shared row — done circle + title + the passive meta
     # line (no status word for "todo"; the folder is the row menu's, not a glyph —
     # #392) + the Move verb + the kebab
@@ -268,7 +290,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(p.locator("#paneSearch")).to_be_visible()
     expect(p.locator("#searchInput")).to_have_value("kitchen")
     expect(p.locator(".search-group")).to_have_count(4)
-    expect(p.locator(".search-group[data-kind='emails'] .search-group-count")).to_have_text(re.compile(r"^\d+ hits?$"))
+    expect(p.locator(".search-group[data-kind='emails'] .search-group-count")).to_have_attribute("aria-label", re.compile(r"^\d+ hits?$"))
     _open_group(p, "emails")
     expect(p.locator(".search-group[data-kind='emails'] .search-hit").first).to_be_visible()
     shot(p, shots / "story-10-search-6-phone.png")

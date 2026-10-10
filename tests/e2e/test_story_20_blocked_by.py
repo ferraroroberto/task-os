@@ -3,7 +3,7 @@
     Board hides "Release v0.2" — it's blocked on "Write sensor driver" — while
     Search still finds it, wearing a lock and "blocked by 1" → open its
     drawer: the "Blocked by" section lists the blocker as a removable row →
-    the filter card's `blocked` pseudo-filter narrows the Board to exactly the
+    the filter sheet's `blocked` pseudo-filter narrows the Board to exactly the
     locked task → a fresh pair of tasks demonstrates the cycle guard: blocking
     B on A then trying to block A back on B is refused with a toast, nothing
     applied → adding and removing a real blocker updates the lock live.
@@ -29,7 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get, open_more_fields, shot
+from tests.e2e.conftest import _get, close_filter_sheet, open_filter_sheet, open_more_fields, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -37,16 +37,6 @@ DESKTOP = {"width": 1440, "height": 900}
 def _trow(page, title: str, scope: str = ""):
     """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``."""
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
-
-
-def _open_filters(page, host_id: str):
-    """The shared filter card is collapsed by default — open it like a user would."""
-    card = page.locator(f"#{host_id} .filter-card")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
 
 
 def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Path) -> None:
@@ -83,10 +73,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         #    #100's explicit precedence over #87's deferred clock).
         page.click("nav.tabs .tab[data-tab='search']")
         page.fill("#searchInput", "Release v0.2")
-        tasks_group = page.locator(".search-group[data-kind='tasks']")
-        expect(tasks_group).to_be_visible()
-        if not tasks_group.evaluate("el => el.open"):
-            tasks_group.locator("summary.collapse-summary").click()
+        expect(page.locator(".search-group[data-kind='tasks']")).to_have_attribute("open", "")   # hits → open (#395)
         locked = _trow(page, "Release v0.2", "#paneSearch")
         expect(locked).to_be_visible()
         expect(locked.locator(".trow-blocked")).to_have_text("Blocked")
@@ -114,15 +101,12 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
-        # 4. The filter card's `blocked` pseudo-filter (status multi-select, the
+        # 4. The filter sheet's `blocked` pseudo-filter (a status tick, the
         #    same shape `deferred` uses) narrows the Board to exactly this task.
         page.click("nav.tabs .tab[data-tab='board']")
-        card = _open_filters(page, "boardFilters")
-        status_sel = card.locator(".msel[data-name='status']")
-        status_sel.locator("summary.msel-summary").click()
-        status_sel.locator("input[name='status'][value='blocked']").check()
+        open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='blocked']").check()
         expect(page).to_have_url(f"{base}/?status=blocked")
-        page.keyboard.press("Escape")
+        close_filter_sheet(page)
         rows = page.locator("#paneBoard .trow")
         expect(rows).to_have_count(1)
         expect(rows.first).to_be_visible()   # not just present — the column it's in must not be hidden
@@ -130,8 +114,8 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(rows.locator(".trow-blocked")).to_have_text("Blocked")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-20-blocked-by-4-desktop.png")
-        card = _open_filters(page, "boardFilters")
-        card.locator(".filter-clear").click()
+        open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
+        close_filter_sheet(page)
         expect(page).to_have_url(f"{base}/")
 
         # 5. Cycle guard through the real UI: two fresh tasks, B blocks A, then

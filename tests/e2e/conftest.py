@@ -777,6 +777,34 @@ def text_contrast(text: Locator) -> float:
     return text.evaluate(_TEXT_CONTRAST_JS)
 
 
+def open_filter_sheet(page: Page, pane: str) -> Locator:
+    """Open the one filter sheet from *pane*'s filter button, like a user would (#395).
+
+    *pane* is the pane's id (``paneBoard``, ``paneToday``, ``paneJournal``,
+    ``paneSearch``); the sheet is the shared ``#filterSheet`` dialog, drawn for
+    the tab that opened it. Already open → returned as it is.
+    """
+    sheet = page.locator("#filterSheet")
+    if not sheet.evaluate("el => el.open"):
+        page.locator(f"#{pane} .filter-open").click()
+    expect(sheet).to_be_visible()
+    return sheet
+
+
+def close_filter_sheet(page: Page) -> None:
+    """Close the filter sheet with its Done button (it is modal: the page under
+    it takes no clicks while it is up)."""
+    sheet = page.locator("#filterSheet")
+    if sheet.evaluate("el => el.open"):
+        sheet.locator(".filter-done").click()
+    expect(sheet).to_be_hidden()
+
+
+def filter_button(page: Page, pane: str) -> Locator:
+    """*pane*'s filter button: its count and its name say what is on (#395)."""
+    return page.locator(f"#{pane} .filter-open")
+
+
 def assert_control_boundaries(scope: Locator) -> list[float]:
     """Every visible field under *scope* draws a boundary of at least 3:1 against its surface.
 

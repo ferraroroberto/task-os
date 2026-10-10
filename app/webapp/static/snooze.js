@@ -9,9 +9,8 @@
  * and a second implementation here would be a second set of rules to keep in
  * step.
  *
- * The menu is the shadcn Select/Popover shape the filter card's multi-select
- * also uses (a grouped list, Escape closes, a click outside closes), so the app
- * has one popover idiom rather than a bespoke one per feature. `Pick a date…`
+ * The menu is the shadcn Select/Popover shape (a grouped list, Escape
+ * closes, a click outside closes). `Pick a date…`
  * hands off to `duePicker()` from dueinput.js — the calendar button with the coarse-pointer
  * branch — instead of hand-rolling a third native-picker call site.
  *
@@ -149,8 +148,8 @@ export function dateMenu(t, field, onPick) {
   const menu = document.createElement('div');
   menu.className = 'snooze-menu';
   menu.dataset.field = field;
-  // The same popover role as the filter card's multi-select (shadcn Popover,
-  // role="dialog"): a non-modal layer over the rows, never part of them (#281).
+  // The shadcn Popover role (role="dialog"): a non-modal layer over the
+  // rows, never part of them (#281).
   menu.setAttribute('role', 'dialog');
   menu.setAttribute('aria-label', spec.name(t));
 

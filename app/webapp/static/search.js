@@ -1,18 +1,26 @@
 /* task-os — the Search tab: one box over four indexes (Step 10).
  *
  * `mountSearch(box, host, opts)` wires the box (`#searchInput` + `#searchMeta`)
- * and renders `GET /api/search?q=` into `host` as one collapsible group per
- * kind — Tasks · Folders · Emails · Issues, in that order, always all four:
- * a kind that is not configured on this install renders a quiet "not
- * configured — reason" row with a link to Settings (never a silent blank),
- * an errored one says so. Groups are the vendored disclosure, collapsed by
- * default and remembered per kind (issue #46): the summary carries the
- * count, so a closed group still tells you what it holds.
+ * and renders `GET /api/search?q=` into `host` (#395, the full-app review's
+ * Search plan):
+ *   before a query   one hint line naming what the box searches, and the
+ *                    kinds this install has not set up folded into one line
+ *                    with a link to Settings — no group shells waiting empty
+ *   with a query     one group per kind that has hits, Tasks · Folders ·
+ *                    Emails · Issues in that order, each a flat section headed
+ *                    by an `overline` with its count (the shared section
+ *                    header, #391), open; every kind without hits — none
+ *                    matched, all hidden by the filters or the scope, not set
+ *                    up — folds into ONE line under them, so nothing goes
+ *                    silent and nothing takes a card to say "nothing". A
+ *                    kind that failed says so on its own line, in the danger
+ *                    tone: that is a fault, not an empty result.
  *
  * Every hit is the ONE task row shape (rows.js, #48): a title line and one
  * muted meta line, no glyphs, no buttons.
  *   tasks    the shared row itself (status select, meta line) + the matched
- *            snippet, filtered and sorted by the shared filter card
+ *            snippet, narrowed by the shared filter state and the scope
+ *            switch (Mine · Issues · All) and sorted by it
  *   folders  name · full path — the title is a taskos:// link the per-PC
  *            opener opens on a PC; on the phone it shows the path to copy
  *   emails   subject · sender · date · folder — same link, the .msg opens
@@ -30,34 +38,52 @@
 import { api } from './api.js';
 import { collapsibleCard } from './collapsible.js';
 import { escapeHtml, folderChip } from './format.js';
-import { matchesFilters } from './filters.js';
+import { matchesFilters, matchesScope } from './filters.js';
 import { sortItems, taskRow } from './rows.js';
 
 const KINDS = [
-  { kind: 'tasks', label: 'Tasks', icon: 'list-checks' },
-  { kind: 'folders', label: 'Folders', icon: 'folder' },
-  { kind: 'emails', label: 'Emails', icon: 'mail' },
-  { kind: 'issues', label: 'Issues', icon: 'github' },
+  { kind: 'tasks', label: 'Tasks' },
+  { kind: 'folders', label: 'Folders' },
+  { kind: 'emails', label: 'Emails' },
+  { kind: 'issues', label: 'Issues' },
 ];
 const DEBOUNCE_MS = 200;
 const LIMIT = 20;
-const OPEN_KEY = 'task-os.search.open';
+const HINT = 'Searches your tasks, folders, emails and issues as you type.';
 
 /** `[match]` marks → <mark>, everything else escaped. */
 export function markHtml(text) {
   return escapeHtml(text).replace(/\[([^\[\]]+)\]/g, '<mark>$1</mark>');
 }
 
-function loadOpen() {
-  try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '{}') || {}; } catch (_) { return {}; }
+/** "a", "a and b", "a, b and c" — lower-cased kind labels for a sentence. */
+function listWords(words) {
+  const w = words.map(function (s) { return s.toLowerCase(); });
+  return w.length < 2 ? w.join('') : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
 }
-function saveOpen(map) {
-  try { localStorage.setItem(OPEN_KEY, JSON.stringify(map)); } catch (_) { /* private mode */ }
+
+/**
+ * What one folded line says about the kinds without a group (#395). Pure, so
+ * the wording is tested without a browser.
+ * @param {{none?: string[], hidden?: number, off?: string[]}} fold
+ *        none   labels of the kinds that matched nothing (a configured-but-not-
+ *               ready kind carries its note: "Folders (index still building)")
+ *        hidden task hits the filters or the scope hid
+ *        off    labels of the kinds not set up on this install
+ * @returns {string[]}  the sentences, joined with " · " on screen; the Settings
+ *          link follows the last one when `off` is non-empty
+ */
+export function foldParts(fold) {
+  const parts = [];
+  if (fold.none && fold.none.length) parts.push('No matches in ' + listWords(fold.none));
+  if (fold.hidden) parts.push(fold.hidden + ' task ' + (fold.hidden === 1 ? 'hit' : 'hits') + ' hidden by the filters or the scope');
+  if (fold.off && fold.off.length) parts.push('Not set up: ' + listWords(fold.off));
+  return parts;
 }
 
 /**
  * @param {HTMLElement} box   the search card (holds #searchInput + #searchMeta)
- * @param {HTMLElement} host  where the result groups render
+ * @param {HTMLElement} host  where the results render
  * @param {{onOpenTask: (id:number) => void, onQuery: (q:string) => void,
  *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>,
  *          menu?: object}} opts   (menu: the Search tab's row menu, rowmenu.js — #311)
@@ -69,7 +95,6 @@ export function mountSearch(box, host, opts) {
   let seq = 0;
   let last = null;        // the last rendered result
   let status = null;      // /api/search/status → adapters (idle view)
-  const openState = loadOpen();
   const hitByIdx = new Map();
 
   // ------------------------------------------------------------ fetch
@@ -92,7 +117,7 @@ export function mountSearch(box, host, opts) {
     } catch (err) {
       if (my !== seq || quiet) return;
       meta.textContent = 'search failed';
-      host.replaceChildren(errCard(err.message || 'Search failed'));
+      host.replaceChildren(note('search-err', err.message || 'Search failed'));
       return;
     }
     if (my !== seq) return;               // a newer query is in flight / rendered
@@ -106,16 +131,6 @@ export function mountSearch(box, host, opts) {
   }
 
   // ----------------------------------------------------------- render
-  function errCard(message) {
-    const c = document.createElement('div');
-    c.className = 'card search-group';
-    const p = document.createElement('p');
-    p.className = 'search-err';
-    p.textContent = message;
-    c.appendChild(p);
-    return c;
-  }
-
   function note(cls, text) {
     const p = document.createElement('p');
     p.className = cls;
@@ -123,48 +138,44 @@ export function mountSearch(box, host, opts) {
     return p;
   }
 
-  // An empty group always names what fills it (design rubric J-09, #339): the
-  // search box above for a query, the filter card for filtered-out tasks.
-  const TRY_BOX = 'try other words in the search box above.';
-  function idleText(k, st) {
-    return 'Type in the search box above to search ' + k.label.toLowerCase()
-      + (st && st.note ? ' — ' + st.note : '') + '.';
+  /** The one folded line, with the Settings link after "Not set up: …". */
+  function foldLine(fold) {
+    const parts = foldParts(fold);
+    if (!parts.length) return null;
+    const p = note('search-fold muted', parts.join(' · '));
+    if (fold.off && fold.off.length) {
+      p.appendChild(document.createTextNode(' · '));
+      const a = document.createElement('a');
+      a.href = '#settings/search';
+      a.textContent = 'Settings';
+      p.appendChild(a);
+    }
+    return p;
   }
 
-  function offRow(p, reason) {
-    p.textContent = 'not configured — ' + (reason || 'unknown') + ' · ';
-    const a = document.createElement('a');
-    a.href = '#settings/search';
-    a.textContent = 'Settings';
-    p.appendChild(a);
-  }
-
-  /** One collapsible group (vendored disclosure), remembered open / closed per kind. */
-  function groupCard(k, countText) {
-    const card = collapsibleCard({
-      className: 'search-group', icon: k.icon, title: k.label,
-      count: countText, countClass: 'search-group-count', bodyClass: 'search-body',
-    }).card;
-    card.dataset.kind = k.kind;
-    card.open = !!openState[k.kind];
-    card.addEventListener('toggle', function () { openState[k.kind] = card.open; saveOpen(openState); });
-    return card;
+  /** One kind's hits: a flat section under an overline header with its count. */
+  function group(k, countText, countLabel) {
+    const parts = collapsibleCard({
+      className: 'disclosure-flat search-group', title: k.label, titleClass: 'overline',
+      count: countText, countClass: 'section-count search-group-count', bodyClass: 'search-body',
+    });
+    parts.card.dataset.kind = k.kind;
+    parts.card.open = true;
+    parts.count.setAttribute('aria-label', countLabel);
+    return parts;
   }
 
   function renderIdle() {
     meta.textContent = '';
     hitByIdx.clear();
-    const wrap = document.createElement('div');
-    wrap.className = 'search-groups';
-    KINDS.forEach(function (k) {
-      const st = (status || []).find(function (a) { return a.kind === k.kind; });
-      const card = groupCard(k, !status ? '' : (st && st.configured ? 'ready' : 'not configured'));
-      const body = card.querySelector('.search-body');
-      if (!status || (st && st.configured)) body.appendChild(note('search-none muted', idleText(k, st)));
-      else { const p = note('search-off muted', ''); offRow(p, st ? st.reason : 'unknown'); body.appendChild(p); }
-      wrap.appendChild(card);
+    const off = (status || []).filter(function (a) { return !a.configured; }).map(function (a) {
+      const k = KINDS.find(function (x) { return x.kind === a.kind; });
+      return k ? k.label : a.kind;
     });
-    host.replaceChildren(wrap);
+    const nodes = [note('search-hint muted', HINT)];
+    const fold = foldLine({ off: off });
+    if (fold) nodes.push(fold);
+    host.replaceChildren.apply(host, nodes);
   }
 
   function taskHits(g) {
@@ -174,67 +185,48 @@ export function mountSearch(box, host, opts) {
       if (!t.title) t.title = h.title;
       return t;
     });
-    const kept = f ? tasks.filter(function (t) { return matchesFilters(t, f); }) : tasks;
-    return f ? sortItems(kept, f.sort) : kept;
+    if (!f) return tasks;
+    const kept = tasks.filter(function (t) { return matchesScope(t, f.scope) && matchesFilters(t, f); });
+    return sortItems(kept, f.sort);
   }
+
+  function hitWord(n) { return n + (n === 1 ? ' hit' : ' hits'); }
 
   function render(res) {
     hitByIdx.clear();
     let total = 0;
-    const wrap = document.createElement('div');
-    wrap.className = 'search-groups';
     let idx = 0;
+    const groups = [];
+    const errors = [];
+    const fold = { none: [], hidden: 0, off: [] };
     KINDS.forEach(function (k) {
       const g = res.groups.find(function (x) { return x.kind === k.kind; }) || { kind: k.kind, configured: false, reason: 'no answer', hits: [] };
-      let countText = '';
-      let rows = null;
-      if (g.configured && !g.error) {
-        if (k.kind === 'tasks') {
-          rows = taskHits(g);
-          countText = rows.length === (g.hits || []).length ? rows.length + ' hit' + (rows.length === 1 ? '' : 's')
-            : rows.length + ' of ' + g.hits.length + ' hit' + (g.hits.length === 1 ? '' : 's');
-          total += rows.length;
-        } else {
-          countText = g.count + ' hit' + (g.count === 1 ? '' : 's');
-          total += g.count || 0;
-        }
-        if (g.note) countText += ' · ' + g.note;
-      } else if (!g.configured) countText = 'not configured';
-      else countText = 'error';
-      const card = groupCard(k, countText);
-      const body = card.querySelector('.search-body');
-      if (!g.configured) {
-        const p = note('search-off muted', '');
-        offRow(p, g.reason);
-        body.appendChild(p);
-      } else if (g.error) {
-        body.appendChild(note('search-err', 'error — ' + g.error));
-      } else if (k.kind === 'tasks') {
-        if (!rows.length) {
-          body.appendChild(note('search-none muted', g.hits.length
-            ? 'No task matches the filters — loosen them in the Filters card above.'
-            : 'No tasks match — ' + TRY_BOX));
-        }
-        else {
-          const ul = document.createElement('ul');
-          ul.className = 'trows search-hits';
-          ul.setAttribute('role', 'list');
-          rows.forEach(function (t) { ul.appendChild(taskHitRow(t, idx++)); });
-          body.appendChild(ul);
-        }
-      } else if (!g.hits.length) {
-        body.appendChild(note('search-none muted', 'No ' + k.label.toLowerCase() + ' match — ' + TRY_BOX));
-      } else {
-        const ul = document.createElement('ul');
-        ul.className = 'trows search-hits';
-        ul.setAttribute('role', 'list');
-        g.hits.forEach(function (h) { ul.appendChild(hitRow(h, idx++)); });
-        body.appendChild(ul);
+      if (!g.configured) { fold.off.push(k.label); return; }
+      if (g.error) { errors.push(note('search-err', k.label + ' failed — ' + g.error)); return; }
+      const all = g.hits || [];
+      const rows = k.kind === 'tasks' ? taskHits(g) : all;
+      if (k.kind === 'tasks' && !rows.length) fold.hidden = all.length;   // a partial cut shows as "3 of 5" on the group
+      if (!rows.length) {
+        if (k.kind !== 'tasks' || !all.length) fold.none.push(g.note ? k.label + ' (' + g.note + ')' : k.label);
+        return;
       }
-      wrap.appendChild(card);
+      const n = k.kind === 'tasks' ? rows.length : (g.count || rows.length);
+      total += n;
+      let countText = k.kind === 'tasks' && rows.length !== all.length ? rows.length + ' of ' + all.length : String(n);
+      if (g.note) countText += ' · ' + g.note;
+      const parts = group(k, countText, hitWord(n));
+      const ul = document.createElement('ul');
+      ul.className = 'trows search-hits';
+      ul.setAttribute('role', 'list');
+      rows.forEach(function (h) { ul.appendChild(k.kind === 'tasks' ? taskHitRow(h, idx++) : hitRow(h, idx++)); });
+      parts.body.appendChild(ul);
+      groups.push(parts.card);
     });
-    meta.textContent = total + ' hit' + (total === 1 ? '' : 's');
-    host.replaceChildren(wrap);
+    meta.textContent = hitWord(total);
+    const nodes = groups.slice();
+    const line = foldLine(fold);
+    if (line) nodes.push(line);
+    host.replaceChildren.apply(host, nodes.concat(errors));
     if (opts.menu) opts.menu.endRender();
   }
 

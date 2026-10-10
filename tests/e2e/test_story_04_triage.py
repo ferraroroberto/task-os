@@ -22,7 +22,7 @@ touch) with the geometry checks:
     docs/screenshots/story-04-triage-9-phone.png   (the Board's rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
 
-UX round 3 (issue #46): the filter state is ONE card shared by every tab and
+UX round 3 (issue #46): the filter state is ONE state shared by every tab and
 lives in the URL (``?status=todo`` is the same view on the Board and
 Today), so a shared URL no longer moves the tab by itself — the story opens
 the Board explicitly.
@@ -32,7 +32,7 @@ the Board explicitly.
 assertions in the phone leg. It is a story of its own in
 ``docs/validation.md``, not a new test: the e2e suite is capped at 15 tests
 (CLAUDE.md) and already held 14, and this story walks the same surface —
-the filter card, the quick-add dialog, a Today row, the drawer. Its shots:
+the filter sheet, the quick-add dialog, a Today row, the drawer. Its shots:
 
     docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
     docs/screenshots/story-13-starts-snooze-{6,7}-phone.png
@@ -77,7 +77,10 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
     assert_date_sheet,
+    close_filter_sheet,
     dismiss_toasts,
+    filter_button,
+    open_filter_sheet,
     open_more_fields,
     shot,
     text_contrast,
@@ -122,16 +125,6 @@ HTMLInputElement.prototype.showPicker = function () { window.__pickerOpens.push(
 """
 
 
-def _open_filters(page: Page, host_id: str):
-    """The shared filter card is collapsed by default — open it like a user would."""
-    card = page.locator(f"#{host_id} .filter-card")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
-
-
 # ----------------------------------------------------------- desktop leg
 
 def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwright, shots: Path) -> None:
@@ -157,15 +150,20 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         expect(page).to_have_url(f"{base}/?status=todo")
-        card = _open_filters(page, "boardFilters")
-        # status is a multi-select (#48): the summary reads the one status picked
-        status_sel = card.locator(".msel[data-name='status']")
-        expect(status_sel.locator(".msel-text")).to_have_text("todo")
-        expect(status_sel.locator("input[name='status']:checked")).to_have_count(1)
-        expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
-        expect(card.locator(".filter-desc")).to_contain_text("todo")
-        # the count's one home is the text field's placeholder (#393), not the card's line
-        expect(card.locator(".filter-desc")).not_to_contain_text("tasks")
+        # the strip's filter button says what is on — its count, and its name
+        # in words (#395) — so nothing needs the sheet open to read the state
+        button = filter_button(page, "paneBoard")
+        expect(button.locator(".filter-count")).to_have_text("1")
+        expect(button).to_have_attribute("aria-label", "Filters, 1 on: todo")
+        # the sheet it opens leads with the sort; status is ticks in place, the
+        # URL's one ticked (#48)
+        sheet = open_filter_sheet(page, "paneBoard")
+        expect(sheet.locator(".filter-sheet-row").first).to_have_attribute("data-name", "sort")
+        status = sheet.locator(".filter-checks[data-name='status']")
+        expect(status.locator("input[name='status']:checked")).to_have_count(1)
+        expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
+        close_filter_sheet(page)
+        # the count's one home is the text field's placeholder (#393)
         expect(page.locator("#boardFilterText .filter-q")).to_have_attribute(
             "placeholder", f"Filter {todo_count} tasks…")
         # a real status pill narrows the columns: only Todo is up, holding the list
@@ -304,9 +302,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(quick_add).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("renew passport")
         # the todo filter hides a standby task — clear to see it, as a user would
-        _open_filters(page, "boardFilters").locator(".filter-clear").click()
+        open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
         expect(page).to_have_url(f"{base}/")
-        expect(page.locator("#boardFilters .msel[data-name='status'] .msel-text")).to_have_text("Open tasks")
+        expect(page.locator("#filterSheet .filter-checks[data-name='status'] input:checked")).to_have_count(0)
+        close_filter_sheet(page)
+        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
         new_row = _trow(page, "renew passport", "#paneBoard section.board-col[data-col='standby']")
         expect(new_row).to_be_visible()
         new_id = int(new_row.get_attribute("data-id"))
@@ -449,10 +449,8 @@ def _walk_closed_on_demand(page: Page, base: str) -> None:
         #    the filtered list, and nothing ever reads the closed forest.
         p.click("nav.tabs .tab[data-tab='board']")
         expect(_trow(p, "Buy a birthday gift", "#paneBoard")).to_have_count(0)
-        card = _open_filters(p, "boardFilters")
-        status_sel = card.locator(".msel[data-name='status']")
-        status_sel.locator("summary.msel-summary").click()
-        status_sel.locator("input[name='status'][value='done']").check()
+        open_filter_sheet(p, "paneBoard").locator(".filter-checks[data-name='status'] input[value='done']").check()
+        close_filter_sheet(p)
         expect(_trow(p, "Buy a birthday gift", "#paneBoard")).to_be_visible()
         assert [r.url for r in calls("/api/tasks/tree") if "include_closed" in query(r)] == []
     finally:
@@ -579,13 +577,13 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     """
     page.goto(f"{base}/")
     page.click("nav.tabs .tab[data-tab='board']")
-    card = _open_filters(page, "boardFilters")
-    card.locator("select[name='updated']").select_option("stale30")
+    open_filter_sheet(page, "paneBoard").locator("select[name='updated']").select_option("stale30")
     expect(page).to_have_url(f"{base}/?updated=stale30")
+    close_filter_sheet(page)
     rows = page.locator("#paneBoard .trow[data-id]")
     expect(rows).to_have_count(1)
     expect(rows.locator(".trow-title")).to_have_text("Sort the garage shelves")
-    expect(card.locator(".filter-desc")).to_contain_text("untouched > 30 days")
+    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: untouched > 30 days")
     expect(page.locator("#boardFilterText .filter-q")).to_have_attribute("placeholder", "Filter 1 task…")
     shot(page, shots / "story-04-triage-11-desktop.png")
     # the token round-trips: a fresh load of the shared URL is the same view
@@ -593,7 +591,8 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     page.click("nav.tabs .tab[data-tab='board']")
     expect(rows).to_have_count(1)
     # 60 days back nothing is that old — an honest empty list, not an error
-    _open_filters(page, "boardFilters").locator("select[name='updated']").select_option("stale60")
+    open_filter_sheet(page, "paneBoard").locator("select[name='updated']").select_option("stale60")
+    close_filter_sheet(page)
     expect(rows).to_have_count(0)
 
 
@@ -788,17 +787,14 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneBoard")).to_be_visible()
     expect(page.locator("#paneBoard").get_by_text("renew insurance", exact=True)).to_have_count(0)
 
-    # 3. Deferred is a visible state, not an absence: the status multi-select's
+    # 3. Deferred is a visible state, not an absence: the status ticks'
     #    pseudo-value lists exactly the sleeping tasks, each wearing the marker
     #    that says why the working views are quiet about it, and the state is
     #    the URL.
-    card = _open_filters(page, "boardFilters")
-    status_sel = card.locator(".msel[data-name='status']")
-    status_sel.locator("summary.msel-summary").click()
-    status_sel.locator("input[name='status'][value='deferred']").check()
+    open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='deferred']").check()
     expect(page).to_have_url(f"{base}/?status=deferred")
-    expect(status_sel.locator(".msel-text")).to_have_text("deferred")
-    page.keyboard.press("Escape")
+    close_filter_sheet(page)
+    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: deferred")
     rows = page.locator("#paneBoard .trow[data-id]")
     # the seed's own deferred task plus the one just created — and nothing else
     expect(rows).to_have_count(2)
@@ -812,7 +808,8 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(snoozed).to_have_attribute("title", re.compile(r"^Snoozed until \w{3} \d+ \w{3}$"))
     dismiss_toasts(page)
     shot(page, shots / "story-13-starts-snooze-2-desktop.png")
-    card.locator(".filter-clear").click()
+    open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
+    close_filter_sheet(page)
     expect(page).to_have_url(f"{base}/")
 
     # 4. Snooze from a Today row's menu: pick an option, the task leaves, the
@@ -999,11 +996,14 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         expect(watering).to_have_attribute("data-status", "todo")
         expect(rows.locator(".trow-status")).to_have_count(0)
         assert_no_horizontal_overflow(page)
-        # the top strip (#80): the text filter, the Select toggle and the + sit
-        # side by side, all at the touch floor, with effective rectangles that
-        # never overlap; pressed, the toggle says its name in accent-text on the
-        # accent tint, 4.5:1 (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
-        strip = page.locator("#paneBoard .filter-q, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
+        # the top strip (#80, #395): the text filter, the filter button, the
+        # Select toggle and the + sit side by side on one line, all at the
+        # touch floor, with effective rectangles that never overlap; pressed,
+        # the toggle says its name in accent-text on the accent tint, 4.5:1
+        # (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
+        strip = page.locator("#paneBoard .filter-q, #paneBoard .filter-open, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
+        tops = strip.evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2))")
+        assert max(tops) - min(tops) <= 2, tops                         # one line
         assert_min_target(strip)
         assert_no_overlap(strip)
         page.locator("#paneBoard [data-select-toggle]").tap()
@@ -1017,25 +1017,6 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert_min_target(page.locator("#quickAdd .quick-add-input"))
         page.keyboard.press("Escape")
         expect(page.locator("#quickAdd")).to_be_hidden()
-        # the shared filter card: the status multi-select holds the five statuses,
-        # the URL's one checked; on the phone the controls sit two per line,
-        # equal widths (#48)
-        card = _open_filters(page, "boardFilters")
-        status_sel = card.locator(".msel[data-name='status']")
-        status_sel.locator("summary.msel-summary").click()
-        # five statuses + `deferred` (#87) + `blocked` (#100), the pseudo-values
-        # that show the sleeping and the locked tasks the working views leave out
-        expect(status_sel.locator("input[name='status']")).to_have_count(7)
-        expect(status_sel.locator("input[name='status'][value='deferred']")).to_have_count(1)
-        expect(status_sel.locator("input[name='status'][value='blocked']")).to_have_count(1)
-        expect(status_sel.locator("input[name='status'][value='todo']")).to_be_checked()
-        page.keyboard.press("Escape")
-        boxes = card.locator(".filter-row > .filter-select, .filter-row > .msel").evaluate_all(
-            "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.width)]; })")
-        assert len(boxes) == 6, boxes
-        lefts = sorted(set(b[0] for b in boxes))
-        assert len(lefts) == 2, boxes                                  # two columns
-        assert max(b[1] for b in boxes) - min(b[1] for b in boxes) <= 2, boxes   # equal widths
         # rows are >=44px tall; a touch screen draws no completion circle
         # (#350: a swipe right or the drawer's status closes a task), so the
         # row's one control is the ⋯ kebab, a real 44x44 box that never
@@ -1072,6 +1053,29 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
         assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
         shot(page, shots / "story-04-triage-9-phone.png")
+        # (after the shot: the pill hides while a dialog is up, and a capture
+        # right after one closes can catch the frosted bar mid-repaint)
+        # the filter sheet (#395): every filter and the sort in one place, sort
+        # first; status holds the five statuses + `deferred` (#87) + `blocked`
+        # (#100), the pseudo-values that show the sleeping and the locked tasks
+        # the working views leave out, the URL's one ticked; on the phone the
+        # ticks sit two per line, every one a 44px target, none overlapping
+        sheet = open_filter_sheet(page, "paneBoard")
+        names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
+        assert names == ["sort", "status", "project", "person", "due", "updated"], names
+        status = sheet.locator(".filter-checks[data-name='status']")
+        expect(status.locator("input[name='status']")).to_have_count(7)
+        expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
+        expect(status.locator("input[name='status'][value='blocked']")).to_have_count(1)
+        expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
+        ticks = sheet.locator(".filter-check")
+        assert_min_target(ticks)
+        assert_no_overlap(ticks)
+        lefts = sorted(set(status.locator(".filter-check").evaluate_all(
+            "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
+        assert len(lefts) == 2, lefts                                   # two columns
+        assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
+        close_filter_sheet(page)
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
         _trow(page, "Get three quotes", "#paneBoard").locator(".trow-main").tap()
