@@ -1017,27 +1017,6 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert_min_target(page.locator("#quickAdd .quick-add-input"))
         page.keyboard.press("Escape")
         expect(page.locator("#quickAdd")).to_be_hidden()
-        # the filter sheet (#395): every filter and the sort in one place, sort
-        # first; status holds the five statuses + `deferred` (#87) + `blocked`
-        # (#100), the pseudo-values that show the sleeping and the locked tasks
-        # the working views leave out, the URL's one ticked; on the phone the
-        # ticks sit two per line, every one a 44px target, none overlapping
-        sheet = open_filter_sheet(page, "paneBoard")
-        names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
-        assert names == ["sort", "status", "project", "person", "due", "updated"], names
-        status = sheet.locator(".filter-checks[data-name='status']")
-        expect(status.locator("input[name='status']")).to_have_count(7)
-        expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
-        expect(status.locator("input[name='status'][value='blocked']")).to_have_count(1)
-        expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
-        ticks = sheet.locator(".filter-check")
-        assert_min_target(ticks)
-        assert_no_overlap(ticks)
-        lefts = sorted(set(status.locator(".filter-check").evaluate_all(
-            "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
-        assert len(lefts) == 2, lefts                                   # two columns
-        assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
-        close_filter_sheet(page)
         # rows are >=44px tall; a touch screen draws no completion circle
         # (#350: a swipe right or the drawer's status closes a task), so the
         # row's one control is the ⋯ kebab, a real 44x44 box that never
@@ -1074,6 +1053,29 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
         assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
         shot(page, shots / "story-04-triage-9-phone.png")
+        # (after the shot: the pill hides while a dialog is up, and a capture
+        # right after one closes can catch the frosted bar mid-repaint)
+        # the filter sheet (#395): every filter and the sort in one place, sort
+        # first; status holds the five statuses + `deferred` (#87) + `blocked`
+        # (#100), the pseudo-values that show the sleeping and the locked tasks
+        # the working views leave out, the URL's one ticked; on the phone the
+        # ticks sit two per line, every one a 44px target, none overlapping
+        sheet = open_filter_sheet(page, "paneBoard")
+        names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
+        assert names == ["sort", "status", "project", "person", "due", "updated"], names
+        status = sheet.locator(".filter-checks[data-name='status']")
+        expect(status.locator("input[name='status']")).to_have_count(7)
+        expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
+        expect(status.locator("input[name='status'][value='blocked']")).to_have_count(1)
+        expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
+        ticks = sheet.locator(".filter-check")
+        assert_min_target(ticks)
+        assert_no_overlap(ticks)
+        lefts = sorted(set(status.locator(".filter-check").evaluate_all(
+            "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
+        assert len(lefts) == 2, lefts                                   # two columns
+        assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
+        close_filter_sheet(page)
 
         # the drawer is a full-screen sheet; the pill is hidden while it is up
         _trow(page, "Get three quotes", "#paneBoard").locator(".trow-main").tap()
