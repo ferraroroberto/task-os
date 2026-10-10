@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
+from src import clock
 from src import db as dbmod
 from src.schema import SCHEMA_VERSION
 from tests.fixtures.seed import PINNED_ANCHOR, seed_db
@@ -406,6 +407,27 @@ def test_parse_endpoint(seeded: TestClient) -> None:
 
     r = seeded.post("/api/parse", json={"text": "x", "today": "17/08/2026"})
     assert r.status_code == 422
+
+
+def test_dates_endpoint_resolves_each_phrase_on_the_write_clock(client: TestClient) -> None:
+    """The date sheet's dates (#391): each phrase as ``parse_date`` resolves it
+    on the process clock — the date the PATCH with that phrase would write."""
+    with clock.use_clock(lambda: datetime(2026, 10, 10, 9, 0).astimezone()):   # a Saturday
+        r = client.get("/api/dates", params={"phrases": "tomorrow,this weekend,next week,today,none"})
+        assert r.status_code == 200
+        assert r.json() == {"today": "2026-10-10", "dates": {
+            "tomorrow": "2026-10-11", "this weekend": "2026-10-10", "next week": "2026-10-17",
+            "today": "2026-10-10", "none": None,
+        }}
+        task = client.post("/api/tasks", json={"title": "Push me out"}).json()
+        patched = client.patch(f"/api/tasks/{task['id']}", json={"due": "next week"}).json()
+        assert patched["due"] == r.json()["dates"]["next week"]
+
+
+def test_dates_endpoint_refuses_an_unknown_or_missing_phrase(client: TestClient) -> None:
+    assert client.get("/api/dates", params={"phrases": "tomorrow,someday"}).status_code == 422
+    assert client.get("/api/dates", params={"phrases": " , "}).status_code == 422
+    assert client.get("/api/dates").status_code == 422
 
 
 # ------------------------------------------------- bulk (issue #81)

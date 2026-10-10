@@ -37,6 +37,7 @@
   --attention: #9a6700;
   --danger: #cf222e;
   --danger-text: #a40e26;    /* danger TEXT on a deficit-soft tint (fleet-config#963) */
+  --attention-text: #7d4e00; /* attention TEXT on its own 16% tint (the status chip, #391) */
   --control-border: #818b98; /* inline control borders / switch off-track, 3:1+ vs card (fleet-config#963) */
   /* accent derivatives — theme-independent color-mix over the per-theme accent */
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -126,6 +127,7 @@
   --attention: #d29922;
   --danger: #f85149;
   --danger-text: #ff7b72;
+  --attention-text: #e3b341;
   --control-border: #6e7681;
   --shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
   --tabbar-bg: rgba(22, 27, 34, 0.86);
@@ -429,9 +431,9 @@ html, body {
    caption step, one padding — and only its colours say what it is. The
    reference pill (folder, AI conversation, issue, link: an <a>) is the AI
    pill's look, accent-text on the accent tint; anything that is not a link
-   is the neutral chip; a status pill wears its status colour. No context
-   resizes it into a box. */
-.chip, .pill {
+   is the neutral chip; a status chip wears its tone (below, #391). No
+   context resizes it into a box. */
+.chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
@@ -547,22 +549,57 @@ a.chip:hover { text-decoration: underline; }
 .opener-more > summary { padding-block: 12px; line-height: 20px; }
 .opener-more { display: grid; gap: var(--space-sm); }
 
-/* Status pills — the one pill's shape (the chips rule above); status colors
-   signal state (design.md). */
-.pill {
-  font-weight: 600;
-  background: var(--card-off);
-  color: var(--muted);
+/* The status chip (#391, design.md "status chip"): the chip's shape in ONE
+   tone map, for exceptions only — `toneChip()` in format.js is its one
+   builder, the tone a `data-tone`, never a chip style per surface. Neutral is
+   a plain fact (standby, snoozed, blocked, high), accent is new work (an
+   Inbox arrival), attention needs you soon, danger is broken. A normal state
+   gets no chip, and done has no tone: `statusMark()` writes those as a quiet
+   word. `success` is never a chip. Text on a tint is its `*-text` token. */
+.chip[data-tone="neutral"] { background: var(--neutral-soft); color: var(--fg); }
+.chip[data-tone="accent"] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-border-soft); }
+.chip[data-tone="attention"] {
+  background: color-mix(in srgb, var(--attention) 16%, transparent);
+  color: var(--attention-text);
+  border-color: color-mix(in srgb, var(--attention) 30%, transparent);
 }
-.pill-todo { color: var(--fg); }
-.pill-open { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border-soft); }
-.pill-standby { color: var(--attention); background: color-mix(in srgb, var(--attention) 14%, transparent); border-color: color-mix(in srgb, var(--attention) 30%, transparent); }
-.pill-done { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 30%, transparent); }
-.pill-cancelled { text-decoration: line-through; }
+.chip[data-tone="danger"] {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.status-word { color: var(--muted); font-size: var(--font-label); white-space: nowrap; }
+.status-word.is-cancelled { text-decoration: line-through; }
 
 /* Due tones: overdue = danger, today = attention (state, not decoration). */
 .due-overdue { color: var(--danger) !important; }
 .due-today { color: var(--attention) !important; }
+
+/* ------------------------------------------ section headers (#391) */
+/* A list's section header that only separates (Today's horizons): design.md's
+   `overline` role, the one legal caps use, with its count beside it in the
+   same quiet caption. Numbers are never transformed, so the count is its own
+   element. Project sub-headers stay in the label role (.today-group-title). */
+.overline {
+  font-size: var(--font-caption);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.section-count { color: var(--muted); font-size: var(--font-caption); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* The scope switch (#391): the vendored segmented control, no wider than its
+   three one-word segments need; the row under the strip on every width. */
+.scope-switch { max-width: 360px; }
+/* Dark only: the switch sits on the canvas, not in a card, and there the dark
+   `card` (#161b22) is DARKER than the neutral-soft track over the canvas, so
+   the selected segment read sunk instead of raised; card-2 (#21262d) is
+   still within a shade of the track. A token value scoped to this switch (the
+   vendored file stays verbatim): the lift is the dark hairline grey #30363d,
+   fg on it 11:1. */
+[data-theme="dark"] .scope-switch { --card: var(--line); }
 
 /* ------------------------------------------- the pane's top strip (#80) */
 /* Board / Today open with the filter reached for most — the
@@ -891,6 +928,12 @@ a.chip:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .snooze-opt:hover { background: var(--card-2); }
+/* The date a phrase resolves to (#391), trailing its phrase: what "This
+   weekend" means today is checkable before the tap. */
+.snooze-opt-date { margin-left: auto; padding-left: var(--space-md); color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Dark only: fg-muted drops to 4.08:1 on the card-2 hover lift, so the date
+   steps toward fg there, as a hovered row's meta does (#281). */
+[data-theme="dark"] .snooze-opt:is(:hover, :focus-visible) .snooze-opt-date { color: color-mix(in srgb, var(--fg) 12%, #7d8590); }
 /* The divider is what sets "Pick a date…" apart from the three phrases — not a
    muted text colour, which read as disabled on the walk. Only its glyph is
    quiet, like every other leading icon on a row. */
@@ -1677,8 +1720,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    Soon / Later / No date as flat disclosures below with breathing room (#350). */
 .today { display: flex; flex-direction: column; }
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
-.today-title { display: inline-flex; align-items: center; gap: 0.4em; margin: 0; font-size: var(--font-body); font-weight: 700; }
-.today-title .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+.today-title { margin: 0; }
 .today-counts { color: var(--muted); font-size: var(--font-label); }
 .today-counts.has-overdue { color: var(--danger); }
 .today-group { padding: 0; border-top: 1px solid var(--line); }

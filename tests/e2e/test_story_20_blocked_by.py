@@ -101,7 +101,10 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         blockers = drawer.locator(".drawer-blocked .drawer-blockers .blocker-row")
         expect(blockers).to_have_count(1)
         expect(blockers.locator(".blocker-title")).to_have_text("Write sensor driver")
-        expect(blockers.locator(".pill")).to_have_text("todo")
+        # an open blocker's todo is its normal state: a quiet word, no chip —
+        # the status chip is for exceptions only (#391)
+        expect(blockers.locator(".status-mark")).to_have_text("todo")
+        expect(blockers.locator(".status-mark")).not_to_have_class(re.compile(r"\bchip\b"))
         shot(page, shots / "story-20-blocked-by-3-desktop.png")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()

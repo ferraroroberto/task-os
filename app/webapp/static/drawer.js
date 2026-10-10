@@ -31,7 +31,7 @@ import { confirmDialog } from './confirm.js';
 import { duePicker } from './dueinput.js';
 import {
   PRIORITIES, aiChip, chipFor, fmtTs, isDeferred, issueChip,
-  linkify, providerIcon, relDue, renderMarkdown, statusPill,
+  linkify, providerIcon, relDue, renderMarkdown, statusMark, toneChip,
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { RECURRENCES, anchorOptions, intervalUnit } from './recurrence.js';
@@ -766,7 +766,7 @@ export function createDrawer(el, opts) {
         cd.title = c.due;
         b.appendChild(cd);
       }
-      b.appendChild(statusPill(c.status));
+      b.appendChild(statusMark(c.status));
       b.addEventListener('click', function () { opts.onOpen(c.id); });
       kids.appendChild(b);
     });
@@ -950,10 +950,18 @@ export function createDrawer(el, opts) {
       const head = document.createElement('div');
       head.className = 'issue-head';
       head.appendChild(issueChip(ref));
-      const stPill = document.createElement('span');
-      stPill.className = 'pill issue-state pill-' + (ref.state === 'closed' ? 'done' : (ref.state === 'open' ? 'open' : 'inbox'));
-      stPill.textContent = ref.state || 'state unknown';
-      head.appendChild(stPill);
+      // Open and closed are the issue's normal states, a quiet word; a state
+      // the sync never established is the exception, a neutral chip (#391).
+      let stMark;
+      if (ref.state === 'open' || ref.state === 'closed') {
+        stMark = document.createElement('span');
+        stMark.className = 'status-word';
+        stMark.textContent = ref.state;
+      } else {
+        stMark = toneChip('state unknown', 'neutral');
+      }
+      stMark.classList.add('issue-state');
+      head.appendChild(stMark);
       const labels = document.createElement('span');
       labels.className = 'issue-labels';
       head.appendChild(labels);
@@ -1089,7 +1097,7 @@ export function createDrawer(el, opts) {
       link.textContent = b.title;
       link.addEventListener('click', function () { opts.onOpen(b.id); });
       row.appendChild(link);
-      row.appendChild(statusPill(b.status));
+      row.appendChild(statusMark(b.status));
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'icon-button danger';

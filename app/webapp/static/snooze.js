@@ -19,12 +19,20 @@
  * Snooze… and Change date…, a swipe) opens the same menu through
  * `openDatePicker()`: anchored beside the row on a fine pointer, in the
  * vendored editor modal on a phone (#311's plan, question 5).
+ *
+ * The date sheet (#391): every phrase shows the date it resolves to today,
+ * and the push-out phrases come first — most re-dates push a task out. The
+ * dates come from the server (`GET /api/dates`, the same `parse_date` the
+ * write runs), read once per local day into a cache the app primes at every
+ * refresh, so the sheet opens with them already filled in.
  */
 
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
+import { api, qs } from './api.js';
 import { duePicker } from './dueinput.js';
+import { fmtDay, todayISO } from './format.js';
 import { closeOnBackdrop, modalCard } from './modal.js';
 
 /** [phrase sent to the API, what the button says]. */
@@ -34,8 +42,48 @@ export const SNOOZE_OPTIONS = [
   ['next week', 'Next week'],
 ];
 
-/** Re-dating starts one step sooner than snoozing: "do it today" is a due date. */
-export const DUE_OPTIONS = [['today', 'Today']].concat(SNOOZE_OPTIONS);
+/** Re-dating offers one step sooner than snoozing — "do it today" is a due
+ *  date — after the push-outs, which are most re-dates (#391). */
+export const DUE_OPTIONS = SNOOZE_OPTIONS.concat([['today', 'Today']]);
+
+// ------------------------------------------------- what each phrase means
+const PHRASES = DUE_OPTIONS.map(function (opt) { return opt[0]; });
+let phraseDates = null;   // {day, dates: {phrase: ISO}} — the server's answer for one local day
+let phraseLoad = null;    // the read in flight, if any
+
+/**
+ * Read what each sheet phrase resolves to today, once per local day. Never
+ * throws: a failed read leaves the sheet without dates (the phrase alone is
+ * still the right pick), logs why, and the next call asks again.
+ * @returns {Promise<Object<string,string>|null>}
+ */
+export function loadPhraseDates() {
+  const day = todayISO();
+  if (phraseDates && phraseDates.day === day) return Promise.resolve(phraseDates.dates);
+  if (phraseLoad) return phraseLoad;
+  phraseLoad = api('/api/dates' + qs({ phrases: PHRASES })).then(function (res) {
+    phraseDates = { day: day, dates: res.dates || {} };
+    return phraseDates.dates;
+  }).catch(function (err) {
+    console.warn('task-os: date phrases not resolved', err);
+    return null;
+  }).finally(function () { phraseLoad = null; });
+  return phraseLoad;
+}
+
+/** Fill each option's date, now if today's answer is cached, else when it lands. */
+function fillDates(menu) {
+  const fill = function (dates) {
+    if (!dates) return;
+    menu.querySelectorAll('.snooze-opt[data-phrase]').forEach(function (b) {
+      const iso = dates[b.dataset.phrase];
+      const slot = b.querySelector('.snooze-opt-date');
+      if (iso && slot) { slot.textContent = fmtDay(iso); slot.dataset.date = iso; }
+    });
+  };
+  if (phraseDates && phraseDates.day === todayISO()) fill(phraseDates.dates);
+  else loadPhraseDates().then(fill);
+}
 
 /** What each date field's menu says about itself. */
 const FIELDS = {
@@ -81,10 +129,17 @@ export function dateMenu(t, field, onPick) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'snooze-opt';
-    b.textContent = opt[1];
+    b.dataset.phrase = opt[0];
+    const label = document.createElement('span');
+    label.className = 'snooze-opt-label';
+    label.textContent = opt[1];
+    const when = document.createElement('span');
+    when.className = 'snooze-opt-date';
+    b.append(label, when);
     b.addEventListener('click', function () { onPick(opt[0]); });
     menu.appendChild(b);
   });
+  fillDates(menu);
 
   // "Pick a date…" — the same calendar button every other date control opens.
   const pick = duePicker({

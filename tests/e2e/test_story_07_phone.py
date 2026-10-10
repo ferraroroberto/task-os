@@ -46,6 +46,7 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-7-phone.png    /login on the phone
     docs/screenshots/story-07-phone-8-desktop.png  /login on the desktop
     docs/screenshots/story-07-phone-9-phone.png    a slim row's tap targets (#311)
+    docs/screenshots/story-07-phone-10-phone.png   the date sheet, a date beside each phrase (#391)
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -77,6 +78,7 @@ from tests.e2e.conftest import (
     _boot,
     _terminate,
     assert_control_boundaries,
+    assert_date_sheet,
     e2e_workdir,
     shot,
 )
@@ -195,6 +197,12 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         expect(sheet.locator("h2")).to_have_text("Change date")
         expect(page.locator(".snooze-pop")).to_have_count(0)
         assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
+        # the date sheet (#391): push-outs first, each phrase beside its date,
+        # every option a full-width 44px row that holds both on one line
+        assert_date_sheet(sheet.locator(".snooze-menu.date-sheet"), base)
+        assert_min_target(sheet.locator(".snooze-opt"))
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-07-phone-10-phone.png")
         sheet.locator(".snooze-pick").tap()
         expect(sheet.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
         # picking a day commits it - the row re-renders on the new date (today,

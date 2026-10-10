@@ -29,6 +29,8 @@
     DELETE /api/tasks/{id}/blockers/{bid} remove one blocker
     GET    /api/activity?task=N&limit=   newest first (all tasks when no task)
     POST   /api/parse                    {text} → quick-add split: title, due, parent
+    GET    /api/dates?phrases=a,b        {today, dates: {phrase: ISO | null}} — what each
+                                         date phrase means today (the date sheet, #391)
 
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
@@ -69,7 +71,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.webapp.routers._helpers import resolve_actor
-from src import quick_add
+from src import clock, quick_add
 from src import tasks_repo as repo
 from src.dates import DateParseError, parse_date
 from src.db import get_db
@@ -585,3 +587,29 @@ def parse_quick_add(body: ParseBody, db: sqlite3.Connection = Depends(get_db)) -
     parsed = quick_add.parse(body.text, today)
     parsed["parent"] = quick_add.resolve_parent(db, parsed["parent_ref"])
     return parsed
+
+
+#: The most phrases one ``GET /api/dates`` resolves — the date sheet asks for four.
+MAX_DATE_PHRASES = 20
+
+
+@router.get("/dates")
+def resolve_dates(phrases: str = Query(..., min_length=1)) -> dict[str, Any]:
+    """What each date phrase resolves to today: ``{today, dates: {phrase: ISO | null}}``.
+
+    The date sheet (#391) shows the date beside every phrase it offers. The
+    phrase is still what a pick sends, so this is the same ``parse_date`` the
+    write path runs, on the same clock: the date shown is the date written. An
+    unknown phrase is a 422, never a blank beside it.
+    """
+    wanted = [p.strip() for p in phrases.split(",") if p.strip()]
+    if not wanted or len(wanted) > MAX_DATE_PHRASES:
+        raise repo.ValidationError(f"phrases takes 1–{MAX_DATE_PHRASES} comma-separated date phrases")
+    resolved: dict[str, str | None] = {}
+    for phrase in wanted:
+        try:
+            d = parse_date(phrase)
+        except DateParseError as exc:
+            raise repo.ValidationError(str(exc)) from exc
+        resolved[phrase] = d.isoformat() if d else None
+    return {"today": clock.today().isoformat(), "dates": resolved}

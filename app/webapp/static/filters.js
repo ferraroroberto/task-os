@@ -29,7 +29,16 @@ import { STATUSES, todayISO } from './format.js';
 import { closeOnOutside } from './popover.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
-export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due' };
+export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine' };
+/**
+ * Whose tasks a list shows (#391, decision 1 of #390): the owner's own, the
+ * issues the forge sync brings in, or both. A task is an issue when it carries
+ * an `issue_ref` — the coding task the sync made (`coding` ⇔ issue_ref). One
+ * URL key, `scope`, absent for the default Mine. It is not a filter-card
+ * control: the segmented switch above the list owns it (scope.js), so the
+ * card neither describes it nor resets it on Clear.
+ */
+export const SCOPES = [['mine', 'Mine'], ['issues', 'Issues'], ['all', 'All']];
 /**
  * The status multi-select's pseudo-value (#87). Not a status: it flips the
  * list from the awake tasks to the sleeping ones (a `starts` date still in the
@@ -68,6 +77,7 @@ export function filtersFromSearch(search) {
   f.updated = UPDATED_WINDOWS.some(function (w) { return w[0] === p.get('updated'); }) ? p.get('updated') : '';
   f.q = p.get('q') || '';
   f.sort = SORTS.some(function (s) { return s[0] === p.get('sort'); }) ? p.get('sort') : 'due';
+  f.scope = SCOPES.some(function (s) { return s[0] === p.get('scope'); }) ? p.get('scope') : 'mine';
   return f;
 }
 
@@ -80,12 +90,22 @@ export function filtersToSearch(f) {
   if (f.updated) p.set('updated', f.updated);
   if (f.q) p.set('q', f.q);
   if (f.sort && f.sort !== 'due') p.set('sort', f.sort);
+  if (f.scope && f.scope !== 'mine') p.set('scope', f.scope);
   const s = p.toString();
   return s ? '?' + s : '';
 }
 
+/** No filter applied — the scope is the switch's, not the card's, so it
+ *  never makes the filters non-default. */
 export function isDefaultFilters(f) {
-  return filtersToSearch(f) === '';
+  return filtersToSearch(Object.assign({}, f, { scope: 'mine' })) === '';
+}
+
+/** Is `t` in `scope`? — the one rule every list that shows the switch reads. */
+export function matchesScope(t, scope) {
+  if (scope === 'issues') return !!(t && t.issue_ref);
+  if (scope === 'all') return true;
+  return !(t && t.issue_ref);
 }
 
 // ------------------------------------------------------- server params
@@ -389,7 +409,7 @@ export function mountFilters(host, opts) {
       clear.className = 'button-ghost filter-clear';
       clear.textContent = 'Clear';
       clear.addEventListener('click', function () {
-        opts.onChange(Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : filters.q }));
+        opts.onChange(Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : filters.q, scope: filters.scope }));
       });
       row.appendChild(clear);
     }

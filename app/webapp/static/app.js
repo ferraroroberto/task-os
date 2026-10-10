@@ -43,7 +43,7 @@ import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
-  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, mountFilters,
+  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
 } from './filters.js';
 import { STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
@@ -52,9 +52,11 @@ import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
 import { CLOSED } from './rows.js';
+import { mountScope } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
+import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
 import { renderToday } from './today.js';
 
@@ -91,6 +93,7 @@ const els = {
   boardHost: document.getElementById('boardHost'),
   todayFilters: document.getElementById('todayFilters'),
   todayFilterText: document.getElementById('todayFilterText'),
+  todayScope: document.getElementById('todayScope'),
   todayHost: document.getElementById('todayHost'),
   searchFilters: document.getElementById('searchFilters'),
   paneJournal: document.getElementById('paneJournal'),
@@ -137,6 +140,7 @@ let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let actions = null;       // the one row-action runner + its undo (actions.js, #311)
 let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
+let todayScope = null;    // Today's Mine · Issues · All switch (scope.js, #391)
 const filterCards = {};   // tab → mountFilters() handle
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
 
@@ -164,7 +168,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilters', 'boardFilterText', 'todayFilters', 'todayFilterText', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilters', 'boardFilterText', 'todayFilters', 'todayFilterText', 'todayScope', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -303,6 +307,9 @@ async function refreshAll() {
       return;
     }
     renderAll();
+    // The date sheet's dates for today (#391) — a no-op once read today, so
+    // the sheet opens already filled in, and a refresh past midnight re-reads.
+    loadPhraseDates();
     // Search rows are drawn from the answer it cached, not from `state.items`:
     // re-read the query so a completed / re-dated hit does not snap back.
     if (search) search.rerun();
@@ -493,6 +500,20 @@ function viewItems() {
   return state.items.filter(function (t) { return !CLOSED[t.status]; });
 }
 
+/** Today's list: the view's items in the scope switch's scope (#391). */
+function todayItems() {
+  return viewItems().filter(function (t) { return matchesScope(t, state.filters.scope); });
+}
+
+/** The switch moved: the scope is applied in the browser, so the list the
+ *  server sent stays; only the URL key and the views that read it change. */
+function onScopeChange(scope) {
+  state.filters = Object.assign({}, state.filters, { scope: scope });
+  syncUrl();
+  renderFilters();
+  renderTodayPane();
+}
+
 async function moveTask(id, parentId) {
   try {
     const t = await api('/api/tasks/' + id + '/move', { method: 'POST', body: { parent_id: parentId } });
@@ -519,6 +540,8 @@ function onFilterChange(next) {
 
 function renderFilters() {
   const options = { projects: state.projects, people: state.people, count: viewItems().length };
+  // Today counts what it shows: its own list is narrowed by the scope switch.
+  const todayOptions = Object.assign({}, options, { count: todayItems().length });
   // [tab, the card's host, the top strip that holds the text input (#80) —
   // Search has none: its own box owns the text]
   [['board', els.boardFilters, els.boardFilterText], ['today', els.todayFilters, els.todayFilterText],
@@ -536,7 +559,7 @@ function renderFilters() {
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
         : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }
-          : options;
+          : pair[0] === 'today' ? todayOptions : options;
       filterCards[pair[0]].render(state.filters, opts);
     });
 }
@@ -617,7 +640,12 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  renderToday(els.todayHost, viewItems(), {
+  if (els.todayScope) {
+    if (!todayScope) todayScope = mountScope(els.todayScope, onScopeChange);
+    todayScope.render(state.filters.scope);
+    els.todayScope.hidden = false;
+  }
+  renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
@@ -1000,7 +1028,7 @@ function paletteCommands() {
     } });
   });
   cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {
-    onFilterChange(Object.assign({}, DEFAULT_FILTERS));
+    onFilterChange(Object.assign({}, DEFAULT_FILTERS, { scope: state.filters.scope }));
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
   cmds.push({ id: 'reindex-folders', label: 'Rescan folders', hint: 'refresh the folder index now', icon: 'folder', run: async function () {

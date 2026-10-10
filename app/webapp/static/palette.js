@@ -18,7 +18,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
-import { breadcrumbText, statusPill } from './format.js';
+import { breadcrumbText, statusMark } from './format.js';
 import { closeOnBackdrop } from './modal.js';
 
 const DEBOUNCE_MS = 150;
@@ -58,7 +58,7 @@ export function createPalette(dialog, opts) {
       const label = document.createElement('div');
       label.className = 'palette-item-label';
       label.textContent = it.label;
-      if (it.status) label.appendChild(statusPill(it.status));
+      if (it.status) label.appendChild(statusMark(it.status));
       main.appendChild(label);
       if (it.hint) {
         const hint = document.createElement('div');

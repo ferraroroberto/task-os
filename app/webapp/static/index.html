@@ -51,6 +51,7 @@
   <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
   <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
   <link rel="stylesheet" href="/static/_vendored/row-menu/row-menu.css">
+  <link rel="stylesheet" href="/static/_vendored/segmented/segmented.css">
   <link rel="stylesheet" href="/static/styles.css">
   <title>task-os</title>
 </head>
@@ -452,6 +453,9 @@
           </button>
           <div class="bulk-bar" id="todayBulk" hidden></div>
         </div>
+        <!-- Mine · Issues · All (#391): the vendored segmented control over the
+             shared filter state's `scope` key (scope.js). -->
+        <div class="scope-host" id="todayScope" hidden></div>
         <div class="filter-host" id="todayFilters" hidden></div>
         <!-- Due ≤ today grouped by project, sorted by due within a group;
              "Later this week" collapsed below (today.js). The phone's

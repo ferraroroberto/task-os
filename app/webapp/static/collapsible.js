@@ -16,8 +16,10 @@ import { icon } from './_vendored/icons/icons.js';
  * `<details class="card card--collapsible …">` with the summary row (icon ·
  * title · count · chevron) and an empty body. The caller owns open state,
  * the toggle listener and what goes in the body.
- * @param {{className?: string, icon: string, title: string, count?: string,
- *          countClass?: string, bodyClass?: string}} opts
+ * @param {{className?: string, icon?: string, title: string, count?: string,
+ *          countClass?: string, titleClass?: string, bodyClass?: string}} opts
+ *        icon — omitted for a section header that only separates (an
+ *        `overline` title, #391), which leads with no glyph
  * @returns {{card: HTMLDetailsElement, count: HTMLSpanElement, body: HTMLDivElement}}
  */
 export function collapsibleCard(opts) {
@@ -28,9 +30,9 @@ export function collapsibleCard(opts) {
   summary.className = 'collapse-summary';
   const main = document.createElement('span');
   main.className = 'collapse-main';
-  main.innerHTML = icon(o.icon);
+  if (o.icon) main.innerHTML = icon(o.icon);
   const h = document.createElement('h3');
-  h.className = 'collapse-title';
+  h.className = 'collapse-title' + (o.titleClass ? ' ' + o.titleClass : '');
   h.textContent = o.title;
   const count = document.createElement('span');
   count.className = 'collapse-count' + (o.countClass ? ' ' + o.countClass : '');
