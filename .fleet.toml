@@ -192,3 +192,10 @@ click = "#paneToday .trow .trow-kebab"
 tab = "today"
 id = "select"
 click = "#paneToday [data-select-toggle]"
+
+# The filter sheet (#395): the strip's filter button opens it. Opening writes
+# nothing; the walk ticks and picks nothing, so no filter changes.
+[[design.review.extra_steps]]
+tab = "today"
+id = "filter-sheet"
+click = "#paneToday .filter-open"

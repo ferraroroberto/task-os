@@ -2,7 +2,7 @@
  *
  * Inbox · Todo · Standby · Done — the first three are the open
  * statuses; Done shows the tasks completed on the current local day (older
- * done tasks never show unless the filter card's "done" pill is pressed,
+ * done tasks never show unless the filter sheet's "done" status is ticked,
  * which turns the column into plain Done). Ported from the fleet launcher's
  * board: on a wide screen the columns sit side by side as flat regions split
  * by a vertical hairline; on the phone the columns container is a scroll-

@@ -4,12 +4,12 @@
 
 **Steps → expected**
 
-1. Search tab → the box is focused → type `kitchen` → **four cards** Tasks (3) · Folders (2) · Emails (2) · Issues (1), full width, each a collapsed disclosure whose summary carries *N hits* (#46) → open them → every kind renders on the ONE shared row (#48): title, the matched terms as `<mark>`, one muted meta line, no glyphs and no buttons — on a task hit the status select and the folder chip, on a folder / email / issue hit the title itself is the link. `?q=kitchen` in the URL; *N hits* in the box (no milliseconds).
+1. Search tab → the box is focused, a one-line hint under it and **no group** yet (#395) → `zzqxnothing` → *0 hits*, still no group, one folded line *No matches in tasks, folders, emails and issues* → the box's filter button opens the filter sheet (sort first, every filter) → type `kitchen` → **four open groups** Tasks (*2 of 3* — the default *Mine* scope leaves the synced issue's task to the Issues group) · Folders (2) · Emails (2) · Issues (1), each under an uppercase header with its count; *All* brings the issue's task into Tasks, *Mine* takes it out again → every kind renders on the ONE shared row (#48): title, the matched terms as `<mark>`, one muted meta line, no glyphs and no buttons — on a task hit the status select and the folder chip, on a folder / email / issue hit the title itself is the link. `?q=kitchen` in the URL; *N hits* in the box (no milliseconds).
 2. **Open** the *Kitchen* task row → the drawer opens beside the results, on that task.
 3. The *kitchen* folder row's title hands `taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen` to the opener (intercepted in the walk; the real hand-off is Step 9's verified leg) and the one-time hint appears. Keyboard: `↓` from the box focuses the first row, `↓` again the second, `Enter` opens that task.
 4. `Ctrl+K` from the Today tab → the palette (vendored dialog shell) with the input focused → type `passports` → *Renew passports · todo · Family admin* → `Enter` → the palette closes, the drawer opens on it.
 5. The ⌘ header button → `>go to` → one *Go to …* command per nav destination plus Settings (Today · Board · Archive · Search, #350; dark theme) → `Enter` on *Go to Board* → the Board tab is active. Then `>tree view` → *Table → Tree view* → `Enter` sets the tab **and** the view (#161, ux-round-8 item 4). `GET /api/search?q=kitchen&kinds=tasks` returns the other three groups `skipped:true` (the API contract for "not asked" vs "empty").
-6. Phone (390 wide, coarse pointer): `/?q=kitchen#search` lands on the Search tab with the box pre-filled and the four cards as a one-column list; opening a card shows its hits on the same shared row.
+6. Phone (390 wide, coarse pointer): `/?q=kitchen#search` lands on the Search tab with the box pre-filled and the four groups, open, as a one-column list of the same shared rows.
 7. Phone: the ⌘ button → the palette as a full-width sheet → `water` → *Pay water bill*.
 8. **Headed walk (real Chrome, disposable instance with `issues.provider` blank):** the Issues card renders *not configured — issues.provider is blank in config — no issue sync · Settings* under the three populated groups — the visible state, never a blank.
 9. **Headed walk:** the *Settings* link → **Settings → Search**: *3 of 4 indexes* — Tasks ready · Folders ready · Emails ready · Issues not configured with the reason; then `Ctrl+K` → `>reindex` → `Enter` ran *Reindex folders* (toast *Folder index: 11 folder(s) in 0 s*).
@@ -18,7 +18,7 @@
 
 | Step | Shot |
 | --- | --- |
-| 1 `kitchen`: four groups, full width | [story-10-search-1-desktop.png](../screenshots/story-10-search-1-desktop.png) |
+| 1 `kitchen`: four open groups, the scope switch under the box | [story-10-search-1-desktop.png](../screenshots/story-10-search-1-desktop.png) |
 | 2 drawer open beside the results | [story-10-search-2-desktop.png](../screenshots/story-10-search-2-desktop.png) |
 | 4 `Ctrl+K`: jump to a task | [story-10-search-4-desktop.png](../screenshots/story-10-search-4-desktop.png) |
 | 5 `Ctrl+K`: `>` commands (dark) | [story-10-search-5-desktop.png](../screenshots/story-10-search-5-desktop.png) |
@@ -42,3 +42,5 @@
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The palette's *Go to Table* and *Table → Tree view* are gone; step 5 checks the five *Go to* commands in nav order.
 
 **2026-10-05 (#339, design review J-09):** an empty group names what fills it. Before a query each group says *Type in the search box above to search tasks* (folders, emails, issues); a query that matches nothing says *No tasks match — try other words in the search box above*; task hits all filtered out say *No task matches the filters — loosen them in the Filters card above*. The walk opens all four groups before the first query and again after one that matches nothing, and checks each sentence names the search box (seen red on the old *Type to search.* first). The shots are unchanged: the groups are collapsed in every one.
+
+**Re-proved 2026-10-11 (#395, redesign 5/7).** The tab opens on one box and a hint instead of four closed *ready* cards; a kind shows a group only when it has hits, the rest fold into one line (*No matches in … · N task hits hidden by the filters or the scope · Not set up: … · Settings*), and an index that fails gets its own danger-tone line. The box carries the strip's filter button and the Mine · Issues · All switch sits under it. Steps 1 and 6 and shots 1, 2, 4–7 are re-proved by the automated walk (full e2e, 16/16); the fold wording by `tests/test_search_fold.py`. Shots 8–9 (real Chrome) show the pre-#395 tab and were **not** re-walked.

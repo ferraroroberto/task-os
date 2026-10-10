@@ -9,7 +9,7 @@
  * Reached from the palette (*Journal*) and the Board's Done column head —
  * deliberately not a seventh tab: the bottom pill is the vendored nav
  * contract and the journal is read, not lived in. `#journal` deep-links it;
- * the shared filter card applies (project · person · text) with the status,
+ * the shared filter sheet applies (project · person · text) with the status,
  * due, modified and sort controls hidden — the status is implicitly
  * done + cancelled (cancelled rows muted, the switch in the head drops
  * them), the order is the closing time.

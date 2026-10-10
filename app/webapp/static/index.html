@@ -408,10 +408,11 @@
          a stack container pinned to minmax(0, 1fr) (design.md Layout). -->
     <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board" hidden>
       <div class="pane-body">
-        <!-- Top strip (#80): the live text filter, always visible, the Select
-             toggle (#81) and the + that opens the quick-add dialog. The rest
-             of the filters stay in the collapsed card below. While tasks are
-             ticked the bulk bar takes this strip over — see bulkbar.js. -->
+        <!-- Top strip (#80, #395): the live text filter with the filter
+             button beside it (the active-filter count; it opens the filter
+             sheet), the Select toggle (#81) and the + that opens the
+             quick-add dialog. While tasks are ticked the bulk bar takes this
+             strip over — see bulkbar.js. -->
         <div class="pane-top">
           <div class="filter-text" id="boardFilterText" hidden></div>
           <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
@@ -425,11 +426,6 @@
           </button>
           <div class="bulk-bar" id="boardBulk" hidden></div>
         </div>
-        <!-- The ONE filter card (filters.js): the same state and URL query on
-             every tab — status · project · person · due · modified · sort
-             (the text is the strip above). Collapsed by default; the summary
-             line says what is on. -->
-        <div class="filter-host" id="boardFilters" hidden></div>
         <!-- Five status columns (board.js): side by side on a wide screen,
              a one-column scroll-snap carousel on the phone. -->
         <div id="boardHost" data-empty="tasks"></div>
@@ -437,9 +433,9 @@
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today">
       <div class="pane-body">
-        <!-- Top strip (#80): the live text filter, always visible, the Select
-             toggle (#81) and the + that opens the quick-add dialog. The rest
-             of the filters stay in the collapsed card below. -->
+        <!-- Top strip (#80, #395): the text filter with the filter button
+             beside it, the Select toggle (#81) and the +; the scope switch
+             is the line under it. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
           <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
@@ -456,7 +452,6 @@
         <!-- Mine · Issues · All (#391): the vendored segmented control over the
              shared filter state's `scope` key (scope.js). -->
         <div class="scope-host" id="todayScope" hidden></div>
-        <div class="filter-host" id="todayFilters" hidden></div>
         <!-- Due ≤ today grouped by project, sorted by due within a group;
              "Later this week" collapsed below (today.js). The phone's
              landing tab. -->
@@ -505,31 +500,31 @@
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
         <!-- One box, four indexes (Step 10): tasks_fts · the folder index · the
-             email archiver's index (read-only) · the issue cache. Results render
-             below as one card per kind (search.js); ?q= keeps the query. -->
+             email archiver's index (read-only) · the issue cache. The box
+             carries the filter button (the sheet applies to the task hits),
+             the scope switch is the line under it, and the results render
+             below: a group per kind that has hits, the rest folded into one
+             line (search.js, #395); ?q= keeps the query. -->
         <div class="card search-box" id="searchBox">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
           <input id="searchInput" class="search-input" type="search" autocomplete="off" spellcheck="false"
                  placeholder="Search tasks, folders, emails, issues…" aria-label="Search everything">
           <span id="searchMeta" class="search-meta muted" aria-live="polite"></span>
         </div>
-        <!-- The same filter card as every other tab (no text field — the box
-             above owns the text); applies to the task hits. -->
-        <div class="filter-host" id="searchFilters" hidden></div>
+        <div class="scope-host" id="searchScope" hidden></div>
         <div id="searchHost" class="search-host"></div>
       </div>
     </section>
     <!-- The done journal (#102): a pane with no tab in the pill (the pill is
          the vendored nav contract; the journal is read, not lived in). Reached
          as #journal from the palette and the Board's Done column; any tab
-         press leaves it (app.js). The shared text strip + filter card apply
+         press leaves it (app.js). The shared text strip + filter sheet apply
          (project · person · text — status, due, modified and sort hidden). -->
     <section id="paneJournal" class="pane" role="region" aria-label="Done journal" hidden>
       <div class="pane-body">
         <div class="pane-top">
           <div class="filter-text" id="journalFilterText" hidden></div>
         </div>
-        <div class="filter-host" id="journalFilters" hidden></div>
         <div id="journalHost" data-empty="tasks"></div>
       </div>
     </section>
@@ -1022,6 +1017,10 @@
   <!-- The date picker a row action opens on a phone (#311): Change date… and
        Snooze… from the row menu or a swipe, built per ask by snooze.js. -->
   <dialog class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
+  <!-- The filter sheet (#395): what every strip's filter button opens —
+       sort first, then status · project · person · due · modified, applied
+       as they change. Built per open by filters.js for the tab that asked. -->
+  <dialog class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>
 
   <!-- Toasts: user-initiated command results / errors (design.md "Async data
        & feedback") — one polite live region, assertive for errors. -->

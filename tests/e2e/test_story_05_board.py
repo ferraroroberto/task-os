@@ -82,11 +82,11 @@ answers land. No screenshots: the proof is the rows.
 UX round 3 (issue #46, the row slimmed by #311): every view renders the ONE
 task row (``.trow`` — completion circle, title with its one-line passive meta,
 the Move verb on a fine pointer outside the Board's columns (#392), ⋯ kebab)
-and shares ONE filter card; "ticking" is the row's circle, on every
+and shares ONE filter state; "ticking" is the row's circle, on every
 pointer, and every other action (status, date, snooze, priority, folder,
 AI, issue) is a ⋯ menu item. Today's done tasks ride in the shared list only
 for the Board's Done today column: Today keeps showing open tasks (as the
-filter card says), so a task finished today leaves the Today
+filter sheet says), so a task finished today leaves the Today
 list and appears in the Board's Done today column.
 """
 
@@ -110,7 +110,10 @@ from tests.e2e.conftest import (
     _get,
     assert_action_row_budget,
     assert_date_sheet,
+    close_filter_sheet,
     dismiss_toasts,
+    filter_button,
+    open_filter_sheet,
     scroll_to_bottom,
     settle,
     shot,
@@ -141,16 +144,6 @@ def _col(page: Page, key: str):
 
 def _counts(page: Page) -> dict[str, int]:
     return {k: int(page.locator(f".board-col-count[data-col='{k}']").inner_text()) for k in COLUMNS}
-
-
-def _open_filters(page: Page, host_id: str):
-    """The shared filter card is collapsed by default — open it like a user would."""
-    card = page.locator(f"#{host_id} .filter-card")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
 
 
 # ----------------------------------------------------------- desktop leg
@@ -228,13 +221,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         #    quick-add dialog, whose Escape discards the draft.
         q = page.locator("#boardFilterText .filter-q")
         expect(q).to_be_visible()
-        filter_card = page.locator("#boardFilters .filter-card")
-        assert not filter_card.evaluate("el => el.open")        # still collapsed
+        sheet = page.locator("#filterSheet")
+        expect(sheet).to_be_hidden()                             # the sheet is not up
         q.fill("passport")
         expect(page).to_have_url(f"{base}/?q=passport")
         expect(_card(page, "Renew passports")).to_be_visible()
         expect(_card(page, "Repair fence")).to_have_count(0)
-        assert not filter_card.evaluate("el => el.open")        # never had to open
+        expect(sheet).to_be_hidden()                             # never had to open
+        # the text is the field's own, never a count on the filter button (#395)
+        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
         # #339: a column the filter empties offers its way forward: a task
         # added straight into it, the quick-add preset to that column's status
         adds = {"inbox": "Add to Inbox", "todo": "Add a task", "standby": "Add to Standby"}
@@ -261,25 +256,28 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
                        for col in _get(base, "/api/board")["columns"].values() for t in col)
 
         # 3. Project filter → only that project's descendants; the URL carries it;
-        #    Today's card shows the same selection (one shared state).
+        #    Today's sheet shows the same selection (one shared state).
         home = next(t for t in api["todo"] if t["title"] == "Home renovation")
-        card = _open_filters(page, "boardFilters")
-        card.locator("select[name='project']").select_option(str(home["id"]))
+        sheet = open_filter_sheet(page, "paneBoard")
+        sheet.locator("select[name='project']").select_option(str(home["id"]))
         expect(page).to_have_url(f"{base}/?project={home['id']}")
-        expect(card.locator(".filter-desc")).to_contain_text("Home renovation")
+        expect(sheet.locator(".filter-clear")).to_be_visible()
+        close_filter_sheet(page)
+        expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: Home renovation")
         filtered = _get(base, f"/api/board?project={home['id']}")["columns"]
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(filtered["todo"])))
         assert _counts(page) == {k: len(filtered[k]) for k in COLUMNS}
         shown = page.locator("#paneBoard .board-list .trow").evaluate_all("els => els.map(e => Number(e.dataset.id))")
         allowed = {t["id"] for col in filtered.values() for t in col}
         assert shown and set(shown) <= allowed
-        expect(card.locator(".filter-clear")).to_be_visible()
         shot(page, shots / "story-05-board-2-desktop.png")
         page.click("nav.tabs .tab[data-tab='today']")
-        expect(page.locator("#todayFilters select[name='project']")).to_have_value(str(home["id"]))
-        expect(page.locator("#todayFilters .filter-desc")).to_contain_text("Home renovation")
+        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filters, 1 on: Home renovation")
+        expect(open_filter_sheet(page, "paneToday").locator("select[name='project']")).to_have_value(str(home["id"]))
+        close_filter_sheet(page)
         page.click("nav.tabs .tab[data-tab='board']")
-        _open_filters(page, "boardFilters").locator(".filter-clear").click()
+        open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
+        close_filter_sheet(page)
         expect(page).to_have_url(f"{base}/")
         expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"])))
 
@@ -336,7 +334,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         )
         expect(head).to_have_class(re.compile(r"\bis-attention\b"))
         expect(page.locator("#paneToday section.today .today-head")).to_have_count(0)
-        expect(page.locator("#todayFilters .filter-desc")).not_to_contain_text("tasks")
+        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filters")
         open_rows = page.locator("#paneToday .trow[data-id]").count()
         expect(page.locator("#todayFilterText .filter-q")).to_have_attribute(
             "placeholder", f"Filter {open_rows} tasks…")
@@ -687,9 +685,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     page.click("nav.tabs .tab[data-tab='search']")
     page.fill("#searchInput", "README")
     tasks_group = page.locator(".search-group[data-kind='tasks']")
-    expect(tasks_group).to_be_visible()
-    if not tasks_group.evaluate("el => el.open"):
-        tasks_group.locator("summary.collapse-summary").click()
+    expect(tasks_group).to_have_attribute("open", "")          # a group with hits opens (#395)
     hit = tasks_group.locator(f".trow[data-id='{rid}']").first
     expect(hit).to_be_visible()
     hit.locator(".trow-main").focus()
@@ -802,16 +798,18 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     # 5. The shared filters apply and ride the URL; the controls that say
     #    nothing about a closed task are not there.
     family = _get(base, "/api/tasks?q=family%20admin")["items"][0]
-    _open_filters(page, "journalFilters")
-    expect(page.locator("#journalFilters select[name='due'], #journalFilters select[name='updated'],"
-                        " #journalFilters select[name='sort'], #journalFilters .msel[data-name='status']")).to_have_count(0)
-    page.select_option("#journalFilters select[name='project']", str(family["id"]))
+    sheet = open_filter_sheet(page, "paneJournal")
+    names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
+    assert names == ["project", "person"], names
+    sheet.locator("select[name='project']").select_option(str(family["id"]))
+    close_filter_sheet(page)
     expect(page.locator("#journalHost .trow-project").first).to_have_text("Family admin")
     projects = page.locator("#journalHost .trow-project").all_inner_texts()
     assert projects and set(projects) == {"Family admin"}, projects
     assert f"project={family['id']}" in page.url and page.url.endswith("#journal"), page.url
-    expect(page.locator("#journalFilters .filter-desc")).to_contain_text("Family admin")
-    page.click("#journalFilters .filter-clear")
+    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filters, 1 on: Family admin")
+    open_filter_sheet(page, "paneJournal").locator(".filter-clear").click()
+    close_filter_sheet(page)
     expect(page.locator("#journalHost .trow-project").first).not_to_have_text("Family admin")
 
     # 5b. The boot forest no longer carries closed tasks (#309), so a project
@@ -825,13 +823,13 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     closed = page.request.patch(f"{base}/api/tasks/{child['id']}", data=json.dumps({"status": "done"}), headers=json_h)
     assert closed.ok, closed.text()
     page.goto(f"{base}/?_e2e=spent#journal")     # a fresh boot reads /api/projects again
-    _open_filters(page, "journalFilters")
-    listed = [o.strip() for o in page.locator("#journalFilters select[name='project'] option").all_inner_texts()]
+    listed = [o.strip() for o in open_filter_sheet(page, "paneJournal").locator("select[name='project'] option").all_inner_texts()]
     assert "Spent project" in listed, listed
+    close_filter_sheet(page)
     assert page.request.delete(f"{base}/api/tasks/{shut['id']}").ok
     page.goto(f"{base}/?_e2e=spent-gone#journal")   # the board in memory still held it
     expect(page.locator("#paneJournal")).to_be_visible()
-    _open_filters(page, "journalFilters")             # …and the card is back as the walk left it
+    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filters")   # …as the walk left it
 
     # 6. Older weeks load on demand, down to the seed's first closing day —
     #    and only then does the journal say it has reached the end.
@@ -1203,7 +1201,7 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
     """§ #350 (story 31) — no open task is out of Today's reach.
 
     With the Table gone, Today lists every open task in four horizons — Today,
-    Soon (the next seven days), Later and No date — and the filter card's text
+    Soon (the next seven days), Later and No date — and the strip's text filter
     works across all of them. A task due a year out and a task with no date are
     reached from Today by scrolling, then each by its text alone. The walk makes
     both over the API and deletes them after, so the seed stays whole.

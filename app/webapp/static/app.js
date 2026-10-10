@@ -3,7 +3,8 @@
  * Nav + theme (Step 1); the views — Today and Board — are
  * renderings of ONE shared list (`state.items`, /api/tasks under the shared
  * filter state) drawn with the ONE task row (rows.js) and edited through the
- * ONE filter card (filters.js) that every tab mounts (issue #46): status ·
+ * ONE filter state (filters.js) that every tab mounts (issue #46) — the
+ * strip's text field and filter button, the sheet it opens (#395): status ·
  * project · person · due · modified · text · sort, all in the URL query so a
  * view is shareable and the same on every tab. The task drawer (↔ #task/<id>)
  * and the quick-add bars; the issue sync (the Settings card's "Sync now",
@@ -86,18 +87,15 @@ const els = {
   searchHost: document.getElementById('searchHost'),
   palette: document.getElementById('palette'),
   quickAdd: document.getElementById('quickAdd'),
-  boardFilters: document.getElementById('boardFilters'),
   boardFilterText: document.getElementById('boardFilterText'),
   boardBulk: document.getElementById('boardBulk'),
   todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
-  todayFilters: document.getElementById('todayFilters'),
   todayFilterText: document.getElementById('todayFilterText'),
   todayScope: document.getElementById('todayScope'),
   todayHost: document.getElementById('todayHost'),
-  searchFilters: document.getElementById('searchFilters'),
+  searchScope: document.getElementById('searchScope'),
   paneJournal: document.getElementById('paneJournal'),
-  journalFilters: document.getElementById('journalFilters'),
   journalFilterText: document.getElementById('journalFilterText'),
   journalHost: document.getElementById('journalHost'),
   drawer: document.getElementById('taskDrawer'),
@@ -147,8 +145,8 @@ let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let actions = null;       // the one row-action runner + its undo (actions.js, #311)
 let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
-let todayScope = null;    // Today's Mine · Issues · All switch (scope.js, #391)
-const filterCards = {};   // tab → mountFilters() handle
+const scopes = {};        // tab → its Mine · Issues · All switch (scope.js, #391; Search since #395)
+const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
 
 // ------------------------------------------------------------------ theme
@@ -175,7 +173,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilters', 'boardFilterText', 'todayFilters', 'todayFilterText', 'todayScope', 'journalFilters', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilterText', 'todayFilterText', 'todayScope', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -492,7 +490,7 @@ async function resolveTask(id) {
 
 /** What the list views show: the filtered list — minus the closed tasks that
  *  ride along for the Board's "Done today" column when no status pill is
- *  pressed (Today defaults to open tasks, as the filter card says). */
+ *  ticked (Today defaults to open tasks, as the filter sheet says). */
 function viewItems() {
   if (state.filters.status.length) return state.items;
   return state.items.filter(function (t) { return !CLOSED[t.status]; });
@@ -510,7 +508,20 @@ function onScopeChange(scope) {
   syncUrl();
   renderFilters();
   renderTodayPane();
+  renderSearchScope();
+  if (search) search.refilter();
 }
+
+/** One tab's scope switch, mounted on first use and kept in step with the
+ *  shared state (the switches are the same key, so moving one moves all). */
+function renderScope(tab, host) {
+  if (!host) return;
+  if (!scopes[tab]) scopes[tab] = mountScope(host, onScopeChange);
+  scopes[tab].render(state.filters.scope);
+  host.hidden = false;
+}
+
+function renderSearchScope() { renderScope('search', els.searchScope); }
 
 async function moveTask(id, parentId) {
   try {
@@ -540,20 +551,22 @@ function renderFilters() {
   const options = { projects: state.projects, people: state.people, count: viewItems().length };
   // Today counts what it shows: its own list is narrowed by the scope switch.
   const todayOptions = Object.assign({}, options, { count: todayItems().length });
-  // [tab, the card's host, the top strip that holds the text input (#80) —
-  // Search has none: its own box owns the text]
-  [['board', els.boardFilters, els.boardFilterText], ['today', els.todayFilters, els.todayFilterText],
-    ['search', els.searchFilters, null], ['journal', els.journalFilters, els.journalFilterText]]
+  // [tab, the top strip that holds the text input (#80) and the filter button
+  // (#395) — Search has no text strip: its own box owns the text and holds
+  // the button]
+  [['board', els.boardFilterText], ['today', els.todayFilterText],
+    ['search', null], ['journal', els.journalFilterText]]
     .forEach(function (pair) {
-      const host = pair[1];
-      if (!host) return;
       if (!filterCards[pair[0]]) {
-        filterCards[pair[0]] = mountFilters(host, pair[0] === 'journal'
+        if (pair[0] === 'search' && !els.searchBox) return;
+        if (pair[0] !== 'search' && !pair[1]) return;
+        filterCards[pair[0]] = mountFilters(pair[0] === 'journal'
           // the journal's status is implicit (done + cancelled), its order the
           // closing time, and a due / modified window says nothing about a
           // closed task — only project · person · text apply (#102)
-          ? { onChange: onFilterChange, textHost: pair[2], hide: JOURNAL_HIDES, countLabel: 'closed' }
-          : { onChange: onFilterChange, textHost: pair[2] });
+          ? { onChange: onFilterChange, textHost: pair[1], hide: JOURNAL_HIDES, countLabel: 'closed' }
+          : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox }
+            : { onChange: onFilterChange, textHost: pair[1] });
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
         : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }
@@ -567,6 +580,7 @@ function renderAll() {
   renderSelectMode();
   renderBoardPane();
   renderTodayPane();
+  renderSearchScope();
   if (search) search.refilter();
 }
 
@@ -638,11 +652,7 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  if (els.todayScope) {
-    if (!todayScope) todayScope = mountScope(els.todayScope, onScopeChange);
-    todayScope.render(state.filters.scope);
-    els.todayScope.hidden = false;
-  }
+  renderScope('today', els.todayScope);
   state.todayCounts = renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
@@ -1015,7 +1025,7 @@ async function syncIssues() {
 
 // ---------------------------------------------------- search + palette
 /** Write the Search tab's query into ?q= (only while that tab is showing — the
- *  filter card's text owns ?q= on the other tabs). */
+ *  strip's text field owns ?q= on the other tabs). */
 function syncSearchUrl(q) {
   if (!nav || nav.getTab() !== 'search') return;
   const p = new URLSearchParams(location.search);
@@ -1204,7 +1214,7 @@ async function boot() {
   const f = state.filters;
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   // ?q= belongs to the Search tab when the page lands there (#search deep
-  // link, or the last tab was Search); otherwise it is the filter card's text.
+  // link, or the last tab was Search); otherwise it is the strip's text filter.
   let storedTab = null;
   try {
     storedTab = localStorage.getItem(TAB_KEY);
