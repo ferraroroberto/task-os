@@ -56,6 +56,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 from collections.abc import Iterator
 from datetime import date, datetime
@@ -787,6 +788,21 @@ def assert_control_boundaries(scope: Locator) -> list[float]:
     low = [f for f in found if f["ratio"] < _BOUNDARY_MIN]
     assert not low, f"field boundary under {_BOUNDARY_MIN}:1 (WCAG 1.4.11): {low}"
     return [f["ratio"] for f in found]
+
+
+#: The date sheet's re-date phrases, push-outs first (#391) — snooze.js DUE_OPTIONS.
+DUE_SHEET = [("tomorrow", "Tomorrow"), ("this weekend", "This weekend"), ("next week", "Next week"), ("today", "Today")]
+
+
+def assert_date_sheet(menu: Locator, base: str) -> None:
+    """The re-date sheet lists its phrases push-outs first, each beside the
+    date the server resolves it to today (#391) — the date a pick writes."""
+    phrases = ",".join(p for p, _ in DUE_SHEET)
+    resolved = _get(base, "/api/dates?phrases=" + urllib.parse.quote(phrases))["dates"]
+    days = [date.fromisoformat(resolved[p]) for p, _ in DUE_SHEET]
+    opts = menu.locator(".snooze-opt[data-phrase]")
+    expect(opts.locator(".snooze-opt-label")).to_have_text([label for _, label in DUE_SHEET])
+    expect(opts.locator(".snooze-opt-date")).to_have_text([f"{d:%a} {d.day} {d:%b}" for d in days])
 
 
 def scroll_to_bottom(page: Page, target: Locator) -> None:

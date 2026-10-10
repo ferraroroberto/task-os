@@ -76,6 +76,7 @@ from tests.e2e._geometry import (
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
+    assert_date_sheet,
     dismiss_toasts,
     shot,
     text_contrast,
@@ -186,6 +187,10 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         page.locator(".row-menu [data-action='change-date']").click()
         dates = page.locator(".snooze-pop .snooze-menu")
         expect(dates).to_have_attribute("data-field", "due")
+        # the date sheet (#391): push-outs first, each phrase beside its date
+        assert_date_sheet(dates, base)
+        assert dates.locator(".snooze-opt[data-phrase='tomorrow'] .snooze-opt-date").get_attribute(
+            "data-date") == (E2E_ANCHOR + timedelta(days=1)).isoformat()
         dates.locator(".snooze-pick").click()
         assert page.evaluate("window.__pickerOpens") == ["due-date"], "Pick a date… did not open the picker"
         new_due = (E2E_ANCHOR + timedelta(days=14)).isoformat()

@@ -3,15 +3,19 @@
  * Four horizons, nearest first (#350 — with the Table gone, Today is where
  * any open task is found, by scrolling or by the filter card's text): Today
  * (due ≤ today, overdue first), Soon (tomorrow … +7 days), Later (further
- * out) and No date. Each is grouped by root project with the shared due-first
- * sort inside each group (#116 — a task's date always decides its position,
- * recurring or not); the three after Today sit open below as flat
- * disclosures, each collapsible via its own chevron (#253). Rows are
- * the ONE task row (rows.js, issue #46) — the completion circle, the title
- * over its meta line (project hidden — the group already names it) and the
- * ⋯ menu, where Snooze… and Change date… live since #311. Flat hairline
- * rows, no card wrapper, group titles in the app's normal title font. This is
- * the phone's landing tab.
+ * out) and No date. Each horizon is headed by an `overline` section header
+ * with its count (#391); the three after Today sit open below as flat
+ * disclosures, each collapsible via its own chevron (#253). Inside a horizon
+ * the tasks are grouped by root project with the shared due-first sort inside
+ * each group (#116 — a task's date always decides its position, recurring or
+ * not), and the project sub-headers are drawn only when there are two or more
+ * groups to tell apart (#391, decision 6 of #390): a lone "No project" header
+ * separated nothing. Rows are the ONE task row (rows.js, issue #46) — the
+ * completion circle, the title over its meta line (the project hidden only
+ * where a sub-header already names it) and the ⋯ menu, where Snooze… and
+ * Change date… live since #311. Flat hairline rows, no card wrapper. The list
+ * arrives already narrowed to the scope switch's Mine · Issues · All (app.js,
+ * scope.js). This is the phone's landing tab.
  *
  * The calendar lane (#96, calendar.js) sits beside all of it on the desktop:
  * today's events from the private ICS address (opts.calendar — the
@@ -26,11 +30,10 @@
 'use strict';
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
-import { icon } from './_vendored/icons/icons.js';
 import { calendarLane } from './calendar.js';
 import { collapsibleCard } from './collapsible.js';
 import { relDue, todayISO } from './format.js';
-import { compareItems, rowList, taskRow } from './rows.js';
+import { compareItems, rowList } from './rows.js';
 
 /** Split the list into the four horizons {due, week, later, nodate, counts}
  *  — exported for tests. Every task lands in exactly one. */
@@ -123,9 +126,8 @@ export function renderToday(host, items, handlers, opts) {
   const head = document.createElement('div');
   head.className = 'today-head';
   const h = document.createElement('h2');
-  h.className = 'today-title';
-  h.innerHTML = icon('calendar-days');
-  h.appendChild(document.createTextNode('Today'));
+  h.className = 'today-title overline';
+  h.textContent = 'Today';
   head.appendChild(h);
   const meta = document.createElement('span');
   meta.className = 'today-counts';
@@ -150,41 +152,71 @@ export function renderToday(host, items, handlers, opts) {
         actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
       } : undefined));
   } else {
-    data.due.forEach(function (g) { section.appendChild(buildGroup(g, handlers, o)); });
+    appendGroups(section, data.due, handlers, o);
   }
   main.appendChild(section);
 
   // Soon always shows, with its way forward when it is empty; Later and No
   // date only when they hold something — an empty far horizon says nothing.
-  main.appendChild(horizon('today-soon', 'calendar-days', 'Soon', data.week, counts.week, handlers, o,
+  main.appendChild(horizon('today-soon', 'Soon', data.week, counts.week, handlers, o,
     q ? emptyStateEl('search', noMatch('due in the next seven days'))
       : emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
         actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
       } : undefined)));
-  if (counts.later) main.appendChild(horizon('today-far', 'clock', 'Later', data.later, counts.later, handlers, o));
-  if (counts.nodate) main.appendChild(horizon('today-nodate', 'circle-dot', 'No date', data.nodate, counts.nodate, handlers, o));
+  if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o));
+  if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o));
 }
 
 /** One horizon after Today — a flat disclosure (vendored markup, hairline
  *  instead of a card box). Open by default (#253): renderToday rebuilds the
  *  host from scratch every call, so there is no user-toggle state to keep,
  *  and every open task stays reachable by scrolling (#350). */
-function horizon(cls, glyph, title, groups, n, handlers, o, empty) {
+function horizon(cls, title, groups, n, handlers, o, empty) {
   const card = collapsibleCard({
-    className: 'disclosure-flat today-horizon ' + cls, icon: glyph, title: title,
-    count: n + (n === 1 ? ' task' : ' tasks'),
+    className: 'disclosure-flat today-horizon ' + cls, title: title, titleClass: 'overline',
+    count: String(n), countClass: 'section-count',
   });
+  card.count.setAttribute('aria-label', n + (n === 1 ? ' task' : ' tasks'));
   card.card.open = true;
   if (!groups.length && empty) card.body.appendChild(empty);
-  groups.forEach(function (g) { card.body.appendChild(buildGroup(g, handlers, o)); });
+  appendGroups(card.body, groups, handlers, o);
   return card.card;
 }
 
-function buildGroup(group, handlers, o) {
+/** One horizon's project groups. A sub-header only separates, so it is drawn
+ *  only when there are two or more groups; with one, the rows name their own
+ *  project on the meta line instead (#391). */
+function appendGroups(host, groups, handlers, o) {
+  const headed = groups.length >= 2;
+  groups.forEach(function (g) { host.appendChild(buildGroup(g, handlers, o, headed)); });
+}
+
+function buildGroup(group, handlers, o, headed) {
   const wrap = document.createElement('section');
-  wrap.className = 'today-group';
+  wrap.className = 'today-group' + (headed ? '' : ' is-unheaded');
   const rootId = group.root ? group.root.id : null;
   wrap.dataset.root = rootId == null ? '' : String(rootId);
+  if (headed) wrap.appendChild(groupTitle(group, handlers));
+  const list = rowList(group.items, handlers, {
+    hideProject: headed,
+    selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
+  });
+  list.classList.add('today-list');
+  // The overdue / due-today tint on the whole row. The date comes off the
+  // chip's `data-due` (rows.js) — the ISO value, stated as a value; reading it
+  // out of the chip's tooltip is what this used to do, and it broke the moment
+  // the tooltip gained a word (#107).
+  list.querySelectorAll('.trow').forEach(function (row) {
+    const chip = row.querySelector('.trow-due');
+    const rel = relDue(chip ? chip.dataset.due : '');
+    if (rel.tone) row.classList.add('is-' + rel.tone);
+  });
+  wrap.appendChild(list);
+  return wrap;
+}
+
+/** A project sub-header: the root's name (it opens the project) and its count. */
+function groupTitle(group, handlers) {
   const title = document.createElement('h3');
   title.className = 'today-group-title';
   if (group.root) {
@@ -202,21 +234,5 @@ function buildGroup(group, handlers, o) {
   n.className = 'today-group-count';
   n.textContent = String(group.items.length);
   title.appendChild(n);
-  wrap.appendChild(title);
-  const list = rowList(group.items, handlers, {
-    hideProject: true,
-    selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
-  });
-  list.classList.add('today-list');
-  // The overdue / due-today tint on the whole row. The date comes off the
-  // chip's `data-due` (rows.js) — the ISO value, stated as a value; reading it
-  // out of the chip's tooltip is what this used to do, and it broke the moment
-  // the tooltip gained a word (#107).
-  list.querySelectorAll('.trow').forEach(function (row) {
-    const chip = row.querySelector('.trow-due');
-    const rel = relDue(chip ? chip.dataset.due : '');
-    if (rel.tone) row.classList.add('is-' + rel.tone);
-  });
-  wrap.appendChild(list);
-  return wrap;
+  return title;
 }

@@ -63,9 +63,12 @@ Story 19 points here.
 task may be out of reach, so Today lists them all in four horizons — Today,
 Soon, Later, No date — and a task due a year out and a task with no date are
 both reached from Today, by scrolling and by the text filter. Story 31 points
-here.
+here. § #391 rides the same walk: the horizons under `overline` headers with
+their counts, the Mine · Issues · All switch (Mine by default, the pick kept
+in the URL across a reload) and project sub-headers only where two or more
+groups need telling apart.
 
-    docs/screenshots/story-31-today-horizons-{1,2}-desktop.png
+    docs/screenshots/story-31-today-horizons-{1,2,3}-desktop.png
 
 § #321 (``_walk_edit_refresh``, same reason): an edit the server confirmed shows
 on every visible row without a reload even when an earlier refresh is still in
@@ -339,7 +342,11 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator("#paneToday .trow-project")).to_have_count(0)
         soon = page.locator(".today-soon")
         assert soon.evaluate("el => el.open") is True                 # open by default (#253)
-        expect(soon.locator(".collapse-count")).to_have_text(f"{today['counts']['week']} tasks")
+        # Today opens on Mine (#391): the synced issues are behind the switch,
+        # so Soon counts the week's tasks that are not issues
+        mine_week = sum(1 for g in today["week"] for t in g["items"] if not t.get("issue_ref"))
+        assert mine_week < today["counts"]["week"]                    # the seed has an issue due this week
+        expect(soon.locator(".collapse-count")).to_have_text(str(mine_week))
         shot(page, shots / "story-05-board-5-desktop.png")
 
         # 7. Mark a recurring task complete (the row's circle: on a recurring
@@ -1133,9 +1140,15 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         expect(loose_row).to_be_in_viewport()
         expect(loose_row.locator(".trow-due")).to_have_count(0)
         # the horizons come in order, nearest first, and every open task the
-        # filter shows is in exactly one of them
-        order = pane.locator(".today-horizon .collapse-title").all_inner_texts()
+        # filter shows is in exactly one of them; each header is the overline
+        # role (caps from CSS, so the text itself stays sentence case) with its
+        # count beside it (#391)
+        heads = pane.locator(".today-horizon .collapse-title")
+        order = heads.evaluate_all("els => els.map(e => e.textContent)")
         assert order == ["Soon", "Later", "No date"], order
+        assert heads.evaluate_all("els => els.every(e => e.classList.contains('overline') "
+                                  "&& getComputedStyle(e).textTransform === 'uppercase')")
+        expect(later.locator(".section-count")).to_have_text(re.compile(r"^\d+$"))
         _clear_toasts(page)
         nodate.scroll_into_view_if_needed()
         shot(page, shots / "story-31-today-horizons-1-desktop.png")
@@ -1157,9 +1170,56 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         nodate.locator(f".trow[data-id='{loose}']").scroll_into_view_if_needed()
         shot(page, shots / "story-31-today-horizons-2-desktop.png")
         q.fill("")
+        _walk_scope_switch(page, base, shots)
     finally:
         for tid in (far, loose):
             page.evaluate("id => fetch('/api/tasks/' + id, {method: 'DELETE'})", tid)
+
+
+def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
+    """§ #391 — Today's Mine · Issues · All switch, one URL key, Mine by default.
+
+    The seed's one synced coding task (it carries an issue_ref) is the Issues
+    scope; everything else is Mine. The pick survives a reload through
+    ``?scope=``, and Mine writes no key at all. Under Issues the Soon horizon
+    holds a single project's group, so it draws no sub-header and the row
+    names its project on the meta line instead.
+    """
+    pane = page.locator("#paneToday")
+    switch = page.locator("#todayScope .segmented.scope-switch")
+    pressed = switch.locator(".segmented-item[aria-pressed='true']")
+    rows = pane.locator(".today-group .trow[data-id]")
+    open_items = _get(base, "/api/tasks")["items"]
+    issue_ids = sorted(t["id"] for t in open_items if t.get("issue_ref"))
+    assert issue_ids, "the seed carries one synced coding task"
+    # 1. Mine is the default: on screen, and absent from the URL
+    expect(pressed).to_have_text("Mine")
+    expect(page).not_to_have_url(re.compile(r"[?&]scope="))
+    for tid in issue_ids:
+        expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(0)
+    # 2. Issues: only the synced tasks, the pick written to the URL
+    switch.locator(".segmented-item[data-scope='issues']").click()
+    expect(pressed).to_have_text("Issues")
+    expect(page).to_have_url(re.compile(r"[?&]scope=issues"))
+    expect(rows).to_have_count(len(issue_ids))
+    assert sorted(int(i) for i in rows.evaluate_all("els => els.map(e => e.dataset.id)")) == issue_ids
+    # 3. …and kept across a reload
+    page.reload()
+    expect(pressed).to_have_text("Issues")
+    expect(rows).to_have_count(len(issue_ids))
+    # one group in the horizon: no sub-header, the row names its project
+    expect(pane.locator(".today-group-title")).to_have_count(0)
+    expect(rows.first.locator(".trow-project")).to_be_visible()
+    _clear_toasts(page)
+    shot(page, shots / "story-31-today-horizons-3-desktop.png")
+    # 4. All, then back to Mine, which drops the key again
+    switch.locator(".segmented-item[data-scope='all']").click()
+    expect(page).to_have_url(re.compile(r"[?&]scope=all"))
+    for tid in issue_ids:
+        expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(1)
+    switch.locator(".segmented-item[data-scope='mine']").click()
+    expect(pressed).to_have_text("Mine")
+    expect(page).not_to_have_url(re.compile(r"[?&]scope="))
 
 
 def _walk_edit_refresh(page: Page, base: str) -> None:

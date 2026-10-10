@@ -563,10 +563,41 @@ export function renderMarkdown(md) {
 }
 
 // ------------------------------------------------------------------ misc
-export function statusPill(status) {
+/** The status chip's tones (design.md "status chip", #391). */
+export const TONES = ['neutral', 'accent', 'attention', 'danger'];
+
+/**
+ * The ONE status chip: the chip's shape, its colour the tone (styles.css
+ * `.chip[data-tone]`). For an exception only — a normal state gets no chip.
+ * @param {string} text   sentence case
+ * @param {'neutral'|'accent'|'attention'|'danger'} tone
+ */
+export function toneChip(text, tone) {
   const el = document.createElement('span');
-  el.className = 'pill pill-' + (status || 'inbox');
-  el.textContent = status || 'inbox';
+  el.className = 'chip tone-chip';
+  el.dataset.tone = TONES.indexOf(tone) >= 0 ? tone : 'neutral';
+  el.textContent = text;
+  return el;
+}
+
+/** Which statuses are an exception, and in what tone: an Inbox arrival is
+ *  new work (accent), standby a plain fact (neutral). Todo is the normal
+ *  state and done has no tone, so neither is a chip. */
+const STATUS_TONES = { inbox: 'accent', standby: 'neutral' };
+
+/** A task's status beside its title (a child, a blocker, a palette hit): the
+ *  tone chip for an exception, else the status as a quiet word. */
+export function statusMark(status) {
+  const s = status || 'inbox';
+  const tone = STATUS_TONES[s];
+  if (tone) {
+    const chip = toneChip(s, tone);
+    chip.classList.add('status-mark');
+    return chip;
+  }
+  const el = document.createElement('span');
+  el.className = 'status-mark status-word is-' + s;
+  el.textContent = s;
   return el;
 }
 
