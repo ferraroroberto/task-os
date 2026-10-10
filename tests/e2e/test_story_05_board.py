@@ -78,7 +78,8 @@ answers land. No screenshots: the proof is the rows.
 
 UX round 3 (issue #46, the row slimmed by #311): every view renders the ONE
 task row (``.trow`` — completion circle, title with its one-line passive meta,
-⋯ kebab) and shares ONE filter card; "ticking" is the row's circle, on every
+the Move verb on a fine pointer outside the Board's columns (#392), ⋯ kebab)
+and shares ONE filter card; "ticking" is the row's circle, on every
 pointer, and every other action (status, date, snooze, priority, folder,
 AI, issue) is a ⋯ menu item. Today's done tasks ride in the shared list only
 for the Board's Done today column: Today keeps showing open tasks (as the
@@ -101,7 +102,16 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _get, scroll_to_bottom, settle, shot
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    _get,
+    assert_action_row_budget,
+    assert_date_sheet,
+    dismiss_toasts,
+    scroll_to_bottom,
+    settle,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -178,22 +188,26 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(_col(page, "done").locator(".board-col-title")).to_have_text(re.compile(r"^Done today"))
         expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_contain_text("tick a task's circle")
         # a row = circle · title · kebab, with one passive meta line under the
-        # title: project · due · priority · glyphs for the folder / AI / issue
-        # it carries · children · comment COUNT · person — never the comment
-        # body (UX round 2, issue #32; the ONE row of round 3, #46; #311)
+        # title on #392's budget: due · exception chips · project · the child
+        # and comment COUNTS — never the comment body (UX round 2, issue #32;
+        # the ONE row of round 3, #46; #311). The folder, AI and issue links
+        # and the person are not on it: the row menu opens each link.
         quotes = _card(page, "Get three quotes")
         expect(quotes).to_have_attribute("data-status", "todo")
         expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
-        expect(quotes.locator(".trow-person")).to_contain_text("Sam Rivera")
+        expect(quotes.locator(".trow-person")).to_have_count(0)
         kitchen = _card(page, "Kitchen")
-        expect(kitchen.locator(".trow-meta .trow-folder")).to_have_attribute("title", re.compile("kitchen$"))
-        expect(kitchen.locator(".trow-meta a, .trow-meta button")).to_have_count(0)   # passive glyphs, not links
+        expect(kitchen.locator(".trow-meta .trow-folder")).to_have_count(0)
+        expect(kitchen.locator(".trow-meta a, .trow-meta button")).to_have_count(0)   # passive text, not links
+        expect(kitchen.locator(".trow-prio")).to_have_text("High")                     # the one priority mark
+        expect(kitchen.locator(".trow-prio")).to_have_attribute("data-tone", "neutral")
+        expect(kitchen.locator(".trow-move")).to_have_count(0)    # a Board column has no room for the verb
         kitchen.locator(".trow-kebab").click()
         expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()   # the action lives in the menu
         page.keyboard.press("Escape")
         expect(page.locator(".row-menu")).to_have_count(0)
         watering = _card(page, "Fix watering schedule drift")
-        expect(watering.locator(".trow-meta .trow-issue")).to_have_attribute("title", re.compile(r"garden-bot#12 · "))
+        expect(watering.locator(".trow-meta .trow-issue")).to_have_count(0)
         _open_issue_from_menu(page, watering, "garden-bot/issues/12")
         expect(watering.locator(".trow-comments")).to_have_text("1")
         expect(page.locator("#paneBoard .trow-comments").first).to_have_text(re.compile(r"^\d+$"))
@@ -338,7 +352,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(school.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
         expect(school.locator(".trow-kebab")).to_be_visible()
         expect(page.locator("#paneToday section.today .trow .snooze-summary")).to_have_count(0)
-        expect(school.locator(".trow-person")).to_contain_text("Jordan Lee")
+        expect(school.locator(".trow-person")).to_have_count(0)     # the drawer's field (#392)
         expect(page.locator("#paneToday .trow-project")).to_have_count(0)
         soon = page.locator(".today-soon")
         assert soon.evaluate("el => el.open") is True                 # open by default (#253)
@@ -348,6 +362,39 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert mine_week < today["counts"]["week"]                    # the seed has an issue due this week
         expect(soon.locator(".collapse-count")).to_have_text(str(mine_week))
         shot(page, shots / "story-05-board-5-desktop.png")
+
+        # 6b. Move (#392): on a fine pointer every open row carries the one
+        #     visible verb — a 44px icon button between the title and the
+        #     kebab, unpainted at rest like the kebab (COMP-05), still inside
+        #     the action-row budget — and re-dating is one tap plus one choice:
+        #     Move → a push-out phrase. Undo puts the date back, so the walk
+        #     below sees the seed's Today.
+        today_rows = page.locator("#paneToday section.today .trow")
+        assert_action_row_budget(today_rows)
+        verb = school.locator(".trow-move")
+        expect(verb).to_be_visible()
+        assert verb.evaluate("e => getComputedStyle(e).backgroundColor") == "rgba(0, 0, 0, 0)"
+        assert_min_target(verb)
+        order = school.evaluate(
+            "r => Array.from(r.children).map(c => Array.from(c.classList).find(k => k.startsWith('trow-')))")
+        assert order.index("trow-main") < order.index("trow-move") < order.index("trow-kebab"), order
+        sid = int(school.get_attribute("data-id"))
+        verb.click()
+        sheet = page.locator(".snooze-pop .snooze-menu[data-field='due']")
+        expect(sheet).to_be_visible()
+        assert_date_sheet(sheet, base)
+        expect(school).to_have_class(re.compile(r"\bis-key-target\b"))     # the row it moves stays marked
+        shot(page, shots / "story-05-board-13-desktop.png")
+        tomorrow = (E2E_ANCHOR + timedelta(days=1)).isoformat()
+        sheet.locator(".snooze-opt[data-phrase='tomorrow']").click()
+        moved = page.locator(".toast-success").last
+        expect(moved).to_contain_text("Due ")
+        assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow
+        expect(page.locator(f"#paneToday section.today .today-group .trow[data-id='{sid}']")).to_have_count(0)
+        moved.locator(".toast-action").click()
+        expect(_today_row(page, "School enrolment forms")).to_be_visible()
+        assert _get(base, f"/api/tasks/{sid}")["due"] == E2E_ANCHOR.isoformat()
+        dismiss_toasts(page)
 
         # 7. Mark a recurring task complete (the row's circle: on a recurring
         #    task it rolls instead of closing, issue #54) → its due rolls a
@@ -432,10 +479,12 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
             " const t = e.tagName === 'SELECT' ? parseFloat(cs.borderTopWidth) : 0;"
             " const b = e.tagName === 'SELECT' ? parseFloat(cs.borderBottomWidth) : 0;"
             " return {y: r.y + t, h: r.height - t - b, w: r.width}; })")
-        assert len(boxes) == 4, boxes                        # status select · date · delete · ✕
+        assert len(boxes) == 4, boxes                        # Move · status select · delete · ✕
+        # Move is the bar's first action, as it is the row's (#392)
+        expect(bar.locator("select, button").first).to_have_class(re.compile(r"\bbulk-move\b"))
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
-        assert all(round(s["w"]) == round(s["h"]) for s in boxes[1:]), boxes
+        assert all(round(s["w"]) == round(s["h"]) for s in boxes[:1] + boxes[2:]), boxes
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-10-desktop.png")
 
@@ -460,17 +509,18 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         # Select mode is still on — the next pick needs no second trip to the toggle
         expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
 
-        # 12. A bulk due date. The bar carries the native picker alone (no
-        #     phrase box — the drawer is where a phrase is typed), and the picker
-        #     dialog is OS chrome Playwright cannot open, so the walk sets the
-        #     date input and fires the change the picker itself would.
+        # 12. A bulk move (#392): the bar's Move opens the one date sheet a row
+        #     opens — the push-outs, each beside its date — and a pick moves the
+        #     whole selection in one tap plus one choice.
         page.locator(f"#paneBoard .trow[data-id='{ids[0]}'] .trow-check").check()
         page.locator(f"#paneBoard .trow[data-id='{ids[1]}'] .trow-check").check()
-        expect(page.locator("#boardBulk .bulk-due")).to_be_visible()
-        expect(page.locator("#boardBulk .due-text")).to_have_count(0)
-        target = (E2E_ANCHOR + timedelta(days=14)).isoformat()
-        page.locator("#boardBulk input.due-date").evaluate(
-            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", target)
+        page.locator("#boardBulk .bulk-move").click()
+        sheet = page.locator(".snooze-pop .snooze-menu[data-field='due']")
+        expect(sheet).to_be_visible()
+        expect(sheet).to_have_attribute("aria-label", "Move 2 selected tasks to another date")
+        expect(sheet.locator(".snooze-clear")).to_be_visible()      # a selection may clear its dates
+        target = _get(base, "/api/dates?phrases=next%20week")["dates"]["next week"]
+        sheet.locator(".snooze-opt[data-phrase='next week']").click()
         expect(page.locator("#boardBulk")).to_be_hidden()
         assert [_get(base, f"/api/tasks/{i}")["due"] for i in ids[:2]] == [target, target]
 
@@ -724,7 +774,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneJournal")).to_be_visible()
     expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
     drift = _trow(page, f".journal-day[data-day='{iso(0)}']", "Fix watering schedule drift")
-    expect(drift.locator(".trow-meta .trow-issue")).to_have_attribute("title", re.compile(r"garden-bot#12 · "))
+    expect(drift.locator(".trow-meta .trow-issue")).to_have_count(0)   # #392: the link is the menu's
     _open_issue_from_menu(page, drift, "garden-bot/issues/12")   # a closed task's menu still carries the link
     expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
     shot(page, shots / "story-18-done-journal-1-desktop.png")
@@ -1080,10 +1130,10 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         # second line, and the date was a phrase box, before the owner's call)
         boxes = bar.locator("select, button").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
-        assert len(boxes) == 4, boxes                       # status select · date · delete · ✕
+        assert len(boxes) == 4, boxes                       # Move · status select · delete · ✕
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
-        squares = boxes[1:]
+        squares = boxes[:1] + boxes[2:]
         assert all(round(s["w"]) == round(s["h"]) >= 44 for s in squares), squares
         assert bar_box["height"] < 2 * boxes[0]["h"], bar_box   # never wrapped
         assert_no_horizontal_overflow(page)

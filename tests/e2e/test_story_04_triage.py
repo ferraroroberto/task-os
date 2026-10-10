@@ -1,6 +1,6 @@
 """Story 04 — Monday triage (Step 4/13, issue #5).
 
-    Board filtered status:todo → a row's ⋯ → Change date → Pick a date… opens
+    Board filtered status:todo → a row's ⋯ → Move… → Pick a date… opens
     the date picker and the pick lands → the activity log shows old → new with
     time → open a drawer → add a comment containing a link → the link is a
     clickable chip → the + opens the quick-add dialog (#80) → "renew passport
@@ -174,7 +174,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
 
-        # 2. Change a due date from the row — ⋯ → Change date → Pick a date…
+        # 2. Change a due date from the row — ⋯ → Move… → Pick a date…
         #    opens the native calendar (#107, #311). `showPicker()` opens an OS
         #    widget no browser automation can drive, so the walk proves the two
         #    halves that are observable: the pick really does call it (stubbed at
@@ -748,7 +748,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     titles = rows.locator(".trow-title").all_inner_texts()
     assert sorted(titles) == ["Book boiler service", "renew insurance"], titles
     expect(rows.locator(".trow-starts")).to_have_count(2)
-    expect(_trow(page, "renew insurance", "#paneBoard").locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
+    # #392: a neutral exception chip — the clock says "snoozed until", the day follows
+    snoozed = _trow(page, "renew insurance", "#paneBoard").locator(".trow-starts")
+    expect(snoozed).to_have_text(re.compile(r"^\d+ \w{3}$"))
+    expect(snoozed).to_have_attribute("data-tone", "neutral")
+    expect(snoozed).to_have_attribute("title", re.compile(r"^Snoozed until \w{3} \d+ \w{3}$"))
     dismiss_toasts(page)
     shot(page, shots / "story-13-starts-snooze-2-desktop.png")
     card.locator(".filter-clear").click()
@@ -984,18 +988,18 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         sizes = rows.locator(".trow-kebab").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
         assert sizes and all(w == 44 and h == 44 for w, h in sizes), sizes
-        # #74 round 2: a folder never makes a card taller. It is a passive glyph
-        # on the one meta line like every other item, so a row that has one is
-        # exactly as tall as a plain one. (Rows above that height are metas
-        # that wrapped - a different thing, and not what the folder caused.)
-        by_folder = rows.evaluate_all(
-            "els => els.map(e => [!!e.querySelector('.trow-folder'),"
+        # #74 round 2, #392: nothing on the meta line makes a card taller. An
+        # exception chip sits on the one meta line like every other part, so a
+        # row that wears one is exactly as tall as a plain one; the folder
+        # glyph that used to be the case here left the row for its menu.
+        by_flag = rows.evaluate_all(
+            "els => els.map(e => [!!e.querySelector('.trow-flag'),"
             " Math.round(e.getBoundingClientRect().height)])")
-        assert any(f for f, _ in by_folder) and any(not f for f, _ in by_folder), by_folder
+        assert any(f for f, _ in by_flag) and any(not f for f, _ in by_flag), by_flag
         # (the list's first row has no hairline above it, so it is 1px shorter:
-        # the claim is that a folder row is no taller than a plain one)
-        plain_h = {h for f, h in by_folder if not f}
-        assert {h for f, h in by_folder if f} <= plain_h, by_folder
+        # the claim is that a chip row is no taller than a plain one)
+        plain_h = {h for f, h in by_flag if not f}
+        assert {h for f, h in by_flag if f} <= plain_h, by_flag
         # #311: the row is title-over-meta · kebab, level with each other, no
         # taller than 60px (+ the hairline) with its meta line, the kebab at
         # the row's right edge
@@ -1063,7 +1067,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         page.locator("#paneBoard .board-strip-btn[data-col='todo']").tap()   # it is a todo task
         sleeping = _trow(page, "Book boiler service", "#paneBoard")
         expect(sleeping).to_be_visible()
-        expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^starts \d"))
+        expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^\d+ \w{3}$"))
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-13-starts-snooze-7-phone.png")
 

@@ -44,7 +44,6 @@ be routed by Playwright); the real hand-off to Explorer is the headed walk.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -280,7 +279,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.goto(base + "/?status=todo")
     page.click("nav.tabs .tab[data-tab='board']")
     wrow = page.locator(f"#paneBoard .trow[data-id='{watering['id']}']")
-    expect(wrow.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
+    expect(wrow.locator(".trow-ai")).to_have_count(0)      # #392: the link is the menu's, below
     # #357: the same icon-button rule across the Board (header, strip +, rows' ⋮)
     assert_icon_buttons_uniform(page, "body", min_count=5)
     # the row's ⋯ menu opens it — and, for a Claude Code session, resumes it
