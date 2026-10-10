@@ -66,9 +66,12 @@ both reached from Today, by scrolling and by the text filter. Story 31 points
 here. § #391 rides the same walk: the horizons under `overline` headers with
 their counts, the Mine · Issues · All switch (Mine by default, the pick kept
 in the URL across a reload) and project sub-headers only where two or more
-groups need telling apart.
+groups need telling apart. § #393: Later and No date start folded with their
+counts (one tap opens each, and a re-render keeps it open), a text filter
+opens them, and the due rows carry no header of their own: the page header
+names them, and the open count is the text field's placeholder.
 
-    docs/screenshots/story-31-today-horizons-{1,2,3}-desktop.png
+    docs/screenshots/story-31-today-horizons-{1,2,3,4}-desktop.png
 
 § #321 (``_walk_edit_refresh``, same reason): an edit the server confirmed shows
 on every visible row without a reload even when an earlier refresh is still in
@@ -324,10 +327,19 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.click("nav.tabs .tab[data-tab='today']")
         expect(page.locator("#paneToday")).to_be_visible()
         today = _get(base, "/api/today")
-        due_counts = page.locator("section.today > .today-head .today-counts")
-        expect(due_counts).to_have_text(
+        # One header and one count (#393): the page header names the
+        # exceptions in the attention tone, the due rows carry no header of
+        # their own, and the open count is the text field's placeholder.
+        head = page.locator("#homeHeadStatus")
+        expect(head).to_have_text(
             f"{today['counts']['overdue']} overdue · {today['counts']['today']} due today"
         )
+        expect(head).to_have_class(re.compile(r"\bis-attention\b"))
+        expect(page.locator("#paneToday section.today .today-head")).to_have_count(0)
+        expect(page.locator("#todayFilters .filter-desc")).not_to_contain_text("tasks")
+        open_rows = page.locator("#paneToday .trow[data-id]").count()
+        expect(page.locator("#todayFilterText .filter-q")).to_have_attribute(
+            "placeholder", f"Filter {open_rows} tasks…")
         groups = page.locator("#paneToday section.today .today-group")
         expect(groups).to_have_count(len(today["due"]))
         titles = groups.locator(".today-group-title").evaluate_all(
@@ -416,7 +428,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(rolled_row).to_be_visible()
         expect(rolled_row).to_have_attribute("data-status", "todo")
         expect(rolled_row.locator(".trow-due")).to_have_attribute("title", next_due)
-        expect(due_counts).to_contain_text(f"{today['counts']['today'] - 1} due today")
+        expect(head).to_contain_text(f"{today['counts']['today'] - 1} due today")
         rolled_row.scroll_into_view_if_needed()
         shot(page, shots / "story-05-board-6-desktop.png")
 
@@ -426,7 +438,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         #     close-for-good lives in the drawer's status select (#311).
         rolled_row.locator(".trow-main").click()
         drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
+        # the pane already shows Today's first due task (#393): wait for this one
+        expect(drawer.locator("#drawerTitle")).to_have_value("Vocabulary review")
         drawer.locator("select[data-field='status']").select_option("done")
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
@@ -1207,10 +1220,24 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='today']")
         pane = page.locator("#paneToday")
-        # 1. Scrolling: Later and No date sit open under Soon, each holding its task
+        # 1. Later and No date start closed with their counts (#393, decision 6
+        #    of #390); one tap opens each, and a re-render keeps it open.
         later = pane.locator(".today-far")
         nodate = pane.locator(".today-nodate")
-        assert later.evaluate("el => el.open") is True and nodate.evaluate("el => el.open") is True
+        assert later.evaluate("el => el.open") is False and nodate.evaluate("el => el.open") is False
+        expect(pane.locator(".today-soon")).to_have_js_property("open", True)
+        _clear_toasts(page)
+        nodate.scroll_into_view_if_needed()
+        shot(page, shots / "story-31-today-horizons-4-desktop.png")      # folded, counts showing
+        for horizon in (later, nodate):
+            n = int(horizon.locator(".section-count").inner_text())
+            assert n == horizon.locator(".trow[data-id]").count() and n >= 1
+            horizon.locator(".collapse-summary").click()
+            expect(horizon).to_have_js_property("open", True)
+        page.locator("#paneToday .scope-switch .segmented-item").nth(2).click()   # All: a re-render
+        page.locator("#paneToday .scope-switch .segmented-item").nth(0).click()   # back to Mine
+        expect(later).to_have_js_property("open", True)
+        expect(nodate).to_have_js_property("open", True)
         far_row = later.locator(f".trow[data-id='{far}']")
         loose_row = nodate.locator(f".trow[data-id='{loose}']")
         far_row.scroll_into_view_if_needed()

@@ -321,6 +321,9 @@ export function multiSelect(name, label, values, selected, onChange, texts) {
  * @param {HTMLElement} host
  * @param {{onChange: (f: object) => void, textHost?: HTMLElement, hide?: string[],
  *          countLabel?: string}} opts
+ *          countLabel = the word before "tasks" in the text field's
+ *          placeholder, which carries the list's count ("Filter 12 closed
+ *          tasks…", #393); the card's summary line no longer repeats it
  *          hide = control names this card leaves out (`status` · `due` ·
  *          `updated` · `sort` · `project` · `person`) — the journal (#102)
  *          drops the four that say nothing about a closed task; a hidden
@@ -365,8 +368,13 @@ export function mountFilters(host, opts) {
 
     host.replaceChildren();
     host.hidden = false;
+    // The count's one home is the text field's placeholder (#393): the
+    // summary line used to repeat it under a header that said another number.
+    if (textEl) {
+      textEl.placeholder = o.count == null ? 'Filter text…'
+        : 'Filter ' + o.count + ' ' + (opts.countLabel ? opts.countLabel + ' ' : '') + (o.count === 1 ? 'task' : 'tasks') + '…';
+    }
     const bits = describeFilters(filters, { projects: o.projects, people: o.people, hide: opts.hide });
-    if (o.count != null) bits.push(o.count + ' ' + (opts.countLabel || (o.count === 1 ? 'task' : 'tasks')));
     const parts = collapsibleCard({
       className: 'filter-card', icon: 'list-filter', title: 'Filters',
       count: bits.join(' · '), countClass: 'filter-desc', bodyClass: 'filter-body',

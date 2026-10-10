@@ -58,7 +58,7 @@ import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
 import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
-import { renderToday } from './today.js';
+import { headLine, renderToday } from './today.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
@@ -109,11 +109,13 @@ const state = {
   people: [],
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
-  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the header's count and the blocker picker (#309)
+  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker (#309)
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
   calendar: null,   // /api/today's calendar group (#96) — the lane beside Today; null = not loaded
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'today',
+  todayCounts: null,  // Today's horizon counts as last drawn (today.js): the header's exceptions line (#393)
+  headNote: null,     // a state that overrides every view's header line: 'No tasks yet' / 'Server unreachable'
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
   // /api/status's `archive` block (#159) — the Archive tab renders it in full
@@ -131,6 +133,11 @@ const state = {
 
 let nav = null;
 let drawer = null;
+// The drawer's own desktop breakpoint (styles.css): at and above it the drawer
+// is a panel beside the list (Today's right half), below it a full-screen sheet.
+const drawerBeside = window.matchMedia('(min-width: 1024px)');
+// The task desktop Today opened by itself (#393), until the user picks one.
+let preselectedId = null;
 let board = null;
 let search = null;
 let settings = null;
@@ -268,17 +275,6 @@ async function loadItems(seq) {
   return true;
 }
 
-function countOpen(forest) {
-  let n = 0;
-  (function walk(nodes) {
-    nodes.forEach(function (t) {
-      if (t.status !== 'done' && t.status !== 'cancelled') n += 1;
-      walk(t.children || []);
-    });
-  })(forest);
-  return n;
-}
-
 /** Drop ticked ids the list no longer holds — deleted elsewhere, or filtered
  *  out — so a bulk POST never carries an id the user cannot see (#81). */
 function pruneSelection() {
@@ -303,9 +299,11 @@ async function refreshAll() {
       state.tree = [];
       state.projects = [];
       renderNoTasks();
-      els.homeHeadStatus.textContent = 'No tasks yet';
+      state.headNote = 'No tasks yet';
+      renderHeadStatus();
       return;
     }
+    state.headNote = null;
     renderAll();
     // The date sheet's dates for today (#391) — a no-op once read today, so
     // the sheet opens already filled in, and a refresh past midnight re-reads.
@@ -313,10 +311,10 @@ async function refreshAll() {
     // Search rows are drawn from the answer it cached, not from `state.items`:
     // re-read the query so a completed / re-dated hit does not snap back.
     if (search) search.rerun();
-    els.homeHeadStatus.textContent = countOpen(state.tree) + ' open';
     if (state.journal.open) refreshJournal();
   } catch (err) {
-    els.homeHeadStatus.textContent = 'Server unreachable';
+    state.headNote = 'Server unreachable';
+    renderHeadStatus();
     toast(err.message || 'Could not load tasks', 'error');
   }
 }
@@ -645,7 +643,7 @@ function renderTodayPane() {
     todayScope.render(state.filters.scope);
     els.todayScope.hidden = false;
   }
-  renderToday(els.todayHost, todayItems(), {
+  state.todayCounts = renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
@@ -653,6 +651,7 @@ function renderTodayPane() {
     calendar: state.calendar,
   }, selectOpts()));
   menus.today.endRender();
+  renderHeadStatus();
 }
 
 // ---------------------------------------------------------------- journal
@@ -727,6 +726,8 @@ function openJournal() {
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneJournal; });
     window.scrollTo(0, 0);
     setHeadTitle('Done journal', 'i-book-open');
+    dropPreselected();
+    renderHeadStatus();
   }
   if (!JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#journal');
   return refreshJournal();
@@ -745,6 +746,26 @@ function hideJournal() {
 function setHeadTitle(text, iconId) {
   els.homeTitleText.textContent = text;
   els.homeTitleIcon.setAttribute('href', '#' + iconId);
+}
+
+/** The line beside the title names an exception or states a plain fact
+ *  (#393, design.md `page-header`). On Today: `headLine` over the counts of
+ *  the horizons Today just drew, so the header and the list never disagree.
+ *  The open count is not repeated here: it is the filter field's
+ *  placeholder. The other views name their own exceptions in their redesign
+ *  steps (#390); until then their line is empty rather than a count. */
+function renderHeadStatus() {
+  const el = els.homeHeadStatus;
+  let text = '';
+  let attention = false;
+  if (state.headNote) text = state.headNote;
+  else if (state.tab === 'today' && !state.settingsOpen && !state.journal.open && state.todayCounts) {
+    const line = headLine(state.todayCounts);
+    text = line.text;
+    attention = line.attention;
+  }
+  el.textContent = text;
+  el.classList.toggle('is-attention', attention);
 }
 
 /** …a tab's name and glyph, read off its own nav button (one source). */
@@ -770,6 +791,8 @@ function openSettings() {
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneSettings; });
     els.settingsBtn.setAttribute('aria-current', 'page');
     setHeadTitle('Settings', 'i-settings');
+    dropPreselected();
+    renderHeadStatus();
     const scroller = document.querySelector('.app');
     if (scroller) scroller.scrollTop = 0;
     window.scrollTo(0, 0);
@@ -815,10 +838,34 @@ function openTask(id) {
     const prefix = state.journal.open ? '#journal/task/' : '#task/';
     history.pushState(null, '', location.pathname + location.search + prefix + id);
   }
+  preselectedId = null;   // the user picked: it stays open wherever they go
   drawer.open(id);
 }
 
+/** Desktop Today never opens on an empty detail half while a task is due
+ *  (#393, decision 8 of #390): on entering the tab with nothing open, the
+ *  first due row (the first row on screen) fills the right half. No hash is
+ *  written: it is the view's default, not a navigation, so a reload picks
+ *  the first due task again and Back does not step through it. The phone's
+ *  drawer is a full-screen sheet, so there it never opens by itself. */
+function preselectToday() {
+  if (!drawerBeside.matches || state.tab !== 'today' || state.settingsOpen || state.journal.open) return;
+  if (drawer.currentId() != null || hashTaskId() != null) return;
+  const first = els.todayHost.querySelector('section.today .trow[data-id]');
+  if (!first) return;
+  preselectedId = Number(first.dataset.id);
+  drawer.open(preselectedId);
+}
+
+/** Leaving Today closes the task it opened by itself: on another tab it
+ *  would be a panel nobody asked for. A task the user opened stays. */
+function dropPreselected() {
+  if (preselectedId != null && hashTaskId() == null) drawer.close();
+  preselectedId = null;
+}
+
 function closeTask() {
+  preselectedId = null;
   drawer.close();
   if (hashTaskId() != null) {
     history.replaceState(null, '', location.pathname + location.search + (state.journal.open ? '#journal' : ''));
@@ -921,7 +968,8 @@ async function fetchVersion() {
   } catch (err) {
     // An unreachable version endpoint is its own visible state, never blank.
     els.buildReadout.textContent = 'Build: unknown';
-    els.homeHeadStatus.textContent = 'Server unreachable';
+    state.headNote = 'Server unreachable';
+    renderHeadStatus();
   }
 }
 
@@ -1077,7 +1125,13 @@ function wireKeys() {
   keys = mountKeys(els.keysHelp, {
     actions: actions,
     resolveTask: resolveTask,
-    isBlocked: function () { return drawer.currentId() != null; },
+    // A task you opened owns the keys (#99). The one desktop Today opened by
+    // itself does not, unless the focus is in it: else the keymap would be off
+    // on the landing tab from the first paint (#393).
+    isBlocked: function () {
+      const id = drawer.currentId();
+      return id != null && (id !== preselectedId || els.drawer.contains(document.activeElement));
+    },
   });
 }
 
@@ -1176,6 +1230,10 @@ async function boot() {
       if (tab === 'archive') archive.refresh();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
+      renderHeadStatus();
+      if (!nav) return;   // the init call restoring the stored tab: boot preselects at its end
+      if (tab === 'today') preselectToday();
+      else dropPreselected();
     },
   });
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
@@ -1221,6 +1279,7 @@ async function boot() {
   await Promise.all([refreshAll(), fetchIssuesStatus(), loadStatus()]);
   if (state.total) renderBoardPane();
   onHashChange();
+  preselectToday();
 }
 
 boot();

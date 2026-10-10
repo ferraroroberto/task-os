@@ -362,6 +362,10 @@ html, body {
 /* The Settings gear while its pane is up (#281): the active nav tab's
    accent-soft + accent-text, since it stands in for the tab it replaced. */
 .home-head .home-toggle[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
+/* The header line names an exception (#393): overdue / due today on Today wear
+   the tone map's attention text, the same as the row's due date. A plain fact
+   stays the vendored muted. */
+.home-head .status.is-attention { color: var(--attention-text); }
 :root[data-theme="dark"] .theme-icon-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-icon-sun { display: none; }
 
@@ -1732,7 +1736,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
 .today-title { margin: 0; }
 .today-counts { color: var(--muted); font-size: var(--font-label); }
-.today-counts.has-overdue { color: var(--danger); }
 .today-group { padding: 0; border-top: 1px solid var(--line); }
 .today-group-title {
   display: flex;
