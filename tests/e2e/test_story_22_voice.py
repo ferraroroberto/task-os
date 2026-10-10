@@ -54,6 +54,7 @@ from tests.e2e.conftest import (
     _boot,
     _get,
     _terminate,
+    board_mode,
     e2e_workdir,
     shot,
 )
@@ -285,7 +286,8 @@ def test_say_the_task(
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.click("nav.tabs .tab[data-tab='board']")   # the add happened on Today, the landing tab (#319)
-    todo = page.locator(".board-col[data-col='todo']")
+    board_mode(page, "status")                      # the status columns (#396)
+    todo = page.locator("#paneBoard .board-status .board-col[data-col='todo']")
     expect(todo.locator(".trow-title", has_text=ENRICHED_TITLE)).to_be_visible()
     shot(page, shots / "story-22-voice-4-desktop.png")
 

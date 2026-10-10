@@ -30,7 +30,14 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, Page, expect
 
-from tests.e2e.conftest import _get, dismiss_toasts, open_more_fields, scroll_to_bottom, shot
+from tests.e2e.conftest import (
+    _get,
+    board_mode,
+    dismiss_toasts,
+    open_more_fields,
+    scroll_to_bottom,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -72,14 +79,18 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("#paneBoard")).to_be_visible()
-        todo_col = page.locator(".board-col[data-col='todo']")
+        # the status columns, every task in them: a synced issue's task is
+        # behind the scope switch's Issues / All (#391, the Board's since #396)
+        board_mode(page, "status")
+        page.locator("#boardScope .segmented-item[data-scope='all']").click()
+        todo_col = page.locator("#paneBoard .board-status .board-col[data-col='todo']")
         # UX rounds 2+3 (#32/#46): a coding task's row names the issue as the
         # code on its meta line (the launcher's "repo#N" look) — no duplicate
         # issue chip on the row.
         expect(todo_col.locator(".trow .trow-code", has_text=re.compile(r"^garden-bot#14$"))).to_have_count(1)
         expect(todo_col.locator(".trow .trow-code", has_text=re.compile(r"^home-dashboard#3$"))).to_have_count(1)
         expect(todo_col.locator(".trow", has=page.locator(".trow-code", has_text="garden-bot#14")).locator(".chip-issue")).to_have_count(0)
-        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(todo_before + 2))
+        expect(todo_col.locator(".board-col-count")).to_have_text(str(todo_before + 2))
         api_todo = _get(base, "/api/tasks?status=todo")["items"]
         new = {t["code"]: t for t in api_todo if t.get("issue_ref") and t["code"] in {"garden-bot#14", "home-dashboard#3"}}
         assert set(new) == {"garden-bot#14", "home-dashboard#3"}
@@ -198,7 +209,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         # wherever it was seeded (inbox), not the sync-default todo column.
         page.keyboard.press("Escape")
         page.click("nav.tabs .tab[data-tab='board']")
-        inbox_col = page.locator(".board-col[data-col='inbox']")
+        page.locator("#boardScope .segmented-item[data-scope='all']").click()   # it is an issue's task now
+        inbox_col = page.locator("#paneBoard .board-status .board-col[data-col='inbox']")
         expect(inbox_col.locator(f".trow[data-id='{plain['id']}'] .trow-code")).to_have_text("garden-bot#15")
 
         # 6. Settings (dark): provider enabled, the last sync's counts.

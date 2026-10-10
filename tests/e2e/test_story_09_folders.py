@@ -278,7 +278,8 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     )
     assert watering["ai_url"] == ai_url                       # the summary carries it
     assert watering["ai_label"] == "drift-fix session"
-    page.goto(base + "/?status=todo")
+    # a synced issue's task: on the Board in the All scope (#391, the Board's since #396)
+    page.goto(base + "/?status=todo&scope=all")
     page.click("nav.tabs .tab[data-tab='board']")
     wrow = page.locator(f"#paneBoard .trow[data-id='{watering['id']}']")
     expect(wrow.locator(".trow-ai")).to_have_count(0)      # #392: the link is the menu's, below

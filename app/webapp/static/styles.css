@@ -366,6 +366,10 @@ html, body {
    the tone map's attention text, the same as the row's due date. A plain fact
    stays the vendored muted. */
 .home-head .status.is-attention { color: var(--attention-text); }
+/* The Board's line names each part in its own tone (#396): an Inbox arrival
+   in the accent, overdue / due today in the attention text. */
+.home-head .status .is-accent { color: var(--accent-text); }
+.home-head .status .is-attention { color: var(--attention-text); }
 :root[data-theme="dark"] .theme-icon-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-icon-sun { display: none; }
 
@@ -1621,9 +1625,23 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* ------------------------------------------------------------- board */
 .board { display: flex; flex-direction: column; gap: var(--gap); }
-/* Phone strip: column switcher + counts — a segmented control that doubles
-   as the column header while the carousel shows one column at a time. */
+/* The line under the strip (#396): Mine · Issues · All, then Week · Status —
+   two vendored segmented controls sharing the row by their segment counts,
+   so every segment is the same width — and, in Status mode while the Inbox
+   holds tasks, Triage at its own width. */
+.board-bar { display: flex; align-items: center; gap: var(--gap); }
+.board-bar[hidden] { display: none; }
+.board-bar .scope-host { flex: 3 1 0; min-width: 0; }
+.board-modes { flex: 2 1 0; min-width: 0; }
+.board-bar .board-triage { flex: none; }
+/* The dark lift the scope switch carries, for the same reason (see .scope-switch). */
+[data-theme="dark"] .board-modes { --card: var(--line); }
+
+/* Phone strip (Status mode): column switcher + counts — a segmented control
+   that doubles as the column header while the carousel shows one column at a
+   time. */
 .board-strip { display: flex; gap: var(--space-xs); }
+.board-strip[hidden] { display: none; }
 .board-strip-btn {
   flex: 1;
   min-width: 0;
@@ -1643,7 +1661,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   text-overflow: ellipsis;
 }
 .board-strip-btn.active { background: var(--card-2); color: var(--fg); border-color: var(--accent-border-soft); }
-.board-count, .board-col-count {
+.board-count {
   display: inline-block;
   min-width: 18px;
   padding: 1px 5px;
@@ -1656,9 +1674,23 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .board-strip-btn.active .board-count { background: var(--accent-soft); color: var(--accent-text); }
 
-/* Carousel (phone / narrow): one column per viewport, swipe between them —
-   scroll-snap gives the swipe for free, no gesture JS. */
-.board-columns {
+/* A lane's header: the `overline` section header Today's horizons use, its
+   count beside it. Hidden on the phone carousel, where the strip names the
+   column. */
+.board-col-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: var(--row-sm);
+}
+.board-col-title .board-col-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-status .board-col-title { display: none; }
+
+/* Carousel (Status mode, phone / narrow): one column per viewport, swipe
+   between them — scroll-snap gives the swipe for free, no gesture JS. */
+.board-columns[hidden] { display: none; }
+.board-status {
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
@@ -1666,33 +1698,31 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.board-columns::-webkit-scrollbar { display: none; }
-.board-col {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-}
-/* The strip is the column header on the carousel; the per-column title only
-   earns space in the desktop grid below. */
-.board-col-title { display: none; }
+.board-status::-webkit-scrollbar { display: none; }
+.board-status .board-col { flex: 0 0 100%; scroll-snap-align: start; overflow: hidden; }
+.board-col { min-width: 0; display: flex; flex-direction: column; padding: 0; }
+/* Week mode on the phone: one list, the lanes stacked as its sections. */
+.board-week { display: flex; flex-direction: column; gap: var(--space-md); }
 .board-list { border-top: 1px solid var(--line-muted); }
 .board-list > .trow:first-child { border-top: 0; }
-/* Drop target: the whole column lights up while a row hovers over it. */
+/* An empty lane collapses: off the phone entirely (nothing to show, and no
+   drag there to drop on it). */
+@media (max-width: 1023px) {
+  .board-col.is-empty, .board-strip-btn.is-empty { display: none; }
+}
+@media (max-width: 520px) {
+  /* the lists bleed (see the full-bleed rule above); the headers keep the gutter */
+  .board-week .board-col-title { padding-inline: var(--gap); }
+}
+/* Drop target: the whole lane lights up while a row hovers over it. */
 .board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
-/* Small empty state per column — a peer of the rows, not a full-height card. */
-.board-empty .empty-state { padding: var(--space-lg) var(--space-md); gap: var(--space-xs); }
-.board-empty .empty-state-icon { width: 20px; height: 20px; }
-.board-empty .empty-state-message { font-size: var(--font-caption); }
+/* Every lane empty: one way forward instead of a row of bare headers. */
+.board-empty[hidden] { display: none; }
 
-/* AI Inbox triage (#95): one quiet action per Inbox surface, then one staged
+/* AI Inbox triage (#95): one quiet action on the mode line, then one staged
    strip inside the row. The two adjacent decision controls use real 44px
    geometry; invisible hit-area expansion would make them overlap. */
 .board-triage {
-  margin-left: auto;
   min-width: 0;
   height: 34px;             /* + .hit-target's 5px a side = 44 (#281) */
   padding: 0 var(--space-sm);
@@ -1701,15 +1731,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   gap: var(--space-xs);
   font-size: var(--font-caption);
 }
+.board-triage[hidden] { display: none; }
 .board-triage .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .board-triage[data-state="loading"] { color: var(--accent); }
-.board-triage-phone {
-  display: flex;
-  width: calc(100% - 8px);
-  height: var(--row-sm);
-  justify-content: center;
-  margin: var(--space-xs);
-}
 .ai-suggestion {
   grid-column: 1 / -1;
   min-width: 0;
@@ -1727,44 +1751,45 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .ai-suggestion-actions { display: grid; grid-template-columns: repeat(2, 44px); }
 .ai-suggestion-action { --icon-btn-box: var(--row-sm); }   /* the one icon button (#357), 44px real */
 
-/* Desktop / wide: all columns side by side using the full width, equal
-   widths, each scrolling on its own under a sticky header with the count.
-   Flat regions, not cards (#32): a vertical 1px hairline between columns is
-   the only separation. */
+/* Desktop / wide: the lanes side by side using the full width, each
+   scrolling on its own under a sticky header with the count. Flat regions,
+   not cards (#32): a vertical 1px hairline between lanes is the only
+   separation. A lane with nothing in it collapses to its header — still a
+   drop target, at its header's width — and the filled lanes share the rest.
+   A week lane keeps a readable width (its title is one ellipsized line, the
+   row contract): seven of them need more than a laptop window has, so the
+   row of lanes scrolls sideways instead of squeezing every title to a word.
+   The status columns are four, and always fit. */
 @media (min-width: 1024px) {
   .board-strip { display: none; }
-  .board-triage-phone { display: none; }
-  .board-columns {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+  .board-columns, .board-status {
+    display: flex;
+    flex-direction: row;
     gap: 0;
     overflow-x: visible;
     scroll-snap-type: none;
   }
-  .board-col {
-    max-height: calc(100vh - 250px);
+  .board-week { overflow-x: auto; scrollbar-width: thin; }
+  .board-week .board-col:not(.is-empty) { min-width: 18rem; }
+  .board-col, .board-status .board-col {
+    flex: 1 1 0;
+    max-height: calc(100vh - 300px);
     min-height: 240px;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 0 10px;
   }
+  .board-col.is-empty, .board-status .board-col.is-empty { flex: 0 0 auto; }
   .board-col + .board-col { border-left: 1px solid var(--line-muted); }
-  .board-col-title {
+  .board-col-title, .board-status .board-col-title {
     display: flex;
-    align-items: center;
-    gap: 6px;
     position: sticky;
     top: 0;
     z-index: 1;
-    margin: 0;
-    min-height: var(--row-md);   /* holds the links' 44px targets below (#281) */
+    min-height: var(--row-md);   /* holds the journal link's 44px target below (#281) */
     padding: var(--space-sm) var(--space-xs);
     background: var(--bg);
     border-bottom: 1px solid var(--line-muted);
-    color: var(--fg);
-    font-size: var(--font-label);
-    font-weight: 600;
   }
   .board-list { border-top: 0; }
 }
@@ -2164,8 +2189,7 @@ kbd {
 .board-col-link { margin-left: auto; color: var(--muted); font-size: var(--font-caption); font-weight: 400; text-decoration: none; }
 .board-col-link:hover, .board-col-link:focus-visible { color: var(--accent); text-decoration: underline; }
 /* A caption-sized text link, 17px tall: it expands invisibly to 44px inside
-   the 52px column title it sits in (#281); the Triage button beside it stands
-   12px away, room for both expansions. */
+   the 52px column title it sits in (#281). */
 .board-col-link { position: relative; }
 .board-col-link::before { content: ""; position: absolute; inset: -14px -4px; }
 
@@ -2469,13 +2493,3 @@ kbd {
   .archive-runbar .button-ghost::before { inset: 0; }
 }
 
-/* The Inbox column's pointer at this tab: a quiet button wearing the same
-   clothes as the Done column's `journal` link. */
-button.board-archive-link {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-family: inherit;
-  cursor: pointer;
-}
-.board-archive-link + .board-triage { margin-left: var(--gap); }   /* 4 + 5 of expansion fit (#281) */

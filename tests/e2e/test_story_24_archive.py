@@ -75,6 +75,7 @@ from tests.e2e.conftest import (
     _get,
     _terminate,
     assert_action_row_budget,
+    board_mode,
     dismiss_toasts,
     e2e_workdir,
     shot,
@@ -362,7 +363,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # 2. …as Inbox tasks the capture made, each carrying the .msg its chip opens
     page.get_by_role("tab", name="Board").click()
-    inbox = page.locator(".board-col[data-col='inbox']")
+    board_mode(page, "status")                      # the status columns (#396)
+    inbox = page.locator("#paneBoard .board-status .board-col[data-col='inbox']")
     expect(inbox.locator(".trow-title", has_text=KITCHEN)).to_be_visible()
     captured = _get(base, "/api/tasks?status=inbox")["items"]
     assert {t["title"] for t in captured} == {KITCHEN, SCHOOL}
@@ -606,19 +608,17 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     _pin_scroller(page)
     shot(page, shots / "story-24-archive-6-desktop.png")
 
-    # 9. The Board's Inbox header points at what the run left for a human, and
-    #    the palette reaches the tab the same way every other destination is
-    #    reached.
+    # 9. What the run left for a human is named where the tab is reached:
+    #    the palette's Go to Archive, the same way every other destination is
+    #    reached. The Board's Inbox column carried a pointer too, until the
+    #    mail tools left the task columns (#396).
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
     page.get_by_role("tab", name="Board").click()
-    link = page.locator(".board-col[data-col='inbox'] .board-archive-link")
-    expect(link).to_have_text("3 mail(s) need you")
-    link.click()
-    expect(page.locator("#paneArchive")).to_be_visible()
-    page.get_by_role("tab", name="Board").click()
+    expect(page.locator("#paneBoard .board-archive-link")).to_have_count(0)
     page.keyboard.press("Control+K")
     page.fill("#paletteInput", ">go to archive")
+    expect(page.locator("#palette")).to_contain_text("3 mail(s) from the last run need you")
     page.keyboard.press("Enter")
     expect(page.locator("#paneArchive")).to_be_visible()
 

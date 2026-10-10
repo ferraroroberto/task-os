@@ -426,8 +426,14 @@
           </button>
           <div class="bulk-bar" id="boardBulk" hidden></div>
         </div>
-        <!-- Five status columns (board.js): side by side on a wide screen,
-             a one-column scroll-snap carousel on the phone. -->
+        <!-- The line under the strip (#396): Mine · Issues · All (scope.js),
+             then board.js's Week · Status segment and, in Status mode while
+             the Inbox holds tasks, Triage. -->
+        <div class="board-bar" id="boardBar">
+          <div class="scope-host" id="boardScope" hidden></div>
+        </div>
+        <!-- Week lanes or the status columns (board.js): side by side on a
+             wide screen; on the phone Week is one list, Status a carousel. -->
         <div id="boardHost" data-empty="tasks"></div>
       </div>
     </section>

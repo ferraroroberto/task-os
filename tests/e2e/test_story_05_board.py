@@ -1,6 +1,10 @@
 """Story 05 — Board day (Step 5/13, issue #6).
 
-    Board tab: four columns visible at once on the laptop → the top strip's
+    Board tab: the week planner (#396) — Today · Tomorrow · This week · This
+    weekend · Next week · Later · No date side by side, the header naming the
+    Inbox arrivals and what is overdue — and a drag between two lanes changes
+    the due date and nothing else (Undo puts it back) → the Status segment:
+    four columns visible at once on the laptop → the top strip's
     text filter narrows the board without opening any disclosure and the +
     opens the quick-add dialog (#80) → project chip
     filters to one project (shared with Today, encoded in the URL) → drag
@@ -19,12 +23,15 @@ shots the validation record links to:
 
     docs/screenshots/story-05-board-{1..7}-desktop.png
     docs/screenshots/story-05-board-{10..12}-desktop.png   (§ #81, below)
+    docs/screenshots/story-05-board-14-desktop.png          (Week mode, #396)
 
 then the phone at 390×844 (WebKit, touch) — Today as the landing tab, the
-Board as a one-column scroll-snap carousel — with the geometry checks:
+Board's Week mode as one list of lane sections and its Status mode as a
+one-column scroll-snap carousel — with the geometry checks:
 
     docs/screenshots/story-05-board-8-phone.png   (Today, the landing tab)
     docs/screenshots/story-05-board-9-phone.png   (Board carousel, one column)
+    docs/screenshots/story-05-board-14-phone.png  (Board Week mode, one list)
     docs/screenshots/story-05-board-10-phone.png  (§ #81 Select mode + bulk bar)
 
 § #81 (multi-select, folded into this story rather than a 15th e2e test, the
@@ -94,7 +101,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -110,6 +117,7 @@ from tests.e2e.conftest import (
     _get,
     assert_action_row_budget,
     assert_date_sheet,
+    board_mode,
     close_filter_sheet,
     dismiss_toasts,
     filter_button,
@@ -122,6 +130,8 @@ from tests.e2e.conftest import (
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 COLUMNS = ["inbox", "todo", "standby", "done"]
+# Week mode's lanes on the anchor, a Monday (#396): the days each holds.
+LANES = ["today", "tomorrow", "week", "weekend", "next", "later", "nodate"]
 
 
 def _trow(page: Page, scope: str, title: str):
@@ -139,11 +149,41 @@ def _today_row(page: Page, title: str):
 
 
 def _col(page: Page, key: str):
-    return page.locator(f".board-col[data-col='{key}']")
+    """A Status-mode column."""
+    return page.locator(f"#paneBoard .board-status .board-col[data-col='{key}']")
+
+
+def _lane(page: Page, key: str):
+    """A Week-mode lane (#396)."""
+    return page.locator(f"#paneBoard .board-week .board-col[data-col='{key}']")
 
 
 def _counts(page: Page) -> dict[str, int]:
-    return {k: int(page.locator(f".board-col-count[data-col='{k}']").inner_text()) for k in COLUMNS}
+    return {k: int(_col(page, k).locator(".board-col-count").inner_text()) for k in COLUMNS}
+
+
+def _mine(columns: dict) -> dict:
+    """/api/board's columns in the Board's default Mine scope: no synced issue's task (#391)."""
+    return {k: [t for t in col if not t.get("issue_ref")] for k, col in columns.items()}
+
+
+def _lane_of(due: str | None) -> str:
+    """The lane a due date falls in on the anchor Monday — the rule weekLanes()
+    implements, stated here as dates so the two are checked against each other."""
+    if not due:
+        return "nodate"
+    days = (date.fromisoformat(due) - E2E_ANCHOR).days
+    if days <= 0:
+        return "today"
+    if days == 1:
+        return "tomorrow"
+    if days <= 4:
+        return "week"        # Wednesday … Friday
+    if days <= 6:
+        return "weekend"
+    if days <= 13:
+        return "next"
+    return "later"
 
 
 # ----------------------------------------------------------- desktop leg
@@ -163,26 +203,83 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.on("pageerror", lambda e: errors.append(str(e)))
 
         # 1. Today is the landing tab on every pointer (#319); one tab press to the
-        #    Board — four columns side by side, full width.
+        #    Board — the week planner (#396): the seven lanes of a Monday side
+        #    by side, each holding exactly the open tasks due in its days.
         page.goto(f"{base}/")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
-        cols = page.locator(".board-col")
+        modes = page.locator("#paneBoard .board-modes .segmented-item")
+        expect(modes).to_have_text(["Week", "Status"])
+        expect(modes.first).to_have_attribute("aria-pressed", "true")       # Week is the default
+        lanes = page.locator("#paneBoard .board-week .board-col:not([hidden])")
+        assert lanes.evaluate_all("els => els.map(e => e.dataset.col)") == LANES
+        expect(lanes.locator(".board-col-label")).to_have_text(
+            ["Today", "Tomorrow", "This week", "This weekend", "Next week", "Later", "No date"])
+        mine_open = [t for t in _get(base, "/api/tasks")["items"] if not t.get("issue_ref")]
+        for k in LANES:
+            want = sorted(t["id"] for t in mine_open if _lane_of(t["due"]) == k)
+            got = _lane(page, k).locator(".trow").evaluate_all("els => els.map(e => Number(e.dataset.id))")
+            assert sorted(got) == want, (k, got, want)
+            expect(_lane(page, k).locator(".board-col-count")).to_have_text(str(len(want)))
+        lane_boxes = [_lane(page, k).bounding_box() for k in LANES]
+        for a, b in zip(lane_boxes, lane_boxes[1:], strict=False):
+            assert abs(a["y"] - b["y"]) < 2 and a["x"] + a["width"] <= b["x"] + 1, (a, b)   # one row, left to right
+        # The header names the exceptions from the lanes' own counts: the Inbox
+        # arrivals in the accent, then what is overdue (#396).
+        inbox_n = sum(1 for t in mine_open if t["status"] == "inbox")
+        overdue_n = sum(1 for t in mine_open if t["due"] and t["due"] < E2E_ANCHOR.isoformat())
+        head = page.locator("#homeHeadStatus")
+        expect(head).to_have_text(f"{inbox_n} in Inbox · {overdue_n} overdue")
+        expect(head.locator(".is-accent")).to_have_text(f"{inbox_n} in Inbox")
+        expect(head.locator(".is-attention")).to_have_text(f"{overdue_n} overdue")
+        # Triage works on the Inbox column: it is not on the week planner.
+        expect(page.locator("#paneBoard .board-triage")).to_be_hidden()
+        # A drag between two lanes changes the due date and nothing else: the
+        # row lands on the lane's first day, through the date sheet's own Move.
+        booking = _trow(page, "#paneBoard .board-week", "Book appointment")
+        bkid = int(booking.get_attribute("data-id"))
+        before = _get(base, f"/api/tasks/{bkid}")
+        assert _lane_of(before["due"]) == "tomorrow", before["due"]
+        booking.drag_to(_lane(page, "weekend"))
+        landed = _lane(page, "weekend").locator(f".trow[data-id='{bkid}']")
+        expect(landed).to_be_visible()
+        saturday = (E2E_ANCHOR + timedelta(days=5)).isoformat()
+        after = _get(base, f"/api/tasks/{bkid}")
+        assert after["due"] == saturday, after["due"]
+        changed = {k for k in before if k not in ("due", "updated_at", "activity") and before[k] != after[k]}
+        assert not changed, changed                                   # only the due date moved
+        act = after["activity"][0]
+        assert (act["field"], act["old_value"], act["new_value"]) == ("due", before["due"], saturday), act
+        expect(page.locator(".toasts")).to_contain_text("Due Sat 12 Sep")
+        shot(page, shots / "story-05-board-14-desktop.png")
+        page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
+        expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
+        assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
+        dismiss_toasts(page)
+
+        #    …then the Status segment: four columns side by side, full width, the
+        #    empty one collapsed to its header (#396).
+        board_mode(page, "status")
+        cols = page.locator("#paneBoard .board-status .board-col")
         expect(cols).to_have_count(4)
         assert cols.evaluate_all("els => els.map(e => e.dataset.col)") == COLUMNS
         boxes = [cols.nth(i).bounding_box() for i in range(4)]
-        assert all(b and b["width"] > 200 for b in boxes), boxes
+        assert all(b and b["width"] > 200 for b in boxes[:3]), boxes
         for a, b in zip(boxes, boxes[1:], strict=False):
             assert a["x"] + a["width"] <= b["x"] + 1, (a, b)   # left to right, no overlap
         assert abs(boxes[0]["y"] - boxes[3]["y"]) < 2                # one row
         assert boxes[3]["x"] + boxes[3]["width"] > DESKTOP["width"] - 40  # uses the full width
-        api = _get(base, "/api/board")["columns"]
+        api = _mine(_get(base, "/api/board")["columns"])
         counts = _counts(page)
         assert counts == {k: len(api[k]) for k in COLUMNS}, counts
         assert counts["done"] == 0                                    # seed's done tasks are old
-        expect(_col(page, "done").locator(".board-col-title")).to_have_text(re.compile(r"^Done today"))
-        expect(_col(page, "done").locator(".board-empty .empty-state-message")).to_contain_text("tick a task's circle")
+        expect(_col(page, "done").locator(".board-col-label")).to_have_text("Done today")
+        expect(_col(page, "done")).to_have_class(re.compile(r"\bis-empty\b"))   # collapsed: its header alone
+        assert boxes[3]["width"] < boxes[0]["width"] / 2, boxes
+        # Status mode with Inbox tasks: Triage sits on the mode line, not in a column head
+        expect(page.locator("#paneBoard .board-bar .board-triage")).to_be_visible()
+        expect(page.locator("#paneBoard .board-col .board-triage")).to_have_count(0)
         # a row = circle · title · kebab, with one passive meta line under the
         # title on #392's budget: due · exception chips · project · the child
         # and comment COUNTS — never the comment body (UX round 2, issue #32;
@@ -202,10 +299,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()   # the action lives in the menu
         page.keyboard.press("Escape")
         expect(page.locator(".row-menu")).to_have_count(0)
+        # a synced issue's task is behind the Issues scope (#391)
+        expect(_card(page, "Fix watering schedule drift")).to_have_count(0)
+        page.locator("#boardScope .segmented-item[data-scope='issues']").click()
         watering = _card(page, "Fix watering schedule drift")
         expect(watering.locator(".trow-meta .trow-issue")).to_have_count(0)
         _open_issue_from_menu(page, watering, "garden-bot/issues/12")
         expect(watering.locator(".trow-comments")).to_have_text("1")
+        page.locator("#boardScope .segmented-item[data-scope='mine']").click()
+        expect(page).to_have_url(f"{base}/")
         expect(page.locator("#paneBoard .trow-comments").first).to_have_text(re.compile(r"^\d+$"))
         expect(page.locator("#paneBoard .t-comment")).to_have_count(0)   # the body bloated the cards
         expect(_card(page, "Repair fence").locator(".trow-due")).to_have_class(re.compile("due-overdue"))
@@ -230,16 +332,18 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(sheet).to_be_hidden()                             # never had to open
         # the text is the field's own, never a count on the filter button (#395)
         expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
-        # #339: a column the filter empties offers its way forward: a task
-        # added straight into it, the quick-add preset to that column's status
-        adds = {"inbox": "Add to Inbox", "todo": "Add a task", "standby": "Add to Standby"}
-        empty_cols = [k for k, n in _counts(page).items() if n == 0 and k in adds]
+        # a column the filter empties collapses to its header (#396)…
+        empty_cols = [k for k, n in _counts(page).items() if n == 0]
         assert empty_cols, "the filter left no Board column empty to show"
         for k in empty_cols:
-            expect(_col(page, k).locator(".board-empty .empty-state-action")).to_have_text(adds[k])
-        _col(page, empty_cols[0]).locator(".board-empty .empty-state-action").click()
+            expect(_col(page, k)).to_have_class(re.compile(r"\bis-empty\b"))
+        # …and a filter that empties them all offers the way forward (#339):
+        # one empty state, its action the quick-add dialog
+        q.fill("no task is called this")
+        empty = page.locator("#paneBoard .board-empty")
+        expect(empty.locator(".empty-state-message")).to_have_text("Nothing on the board")
+        empty.locator(".empty-state-action").click()
         expect(page.locator("#quickAdd")).to_be_visible()
-        expect(page.locator("#quickAddStatus")).to_have_value(empty_cols[0])
         page.keyboard.press("Escape")
         expect(page.locator("#quickAdd")).to_be_hidden()
         q.fill("")
@@ -264,8 +368,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(sheet.locator(".filter-clear")).to_be_visible()
         close_filter_sheet(page)
         expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: Home renovation")
-        filtered = _get(base, f"/api/board?project={home['id']}")["columns"]
-        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(filtered["todo"])))
+        filtered = _mine(_get(base, f"/api/board?project={home['id']}")["columns"])
+        expect(_col(page, "todo").locator(".board-col-count")).to_have_text(str(len(filtered["todo"])))
         assert _counts(page) == {k: len(filtered[k]) for k in COLUMNS}
         shown = page.locator("#paneBoard .board-list .trow").evaluate_all("els => els.map(e => Number(e.dataset.id))")
         allowed = {t["id"] for col in filtered.values() for t in col}
@@ -279,7 +383,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
         close_filter_sheet(page)
         expect(page).to_have_url(f"{base}/")
-        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"])))
+        expect(_col(page, "todo").locator(".board-col-count")).to_have_text(str(len(api["todo"])))
 
         # 4. Drag a row todo → standby: PATCH status, counts update, activity row.
         quotes = _card(page, "Get three quotes")
@@ -292,8 +396,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         moved = _col(page, "standby").locator(f".trow[data-id='{qid}']")
         expect(moved).to_be_visible()
         expect(moved).to_have_attribute("data-status", "standby")
-        expect(page.locator(".board-col-count[data-col='todo']")).to_have_text(str(len(api["todo"]) - 1))
-        expect(page.locator(".board-col-count[data-col='standby']")).to_have_text(str(len(api["standby"]) + 1))
+        expect(_col(page, "todo").locator(".board-col-count")).to_have_text(str(len(api["todo"]) - 1))
+        expect(_col(page, "standby").locator(".board-col-count")).to_have_text(str(len(api["standby"]) + 1))
         detail = _get(base, f"/api/tasks/{qid}")
         assert detail["status"] == "standby"
         act = detail["activity"][0]
@@ -457,7 +561,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert done["status"] == "done" and done["done_at"][:10] == E2E_ANCHOR.isoformat()
         page.click("nav.tabs .tab[data-tab='board']")
         expect(_col(page, "done").locator(f".trow[data-id='{bid}']")).to_be_visible()
-        expect(page.locator(".board-col-count[data-col='done']")).to_have_text("2")
+        expect(_col(page, "done").locator(".board-col-count")).to_have_text("2")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-7-desktop.png")
 
@@ -750,7 +854,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     # 1. The Done column's head links to the journal: no tab lit, #journal in the URL.
     _clear_toasts(page)
     page.click("nav.tabs .tab[data-tab='board']")
-    page.click(".board-col[data-col='done'] .board-col-link")
+    page.click("#paneBoard .board-status .board-col[data-col='done'] .board-col-link")
     expect(page.locator("#paneJournal")).to_be_visible()
     expect(page.locator("#paneBoard")).to_be_hidden()
     expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
@@ -964,10 +1068,18 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
 
 
+def _in_view(page: Page) -> list[str]:
+    """The Status columns whose left edge is inside the phone's viewport (an
+    empty column is collapsed away there, so it has no box)."""
+    boxes = {k: _col(page, k).bounding_box() for k in COLUMNS}
+    return [k for k, b in boxes.items() if b and 0 <= b["x"] < PHONE["width"] - 1]
+
+
 def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwright, shots: Path) -> None:
-    """390-wide WebKit (iOS-class): Today is the landing tab, the Board a
-    one-column scroll-snap carousel with the count strip, 44px targets (the
-    row's circle and ⋯ kebab included, #311)."""
+    """390-wide WebKit (iOS-class): Today is the landing tab; the Board's Week
+    mode one list of lane sections, its Status mode a one-column scroll-snap
+    carousel with the count strip; 44px targets (the row's circle and ⋯ kebab
+    included, #311)."""
     try:
         wk = playwright.webkit.launch(headless=True)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
@@ -1027,27 +1139,50 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         finally:
             dark.close()
 
-        # 10. Board: strip of four counts + one column per screen (scroll-snap).
+        # 10. Board, Week mode (#396): one list, the lanes stacked as its
+        #     sections under their headers, the empty ones out of the way — no
+        #     carousel and no strip; the row's swipe and menu move a task.
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("#paneBoard")).to_be_visible()
-        strip = page.locator(".board-strip-btn")
+        expect(page.locator("#paneBoard .board-strip")).to_be_hidden()
+        week = page.locator("#paneBoard .board-week")
+        sections = week.locator(".board-col:not([hidden]):not(.is-empty)")
+        assert sections.count() >= 3
+        wbox = week.bounding_box()
+        sboxes = [sections.nth(i).bounding_box() for i in range(sections.count())]
+        for a, b in zip(sboxes, sboxes[1:], strict=False):
+            assert abs(a["x"] - b["x"]) < 2 and a["y"] + a["height"] <= b["y"] + 1, (a, b)   # stacked
+        assert all(abs(b["width"] - wbox["width"]) < 2 for b in sboxes), (wbox, sboxes)
+        expect(sections.first.locator(".board-col-title")).to_be_visible()
+        assert_min_target(week.locator(".trow"))
+        assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
+        assert_no_overlap(page.locator("#paneBoard .board-bar .segmented-item"))
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-05-board-14-phone.png")
+
+        #     …Status mode: strip of counts + one column per screen
+        #     (scroll-snap). Every column holds a task by now — the desktop
+        #     walk closed two today — so none is collapsed (story 07 shows one).
+        board_mode(page, "status")
+        strip = page.locator("#paneBoard .board-strip-btn")
         expect(strip).to_have_count(4)
+        expect(page.locator("#paneBoard .board-strip-btn.is-empty")).to_have_count(0)
         assert_min_target(strip)
         assert_no_overlap(strip)
-        columns = page.locator(".board-columns")
+        columns = page.locator("#paneBoard .board-status")
         assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
         wrap = columns.bounding_box()
         first = _col(page, "inbox").bounding_box()
         assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
         # exactly one column inside the viewport at a time
-        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        visible = _in_view(page)
         assert len(visible) == 1, visible
         # tap the strip → the carousel scrolls to that column and marks it active
         page.locator(".board-strip-btn[data-col='standby']").tap()
         expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
         page.wait_for_function(
-            "() => Math.abs(document.querySelector(\".board-col[data-col='standby']\").getBoundingClientRect().left"
-            " - document.querySelector('.board-columns').getBoundingClientRect().left) < 2"
+            "() => Math.abs(document.querySelector(\".board-status .board-col[data-col='standby']\").getBoundingClientRect().left"
+            " - document.querySelector('.board-status').getBoundingClientRect().left) < 2"
         )
         # the row budget (UX round 2, issue #32; slimmed to 60px + the hairline
         # with a meta line by #311): every seeded row in the active column stays
@@ -1094,13 +1229,13 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         expect(page.locator("#paneBoard .board-strip-btn.active")).to_have_attribute("data-col", "todo")
         page.wait_for_function(
             "() => { const a = document.querySelector('.board-strip-btn.active');"
-            "        const w = document.querySelector('.board-columns');"
+            "        const w = document.querySelector('.board-status');"
             "        if (!a || !w) return false;"
-            "        const c = document.querySelector(\".board-col[data-col='\" + a.dataset.col + \"']\");"
+            "        const c = w.querySelector(\".board-col[data-col='\" + a.dataset.col + \"']\");"
             "        return c && Math.abs(c.getBoundingClientRect().left - w.getBoundingClientRect().left) < 2; }"
         )
         # and the column on screen really is the one the strip names
-        in_view = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        in_view = _in_view(page)
         assert in_view == ["todo"], in_view
 
         # 11. § #81 on the phone: the same Select toggle, tap-to-select (no

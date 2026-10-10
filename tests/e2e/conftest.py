@@ -805,6 +805,19 @@ def filter_button(page: Page, pane: str) -> Locator:
     return page.locator(f"#{pane} .filter-open")
 
 
+def board_mode(page: Page, mode: str) -> None:
+    """Press the Board's Week · Status segment (#396), like a user would.
+
+    Week is the default; the pick is remembered on the device, so one press per
+    browser context holds across reloads and tab presses. The Board tab must be
+    showing.
+    """
+    seg = page.locator(f"#paneBoard .board-modes [data-mode='{mode}']")
+    seg.click()
+    expect(seg).to_have_attribute("aria-pressed", "true")
+    expect(page.locator(f"#paneBoard .board-{mode}")).to_be_visible()
+
+
 def assert_control_boundaries(scope: Locator) -> list[float]:
     """Every visible field under *scope* draws a boundary of at least 3:1 against its surface.
 

@@ -77,6 +77,7 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
     assert_date_sheet,
+    board_mode,
     close_filter_sheet,
     dismiss_toasts,
     filter_button,
@@ -144,11 +145,13 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # 1. The Board filtered status:todo — via the URL, the shareable view.
         #    The filter is shared by every tab (UX round 3), so the URL never
         #    moves the tab by itself: open the Board, the query survives the switch.
-        todo = _get(base, "/api/tasks?status=todo")
-        todo_count = todo["count"]
+        # the Board's default scope is Mine (#396): a synced issue's task is not on it
+        todo = [t for t in _get(base, "/api/tasks?status=todo")["items"] if not t.get("issue_ref")]
+        todo_count = len(todo)
         page.goto(f"{base}/?status=todo")
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        board_mode(page, "status")
         expect(page).to_have_url(f"{base}/?status=todo")
         # the strip's filter button says what is on — its count, and its name
         # in words (#395) — so nothing needs the sheet open to read the state
@@ -167,11 +170,11 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(page.locator("#boardFilterText .filter-q")).to_have_attribute(
             "placeholder", f"Filter {todo_count} tasks…")
         # a real status pill narrows the columns: only Todo is up, holding the list
-        expect(page.locator("#paneBoard .board-col:not([hidden])")).to_have_count(1)
+        expect(page.locator("#paneBoard .board-status .board-col:not([hidden])")).to_have_count(1)
         rows = page.locator("#paneBoard .trow[data-id]")
         expect(rows).to_have_count(todo_count)
         shown = {int(i) for i in rows.evaluate_all("els => els.map(e => e.dataset.id)")}
-        assert shown == {t["id"] for t in todo["items"]}
+        assert shown == {t["id"] for t in todo}
         quotes = _trow(page, "Get three quotes", "#paneBoard")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-1-desktop.png")
@@ -307,7 +310,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(page.locator("#filterSheet .filter-checks[data-name='status'] input:checked")).to_have_count(0)
         close_filter_sheet(page)
         expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
-        new_row = _trow(page, "renew passport", "#paneBoard section.board-col[data-col='standby']")
+        new_row = _trow(page, "renew passport", "#paneBoard .board-status section.board-col[data-col='standby']")
         expect(new_row).to_be_visible()
         new_id = int(new_row.get_attribute("data-id"))
         created = _get(base, f"/api/tasks/{new_id}")
@@ -986,6 +989,8 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         page.goto(f"{base}/?status=todo")
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        # every todo task, the synced issue's included (#391's All scope)
+        page.locator("#boardScope .segmented-item[data-scope='all']").tap()
         rows = page.locator("#paneBoard .trow[data-id]")
         expect(rows).to_have_count(_get(base, "/api/tasks?status=todo")["count"])
         # the ONE shared row (circle + title, the one passive meta line with the
@@ -1141,6 +1146,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         # the sleeping seed task wears its marker wherever it still shows
         page.goto(f"{base}/?status=deferred")
         page.locator("nav.tabs .tab[data-tab='board']").tap()
+        board_mode(page, "status")
         page.locator("#paneBoard .board-strip-btn[data-col='todo']").tap()   # it is a todo task
         sleeping = _trow(page, "Book boiler service", "#paneBoard")
         expect(sleeping).to_be_visible()
