@@ -52,3 +52,32 @@ verified in the browser (e2e, desktop light). **Real phone not verified**: the g
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The phone swipe walk (story 07) runs on a Today row.
 
 **2026-10-05 (#350):** a touch screen draws no completion circle any more: a task closes by swiping it right, or by opening it and setting its status in the drawer (the non-gesture way, so WCAG 2.5.1 holds), and a closed one reopens from the drawer. A mouse, a trackpad and the keyboard keep the circle and `e`. The phone legs of stories 04, 05 and 07 assert the circle is hidden and that the open target and the ⋮ are the row's 44px targets; red first against the build that still drew it.
+
+## 2026-10-10 — the row on a budget, with Move as its verb (#392, redesign step 2/7)
+
+**Story.** Re-dating is most of what the owner does to a task, so it is the row's one visible verb. On a mouse or trackpad every open row outside the Board's columns carries **Move** (a calendar glyph on a 44px icon button between the title and the ⋯, unpainted at rest like the ⋯: the vendored `.action-row-verb` tint fails the rubric's COMP-05 on every row): one click opens the date sheet beside the row, one pick moves the task, with Undo. On the phone a swipe left opens the same sheet and a swipe right completes (the defaults since #311). Select mode keeps its shape, with **Move** as the bar's first action. The meta line is on a budget: due (repeat glyph folded in) · exception chips only, neutral (*Blocked* or the day a snooze ends, *Inbox* / *Standby* where the view does not say the status, *High*; no medium/low mark, no danger tone; overdue and due today in the attention tone) · one context name (the project when ungrouped, else the issue code), the only part the ellipsis may take on a phone · at most two counts. The folder, AI and issue glyphs and the person left the row: the ⋯ menu opens each link and the drawer shows them all.
+
+| # | Step | Expected |
+| --- | --- | --- |
+| 10 | Desktop Today (story 05, step 6b): look at a row, click its **Move**, pick *Tomorrow*, press Undo | The verb sits between the title and the kebab, 44px, within the action-row budget. The sheet opens beside the row with the push-outs first, each with its date; the pick moves the task off today's list with a `Due …` toast; Undo puts the date back |
+| 11 | Board Select mode (story 05, step 12): tick two rows, press the bar's first square (**Move**), pick *Next week* | The sheet is titled for the selection and offers *No date*; both tasks land on the date `GET /api/dates` gives for *next week* |
+| 12 | Phone (story 07): a row with every part the budget allows — overdue, blocked, standby, High, a long project name, a child and a comment, plus a folder and an AI link | At 390 px the chips read *Blocked · Standby · High* whole, both counts show, and only the project name is ellipsized (each part measured against its own max-content width once the web font is in). No folder, AI, issue or person glyph on the line; the ⋯ menu offers *Open folder*, *Open AI conversation* and *Move…*; no Move square on a touch screen |
+| 13 | Phone (story 07): swipe the row left, then right | Left opens the sheet titled *Move to a date*, nothing written; right completes with Undo, and Undo restores the status |
+
+**Everything still reachable from the row.**
+
+| Was on the row | Where it lives now |
+| --- | --- |
+| Folder glyph | ⋯ → *Open folder* · drawer *Folder* section |
+| AI conversation glyph | ⋯ → *Open AI conversation* (and *Resume in CLI* on a PC) · drawer *Links* |
+| Issue glyph | ⋯ → *Open issue repo#N* · drawer issue panel |
+| Person | drawer *Person* field · filter card *person* |
+| Code beside a project | drawer *Code* field (still on the row when there is no project) |
+| Medium / low priority mark | drawer *Priority* field · ⋯ → *Cycle priority* |
+| Bulk bar's native date picker | the bar's **Move** → date sheet → *Pick a date…* |
+
+**Proof.** [story-05-board-13-desktop.png](../screenshots/story-05-board-13-desktop.png) (Move's sheet beside a desktop row) · [story-07-phone-9-phone.png](../screenshots/story-07-phone-9-phone.png) (the full-budget row at 390 px) · [story-07-phone-10-phone.png](../screenshots/story-07-phone-10-phone.png) (the sheet on the phone). Tests: `tests/e2e/test_story_05_board.py` steps 6b and 12 plus the phone bar leg, `tests/e2e/test_story_07_phone.py` (`_walk_row_tap_targets`), and the reworked meta assertions in stories 04, 08, 09, 10 and 20; no new test file, the suite stays at 16. The 390 px budget check was proven red first: on the build that let the chips shrink by weight it reported all three chips cut (each a fraction of a pixel short, which is what paints "Block…"), and two weaker checks (integer `scrollWidth`, text range extents) had passed over that same build, so the check measures each part against its own max-content width after the web font loads.
+
+**Design measure (seeded pre-check, rubric 1.18.0, 66/66 screens):** A 97.83, failing TYPE-01 and COMP-02 only, both already failing in the post-#391 baseline (A 96.83). A first build that used the vendored `.action-row-verb` tint failed COMP-05 (an icon-only button painted at rest) on 38 desktop rows, so the verb is an unpainted icon button; the contradiction between that recipe and the rubric is filed upstream (project-scaffolding#347).
+
+**Result.** verified in the browser: e2e desktop and phone (light), headed walk of stories 05 and 07 on a disposable seeded instance (invented data only; no real task was written). **Not verified:** the swipe and the Move sheet on a real iPhone, and dark mode on a real phone; the owner's checklist above still applies. On a Board column narrowed by the open drawer the chips and counts ellipsize once the project name is gone (the Board is rebuilt in step 6/7). Date: 2026-10-10.

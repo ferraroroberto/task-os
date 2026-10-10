@@ -9,29 +9,28 @@
  *             task completes (a recurring one rolls to its next date), a
  *             closed one reopens; both through the shared action runner, so
  *             both come with Undo
- *   main      the title (one line, ellipsized) over ONE quiet meta line: due ·
- *             blocked or asleep · project · code · status (where the view does
- *             not imply it) · priority · then glyphs — recurrence,
- *             children, comments, folder, AI conversation, issue — and the
- *             person. Passive text: nothing on it is its own tap target, so
- *             the whole line opens the task
+ *   main      the title (one line, ellipsized) over ONE quiet meta line on a
+ *             budget (#392, `metaLine`): due · exception chips · one context
+ *             name · at most two counts. Passive text: nothing on it is its
+ *             own tap target, so the whole line opens the task
+ *   verb      Move — the one visible action, on a fine pointer (#392): the
+ *             date sheet, because re-dating is most of the owner's edits
  *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
- *             change date, snooze, priority, folder, AI, issue). Right-
+ *             move, snooze, priority, folder, AI, issue). Right-
  *             click and the keyboard's menu key open the same menu
  *
- * Select mode swaps the circle for the checkbox and drops the kebab: there the
- * row's one job is to tick and the bulk bar owns the actions. A view may pass an
- * `extra` line (a Search snippet, an AI suggestion) that
+ * Select mode swaps the circle for the checkbox and drops the verb and the
+ * kebab: there the row's one job is to tick and the bulk bar owns the actions.
+ * A view may pass an `extra` line (a Search snippet, an AI suggestion) that
  * wraps under the row — the row itself never changes shape. Flat hairlines
- * between rows, no per-row box, the priority accent on the left edge of a
- * high-priority row.
+ * between rows, no per-row box.
  */
 
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
 import {
-  STATUSES, blockedLabel, breadcrumbText, isBlocked, isDeferred, providerIcon, relDue, startsLabel,
+  STATUSES, blockedLabel, breadcrumbText, fmtDay, isBlocked, isDeferred, relDue, startsLabel, toneChip,
 } from './format.js';
 import { recurrenceLabel } from './recurrence.js';
 
@@ -101,56 +100,88 @@ function metaPart(cls, iconName, text, title) {
   return el;
 }
 
-/** Statuses the row never spells out: todo is the default, done is the circle. */
+/** An exception chip on the meta line (#392): the one tone chip (#391), its
+ *  text in a label that ellipsizes before the chip leaves the line. */
+function flagChip(cls, iconName, text, tone, title) {
+  const chip = toneChip('', tone);
+  chip.classList.add('trow-flag', 'trow-' + cls);
+  if (iconName) chip.innerHTML = icon(iconName);
+  const label = document.createElement('span');
+  label.className = 'chip-label';
+  label.textContent = text;
+  chip.appendChild(label);
+  if (title) chip.title = title;
+  return chip;
+}
+
+/** The statuses that are an exception on a row, and their chip's tone: the
+ *  status chip's own map (format.js). Todo is the default and done is the
+ *  circle; cancelled stays a quiet word (a closed row is already muted). */
+const STATUS_FLAGS = { inbox: 'accent', standby: 'neutral' };
 const QUIET_STATUSES = { todo: 1, done: 1 };
 
+function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
 /**
- * Build the meta line: one line of quiet text, only the parts with content.
- * A glyph stands for each link the task carries (folder, AI conversation,
- * issue) — what to *do* with it lives in the row menu (#311).
+ * Build the meta line (#392's budget): one quiet line that never loses a part
+ * to the ellipsis on a 390px phone —
+ *
+ *   due        relative, the repeat glyph beside it when the task recurs
+ *   flags      exception chips only, in the status chip's tone map: Blocked or
+ *              the day a snooze ends (blocked wins, #100), an Inbox / Standby
+ *              status where the view does not already say it, and High. No
+ *              mark for medium or low, and no danger tone: priority is a mode,
+ *              not an alarm
+ *   context    ONE name, the only part that ellipsizes: the project when the
+ *              view does not group by it, else the issue code
+ *   counts     at most two — child tasks and comments — kept outside the
+ *              ellipsis
+ *
+ * The link glyphs (folder, AI conversation, issue) and the person are not on
+ * the row: the row menu opens each link, the drawer shows all of them.
  * @param {object} t
  * @param {{hideProject?: boolean, hideStatus?: boolean}} [opts]
+ *        hideProject: the view's sub-header names the project (Today's groups);
  *        hideStatus: the view already says the status (the Board's columns)
  */
 export function metaLine(t, opts) {
   const o = opts || {};
   const meta = document.createElement('span');
   meta.className = 'trow-meta action-row-meta';
+  const recur = t.recurrence ? recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval) : '';
   if (t.due) {
     const rel = relDue(t.due);
     const due = metaPart('due' + (rel.tone ? ' due-' + rel.tone : ''), null, rel.text, t.due);
     // The ISO date as a value — Today reads it for the row's overdue tint.
     due.dataset.due = t.due;
+    if (recur) due.prepend(metaPart('recur', 'repeat', '', recur));
     meta.appendChild(due);
+  } else if (recur) {
+    meta.appendChild(metaPart('recur', 'repeat', '', recur));
   }
-  // Blocked wins over deferred (#100) — it's the harder gate: a task both
-  // asleep and blocked shows the lock, not the clock, wherever either still
-  // shows (a search hit, the Deferred/blocked filters). Right after
-  // the date, because it says when the task can be worked at all, and a
-  // narrow Board column must not ellipsize it away.
-  if (isBlocked(t)) meta.appendChild(metaPart('blocked', 'lock', blockedLabel(t), blockedLabel(t)));
-  else if (isDeferred(t)) meta.appendChild(metaPart('starts', 'clock', startsLabel(t.starts), 'starts ' + t.starts));
-  const project = t.root ? t.root.title : '';
+  // the clock says "snoozed until"; the words are on the tooltip, to keep the
+  // budget at 390px
+  if (isBlocked(t)) meta.appendChild(flagChip('blocked', null, 'Blocked', 'neutral', blockedLabel(t)));
+  else if (isDeferred(t)) {
+    meta.appendChild(flagChip('starts', 'clock', startsLabel(t.starts).replace(/^starts /, ''), 'neutral',
+      'Snoozed until ' + fmtDay(t.starts)));
+  }
+  if (!o.hideStatus && STATUS_FLAGS[t.status]) {
+    meta.appendChild(flagChip('state', null, sentence(t.status), STATUS_FLAGS[t.status], 'Status ' + t.status));
+  } else if (!o.hideStatus && !QUIET_STATUSES[t.status]) {
+    meta.appendChild(metaPart('state trow-ctx', null, t.status, 'Status ' + t.status));
+  }
+  if (t.priority === 'high') meta.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
+  const project = t.root && !o.hideProject ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
   // three levels down reads "Home renovation › Kitchen" on hover, #102)
-  if (project && !o.hideProject) meta.appendChild(metaPart('project', null, project, breadcrumbText(t.breadcrumb) || project));
-  if (t.code) meta.appendChild(metaPart('code', null, t.code, 'code'));
-  if (!o.hideStatus && !QUIET_STATUSES[t.status]) meta.appendChild(metaPart('state', null, t.status, 'status ' + t.status));
-  if (t.priority && t.priority !== 'none') meta.appendChild(metaPart('prio prio-' + t.priority, null, t.priority, 'priority ' + t.priority));
-  if (t.recurrence) meta.appendChild(metaPart('recur', 'repeat', '', recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval)));
-  if (t.child_count) meta.appendChild(metaPart('kids', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
+  if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
+  else if (t.code) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
+  if (t.child_count) meta.appendChild(metaPart('kids trow-count', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
   if (t.comment_count) {
-    meta.appendChild(metaPart('comments', 'message-square', String(t.comment_count),
+    meta.appendChild(metaPart('comments trow-count', 'message-square', String(t.comment_count),
       t.last_comment ? t.last_comment.author + ': ' + (t.last_comment.body || '') : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments')));
   }
-  if (t.folder_ref) meta.appendChild(metaPart('folder', 'folder', '', 'Folder ' + t.folder_ref));
-  if (t.ai_url) meta.appendChild(metaPart('ai', 'bot', '', 'AI conversation' + (t.ai_label ? ' — ' + t.ai_label : '')));
-  // the code already names the issue — no second mark for it
-  if (t.issue_ref && !t.code) {
-    const ref = t.issue_ref;
-    meta.appendChild(metaPart('issue', providerIcon(ref.provider), '', ref.repo + '#' + ref.number + ' · ' + (ref.state || 'state unknown')));
-  }
-  if (t.person) meta.appendChild(metaPart('person', 'user', t.person.name, t.person.name));
   return meta;
 }
 
@@ -174,6 +205,27 @@ function doneToggle(t, handlers) {
     Promise.resolve(handlers.onStatus(t.id, closed ? 'todo' : (t.recurrence ? 'complete' : 'done')))
       .catch(function () { /* the caller toasts the failure */ });
   });
+  return btn;
+}
+
+/**
+ * Move (#392): the row's one visible verb, because re-dating is most of what
+ * the owner does to a task — opening the date sheet beside the row. A plain
+ * 44px icon button like the kebab beside it, not the vendored
+ * `.action-row-verb`: that recipe paints a tint at rest, which the design
+ * rubric's COMP-05 fails on every row (the conflict is the scaffold's to
+ * settle: project-scaffolding#347). A fine pointer only (styles.css): a touch screen swipes the row
+ * left for the same sheet.
+ */
+function moveVerb(t, menu) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'icon-button trow-move';
+  btn.setAttribute('aria-label', 'Move ' + t.title + ' to another date');
+  btn.setAttribute('aria-haspopup', 'dialog');
+  btn.title = 'Move… (D)';
+  btn.innerHTML = icon('calendar-days');
+  btn.addEventListener('click', function () { menu.move(t, btn); });
   return btn;
 }
 
@@ -204,22 +256,25 @@ function rowKebab(t, menu, li) {
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
  *          onToggleSelect?: (id:number)=>void,
  *          menu?: {attach: (t:object, kebab:HTMLElement)=>void,
- *                  toggleDone: (t:object, el:HTMLElement)=>void}}} handlers
- *          menu (optional) is the view's row menu (rowmenu.js, #311) — the kebab
- *          and the circle both commit through it
+ *                  toggleDone: (t:object, el:HTMLElement)=>void,
+ *                  move: (t:object, el:HTMLElement)=>void}}} handlers
+ *          menu (optional) is the view's row menu (rowmenu.js, #311) — the kebab,
+ *          the circle and the Move verb all commit through it
  * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
- *          selected?: boolean, swipe?: boolean}} [opts]
+ *          selected?: boolean, swipe?: boolean, verb?: boolean}} [opts]
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on (#81): the checkbox replaces the
  *                       circle, the kebab goes, and the row gesture ticks;
- *          swipe      = false where the view owns the sideways swipe (the Board)
+ *          swipe      = false where the view owns the sideways swipe (the Board);
+ *          verb       = false where a column is too narrow for a third square
+ *                       (the Board's columns; the ⋯ menu and `d` still move)
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
   const li = document.createElement(o.tag || 'li');
-  li.className = 'trow action-row' + (t.priority === 'high' ? ' is-high' : '') + (CLOSED[t.status] ? ' is-closed' : '')
+  li.className = 'trow action-row' + (CLOSED[t.status] ? ' is-closed' : '')
     + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
   li.dataset.id = String(t.id);
   li.dataset.status = t.status;
@@ -259,6 +314,7 @@ export function taskRow(t, handlers, opts) {
   main.addEventListener('click', activate);
   li.appendChild(main);
 
+  if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.verb !== false) li.appendChild(moveVerb(t, handlers.menu));
   if (handlers.menu && !o.selectable) li.appendChild(rowKebab(t, handlers.menu, li));
   // A touch swipe runs a row action (swipe.js, #311) — an open task's row
   // only (a closed one's circle reopens it), never in Select mode, and not

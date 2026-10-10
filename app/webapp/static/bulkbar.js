@@ -5,12 +5,12 @@
  * stacking a third row above the board: the pane keeps its height, and on the
  * phone nothing lands near the floating bottom-nav pill.
  *
- *   ☑ 3 selected   [Set status…▾]   📅   🗑   ✕
+ *   ☑ 3 selected   📅 Move   [Set status…▾]   🗑   ✕
  *
  * One line, and every control the same square height as the strip's own
  * buttons. Two edits, both applying the moment they are given a value — the
- * same commit gesture the single-task controls use (the row's status select
- * applies on change; a picked date on change), so nothing here needs a Save
+ * same commit gesture the single-task controls use (a status applies on
+ * change; a date applies on its pick in the date sheet), so nothing here needs a Save
  * the rest of the app doesn't have. `complete` is offered alongside the plain
  * statuses because the selection may hold recurring tasks; the server decides
  * per task what it means (issue #54 semantics, applied in bulk). The third
@@ -24,9 +24,9 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { duePicker } from './dueinput.js';
 import { STATUSES } from './format.js';
 import * as selection from './selection.js';
+import { openDatePicker } from './snooze.js';
 
 const STATUS_PLACEHOLDER = '';
 
@@ -76,15 +76,21 @@ export function mountBulkBar(host, handlers) {
     status.appendChild(o);
   });
 
-  // Date = the native picker alone: the bar is one line on the strip, and a
-  // phrase box beside a status select would be the widest thing on it. The
-  // API still takes the natural phrases — the drawer and the CLI are where
-  // you type them.
-  const due = duePicker({
-    className: 'icon-button bulk-due',
-    title: 'Set the due date of the selected tasks',
-    ariaLabel: 'Set the due date of the selected tasks',
-    onPick: function (value) { apply({ due: value }, function () { due.picker.value = ''; }); },
+  // Move (#392) is the bar's first action, as it is the row's: the one date
+  // sheet every re-date opens (snooze.js) — the push-out phrases, Pick a date…
+  // and No date — so a selection moves the way a single row does.
+  const move = document.createElement('button');
+  move.type = 'button';
+  move.className = 'icon-button bulk-move';
+  move.title = 'Move the selected tasks…';
+  move.setAttribute('aria-label', 'Move the selected tasks to another date');
+  move.setAttribute('aria-haspopup', 'dialog');
+  move.innerHTML = icon('calendar-days');
+  move.addEventListener('click', function () {
+    if (busy) return;
+    const n = selection.size();
+    const subject = { title: n + ' selected task' + (n === 1 ? '' : 's'), due: null, clearable: true };
+    openDatePicker(subject, 'due', host, function (phrase) { apply({ due: phrase }, function () {}); });
   });
 
   // Delete (#121): the caller confirms and posts; this square only locks the
@@ -138,12 +144,12 @@ export function mountBulkBar(host, handlers) {
   }
 
   function setDisabled(on) {
+    move.disabled = on;
     status.disabled = on;
-    due.button.disabled = on;
     del.disabled = on;
   }
 
-  host.append(count, status, due.button, due.picker, del, exit);
+  host.append(count, move, status, del, exit);
 
   function render() {
     const n = selection.size();

@@ -4,7 +4,7 @@
  * vendored data-driven row-menu (project-scaffolding#317), and its items are
  * built here from two sources —
  *
- *   the ACTIONS table (actions.js)  complete / reopen, change date, snooze,
+ *   the ACTIONS table (actions.js)  complete / reopen, move, snooze,
  *                                   the statuses, priority — the same entries
  *                                   the keys, the palette and the swipes read,
  *                                   committed through the same runner, so a
@@ -41,6 +41,7 @@ const CLOSED = { done: 1, cancelled: 1 };
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          onOpen: (id:number) => void}} ctx
  * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
+ *            move: (t:object, el:HTMLElement) => void,
  *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
 export function createTaskMenu(ctx) {
@@ -51,7 +52,8 @@ export function createTaskMenu(ctx) {
    *  same row's new one, if the row stayed. */
   function refocus(t, el) {
     const pane = el.closest('.pane');
-    const which = el.classList.contains('trow-done') ? '.trow-done' : '.trow-kebab';
+    const which = el.classList.contains('trow-done') ? '.trow-done'
+      : el.classList.contains('trow-move') ? '.trow-move' : '.trow-kebab';
     return {
       afterRefresh: function () {
         if (!pane || pane.hidden) return;
@@ -133,6 +135,8 @@ export function createTaskMenu(ctx) {
     },
     /** The completion circle: complete an open task, reopen a closed one. */
     toggleDone: function (t, el) { run(actionById(CLOSED[t.status] ? 'reopen' : 'complete'), t, el); },
+    /** The row's Move verb (#392): the menu's Move…, one tap sooner. */
+    move: function (t, el) { run(actionById('change-date'), t, el); },
     endRender: function () { ctl.endRender(); },
     close: function () { ctl.close(); },
   };

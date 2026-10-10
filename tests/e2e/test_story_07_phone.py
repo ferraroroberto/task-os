@@ -22,9 +22,9 @@ allowed on screen). What a browser can prove of the story:
   overflow, ≥ 44 px targets on the nav pill + the column strip;
 - the slim row's tap targets (#311): the completion circle, the open target and
   the kebab — real 44px boxes that share no pixel, the kebab at the row's right
-  edge, the whole row ≤ 61px — while the date, folder and AI conversation on its
-  meta line are passive (no button, no link); the date is changed through the
-  kebab's "Change date" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
+  edge, the whole row ≤ 61px — while its meta line, on #392's budget (no part but
+  the project name cut at 390px; links in the menu), is passive; the date moves through the
+  kebab's "Move…" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
   rows run edge to edge;
 - the row's swipes, with synthetic touch pointers (#311): left opens the date
   sheet and writes nothing, a touch starting in the 20px edge zone is ignored,
@@ -80,6 +80,7 @@ from tests.e2e.conftest import (
     assert_control_boundaries,
     assert_date_sheet,
     e2e_workdir,
+    settle,
     shot,
 )
 
@@ -124,46 +125,95 @@ def authed_webapp() -> Iterator[str]:
 def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
     """The slim row's tap targets on a phone: done circle · open · kebab (#311, #107).
 
-    The row is `[circle] [title + one passive meta line] [kebab]`. The date,
-    folder and AI conversation on the meta line are plain spans — nothing on it
-    is a button or a link, so a tap anywhere in the middle opens the drawer and
-    the three real targets (the circle, the open button, the kebab) can never
-    share a pixel with a meta chip. Re-planning stays one menu away: the kebab's
-    "Change date" opens the shared date picker, which on a coarse pointer is the
-    `dialog#dateDialog` sheet (the phone's own surface, not the desktop popover).
+    The row is `[circle] [title + one passive meta line] [kebab]`. Nothing on
+    the meta line is a button or a link, so a tap anywhere in the middle opens
+    the drawer and the real targets (the open button, the kebab) can never
+    share a pixel with a meta chip. Re-dating is one gesture away: a swipe left,
+    or the kebab's "Move…", opens the shared date sheet, which on a coarse
+    pointer is the `dialog#dateDialog` sheet (the phone's own surface, not the
+    desktop popover).
 
-    The row it measures is built here rather than borrowed from the seed, and
-    deliberately bare — a date, a folder and an AI link, so the meta line is as
-    full as a real row's gets. Deleted again at the end.
+    The row it measures is built here rather than borrowed from the seed, with
+    every part #392's meta budget allows — so the 390px line is as full as a
+    real row's can get — and a folder and an AI link the budget keeps in the
+    menu. Deleted again at the end.
     """
     # Build the row *before* the only navigation: `page.request` talks to the
     # instance directly and needs no loaded document, and loading the app twice
     # in a row let WebKit abort the first load's fetches mid-flight — which the
     # `pageerror` assertion below then (intermittently) caught as a page error.
-    made = page.request.post(f"{base}/api/tasks", data=json.dumps({
+    def post(path: str, body: dict) -> dict:
+        res = page.request.post(f"{base}{path}", data=json.dumps(body), headers={"content-type": "application/json"})
+        assert res.ok, res.text()
+        return res.json()
+
+    # The row with every part #392's meta budget allows: a due date, a blocker,
+    # an exception status, High, a project with a long name (the one part that
+    # may ellipsize), a child task and a comment — plus a folder and an AI link,
+    # which the budget moves off the row and into its menu.
+    project = post("/api/tasks", {"title": "Garden irrigation controller and moisture sensor network rebuild"})
+    blocker = post("/api/tasks", {"title": "Order the sensor cable"})
+    task = post("/api/tasks", {
         "title": "Wire the moisture sensor",
         # overdue, so Today lists it: the phone's own list, and the one whose
         # rows swipe (the phone Board's columns swipe sideways already)
         "due": (E2E_ANCHOR - timedelta(days=1)).isoformat(),
         "folder_ref": "{user}/code/garden-bot",
-    }), headers={"content-type": "application/json"})
-    assert made.ok, made.text()
-    task = made.json()
-    page.request.post(f"{base}/api/tasks/{task['id']}/links", data=json.dumps({
+        "parent_id": project["id"], "status": "standby", "priority": "high",
+    })
+    post(f"/api/tasks/{task['id']}/links", {
         "url": "https://claude.ai/code/session_01SeedExampleTapTargets0", "label": "sensor session", "kind": "ai",
-    }), headers={"content-type": "application/json"})
+    })
+    post("/api/tasks", {"title": "Solder the header pins", "parent_id": task["id"]})
+    post(f"/api/tasks/{task['id']}/comments", {"body": "Cable arrives Thursday."})
+    post(f"/api/tasks/{task['id']}/blockers", {"blocker_id": blocker["id"]})
     try:
-        page.goto(f"{base}/")
+        # a blocked task is on Today only while its pill is pressed (#100)
+        page.goto(f"{base}/?status=standby,blocked")
         page.locator("nav.tabs .tab[data-tab='today']").tap()
         row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
         expect(row).to_be_visible()
-        # the meta line is passive: date, folder and AI are glyph/text spans
+        # the meta line is passive: text and chips, nothing to tap
         meta = row.locator(".trow-meta")
         expect(meta.locator(".trow-due")).to_have_count(1)
-        expect(meta.locator(".trow-folder")).to_have_attribute("title", "Folder {user}/code/garden-bot")
-        expect(meta.locator(".trow-ai")).to_have_attribute("title", re.compile(r"^AI conversation"))
         expect(meta.locator("button, a")).to_have_count(0)
         assert row.locator(".trow-due").evaluate("el => el.tagName") != "BUTTON", "the date is a control again"
+        # #392's budget: exception chips only, in the one neutral tone (no red
+        # mark, no medium/low mark); the link glyphs left the row for its menu
+        flags = meta.locator(".trow-flag")
+        expect(flags).to_have_text(["Blocked", "Standby", "High"])
+        assert set(flags.evaluate_all("els => els.map(e => e.dataset.tone)")) == {"neutral"}
+        expect(meta.locator(".trow-ctx")).to_have_text(project["title"])
+        expect(meta.locator(".trow-count")).to_have_text(["1", "1"])
+        expect(meta.locator(".trow-folder, .trow-ai, .trow-issue, .trow-person")).to_have_count(0)
+        # ... and at 390px nothing but the project name loses a pixel to the
+        # ellipsis: every other part ends inside the line, its text whole.
+        # Measured once the web font is in — the fallback is narrower and hid it.
+        settle(page)
+        cut = meta.evaluate("""m => { const edge = m.getBoundingClientRect().right;
+          // a part is cut when it ends past the line, or when the line gave it
+          // less than its own max-content width (an ellipsized chip label) —
+          // compared in subpixels against an out-of-flow clone: a chip a
+          // fraction of a pixel short already paints "Block…", and
+          // scrollWidth rounds that away
+          const narrow = el => {
+            const twin = el.cloneNode(true);
+            twin.style.cssText = 'position:absolute;visibility:hidden;width:max-content;flex:none';
+            m.appendChild(twin);
+            const want = twin.getBoundingClientRect().width;
+            twin.remove();
+            return el.getBoundingClientRect().width < want - 0.01; };
+          return Array.from(m.children).filter(p => !p.classList.contains('trow-ctx'))
+            .filter(p => p.getBoundingClientRect().right > edge + 0.5 || narrow(p))
+            .map(p => p.className + ' ' + p.textContent); }""")
+        assert cut == [], cut
+        expect(row.locator(".trow-move")).to_be_hidden()       # the verb is a fine pointer's; a phone swipes
+        row.locator(".trow-kebab").tap()
+        expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()
+        expect(page.locator(".row-menu [data-action='ai']")).to_be_visible()
+        expect(page.locator(".row-menu [data-action='change-date']")).to_contain_text("Move…")
+        row.locator(".trow-kebab").tap()
+        expect(page.locator(".row-menu")).to_have_count(0)
         # the real targets: 44px boxes that share no pixel, inside the card —
         # the open target and the kebab; a touch screen draws no completion
         # circle (#350: swipe right, or the drawer's status, closes a task)
@@ -187,14 +237,14 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
         shot(page, shots / "story-07-phone-9-phone.png")
 
-        # the date is changed through the kebab -> "Change date": on a coarse
+        # the date is changed through the kebab -> "Move…": on a coarse
         # pointer that is the dialog sheet, and its "Pick a date..." is the
         # reveal-and-click fallback (#50), since showPicker() opens nothing on touch
         row.locator(".trow-kebab").tap()
         page.locator(".row-menu [data-action='change-date']").tap()
         sheet = page.locator("dialog#dateDialog")
         expect(sheet).to_be_visible()
-        expect(sheet.locator("h2")).to_have_text("Change date")
+        expect(sheet.locator("h2")).to_have_text("Move to a date")
         expect(page.locator(".snooze-pop")).to_have_count(0)
         assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
         # the date sheet (#391): push-outs first, each phrase beside its date,
@@ -234,14 +284,14 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
         row.locator(".trow-main").evaluate(swipe, [300, 100])
         expect(sheet).to_be_visible()
-        expect(sheet.locator("h2")).to_have_text("Change date")
+        expect(sheet.locator("h2")).to_have_text("Move to a date")
         sheet.locator(".detail-close").tap()
         expect(sheet).to_be_hidden()
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
         row.locator(".trow-main").evaluate(swipe, [5, 250])
         expect(row.locator(".trow-reveal")).to_have_count(0)
         expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "todo"
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"
         row.locator(".trow-main").evaluate(swipe, [100, 300])
         toast = page.locator(".toast-success").last
         expect(toast).to_contain_text("Completed")
@@ -250,13 +300,15 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
         toast.locator(".toast-action").tap()
         expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "todo"
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"   # Undo puts the status back
         # Let the re-renders the writes kicked off finish before the row's task is
         # deleted below: pulling it out from under the in-flight GETs aborts
         # them, and WebKit reports an aborted request as a page error.
         page.wait_for_load_state("networkidle")
     finally:
-        page.request.delete(f"{base}/api/tasks/{task['id']}")
+        # the project takes the task and its child with it
+        page.request.delete(f"{base}/api/tasks/{project['id']}")
+        page.request.delete(f"{base}/api/tasks/{blocker['id']}")
 
 
 # ---------------------------------------------------------- phone story
@@ -352,15 +404,13 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
         page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
         expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #311: on the phone the row's folder is a passive glyph on the meta line
-        # (the ref says nothing at that size, so it lives in the title attribute);
-        # the row's targets are the circle, the open button and the kebab.
-        fglyph = kitchen.locator(".trow-meta .trow-folder")
-        expect(fglyph).to_be_visible()
-        assert "{onedrive}/house/kitchen" in (fglyph.get_attribute("title") or "")
+        # #392: the row's folder is off the meta line (its budget) — the folder
+        # opens from the row's menu, and the drawer shows it; the row's targets
+        # are the open button and the kebab.
+        expect(kitchen.locator(".trow-meta .trow-folder")).to_have_count(0)
         expect(kitchen.locator(".trow-meta button, .trow-meta a")).to_have_count(0)
-        # One glyph size on the meta line: the folder reads no heavier than the
-        # calendar or the repeat arrows beside it (round 2 of #74).
+        # One glyph size on the meta line: a count's glyph reads no heavier than
+        # the repeat arrows (round 2 of #74).
         sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
             "els => els.map(e => { const r = e.getBoundingClientRect();"
             " return [Math.round(r.width), Math.round(r.height)]; })")

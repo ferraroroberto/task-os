@@ -16,7 +16,8 @@
  * branch — instead of hand-rolling a third native-picker call site.
  *
  * A row action that asks for a date (the `s` and `d` keys, the ⋯ menu's
- * Snooze… and Change date…, a swipe) opens the same menu through
+ * Snooze… and Move…, a swipe, the desktop row's Move button and Select mode's
+ * Move, #392) opens the same menu through
  * `openDatePicker()`: anchored beside the row on a fine pointer, in the
  * vendored editor modal on a phone (#311's plan, question 5).
  *
@@ -95,9 +96,9 @@ const FIELDS = {
   },
   due: {
     options: DUE_OPTIONS,
-    name: function (t) { return 'Change the due date of ' + t.title; },
+    name: function (t) { return 'Move ' + t.title + ' to another date'; },
     pickName: function (t) { return 'Due date of ' + t.title + ': a date you pick'; },
-    heading: 'Change date',
+    heading: 'Move to a date',
   },
 };
 
@@ -153,7 +154,9 @@ export function dateMenu(t, field, onPick) {
   pick.button.appendChild(document.createTextNode('Pick a date…'));
   menu.append(pick.button, pick.picker);
 
-  if (field === 'due' && t.due) {
+  // `clearable`: a selection (#392) — its tasks' dates are not known here,
+  // so "No date" is always offered; clearing an undated task changes nothing
+  if (field === 'due' && (t.due || t.clearable)) {
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'snooze-opt snooze-clear';

@@ -147,7 +147,7 @@ export function bindSwipe(li, opts) {
   li.addEventListener('pointerdown', function (ev) {
     if (ev.pointerType !== 'touch' || !ev.isPrimary || live) return;
     if (!startAllowed(ev.clientX, window.innerWidth)) return;
-    if (ev.target.closest('button.trow-kebab, button.trow-done, .trow-extra')) return;
+    if (ev.target.closest('button.trow-kebab, button.trow-done, button.trow-move, .trow-extra')) return;
     live = li;
     start = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
     last = { x: ev.clientX, t: ev.timeStamp, vx: 0 };

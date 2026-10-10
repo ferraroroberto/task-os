@@ -162,13 +162,13 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
         expect(g.locator(".search-hit").first).to_be_visible()
     expect(page.locator("#searchMeta")).to_have_text(re.compile(r"^\d+ hits$"))   # no milliseconds anywhere
     # task hits are the ONE shared row — done circle + title + the passive meta
-    # line (no status word for "todo"; the folder is a glyph whose title names
-    # the ref) + the kebab
+    # line (no status word for "todo"; the folder is the row menu's, not a glyph —
+    # #392) + the Move verb + the kebab
     kitchen_hit = _task_hit(page, "Kitchen")
     expect(kitchen_hit.locator(".trow-title")).to_contain_text("Kitchen")
     expect(kitchen_hit).to_have_attribute("data-status", "todo")
     expect(kitchen_hit.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
-    expect(kitchen_hit.locator(".trow-meta .trow-folder")).to_have_attribute("title", re.compile(r"Folder .*kitchen"))
+    expect(kitchen_hit.locator(".trow-meta .trow-folder")).to_have_count(0)   # #392: the menu opens it
     expect(kitchen_hit.locator(".trow-kebab")).to_be_visible()
     # folder / email / issue hits are the same row shape (#48): a title line and
     # one muted meta line (inside .trow-main), no glyphs, no buttons — the title

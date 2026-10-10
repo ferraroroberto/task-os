@@ -14,7 +14,7 @@ v0.2" ↔ "Write sensor driver" pair, added for this issue) at 1440×900
 desktop, saving the proof shots the validation record links to:
 
     docs/screenshots/story-20-blocked-by-1-desktop.png   Board: no "Release v0.2" row
-    docs/screenshots/story-20-blocked-by-2-desktop.png   Search: locked hit, lock + "blocked by 1"
+    docs/screenshots/story-20-blocked-by-2-desktop.png   Search: locked hit, a neutral "Blocked" chip (#392)
     docs/screenshots/story-20-blocked-by-3-desktop.png   drawer: Blocked by section
     docs/screenshots/story-20-blocked-by-4-desktop.png   Board filtered to `blocked` — exactly one row
     docs/screenshots/story-20-blocked-by-5-desktop.png   drawer (dark): cycle rejected toast + the picker
@@ -89,7 +89,8 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
             tasks_group.locator("summary.collapse-summary").click()
         locked = _trow(page, "Release v0.2", "#paneSearch")
         expect(locked).to_be_visible()
-        expect(locked.locator(".trow-blocked")).to_have_text("blocked by 1")
+        expect(locked.locator(".trow-blocked")).to_have_text("Blocked")
+        expect(locked.locator(".trow-blocked")).to_have_attribute("title", "blocked by 1")
         expect(locked.locator(".trow-starts")).to_have_count(0)
         shot(page, shots / "story-20-blocked-by-2-desktop.png")
 
@@ -122,7 +123,7 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
         expect(rows).to_have_count(1)
         expect(rows.first).to_be_visible()   # not just present — the column it's in must not be hidden
         expect(rows.locator(".trow-title")).to_have_text("Release v0.2")
-        expect(rows.locator(".trow-blocked")).to_have_text("blocked by 1")
+        expect(rows.locator(".trow-blocked")).to_have_text("Blocked")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-20-blocked-by-4-desktop.png")
         card = _open_filters(page, "boardFilters")

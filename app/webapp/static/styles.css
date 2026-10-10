@@ -571,9 +571,9 @@ a.chip:hover { text-decoration: underline; }
 .status-word { color: var(--muted); font-size: var(--font-label); white-space: nowrap; }
 .status-word.is-cancelled { text-decoration: line-through; }
 
-/* Due tones: overdue = danger, today = attention (state, not decoration). */
-.due-overdue { color: var(--danger) !important; }
-.due-today { color: var(--attention) !important; }
+/* Due tones (#392's tone map): overdue and due today both need you soon —
+   attention text, never the danger tone, which means broken. */
+.due-overdue, .due-today { color: var(--attention-text) !important; }
 
 /* ------------------------------------------ section headers (#391) */
 /* A list's section header that only separates (Today's horizons): design.md's
@@ -975,9 +975,6 @@ a.chip:hover { text-decoration: underline; }
 .trow:has(.trow-meta) { min-height: var(--row-lg); }
 .trows > .trow:first-child { border-top: 0; }
 .trow:hover { background: var(--card-2); }
-/* The accent is painted inside the row, so it costs no width and moves
-   nothing — a Board column's ellipsis stays put. */
-.trow.is-high { box-shadow: inset 3px 0 0 var(--danger); }
 .trow.is-dragging { opacity: 0.5; }
 .trow.is-new { background: var(--accent-soft); }
 /* after :hover so a ticked row stays visibly ticked under the cursor (#81) */
@@ -1014,26 +1011,36 @@ a.chip:hover { text-decoration: underline; }
 .trow-meta > span { white-space: nowrap; }
 .trow-meta > span:not(:last-child)::after { content: "·"; margin: 0 6px; color: var(--muted); }
 .trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
-.trow-kids .icon, .trow-comments .icon, .trow-person .icon, .trow-blocked .icon, .trow-starts .icon { margin-right: 2px; }
+/* A task row's meta line on its budget (#392, rows.js `metaLine`): due ·
+   exception chips · one context name · at most two counts, laid out so the
+   ellipsis takes the context name first, and on a 390px phone only that. The
+   due never shrinks. The chips and counts shrink only once the name is gone
+   (a column narrower than a phone row: the Board's, beside the drawer) — the
+   name's 10^6 weight keeps their share of the squeeze below one layout unit
+   until then, where a plain weight still shaved a fraction of a pixel off each
+   chip, and a fraction is an ellipsis. The Search tab's folder / email / issue
+   hits keep the plain dotted line above. */
+.trow .trow-meta.action-row-meta { display: flex; align-items: center; gap: 4px; text-overflow: clip; }
+.trow-meta.action-row-meta > * { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.trow-meta.action-row-meta > .trow-due { flex: none; }
+.trow-meta.action-row-meta > span::after { content: none; }
+.trow-meta.action-row-meta > .trow-ctx { flex: 0 1000000 auto; text-overflow: ellipsis; }
+.trow-meta.action-row-meta > .trow-ctx:not(:first-child)::before { content: "·"; margin: 0 4px 0 2px; }
+/* The exception chips (#391's tone map): the meta line's own 14px, not the
+   chip's caption size, and a tighter box so the 60px row keeps its height. */
+.trow-meta .trow-flag { padding: 0 5px; font-size: inherit; line-height: 1.35; gap: 2px; }
+.trow-meta .trow-flag .icon { flex: none; vertical-align: 0; }
+.trow-count { display: inline-flex; align-items: center; gap: 2px; }
+.trow-count .icon { vertical-align: 0; }
+.trow-recur { margin-right: 2px; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .trow-due { color: var(--fg); }
-/* The sleeping marker (#87) — muted like the rest of the meta line: it is a
-   statement of fact, not a state to warn about, so it takes no status colour.
-   The locked marker (#100) takes the same treatment, and replaces it on the
-   line whenever both would otherwise show. */
-.trow-starts, .trow-blocked { color: var(--muted); }
-.trow-prio { text-transform: capitalize; }
-.trow-prio::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 3px;
-  vertical-align: 2px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.trow-prio.prio-high { color: var(--danger); }
+/* Move (#392): the row's one visible verb, an unpainted 44px icon button on
+   the kebab's box (rows.js says why it is not the tinted .action-row-verb), on
+   a fine pointer only — a touch screen swipes the row left for the same date
+   sheet, and the ⋯ menu holds Move… everywhere (WCAG 2.5.1). */
+.trow .trow-move { --icon-btn-box: var(--row-sm); }
+@media (pointer: coarse) { .trow-move { display: none; } }
 /* The completion circle (the vendored .action-row-fav): outline at rest, the
    check when closed. Done reads as success, not the favourite's attention. */
 /* The vendored action-row and icon-button colour the toggle 2-5 classes deep

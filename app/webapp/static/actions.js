@@ -109,7 +109,7 @@ export const ACTIONS = [
   },
   {
     id: 'change-date', key: 'd', kbd: 'D', icon: 'calendar-days', menu: 'due',
-    label: 'Change date…', hint: 'today · tomorrow · this weekend · next week · a date · no date',
+    label: 'Move…', hint: 'to another date: tomorrow · this weekend · next week · today · a date · no date',
     plan: function (tasks, phrase) { return oneGroup(tasks, { due: phrase }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
     applies: isOpen,

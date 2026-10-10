@@ -282,6 +282,8 @@ function buildRow(t, handlers, opts) {
     draggable: !o.selectable, selectable: o.selectable, selected: o.selected, hideStatus: true,
     // the phone Board's columns are a sideways carousel: a row swipe would fight it
     swipe: false,
+    // a column has no width for a third square beside the circle and the kebab
+    verb: false,
   });
   if (o.selectable) return li;
   if (o.suggestion) li.appendChild(suggestionStrip(o.suggestion, handlers));

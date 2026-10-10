@@ -124,7 +124,8 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Side project: garden-bot"])
         expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
         expect(row.locator(".trow-project")).to_have_text("Side project: garden-bot")
-        expect(row.locator(".trow-code")).to_have_text("garden-bot#14")
+        # one context name per row (#392): the project now, the code is the drawer's
+        expect(row.locator(".trow-code")).to_have_count(0)
         dismiss_toasts(page)
         shot(page, shots / "story-08-issues-3-desktop.png")
         page.keyboard.press("Escape")
