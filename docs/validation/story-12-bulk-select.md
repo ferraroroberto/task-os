@@ -35,3 +35,5 @@ Chrome against a disposable seeded instance (never the live `:8448`), light and 
 Result: **verified** (e2e desktop + phone legs · unit · headed desktop walk in both themes, including the partial-failure path) · real phone = owner's checklist. Date: 2026-08-29.
 
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The selection is carried to Today (the Table's checkbox column is gone); the bulk status, due and partial-failure steps run on the Board's bar.
+
+**2026-10-10 (#394):** the design walk opened Select mode for the first time and measured the row checkbox as a 16px (20px on touch) target. It now carries an invisible band to 44px, the filter multi-select's recipe, with side margins that keep the band off the row's open target. Measured by the design review (TOUCH-01 passes on every Select screen); no e2e change.

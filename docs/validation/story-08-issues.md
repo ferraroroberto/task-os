@@ -56,3 +56,5 @@
 **Result — 2026-09-09: verified.** All four drawer captures in this story now go through `tests/e2e/conftest.py`'s `scroll_to_bottom()` (settle → scroll → settle → accept only at the end with an unmoved height, else scroll again), and `docs/validation.md`'s capture rules carry it as rule 3. `scripts/shot_determinism` came back `0 moved` on three consecutive invocations.
 
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 3 files the task with the drawer's Move to instead of the Tree's drag.
+
+**2026-10-10 (#394):** the linked issue is one of the drawer's link pills, shown once (the `issue` link the link step stores is the same target, so the pill row does not repeat it); the issue panel with Unlink and the create / link forms is under More fields. Step 4 now proves the folded sync: the owner's Move to leads the activity log, the sync's rows are behind *Show N sync updates*, and the toggle brings them back. Result: **verified** (e2e desktop).

@@ -98,3 +98,5 @@ The story is unchanged (click a folder chip → Explorer opens **this** PC's syn
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Steps 1–3 click the drawer's folder chip: a row's folder glyph is passive since #311, and the grid's clickable chip went with the Table. Its one-time hint and the Settings hand-off are unchanged.
 
 **2026-10-05 (#339):** Escape on the folder popover closes the popover and stops there; the drawer under it stays open. The popover registered its Escape listener on first open, after app.js's document-level one, so the same key also closed the drawer. It now takes Escape in the capture phase while it is open. Step 2 presses Escape on the hint and checks the drawer and the `#task/N` hash survive, seen red first (the drawer closed).
+
+**2026-10-10 (#394):** steps 1–3 click the folder chip in the drawer's link pills, where it now leads; the Folder editor (step 4 on), the link editor (step 8) and the phone's two-line folder check (step 7) open More fields first. The AI chip of step 8 is clicked in the pills too. Result: **verified** (e2e desktop + phone).

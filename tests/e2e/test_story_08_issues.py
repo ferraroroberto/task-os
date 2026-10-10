@@ -30,7 +30,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, Page, expect
 
-from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot
+from tests.e2e.conftest import _get, dismiss_toasts, open_more_fields, scroll_to_bottom, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -96,6 +96,10 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
         expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
+        # the issue is one of the drawer's link pills (#394); its panel, with
+        # Unlink and the sync, is under More fields
+        expect(drawer.locator(".drawer-pill-row .chip-issue")).to_have_text("garden-bot#14")
+        open_more_fields(drawer)
         panel = drawer.locator(".drawer-issue")
         expect(panel.locator(".chip-issue")).to_have_text("garden-bot#14")
         expect(panel.locator(".chip-issue")).to_have_attribute("href", "https://github.com/example/garden-bot/issues/14")
@@ -141,9 +145,18 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         assert ("status", "todo", "done", "sync") in acts and ("issue_state", "open", "closed", "sync") in acts
         page.goto(f"{base}/#task/{sensor['id']}")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         expect(drawer.locator(".drawer-fields select[data-field='status']")).to_have_value("done")
         expect(panel.locator(".issue-state")).to_have_text("closed")
         expect(panel.locator(".chip-issue-closed")).to_be_visible()
+        # the sync's rows fold behind one toggle (#394, decision 7): the
+        # owner's own change (the Move to above) leads the log
+        expect(drawer.locator(".activity-row").first).to_have_attribute("data-field", "parent")
+        expect(drawer.locator(".activity-row[data-field='status']")).to_have_count(0)
+        sync_toggle = drawer.locator(".activity-sync-toggle")
+        expect(sync_toggle).to_have_text(re.compile(r"^Show \d+ sync updates$"))
+        sync_toggle.click()
+        expect(sync_toggle).to_have_text("Hide sync updates")
         row = drawer.locator(".activity-row[data-field='status']").first
         expect(row.locator(".activity-new")).to_have_text("done")
         expect(row.locator(".activity-meta")).to_contain_text("sync ·")
@@ -159,6 +172,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         assert plain["type"] == "task" and plain["issue_ref"] is None
         page.goto(f"{base}/#task/{plain['id']}")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         expect(panel.locator(".issue-create")).to_be_visible()
         expect(panel.locator(".issue-link")).to_be_visible()
         repo_input = panel.locator(".issue-create input")
@@ -166,7 +180,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         scroll_to_bottom(page, drawer)
         shot(page, shots / "story-08-issues-5-desktop.png")
         repo_input.fill("example/garden-bot")
-        panel.locator(".issue-create button[type='submit']").click()
+        panel.locator(".issue-create button").click()
         expect(page.locator(".toast-success").last).to_contain_text("Created example/garden-bot#15")
         expect(panel.locator(".chip-issue")).to_have_text("garden-bot#15")
         expect(panel.locator(".issue-state")).to_have_text("open")

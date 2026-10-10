@@ -805,6 +805,22 @@ def assert_date_sheet(menu: Locator, base: str) -> None:
     expect(opts.locator(".snooze-opt-date")).to_have_text([f"{d:%a} {d.day} {d:%b}" for d in days])
 
 
+def open_more_fields(drawer: Locator) -> Locator:
+    """Open the drawer's **More fields** (#394) and return the disclosure.
+
+    The rare fields and the editors (starts, repeat, person, code, Move to,
+    folder, link editor, blockers, children, issue panel) live there, closed
+    by default. It stays open for the page's life once opened, so on a page
+    that already opened it this only checks; a fresh load closes it again.
+    """
+    more = drawer.locator("details.drawer-more")
+    expect(more).to_be_attached()
+    if more.get_attribute("open") is None:
+        more.locator("summary").first.click()
+    expect(more).to_have_attribute("open", "")
+    return more
+
+
 def scroll_to_bottom(page: Page, target: Locator) -> None:
     """Park *target* at the end of its own scroll — and prove it stayed there.
 

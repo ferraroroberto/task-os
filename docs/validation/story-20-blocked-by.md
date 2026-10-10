@@ -34,3 +34,5 @@ verified (e2e walk on the seeded instance, screenshots read back, both themes re
 **Deliberate limits (from the issue):** edges only, no ordering/critical-path view, no auto-surfaced "next action" beyond the hide itself, no cross-project rollups, no unblock notification.
 
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 2 finds the locked task through Search; the Board under the `blocked` pill (step 4) is unchanged.
+
+**2026-10-10 (#394):** Blocked by moved under the drawer's More fields. Step 3 asserts the closed disclosure already names *1 blocker* in its summary, then opens it; the cycle walk opens it after each full load. Result: **verified** (e2e desktop).

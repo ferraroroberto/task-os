@@ -78,6 +78,7 @@ from tests.e2e.conftest import (
     _get,
     assert_date_sheet,
     dismiss_toasts,
+    open_more_fields,
     shot,
     text_contrast,
 )
@@ -224,6 +225,26 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         assert drawer_box["width"] >= 400
         shot(page, shots / "story-04-triage-3-desktop.png")
 
+        # 3b. Due leads the drawer with the date sheet's phrases as one-tap
+        #     moves (#394): push-outs first, each with the date it resolves to;
+        #     one tap re-dates, then the typed field puts the date back.
+        due_input = drawer.locator(".field-due input[data-field='due']")
+        moves = drawer.locator(".quick-moves")
+        assert_date_sheet(moves, base)
+        next_week = moves.locator(".snooze-opt[data-phrase='next week']")
+        pushed = next_week.locator(".snooze-opt-date").get_attribute("data-date")
+        next_week.click()
+        expect(due_input).to_have_value(pushed)
+        assert _get(base, f"/api/tasks/{task_id}")["due"] == pushed
+        expect(drawer.locator(".activity-row").first.locator(".activity-new")).to_have_text(pushed)
+        due_input.fill(new_due)
+        due_input.press("Enter")
+        expect(due_input).to_have_value(new_due)
+        assert _get(base, f"/api/tasks/{task_id}")["due"] == new_due
+        # the rare fields wait behind More fields, closed on a fresh load
+        expect(drawer.locator("details.drawer-more")).not_to_have_attribute("open", "")
+        expect(drawer.locator("input[data-field='starts']")).to_be_hidden()
+
         # 4. Add a comment containing a link → chip with href, newest first.
         # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
         # hint, quiet ghost Send (the Description Edit tier).
@@ -308,6 +329,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         family_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Family admin")
         new_row.locator(".trow-main").click()
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)   # Move to is a rare field (#394)
         expect(drawer.locator("select[data-field='parent']")).to_have_value("")   # top level
         drawer.locator("select[data-field='parent']").select_option(str(family_id))
         expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
@@ -325,6 +347,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         home_id = projects["Home renovation"]
         page.goto(f"{base}/#task/{home_id}")
         expect(drawer.locator("#drawerTitle")).to_have_value("Home renovation")
+        open_more_fields(drawer)
         drawer.locator("select[data-field='parent']").select_option(str(projects["Kitchen"]))
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{home_id}")["parent_id"] is None
@@ -456,6 +479,7 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     """
     review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
     page.goto(f"{base}/#task/{review['id']}")
+    open_more_fields(page.locator("#taskDrawer"))   # Repeat is a rare field (#394)
     cadence = page.locator("#taskDrawer select[data-field='recurrence']")
     anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
     expect(cadence).to_have_value("weekly")
@@ -506,6 +530,7 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     page.goto(f"{base}/")
     page.goto(f"{base}/#task/{review['id']}")
     drawer = page.locator("#taskDrawer")
+    open_more_fields(drawer)
     every = drawer.locator("input[data-field='recurrence_interval']")
     expect(every).to_have_value("")
     expect(drawer.locator(".field-unit")).to_have_text("weeks")
@@ -604,6 +629,7 @@ def _walk_hash_open_loads_once(page: Page, base: str) -> None:
     expect(drawer).to_be_visible()
     page.remove_listener("request", on_request)
     assert len(loads) == 1, f"one hash navigation loaded the task {len(loads)} times"
+    open_more_fields(drawer)   # Starts is a rare field (#394)
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
     starts_input.fill("")
     starts_input.blur()
@@ -920,10 +946,12 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert page.evaluate("localStorage.getItem('task-os.rowactions')") is None
     page.click("nav.tabs .tab[data-tab='today']")
 
-    # 5. The drawer edits Starts beside Due — the same control, one behaviour.
+    # 5. The drawer edits Starts with Due's control, one behaviour; Starts
+    #    sits under More fields since #394.
     page.goto(f"{base}/#task/{task_id}")
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    open_more_fields(drawer)
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
     expect(starts_input).to_be_visible()
     expect(drawer.locator(".field-due input[data-field='due']")).to_be_visible()
@@ -1053,8 +1081,11 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert box and box["width"] >= PHONE["width"] - 1 and box["height"] >= PHONE["height"] - 1, box
         assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "hidden"
         assert_min_target(drawer.locator(".drawer-close"))
-        assert_min_target(drawer.locator(".field-control"))
+        assert_min_target(drawer.locator(".field-control:visible"))
         assert_min_target(drawer.locator(".comment-send"))
+        # the quick moves are two by two on the phone, each a whole target (#394)
+        assert_min_target(drawer.locator(".quick-move"))
+        assert_no_overlap(drawer.locator(".quick-move"))
         # UX round 2 (#32): the composer keeps the Ctrl+Enter hint; Send stays
         # on the Description "Edit" tier (ghost, same rendered height).
         expect(drawer.locator(".comment-input")).to_have_attribute(
@@ -1064,6 +1095,10 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-04-triage-10-phone.png")
+        # …and every field under More fields is a whole target too, once opened
+        open_more_fields(drawer)
+        assert_min_target(drawer.locator(".field-control"))
+        assert_no_horizontal_overflow(page)
         drawer.locator(".drawer-close").tap()
         expect(drawer).to_be_hidden()
         assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
@@ -1113,6 +1148,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         page.goto(f"{base}/#task/{review['id']}")
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
+        open_more_fields(drawer)
         every = drawer.locator("input[data-field='recurrence_interval']")
         expect(every).to_have_value("7")
         expect(every).to_have_attribute("inputmode", "numeric")

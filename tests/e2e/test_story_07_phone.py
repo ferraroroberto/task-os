@@ -458,12 +458,13 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
         # Step 9: the chip is a taskos:// link (the per-PC opener); on a phone a
         # tap shows the path to copy instead of navigating (story 09 walks that).
-        chip = drawer.locator(".drawer-folder .chip-folder").first
+        # The folder leads the drawer's row of link pills, the links after it (#394).
+        chip = drawer.locator(".drawer-pill-row .chip-folder").first
         expect(chip).to_be_visible()
         expect(chip).to_have_text("kitchen")  # last segment; full ref lives in the title
         assert chip.evaluate("el => el.tagName") == "A"
         assert (chip.get_attribute("href") or "").startswith("taskos://open?ref=%7Bonedrive%7D")
-        link_chip = drawer.locator(".drawer-links .chip-folder").first
+        link_chip = drawer.locator(".drawer-pill-row .chip-folder", has_text="Kitchen folder")
         expect(link_chip).to_have_text(re.compile("Kitchen folder"))
         assert "{onedrive}/house/kitchen" in (link_chip.get_attribute("title") or "")   # the unresolved ref, per PC
         assert_min_target(drawer.locator(".drawer-close"))
