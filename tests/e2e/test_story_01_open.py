@@ -30,17 +30,23 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import assert_control_boundaries, shot
+from tests.e2e.conftest import (
+    assert_control_boundaries,
+    close_settings_sheet,
+    open_settings_sheet,
+    shot,
+)
 
-# Four destinations: the Table tab (grid and Tree) went in #350. Today leads,
-# and is where a first visit opens (#319).
-TABS = ["Today", "Board", "Archive", "Search"]   # Settings is the header gear (#281)
-VIEWS = ["today", "board", "archive", "search"]  # the tabs' data-tab ids, in TABS order
+# Three destinations: the Table tab (grid and Tree) went in #350, the Archive
+# tab into Settings → Email archiving in #397. Today leads, and is where a first
+# visit opens (#319).
+TABS = ["Today", "Board", "Search"]   # Settings is the header gear (#281)
+VIEWS = ["today", "board", "search"]  # the tabs' data-tab ids, in TABS order
 HEADINGS = dict(zip(VIEWS, TABS, strict=True))             # what the header names each view (#339)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
-WIDE_VIEWS = ["board", "today", "archive"]
+WIDE_VIEWS = ["board", "today"]
 MEASURED_VIEWS = ["search", "settings"]
 
 
@@ -204,8 +210,8 @@ def _pane_width(page: Page, tab: str) -> float:
         pane = page.locator("#paneSettings")
         pane.wait_for()
         expect(page.locator(".home-head h1.home-title")).to_have_text("Settings")
-        # the install card's summary says what it is in words, not "schema v17" (#339)
-        expect(page.locator("#settingsSite")).to_have_text(re.compile(r"^database version \d+$"))
+        # the Database row's value says what it is in words, not "schema v17" (#339)
+        expect(page.locator("#settingsSite")).to_have_text(re.compile(r"^version \d+$"))
         return pane.evaluate("el => el.getBoundingClientRect().width")
     page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
     pane = page.locator("[role=tabpanel]:not([hidden])")
@@ -232,15 +238,35 @@ def _assert_widths(page: Page) -> None:
     for tab in MEASURED_VIEWS:
         width = _pane_width(page, tab)
         assert MEASURE - 1 <= width <= MEASURE + 1, f"{tab} is one-dimensional and must hold the {MEASURE}px measure, got {width}px"
+    # Master-detail (#397, design.md Layout): a Settings sheet is the detail pane
+    # beside the list, list : detail = 1 : 1.5, side by side and never over it…
+    open_settings_sheet(page, "issues")
+    list_box = page.locator("#paneSettings").bounding_box()
+    sheet_box = page.locator("#settingsSheet").bounding_box()
+    assert list_box and sheet_box
+    assert list_box["x"] + list_box["width"] <= sheet_box["x"], (list_box, sheet_box)
+    assert 1.3 <= sheet_box["width"] / list_box["width"] <= 1.7, (list_box, sheet_box)
+    expect(page.locator("#paneSettings [data-settings-sheet='issues']")).to_have_attribute("aria-current", "true")
+    close_settings_sheet(page)
+    assert MEASURE - 1 <= page.locator("#paneSettings").bounding_box()["width"] <= MEASURE + 1
+    # …but the Email archiving report (the Archive tab until then) is a
+    # nine-column table: two-dimensional, so its sheet spans the content width.
+    open_settings_sheet(page, "archive")
+    sheet_box = page.locator("#settingsSheet").bounding_box()
+    nav_box = page.locator("nav.tabs").bounding_box()
+    assert sheet_box and nav_box
+    assert sheet_box["width"] >= (DESKTOP["width"] - nav_box["width"]) * 0.9, (sheet_box, nav_box)
+    close_settings_sheet(page)
 
 
 def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
-    """Settings' Command palette card opens the palette (#316): Ctrl+K has no
-    phone equivalent since the header lost its palette button (#301). Leaves the
-    palette closed and the card shut, as it found them."""
+    """Settings → Command palette opens the palette (#316): Ctrl+K has no phone
+    equivalent since the header lost its palette button (#301). Escape closes
+    the palette and leaves the sheet under it (#397); Done closes the sheet, as
+    it found them."""
     press = page.tap if tap else page.click
     expect(page.locator("#paneSettings")).to_be_visible()
-    press("#paletteCard summary")
+    open_settings_sheet(page, "palette", tap=tap)
     expect(page.locator("#paletteOpen")).to_be_visible()
     if tap:
         assert_min_target(page.locator("#paletteOpen"))
@@ -249,7 +275,10 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     expect(page.locator("#paletteInput")).to_be_focused()
     page.keyboard.press("Escape")
     expect(page.locator("#palette")).not_to_be_visible()
-    press("#paletteCard summary")
+    expect(page.locator("#paletteOpen")).to_be_visible()
+    press("#settingsSheet .settings-sheet-done")
+    expect(page.locator("#settingsSheet")).to_be_hidden()
+    expect(page.locator("#paneSettings")).to_be_visible()
 
 
 #: The root font-size each Text size step computes to (text-size.css: 93.75% /
@@ -287,7 +316,8 @@ def _walk_tab_during_boot(page: Page, webapp: str) -> None:
 
 
 def _walk_text_size(page: Page, *, tap: bool) -> None:
-    """Settings' Text size card (#314): the escape from the viewport zoom lock.
+    """Settings' Text size row (#314), changed in place since #397: the escape
+    from the viewport zoom lock.
 
     Each step changes the root font-size, the choice is stored and stamped before
     first paint on reload, an unreadable value falls back to default, and Large
@@ -298,7 +328,6 @@ def _walk_text_size(page: Page, *, tap: bool) -> None:
     expect(page.locator("#paneSettings")).to_be_visible()
     assert root_px() == TEXT_STEPS["default"]
     expect(html).to_have_attribute("data-textsize", "default")
-    press("#textSizeCard summary")
     expect(page.locator("#textSizeControl")).to_be_visible()
     if tap:
         assert_min_target(page.locator("#textSizeControl .range-tab"))
@@ -308,7 +337,6 @@ def _walk_text_size(page: Page, *, tap: bool) -> None:
         assert root_px() == px, (step, root_px())
         expect(page.locator(f"#textSizeControl [data-textsize='{step}']")).to_have_attribute("aria-pressed", "true")
         expect(page.locator("#textSizeControl .range-tab.active")).to_have_count(1)
-        expect(page.locator("#textSizeMeta")).to_have_text(step.capitalize())
         assert_no_horizontal_overflow(page)
     # Large is the last step taken: it is stored, and the next load already wears it.
     assert page.evaluate("localStorage.getItem('task-os.textsize')") == "large"
@@ -362,7 +390,7 @@ def _phone_leg(webapp: str, playwright: Playwright, shots: Path, sha: str) -> No
         assert _theme(page) == "dark"
         # The palette has a way in without a hardware keyboard (#316).
         page.tap("#settingsBtn")
-        assert_min_target(page.locator("#paletteCard summary"))
+        assert_min_target(page.locator("#paneSettings [data-settings-sheet]"))
         _open_palette_from_settings(page, tap=True)
         _walk_text_size(page, tap=True)
         context.close()

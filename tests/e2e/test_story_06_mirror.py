@@ -4,7 +4,7 @@
     editor, change ``due:`` and append a comment line → within seconds the
     app shows both, log actor ``md`` → make a conflicting edit → the conflict
     is recorded as a mirror event (issue #84) — visible on the Settings
-    card, nothing added to the task's own comment thread — the backup folder
+    sheet, nothing added to the task's own comment thread — the backup folder
     holds a dated ``.db`` copy → a malformed file is skipped and reported,
     never fatal.
 
@@ -13,11 +13,11 @@ Walks the story against the **mirrored** disposable instance (conftest
 a temp folder — never a real synced folder) at 1440×900 Chromium, saving the
 proof shots the validation record links to:
 
-    docs/screenshots/story-06-mirror-1-desktop.png   Settings card: mirror + backup on
+    docs/screenshots/story-06-mirror-1-desktop.png   Settings sheet: mirror + backup on
     docs/screenshots/story-06-mirror-2-desktop.png   drawer: the comment typed in the file, origin md
     docs/screenshots/story-06-mirror-3-desktop.png   drawer: activity due old → new by md
-    docs/screenshots/story-06-mirror-4-desktop.png   Settings card: the import conflict, inspect + clear
-    docs/screenshots/story-06-mirror-5-desktop.png   Settings card: backup file + a skipped file (dark)
+    docs/screenshots/story-06-mirror-4-desktop.png   Settings sheet: the import conflict, inspect + clear
+    docs/screenshots/story-06-mirror-5-desktop.png   Settings sheet: backup file + a skipped file (dark)
 
 The "editor" is the test writing the file — the headed walk in
 ``docs/validation/story-06-mirror.md`` does it in a real editor beside the app.
@@ -34,7 +34,7 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get, shot
+from tests.e2e.conftest import _get, open_settings_sheet, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -82,15 +82,14 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
     try:
         page = context.new_page()
 
-        # 1. Settings → the card reports both services on, pointing at the temp folders.
+        # 1. Settings → Mirror and backup reports both services on, pointing at the temp folders.
         page.goto(f"{base}/")
-        page.click("#settingsBtn")
-        card = page.locator("#mirrorCard")
+        card = open_settings_sheet(page, "mirror")
         expect(card.locator("#statusMirror .status-ok")).to_have_text("enabled")
         expect(card.locator("#statusMirror")).to_contain_text(str(inst.mirror_dir))
         expect(card.locator("#statusMirror")).to_contain_text(f"{n_tasks} file(s)")
         expect(card.locator("#statusBackup .status-ok")).to_have_text("enabled")
-        expect(card.locator("#mirrorCardMeta")).to_have_text("both on")
+        expect(page.locator("#mirrorCardMeta")).to_have_text("both on")   # the row's value (#397)
         shot(page, shots / "story-06-mirror-1-desktop.png")
 
         # 2. "Open the file in an editor": change due: and append a comment line.
@@ -160,11 +159,10 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         # the drawer's newest comment is still the one typed in step 3 — the conflict added no comment
         expect(drawer.locator(".comment").first.locator(".comment-body")).to_contain_text("checked the tiles supplier")
 
-        # The diagnostic surfaces on the Settings card instead — inspect, then clear it.
+        # The diagnostic surfaces on the Settings sheet instead — inspect, then clear it.
         page.keyboard.press("Escape")  # close the drawer first — it overlays the tab panel
         expect(drawer).to_be_hidden()
-        page.click("#settingsBtn")
-        card.locator("summary.collapse-summary").click()  # the disclosure starts collapsed
+        open_settings_sheet(page, "mirror")
         expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
         expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
         shot(page, shots / "story-06-mirror-4-desktop.png")

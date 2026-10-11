@@ -1,18 +1,19 @@
 """Story 24 — the mail surface: what needs me becomes a task, the rest gets filed.
 
     Flag an email in Outlook and archive it as usual → Settings' *Capture into
-    Inbox* card lands it as an Inbox task carrying its ``.msg`` chip (#98) →
-    then, for everything that only needs filing, the **Archive** tab: one
+    Inbox* sheet lands it as an Inbox task carrying its ``.msg`` chip (#98) →
+    then, for everything that only needs filing, Settings → **Email
+    archiving** (the Archive tab until #397): one
     button runs the batch (#157) with the local model picking the folder
     (#158), the report appears row by row, and each row offers the review level
     its own state allows — *accept* what needed a human, *file / move* into a
     ranked candidate or any other folder with a one-line hint, *revert* a mail
     back into the Inbox, *retry* the one whose file was written before Outlook
     refused the move (#159, #174 — a mail the archiver's index already has and
-    the Inbox still holds is finished by the run itself). Settings carries the
-    same block as a card of
-    its own, so the Settings tab stays the one complete picture of what this
-    install can do — and can start a run without leaving it (#167).
+    the Inbox still holds is finished by the run itself). The Settings row
+    carries the run's word and the Settings header what it left for a human, so
+    Settings stays the one complete picture of what this install can do (#167,
+    #397).
 
 One instance, because one index feeds both halves: the archiver's ``emails.db``
 is what capture reads, and the archiver's ``main_batch.py`` is what the run
@@ -34,9 +35,9 @@ the WhatsApp replay, the pre-flag *not configured* reason) is unit-level in
 1440×900 Chromium then a 390-wide touch context, saving the proof shots the
 validation record links to:
 
-    docs/screenshots/story-24-archive-1-desktop.png   Capture card after "Check now"
+    docs/screenshots/story-24-archive-1-desktop.png   Capture sheet after "Check now"
     docs/screenshots/story-24-archive-2-desktop.png   the captured task's .msg chip
-    docs/screenshots/story-24-archive-3-desktop.png   Archive tab, nothing run yet
+    docs/screenshots/story-24-archive-3-desktop.png   Email archiving sheet, nothing run yet
     docs/screenshots/story-24-archive-4-desktop.png   the report: filed · needs you · failed
     docs/screenshots/story-24-archive-5-desktop.png   filing a needs-you mail, hint typed
     docs/screenshots/story-24-archive-6-desktop.png   after the review round (dark)
@@ -44,8 +45,9 @@ validation record links to:
                                                       picker, bulk button and reviewed row)
     docs/screenshots/story-24-archive-8-phone.png     one card's review menu and its
                                                       *File it…* panel (dark)
-    docs/screenshots/story-24-archive-9-desktop.png   Settings' archiving card after the run
-    docs/screenshots/story-24-archive-9-phone.png     the same card at 390 (dark)
+    docs/screenshots/story-24-archive-9-desktop.png   Settings after the run: the row's word,
+                                                      the header's "needs you"
+    docs/screenshots/story-24-archive-9-phone.png     the same list at 390 (dark)
     docs/screenshots/story-24-archive-10-phone.png    *Retry* on the mail whose move was
                                                       refused, in its review menu (dark)
 """
@@ -76,8 +78,10 @@ from tests.e2e.conftest import (
     _terminate,
     assert_action_row_budget,
     board_mode,
+    close_settings_sheet,
     dismiss_toasts,
     e2e_workdir,
+    open_settings_sheet,
     shot,
 )
 from tests.fixtures.archiver_fake import (
@@ -251,16 +255,6 @@ def _post_status(base: str, path: str, body: dict) -> int:
         return int(exc.code)
 
 
-def _open_card(page: Page, card_id: str):
-    """A Settings card is a collapsed disclosure (#46) — open it like a user would."""
-    card = page.locator(f"#{card_id}")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
-
-
 def _row(page: Page, message_id: str, items: list[dict]):
     """The report row for one mail, by the item id the API gave it."""
     item = next(i for i in items if i["message_id"] == message_id)
@@ -321,7 +315,7 @@ def _pin_scroller(page: Page) -> None:
     control inside the panel can nudge the scroller — enough to reframe a shot
     between two runs of one commit (rule 3 in `docs/validation.md`).
     """
-    scroller = page.locator("#paneArchive .table-scroll")
+    scroller = page.locator("#archiveCard .table-scroll")
     scroller.evaluate("el => { el.scrollLeft = 0; }")
     assert scroller.evaluate("el => el.scrollLeft") == 0
 
@@ -350,14 +344,13 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     page.goto(base + "/")
 
     # ---------------------------------------------------------------- capture
-    # 1. Settings → the Capture card is on, and "Check now" lands the two
+    # 1. Settings → Capture into Inbox is on, and "Check now" lands the two
     #    flagged mails as Inbox tasks (the on-screen half of story 21).
-    page.get_by_role("button", name="Settings", exact=True).click()
-    card = _open_card(page, "captureCard")
-    expect(card.locator("#captureCardMeta")).to_have_text("on")
+    card = open_settings_sheet(page, "capture")
+    expect(page.locator("#captureCardMeta")).to_have_text("on")          # the row's word (#397)
     expect(card.locator("#statusCaptureRun")).to_have_text("not yet")
     card.locator("#captureRunNow").click()
-    expect(card.locator("#captureCardMeta")).to_have_text("checked")
+    expect(page.locator("#captureCardMeta")).to_have_text("checked")
     expect(card.locator("#statusCaptureRun")).to_contain_text("2 flagged · 2 new")
     shot(page, shots / "story-24-archive-1-desktop.png")
 
@@ -383,16 +376,17 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(drawer).to_be_hidden()
 
     # ---------------------------------------------------------------- archive
-    # 3. The Archive tab before anything has run: configured, the model named,
+    # 3. Settings → Email archiving (the Archive tab until #397) before anything
+    #    has run: configured, the model named, where it lives and its threshold,
     #    the bound empty (= the whole Inbox), and no run to show.
-    page.get_by_role("tab", name="Archive").click()
-    pane = page.locator("#paneArchive")
-    expect(pane).to_be_visible()
+    pane = open_settings_sheet(page, "archive")
     expect(pane.locator("#statusArchive .status-ok")).to_have_text("ready")
     # the reading is in words, not config ids (#339): the model by name, the batch in mails
     expect(pane.locator("#statusArchive")).to_contain_text("sorted by Claude Haiku · 8 mails a batch")
     expect(pane.locator("#statusArchiveRun")).to_have_text("never")
     expect(pane.locator("#statusArchiveRecent")).to_have_text("no finished run yet")
+    expect(pane.locator("#statusArchiveRepo code")).to_have_text(str(inst.repo))
+    expect(pane.locator("#statusArchiveThreshold")).to_contain_text("70%")
     expect(pane.locator("#archiveLimit")).to_have_value("")
     expect(pane.locator("#archiveRun")).to_be_enabled()
     expect(pane.locator("#archiveHost .empty-state-message")).to_contain_text("No run yet")
@@ -474,7 +468,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # #339: the table fits the window, so every row's ⋮ is on screen rather
     # than scrolled past the right edge
-    scroller = page.locator("#paneArchive .table-scroll")
+    scroller = page.locator("#archiveCard .table-scroll")
     fit = scroller.evaluate("el => [el.scrollWidth, el.clientWidth]")
     assert fit[0] <= fit[1] + 1, f"the Archive grid scrolls sideways at {DESKTOP['width']}px: {fit}"
 
@@ -608,9 +602,9 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     _pin_scroller(page)
     shot(page, shots / "story-24-archive-6-desktop.png")
 
-    # 9. What the run left for a human is named where the tab is reached:
-    #    the palette's Go to Archive, the same way every other destination is
-    #    reached. The Board's Inbox column carried a pointer too, until the
+    # 9. What the run left for a human is named where the sheet is reached:
+    #    the palette's Go to Archive, which opens Settings → Email archiving
+    #    (#397). The Board's Inbox column carried a pointer too, until the
     #    mail tools left the task columns (#396).
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
@@ -620,37 +614,31 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     page.fill("#paletteInput", ">go to archive")
     expect(page.locator("#palette")).to_contain_text("3 mail(s) from the last run need you")
     page.keyboard.press("Enter")
-    expect(page.locator("#paneArchive")).to_be_visible()
+    acard = page.locator("#archiveCard")
+    expect(acard).to_be_visible()
+    expect(page).to_have_url(re.compile(r"#settings/archive$"))
 
-    # 9b. Settings gets the same one-card picture every other service has
-    #     (#167): what the archiver is, what the model works with, where the
-    #     threshold sits and what the last run did — read from the very block
-    #     the tab renders, plus the way back to it.
-    page.get_by_role("button", name="Settings", exact=True).click()
-    acard = _open_card(page, "archiveCard")
-    expect(acard.locator("#archiveCardMeta")).to_have_text("on")
-    expect(acard.locator("#statusArchiveRepo .status-ok")).to_have_text("ready")
-    expect(acard.locator("#statusArchiveRepo code")).to_have_text(str(inst.repo))
-    expect(acard.locator("#statusArchiveModel")).to_contain_text("per batch")
-    expect(acard.locator("#statusArchiveThreshold")).to_contain_text("70%")
-    expect(acard.locator("#statusArchiveLast")).to_contain_text(
-        "7 mail(s) · 3 filed · 3 need you · 1 failed"
-    )
+    # 9b. Settings gives the archiver the picture every other service has
+    #     (#167, #397): the row's word, read from the very block the sheet
+    #     renders, and the header naming what the last run left for a human.
+    #     The sheet's Done goes back to the list.
+    close_settings_sheet(page)
+    expect(page.locator("#paneSettings")).to_be_visible()
+    expect(page.locator("#archiveCardMeta")).to_have_text("on")
+    expect(page.locator("#homeHeadStatus")).to_contain_text("3 mails need you")
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
-    acard.locator("#archiveOpenTab").click()
-    expect(page.locator("#paneArchive")).to_be_visible()
 
-    # 10. Phone: five destinations in the pill (Settings is the gear, #281), and the report as cards whose
+    # 10. Phone: three destinations in the pill (Settings is the gear, #281;
+    #     Email archiving one of its rows, #397), and the report as cards whose
     #     actions live behind each row's own menu — the grid does not fit here.
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True,
                                 has_touch=True, color_scheme="light")
     phone.add_init_script(INTERCEPT)
     p = phone.new_page()
     p.goto(base + "/")
-    expect(p.locator("nav.tabs .tab")).to_have_count(4)
-    p.get_by_role("tab", name="Archive").tap()
-    expect(p.locator("#paneArchive")).to_be_visible()
+    expect(p.locator("nav.tabs .tab")).to_have_count(3)
+    open_settings_sheet(p, "archive", tap=True)
     expect(p.locator(".archive-card")).to_have_count(7)
     expect(p.locator(".archive-table")).to_have_count(0)
 
@@ -692,8 +680,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("#statusArchiveRun")).to_have_text(
         re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 3 filed")
     )
-    for index in range(3):
-        row = _box(p.locator("#paneArchive .archive-head .status-row").nth(index))
+    for index in range(5):
+        row = _box(p.locator("#archiveCard .archive-head .status-row").nth(index))
         assert row["height"] < _ONE_LINE_PX, f"status row {index} wraps ({row['height']}px)"
 
     # 10b. The picker reaches the right edge and the bulk button is a full-width
@@ -829,43 +817,36 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
         "payload": [{"message_id": STUCK_ID, "folder_path": HOUSE, "date_prefix": False}],
     }
 
-    # 10b. The Settings card is the same five rows in a 390-wide column, and the
-    #      two things it can do are still thumb-sized there (#167).
-    p.locator("#settingsBtn").tap()
-    pcard = p.locator("#archiveCard")
-    pcard.locator("summary.collapse-summary").tap()
-    expect(pcard).to_have_attribute("open", "")
-    expect(pcard.locator(".status-row")).to_have_count(5)
-    expect(pcard.locator("#archiveCardMeta")).to_have_text("on")
-    expect(pcard.locator("#statusArchiveLast")).to_contain_text("3 filed")
+    # 10g. Done goes back to the Settings list at 390 (#397): the row's word
+    #      and the header's "needs you", the sheet's five readings behind it.
+    expect(p.locator("#archiveCard .status-row")).to_have_count(5)
+    p.locator("#settingsSheet .settings-sheet-done").tap()
+    expect(p.locator("#settingsSheet")).to_be_hidden()
+    expect(p.locator("#archiveCardMeta")).to_have_text("on")
+    expect(p.locator("#homeHeadStatus")).to_contain_text("3 mails need you")
+    assert_min_target(p.locator("#paneSettings [data-settings-sheet='archive']"))
     assert_no_horizontal_overflow(p)
     dismiss_toasts(p)
-    # Full page, as story 09's Settings shot is: the pane is taller than 844 px
-    # here and the floating pill sits over its last rows, so a viewport shot
-    # would have to be scrolled to a position that shows either the card's
-    # header word or its button, never both.
+    # Full page, as story 09's Settings shot is: the list is taller than 844 px
+    # and the floating pill sits over its last rows.
     shot(p, shots / "story-24-archive-9-phone.png", full_page=True)
     phone.close()
 
-    # 11. "Run now" starts the same run the tab's button starts, and goes out
-    #     while the archiver works. The card's reading is at most one poll old,
-    #     so a second press is reachable from a screen that has not caught up
-    #     (a run started on another device) — and that press gets the API's own
-    #     sentence as a toast, never a console error. Left until last: a second
-    #     run re-plans the same three mails and would move the report the steps
-    #     above read. It is waited out, so nothing races the shutdown.
-    page.get_by_role("button", name="Settings", exact=True).click()
-    run_now = acard.locator("#archiveRunNow")
+    # 11. A second run, and the Settings row follows it (#397): the sheet's
+    #     button goes out while the archiver works and the row beside it reads
+    #     "running", then both come back on their own — the sheet follows the
+    #     run and publishes the status it reads (#262) — no reload. (One run at
+    #     a time is the API's answer, proven in step 4.) Left until last: a
+    #     second run re-plans the same mails and would move the report the
+    #     steps above read. It is waited out, so nothing races the shutdown.
+    acard = open_settings_sheet(page, "archive")
+    run_now = acard.locator("#archiveRun")
     expect(run_now).to_be_enabled()
     run_now.click()
-    expect(acard.locator("#archiveCardMeta")).to_have_text("running")
+    expect(page.locator("#archiveCardMeta")).to_have_text("running")
     expect(run_now).to_be_disabled()
-    run_now.evaluate("el => { el.disabled = false; el.click(); }")
-    expect(page.locator(".toast-error")).to_contain_text("one Outlook, one run at a time")
-    # The card leaves "running" on its own — the Archive pane follows the run and
-    # publishes the status it reads (#262) — no tab change, no reload.
     expect(run_now).to_be_enabled(timeout=30000)
-    expect(acard.locator("#archiveCardMeta")).not_to_have_text("running")
+    expect(page.locator("#archiveCardMeta")).not_to_have_text("running")
     ctx.close()
 
     # 12. Both runs are history now, and reading them back needs no archiver at

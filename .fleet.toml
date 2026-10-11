@@ -59,10 +59,11 @@ foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sh
 ready_selector = "#todayHost .today-counts"
 
 # Width follows the shape of the view (fleet-config#1113, design.md Layout): these
-# tabs are two-dimensional (lanes, a calendar lane, a run report)
-# and span the window; Search and Settings keep the 772px measure.
+# tabs are two-dimensional (lanes, a calendar lane) and span the window; Search
+# and Settings keep the 772px measure. The archiving report left the tabs in #397:
+# it is the Settings → Email archiving sheet, the detail pane beside the list.
 [design]
-wide_views = ["board", "today", "archive"]
+wide_views = ["board", "today"]
 
 # Diff-proportionate e2e routing (project-scaffolding#180): the gate's browser
 # phase is classified by scripts/classify_e2e.py against these rules, first
@@ -207,3 +208,16 @@ click = "#paneToday .filter-open"
 tab = "board"
 id = "board-status"
 click = "#paneBoard .board-modes [data-mode='status']"
+
+# Settings sheets (#397): the Email archiving sheet (the Archive tab until then —
+# opening it only reads the runs; the walk presses neither the run button nor a
+# review action) and the Folder opener sheet, the longest text a sheet holds.
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-archive"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='archive']"]
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-opener"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='opener']"]

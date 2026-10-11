@@ -83,6 +83,7 @@ from tests.e2e.conftest import (
     filter_button,
     open_filter_sheet,
     open_more_fields,
+    open_settings_sheet,
     shot,
     text_contrast,
 )
@@ -900,9 +901,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     #     follows, a swipe left opens the snooze picker, and the action a
     #     swipe runs cannot be taken out of the menu (WCAG 2.5.1). Reset puts
     #     the plan's defaults back.
-    page.click("#settingsBtn")
-    card = page.locator("#rowActionsCard")
-    card.locator("summary").click()
+    card = open_settings_sheet(page, "rows")
     meta = page.locator("#rowActionsMeta")
     expect(meta).to_have_text("Default")
     page.select_option("#swipeLeftSelect", "snooze")
@@ -940,7 +939,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     page.keyboard.press("Escape")
     expect(picker).to_have_count(0)
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None    # a cancelled pick writes nothing
-    page.click("#settingsBtn")
+    open_settings_sheet(page, "rows")
     page.click("#rowActionsReset")
     expect(meta).to_have_text("Default")
     assert page.evaluate("localStorage.getItem('task-os.rowactions')") is None

@@ -56,6 +56,7 @@ from tests.e2e.conftest import (
     _terminate,
     board_mode,
     e2e_workdir,
+    open_settings_sheet,
     shot,
 )
 from tests.fixtures.chat_fake import FakeChat
@@ -179,15 +180,6 @@ def _open_add(page: Page):
     dialog = page.locator("#quickAdd")
     expect(dialog).to_be_visible()
     return dialog
-
-
-def _open_card(page: Page, card_id: str):
-    card = page.locator(f"#{card_id}")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
 
 
 def test_say_the_task(
@@ -330,8 +322,8 @@ def test_say_the_task(
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
     page.get_by_role("button", name="Settings", exact=True).click()
-    card = _open_card(page, "voiceCard")
-    expect(card.locator("#voiceCardMeta")).to_have_text("on")
+    expect(page.locator("#voiceCardMeta")).to_have_text("on")    # the row's word (#397)…
+    card = open_settings_sheet(page, "voice")                     # …and its sheet
     expect(card.locator("#statusVoice .status-ok")).to_have_text("reachable")
     expect(card.locator("#statusVoice")).to_contain_text("hub")
     expect(card.locator("#statusVoice")).to_contain_text("live every 0.3s")
@@ -385,8 +377,8 @@ def test_say_the_task(
 
     # 7. …and Settings says the same thing, in the same words
     p2.get_by_role("button", name="Settings", exact=True).click()
-    card2 = _open_card(p2, "voiceCard")
-    expect(card2.locator("#voiceCardMeta")).to_have_text("off")
+    expect(p2.locator("#voiceCardMeta")).to_have_text("off")
+    card2 = open_settings_sheet(p2, "voice")
     expect(card2.locator("#statusVoice .status-off")).to_have_text("not reachable")
     expect(card2.locator("#statusVoice")).to_contain_text("no voice.transcribe_url in config")
     expect(card2.locator("#statusVoiceUrl")).to_have_text("not set")

@@ -1,10 +1,15 @@
-/* task-os — the Settings tab: what this install is and what it can reach.
+/* task-os — the Settings pane: what this install is and what it can reach.
  *
  * One module per view, like Board · Today · Search:
- * `mountSettings(opts)` looks up the pane's cards once, wires their controls
- * and returns the handle the bootstrap calls when something it owns changes.
- * Every card is the vendored disclosure (issue #46) whose summary carries a
- * state word — on · synced · indexed · off — never a count.
+ * `mountSettings(opts)` looks up the pane's rows and sheets once, wires their
+ * controls and returns the handle the bootstrap calls when something it owns
+ * changes. The pane is five inset groups (#397, design.md `settings group`):
+ * each row carries its state word — on · synced · indexed · off, in its tone
+ * when it is an exception — and a chevron to its sheet (#settingsSheet), which
+ * holds the card the row replaced, under the same ids. One sheet is up at a
+ * time and the URL says which (`#settings/<key>`), so the bootstrap opens and
+ * closes it (`showSheet` / `hideSheet`) and this module only asks
+ * (`opts.onOpenSheet` / `opts.onCloseSheet`). Text size is changed in place.
  *
  *   Row actions    what each touch swipe on a task row runs and what the
  *                  row's ⋯ menu lists, in order (#311) — per device, from the
@@ -20,9 +25,9 @@
  *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
  *                  issue sync this card owns its own call, because nothing
  *                  else in the app triggers a capture pass.
- *   Archive        the batch archiver (#157–#159): what it is configured with,
- *                  what the last run did, "Run now" over the whole Inbox and
- *                  the way to the tab that owns the report (#167).
+ *   Archive        the batch archiver (#157–#159): where it lives and its
+ *                  threshold. The rest of its sheet — the run, the report and
+ *                  every review action — is archive.js's (a tab until #397).
  *   Calendar       the Today lane's private ICS feed (#96): its state (off ·
  *                  ok · address refused · unreachable · timed out · not a
  *                  calendar), the host it reads from — never the address —
@@ -45,13 +50,15 @@
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
+ *
+ * The rows' words are the Settings header's line too (`headParts()`, #397):
+ * the exceptions among them, else how many services are on.
  */
 
 'use strict';
 
 import { ACTIONS, actionById } from './actions.js';
 import { api } from './api.js';
-import { renderRunSummary } from './archive.js';
 import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
 import { isDefault, rowPrefs, setRowPrefs } from './rowprefs.js';
@@ -60,19 +67,39 @@ import { bindTextSize } from './_vendored/text-size/text-size.js';
 
 const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
 
+//: A row's state word that is an exception, and its tone (design.md's status
+//: chip tone map): broken is danger, needs-a-look is attention. Every other
+//: word — on, synced, off, … — is a plain fact in the muted value colour.
+const WORD_TONES = { error: 'danger', stale: 'attention', unknown: 'attention', unavailable: 'attention' };
+//: The service rows, by their value element, and the name the header line
+//: gives each when it is the exception ("Issue sync failing").
+const SERVICE_NAMES = {
+  issuesCardMeta: 'Issue sync', calendarCardMeta: 'Calendar', captureCardMeta: 'Capture',
+  archiveCardMeta: 'Archiving', searchCardMeta: 'Search', folderCardMeta: 'Folder index',
+  voiceCardMeta: 'Voice', aiCardMeta: 'AI triage', mirrorCardMeta: 'Backup',
+};
+//: The words that say a service is not on (the rest of the header's plain count).
+const OFF_WORDS = ['off', 'index off', 'unknown'];
+
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
  * @param {{onSyncIssues: () => Promise<any>, onSearchStatus: () => void,
  *          onOpenPalette: () => void, onRowActions?: () => void,
  *          onCaptured: () => void, onArchiveRun: () => void,
- *          onOpenArchive: () => void, onCalendar: (group: object) => void}} opts
+ *          onCalendar: (group: object) => void, onHead: () => void,
+ *          onOpenSheet: (key: string) => void, onCloseSheet: () => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
  *            renderArchive: (st: object|null) => void,
- *            renderIssues: (status: object|null) => void, revealCard: (key: string) => void}}
+ *            renderIssues: (status: object|null) => void,
+ *            showSheet: (key: string) => boolean, hideSheet: () => void,
+ *            currentSheet: () => (string|null),
+ *            headParts: () => Array<{text: string, tone: string}>}}
  */
 export function mountSettings(opts) {
   const els = {
-    accessCard: document.getElementById('accessCard'),
+    pane: document.getElementById('paneSettings'),
+    sheet: document.getElementById('settingsSheet'),
+    sheetTitle: document.getElementById('settingsSheetTitle'),
     accessClient: document.getElementById('accessClient'),
     accessRows: document.getElementById('accessRows'),
     signOutBtn: document.getElementById('signOutBtn'),
@@ -81,7 +108,6 @@ export function mountSettings(opts) {
     statusBackup: document.getElementById('statusBackup'),
     statusMirrorEvents: document.getElementById('statusMirrorEvents'),
     mirrorEventsClear: document.getElementById('mirrorEventsClear'),
-    folderCard: document.getElementById('folderCard'),
     folderCardMeta: document.getElementById('folderCardMeta'),
     statusOpener: document.getElementById('statusOpener'),
     statusIndex: document.getElementById('statusIndex'),
@@ -97,7 +123,6 @@ export function mountSettings(opts) {
     issuesSyncNow: document.getElementById('issuesSyncNow'),
     paletteOpen: document.getElementById('paletteOpen'),
     textSizeControl: document.getElementById('textSizeControl'),
-    textSizeMeta: document.getElementById('textSizeMeta'),
     rowActionsMeta: document.getElementById('rowActionsMeta'),
     swipeRight: document.getElementById('swipeRightSelect'),
     swipeLeft: document.getElementById('swipeLeftSelect'),
@@ -109,11 +134,7 @@ export function mountSettings(opts) {
     captureRunNow: document.getElementById('captureRunNow'),
     archiveCardMeta: document.getElementById('archiveCardMeta'),
     statusArchiveRepo: document.getElementById('statusArchiveRepo'),
-    statusArchiveModel: document.getElementById('statusArchiveModel'),
     statusArchiveThreshold: document.getElementById('statusArchiveThreshold'),
-    statusArchiveLast: document.getElementById('statusArchiveLast'),
-    archiveRunNow: document.getElementById('archiveRunNow'),
-    archiveOpenTab: document.getElementById('archiveOpenTab'),
     calendarCardMeta: document.getElementById('calendarCardMeta'),
     statusCalendar: document.getElementById('statusCalendar'),
     statusCalendarSource: document.getElementById('statusCalendarSource'),
@@ -126,11 +147,42 @@ export function mountSettings(opts) {
     aiCardMeta: document.getElementById('aiCardMeta'),
     statusAI: document.getElementById('statusAI'),
     statusAIModel: document.getElementById('statusAIModel'),
-    searchCard: document.getElementById('searchCard'),
     searchCardMeta: document.getElementById('searchCardMeta'),
   };
-  // The cards a deep link (`#settings/opener`, `#settings/search`, `#settings/access`) opens.
-  const DEEP_LINK_CARDS = { opener: els.folderCard, search: els.searchCard, access: els.accessCard };
+
+  // ------------------------------------------------------- row values
+  // The state word each service row shows, by its value element's id — what
+  // the header line is read from (`headParts`).
+  const words = {};
+  let statusFailed = false;   // the last GET /api/status failed: one "unknown", not nine
+
+  /** A row's state word, in its tone when it is an exception. */
+  function setWord(el, word) {
+    el.textContent = word;
+    const tone = WORD_TONES[word];
+    if (tone) el.dataset.tone = tone;
+    else delete el.dataset.tone;
+    words[el.id] = word;
+  }
+
+  /** The Settings header's line (design.md `page-header`, #397): the services
+   *  in an exception tone, broken first, at most two; else the plain count of
+   *  the services that are on. Empty until a status has been read. */
+  function headParts() {
+    if (statusFailed) return [{ text: 'Status unknown', tone: 'attention' }];
+    const ids = Object.keys(SERVICE_NAMES).filter(function (id) { return id in words; });
+    if (!ids.length) return [];
+    const verbs = { error: 'failing', stale: 'stale', unknown: 'unknown', unavailable: 'unreachable' };
+    const parts = [];
+    ['danger', 'attention'].forEach(function (tone) {
+      ids.forEach(function (id) {
+        if (WORD_TONES[words[id]] === tone) parts.push({ text: SERVICE_NAMES[id] + ' ' + verbs[words[id]], tone: tone });
+      });
+    });
+    if (parts.length) return parts.slice(0, 2);
+    const on = ids.filter(function (id) { return OFF_WORDS.indexOf(words[id]) < 0; }).length;
+    return [{ text: on + ' of ' + ids.length + ' services on', tone: 'muted' }];
+  }
 
   // ------------------------------------------------------ phone access card
   function accessRow(label, ok, text) {
@@ -317,12 +369,16 @@ export function mountSettings(opts) {
       renderMirrorRow(els.statusMirror, body.mirror);
       renderBackupRow(els.statusBackup, body.backup);
       renderMirrorEventsRow(body.mirror).catch(function () {});
+      statusFailed = false;
       const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
-      els.mirrorCardMeta.textContent = on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off';
+      // A backup that failed is the row's word, whatever else is on (#397: the
+      // header names it, "Backup failing").
+      setWord(els.mirrorCardMeta, body.backup && body.backup.last_error ? 'error'
+        : on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off');
       renderOpener(body.opener);
       renderIndexRow(els.statusIndex, body.folders);
       const f = body.folders;
-      els.folderCardMeta.textContent = f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off';
+      setWord(els.folderCardMeta, f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off');
       renderCapture(body.capture);
       renderArchive(body.archive);
       // A run this page did not start (another device): hand it to the Archive
@@ -334,13 +390,15 @@ export function mountSettings(opts) {
       renderAI(body.ai);
     } catch (err) {
       // An unreachable status is its own visible state, never a stale "Loading…".
+      statusFailed = true;
       renderAccessUnknown(err.message);
       els.statusMirror.textContent = 'unknown — ' + err.message;
       els.statusBackup.textContent = 'unknown — ' + err.message;
       els.statusMirrorEvents.textContent = 'unknown — ' + err.message;
-      els.mirrorCardMeta.textContent = 'unknown';
+      setWord(els.mirrorCardMeta, 'unknown');
       els.statusOpener.textContent = 'unknown — ' + err.message;
       els.statusIndex.textContent = 'unknown — ' + err.message;
+      setWord(els.folderCardMeta, 'unknown');
       renderCapture(null);
       renderArchive(null);
       renderCalendar(null);
@@ -348,6 +406,7 @@ export function mountSettings(opts) {
       renderEnrich(null);
       renderAI(null);
     }
+    opts.onHead();
   }
 
   // ------------------------------------------------------------- capture
@@ -363,13 +422,13 @@ export function mountSettings(opts) {
     if (!st) {
       els.statusCapture.textContent = 'unknown';
       els.statusCaptureRun.textContent = '–';
-      els.captureCardMeta.textContent = 'unknown';
+      setWord(els.captureCardMeta, 'unknown');
       return;
     }
     if (!st.enabled) {
       els.statusCapture.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
       els.statusCaptureRun.textContent = '–';
-      els.captureCardMeta.textContent = 'off';
+      setWord(els.captureCardMeta, 'off');
       return;
     }
     els.statusCapture.append(
@@ -391,7 +450,7 @@ export function mountSettings(opts) {
         );
       }
     }
-    els.captureCardMeta.textContent = st.last_error ? 'error' : (st.last_run ? 'checked' : 'on');
+    setWord(els.captureCardMeta, st.last_error ? 'error' : (st.last_run ? 'checked' : 'on'));
   }
 
   function wireCaptureRunNow() {
@@ -408,75 +467,44 @@ export function mountSettings(opts) {
   }
 
   // ------------------------------------------------------------- archive
-  /** The batch archiver's half of `GET /api/status` (#157–#159, #167). The
-   *  Archive tab owns the report and the review actions; this card is what
-   *  the install is configured with and what the last run did. Not configured
-   *  always carries its reason; `null` = the status call itself failed, which
-   *  is "unknown" and not the same as "off". This card never follows a live
-   *  run itself (#262): the Archive pane does, and publishes each status it
-   *  reads back here through `renderArchive` — so "running" resolves into the
-   *  run's own counts when that pane's poll finishes. */
+  /** The batch archiver's half of `GET /api/status` (#157–#159, #167): where
+   *  the archiver lives and its threshold — the two rows of the Email
+   *  archiving sheet that archive.js does not draw (its head names the state,
+   *  the model and the runs) — and the row's word. Not configured carries its
+   *  reason in archive.js's Archiver row; `null` = the status call itself
+   *  failed, which is "unknown" and not the same as "off". This module never
+   *  follows a live run itself (#262): archive.js does, and publishes each
+   *  status it reads back here through `renderArchive` — so "running"
+   *  resolves into the run's own counts when its poll finishes. */
   function renderArchive(st) {
-    els.archiveRunNow.disabled = !st || !st.configured || !!st.running;
-    const rows = [els.statusArchiveRepo, els.statusArchiveModel,
-      els.statusArchiveThreshold, els.statusArchiveLast];
+    const rows = [els.statusArchiveRepo, els.statusArchiveThreshold];
     rows.forEach(function (el) { el.replaceChildren(); el.classList.remove('muted'); });
     if (!st) {
       rows.forEach(function (el) { el.textContent = 'unknown'; });
-      els.archiveCardMeta.textContent = 'unknown';
-      return;
+      setWord(els.archiveCardMeta, 'unknown');
+    } else if (!st.configured) {
+      rows.forEach(function (el) { el.textContent = '–'; });
+      setWord(els.archiveCardMeta, 'off');
+    } else {
+      els.statusArchiveRepo.append(codeEl(st.repo || 'unknown'));
+      els.statusArchiveThreshold.append(
+        pct(st.confidence_threshold),
+        ' · ' + (st.candidates == null ? '?' : st.candidates) + ' folder(s) ranked per mail'
+      );
+      setWord(els.archiveCardMeta, archiveWord(st));
     }
-    if (!st.configured) {
-      els.statusArchiveRepo.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
-      els.statusArchiveModel.textContent = '–';
-      els.statusArchiveThreshold.textContent = '–';
-      els.statusArchiveLast.textContent = '–';
-      els.archiveCardMeta.textContent = 'off';
-      return;
-    }
-    els.statusArchiveRepo.append(
-      statusPart(st.last_error ? 'warn' : 'ok', st.running ? 'running' : 'ready'),
-      ' · ', codeEl(st.repo || 'unknown')
-    );
-    if (st.last_error) els.statusArchiveRepo.append(' · last error: ' + st.last_error);
-    els.statusArchiveModel.append(
-      codeEl(st.model || 'none'),
-      ' · ' + st.batch_size + ' per batch · ' + st.examples + ' examples'
-    );
-    els.statusArchiveThreshold.append(
-      pct(st.confidence_threshold),
-      ' · ' + (st.candidates == null ? '?' : st.candidates) + ' folder(s) ranked per mail'
-    );
-    renderRunSummary(els.statusArchiveLast, st.last_run, false);
-    els.archiveCardMeta.textContent = archiveWord(st);
+    opts.onHead();
   }
 
-  /** The one word in the card header. `agreement` is the only rate the status
-   *  block carries, so it is the one reported — an accept rate would be a
-   *  number nobody here measures. */
+  /** The row's one word. `agreement` is the only rate the status block
+   *  carries, so it is the one reported — an accept rate would be a number
+   *  nobody here measures. */
   function archiveWord(st) {
     if (st.running) return 'running';
     const last = st.last_run;
     if (st.last_error || (last && last.status === 'failed')) return 'error';
     if (last && last.agreement != null) return pct(last.agreement) + ' agreed';
     return 'on';
-  }
-
-  function wireArchiveCard() {
-    els.archiveOpenTab.addEventListener('click', function () { opts.onOpenArchive(); });
-    els.archiveRunNow.addEventListener('click', async function () {
-      els.archiveRunNow.disabled = true;
-      try {
-        await api('/api/archive/run', { method: 'POST', body: {} });
-        toast('Archiving the Inbox — the report fills in on the Archive tab', 'success');
-        opts.onArchiveRun();
-      } catch (err) {
-        // 409 archive_in_flight is the honest answer to a second press, and the
-        // API's own sentence is better than anything invented here.
-        toast(err.message || 'Could not start the run', 'error');
-      }
-      refreshStatus();
-    });
   }
 
   // ------------------------------------------------------------ calendar
@@ -496,14 +524,14 @@ export function mountSettings(opts) {
     els.calendarRefresh.disabled = !(st && st.configured && st.state !== 'off');
     if (!st) {
       rows.forEach(function (dd) { dd.textContent = 'unknown'; });
-      els.calendarCardMeta.textContent = 'unknown';
+      setWord(els.calendarCardMeta, 'unknown');
       return;
     }
     if (!st.configured || st.state === 'off') {
       els.statusCalendar.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
       els.statusCalendarSource.textContent = '–';
       els.statusCalendarFetched.textContent = '–';
-      els.calendarCardMeta.textContent = 'off';
+      setWord(els.calendarCardMeta, 'off');
       return;
     }
     const ok = st.state === 'ok';
@@ -520,7 +548,7 @@ export function mountSettings(opts) {
     els.statusCalendarSource.append(' · every ' + st.refresh_minutes + ' min · ' + st.timeout_seconds + ' s timeout');
     els.statusCalendarFetched.textContent = st.fetched_at
       ? fmtTsShort(st.fetched_at) + (st.stale ? ' (stale)' : '') : 'never';
-    els.calendarCardMeta.textContent = ok ? 'on' : (st.stale ? 'stale' : 'error');
+    setWord(els.calendarCardMeta, ok ? 'on' : (st.stale ? 'stale' : 'error'));
   }
 
   function wireCalendarRefresh() {
@@ -552,13 +580,13 @@ export function mountSettings(opts) {
     if (!st) {
       els.statusVoice.textContent = 'unknown';
       els.statusVoiceUrl.textContent = '–';
-      els.voiceCardMeta.textContent = 'unknown';
+      setWord(els.voiceCardMeta, 'unknown');
       return;
     }
     els.statusVoiceUrl.append(st.url ? codeEl(st.url) : 'not set');
     if (!st.enabled) {
       els.statusVoice.append(statusPart('off', 'not reachable'), ' — ' + (st.reason || 'unknown'));
-      els.voiceCardMeta.textContent = 'off';
+      setWord(els.voiceCardMeta, 'off');
       return;
     }
     // Which endpoint answered matters: the hub means the fleet's transcribe
@@ -576,7 +604,7 @@ export function mountSettings(opts) {
       ' · ' + live,
       st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
     );
-    els.voiceCardMeta.textContent = st.serving === 'fallback' ? 'fallback' : 'on';
+    setWord(els.voiceCardMeta, st.serving === 'fallback' ? 'fallback' : 'on');
   }
 
   /** The light model that turns a spoken sentence into a title and a
@@ -604,27 +632,32 @@ export function mountSettings(opts) {
     if (!st) {
       els.statusAI.textContent = 'unknown';
       els.statusAIModel.textContent = '–';
-      els.aiCardMeta.textContent = 'unknown';
+      setWord(els.aiCardMeta, 'unknown');
       return;
     }
     els.statusAIModel.append(st.model ? codeEl(st.model) : 'not set');
     if (!st.enabled) {
       const label = st.configured ? 'not reachable' : 'off';
       els.statusAI.append(statusPart('off', label), ' — ' + (st.reason || 'unknown'));
-      els.aiCardMeta.textContent = st.configured ? 'unavailable' : 'off';
+      setWord(els.aiCardMeta, st.configured ? 'unavailable' : 'off');
       return;
     }
     els.statusAI.append(
       statusPart('ok', 'reachable'),
       st.checked_at ? ' · checked ' + fmtTsShort(st.checked_at) : ''
     );
-    els.aiCardMeta.textContent = 'on';
+    setWord(els.aiCardMeta, 'on');
   }
 
   // ------------------------------------------------------------ issue sync
-  /** The Settings card's half of the issue-provider status; the sync call
+  /** The Settings row's half of the issue-provider status; the sync call
    *  itself stays with the bootstrap (the drawer and the palette make it too). */
   function renderIssues(st) {
+    drawIssues(st);
+    opts.onHead();
+  }
+
+  function drawIssues(st) {
     const configured = !!(st && st.enabled);
     els.issuesSyncNow.disabled = !configured;
     els.statusIssues.replaceChildren();
@@ -634,13 +667,13 @@ export function mountSettings(opts) {
     if (!st) {
       els.statusIssues.textContent = 'unknown';
       els.statusIssuesSync.textContent = '–';
-      els.issuesCardMeta.textContent = 'unknown';
+      setWord(els.issuesCardMeta, 'unknown');
       return;
     }
     if (!configured) {
       els.statusIssues.append(statusPart('off', 'not configured'), ' — ' + (st.reason || 'unknown'));
       els.statusIssuesSync.textContent = '–';
-      els.issuesCardMeta.textContent = 'off';
+      setWord(els.issuesCardMeta, 'off');
       return;
     }
     els.statusIssues.append(
@@ -659,7 +692,7 @@ export function mountSettings(opts) {
       }
     }
     if (st.repos && st.repos.length) els.statusIssuesSync.append(' · repos: ' + st.repos.join(', '));
-    els.issuesCardMeta.textContent = st.last_error ? 'error' : (st.last_sync ? 'synced' : 'on');
+    setWord(els.issuesCardMeta, st.last_error ? 'error' : (st.last_sync ? 'synced' : 'on'));
   }
 
   /** The palette's phone entry (#316) — the card only hosts the button. */
@@ -667,16 +700,10 @@ export function mountSettings(opts) {
     els.paletteOpen.addEventListener('click', function () { opts.onOpenPalette(); });
   }
 
-  /** Text size (#314): the vendored control does the storing and stamping; this
-   *  only keeps the card's state word in step with the stamped step. */
+  /** Text size (#314): inline in its row since #397 — the control is its own
+   *  value; the vendored binding does the storing and stamping. */
   function wireTextSize() {
-    const word = function () {
-      const size = document.documentElement.dataset.textsize || 'default';
-      els.textSizeMeta.textContent = size.charAt(0).toUpperCase() + size.slice(1);
-    };
     bindTextSize(els.textSizeControl, 'task-os');
-    word();
-    els.textSizeControl.addEventListener('click', word);
   }
 
   // ------------------------------------------------------ row actions
@@ -823,18 +850,62 @@ export function mountSettings(opts) {
         dd.append(statusPart('off', 'not configured'), ' — ' + ((a && a.reason) || 'unknown'));
       }
     });
-    els.searchCardMeta.textContent = adapters ? (on ? 'indexed' : 'off') : 'unknown';
+    setWord(els.searchCardMeta, adapters ? (on ? 'indexed' : 'off') : 'unknown');
+    opts.onHead();
     opts.onSearchStatus();
   }
 
-  // ------------------------------------------------------------ deep links
-  /** `#settings/opener` / `#settings/search`: open that card and scroll to it.
-   *  The tab switch and the URL are the bootstrap's (routing lives there). */
-  function revealCard(key) {
-    const card = DEEP_LINK_CARDS[key];
-    if (!card) return;
-    card.open = true;
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  // ------------------------------------------------------------ sheets
+  // One sheet body per row (`data-sheet`), all inside the one #settingsSheet.
+  const bodies = {};
+  els.sheet.querySelectorAll('.settings-sheet[data-sheet]').forEach(function (s) { bodies[s.dataset.sheet] = s; });
+  let openKey = null;
+
+  function rowFor(key) {
+    return els.pane.querySelector('[data-settings-sheet="' + key + '"]');
+  }
+
+  /** Show `key`'s sheet (the bootstrap calls it for `#settings/<key>`): its
+   *  body alone, titled by its row's label, the row marked as the selected
+   *  one (beside the detail pane on a wide screen). False for an unknown key. */
+  function showSheet(key) {
+    if (!bodies[key]) return false;
+    const fresh = openKey !== key;
+    Object.keys(bodies).forEach(function (k) { bodies[k].hidden = k !== key; });
+    const row = rowFor(key);
+    els.sheetTitle.textContent = row ? row.querySelector('.action-row-title').textContent : '';
+    els.pane.querySelectorAll('[data-settings-sheet]').forEach(function (r) {
+      if (r === row) r.setAttribute('aria-current', 'true');
+      else r.removeAttribute('aria-current');
+    });
+    els.sheet.hidden = false;
+    document.body.dataset.settingsSheet = key;
+    openKey = key;
+    if (fresh) {
+      els.sheet.querySelector('.settings-sheet-scroll').scrollTop = 0;
+      els.sheet.querySelector('.settings-sheet-close').focus({ preventScroll: true });
+    }
+    return true;
+  }
+
+  /** Close the sheet; focus goes back to its row while that is on screen. */
+  function hideSheet() {
+    if (openKey == null) return;
+    const row = rowFor(openKey);
+    openKey = null;
+    els.sheet.hidden = true;
+    delete document.body.dataset.settingsSheet;
+    if (row) row.removeAttribute('aria-current');
+    if (row && !els.pane.hidden && els.sheet.contains(document.activeElement)) row.focus({ preventScroll: true });
+  }
+
+  function wireSheets() {
+    els.pane.querySelectorAll('[data-settings-sheet]').forEach(function (row) {
+      row.addEventListener('click', function () { opts.onOpenSheet(row.dataset.settingsSheet); });
+    });
+    // Instant model: every control applies as it changes, so Done only closes.
+    els.sheet.querySelector('.settings-sheet-close').addEventListener('click', function () { opts.onCloseSheet(); });
+    els.sheet.querySelector('.settings-sheet-done').addEventListener('click', function () { opts.onCloseSheet(); });
   }
 
   wireSignOut();
@@ -845,14 +916,17 @@ export function mountSettings(opts) {
   wireTextSize();
   wireRowActions();
   wireCaptureRunNow();
-  wireArchiveCard();
   wireCalendarRefresh();
+  wireSheets();
 
   return {
     refreshStatus: refreshStatus,
     renderArchive: renderArchive,
     refreshSearchStatus: refreshSearchStatus,
     renderIssues: renderIssues,
-    revealCard: revealCard,
+    showSheet: showSheet,
+    hideSheet: hideSheet,
+    currentSheet: function () { return openKey; },
+    headParts: headParts,
   };
 }

@@ -2,8 +2,8 @@
  *
  * Relative dates, timestamps, link chips (URLs / folder placeholders /
  * repo#N inside comment bodies), the small parts a status row is built from
- * (`statusPart` · `codeEl` · `pct`, shared by the Settings cards and the
- * Archive tab) and a deliberately small markdown renderer for descriptions.
+ * (`statusPart` · `codeEl` · `pct`, shared by the Settings sheets and the
+ * Email archiving report) and a deliberately small markdown renderer for descriptions.
  * Everything escapes text before it touches innerHTML.
  */
 

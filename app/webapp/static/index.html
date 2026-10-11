@@ -332,7 +332,7 @@
     <path d="M8 12h.01" />
     <rect width="20" height="16" x="2" y="4" rx="2" />
   </symbol>
-  <!-- #159 glyph (the Archive tab) — pasted verbatim from lucide-static's
+  <!-- #159 glyph (Settings → Email archiving since #397) — pasted verbatim from lucide-static's
        archive.svg; it is not in the scaffold's sprite. -->
   <symbol id="i-archive" viewBox="0 0 24 24" fill="none">
     <rect width="20" height="5" x="2" y="3" rx="1" />
@@ -356,13 +356,8 @@
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-square-kanban"></use></svg>
       <span class="tab-label">Board</span>
     </button>
-    <!-- #159: the batch-archiving report. A destination, not a Settings card —
-         it is where the run is started and where every filed mail is reviewed. -->
-    <button id="tabArchive" type="button" class="tab" data-tab="archive"
-            role="tab" aria-selected="false" aria-controls="paneArchive" tabindex="-1">
-      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
-      <span class="tab-label">Archive</span>
-    </button>
+    <!-- No Archive tab since #397 (decision 3 of #390): the batch-archiving
+         run and its report are Settings → Email archiving, a rarely run job. -->
     <button id="tabSearch" type="button" class="tab" data-tab="search"
             role="tab" aria-selected="false" aria-controls="paneSearch" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
@@ -464,45 +459,6 @@
         <div id="todayHost" data-empty="tasks"></div>
       </div>
     </section>
-    <!-- Archive (#159): one button files the whole Outlook Inbox through
-         email-archiver (#157), the local model picks the folder (#158), and
-         this pane is where the run is read and corrected. Read-mostly over the
-         Step 1 API — no domain rule lives here; the rows come back from
-         GET /api/archive/runs/{id} and the four review actions are POSTs. -->
-    <section id="paneArchive" class="pane" role="tabpanel" aria-labelledby="tabArchive" aria-label="Archive" hidden>
-      <div class="pane-body">
-        <div class="card archive-head">
-          <div class="archive-actions">
-            <button type="button" id="archiveRun" class="button-surface archive-run" disabled>
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
-              <span id="archiveRunLabel">Archive Inbox now</span>
-            </button>
-            <!-- The bound that makes a first run safe: trust in something that
-                 moves your mail is built on an undo you have seen, so start
-                 with one mail. Empty = the whole Inbox. -->
-            <label class="archive-limit">
-              <span class="archive-limit-text">First</span>
-              <input id="archiveLimit" class="input-native archive-limit-input" type="number"
-                     min="1" max="1000" step="1" inputmode="numeric" placeholder="all"
-                     aria-label="How many mails at most this run (empty = all)">
-              <span class="archive-limit-text">mails</span>
-            </label>
-            <span id="archiveProgress" class="archive-progress muted" aria-live="polite"></span>
-          </div>
-          <dl class="status-rows" id="archiveStatus" aria-live="polite">
-            <div class="status-row"><dt>Archiver</dt><dd id="statusArchive" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Last run</dt><dd id="statusArchiveRun" class="muted">–</dd></div>
-            <div class="status-row"><dt id="archiveRecentLabel">Recent runs</dt><dd id="statusArchiveRecent" class="muted">–</dd></div>
-          </dl>
-        </div>
-        <div class="pane-top archive-runbar">
-          <label class="archive-runbar-label" for="archiveRunPick">Run</label>
-          <select id="archiveRunPick" class="select-native archive-run-pick"></select>
-          <button type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
-        </div>
-        <div id="archiveHost" class="archive-host"></div>
-      </div>
-    </section>
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
         <!-- One box, four indexes (Step 10): tasks_fts · the folder index · the
@@ -535,318 +491,318 @@
       </div>
     </section>
     <!-- Settings (#281): a pane with no tab, like the journal — the header
-         gear opens it over the current tab, any tab press leaves it. -->
+         gear opens it over the current tab, any tab press leaves it.
+         Inset groups (#397, design.md `settings group`): each row is a lead
+         glyph, its label, the current value muted and a chevron to its sheet
+         (#settingsSheet below). Text size is the one setting changed in place.
+         The value ids are the ones settings.js has always filled. -->
     <section id="paneSettings" class="pane" role="region" aria-label="Settings" hidden>
-      <div class="pane-body">
-        <!-- Every Settings card is the vendored disclosure, collapsed by default
-             (#46): the summary carries the title + a state word (on · synced ·
-             indexed · off — never a count); the body has the detail. -->
-        <details class="card card--collapsible settings-card" id="installCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
-              <h3 class="collapse-title">This install</h3>
-              <span class="collapse-count" id="settingsSite"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
-          </div>
-        </details>
-        <!-- Command palette (#316): Ctrl+K has no phone equivalent since the
-             header lost its palette button (#301), so Settings opens it. -->
-        <details class="card card--collapsible settings-card" id="paletteCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
+      <div class="pane-body settings-groups">
+        <h2 class="overline settings-overline" id="settingsGroupDevice">This device</h2>
+        <section class="card action-list settings-group" aria-labelledby="settingsGroupDevice">
+          <ul class="action-rows">
+            <!-- Text size (#314): the escape from the viewport zoom lock (WCAG 1.4.4),
+                 inline because it is changed in place. The vendored text-size control
+                 on the vendored range-tab row; text-size.js persists the step to
+                 task-os.textsize and stamps html[data-textsize]. -->
+            <li class="action-row settings-text-size" id="textSizeCard">
+              <span class="settings-link-label" id="textSizeLabel">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
+                <span class="action-row-title">Text size</span>
+              </span>
+              <nav class="range-tabs" id="textSizeControl" aria-labelledby="textSizeLabel">
+                <button type="button" class="range-tab" data-textsize="small">Small</button>
+                <button type="button" class="range-tab" data-textsize="default">Default</button>
+                <button type="button" class="range-tab" data-textsize="large">Large</button>
+              </nav>
+              <p class="settings-text-size-hint muted">On this device. Rows, buttons and icons keep their size.</p>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="rows" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
+                <span class="action-row-title">Row actions</span>
+                <span class="settings-link-value" id="rowActionsMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="palette" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
+                <span class="action-row-title">Command palette</span>
+                <span class="settings-link-value">Ctrl+K</span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="access" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
+                <span class="action-row-title">Phone access</span>
+                <span class="settings-link-value" id="accessClient"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <h2 class="overline settings-overline" id="settingsGroupSync">Sync</h2>
+        <section class="card action-list settings-group" aria-labelledby="settingsGroupSync">
+          <ul class="action-rows">
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="issues" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg>
+                <span class="action-row-title">Issues as tasks</span>
+                <span class="settings-link-value" id="issuesCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="calendar" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
+                <span class="action-row-title">Calendar</span>
+                <span class="settings-link-value" id="calendarCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <h2 class="overline settings-overline" id="settingsGroupEmail">Email</h2>
+        <section class="card action-list settings-group" aria-labelledby="settingsGroupEmail">
+          <ul class="action-rows">
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="capture" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg>
+                <span class="action-row-title">Capture into Inbox</span>
+                <span class="settings-link-value" id="captureCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <!-- Email archiving (#159, #397): the run, its report and every review
+                 action — the Archive tab until #397, now this row's sheet. -->
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="archive" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
+                <span class="action-row-title">Email archiving</span>
+                <span class="settings-link-value" id="archiveCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <h2 class="overline settings-overline" id="settingsGroupTools">Tools</h2>
+        <section class="card action-list settings-group" aria-labelledby="settingsGroupTools">
+          <ul class="action-rows">
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="search" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+                <span class="action-row-title">Search</span>
+                <span class="settings-link-value" id="searchCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="opener" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
+                <span class="action-row-title">Folder opener</span>
+                <span class="settings-link-value" id="folderCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="voice" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
+                <span class="action-row-title">Voice quick-add</span>
+                <span class="settings-link-value" id="voiceCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="ai" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg>
+                <span class="action-row-title">AI Inbox triage</span>
+                <span class="settings-link-value" id="aiCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <h2 class="overline settings-overline" id="settingsGroupInstall">This install</h2>
+        <section class="card action-list settings-group" aria-labelledby="settingsGroupInstall">
+          <ul class="action-rows">
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="install" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
+                <span class="action-row-title">Database</span>
+                <span class="settings-link-value" id="settingsSite"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="mirror" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
+                <span class="action-row-title">Mirror and backup</span>
+                <span class="settings-link-value" id="mirrorCardMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </section>
+
+    <!-- Build identity: outside every card, last child of <main> (vendored
+         page-foot). Text set from GET /api/version by app.js. -->
+    <footer class="page-foot">
+      <p id="buildReadout"></p>
+    </footer>
+
+    <!-- Task drawer: a right-hand side panel on desktop (>= 1024px, fixed,
+         the content shrinks so it never covers the list); a full-screen sheet
+         on the phone. Deep-linkable as #task/<id>. Body built by drawer.js. -->
+    <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
+           aria-labelledby="drawerTitle" hidden></aside>
+    <!-- Today's split view (#336): on desktop the right half is always the
+         detail pane. While no task is open this is what sits there; styles.css
+         shows it only on Today at >= 1024px with the drawer closed. -->
+    <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
+      <div class="empty-state">
+        <svg class="icon empty-state-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
+        <p class="empty-state-message">Select a task to see its details</p>
+      </div>
+    </aside>
+    <!-- Settings sheets (#397, design.md `settings group` + the detail sheet):
+         one row's sheet at a time, built from the markup below by settings.js.
+         The task drawer's own geometry (the .drawer class): a full-screen sheet
+         on the phone, the detail pane beside the Settings list from 1024px. Each
+         body is the card it replaced, moved unchanged under the same ids. Instant
+         model: a change applies as it is made; Done and the × close. -->
+    <aside id="settingsSheet" class="drawer settings-detail card" role="dialog" aria-modal="false"
+           aria-labelledby="settingsSheetTitle" hidden>
+      <div class="settings-sheet-head">
+        <h2 id="settingsSheetTitle"></h2>
+        <button type="button" class="icon-button settings-sheet-close hit-target" aria-label="Close">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
+        </button>
+      </div>
+      <!-- The head stays put; this is what scrolls (a long archive report). -->
+      <div class="settings-sheet-scroll">
+        <section class="settings-sheet" id="rowActionsCard" data-sheet="rows" hidden>
+          <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
+          <label class="row-actions-field">
+            <span class="row-actions-label">Swipe right</span>
+            <select class="select-native" id="swipeRightSelect"></select>
+          </label>
+          <label class="row-actions-field">
+            <span class="row-actions-label">Swipe left</span>
+            <select class="select-native" id="swipeLeftSelect"></select>
+          </label>
+          <h4 class="row-actions-sub">The ⋯ menu</h4>
+          <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
+          <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
+        </section>
+        <section class="settings-sheet" id="paletteCard" data-sheet="palette" hidden>
+          <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
+          <div class="card-actions">
+            <button type="button" id="paletteOpen" class="button-surface">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
-              <h3 class="collapse-title">Command palette</h3>
-              <span class="collapse-count">Ctrl+K</span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
-            <div class="card-actions">
-              <button type="button" id="paletteOpen" class="button-surface">
-                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
-                Open command palette
-              </button>
-            </div>
+              Open command palette
+            </button>
           </div>
-        </details>
-        <!-- Text size (#314): the escape from the viewport zoom lock (WCAG 1.4.4). The
-             vendored text-size control on the vendored range-tab row; text-size.js
-             persists the step to task-os.textsize and stamps html[data-textsize]. -->
-        <details class="card card--collapsible settings-card" id="textSizeCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
-              <h3 class="collapse-title">Text size</h3>
-              <span class="collapse-count" id="textSizeMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Scales the text on this device. Rows, buttons and icons keep their size.</p>
-            <nav class="range-tabs" id="textSizeControl" aria-label="Text size">
-              <button type="button" class="range-tab" data-textsize="small">Small</button>
-              <button type="button" class="range-tab" data-textsize="default">Default</button>
-              <button type="button" class="range-tab" data-textsize="large">Large</button>
-            </nav>
+        </section>
+        <section class="settings-sheet" id="accessCard" data-sheet="access" hidden>
+          <dl class="access-rows" id="accessRows"></dl>
+          <p class="card-meta">Install: in iOS Safari, Share, then Add to Home Screen; in Android Chrome, Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
+          <div class="access-actions">
+            <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
           </div>
-        </details>
-        <!-- Row actions (#311): what each swipe runs and what the row's ⋯ menu
-             lists, in order — per device, built by settings.js from the one
-             action table (actions.js); stored beside the text size. -->
-        <details class="card card--collapsible settings-card" id="rowActionsCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
-              <h3 class="collapse-title">Row actions</h3>
-              <span class="collapse-count" id="rowActionsMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
-            <label class="row-actions-field">
-              <span class="row-actions-label">Swipe right</span>
-              <select class="select-native" id="swipeRightSelect"></select>
-            </label>
-            <label class="row-actions-field">
-              <span class="row-actions-label">Swipe left</span>
-              <select class="select-native" id="swipeLeftSelect"></select>
-            </label>
-            <h4 class="row-actions-sub">The ⋯ menu</h4>
-            <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
-            <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
+        </section>
+        <section class="settings-sheet" id="issuesCard" data-sheet="issues" hidden>
+          <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
+          <dl class="status-rows" id="issuesStatus" aria-live="polite">
+            <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Last sync</dt><dd id="statusIssuesSync" class="muted">–</dd></div>
+          </dl>
+          <div class="card-actions">
+            <button type="button" id="issuesSyncNow" class="button-surface" disabled>
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+              Sync now
+            </button>
           </div>
-        </details>
-        <!-- Phone access (Step 7): how this connection came in and what the
-             install accepts — filled from GET /api/status by settings.js. -->
-        <details class="card card--collapsible settings-card" id="accessCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
-              <h3 class="collapse-title">Phone access</h3>
-              <span class="collapse-count" id="accessClient"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <dl class="access-rows" id="accessRows"></dl>
-            <p class="card-meta">Install: in iOS Safari, Share, then Add to Home Screen; in Android Chrome, Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
-            <div class="access-actions">
-              <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
-            </div>
+        </section>
+        <section class="settings-sheet" id="calendarCard" data-sheet="calendar" hidden>
+          <p class="card-meta">Today shows your real calendar beside the task list, read-only, from a private ICS address in <code>calendar.ics_url</code> (Google's secret iCal address or Outlook's published calendar link). Nothing is ever written to the calendar. The copy is refreshed every few minutes; recurring events the app cannot expand are counted, never dropped.</p>
+          <dl class="status-rows" id="calendarStatus" aria-live="polite">
+            <div class="status-row"><dt>Calendar</dt><dd id="statusCalendar" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Source</dt><dd id="statusCalendarSource" class="muted">–</dd></div>
+            <div class="status-row"><dt>Last fetched</dt><dd id="statusCalendarFetched" class="muted">–</dd></div>
+          </dl>
+          <div class="card-actions">
+            <button type="button" id="calendarRefresh" class="button-surface" disabled>
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+              Refresh now
+            </button>
           </div>
-        </details>
-        <!-- Markdown mirror + backup: read-only status from GET /api/status
-             (refreshed when this tab is shown). Vendored card; rows built by settings.js. -->
-        <details class="card card--collapsible settings-card" id="mirrorCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
-              <h3 class="collapse-title">Markdown mirror and backup</h3>
-              <span class="collapse-count" id="mirrorCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
-            <dl class="status-rows" id="mirrorStatus" aria-live="polite">
-              <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Import conflicts</dt><dd id="statusMirrorEvents" class="muted">Loading…</dd></div>
-            </dl>
-            <div class="card-actions">
-              <button type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
-            </div>
+        </section>
+        <section class="settings-sheet" id="captureCard" data-sheet="capture" hidden>
+          <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over the archiver's index (<code>search.email_db</code>, read-only) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
+          <dl class="status-rows" id="captureStatus" aria-live="polite">
+            <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Last run</dt><dd id="statusCaptureRun" class="muted">–</dd></div>
+          </dl>
+          <div class="card-actions">
+            <button type="button" id="captureRunNow" class="button-surface" disabled>
+              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
+              Check now
+            </button>
           </div>
-        </details>
-        <!-- Issue provider (Step 8): status from GET /api/issues/status,
-             ↻ = POST /api/issues/sync. Vendored card; rows built by settings.js. -->
-        <details class="card card--collapsible settings-card" id="issuesCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg>
-              <h3 class="collapse-title">Issues as tasks</h3>
-              <span class="collapse-count" id="issuesCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
-            <dl class="status-rows" id="issuesStatus" aria-live="polite">
-              <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Last sync</dt><dd id="statusIssuesSync" class="muted">–</dd></div>
-            </dl>
-            <div class="card-actions">
-              <button type="button" id="issuesSyncNow" class="button-surface" disabled>
-                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
-                Sync now
-              </button>
-            </div>
-          </div>
-        </details>
-        <!-- Capture (#98): status from GET /api/status's `capture`,
-             ↻ = POST /api/capture/email/run. Vendored card; rows by settings.js. -->
-        <details class="card card--collapsible settings-card" id="captureCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg>
-              <h3 class="collapse-title">Capture into Inbox</h3>
-              <span class="collapse-count" id="captureCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over the archiver's index (<code>search.email_db</code>, read-only) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
-            <dl class="status-rows" id="captureStatus" aria-live="polite">
-              <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Last run</dt><dd id="statusCaptureRun" class="muted">–</dd></div>
-            </dl>
-            <div class="card-actions">
-              <button type="button" id="captureRunNow" class="button-surface" disabled>
-                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
-                Check now
-              </button>
-            </div>
-          </div>
-        </details>
-        <!-- Batch email archiving (#157–#159): status from GET /api/status's
-             `archive`, ▷ = POST /api/archive/run over the whole Inbox. The card
-             is read-only apart from that button — the report, the bound and the
-             review actions all live on the Archive tab (#167). -->
-        <details class="card card--collapsible settings-card" id="archiveCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
-              <h3 class="collapse-title">Batch email archiving</h3>
-              <span class="collapse-count" id="archiveCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">What is left in the Inbox once the flagged mail is a task: the archiver (<code>archive.repo</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you on the Archive tab, where every run can also be undone.</p>
-            <dl class="status-rows" aria-live="polite">
-              <div class="status-row"><dt>Archiver</dt><dd id="statusArchiveRepo" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Model</dt><dd id="statusArchiveModel" class="muted">–</dd></div>
-              <div class="status-row"><dt>Threshold</dt><dd id="statusArchiveThreshold" class="muted">–</dd></div>
-              <div class="status-row"><dt>Last run</dt><dd id="statusArchiveLast" class="muted">–</dd></div>
-              <div class="status-row"><dt>Report</dt><dd><button type="button" id="archiveOpenTab" class="button-surface">Open the Archive tab</button></dd></div>
-            </dl>
-            <div class="card-actions">
-              <button type="button" id="archiveRunNow" class="button-surface" disabled>
+        </section>
+        <section class="settings-sheet" id="archiveCard" data-sheet="archive" hidden>
+          <p class="card-meta">What is left in the Inbox once the flagged mail is a task: the archiver (<code>archive.repo</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
+          <div class="archive-head">
+            <div class="archive-actions">
+              <button type="button" id="archiveRun" class="button-surface archive-run" disabled>
                 <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
-                Run now
+                <span id="archiveRunLabel">Archive Inbox now</span>
               </button>
+              <!-- The bound that makes a first run safe: trust in something that
+                   moves your mail is built on an undo you have seen, so start
+                   with one mail. Empty = the whole Inbox. -->
+              <label class="archive-limit">
+                <span class="archive-limit-text">First</span>
+                <input id="archiveLimit" class="input-native archive-limit-input" type="number"
+                       min="1" max="1000" step="1" inputmode="numeric" placeholder="all"
+                       aria-label="How many mails at most this run (empty = all)">
+                <span class="archive-limit-text">mails</span>
+              </label>
+              <span id="archiveProgress" class="archive-progress muted" aria-live="polite"></span>
             </div>
-          </div>
-        </details>
-        <!-- Calendar (#96): status from GET /api/status's `calendar` — the
-             read-only lane beside Today. The address itself is a secret and
-             never reaches the page: the source row is its host alone. -->
-        <details class="card card--collapsible settings-card" id="calendarCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
-              <h3 class="collapse-title">Calendar</h3>
-              <span class="collapse-count" id="calendarCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Today shows your real calendar beside the task list, read-only, from a private ICS address in <code>calendar.ics_url</code> (Google's secret iCal address or Outlook's published calendar link). Nothing is ever written to the calendar. The copy is refreshed every few minutes; recurring events the app cannot expand are counted, never dropped.</p>
-            <dl class="status-rows" id="calendarStatus" aria-live="polite">
-              <div class="status-row"><dt>Calendar</dt><dd id="statusCalendar" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Source</dt><dd id="statusCalendarSource" class="muted">–</dd></div>
-              <div class="status-row"><dt>Last fetched</dt><dd id="statusCalendarFetched" class="muted">–</dd></div>
-            </dl>
-            <div class="card-actions">
-              <button type="button" id="calendarRefresh" class="button-surface" disabled>
-                <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
-                Refresh now
-              </button>
-            </div>
-          </div>
-        </details>
-        <!-- Voice (#92): status from GET /api/status's `voice` — a cached TCP
-             probe of the whisper endpoint. No button: there is nothing to run
-             on demand, only somewhere to be reachable. -->
-        <details class="card card--collapsible settings-card" id="voiceCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
-              <h3 class="collapse-title">Voice quick-add</h3>
-              <span class="collapse-count" id="voiceCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Click the mic on the add dialog and talk; the words appear on the line as they are heard and settle when you click again. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
-            <dl class="status-rows" id="voiceStatus" aria-live="polite">
-              <div class="status-row"><dt>Transcription</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Endpoint</dt><dd id="statusVoiceUrl" class="muted">–</dd></div>
-              <div class="status-row"><dt>Wording</dt><dd id="statusEnrich" class="muted">Loading…</dd></div>
+            <dl class="status-rows" id="archiveStatus" aria-live="polite">
+              <div class="status-row"><dt>Archiver</dt><dd id="statusArchive" class="muted">Loading…</dd></div>
+              <div class="status-row"><dt>Location</dt><dd id="statusArchiveRepo" class="muted">–</dd></div>
+              <div class="status-row"><dt>Threshold</dt><dd id="statusArchiveThreshold" class="muted">–</dd></div>
+              <div class="status-row"><dt>Last run</dt><dd id="statusArchiveRun" class="muted">–</dd></div>
+              <div class="status-row"><dt id="archiveRecentLabel">Recent runs</dt><dd id="statusArchiveRecent" class="muted">–</dd></div>
             </dl>
           </div>
-        </details>
-        <!-- AI Inbox triage (#95): staged suggestions only; accepting one is
-             the explicit write and moves the task from Inbox to Todo. -->
-        <details class="card card--collapsible settings-card" id="aiCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg>
-              <h3 class="collapse-title">AI Inbox triage</h3>
-              <span class="collapse-count" id="aiCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">Triage sends Inbox task text, the project tree and people to the local LLM hub in one bounded request. Suggestions stay staged until you accept or reject each one; nothing is auto-applied.</p>
-            <dl class="status-rows" aria-live="polite">
-              <div class="status-row"><dt>Local AI</dt><dd id="statusAI" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
-            </dl>
+          <div class="pane-top archive-runbar">
+            <label class="archive-runbar-label" for="archiveRunPick">Run</label>
+            <select id="archiveRunPick" class="select-native archive-run-pick"></select>
+            <button type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
           </div>
-        </details>
-        <!-- Search (Step 10): which of the four indexes this install can query
-             — from GET /api/search/status; a kind that is off says why. -->
-        <details class="card card--collapsible settings-card" id="searchCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-              <h3 class="collapse-title">Search</h3>
-              <span class="collapse-count" id="searchCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
-            <p class="card-meta">One box over four indexes: tasks (always), the folder index (<code>search.folder_roots</code>), the email archiver's <code>emails.db</code> (<code>search.email_db</code>, read-only) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
-            <dl class="status-rows" id="searchStatus" aria-live="polite">
-              <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Folders</dt><dd id="statusSearchFolders" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Emails</dt><dd id="statusSearchEmails" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
-            </dl>
-          </div>
-        </details>
-        <!-- Folder opener + folder index (Step 9): the one-line install command
-             for the per-PC opener (opener/install.txt with this address filled
-             in), the opener.env template built from this install's placeholders,
-             and the folder-index status. Filled from GET /api/status by settings.js. -->
-        <details class="card card--collapsible settings-card" id="folderCard">
-          <summary class="collapse-summary">
-            <span class="collapse-main">
-              <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
-              <h3 class="collapse-title">Folder opener and index</h3>
-              <span class="collapse-count" id="folderCardMeta"></span>
-            </span>
-            <span class="collapse-chevron" aria-hidden="true">›</span>
-          </summary>
-          <div class="collapse-body">
+          <div id="archiveHost" class="archive-host"></div>
+        </section>
+        <section class="settings-sheet" id="searchCard" data-sheet="search" hidden>
+          <p class="card-meta">One box over four indexes: tasks (always), the folder index (<code>search.folder_roots</code>), the email archiver's <code>emails.db</code> (<code>search.email_db</code>, read-only) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
+          <dl class="status-rows" id="searchStatus" aria-live="polite">
+            <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Folders</dt><dd id="statusSearchFolders" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Emails</dt><dd id="statusSearchEmails" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
+          </dl>
+        </section>
+        <section class="settings-sheet" id="folderCard" data-sheet="opener" hidden>
           <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
@@ -879,29 +835,39 @@
               </div>
             </details>
           </div>
+        </section>
+        <section class="settings-sheet" id="voiceCard" data-sheet="voice" hidden>
+          <p class="card-meta">Click the mic on the add dialog and talk; the words appear on the line as they are heard and settle when you click again. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
+          <dl class="status-rows" id="voiceStatus" aria-live="polite">
+            <div class="status-row"><dt>Transcription</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Endpoint</dt><dd id="statusVoiceUrl" class="muted">–</dd></div>
+            <div class="status-row"><dt>Wording</dt><dd id="statusEnrich" class="muted">Loading…</dd></div>
+          </dl>
+        </section>
+        <section class="settings-sheet" id="aiCard" data-sheet="ai" hidden>
+          <p class="card-meta">Triage sends Inbox task text, the project tree and people to the local LLM hub in one bounded request. Suggestions stay staged until you accept or reject each one; nothing is auto-applied.</p>
+          <dl class="status-rows" aria-live="polite">
+            <div class="status-row"><dt>Local AI</dt><dd id="statusAI" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
+          </dl>
+        </section>
+        <section class="settings-sheet" id="installCard" data-sheet="install" hidden>
+          <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
+        </section>
+        <section class="settings-sheet" id="mirrorCard" data-sheet="mirror" hidden>
+          <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
+          <dl class="status-rows" id="mirrorStatus" aria-live="polite">
+            <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Backup</dt><dd id="statusBackup" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Import conflicts</dt><dd id="statusMirrorEvents" class="muted">Loading…</dd></div>
+          </dl>
+          <div class="card-actions">
+            <button type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
           </div>
-        </details>
-      </div>
-    </section>
-
-    <!-- Build identity: outside every card, last child of <main> (vendored
-         page-foot). Text set from GET /api/version by app.js. -->
-    <footer class="page-foot">
-      <p id="buildReadout"></p>
-    </footer>
-
-    <!-- Task drawer: a right-hand side panel on desktop (>= 1024px, fixed,
-         the content shrinks so it never covers the list); a full-screen sheet
-         on the phone. Deep-linkable as #task/<id>. Body built by drawer.js. -->
-    <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
-           aria-labelledby="drawerTitle" hidden></aside>
-    <!-- Today's split view (#336): on desktop the right half is always the
-         detail pane. While no task is open this is what sits there; styles.css
-         shows it only on Today at >= 1024px with the drawer closed. -->
-    <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
-      <div class="empty-state">
-        <svg class="icon empty-state-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
-        <p class="empty-state-message">Select a task to see its details</p>
+        </section>
+        <div class="settings-sheet-actions">
+          <button type="button" class="button-primary settings-sheet-done">Done</button>
+        </div>
       </div>
     </aside>
   </main>

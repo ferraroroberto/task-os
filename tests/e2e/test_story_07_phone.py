@@ -81,6 +81,7 @@ from tests.e2e.conftest import (
     assert_date_sheet,
     board_mode,
     e2e_workdir,
+    open_settings_sheet,
     settle,
     shot,
 )
@@ -580,7 +581,7 @@ def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright
         # Settings → Phone access: the token is configured; this browser is on
         # loopback, so it reads as the owner ("this PC") — a phone reads "signed in".
         page.locator("#taskDrawer .drawer-close").tap()
-        page.locator("#settingsBtn").tap()
+        open_settings_sheet(page, "access", tap=True)
         expect(page.locator("#accessClient")).to_have_text("this PC")
         expect(page.locator("#accessRows")).to_contain_text("configured")
         st = page.request.get(f"{base}/api/status").json()

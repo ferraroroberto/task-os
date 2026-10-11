@@ -18,6 +18,7 @@ from tests.e2e.conftest import (
     board_mode,
     e2e_workdir,
     hold_toasts,
+    open_settings_sheet,
     shot,
 )
 from tests.fixtures.anthropic_fake import FakeAnthropic
@@ -94,9 +95,8 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     shot(page, shots / "story-23-ai-triage-2-desktop.png")
 
     page.get_by_role("button", name="Settings", exact=True).click()
-    card = page.locator("#aiCard")
-    card.locator("summary").click()
-    expect(card.locator("#aiCardMeta")).to_have_text("on")
+    expect(page.locator("#aiCardMeta")).to_have_text("on")       # the row's word (#397)
+    card = open_settings_sheet(page, "ai")
     expect(card.locator("#statusAI")).to_contain_text("reachable")
     desktop.close()
 

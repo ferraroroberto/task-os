@@ -17,7 +17,7 @@ Walks the story against the **issues** disposable instance (conftest
     docs/screenshots/story-08-issues-4-desktop.png   drawer after the close: done · activity by sync · closed chip
     docs/screenshots/story-08-issues-5-desktop.png   drawer: a plain task's issue panel — Create issue / Link existing
     docs/screenshots/story-08-issues-6-desktop.png   drawer: after "Create issue" — linked, code, open chip
-    docs/screenshots/story-08-issues-7-desktop.png   Settings card (dark): provider enabled, last sync counts
+    docs/screenshots/story-08-issues-7-desktop.png   Settings sheet (dark): provider enabled, last sync counts
 
 The real-provider walk (``gh`` against the owner's account) is in
 ``docs/validation/story-08-issues.md`` — counts only, no titles.
@@ -33,8 +33,10 @@ from playwright.sync_api import Browser, Page, expect
 from tests.e2e.conftest import (
     _get,
     board_mode,
+    close_settings_sheet,
     dismiss_toasts,
     open_more_fields,
+    open_settings_sheet,
     scroll_to_bottom,
     shot,
 )
@@ -44,18 +46,16 @@ DESKTOP = {"width": 1440, "height": 900}
 
 
 def _sync_now(page: Page) -> None:
-    """Settings → the Issues card's *Sync now* (the app's one sync control since #301).
+    """Settings → Issues as tasks → *Sync now* (the app's one sync control since #301).
 
-    The card is a collapsed disclosure; it is opened for the click and closed
-    again, so the step that walks its collapsed state (6) still finds it shut.
+    The sheet is opened for the press and closed again with Done (#397), so the
+    step that reads the row's word (6) finds the Settings list as a user would.
     """
-    page.click("#settingsBtn")
-    card = page.locator("#issuesCard")
-    card.locator("summary.collapse-summary").click()
+    card = open_settings_sheet(page, "issues")
     sync = card.locator("#issuesSyncNow")
     expect(sync).to_be_enabled()
     sync.click()
-    card.locator("summary.collapse-summary").click()
+    close_settings_sheet(page)
 
 def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -> None:
     inst = issues_webapp
@@ -216,13 +216,11 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         # 6. Settings (dark): provider enabled, the last sync's counts.
         page.evaluate("document.documentElement.dataset.theme = 'dark'")
         page.click("#settingsBtn")
-        card = page.locator("#issuesCard")
-        # every Settings card is a collapsed disclosure (#46): the summary
-        # carries the state word, the body opens on demand
-        expect(card.locator("#issuesCardMeta")).to_have_text("synced")
-        assert card.evaluate("el => el.open") is False
-        card.locator("summary.collapse-summary").click()
-        expect(card).to_have_attribute("open", "")
+        # every Settings row carries its state word (#397): the row says it, the
+        # sheet behind its chevron has the detail
+        expect(page.locator("#issuesCardMeta")).to_have_text("synced")
+        expect(page.locator("#settingsSheet")).to_be_hidden()
+        card = open_settings_sheet(page, "issues")
         expect(card.locator("#statusIssues .status-ok")).to_have_text("enabled")
         expect(card.locator("#statusIssues")).to_contain_text("github")
         expect(card.locator("#statusIssuesSync")).to_contain_text("2 open issue(s) · 0 new · 0 retitled · 0 reopened · 1 closed")

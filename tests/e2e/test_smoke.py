@@ -9,8 +9,8 @@ from playwright.sync_api import Page, expect
 
 def test_shell_boots(webapp: str, page: Page) -> None:
     page.goto(webapp)
-    # four destinations (#350); Settings is the header gear (#281)
-    expect(page.locator("nav.tabs .tab")).to_have_count(4)
+    # three destinations (#350, #397); Settings is the header gear (#281)
+    expect(page.locator("nav.tabs .tab")).to_have_count(3)
     expect(page.locator(".home-head #settingsBtn")).to_be_visible()
     expect(page.locator("#paneBoard .empty-state-message")).to_have_text("Add your first task")
     expect(page.locator("#buildReadout")).to_contain_text("Build:")
