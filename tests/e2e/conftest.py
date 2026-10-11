@@ -818,6 +818,33 @@ def board_mode(page: Page, mode: str) -> None:
     expect(page.locator(f"#paneBoard .board-{mode}")).to_be_visible()
 
 
+def open_settings_sheet(page: Page, key: str, *, tap: bool = False) -> Locator:
+    """Settings → one row's sheet, like a user would (#397).
+
+    Presses the header gear when Settings is not up, then the row whose sheet
+    is *key* (``issues``, ``mirror``, ``archive``, … — the row's
+    ``data-settings-sheet``). Returns the sheet's body, which carries the id of
+    the Settings card it replaced (``#issuesCard`` …), so a story reads the same
+    ids it always did. *tap* presses with touch, for the phone legs.
+    """
+    press = (lambda loc: loc.tap()) if tap else (lambda loc: loc.click())
+    if not page.locator("#paneSettings").is_visible():
+        press(page.locator("#settingsBtn"))
+        expect(page.locator("#paneSettings")).to_be_visible()
+    press(page.locator(f"#paneSettings [data-settings-sheet='{key}']"))
+    body = page.locator(f"#settingsSheet .settings-sheet[data-sheet='{key}']")
+    expect(body).to_be_visible()
+    return body
+
+
+def close_settings_sheet(page: Page) -> None:
+    """Close the open Settings sheet with its Done button (#397)."""
+    sheet = page.locator("#settingsSheet")
+    if sheet.is_visible():
+        sheet.locator(".settings-sheet-done").click()
+    expect(sheet).to_be_hidden()
+
+
 def assert_control_boundaries(scope: Locator) -> list[float]:
     """Every visible field under *scope* draws a boundary of at least 3:1 against its surface.
 

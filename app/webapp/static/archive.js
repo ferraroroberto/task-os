@@ -1,4 +1,4 @@
-/* task-os — the Archive tab: run the batch, read the report, fix what is wrong (#159).
+/* task-os — Settings → Email archiving: run the batch, read the report, fix what is wrong (#159).
  *
  * Step 3/3 of batch email archiving. One button files the whole Outlook Inbox
  * through email-archiver (#157) with the local model picking the folder (#158);
@@ -32,9 +32,10 @@
  * becomes a few-shot line in every later prompt (#158) — explained once, not
  * repeated.
  *
- * Two renderings of one report, like every other view here: the full-width
- * grid on a wide screen, stacked cards with the actions behind a per-row
- * disclosure under 768 px. Both are built from the same row objects.
+ * Two renderings of one report, like every other view here: the grid on a
+ * wide screen (in the detail pane beside the Settings list since #397),
+ * stacked cards with the actions behind a per-row disclosure under 768 px.
+ * Both are built from the same row objects.
  */
 
 'use strict';
@@ -118,15 +119,15 @@ function outcomes(r) {
 
 /**
  * Draw a run's one-line summary into `el` — the single formatter of it (#262):
- * this pane's head and the Settings archive card both call it, so the wording
- * and the status colour cannot drift apart. `last` is the API's run row
+ * since #397 the sheet's head is the one place a run's summary is shown (the
+ * Settings card that repeated it is gone). `last` is the API's run row
  * (`status.last_run`); `null` is "never run". `narrow` picks the one-line
  * phone wording.
  * @param {HTMLElement} el
  * @param {object|null} last
  * @param {boolean} narrow
  */
-export function renderRunSummary(el, last, narrow) {
+function renderRunSummary(el, last, narrow) {
   el.replaceChildren();
   el.classList.remove('muted');
   if (!last) { el.textContent = 'never'; return; }
@@ -145,7 +146,7 @@ export function renderRunSummary(el, last, narrow) {
 }
 
 /**
- * Wire the Archive pane once and hand back the bootstrap's handle.
+ * Wire the Email archiving sheet once and hand back the bootstrap's handle.
  * @param {{onStatus: (archive: object|null) => void, onChanged: () => void}} opts
  *        `onStatus` publishes `GET /api/status`'s `archive` block so the Board's
  *        Inbox header can show what still needs a human; `onChanged` fires when
@@ -178,7 +179,7 @@ export function mountArchive(opts) {
   let runId = null;
   let poll = 0;         // setTimeout handle between two polls of a live run
   // Whether this pane is following a run *at all* — true across the gap where
-  // `poll` is 0 because a tick is in flight. Re-entering the tab mid-run must
+  // `poll` is 0 because a tick is in flight. Re-opening the sheet mid-run must
   // not start a second chain that double-polls and double-toasts.
   let polling = false;
   let busy = false;     // a run or a review action is in flight
@@ -1004,7 +1005,7 @@ export function mountArchive(opts) {
     await Promise.all([refreshStatus(), loadRuns()]);
     // A live run is the one to follow, whichever run the picker was last on:
     // `tick` polls `runId`, and a finished run there would end the poll (and the
-    // Settings card's "running", which follows this pane's) while the new run
+    // Settings row's "running", which follows this pane's) while the new run
     // is still going.
     if (status && status.running && runs.length && runs[0].status === 'running') {
       runId = runs[0].id;
@@ -1074,6 +1075,9 @@ export function mountArchive(opts) {
       els.progress.textContent = progressText(run);
       renderReport();
       startPolling();
+      // The Settings row beside this sheet reads "running" from the status it
+      // is handed (#397): hand it the one that says so.
+      await refreshStatus();
     } catch (err) {
       // 409 archive_in_flight is the honest answer to a second click, and the
       // API's own sentence is better than anything invented here.
@@ -1081,7 +1085,9 @@ export function mountArchive(opts) {
       toast(err.message || 'Could not start the run', 'error');
       // Released before the redraw, which re-reads it for the button's state.
       busy = false;
-      await refreshStatus();
+      // A run this screen had not seen (another device started it): follow
+      // it, as opening the sheet would, rather than only re-reading the head.
+      await refresh();
     } finally {
       busy = false;
     }

@@ -50,6 +50,7 @@ from tests.e2e.conftest import (
     _get,
     _terminate,
     e2e_workdir,
+    open_settings_sheet,
     settle,
     shot,
 )
@@ -173,8 +174,7 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
 
         # Settings says who this browser is, with the way back to the name step
         page.goto(f"{base}/")
-        page.locator("#settingsBtn").click()
-        page.locator("#accessCard summary").click()
+        open_settings_sheet(page, "access")
         expect(page.locator("#accessRows")).to_contain_text("you are Sam Rivera")
         expect(page.locator("#accessRows a")).to_have_attribute("href", "/login?step=name&next=%2F%23settings%2Faccess")
     finally:

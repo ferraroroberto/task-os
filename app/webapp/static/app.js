@@ -17,14 +17,14 @@
  * the views never drift.
  *
  * Every tab is its own module and this file is the wiring: board.js ·
- * today.js · search.js · archive.js (the batch-archiving
- * run and its report, #159 — the one tab that is not a rendering of the task
- * list) · settings.js (issue #37 — the
- * Settings cards used to live here) · journal.js (the done journal, #102 —
+ * today.js · search.js · settings.js (issue #37 — the Settings cards used to
+ * live here; inset groups and their sheets since #397) · archive.js (the
+ * batch-archiving run and its report, #159 — a tab until #397, now the
+ * Settings → Email archiving sheet) · journal.js (the done journal, #102 —
  * `#journal`, a pane without a tab: reached from the palette and the Board's
  * Done column, left by pressing any tab). What stays is what more than one
- * tab needs: routing (nav, the URL, #task/<id>, #journal and the two
- * #settings/… deep links), `state`, and the shared calls the drawer and the
+ * tab needs: routing (nav, the URL, #task/<id>, #journal, #settings and its
+ * #settings/<sheet> links), `state`, and the shared calls the drawer and the
  * palette also make — `syncIssues()` among them.
  *
  * ES module; the vendored components are imported by their static paths so
@@ -67,9 +67,10 @@ const TAB_KEY = 'task-os.tab';
 // stored `table` / `tree` tab needs nothing: the nav falls back to Today.
 const RETIRED_KEYS = ['task-os.tableView', 'task-os.tree.collapsed'];
 // Settings is a pane with no tab (#281): the header gear opens it, `#settings`
-// keeps it across a reload, and these deep links open it on one card.
+// keeps it across a reload, and `#settings/<sheet>` has one row's sheet open
+// over it (#397) — a row press pushes it, so Back closes the sheet.
 const SETTINGS_HASH = '#settings';
-const SETTINGS_HASH_CARDS = { '#settings/opener': 'opener', '#settings/search': 'search', '#settings/access': 'access' };
+const SETTINGS_SHEET_HASH = /^#settings\/([a-z]+)$/;
 // The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it (#102).
 const JOURNAL_HASH = /^#journal(\/|$)/;
 const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];
@@ -119,8 +120,9 @@ const state = {
   headNote: null,     // a state that overrides every view's header line: 'No tasks yet' / 'Server unreachable'
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
-  // /api/status's `archive` block (#159) — the Archive tab renders it in full
-  // and the Board's Inbox header reads the last run's "needs you" count off it.
+  // /api/status's `archive` block (#159) — the Email archiving sheet renders it
+  // in full; the Settings header and the palette read the last run's "needs
+  // you" count off it.
   // `null` = not established yet (or the status call failed), never "off".
   archive: null,
   aiSuggestions: {},  // task id → one pending staged suggestion (#95)
@@ -142,7 +144,7 @@ let preselectedId = null;
 let board = null;
 let search = null;
 let settings = null;
-let archive = null;       // the Archive pane (#159) — the batch run + its report
+let archive = null;       // the Email archiving sheet (#159, #397) — the batch run + its report
 let palette = null;
 let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let actions = null;       // the one row-action runner + its undo (actions.js, #311)
@@ -194,9 +196,9 @@ function indexSuggestions(items) {
 }
 
 /** The one `GET /api/status` the Board needs at boot: the local AI's state
- *  (the Triage button) and the archiver's (the Inbox header's "needs you"
- *  link, #159). The Archive pane re-reads the same block for itself and
- *  publishes it back here, so both paths tell one story. */
+ *  (the Triage button) and the archiver's (the "needs you" count, #159). The
+ *  Email archiving sheet re-reads the same block for itself and publishes it
+ *  back here, so both paths tell one story. */
 async function loadStatus() {
   try {
     const results = await Promise.all([api('/api/status'), api('/api/ai/suggestions')]);
@@ -789,9 +791,11 @@ function setHeadTitle(text, iconId) {
  *  the horizons Today just drew, so the header and the list never disagree.
  *  On the Board: `boardHeadParts` over the counts its lanes were drawn from —
  *  Inbox arrivals in the accent, then overdue / due today, each part in its
- *  own tone (#396). The open count is not repeated here: it is the filter
- *  field's placeholder. The other views name their own exceptions in their
- *  redesign steps (#390); until then their line is empty rather than a count. */
+ *  own tone (#396). On Settings: the mails the last archiving run left for
+ *  you, then the services in trouble, else how many are on (#397). The open
+ *  count is not repeated here: it is the filter field's placeholder. The
+ *  other views name their own exceptions in their redesign steps (#390);
+ *  until then their line is empty rather than a count. */
 function renderHeadStatus() {
   const el = els.homeHeadStatus;
   let text = '';
@@ -805,9 +809,11 @@ function renderHeadStatus() {
     attention = line.attention;
   } else if (state.tab === 'board' && onPane && state.boardCounts) {
     parts = boardHeadParts(state.boardCounts);
+  } else if (state.settingsOpen) {
+    parts = settingsHeadParts();
   }
   el.classList.toggle('is-attention', attention);
-  if (!parts) { el.textContent = text; return; }
+  if (!parts || !parts.length) { el.textContent = text; return; }
   el.replaceChildren();
   parts.forEach(function (part, i) {
     if (i) el.append(' · ');
@@ -816,6 +822,18 @@ function renderHeadStatus() {
     span.textContent = part.text;
     el.appendChild(span);
   });
+}
+
+/** The Settings line's parts (#397): the archive's "needs you" first — the
+ *  one exception that asks for a hand rather than a fix — then settings.js's
+ *  own (failing services, or the plain count), at most two in all. */
+function settingsHeadParts() {
+  const own = settings.headParts();
+  const needs = archiveNeedsYou();
+  if (!needs) return own;
+  // An exception line names exceptions only: the plain count yields to it.
+  return [{ text: needs + (needs === 1 ? ' mail needs' : ' mails need') + ' you', tone: 'attention' }]
+    .concat(own.filter(function (p) { return p.tone !== 'muted'; })).slice(0, 2);
 }
 
 /** …a tab's name and glyph, read off its own nav button (one source). */
@@ -833,6 +851,8 @@ function setHeadTitleFromTab(tab) {
  *  `#settings` keeps it across a reload. */
 function openSettings() {
   hideJournal();
+  // One detail beside the list at a time (#397): Settings has its own.
+  if (drawer.currentId() != null) closeTask();
   if (!state.settingsOpen) {
     state.settingsOpen = true;
     const navEl = document.querySelector('nav.tabs');
@@ -847,7 +867,9 @@ function openSettings() {
     if (scroller) scroller.scrollTop = 0;
     window.scrollTo(0, 0);
   }
-  if (location.hash !== SETTINGS_HASH) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  if (location.hash !== SETTINGS_HASH && !SETTINGS_SHEET_HASH.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  }
   settings.refreshStatus();
   fetchIssuesStatus();
   settings.refreshSearchStatus();
@@ -857,7 +879,7 @@ function openSettings() {
  *  yet: boot opens it at its end, unless a tab press came first (#328). */
 function dropPendingPaneHash() {
   const h = location.hash;
-  if (h === SETTINGS_HASH || SETTINGS_HASH_CARDS[h] || JOURNAL_HASH.test(h)) {
+  if (h === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(h) || JOURNAL_HASH.test(h)) {
     history.replaceState(null, '', location.pathname + location.search);
   }
 }
@@ -865,9 +887,38 @@ function dropPendingPaneHash() {
 function hideSettings() {
   if (!state.settingsOpen) return;
   state.settingsOpen = false;
+  settings.hideSheet();
   els.paneSettings.hidden = true;
   els.settingsBtn.removeAttribute('aria-current');
-  if (location.hash === SETTINGS_HASH) history.replaceState(null, '', location.pathname + location.search);
+  if (location.hash === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
+
+/** A Settings row was pressed (or the palette asked): Settings with that
+ *  row's sheet up, as `#settings/<key>` — pushed, so Back closes the sheet
+ *  (#397). */
+function openSettingsSheet(key) {
+  const hash = '#settings/' + key;
+  if (location.hash !== hash) history.pushState(null, '', location.pathname + location.search + hash);
+  showSettingsSheet(key);
+}
+
+/** …and what `#settings/<key>` shows, however it arrived. The Email
+ *  archiving sheet reads its runs as it opens, as the Archive tab did. */
+function showSettingsSheet(key) {
+  openSettings();
+  const fresh = settings.currentSheet() !== key;
+  if (!settings.showSheet(key)) return;
+  if (fresh && key === 'archive') archive.refresh();
+}
+
+/** The sheet's × / Done / Escape: back to the Settings list. */
+function closeSettingsSheet() {
+  settings.hideSheet();
+  if (SETTINGS_SHEET_HASH.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  }
 }
 
 // ---------------------------------------------------------- URL / drawer
@@ -883,6 +934,8 @@ function hashTaskId() {
 }
 
 function openTask(id) {
+  // The task panel takes the sheet's place beside the Settings list (#397).
+  if (settings.currentSheet()) closeSettingsSheet();
   if (hashTaskId() !== id) {
     // inside the journal the hash keeps saying so, or a reload would land on a tab
     const prefix = state.journal.open ? '#journal/task/' : '#task/';
@@ -923,15 +976,15 @@ function closeTask() {
 }
 
 function onHashChange() {
-  const settingsCard = SETTINGS_HASH_CARDS[location.hash];
-  if (settingsCard) {
-    // The folder chip's one-time hint / a "not configured" search row link
-    // here: Settings → that card, opened (settings.js owns the pane's DOM).
-    openSettings();
-    settings.revealCard(settingsCard);
+  const sheet = SETTINGS_SHEET_HASH.exec(location.hash);
+  if (sheet) {
+    // A row press, Forward, or a link from elsewhere (the folder chip's
+    // one-time hint, a "not configured" search row, the team sign-in):
+    // Settings with that sheet up (settings.js owns the pane's DOM).
+    showSettingsSheet(sheet[1]);
     return;
   }
-  if (location.hash === SETTINGS_HASH) { openSettings(); return; }
+  if (location.hash === SETTINGS_HASH) { openSettings(); settings.hideSheet(); return; }
   if (location.hash === '#search') {
     // Deep link to the Search tab (?q= carries the query — see boot()).
     nav.setTab('search');
@@ -1013,7 +1066,7 @@ async function fetchVersion() {
     const body = await res.json();
     els.buildReadout.textContent = buildReadoutText(body.git_sha || 'unknown', body.built_at || '');
     if (els.settingsSite && body.schema_version != null) {
-      els.settingsSite.textContent = 'database version ' + body.schema_version;   // plain words (#339)
+      els.settingsSite.textContent = 'version ' + body.schema_version;   // the Database row's value: plain words (#339, #397)
     }
   } catch (err) {
     // An unreachable version endpoint is its own visible state, never blank.
@@ -1114,7 +1167,8 @@ function paletteCommands() {
     ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
-    { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: go('archive') },
+    // The Archive tab until #397: Settings → Email archiving now, one command away still.
+    { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: function () { openSettingsSheet('archive'); } },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
     { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
@@ -1230,17 +1284,20 @@ async function boot() {
     // Refresh now on the Calendar card answers the fresh lane (#96): Today
     // shows it without a second round trip.
     onCalendar: function (group) { state.calendar = group; renderTodayPane(); },
-    // A run started from the Settings card is the Archive tab's run: hand it to
-    // that pane, which re-reads the service, picks the live run up and resumes
-    // polling it.
+    // A run this page did not start (another device): hand it to the Email
+    // archiving sheet, which re-reads the service, picks the live run up and
+    // resumes polling it.
     onArchiveRun: function () { if (archive) archive.refresh(); },
-    onOpenArchive: function () { nav.setTab('archive'); },
+    // A row's word changed: the Settings header line is read off them (#397).
+    onHead: renderHeadStatus,
+    onOpenSheet: openSettingsSheet,
+    onCloseSheet: closeSettingsSheet,
   });
-  // The Archive pane (#159), mounted here for the same reason: a stored
-  // `archive` tab fires the nav's onChange straight into it.
+  // The Email archiving sheet's run and report (#159, #397).
   archive = mountArchive({
-    // The Settings archive card renders the same block rather than polling it (#262).
-    // (the palette's Go to Archive hint reads `state.archive` as it opens)
+    // Settings' rows render the same block rather than polling it (#262).
+    // (the palette's Go to Archive hint and the Settings header read
+    // `state.archive`)
     onStatus: function (st) {
       state.archive = st;
       settings.renderArchive(st);
@@ -1277,7 +1334,6 @@ async function boot() {
       // the init call that restores the stored tab, which must keep the hash.
       if (nav) dropPendingPaneHash();
       if (tab === 'board' && board) board.show();
-      if (tab === 'archive') archive.refresh();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
       renderHeadStatus();
@@ -1290,6 +1346,8 @@ async function boot() {
   // A PWA last left on the Settings tab (before #281) reopens on Settings once;
   // the nav has already stored its default tab in that key's place.
   if (storedTab === 'settings' && !location.hash) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
+  // …and one last left on the Archive tab (before #397) on its sheet.
+  if (storedTab === 'archive' && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#settings/archive');
   // Pressed while Settings is up, it re-reads the cards — what tapping the
   // Settings tab used to do.
   els.settingsBtn.addEventListener('click', openSettings);
@@ -1317,8 +1375,9 @@ async function boot() {
     // an open dialog (palette, quick-add, the keys card, a confirmation) owns
     // Escape natively — it must not also close the drawer underneath (#121)
     if (document.querySelector('dialog[open]')) return;
-    // the drawer first (it is the thing on top), then Select mode
-    if (drawer.currentId() != null) closeTask();
+    // a Settings sheet or the drawer first (the thing on top), then Select mode
+    if (settings.currentSheet()) closeSettingsSheet();
+    else if (drawer.currentId() != null) closeTask();
     else if (selection.isActive()) selection.setActive(false);
   });
   window.addEventListener('hashchange', onHashChange);

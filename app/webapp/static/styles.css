@@ -305,13 +305,14 @@ html, body {
 .pane-body .card { margin: 0; }
 
 /* Width follows the shape of the view (design.md Layout, fleet-config#1113): the
-   Board, Today and Archive tabs are two-dimensional (lanes, a calendar lane,
-   a run report) and span the window; Search (results as
-   cards) and Settings (collapsible cards) are one-dimensional and keep the
-   centred measure. The declaration is .fleet.toml [design] wide_views. One
-   measure per view: the persistent header row and the build footer are capped
-   with the active pane, so the view never mixes two widths. The drawer is a
-   fixed aside and is left out on purpose. */
+   Board and Today tabs are two-dimensional (lanes, a calendar lane) and span
+   the window; Search (results as cards) and Settings (inset groups) are
+   one-dimensional and keep the centred measure — until a Settings sheet is up
+   beside it on a wide screen, when the list and the sheet share the window
+   (master-detail, below). The declaration is .fleet.toml [design] wide_views.
+   One measure per view: the persistent header row and the build footer are
+   capped with the active pane, so the view never mixes two widths. The drawer
+   is a fixed aside and is left out on purpose. */
 .app:has(> #paneSearch:not([hidden])) > :is(.home-head, .pane, .page-foot),
 .app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) {
   max-width: var(--layout-measure);
@@ -339,20 +340,118 @@ html, body {
 .card.disclosure-flat > .collapse-body { padding: 0 0 var(--space-xs); }
 
 /* ------------------------------------------------------------ settings */
-/* Every Settings card is a collapsible disclosure (index.html). The body
-   breathes: the first paragraph sits under the summary with room; labels are
-   plain label-size text (no caps); state words carry the color. */
-.settings-card .collapse-body { display: grid; gap: var(--space-sm); padding-top: var(--space-md); font-size: var(--font-caption); }
-.settings-card .card-meta { margin: 0; font-size: var(--font-caption); line-height: 1.5; }
-.settings-card .collapse-count { font-size: var(--font-caption); }
-.settings-card .button-ghost, .settings-card .button-surface { font-size: var(--font-caption); }
+/* Inset groups (#397, design.md `settings group`, the shape home-automation's
+   Settings has): an overline over each group card, each row a lead glyph, its
+   label, the current value muted (in its tone when it is an exception) and a
+   chevron to its sheet. The rows are the vendored action-row; only the
+   settings-specific row layout lives here. */
+.settings-groups { gap: 0; }
+.settings-overline { margin: var(--space-md) 14px var(--space-sm); }
+.settings-overline:first-child { margin-top: 0; }
+.settings-group { margin-bottom: var(--gap); }
+.settings-link {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-sm);
+}
+/* The label never gives way to its value: the value ellipsizes first. */
+.settings-link .action-row-title { flex: 1 0 auto; overflow: visible; }
+.settings-link-icon { flex: none; width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+.settings-link-value {
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--font-body-sm);
+}
+.settings-link-value[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
+.settings-link-value[data-tone="danger"] { color: var(--danger-text); font-weight: 600; }
+.settings-link-chevron { flex: none; width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
+/* The row whose sheet is up, beside it on a wide screen (design.md Layout:
+   the selected row keeps the accent-soft tint). */
+.settings-link[aria-current="true"] { background: var(--accent-soft); }
+/* Muted text falls under AA on that tint (COLOR-02): the selected row's plain
+   value and glyphs take the accent-text the active nav tab pairs with it. */
+.settings-link[aria-current="true"] :is(.settings-link-value:not([data-tone]), .settings-link-icon, .settings-link-chevron) { color: var(--accent-text); }
+/* Text size, changed in place: the label, the vendored range-tab row, one
+   hint line. A single minmax(0, 1fr) track so Large never widens the card. */
+.action-row.settings-text-size {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-sm);
+  padding: var(--space-sm) 14px var(--space-md);
+}
+.settings-link-label { display: flex; align-items: center; gap: var(--space-sm); min-height: var(--row-sm); }
+.settings-text-size-hint { margin: 0; font-size: var(--font-body-sm); }
+
+/* The sheet (#settingsSheet): the task drawer's geometry (.drawer) — a
+   full-screen sheet on the phone, the detail pane from 1024px. Its head stays
+   in view and the body under it scrolls (the archive report is long); each
+   body is the card it replaced, its text the 14px body-sm role (TYPE-01).
+   Two classes, to win over .drawer's own scroller and panel width. */
+.drawer.settings-detail { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.drawer.settings-detail[hidden] { display: none; }
+.settings-sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 calc(-1 * var(--space-md));
+  padding: 0 var(--space-md) calc(env(safe-area-inset-bottom, 0px) + var(--space-md));
+}
+.settings-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: var(--row-md);
+  margin-bottom: var(--space-sm);
+}
+.settings-sheet-head h2 { margin: 0; font-size: var(--font-heading-lg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-sheet-close .icon { width: var(--icon-title); height: var(--icon-title); }
+.settings-sheet { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); font-size: var(--font-body-sm); }
+.settings-sheet[hidden] { display: none; }
+.settings-sheet .card-meta { margin: 0; font-size: var(--font-body-sm); line-height: 1.5; }
+.settings-sheet .button-ghost, .settings-sheet .button-surface { font-size: var(--font-body-sm); }
+/* Instant model: Done only closes, so it ends the sheet in the flow rather
+   than pinned over its last controls (the filter sheet's lesson, #395). */
+.settings-sheet-actions { margin-top: var(--space-md); padding-top: 12px; border-top: 1px solid var(--line); }
+.settings-sheet-actions .button-primary { width: 100%; }
+@media (max-width: 1023px) {
+  body[data-settings-sheet] { overflow: hidden; }
+  body[data-settings-sheet] nav.tabs { visibility: hidden; }
+}
+@media (min-width: 1024px) {
+  /* Master-detail (design.md Layout, list : detail = 1 : 1.5): while a sheet
+     is up, the Settings list takes the left share and the sheet the right. */
+  body[data-settings-sheet]:not([data-settings-sheet="archive"]) .app:has(> #paneSettings:not([hidden])) {
+    --split-w: calc((100vw - var(--split-rail, 0px) - var(--gap) * 3) * 0.6);
+    padding-right: calc(var(--split-w) + var(--gap) * 2);
+  }
+  body[data-settings-sheet]:not([data-settings-sheet="archive"]) .app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) { max-width: none; }
+  .drawer.settings-detail { --drawer-w: var(--split-w); box-shadow: none; }
+  /* …except the Email archiving report, a nine-column table (the Archive tab
+     until #397): two-dimensional, so its sheet spans the content width
+     (design.md: width follows the shape of the view) and the list waits
+     under it, as it was, one × away. */
+  body[data-settings-sheet="archive"] .drawer.settings-detail {
+    --drawer-w: calc(100vw - var(--split-rail, 0px) - var(--gap) * 2);
+  }
+}
+
 .status-rows { margin: 0; display: grid; gap: var(--space-xs); }
-.status-row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
-.status-row dt { color: var(--muted); font-size: var(--font-caption); }
-.status-row dd { margin: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
-.status-row .status-ok { color: var(--success, var(--fg)); font-weight: 600; }
+.status-row { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
+.status-row dt { color: var(--muted); font-size: var(--font-body-sm); }
+.status-row dd { margin: 0; font-size: var(--font-body-sm); overflow-wrap: anywhere; }
+/* A state word in its tone (design.md status chip tone map): a plain "on" is
+   ink, never success green as text (#390's diagnosis 10); broken is danger. */
+.status-row .status-ok { color: var(--fg); font-weight: 600; }
 .status-row .status-off { color: var(--muted); font-weight: 600; }
-.status-row .status-warn { color: var(--danger, var(--fg)); font-weight: 600; }
+.status-row .status-warn { color: var(--danger-text); font-weight: 600; }
 
 /* ============================================================ theme toggle */
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
@@ -370,6 +469,8 @@ html, body {
    in the accent, overdue / due today in the attention text. */
 .home-head .status .is-accent { color: var(--accent-text); }
 .home-head .status .is-attention { color: var(--attention-text); }
+/* …and Settings' a failing service in the danger text (#397). */
+.home-head .status .is-danger { color: var(--danger-text); }
 :root[data-theme="dark"] .theme-icon-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-icon-sun { display: none; }
 
@@ -542,16 +643,16 @@ a.chip:hover { text-decoration: underline; }
 /* Settings: opener card */
 .opener-block { display: grid; gap: var(--space-sm); margin-top: var(--space-sm); }
 .opener-block-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
-.opener-block-title { font-size: var(--font-caption); color: var(--muted); }
+.opener-block-title { font-size: var(--font-body-sm); color: var(--muted); }
 .opener-cmd {
   margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
-  font-size: var(--font-caption); white-space: pre-wrap;
+  font-size: var(--font-body-sm); white-space: pre-wrap;
   /* a long token (a path, a URL) breaks where it must; words still wrap whole —
      break-all split "Directory" and "-Force" mid-word (#281) */
   overflow-wrap: anywhere;
 }
-.opener-more summary { cursor: pointer; font-size: var(--font-caption); color: var(--muted); }
+.opener-more summary { cursor: pointer; font-size: var(--font-body-sm); color: var(--muted); }
 /* 12 + 20 + 12 = the 44px floor for a one-line summary (#281); it stays a
    list-item so the disclosure keeps its marker. */
 .opener-more > summary { padding-block: 12px; line-height: 20px; }
@@ -1530,13 +1631,13 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .chip-issue-unknown { border-style: dashed; }
 .card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
 .card-actions .button-surface { display: inline-flex; align-items: center; gap: var(--space-xs); }
-/* Every Settings button is pressed on its own in a card body, never in a
+/* Every Settings button is pressed on its own in a sheet body, never in a
    cluster, so it simply is 44px tall (#281) — the vendored 36px control
-   height is a floor the min-height lifts. */
-.settings-card .button-surface, .settings-card .button-ghost { min-height: var(--hit-min); }
-/* Every glyph on a Settings button is the icons.size inline step (16px), not
-   1em of the caption-sized label (12px) or a hand-picked 14 (#281). */
-.settings-card .button-surface .icon, .settings-card .button-ghost .icon { width: var(--icon-inline); height: var(--icon-inline); }
+   height is a floor the min-height lifts. Its glyph is the icons.size inline
+   step (16px), not 1em of its label (COMP-02; .drawer's own rule covers the
+   sheet's, this keeps it whatever holds the button). */
+.settings-sheet .button-surface, .settings-sheet .button-ghost { min-height: var(--hit-min); }
+.settings-sheet .button-surface .icon, .settings-sheet .button-ghost .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .is-busy .icon { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -1925,11 +2026,11 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 
 /* Settings → Phone access card: status rows from GET /api/status. A coloured
    state word is always bold — one rule for every Settings row (#48). */
-.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-xs) var(--gap); margin: 0; font-size: var(--font-caption); }
+.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-xs) var(--gap); margin: 0; font-size: var(--font-body-sm); }
 .access-rows dt { color: var(--muted); }
 .access-rows dd { margin: 0; }
-.access-rows .ok { color: var(--success); font-weight: 600; }
-.access-rows .warn { color: var(--danger); font-weight: 600; }
+.access-rows .ok { color: var(--fg); font-weight: 600; }   /* never success green as text (#397) */
+.access-rows .warn { color: var(--danger-text); font-weight: 600; }
 .access-rows a { color: var(--accent); }
 .access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }
 
@@ -2016,6 +2117,10 @@ kbd {
   line-height: 1.5;
   text-align: center;
 }
+/* A key drawn as a glyph (⌘, ↑, ↓) sits on the 16px inline step, never 1em of
+   the 12px key label (COMP-02: the palette foot and Settings → Command
+   palette, #397). */
+kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
 
 /* ----------------------------------------------------------- palette */
 /* The vendored dialog shell, wider and top-anchored on desktop; on the phone
@@ -2127,7 +2232,7 @@ kbd {
    state), so ticked reads at a glance and without hue; locked by a swipe:
    the same glyph, muted and inert. No fill either way (#357). */
 .row-actions-tick:disabled[aria-pressed="true"] { color: var(--muted); }
-.row-actions-hint { font-size: var(--font-caption); white-space: nowrap; }
+.row-actions-hint { font-size: var(--font-body-sm); white-space: nowrap; }
 /* the two arrows stand side by side: one icon-button gap apart, so their
    44px targets touch and never overlap (the row's own gap is 10px) */
 .row-actions-move + .row-actions-move { margin-left: calc(var(--icon-btn-gap) - 10px); }
@@ -2193,12 +2298,14 @@ kbd {
 .board-col-link { position: relative; }
 .board-col-link::before { content: ""; position: absolute; inset: -14px -4px; }
 
-/* ---- Archive tab (#159) — the batch run and its report. Full-width like
-   every other PC-first pane: the head card carries the one button, the bound
-   that makes a first run safe and the service's own state; the report is the
+/* ---- Settings → Email archiving (#159; the Archive tab until #397) — the
+   batch run and its report, in the Settings sheet (the detail pane beside the
+   list on a wide screen): the head carries the one button, the bound that
+   makes a first run safe and the service's own state; the report is the
    `.task-table` grid on a wide screen and stacked cards under 768 px,
    where nine columns do not fit and the actions are the point. Tokens only —
-   the state words reuse the Settings card's `.status-ok/-warn/-off`. ---- */
+   the state words reuse the Settings `.status-ok/-warn/-off`; its text is the
+   14px body-sm role, never the caption (TYPE-01, #397). ---- */
 /* `minmax(0, …)`, like every other stack here: an implicit `auto` track is
    sized to its content's min-content, and one un-wrappable reading (a status
    line the phone draws `nowrap`) would then widen the card past the pane
@@ -2208,23 +2315,23 @@ kbd {
 .archive-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
 .archive-run { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-h); }
 .archive-run .icon { width: var(--icon-inline); height: var(--icon-inline); }
-.archive-limit { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--font-caption); }
+.archive-limit { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--font-body-sm); }
 .archive-limit-input { width: 5.5rem; min-height: var(--control-h); }
 /* Its own line: it is the one thing here that changes while you watch, and a
    growing sentence must not push the button and the bound around. */
-.archive-progress { flex: 1 1 100%; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.archive-progress { flex: 1 1 100%; min-width: 0; font-size: var(--font-body-sm); overflow-wrap: anywhere; }
 .archive-progress:empty { display: none; }
 .archive-head .status-row { grid-template-columns: 7rem minmax(0, 1fr); }
 
 /* The run picker sits on the same strip shape every other pane uses. */
 .archive-runbar { justify-content: flex-start; flex-wrap: wrap; }
-.archive-runbar-label { color: var(--muted); font-size: var(--font-caption); }
+.archive-runbar-label { color: var(--muted); font-size: var(--font-body-sm); }
 .archive-run-pick { min-height: var(--control-h); max-width: min(100%, 26rem); }
 .archive-runbar .button-ghost { margin-left: auto; min-height: var(--control-h); }   /* + its 4px a side = 44 (#281) */
 
 /* ---- the report grid ---- */
 .archive-table-wrap { padding: 0; overflow: hidden; }
-.archive-table { font-size: var(--font-caption); }
+.archive-table { font-size: var(--font-body-sm); }
 /* Centred, not top-aligned: the file-chip cell is the one column whose
    content can wrap to more than one line (#178) — a five-file row taller than
    its neighbours must not read as the other cells having drifted upward. */
@@ -2245,7 +2352,7 @@ kbd {
   overflow: hidden;
   color: var(--muted);
 }
-.archive-reason-error { color: var(--danger); }
+.archive-reason-error { color: var(--danger-text); }   /* the AA text tone, not the fill (#397) */
 .archive-confidence { font-variant-numeric: tabular-nums; }
 .archive-files .chip { max-width: 9rem; }
 /* The desktop cap's own chip (#178): same pill, a button rather than a link,
@@ -2265,7 +2372,7 @@ kbd {
 
 /* ---- the per-row actions (the phone card's; the desktop row has its ⋮) ---- */
 .archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
-.archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-caption); }
+.archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-body-sm); }
 .archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
 /* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
    *Revert* are all `.archive-action`, so an open panel may not invent a colour
@@ -2305,19 +2412,19 @@ kbd {
   min-height: var(--row-sm);
   padding: var(--space-xs) var(--space-sm);
   text-align: left;
-  font-size: var(--font-caption);
+  font-size: var(--font-body-sm);
 }
 .archive-cand:hover { background: var(--accent-soft); border-color: var(--accent-border-soft); }
 .archive-cand-name { font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-cand-path { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-cand-score { color: var(--muted); font-variant-numeric: tabular-nums; }
-.archive-move-none { margin: 0; font-size: var(--font-caption); }
+.archive-move-none { margin: 0; font-size: var(--font-body-sm); }
 .archive-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-sm); align-items: center; }
 /* The field and its picker button are one group in the markup so the phone can
    draw them as one box (below); on a wide screen the group dissolves and its
    two children are the grid's own first two tracks, exactly as before. */
 .archive-other-field { display: contents; }
-.archive-other-input, .archive-hint { min-width: 0; min-height: var(--control-h); font-size: var(--font-caption); }
+.archive-other-input, .archive-hint { min-width: 0; min-height: var(--control-h); font-size: var(--font-body-sm); }
 .archive-other-go { white-space: nowrap; min-height: var(--control-h); }
 /* …and the picker button is a control on that line, not a smaller glyph
    floating half a line above it. */
@@ -2332,11 +2439,11 @@ kbd {
 .archive-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .archive-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
 .archive-card-head .archive-subject { min-width: 0; max-width: none; }
-.archive-card-why { margin: 0; min-width: 0; font-size: var(--font-caption); overflow-wrap: anywhere; }
+.archive-card-why { margin: 0; min-width: 0; font-size: var(--font-body-sm); overflow-wrap: anywhere; }
 /* who · when · where, one line: the destination is the end that ellipsizes */
-.archive-card-meta { margin: 0; min-width: 0; font-size: var(--font-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-card-meta { margin: 0; min-width: 0; font-size: var(--font-body-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-card-meta .archive-dest { display: inline; max-width: none; }
-.archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); min-width: 0; font-size: var(--font-caption); }
+.archive-card-dest { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); min-width: 0; font-size: var(--font-body-sm); }
 .archive-card-dest .archive-dest { min-width: 0; max-width: 100%; }
 .archive-card-why .archive-reason { display: block; max-width: none; overflow-wrap: anywhere; }
 /* A file chip is `.archive-files`' own flex item, which — like any flex item —

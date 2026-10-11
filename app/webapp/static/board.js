@@ -36,8 +36,8 @@
  *
  * The AI triage action (#95) works on the Inbox column, so it sits on the
  * mode line in Status mode while the Inbox has tasks, never in a lane head.
- * The pointer at the Archive tab that used to sit there is gone: the tab and
- * the palette's Go to Archive hint already carry the last run's count.
+ * The pointer at the Archive tab that used to sit there is gone: the Settings
+ * header and the palette's Go to Archive hint carry the last run's count.
  */
 
 'use strict';

@@ -9,7 +9,7 @@
 Two disposable instances over the synthetic seed. The plain ``seeded_webapp``
 (blank ``calendar.ics_url``, like every other story) draws **no lane at all**
 (#320): Today's task column takes the width, and how to connect a calendar is
-the Settings card's job.
+the Settings sheet's job.
 ``calendar_webapp`` points ``calendar.ics_url`` at
 :class:`tests.fixtures.calendar_fake.FakeCalendar` — a loopback server in this
 pytest process serving ``tests/fixtures/calendar/day.ics``, never a real
@@ -51,6 +51,7 @@ from tests.e2e.conftest import (
     _terminate,
     dismiss_toasts,
     e2e_workdir,
+    open_settings_sheet,
     shot,
 )
 from tests.fixtures.calendar_fake import SECRET, FakeCalendar
@@ -105,20 +106,15 @@ def _open_today(page: Page, base: str) -> None:
 
 
 def _open_calendar_card(page: Page):
-    page.get_by_role("button", name="Settings", exact=True).click()
-    card = page.locator("#calendarCard")
-    expect(card).to_be_visible()
-    if not card.evaluate("el => el.open"):
-        card.locator("summary.collapse-summary").click()
-    expect(card).to_have_attribute("open", "")
-    return card
+    """Settings → Calendar: the row's sheet (#397), the card it replaced."""
+    return open_settings_sheet(page, "calendar")
 
 
 def test_today_calendar_lane(
     seeded_webapp: str, calendar_webapp: CalendarInstance, browser: Browser, shots: Path
 ) -> None:
     # 1. No calendar configured: no lane (#320) — the reason is in the API and
-    #    the Settings card, where the hint to connect one lives.
+    #    the Settings sheet, where the hint to connect one lives.
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
@@ -137,7 +133,7 @@ def test_today_calendar_lane(
         assert widths[1] >= widths[0] - 1, widths
         page.set_viewport_size(DESKTOP)
         card = _open_calendar_card(page)
-        expect(card.locator("#calendarCardMeta")).to_have_text("off")
+        expect(page.locator("#calendarCardMeta")).to_have_text("off")
         expect(card.locator("#statusCalendar")).to_contain_text("not configured")
         expect(card).to_contain_text("calendar.ics_url")   # the setup hint lives here
         expect(card.locator("#calendarRefresh")).to_be_disabled()
@@ -164,13 +160,13 @@ def test_today_calendar_lane(
         shot(page, shots / "story-28-calendar-2-desktop.png")
 
         # 3. An answer that is not a calendar (a sign-in page), through the
-        #    Settings card's Refresh now.
+        #    Settings sheet's Refresh now.
         fake.mode = "html"
         card = _open_calendar_card(page)
         expect(card.locator("#calendarRefresh")).to_be_enabled()
         card.locator("#calendarRefresh").click()
         expect(card.locator("#statusCalendar .status-warn")).to_have_text("not a calendar")
-        expect(card.locator("#calendarCardMeta")).to_have_text("error")
+        expect(page.locator("#calendarCardMeta")).to_have_text("error")
         page.click("nav.tabs .tab[data-tab='today']")
         expect(lane).to_have_attribute("data-state", "parse_error")
         expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar feed unreadable")
@@ -202,7 +198,7 @@ def test_today_calendar_lane(
         expect(card.locator("#statusCalendar .status-ok")).to_have_text("reading")
         expect(card.locator("#statusCalendar")).to_contain_text("6 event(s) today · 1 recurring not checked")
         expect(card.locator("#statusCalendarSource")).to_contain_text("127.0.0.1")
-        expect(card.locator("#calendarCardMeta")).to_have_text("on")
+        expect(page.locator("#calendarCardMeta")).to_have_text("on")
         dismiss_toasts(page)
         shot(page, shots / "story-28-calendar-3-desktop.png")
 
