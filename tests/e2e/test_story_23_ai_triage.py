@@ -10,7 +10,16 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, hold_toasts, shot
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    _boot,
+    _get,
+    _terminate,
+    board_mode,
+    e2e_workdir,
+    hold_toasts,
+    shot,
+)
 from tests.fixtures.anthropic_fake import FakeAnthropic
 from tests.fixtures.seed import seed_db
 
@@ -62,19 +71,23 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     page.goto(base + "/")
     page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
     expect(page.locator("#paneBoard")).to_be_visible()
+    # Triage works on the Inbox column, so it is on the Status mode's line,
+    # never on the week planner nor in a column head (#396)
+    expect(page.locator("#paneBoard .board-triage")).to_be_hidden()
+    board_mode(page, "status")
 
-    triage = page.locator(".board-col[data-col='inbox'] .board-triage")
+    triage = page.locator("#paneBoard .board-bar .board-triage")
     expect(triage).to_be_enabled()
     hold_toasts(page)                  # shot 2 frames the triage toast and the accept toast
     triage.click()
-    suggestions = page.locator(".board-col[data-col='inbox'] .ai-suggestion")
+    suggestions = page.locator("#paneBoard .board-status .board-col[data-col='inbox'] .ai-suggestion")
     expect(suggestions.first).to_be_visible()
     assert suggestions.count() >= 1
     shot(page, shots / "story-23-ai-triage-1-desktop.png")
 
     first_task_id = int(suggestions.first.locator("xpath=..").get_attribute("data-id"))
     suggestions.first.get_by_role("button", name="Accept suggestion").click()
-    expect(page.locator(f".board-col[data-col='todo'] .trow[data-id='{first_task_id}']")).to_be_visible()
+    expect(page.locator(f"#paneBoard .board-status .board-col[data-col='todo'] .trow[data-id='{first_task_id}']")).to_be_visible()
     task = _get(base, f"/api/tasks/{first_task_id}")
     assert task["status"] == "todo" and task["priority"] == "medium"
     assert {row["actor"] for row in task["activity"] if row["field"] in {"parent", "priority", "status"}} == {"ai"}
@@ -93,8 +106,9 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     mobile = phone.new_page()
     mobile.goto(base + "/")
     mobile.get_by_role("tab", name="Board").click()
+    board_mode(mobile, "status")
     mobile.locator(".board-strip-btn[data-col='inbox']").click()
-    expect(mobile.locator(".board-triage-phone")).to_be_visible()
-    expect(mobile.locator(".board-col[data-col='inbox'] .ai-suggestion").first).to_be_visible()
+    expect(mobile.locator("#paneBoard .board-bar .board-triage")).to_be_visible()
+    expect(mobile.locator("#paneBoard .board-status .board-col[data-col='inbox'] .ai-suggestion").first).to_be_visible()
     shot(mobile, shots / "story-23-ai-triage-3-phone.png")
     phone.close()

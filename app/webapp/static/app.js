@@ -39,7 +39,7 @@ import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { actionById, createActions, failedOf, failureText } from './actions.js';
 import { api, qs } from './api.js';
 import { mountArchive } from './archive.js';
-import { mountBoard } from './board.js';
+import { boardHeadParts, mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
@@ -91,6 +91,8 @@ const els = {
   boardBulk: document.getElementById('boardBulk'),
   todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
+  boardBar: document.getElementById('boardBar'),
+  boardScope: document.getElementById('boardScope'),
   todayFilterText: document.getElementById('todayFilterText'),
   todayScope: document.getElementById('todayScope'),
   todayHost: document.getElementById('todayHost'),
@@ -113,6 +115,7 @@ const state = {
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'today',
   todayCounts: null,  // Today's horizon counts as last drawn (today.js): the header's exceptions line (#393)
+  boardCounts: null,  // …and the Board's (board.js, #396): Inbox arrivals, overdue, due today
   headNote: null,     // a state that overrides every view's header line: 'No tasks yet' / 'Server unreachable'
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
@@ -173,7 +176,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilterText', 'todayFilterText', 'todayScope', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -398,6 +401,18 @@ async function setStatus(id, status) {
   if (!(await actions.run(actionById('complete'), [task]))) throw new Error('busy');
 }
 
+/** A row dropped on a Board week lane (#396): re-dated to the lane's first
+ *  day (`null` = No date) through the one action runner — the date sheet's
+ *  own Move, so the same write, toast and Undo, and nothing but `due`. */
+async function setDue(id, due) {
+  const task = await resolveTask(id);
+  if (!task) {
+    toast('That task is no longer on the list', 'error');
+    throw new Error('task not found');
+  }
+  if (!(await actions.run(actionById('change-date'), [task], due))) throw new Error('busy');
+}
+
 /** Delete every ticked task (#121) — POST /api/tasks/bulk/delete, after the
  *  one confirmation names the count, the projects whose children go too and
  *  the synced coding tasks the next sync would bring back. Per-id results as
@@ -501,12 +516,19 @@ function todayItems() {
   return viewItems().filter(function (t) { return matchesScope(t, state.filters.scope); });
 }
 
+/** The Board's list: the shared list (today's done tasks included, for the
+ *  Status mode's Done column) in the same scope (#396). */
+function boardItems() {
+  return state.items.filter(function (t) { return matchesScope(t, state.filters.scope); });
+}
+
 /** The switch moved: the scope is applied in the browser, so the list the
  *  server sent stays; only the URL key and the views that read it change. */
 function onScopeChange(scope) {
   state.filters = Object.assign({}, state.filters, { scope: scope });
   syncUrl();
   renderFilters();
+  renderBoardPane();
   renderTodayPane();
   renderSearchScope();
   if (search) search.refilter();
@@ -549,8 +571,11 @@ function onFilterChange(next) {
 
 function renderFilters() {
   const options = { projects: state.projects, people: state.people, count: viewItems().length };
-  // Today counts what it shows: its own list is narrowed by the scope switch.
+  // Today and the Board count what they show: their lists are narrowed by the scope switch.
   const todayOptions = Object.assign({}, options, { count: todayItems().length });
+  const boardOptions = Object.assign({}, options, {
+    count: boardItems().filter(function (t) { return state.filters.status.length || !CLOSED[t.status]; }).length,
+  });
   // [tab, the top strip that holds the text input (#80) and the filter button
   // (#395) — Search has no text strip: its own box owns the text and holds
   // the button]
@@ -570,7 +595,7 @@ function renderFilters() {
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
         : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }
-          : pair[0] === 'today' ? todayOptions : options;
+          : pair[0] === 'today' ? todayOptions : pair[0] === 'board' ? boardOptions : options;
       filterCards[pair[0]].render(state.filters, opts);
     });
 }
@@ -632,23 +657,24 @@ function selectOpts() {
 function renderBoardPane() {
   if (!board) {
     board = mountBoard({
-      onOpen: openTask, onStatus: setStatus,
+      onOpen: openTask, onStatus: setStatus, onDue: setDue,
       onToggleSelect: selectHandlers.onToggleSelect, menu: menus.board,
       onTriage: triageInbox,
       onAcceptSuggestion: acceptAISuggestion,
       onRejectSuggestion: rejectAISuggestion,
-      onOpenArchive: function () { nav.setTab('archive'); },
       onAdd: addTask,
-    });
+      // Week · Status changes what the lanes hold, so the header line follows.
+      onModeChange: function () { menus.board.endRender(); renderHeadStatus(); },
+    }, els.boardBar);
   }
+  els.boardBar.hidden = false;
+  renderScope('board', els.boardScope);
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
-  board.render(state.items, state.filters, Object.assign({
+  state.boardCounts = board.render(boardItems(), state.filters, Object.assign({
     ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
-    // Mail the last run could not file is waiting behind the Archive tab, not
-    // in this column — the count is a pointer, never a task row (#159).
-    archiveNeedsYou: archiveNeedsYou(),
   }, selectOpts()));
   menus.board.endRender();
+  renderHeadStatus();
 }
 
 function renderTodayPane() {
@@ -761,21 +787,35 @@ function setHeadTitle(text, iconId) {
 /** The line beside the title names an exception or states a plain fact
  *  (#393, design.md `page-header`). On Today: `headLine` over the counts of
  *  the horizons Today just drew, so the header and the list never disagree.
- *  The open count is not repeated here: it is the filter field's
- *  placeholder. The other views name their own exceptions in their redesign
- *  steps (#390); until then their line is empty rather than a count. */
+ *  On the Board: `boardHeadParts` over the counts its lanes were drawn from —
+ *  Inbox arrivals in the accent, then overdue / due today, each part in its
+ *  own tone (#396). The open count is not repeated here: it is the filter
+ *  field's placeholder. The other views name their own exceptions in their
+ *  redesign steps (#390); until then their line is empty rather than a count. */
 function renderHeadStatus() {
   const el = els.homeHeadStatus;
   let text = '';
   let attention = false;
+  let parts = null;
+  const onPane = !state.settingsOpen && !state.journal.open;
   if (state.headNote) text = state.headNote;
-  else if (state.tab === 'today' && !state.settingsOpen && !state.journal.open && state.todayCounts) {
+  else if (state.tab === 'today' && onPane && state.todayCounts) {
     const line = headLine(state.todayCounts);
     text = line.text;
     attention = line.attention;
+  } else if (state.tab === 'board' && onPane && state.boardCounts) {
+    parts = boardHeadParts(state.boardCounts);
   }
-  el.textContent = text;
   el.classList.toggle('is-attention', attention);
+  if (!parts) { el.textContent = text; return; }
+  el.replaceChildren();
+  parts.forEach(function (part, i) {
+    if (i) el.append(' · ');
+    const span = document.createElement('span');
+    span.className = 'is-' + part.tone;
+    span.textContent = part.text;
+    el.appendChild(span);
+  });
 }
 
 /** …a tab's name and glyph, read off its own nav button (one source). */
@@ -1192,7 +1232,7 @@ async function boot() {
     onCalendar: function (group) { state.calendar = group; renderTodayPane(); },
     // A run started from the Settings card is the Archive tab's run: hand it to
     // that pane, which re-reads the service, picks the live run up and resumes
-    // polling it — and refreshes the Board's "needs you" line off the same block.
+    // polling it.
     onArchiveRun: function () { if (archive) archive.refresh(); },
     onOpenArchive: function () { nav.setTab('archive'); },
   });
@@ -1200,14 +1240,14 @@ async function boot() {
   // `archive` tab fires the nav's onChange straight into it.
   archive = mountArchive({
     // The Settings archive card renders the same block rather than polling it (#262).
+    // (the palette's Go to Archive hint reads `state.archive` as it opens)
     onStatus: function (st) {
       state.archive = st;
       settings.renderArchive(st);
-      if (state.total) renderBoardPane();
     },
     // A run files mail and a review action re-files one — neither touches a
-    // task, so only the archiver's own state is re-read here.
-    onChanged: function () { if (state.total) renderBoardPane(); },
+    // task, and since #396 nothing outside the pane shows the run's count.
+    onChanged: function () {},
   });
   // The filters are shared by every tab, so a shared URL never moves the tab
   // by itself. First visit: Today, on every pointer (#319) — the first tab in the nav.

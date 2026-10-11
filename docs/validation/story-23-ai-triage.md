@@ -38,3 +38,5 @@ Verified on the synthetic story fixture in desktop light and phone dark layouts,
 ## Deliberate limits
 
 Only Inbox classification ships here. There is no automatic application, accept-all, free-form task editing, title/description rewriting, task creation, chat surface or background triage. One run handles at most 50 Inbox tasks and includes at most 200 open project nodes; task descriptions and model reasons are bounded before storage/logging.
+
+**2026-10-11 (#396):** Triage left the Inbox column head. It is the **Triage Inbox** button on the Board's mode line, in Status mode while the Inbox holds tasks, on the desktop and the phone alike (the separate phone copy above the Inbox column went); the walk presses Status first and asserts the button is not on the week planner.

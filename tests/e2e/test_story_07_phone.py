@@ -79,6 +79,7 @@ from tests.e2e.conftest import (
     _terminate,
     assert_control_boundaries,
     assert_date_sheet,
+    board_mode,
     e2e_workdir,
     settle,
     shot,
@@ -94,7 +95,15 @@ HEADLESS = os.environ.get("E2E_HEADED", "") != "1"
 
 
 def _col(page: Page, key: str):
-    return page.locator(f".board-col[data-col='{key}']")
+    """A Status-mode column (#396)."""
+    return page.locator(f"#paneBoard .board-status .board-col[data-col='{key}']")
+
+
+def _in_view(page: Page, width: int) -> list[str]:
+    """The Status columns whose left edge is inside the viewport (an empty one
+    is collapsed away on the phone, so it has no box)."""
+    boxes = {k: _col(page, k).bounding_box() for k in COLUMNS}
+    return [k for k, b in boxes.items() if b and 0 <= b["x"] < width - 1]
 
 
 def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
@@ -377,22 +386,24 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
         shot(page, shots / "story-07-phone-2-phone.png")
 
-        # 3. Board: one-column carousel; a swipe (scroll) moves the active column.
+        # 3. Board, Status mode (#396): one-column carousel; a swipe (scroll)
+        #    moves the active column. The empty Done column is collapsed away.
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("#paneBoard")).to_be_visible()
-        columns = page.locator(".board-columns")
+        board_mode(page, "status")
+        columns = page.locator("#paneBoard .board-status")
         assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
-        strip = page.locator(".board-strip-btn")
-        expect(strip).to_have_count(4)
+        strip = page.locator("#paneBoard .board-strip-btn:not(.is-empty)")
+        expect(strip).to_have_count(3)
         assert_min_target(strip)
         assert_no_overlap(strip)
         # the Board opens on Todo (the working column); exactly one column in view
-        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        visible = _in_view(page, PHONE["width"])
         assert visible == ["todo"], visible
         # swipe left (a scroll of one column width) → Standby becomes the active column
         columns.evaluate("el => el.scrollBy({left: el.clientWidth, behavior: 'auto'})")
         expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
-        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE["width"] - 1]
+        visible = _in_view(page, PHONE["width"])
         assert visible == ["standby"], visible
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-07-phone-3-phone.png")
@@ -501,10 +512,11 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
         page = context.new_page()
         page.goto(f"{base}/")
         page.locator("nav.tabs .tab[data-tab='board']").tap()
-        wrap = page.locator(".board-columns").bounding_box()
+        board_mode(page, "status")
+        wrap = page.locator("#paneBoard .board-status").bounding_box()
         first = _col(page, "inbox").bounding_box()
         assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
-        visible = [k for k in COLUMNS if 0 <= _col(page, k).bounding_box()["x"] < PHONE_LG["width"] - 1]
+        visible = _in_view(page, PHONE_LG["width"])
         assert len(visible) == 1, visible
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-07-phone-6-phone.png")
@@ -528,8 +540,11 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
                 assert_min_target(tabs)
             assert_no_overlap(tabs)
             page.locator("nav.tabs .tab[data-tab='board']").tap()
+            assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
+            assert_no_horizontal_overflow(page)
+            board_mode(page, "status")
             expect(page.locator(".board-strip-btn").first).to_be_visible()
-            assert_min_target(page.locator(".board-strip-btn"))
+            assert_min_target(page.locator(".board-strip-btn:not(.is-empty)"))
             assert_no_horizontal_overflow(page)
             context.close()
     finally:

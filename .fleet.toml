@@ -199,3 +199,11 @@ click = "#paneToday [data-select-toggle]"
 tab = "today"
 id = "filter-sheet"
 click = "#paneToday .filter-open"
+
+# The Board's Status mode (#396): Week is the default layout, so the walk
+# presses the Week · Status segment to measure the status columns too. The
+# press only changes the walk's own remembered layout, never a task.
+[[design.review.extra_steps]]
+tab = "board"
+id = "board-status"
+click = "#paneBoard .board-modes [data-mode='status']"

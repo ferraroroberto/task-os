@@ -48,3 +48,5 @@
 - Not verified in this step, by design: a real touch swipe on glass (the carousel was driven with a programmatic scroll); Service Worker / offline (deliberately not used in the fleet); the `--check` renewal path (a fresh leaf is 90 days out — the auto-renew leg is exercised only by the scaffold's own script tests; the first real renewal happens in ~60 days on a tray start).
 
 **2026-10-10 (#391):** the phone date sheet. *Change date* lists *Tomorrow · This weekend · Next week · Today*, each beside its resolved date (*Tue 8 Sep* … on the pinned clock), every option a full-width 44px row with no sideways scroll. [Shot 10](../screenshots/story-07-phone-10-phone.png). Result: **verified** (e2e phone, WebKit 390 px); **owner's real-phone check not yet done**.
+
+**2026-10-11 (#396):** the phone Board opens in Week mode (one list of lane sections); steps 3, 6 and 7 press the Status segment first, and the empty Done column is collapsed out of the strip, so the strip holds three counts.
