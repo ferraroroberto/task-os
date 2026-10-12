@@ -1806,6 +1806,15 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .board-week { display: flex; flex-direction: column; gap: var(--space-md); }
 .board-list { border-top: 1px solid var(--line-muted); }
 .board-list > .trow:first-child { border-top: 0; }
+/* The group closing a lane (Later's "No date", #414): a quiet sub-heading on
+   the lane's own hairline, the overline role like the lane titles above it. */
+.board-list-sub {
+  list-style: none;
+  padding: var(--space-md) var(--space-xs) var(--space-xs);
+  border-top: 1px solid var(--line-muted);
+  color: var(--muted);
+}
+.board-list > .board-list-sub:first-child { border-top: 0; padding-top: var(--space-sm); }
 /* An empty lane collapses: off the phone entirely (nothing to show, and no
    drag there to drop on it). */
 @media (max-width: 1023px) {
@@ -1857,10 +1866,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    not cards (#32): a vertical 1px hairline between lanes is the only
    separation. A lane with nothing in it collapses to its header — still a
    drop target, at its header's width — and the filled lanes share the rest.
-   A week lane keeps a readable width (its title is one ellipsized line, the
-   row contract): seven of them need more than a laptop window has, so the
-   row of lanes scrolls sideways instead of squeezing every title to a word.
-   The status columns are four, and always fit. */
+   Six week lanes share the window the same way and never scroll it sideways
+   (#414): a title is one ellipsized line (the row contract), so a narrow lane
+   shortens it instead of widening the board. The status columns are four. */
 @media (min-width: 1024px) {
   .board-strip { display: none; }
   .board-columns, .board-status {
@@ -1870,8 +1878,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
     overflow-x: visible;
     scroll-snap-type: none;
   }
-  .board-week { overflow-x: auto; scrollbar-width: thin; }
-  .board-week .board-col:not(.is-empty) { min-width: 18rem; }
   .board-col, .board-status .board-col {
     flex: 1 1 0;
     max-height: calc(100vh - 300px);

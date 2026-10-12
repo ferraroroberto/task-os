@@ -1,8 +1,8 @@
 """``board.js`` — the Board's week planner lanes and its header line (#396).
 
 Week mode puts every open task in exactly one lane by its due date: Today
-(overdue included) · Tomorrow · This week · This weekend · Next week · Later ·
-No date. A week runs Monday to Sunday, and on a Sunday "this week" is the one
+(overdue included) · Tomorrow · This week · This weekend · Next week · Later.
+A task with no date falls in Later too (its tail group, #414). A week runs Monday to Sunday, and on a Sunday "this week" is the one
 tomorrow starts. A lane whose days are all taken by an earlier one is left
 out (This week from Thursday, This weekend on a Saturday), and a row dropped
 on a lane is re-dated to that lane's own first day, so it always lands in the
@@ -57,7 +57,7 @@ def _lanes(today: date) -> list[dict]:
     return _call_js([["weekLanes", today.isoformat()]])[0]
 
 
-def test_a_monday_has_all_seven_lanes_with_their_days() -> None:
+def test_a_monday_has_all_six_lanes_with_their_days() -> None:
     lanes = _lanes(MONDAY)
     assert [(lane["key"], lane["from"], lane["to"]) for lane in lanes] == [
         ("today", None, "2026-10-12"),
@@ -66,10 +66,9 @@ def test_a_monday_has_all_seven_lanes_with_their_days() -> None:
         ("weekend", "2026-10-17", "2026-10-18"),
         ("next", "2026-10-19", "2026-10-25"),
         ("later", "2026-10-26", None),
-        ("nodate", None, None),
     ]
     assert [lane["label"] for lane in lanes] == [
-        "Today", "Tomorrow", "This week", "This weekend", "Next week", "Later", "No date"]
+        "Today", "Tomorrow", "This week", "This weekend", "Next week", "Later"]
 
 
 def test_a_lane_whose_days_are_taken_is_left_out() -> None:
@@ -77,7 +76,7 @@ def test_a_lane_whose_days_are_taken_is_left_out() -> None:
     assert "week" in keys["Wed"] and "week" not in keys["Thu"]          # Friday is tomorrow
     assert keys["Fri"].count("weekend") == 1                             # Sunday alone
     assert "weekend" not in keys["Sat"] and "week" not in keys["Sat"]   # Sunday is tomorrow
-    assert keys["Sun"] == ["today", "tomorrow", "week", "weekend", "next", "later", "nodate"]
+    assert keys["Sun"] == ["today", "tomorrow", "week", "weekend", "next", "later"]
 
 
 @pytest.mark.parametrize("today", WEEK, ids=lambda d: d.strftime("%a"))
@@ -86,13 +85,19 @@ def test_every_date_has_exactly_one_lane_and_a_drop_lands_in_its_own(today: date
     days = [(today + timedelta(days=n)).isoformat() for n in range(-10, 40)]
     got = _call_js([["laneOf", d, today.isoformat()] for d in days])
     for d, key in zip(days, got, strict=True):
-        hits = [lane["key"] for lane in lanes if lane["key"] != "nodate"
-                and (lane["from"] is None or d >= lane["from"]) and (lane["to"] is None or d <= lane["to"])]
+        hits = [lane["key"] for lane in lanes
+                if (lane["from"] is None or d >= lane["from"]) and (lane["to"] is None or d <= lane["to"])]
         assert hits == [key], (d, hits, key)
     assert got[:11] == ["today"] * 11                                     # overdue and today
     drops = _call_js([["laneOf", lane["drop"], today.isoformat()] for lane in lanes])
     assert drops == [lane["key"] for lane in lanes]
-    assert lanes[-1]["drop"] is None                                      # No date clears the date
+    assert all(lane["drop"] for lane in lanes)                            # every lane drops on a date
+
+
+@pytest.mark.parametrize("today", WEEK, ids=lambda d: d.strftime("%a"))
+def test_no_date_falls_in_later_and_no_lane_clears_a_date(today: date) -> None:
+    assert _call_js([["laneOf", None, today.isoformat()]]) == ["later"]
+    assert "nodate" not in [lane["key"] for lane in _lanes(today)]
 
 
 def test_the_header_names_inbox_arrivals_then_what_is_due() -> None:

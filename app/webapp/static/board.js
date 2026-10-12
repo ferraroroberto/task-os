@@ -6,14 +6,16 @@
  *
  *   Week    the default. Lanes by due date — Today (overdue included, as on
  *           the Today tab) · Tomorrow · This week · This weekend · Next week ·
- *           Later · No date (`weekLanes`). A week runs Monday to Sunday, and
+ *           Later (`weekLanes`), the tasks with no due date closing Later under
+ *           a "No date" sub-heading, so six lanes share the window and nothing
+ *           scrolls sideways (#414). A week runs Monday to Sunday, and
  *           on a Sunday "this week" is the one tomorrow starts. This week is
  *           there only while days sit between tomorrow and Saturday, This
  *           weekend only while a weekend day comes after tomorrow, so every
  *           date has exactly one lane. Dropping a row on a lane re-dates it to
- *           the lane's first day (No date clears it) through the one row
- *           action runner — the same write, toast and Undo as the date sheet's
- *           Move — and changes nothing else.
+ *           the lane's first day through the one row action runner — the same
+ *           write, toast and Undo as the date sheet's Move — and changes
+ *           nothing else. Clearing a date is the Move sheet's "no date".
  *   Status  Inbox · Todo · Standby · Done — the first three are the open
  *           statuses; Done shows the tasks completed on the current local day
  *           (older done tasks never show unless the filter sheet's "done"
@@ -57,9 +59,11 @@ export const BOARD_COLUMNS = [
 export const BOARD_MODES = [['week', 'Week'], ['status', 'Status']];
 const MODE_KEY = 'task-os.board.mode';
 const PHONE_MQ = '(max-width: 1023px)';
-// Every lane key Week mode can draw, in order: the skeleton holds all seven
+// Every lane key Week mode can draw, in order: the skeleton holds all six
 // and `weekLanes` says which of them today's calendar has.
-const WEEK_KEYS = ['today', 'tomorrow', 'week', 'weekend', 'next', 'later', 'nodate'];
+const WEEK_KEYS = ['today', 'tomorrow', 'week', 'weekend', 'next', 'later'];
+// The group closing the Later lane: the open tasks with no due date.
+const NO_DATE_LABEL = 'No date';
 
 function addDays(iso, n) {
   const d = new Date(iso + 'T00:00:00');
@@ -71,8 +75,7 @@ function addDays(iso, n) {
  * Week mode's lanes on `today`, nearest first — exported for tests.
  * Each lane holds the due dates `from`…`to` (inclusive ISO; null = open
  * ended) and `drop` is what a row dropped on it is re-dated to: the lane's
- * first day, Today's for the Today lane, null (no date) for No date. A lane
- * whose range is empty on this weekday is left out, so a date always has
+ * first day, Today's for the Today lane. A lane whose range is empty on this weekday is left out, so a date always has
  * exactly one lane.
  * @param {string} [today]  ISO day; the browser's today by default
  * @returns {Array<{key: string, label: string, from: ?string, to: ?string, drop: ?string}>}
@@ -91,27 +94,26 @@ export function weekLanes(today) {
     { key: 'weekend', label: 'This weekend', from: afterTomorrow > saturday ? afterTomorrow : saturday, to: sunday },
     { key: 'next', label: 'Next week', from: addDays(sunday, 1), to: addDays(sunday, 7) },
     { key: 'later', label: 'Later', from: addDays(sunday, 8), to: null },
-    { key: 'nodate', label: 'No date', from: null, to: null, drop: null },
   ];
   return lanes.filter(function (l) { return !l.from || !l.to || l.from <= l.to; }).map(function (l) {
     return Object.assign({}, l, { drop: 'drop' in l ? l.drop : l.from });
   });
 }
 
-/** The lane key a due date falls in, against `weekLanes(today)`'s answer. */
+/** The lane key a due date falls in, against `weekLanes(today)`'s answer. No
+ *  date falls in Later, whose tail group it is. */
 export function laneOf(due, lanes) {
-  if (!due) return 'nodate';
+  if (!due) return 'later';
   const lane = lanes.find(function (l) {
-    return l.key !== 'nodate' && (!l.from || due >= l.from) && (!l.to || due <= l.to);
+    return (!l.from || due >= l.from) && (!l.to || due <= l.to);
   });
-  return lane ? lane.key : 'nodate';
+  return lane ? lane.key : 'later';
 }
 
 /** A lane's dates in words, for its header's tooltip. */
 function laneSpan(lane) {
-  if (lane.key === 'nodate') return 'Tasks without a due date';
   if (lane.key === 'today') return 'Due today or overdue';
-  if (!lane.to) return 'From ' + fmtDay(lane.from);
+  if (!lane.to) return 'From ' + fmtDay(lane.from) + ', and tasks without a due date';
   return lane.from === lane.to ? fmtDay(lane.from) : fmtDay(lane.from) + ' – ' + fmtDay(lane.to);
 }
 
@@ -225,11 +227,15 @@ export function mountBoard(handlers, barHost) {
     if (mode === 'week') {
       const lanes = weekLanes(t);
       const byLane = {};
+      const undated = [];
       WEEK_KEYS.forEach(function (k) { byLane[k] = []; });
-      open.forEach(function (x) { byLane[laneOf(x.due, lanes)].push(x); });
+      open.forEach(function (x) { (x.due ? byLane[laneOf(x.due, lanes)] : undated).push(x); });
       week.fill(WEEK_KEYS.map(function (k) {
         const lane = lanes.find(function (l) { return l.key === k; });
-        return lane ? { key: k, label: lane.label, title: laneSpan(lane), drop: lane.drop, rows: byLane[k] } : null;
+        if (!lane) return null;
+        const entry = { key: k, label: lane.label, title: laneSpan(lane), drop: lane.drop, rows: byLane[k] };
+        if (k === 'later') entry.tail = { label: NO_DATE_LABEL, rows: undated };
+        return entry;
       }), f.sort, rowOpts);
       shown = open.length;
     } else {
@@ -286,8 +292,10 @@ export function mountBoard(handlers, barHost) {
  * One mode's lanes: the columns container, the phone strip (Status mode's
  * carousel switcher) and the drop targets, built once.
  * `fill(lanes, sort, rowOpts)` takes one entry per skeleton lane, in order —
- * `{key, label, title, drop, rows}`, or null for a lane this calendar or the
- * status filter does not have.
+ * `{key, label, title, drop, rows, tail?}`, or null for a lane this calendar
+ * or the status filter does not have. A `tail` (`{label, rows}`) is a second
+ * group closing the lane under its own sub-heading; the lane's count and its
+ * emptiness include it.
  */
 function mountLanes(kind, skeleton, handlers) {
   const columns = document.createElement('div');
@@ -412,20 +420,30 @@ function mountLanes(kind, skeleton, handlers) {
       if (p.strip) p.strip.hidden = !lane;
       if (!lane) return;
       const rows = sortItems(lane.rows, sort);
+      const tail = lane.tail && lane.tail.rows.length ? sortItems(lane.tail.rows, sort) : [];
+      const total = rows.length + tail.length;
       p.section.dataset.drop = lane.drop == null ? '' : lane.drop;
       p.section.setAttribute('aria-label', lane.label);
-      p.section.classList.toggle('is-empty', rows.length === 0);
+      p.section.classList.toggle('is-empty', total === 0);
       p.label.textContent = lane.label;
       p.label.parentElement.title = lane.title;
-      p.count.textContent = String(rows.length);
-      p.count.setAttribute('aria-label', rows.length + (rows.length === 1 ? ' task' : ' tasks'));
+      p.count.textContent = String(total);
+      p.count.setAttribute('aria-label', total + (total === 1 ? ' task' : ' tasks'));
       if (p.strip) {
-        p.strip.classList.toggle('is-empty', rows.length === 0);
+        p.strip.classList.toggle('is-empty', total === 0);
         p.strip.title = lane.label;
-        p.stripCount.textContent = String(rows.length);
+        p.stripCount.textContent = String(total);
       }
       p.list.replaceChildren();
       rows.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
+      if (tail.length) {
+        const sub = document.createElement('li');
+        sub.className = 'board-list-sub overline';
+        sub.dataset.group = 'tail';
+        sub.textContent = lane.tail.label;
+        p.list.appendChild(sub);
+        tail.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
+      }
     });
   }
 
@@ -512,7 +530,7 @@ function suggestionStrip(suggestion, handlers) {
 }
 
 /** A lane takes a dropped row: a status column sets its status, a week lane
- *  its due date (`data-drop`, the lane's first day; empty = No date). A drop
+ *  its due date (`data-drop`, the lane's first day). A drop
  *  on the lane the row is already in changes nothing. */
 function wireDropTarget(section, kind, handlers) {
   section.addEventListener('dragover', function (ev) {
@@ -529,7 +547,7 @@ function wireDropTarget(section, kind, handlers) {
     const id = Number(ev.dataTransfer.getData('text/plain'));
     if (!id || section.querySelector('.trow[data-id="' + id + '"]')) return;
     const drop = section.dataset.drop;
-    const write = kind === 'status' ? handlers.onStatus(id, drop) : handlers.onDue(id, drop || null);
+    const write = kind === 'status' ? handlers.onStatus(id, drop) : handlers.onDue(id, drop);
     Promise.resolve(write).catch(function () { /* toasted by the caller */ });
   });
 }

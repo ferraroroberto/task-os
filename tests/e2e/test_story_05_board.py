@@ -1,7 +1,8 @@
 """Story 05 — Board day (Step 5/13, issue #6).
 
     Board tab: the week planner (#396) — Today · Tomorrow · This week · This
-    weekend · Next week · Later · No date side by side, the header naming the
+    weekend · Next week · Later (the undated tasks closing it) side by side with
+    no sideways scroll at 1280 / 1920 / 1440px (#414), the header naming the
     Inbox arrivals and what is overdue — and a drag between two lanes changes
     the due date and nothing else (Undo puts it back) → the Status segment:
     four columns visible at once on the laptop → the top strip's
@@ -131,7 +132,7 @@ DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 COLUMNS = ["inbox", "todo", "standby", "done"]
 # Week mode's lanes on the anchor, a Monday (#396): the days each holds.
-LANES = ["today", "tomorrow", "week", "weekend", "next", "later", "nodate"]
+LANES = ["today", "tomorrow", "week", "weekend", "next", "later"]
 
 
 def _trow(page: Page, scope: str, title: str):
@@ -169,9 +170,10 @@ def _mine(columns: dict) -> dict:
 
 def _lane_of(due: str | None) -> str:
     """The lane a due date falls in on the anchor Monday — the rule weekLanes()
-    implements, stated here as dates so the two are checked against each other."""
+    implements, stated here as dates so the two are checked against each other.
+    No date closes Later, under its own sub-heading (#414)."""
     if not due:
-        return "nodate"
+        return "later"
     days = (date.fromisoformat(due) - E2E_ANCHOR).days
     if days <= 0:
         return "today"
@@ -203,8 +205,9 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.on("pageerror", lambda e: errors.append(str(e)))
 
         # 1. Today is the landing tab on every pointer (#319); one tab press to the
-        #    Board — the week planner (#396): the seven lanes of a Monday side
-        #    by side, each holding exactly the open tasks due in its days.
+        #    Board — the week planner (#396): the six lanes of a Monday side
+        #    by side, each holding exactly the open tasks due in its days (the
+        #    undated ones close Later).
         page.goto(f"{base}/")
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
         page.click("nav.tabs .tab[data-tab='board']")
@@ -215,7 +218,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         lanes = page.locator("#paneBoard .board-week .board-col:not([hidden])")
         assert lanes.evaluate_all("els => els.map(e => e.dataset.col)") == LANES
         expect(lanes.locator(".board-col-label")).to_have_text(
-            ["Today", "Tomorrow", "This week", "This weekend", "Next week", "Later", "No date"])
+            ["Today", "Tomorrow", "This week", "This weekend", "Next week", "Later"])
         mine_open = [t for t in _get(base, "/api/tasks")["items"] if not t.get("issue_ref")]
         for k in LANES:
             want = sorted(t["id"] for t in mine_open if _lane_of(t["due"]) == k)
@@ -225,6 +228,29 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         lane_boxes = [_lane(page, k).bounding_box() for k in LANES]
         for a, b in zip(lane_boxes, lane_boxes[1:], strict=False):
             assert abs(a["y"] - b["y"]) < 2 and a["x"] + a["width"] <= b["x"] + 1, (a, b)   # one row, left to right
+        # The six lanes share the window and nothing scrolls sideways at any
+        # desktop width (#414): the board's own scroller, not just the page.
+        for width in (1280, 1920, DESKTOP["width"]):
+            page.set_viewport_size({"width": width, "height": DESKTOP["height"]})
+            fits = page.locator("#paneBoard .board-week").evaluate("el => [el.scrollWidth, el.clientWidth]")
+            assert fits[0] <= fits[1], (width, fits)
+            assert_no_horizontal_overflow(page)
+        # No date closes Later under its own sub-heading: the dated tasks
+        # first, the undated after it, the lane's count holding both.
+        due_of = {t["id"]: t["due"] for t in mine_open}
+        undated_ids = sorted(i for i, due in due_of.items() if not due)
+        assert undated_ids, "the seed has undated tasks"
+        later = _lane(page, "later")
+        expect(later.locator(".board-list-sub")).to_have_text(["No date"])
+        split = later.locator(".board-list").evaluate(
+            """ul => { const out = {before: [], after: []}; let seen = false;
+                       for (const li of ul.children) {
+                         if (li.classList.contains('board-list-sub')) seen = true;
+                         else out[seen ? 'after' : 'before'].push(Number(li.dataset.id));
+                       }
+                       return out; }""")
+        assert split["before"] and all(due_of[i] for i in split["before"]), split
+        assert sorted(split["after"]) == undated_ids, (split, undated_ids)
         # The header names the exceptions from the lanes' own counts: the Inbox
         # arrivals in the accent, then what is overdue (#396).
         inbox_n = sum(1 for t in mine_open if t["status"] == "inbox")
@@ -256,6 +282,22 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
         expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
         assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
+        dismiss_toasts(page)
+        #    Clearing a date is the Move sheet's "No date" (no lane drops on it):
+        #    the task lands under Later's No date sub-heading, Undo brings it back.
+        ceiling = _trow(page, "#paneBoard .board-week", "Repaint ceiling")
+        cid = int(ceiling.get_attribute("data-id"))
+        ceiling_due = _get(base, f"/api/tasks/{cid}")["due"]
+        assert ceiling_due and _lane_of(ceiling_due) == "later", ceiling_due
+        ceiling.locator(".trow-kebab").click()
+        page.locator(".row-menu [data-action='change-date']").click()
+        page.locator(".snooze-pop .snooze-menu[data-field='due'] .snooze-clear").click()
+        expect(page.locator(".toasts")).to_contain_text("Due date cleared")
+        assert _get(base, f"/api/tasks/{cid}")["due"] is None
+        expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(1)
+        page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
+        assert _get(base, f"/api/tasks/{cid}")["due"] == ceiling_due
+        expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(0)
         dismiss_toasts(page)
 
         #    …then the Status segment: four columns side by side, full width, the
