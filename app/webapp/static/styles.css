@@ -2095,11 +2095,11 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 .search-hit-link:hover { text-decoration: underline; }
 .search-hit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; max-width: 100%; }
-.search-hit-snippet { font-size: var(--font-caption); overflow-wrap: anywhere; }
+.search-hit-snippet { font-size: var(--font-body-sm); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
-/* The hint and the folded line are sentences, read at the label size — never
-   the caption, which the type rubric holds to a minority of the text. */
-.search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-label); }
+/* The hint, the folded line, the error and a hit's snippet are what a person
+   reads: the 14px body-sm role, never the caption (TYPE-01, #408). */
+.search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-body-sm); }
 .search-fold a { color: var(--accent); }
 /* The inline Settings link is one word: 14px of padding around its line is
    the room its 44px target takes, invisibly (#281). */
@@ -2165,11 +2165,13 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 .palette-item-icon { width: 18px; height: 18px; color: var(--muted); }
 .palette-item.is-active .palette-item-icon { color: var(--accent); }
 .palette-item-main { min-width: 0; display: grid; gap: 1px; }
-.palette-item-label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--font-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette-item-hint { font-size: var(--font-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette-empty { padding: 14px 10px; font-size: var(--font-label); }
-.palette-foot { margin: 6px 6px 0; font-size: var(--font-caption); }
-.palette-foot kbd { margin-right: 2px; }
+.palette-item-label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--font-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-item-hint { font-size: var(--font-body-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-empty { padding: 14px 10px; font-size: var(--font-body-sm); }
+/* The footer's key hints are the only text an empty palette shows, so they sit
+   on the body-sm step too (TYPE-01, #408); the line wraps on a narrow sheet. */
+.palette-foot { margin: 6px 6px 0; font-size: var(--font-body-sm); }
+.palette-foot kbd { margin-right: 2px; font-size: var(--font-body-sm); }
 @media (pointer: coarse) and (max-width: 520px) {
   .detail-dialog.palette-dialog {
     width: 100vw;
