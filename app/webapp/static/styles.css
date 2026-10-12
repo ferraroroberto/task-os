@@ -2069,7 +2069,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    one, a flat section per kind that has hits (the overline header Today's
    horizons use, #391), then the folded line for the rest. */
 .search-host { display: grid; gap: var(--space-sm); }
-.search-group { margin: 0; }
+/* min-width 0: a grid item's auto minimum is its nowrap content, so one long
+   hit meta row widened the group, and the page, past a phone (#417). */
+.search-group { margin: 0; min-width: 0; }
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
 .search-hit:first-child { border-top: 0; }
