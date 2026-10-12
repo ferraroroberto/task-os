@@ -107,6 +107,13 @@ def search_webapp() -> Iterator[SearchInstance]:
         log.close()
 
 
+def _task_post(base: str, body: dict) -> dict:
+    req = urllib.request.Request(f"{base}/api/tasks", data=json.dumps(body).encode("utf-8"), method="POST")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=60) as res:
+        return json.loads(res.read().decode("utf-8"))
+
+
 def _task_by_title(base: str, title: str) -> dict:
     items = _get(base, "/api/tasks?q=" + urllib.request.quote(title) + "&include_closed=true")["items"]
     return next(t for t in items if t["title"] == title)
@@ -299,4 +306,19 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     p.locator("#paletteInput").fill("water")
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Pay water bill")
     shot(p, shots / "story-10-search-7-phone.png")
+    p.keyboard.press("Escape")
+
+    # 8. a long hit never widens the page (#417): invented over-long names (a
+    # folder, a project holding the matching task) on a 390px screen. The grid
+    # item's auto minimum used to take the nowrap meta row's full width, and
+    # the whole Search pane scrolled sideways.
+    (inst.od / "house" / ("longprobe-" + "x" * 90)).mkdir()
+    _post(base, "/api/folders/reindex")
+    project = _task_post(base, {"title": "Quarterly-programme-" + "y" * 80})
+    _task_post(base, {"title": "Longprobe task", "parent_id": project["id"]})
+    p.goto(base + "/?q=longprobe#search")
+    expect(p.locator(".search-group[data-kind='tasks'] .search-hit.trow", has_text="Longprobe task")).to_be_visible()
+    expect(p.locator(".search-group[data-kind='folders'] .search-hit", has_text="longprobe-")).to_be_visible()
+    widths = p.evaluate("({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth})")
+    assert widths["scroll"] <= widths["client"], f"the page scrolls sideways: {widths}"
     phone.close()
