@@ -15,10 +15,10 @@ description = "One master task list: nested projects, capture Inbox, calendar, v
 nav            = { src = "app/webapp/static/_vendored/nav",           sha = "f70569640ebaf251ab0ed5f5daadd6055953a8c9", dest = "app/webapp/static/_vendored/nav" }
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "56e76aa373c6cb689b100f1ce14aa8171d872085", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "f70569640ebaf251ab0ed5f5daadd6055953a8c9", dest = "app/webapp/static/_vendored/card" }
-button         = { src = "app/webapp/static/_vendored/button",        sha = "f70569640ebaf251ab0ed5f5daadd6055953a8c9", dest = "app/webapp/static/_vendored/button" }
+button         = { src = "app/webapp/static/_vendored/button",        sha = "69351311c9c4d6500c79f45ddd3c4441b1e90fa4", dest = "app/webapp/static/_vendored/button" }
 modal          = { src = "app/webapp/static/_vendored/modal",         sha = "aa820f1215151087588433f290cd2ba55b34658d", dest = "app/webapp/static/_vendored/modal" }
 disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "f70569640ebaf251ab0ed5f5daadd6055953a8c9", dest = "app/webapp/static/_vendored/disclosure" }
-empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "f70569640ebaf251ab0ed5f5daadd6055953a8c9", dest = "app/webapp/static/_vendored/empty-state" }
+empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "69351311c9c4d6500c79f45ddd3c4441b1e90fa4", dest = "app/webapp/static/_vendored/empty-state" }
 select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "7e1433c70cac1bdcdbd160e874d3f486ba9e2a08", dest = "app/webapp/static/_vendored/select-native" }
 switch         = { src = "app/webapp/static/_vendored/switch",        sha = "7e1433c70cac1bdcdbd160e874d3f486ba9e2a08", dest = "app/webapp/static/_vendored/switch" }
 home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "aa820f1215151087588433f290cd2ba55b34658d", dest = "app/webapp/static/_vendored/home-head" }

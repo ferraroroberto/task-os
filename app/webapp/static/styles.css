@@ -132,7 +132,7 @@
   --shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
   --tabbar-bg: rgba(22, 27, 34, 0.86);
   --tabbar-border: rgba(255, 255, 255, 0.13);
-  --input-bg: #0d1117;
+  --input-bg: var(--line-muted);
   --toggle-knob: var(--ink);
   color-scheme: dark;
 }
