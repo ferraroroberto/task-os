@@ -404,8 +404,9 @@ async function setStatus(id, status) {
 }
 
 /** A row dropped on a Board week lane (#396): re-dated to the lane's first
- *  day (`null` = No date) through the one action runner — the date sheet's
- *  own Move, so the same write, toast and Undo, and nothing but `due`. */
+ *  day through the one action runner — the date sheet's own Move, so the same
+ *  write, toast and Undo, and nothing but `due` (`null` stays the sheet's
+ *  "No date", which no lane drops). */
 async function setDue(id, due) {
   const task = await resolveTask(id);
   if (!task) {
