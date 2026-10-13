@@ -280,6 +280,9 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator(".toasts")).to_contain_text("Due Sat 12 Sep")
         shot(page, shots / "story-05-board-14-desktop.png")
         page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
+        # The "Undone" toast is raised after the inverse write lands: waiting on it
+        # keeps the API read below off a slower runner's race (#411).
+        expect(page.locator(".toasts")).to_contain_text("Undone")
         expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
         assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
         dismiss_toasts(page)
@@ -296,6 +299,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert _get(base, f"/api/tasks/{cid}")["due"] is None
         expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(1)
         page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
+        expect(page.locator(".toasts")).to_contain_text("Undone")
         assert _get(base, f"/api/tasks/{cid}")["due"] == ceiling_due
         expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(0)
         dismiss_toasts(page)
