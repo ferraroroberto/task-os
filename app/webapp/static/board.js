@@ -165,6 +165,7 @@ export function mountBoard(handlers, barHost) {
     b.type = 'button';
     b.className = 'segmented-item';
     b.dataset.mode = m[0];
+    b.dataset.track = 'board.mode.' + m[0];
     b.textContent = m[1];
     modes.appendChild(b);
   });

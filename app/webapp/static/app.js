@@ -36,6 +36,7 @@
 import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
+import { initUsageLog } from './_vendored/usage-log/usage-log.js';
 import { actionById, createActions, failedOf, failureText } from './actions.js';
 import { api, qs } from './api.js';
 import { mountArchive } from './archive.js';
@@ -150,6 +151,11 @@ let keys = null;          // the row keymap + undo (#99); also feeds the palette
 let actions = null;       // the one row-action runner + its undo (actions.js, #311)
 let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
+// The local usage log (#412, vendored usage-log): which views and [data-track]
+// controls are used, on which device class — posted to this app's own
+// /api/usage/events, never anywhere else. Views: the three tabs, `settings`,
+// `settings.<sheet>` and `journal`.
+const usage = initUsageLog();
 const scopes = {};        // tab → its Mine · Issues · All switch (scope.js, #391; Search since #395)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
@@ -765,6 +771,7 @@ function openJournal() {
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneJournal; });
     window.scrollTo(0, 0);
     setHeadTitle('Done journal', 'i-book-open');
+    usage.trackView('journal');
     dropPreselected();
     renderHeadStatus();
   }
@@ -862,6 +869,7 @@ function openSettings() {
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneSettings; });
     els.settingsBtn.setAttribute('aria-current', 'page');
     setHeadTitle('Settings', 'i-settings');
+    usage.trackView('settings');
     dropPreselected();
     renderHeadStatus();
     const scroller = document.querySelector('.app');
@@ -911,11 +919,13 @@ function showSettingsSheet(key) {
   openSettings();
   const fresh = settings.currentSheet() !== key;
   if (!settings.showSheet(key)) return;
+  if (fresh) usage.trackView('settings.' + key);
   if (fresh && key === 'archive') archive.refresh();
 }
 
 /** The sheet's × / Done / Escape: back to the Settings list. */
 function closeSettingsSheet() {
+  if (settings.currentSheet()) usage.trackView('settings');
   settings.hideSheet();
   if (SETTINGS_SHEET_HASH.test(location.hash)) {
     history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
@@ -1326,6 +1336,7 @@ async function boot() {
     defaultTab: 'today',
     onChange: function (tab) {
       state.tab = tab;
+      usage.trackView(tab);
       setHeadTitleFromTab(tab);
       hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
       hideSettings();  // …and Settings, the same way (#281)

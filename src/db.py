@@ -32,14 +32,23 @@ logger = logging.getLogger(__name__)
 # dead module state; nothing imported them.
 DEFAULT_DB_PATH = runtime_db_path("task-os", "tasks.db")
 DB_PATH_ENV = "TASKOS_DB_PATH"
+#: The usage log's file (#412, vendored ``src/usage_log.py``), its own SQLite
+#: beside the task database — never a table in it, so losing it loses history only.
+USAGE_DB_NAME = "usage.sqlite3"
 
-__all__ = ["SCHEMA_VERSION", "connect", "db_path", "get_db", "init_db", "schema_version"]
+__all__ = ["SCHEMA_VERSION", "connect", "db_path", "get_db", "init_db", "schema_version", "usage_db_path"]
 
 
 def db_path() -> Path:
     """The database file this process uses: env override → the fleet runtime-data root."""
     override = os.environ.get(DB_PATH_ENV, "").strip()
     return Path(override) if override else DEFAULT_DB_PATH
+
+
+def usage_db_path() -> Path:
+    """The usage log's file: beside :func:`db_path`, so an instance on ``TASKOS_DB_PATH``
+    (the e2e instance, a unit test) never writes into the real runtime-data folder."""
+    return db_path().with_name(USAGE_DB_NAME)
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:

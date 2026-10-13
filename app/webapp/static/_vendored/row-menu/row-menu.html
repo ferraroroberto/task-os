@@ -6,10 +6,15 @@
      aria-expanded / aria-controls attributes; they are written here only so the
      markup reads complete. The menu itself is built and mounted by the script:
 
-       <div class="row-menu" id="row-menu-1" role="menu">
+       <div class="row-menu" id="row-menu-1" role="menu" aria-describedby="row-menu-1-head">
+         <div class="row-menu-head" id="row-menu-1-head" role="presentation">pid 4242</div>
          <button type="button" class="row-menu-item" role="menuitem" tabindex="0">
            <svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>
            <span class="row-menu-label">Rename</span>
+         </button>
+         <button type="button" class="row-menu-item" role="menuitem" tabindex="-1" aria-label="Open in the demo app">
+           <svg class="row-menu-brand" aria-hidden="true"><use href="#b-demo"></use></svg>
+           <span class="row-menu-label">Demo app</span>
          </button>
          <div class="row-menu-divider" role="separator"></div>
          <button type="button" class="row-menu-item row-menu-danger" role="menuitem" tabindex="-1">

@@ -124,7 +124,7 @@ from src.backup import BackupScheduler
 from src.calendar_lane import CalendarService
 from src.certs import cert_paths
 from src.config import load_config
-from src.db import db_path, init_db
+from src.db import db_path, init_db, usage_db_path
 from src.email_capture import EmailCaptureService
 from src.enrich import EnrichClient
 from src.folder_index import FolderIndexService
@@ -133,6 +133,7 @@ from src.logger import configure_logging
 from src.mirror import Mirror
 from src.search import build_federated
 from src.tasks_repo import RepoError
+from src.usage_log import usage_router
 from src.voice import VoiceClient
 
 logger = logging.getLogger(__name__)
@@ -314,6 +315,9 @@ def create_app() -> FastAPI:
     app.include_router(voice.router)
     app.include_router(ai.router)
     app.include_router(archive.router)
+    # The local usage log (#412): /api/usage/*, so AuthMiddleware gates it like
+    # every other /api/ route — no per-route dependency.
+    app.include_router(usage_router(usage_db_path()))
     return app
 
 
