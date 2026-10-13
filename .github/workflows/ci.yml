@@ -1,0 +1,115 @@
+# Canonical web-app CI gate: install, unit suite, Playwright e2e (desktop + phone).
+#
+# COPY-TO-ADAPT TEMPLATE (project-scaffolding#351). Copy this file to
+# `.github/workflows/ci.yml` in the adopting repo and change only the lines
+# marked `# ADAPT:`. The `.template` suffix keeps it inert here: GitHub Actions
+# only loads `.yml`/`.yaml` under `.github/workflows/`. Adoption steps and how
+# to make tests CI-safe: docs/ci-conventions.md -> "Web-app CI template".
+#
+# Derived from the workflows that run green on the hosted runner (voice-
+# transcriber, whatsapp-radar, app-launcher e2e.yml). It follows every rule in
+# docs/ci-conventions.md: dated runner, Node-24 action majors, one run per
+# commit (push:[main] + pull_request:[main]), a timeout that caps a wedge.
+#
+# CI IS ADVISORY. The local gate (scripts/verify-before-ship.ps1, or pytest +
+# ruff + mypy) is the contract; this job is the clean-machine second opinion:
+# a fresh .venv from the requirements files, committed files only, the commit
+# rather than somebody's working tree. Declare it in the repo's own
+# `## CI expectations` block so /issue-finish knows the duration and the
+# flaky leg.
+#
+# QUIET BY DESIGN. No third-party service, no secret beyond the implicit
+# GITHUB_TOKEN (read-only below), no machine-local file read. A gitignored
+# config that is missing on the runner must make a test skip or use the repo's
+# fixture data, never fail; the seed step below supplies committed samples.
+name: ci
+
+on:
+  push:
+    branches: [main]          # post-merge integration gate on main only
+  pull_request:
+    branches: [main]          # validates every feature branch via the PR event
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  gate:
+    runs-on: windows-2025          # not windows-latest -- pin the OS image
+    # Cap a wedge: GitHub's default is 6 h. The WebKit/phone leg is the part
+    # that can hang on the slower hosted runner; a wedge is a flake, not the
+    # diff. Set to ~4x the typical green run.
+    timeout-minutes: 30            # ADAPT: ~4x this repo's typical green
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'   # ADAPT: the repo's Python
+
+      - name: Create .venv and install deps
+        # The install is part of what this job checks: the requirements files
+        # must produce a working environment on a machine with nothing on it.
+        # Each native call is checked -- a step only fails on the exit code of
+        # its LAST command, so an early pip failure would otherwise pass.
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # ADAPT: add -r requirements-dev.txt if test deps are split out.
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Playwright browsers
+        run: .\.venv\Scripts\python.exe -m playwright install chromium webkit
+
+      - name: Seed gitignored config from committed samples
+        # Config files are gitignored; only the `*.sample.*` templates are
+        # committed, and they carry no credential. Copy each to its live name
+        # when absent, so the suite runs against demo data instead of silently
+        # skipping an authed fixture. Loopback traffic bypasses the bearer
+        # middleware, so a sample token is enough.
+        run: |
+          # ADAPT: the directory holding the samples.
+          Get-ChildItem -Path config -Filter '*.sample.*' -File -ErrorAction SilentlyContinue | ForEach-Object {
+            $dest = Join-Path $_.DirectoryName ($_.Name -replace '\.sample(?=\.)', '')
+            if (-not (Test-Path $dest)) { Copy-Item $_.FullName $dest }
+          }
+
+      - name: Unit suite
+        # ADAPT: the repo's non-browser test command.
+        run: .\.venv\Scripts\python.exe -m pytest --ignore=tests/e2e
+
+      - name: E2E suite (desktop chromium)
+        # The suite boots its own disposable app instance (conftest fixture);
+        # nothing is assumed to be running. Trace + screenshot are kept only
+        # for a failing test and uploaded below only when the job fails.
+        # The story tests launch their own WebKit phone contexts inside this run,
+        # so there is no separate phone step (no test is marked `phone`).
+        # ADAPT: the e2e directory.
+        run: >
+          .\.venv\Scripts\python.exe -m pytest tests/e2e
+          --browser chromium
+          --tracing retain-on-failure
+          --screenshot only-on-failure
+          --output test-results
+
+      - name: Upload e2e traces and screenshots
+        # Only on failure: a green run uploads nothing.
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

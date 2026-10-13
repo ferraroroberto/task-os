@@ -36,6 +36,13 @@ Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray t
   - /          (Today · Board · Search tabs · Settings behind the header gear: inset groups, each row's sheet — Email archiving among them)
   - /login     (sign-in card: token or password → cookie)
 
+## CI expectations
+- Workflow `.github/workflows/ci.yml`, job `gate`, on every PR and every push to `main`. **Advisory, not required** (no branch protection) — the local gate (`scripts/verify-before-ship.ps1`) is the contract; CI is the clean-runner second opinion (fresh `.venv`, committed files only).
+- Typical green: **~TBD min** (to be measured from the first green runs). Investigate at **>2x**; treat as wedged at **>~4x**.
+- Flaky leg: the WebKit phone contexts inside the e2e run can wedge on the hosted runner. `timeout-minutes` caps a wedge. A wedge is a flake, not the diff.
+- CI's only signal beyond the local gate is the **e2e suite on a clean runner**. Its e2e surface = `app/webapp/`, `src/`, `tests/e2e/`, `.github/workflows/`. A diff touching **none** of these gains nothing from CI.
+- The runner has no gitignored config: the workflow seeds `config/*.sample.json` to their live names, and nothing reads the live `:8448`, a real mirror folder or the archiver's `emails.db`.
+
 ## Internal architecture
 
 [`docs/architecture.mmd`](docs/architecture.mmd) — hand-authored Mermaid of this repo's own structure (clients → route families → `tasks_repo` → schema/db → SQLite tables; tray, gate, seed). Not generated, not covered by any automated check: update it in the same PR as any material structural change (a new route family or `src/` module, a schema step, a new client surface).
