@@ -27,7 +27,10 @@
   min-width: 200px;
   max-width: calc(100vw - 16px);
   padding: 4px;
-  background: var(--card);
+  /* The fleet menu surface (#362, owner's decision 2026-10-13): one elevation
+   * step above the card it opens over, so it reads as a layer in both themes.
+   * An app without the token keeps the card surface. */
+  background: var(--card-2, var(--card));
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow);
@@ -60,6 +63,33 @@
   height: var(--icon-inline);
 }
 .row-menu-label { line-height: 1.2; }
+
+/* A caller's brand mark in place of a named glyph: 18px, the size app-launcher
+ * gave its brand marks in this menu, so adopting it changes nothing there.
+ * Greyed, not recoloured, while its row is disabled. */
+.row-menu-item .row-menu-brand {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+.row-menu-item[aria-disabled="true"] .row-menu-brand { filter: grayscale(1); }
+
+/* The optional header line: a muted, non-interactive fact above the items. It
+ * wraps rather than widening the menu (`width: 0` + `min-width: 100%`). */
+.row-menu-head {
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--font-body-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
 
 /* Hover only where there is a pointer: on touch a sticky :hover would leave the
  * last-tapped row tinted. */

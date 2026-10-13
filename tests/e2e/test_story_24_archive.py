@@ -324,8 +324,8 @@ def _confirm(page: Page, action: str) -> None:
     """The one vendored destructive-action dialog (#121) — press its primary."""
     dialog = page.locator("#confirmDialog")
     expect(dialog).to_be_visible()
-    expect(dialog.locator(".confirm-danger")).to_have_text(action)
-    dialog.locator(".confirm-danger").click()
+    expect(dialog.locator(".button-tint.danger")).to_have_text(action)
+    dialog.locator(".button-tint.danger").click()
     expect(dialog).to_be_hidden()
 
 

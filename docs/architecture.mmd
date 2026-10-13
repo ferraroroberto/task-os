@@ -28,6 +28,7 @@ flowchart LR
     issuesr["routers/issues<br/>/api/issues/status · /api/issues/sync<br/>GET/POST /api/tasks/{id}/issue"]
     foldersr["routers/folders<br/>POST /api/resolve · /api/folders/search<br/>/api/folders/reindex"]
     capturer["routers/capture (#98)<br/>POST /api/capture/email/run"]
+    usager["src/usage_log.py (vendored, #412)<br/>POST /api/usage/events · GET /api/usage/summary<br/>kind · view id · control id · device class only<br/>→ usage.sqlite3 beside tasks.db (db.usage_db_path)"]
     archiver["routers/archive (#157)<br/>POST /api/archive/run {limit?} → 202<br/>GET /api/archive/runs · /runs/{id}<br/>POST /api/archive/items/{id}/revert|move|accept|retry<br/>move also files a needs_review mail (#159)<br/>retry re-sends a refused move, files on disk (#174)"]
     voicer["routers/voice (#92, #146)<br/>POST /api/transcribe → {text, parse}<br/>POST /api/transcribe?parse=0 → {text}<br/>(the rolling partial pass; raw audio body)"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
@@ -105,6 +106,7 @@ flowchart LR
   authmw --> misc
   authmw --> authr
   authmw --> tasksr
+  authmw --> usager
   authr --> config
   authr --> team
   tasksr -->|"resolve_actor"| team
@@ -113,6 +115,7 @@ flowchart LR
   pwa -->|"stage / accept / reject"| air
   pwa -->|fetch| peopler
   pwa -->|fetch| viewsr
+  pwa -->|"_vendored/usage-log: views + [data-track] taps, batched, same origin"| usager
   llm --> tasksr
   cli -->|"app up: HTTP (X-Actor)"| tasksr
   cli -->|"triage (HTTP or local)"| ai

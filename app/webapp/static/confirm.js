@@ -6,9 +6,9 @@
  * showModal / close, Esc, the × and a backdrop click all mean "no"; focus
  * goes back to the opener when it closes, as the native dialog does).
  *
- * The single primary is the destructive action, restating the tint recipe
- * on `danger` per the design system — never a competing second primary, and
- * the safe answer is every other way out.
+ * The one footer action is the destructive one, on the vendored outlined
+ * recipe (`button-tint danger`, design.md) — never a fill or a tint, never a
+ * competing second action, and the safe answer is every other way out.
  */
 
 'use strict';
@@ -53,9 +53,9 @@ export function confirmDialog(o) {
     actions.className = 'detail-actions';
     const go = document.createElement('button');
     go.type = 'button';
-    // The modal's one footer primary at button-primary's 48px, restating the
-    // tint recipe on danger (styles.css .confirm-danger), never a solid red (#281).
-    go.className = 'button-primary detail-save-btn confirm-danger';
+    // The modal's one full-width footer action, outlined on danger (the
+    // vendored button-tint danger, #412) — never a solid red or a tint (#281).
+    go.className = 'button-tint danger detail-save-btn';
     go.textContent = o.action || 'Delete';
     go.addEventListener('click', function () { answer = true; dialog.close(); });
     actions.appendChild(go);

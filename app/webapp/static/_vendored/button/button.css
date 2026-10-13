@@ -31,9 +31,11 @@
  *                                .detail-save-btn:disabled (~line 2479,
  *                                home-automation#362) — one recipe, both
  *                                themes, never opacity on a solid fill
- *   - .button-tint.danger     <- whatsapp-radar styles.css .run-btn.danger
- *                                (~line 739) — the --deficit-tinted
- *                                restatement of the tint recipe
+ *   - .button-tint.danger     <- the outlined destructive recipe (design.md
+ *                                "Component contracts", fleet-config#1403);
+ *                                the class keeps its old name so consuming
+ *                                apps' markup survives a re-vendor, only the
+ *                                look changed (project-scaffolding#379)
  *
  * Contract: button-primary is the one main action per view (solid accent).
  * button-tint is secondary emphasis (accent-soft fill, accent text, soft
@@ -42,9 +44,11 @@
  * tinted fill. button-surface is a labelled toolbar/utility button at the
  * control height; a glyph-only control is not a tier here but its own
  * component, icon-button/ (unpainted at rest, fleet-config#1259). Every tier shares the one button-disabled recipe (flat
- * card-off / line / muted trio — AA in both themes). A destructive action
- * restates the tint recipe on `.danger` (deficit-tinted border and shade, danger-text text);
- * status colors never fill a non-status button.
+ * card-off / line / muted trio — 4.93:1 light, 4.08:1 dark; see the disabled rule). A destructive action
+ * is OUTLINED on `.danger` (transparent fill, danger-text label, --deficit
+ * hairline border) — never a fill or tint, the final Delete of a confirm
+ * dialog included (fleet-config#1403, measured as COMP-08); status colors
+ * never fill a non-status button.
  *
  * No :focus-visible rule here — the app-wide tokenized ring
  * (`:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }`)
@@ -79,13 +83,18 @@
 }
 .button-tint:active { transform: scale(0.98); }
 
-/* Destructive restatement of the tint recipe (whatsapp-radar .run-btn.danger,
-   ~line 739): same shape, colors swapped to the --deficit tint, text in --danger-text
-   (fleet-config#963: the base hue drops under AA on its own tint). */
+/* Destructive = the outlined recipe (design.md, fleet-config#1403): the tint's
+   shape (padding, 48px, bold) with the fill and accent border taken off.
+   Transparent on the hairline, label in --danger-text, border in --deficit.
+   Label contrast over the card (the e2e test asserts >= 4.5:1 in both themes):
+   light #a40e26 on #ffffff 7.87:1; dark #ff7b72 on #161b22 6.86:1. The
+   --deficit border clears 3:1 for a UI boundary (light 5.36:1, dark 5.16:1).
+   The class name stays `.button-tint.danger` so existing markup keeps working;
+   only the look changed from the former --deficit-soft tint. */
 .button-tint.danger {
-  background: var(--deficit-soft);
+  background: transparent;
   color: var(--danger-text);
-  border-color: var(--deficit-border-soft);
+  border-color: var(--deficit);
 }
 
 .button-ghost {
@@ -102,7 +111,9 @@
 }
 
 .button-surface {
-  background: var(--card-off);
+  /* The control fill (--input-bg): card-off in light, border-muted (#21262d)
+     in dark, never true black on a dark card (fleet-config#1375). */
+  background: var(--input-bg, var(--card-off));
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   height: var(--control-h);
@@ -114,10 +125,16 @@
   font-weight: 600;
   cursor: pointer;
 }
+/* Dark label is fg (12.88:1 on the control fill); fg-muted would be 4.08:1
+   (fleet-config#1375). Sits before the disabled rule so that stays muted. */
+[data-theme="dark"] .button-surface { color: var(--ink); }
 
 /* One disabled recipe for every tier, both themes (home-automation#362):
    opacity on a solid fill blends sub-AA either way; the flat card-off/line/
-   muted trio reads identically greyed-out in both themes and passes AA.
+   muted trio reads identically greyed-out in both themes. Measured muted-on-
+   fill: 4.93:1 light, 4.08:1 dark, so dark is under the 4.5:1 AA text bar.
+   Accepted: WCAG 2.2 SC 1.4.3 exempts text in an inactive UI component.
+   Do not raise the colours without the owner (project-scaffolding#360).
    The fill is the control fill (--input-bg): card-off in light, border-muted
    (#21262d) in dark, never true black on a dark card (fleet-config#1368). */
 .button-primary:disabled,

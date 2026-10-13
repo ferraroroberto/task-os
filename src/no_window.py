@@ -19,10 +19,12 @@ Import the flag from here instead of re-deriving the
 **Vendor-verbatim modules are the one exception and keep a local definition.**
 A file copied byte-identical into adopter repos cannot import a module of this
 repo's -- the copy would not resolve, and the hash-verified bytes must stay
-self-contained. Two such files therefore derive the flag themselves on
-purpose, and that is not drift: ``tests/e2e/_browser_sweep.py`` and
-``scripts/classify_e2e.py`` (both listed in
-``scripts/verify-before-ship.ps1``'s ``$VendoredModules``).
+self-contained. A handful of such files therefore derive the flag themselves
+on purpose, and that is not drift: every ``src`` catalogued in
+``.fleet.toml``'s ``[components]`` table (read via
+``scripts/vendored_catalog.py``) is a vendor-verbatim publication, and
+``tests/test_no_window_convention.py`` derives its allow-list from that same
+catalog.
 
 Stdlib-only and side-effect-free, so a standalone script launched outside the
 project venv can import it after putting the repo root on ``sys.path``.

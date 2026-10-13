@@ -330,13 +330,13 @@ def _walk_text_size(page: Page, *, tap: bool) -> None:
     expect(html).to_have_attribute("data-textsize", "default")
     expect(page.locator("#textSizeControl")).to_be_visible()
     if tap:
-        assert_min_target(page.locator("#textSizeControl .range-tab"))
+        assert_min_target(page.locator("#textSizeControl .segmented-item"))
     for step, px in TEXT_STEPS.items():
         press(f"#textSizeControl [data-textsize='{step}']")
         expect(html).to_have_attribute("data-textsize", step)
         assert root_px() == px, (step, root_px())
         expect(page.locator(f"#textSizeControl [data-textsize='{step}']")).to_have_attribute("aria-pressed", "true")
-        expect(page.locator("#textSizeControl .range-tab.active")).to_have_count(1)
+        expect(page.locator("#textSizeControl .segmented-item[aria-pressed='true']")).to_have_count(1)
         assert_no_horizontal_overflow(page)
     # Large is the last step taken: it is stored, and the next load already wears it.
     assert page.evaluate("localStorage.getItem('task-os.textsize')") == "large"

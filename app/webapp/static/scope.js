@@ -31,6 +31,7 @@ export function mountScope(host, onChange) {
     b.type = 'button';
     b.className = 'segmented-item';
     b.dataset.scope = s[0];
+    b.dataset.track = 'scope.' + s[0];
     b.setAttribute('aria-pressed', 'false');
     b.textContent = s[1];
     group.appendChild(b);

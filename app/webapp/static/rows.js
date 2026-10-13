@@ -238,6 +238,7 @@ function rowKebab(t, menu, li) {
   const kebab = document.createElement('button');
   kebab.type = 'button';
   kebab.className = 'icon-button trow-kebab action-row-kebab';
+  kebab.dataset.track = 'row.menu';
   kebab.setAttribute('aria-label', 'More actions for ' + t.title);
   kebab.innerHTML = icon('ellipsis-vertical');
   menu.attach(t, kebab);

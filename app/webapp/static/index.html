@@ -46,7 +46,6 @@
   <link rel="stylesheet" href="/static/_vendored/empty-state/empty-state.css">
   <link rel="stylesheet" href="/static/_vendored/select-native/select-native.css">
   <link rel="stylesheet" href="/static/_vendored/switch/switch.css">
-  <link rel="stylesheet" href="/static/_vendored/range-tab/range-tab.css">
   <link rel="stylesheet" href="/static/_vendored/text-size/text-size.css">
   <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
   <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
@@ -385,14 +384,14 @@
       <!-- The header keeps the spec's two trailing icon buttons (#301): the
            theme toggle and the Settings gear. The issue sync lives on its
            Settings card ("Sync now"); the command palette is Ctrl+K / ⌘K. -->
-      <button type="button" id="themeToggle" class="icon-button home-toggle hit-target"
+      <button type="button" id="themeToggle" data-track="theme" class="icon-button home-toggle hit-target"
               title="Toggle theme" aria-label="Toggle dark mode">
         <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
         <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
       </button>
       <!-- Settings (#281): the header gear, not a sixth tab. aria-current
            while its pane is up; any tab press leaves it, as for the journal. -->
-      <button type="button" id="settingsBtn" class="icon-button home-toggle hit-target"
+      <button type="button" id="settingsBtn" data-track="settings" class="icon-button home-toggle hit-target"
               title="Settings" aria-label="Settings" aria-controls="paneSettings">
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
       </button>
@@ -410,12 +409,12 @@
              strip over — see bulkbar.js. -->
         <div class="pane-top">
           <div class="filter-text" id="boardFilterText" hidden></div>
-          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
+          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle data-track="select"
                   title="Select tasks" aria-label="Select tasks" aria-pressed="false">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
             <span class="strip-label">Select</span>
           </button>
-          <button type="button" class="icon-button quick-add-btn" data-quick-add
+          <button type="button" class="icon-button quick-add-btn" data-quick-add data-track="quick-add"
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
           </button>
@@ -439,12 +438,12 @@
              is the line under it. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
-          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle
+          <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle data-track="select"
                   title="Select tasks" aria-label="Select tasks" aria-pressed="false">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
             <span class="strip-label">Select</span>
           </button>
-          <button type="button" class="icon-button quick-add-btn" data-quick-add
+          <button type="button" class="icon-button quick-add-btn" data-quick-add data-track="quick-add"
                   title="Add task" aria-label="Add task" aria-haspopup="dialog">
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
           </button>
@@ -503,18 +502,18 @@
           <ul class="action-rows">
             <!-- Text size (#314): the escape from the viewport zoom lock (WCAG 1.4.4),
                  inline because it is changed in place. The vendored text-size control
-                 on the vendored range-tab row; text-size.js persists the step to
+                 as a vendored segmented group (#412); text-size.js persists the step to
                  task-os.textsize and stamps html[data-textsize]. -->
             <li class="action-row settings-text-size" id="textSizeCard">
               <span class="settings-link-label" id="textSizeLabel">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
                 <span class="action-row-title">Text size</span>
               </span>
-              <nav class="range-tabs" id="textSizeControl" aria-labelledby="textSizeLabel">
-                <button type="button" class="range-tab" data-textsize="small">Small</button>
-                <button type="button" class="range-tab" data-textsize="default">Default</button>
-                <button type="button" class="range-tab" data-textsize="large">Large</button>
-              </nav>
+              <div class="segmented" id="textSizeControl" role="group" aria-labelledby="textSizeLabel">
+                <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.small" data-textsize="small">Small</button>
+                <button type="button" class="segmented-item" aria-pressed="true" data-track="text-size.default" data-textsize="default">Default</button>
+                <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.large" data-textsize="large">Large</button>
+              </div>
               <p class="settings-text-size-hint muted">On this device. Rows, buttons and icons keep their size.</p>
             </li>
             <li class="action-row">
@@ -705,7 +704,7 @@
         <section class="settings-sheet" id="paletteCard" data-sheet="palette" hidden>
           <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
           <div class="card-actions">
-            <button type="button" id="paletteOpen" class="button-surface">
+            <button type="button" id="paletteOpen" data-track="palette.open" class="button-surface">
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
               Open command palette
             </button>
@@ -725,7 +724,7 @@
             <div class="status-row"><dt>Last sync</dt><dd id="statusIssuesSync" class="muted">–</dd></div>
           </dl>
           <div class="card-actions">
-            <button type="button" id="issuesSyncNow" class="button-surface" disabled>
+            <button type="button" id="issuesSyncNow" data-track="issues.sync" class="button-surface" disabled>
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
               Sync now
             </button>
@@ -739,7 +738,7 @@
             <div class="status-row"><dt>Last fetched</dt><dd id="statusCalendarFetched" class="muted">–</dd></div>
           </dl>
           <div class="card-actions">
-            <button type="button" id="calendarRefresh" class="button-surface" disabled>
+            <button type="button" id="calendarRefresh" data-track="calendar.refresh" class="button-surface" disabled>
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
               Refresh now
             </button>
@@ -752,7 +751,7 @@
             <div class="status-row"><dt>Last run</dt><dd id="statusCaptureRun" class="muted">–</dd></div>
           </dl>
           <div class="card-actions">
-            <button type="button" id="captureRunNow" class="button-surface" disabled>
+            <button type="button" id="captureRunNow" data-track="capture.run" class="button-surface" disabled>
               <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-refresh-cw"></use></svg>
               Check now
             </button>
@@ -762,7 +761,7 @@
           <p class="card-meta">What is left in the Inbox once the flagged mail is a task: the archiver (<code>archive.repo</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
           <div class="archive-head">
             <div class="archive-actions">
-              <button type="button" id="archiveRun" class="button-surface archive-run" disabled>
+              <button type="button" id="archiveRun" data-track="archive.run" class="button-surface archive-run" disabled>
                 <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
                 <span id="archiveRunLabel">Archive Inbox now</span>
               </button>
@@ -831,7 +830,7 @@
               <p class="card-meta">This install's folder placeholders: save them as <code>%LOCALAPPDATA%\task-os\opener.env</code> on that PC and edit the paths there.</p>
               <pre class="opener-cmd" id="openerEnv"></pre>
               <div class="access-actions">
-                <button type="button" id="reindexBtn" class="button-ghost" hidden>Rescan folders now</button>
+                <button type="button" id="reindexBtn" data-track="folders.reindex" class="button-ghost" hidden>Rescan folders now</button>
               </div>
             </details>
           </div>
@@ -918,7 +917,7 @@
              appear on the line as they are heard. Never a dead button: when no
              transcription endpoint answers it stays visible, disabled, and the
              reason is spelled out in the hint below. -->
-        <button type="button" class="icon-button quick-add-mic" aria-label="Dictate (click to start)"
+        <button type="button" class="icon-button quick-add-mic" data-track="quick-add.voice" aria-label="Dictate (click to start)"
                 aria-pressed="false" disabled>
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
         </button>
@@ -970,7 +969,7 @@
       <div class="detail-actions">
         <!-- The dialog's one primary (design.md modal.primaryButton): the vendored
              button-primary — 48px, accent-fill, the AA disabled recipe (#281). -->
-        <button type="submit" class="button-primary detail-save-btn quick-add-submit" disabled>Add</button>
+        <button type="submit" class="button-primary detail-save-btn quick-add-submit" data-track="quick-add.submit" disabled>Add</button>
       </div>
     </form>
   </dialog>

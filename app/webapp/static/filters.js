@@ -365,6 +365,7 @@ export function mountFilters(opts) {
       button = document.createElement('button');
       button.type = 'button';
       button.className = 'icon-button filter-open';
+      button.dataset.track = 'filter';
       button.setAttribute('aria-haspopup', 'dialog');
       button.innerHTML = icon('list-filter');
       badge = document.createElement('span');

@@ -1078,7 +1078,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     # 3. Confirm: the subtree is gone, the drawer closes, the hash clears, a toast says how much.
     drawer.locator(".drawer-delete").click()
     expect(dialog).to_be_visible()
-    dialog.locator(".confirm-danger").click()
+    dialog.locator(".button-tint.danger").click()
     expect(dialog).to_be_hidden()
     expect(drawer).to_be_hidden()
     assert page.evaluate("location.hash") == ""
@@ -1098,7 +1098,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(dialog).to_be_visible()
     expect(dialog.locator("#confirmTitle")).to_have_text("Delete 2 tasks?")
     shot(page, shots / "story-19-delete-task-2-desktop.png")
-    dialog.locator(".confirm-danger").click()
+    dialog.locator(".button-tint.danger").click()
     expect(dialog).to_be_hidden()
     expect(page.locator(".toasts")).to_contain_text("2 tasks deleted")
     expect(page.locator(f"#boardHost .trow[data-id='{dupe}']")).to_have_count(0)
@@ -1167,14 +1167,28 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
             dpage.goto(f"{base}/")
             expect(dpage.locator("html")).to_have_attribute("data-theme", "dark")
             _assert_scope_switch_spans_row(dpage)
+            # Each fill as the eye sees it: painted over the first opaque
+            # backdrop behind the switch on a 1px canvas, so the translucent
+            # track is composited and every CSS colour syntax (rgb(), color(srgb
+            # …) from a color-mix) lands on one 0-255 scale (#412: the raw
+            # computed strings put a 0-1 track beside a 0-255 fill).
             lums = dpage.evaluate(
                 """() => {
-                  const lum = c => { const m = c.match(/\\d+(\\.\\d+)?/g).map(Number);
-                                     return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]; };
                   const sw = document.querySelector('#todayScope .scope-switch');
-                  return {track: lum(getComputedStyle(sw).backgroundColor),
-                          picked: lum(getComputedStyle(
-                            sw.querySelector('.segmented-item[aria-pressed="true"]')).backgroundColor)};
+                  const picked = sw.querySelector('.segmented-item[aria-pressed="true"]');
+                  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+                  const paint = fills => {
+                    ctx.clearRect(0, 0, 1, 1);
+                    fills.forEach(f => { ctx.fillStyle = f; ctx.fillRect(0, 0, 1, 1); });
+                    return ctx.getImageData(0, 0, 1, 1).data;
+                  };
+                  let back = sw.parentElement;
+                  while (back && paint([getComputedStyle(back).backgroundColor])[3] !== 255) back = back.parentElement;
+                  const base = getComputedStyle(back || document.documentElement).backgroundColor;
+                  const track = getComputedStyle(sw).backgroundColor;
+                  const lum = d => 0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2];
+                  return {track: lum(paint([base, track])),
+                          picked: lum(paint([base, track, getComputedStyle(picked).backgroundColor]))};
                 }"""
             )
             assert lums["picked"] > lums["track"], lums   # raised, not sunk
