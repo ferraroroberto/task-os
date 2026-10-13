@@ -38,7 +38,7 @@ Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray t
 
 ## CI expectations
 - Workflow `.github/workflows/ci.yml`, job `gate`, on every PR and every push to `main`. **Advisory, not required** (no branch protection) — the local gate (`scripts/verify-before-ship.ps1`) is the contract; CI is the clean-runner second opinion (fresh `.venv`, committed files only).
-- Typical green: **~TBD min** (to be measured from the first green runs). Investigate at **>2x**; treat as wedged at **>~4x**.
+- Typical green: **~8 min** (unit ~3.5 min, e2e ~3.3 min, install and browsers the rest). Investigate at **>16 min**; treat as wedged at **>~30 min**.
 - Flaky leg: the WebKit phone contexts inside the e2e run can wedge on the hosted runner. `timeout-minutes` caps a wedge. A wedge is a flake, not the diff.
 - CI's only signal beyond the local gate is the **e2e suite on a clean runner**. Its e2e surface = `app/webapp/`, `src/`, `tests/e2e/`, `.github/workflows/`. A diff touching **none** of these gains nothing from CI.
 - The runner has no gitignored config: the workflow seeds `config/*.sample.json` to their live names, and nothing reads the live `:8448`, a real mirror folder or the archiver's `emails.db`.
