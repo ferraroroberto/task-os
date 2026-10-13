@@ -242,6 +242,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         due_input.fill(new_due)
         due_input.press("Enter")
         expect(due_input).to_have_value(new_due)
+        # fill() already set the field, so the value check above waits for nothing:
+        # the activity row is what appears once the write has landed (#411).
+        expect(drawer.locator(".activity-row").first.locator(".activity-new")).to_have_text(new_due)
         assert _get(base, f"/api/tasks/{task_id}")["due"] == new_due
         # the rare fields wait behind More fields, closed on a fresh load
         expect(drawer.locator("details.drawer-more")).not_to_have_attribute("open", "")
