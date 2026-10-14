@@ -295,6 +295,23 @@ def _items(base: str, run_id: int) -> list[dict]:
 #: status row taller than this has wrapped, which is the thing #168 removed.
 _ONE_LINE_PX = 24.0
 
+# The visible row verbs on a phone card (fleet-config#1420): what each one is
+# called, and whether anything is painted on it at rest.
+ROW_VERB_SHAPE_JS = (
+    "els => els.map(el => { const cs = getComputedStyle(el); return {"
+    " tag: el.tagName, label: el.getAttribute('aria-label'), title: el.title,"
+    " height: Math.round(el.offsetHeight), font: cs.fontSize, pad: cs.padding,"
+    " bg: cs.backgroundColor, border: cs.borderTopWidth + ' ' + cs.borderTopStyle}; })"
+)
+
+
+def _assert_unpainted(shapes: list[dict]) -> None:
+    for shape in shapes:
+        assert shape["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), f"{shape['label']} is filled: {shape}"
+        assert shape["border"].split()[0] == "0px" or shape["border"].endswith("none"), (
+            f"{shape['label']} is outlined: {shape}"
+        )
+
 
 def _box(locator) -> dict[str, float]:
     """The rendered box of the one element *locator* matches; missing fails loud."""
@@ -697,7 +714,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # 10c. …and the row that already had its human says so and asks nothing.
     reviewed_card = p.locator(f".archive-card[data-id='{reviewed_item['id']}']")
     expect(reviewed_card.locator(".archive-state")).to_have_text("reviewed")
-    expect(reviewed_card.locator(".archive-menu-toggle")).to_have_text("Details")
+    expect(reviewed_card.locator(".archive-menu-toggle")).to_have_attribute("aria-label", "Details")
     expect(reviewed_card).to_contain_text("nothing left to do")
     # #339: a card reads at a glance in two lines (the subject with its state,
     # then who · when · where): the files and the reason wait behind its
@@ -730,14 +747,12 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     open_card.locator(".archive-menu-toggle").tap()
     expect(open_card.locator(".archive-move-toggle")).to_be_visible()
     assert_min_target(open_card.locator(".archive-action"))
-    shapes = open_card.locator(".archive-action").evaluate_all(
-        "els => els.map(el => ({tag: el.tagName, height: Math.round(el.offsetHeight),"
-        " font: getComputedStyle(el).fontSize, pad: getComputedStyle(el).padding}))"
-    )
+    shapes = open_card.locator(".archive-action").evaluate_all(ROW_VERB_SHAPE_JS)
     assert len(shapes) == 3, shapes                          # Review · Accept · File it…
     assert {s["tag"] for s in shapes} == {"BUTTON"}, shapes   # no link-styled <summary>
     for key in ("height", "font", "pad"):
         assert len({s[key] for s in shapes}) == 1, f"row actions differ in {key}: {shapes}"
+    _assert_unpainted(shapes)
     open_card.locator(".archive-move-toggle").tap()
     panel = open_card.locator(".archive-move-body")
     expect(panel).to_be_visible()
@@ -779,21 +794,24 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     open_card.locator(".archive-menu-toggle").tap()      # close the one before it
     expect(open_card.locator(".archive-move-toggle")).to_be_hidden()
     stuck_card.locator(".archive-menu-toggle").tap()
-    retry = stuck_card.locator(".archive-action", has_text="Retry")
+    retry = stuck_card.locator(".archive-action[aria-label='Retry']")
     expect(retry).to_be_visible()
-    stuck_shapes = stuck_card.locator(".archive-action").evaluate_all(
-        "els => els.map(el => ({tag: el.tagName, text: el.textContent.trim(),"
-        " height: Math.round(el.offsetHeight), font: getComputedStyle(el).fontSize,"
-        " pad: getComputedStyle(el).padding}))"
-    )
-    # Review · Move to… · Retry · Revert — no *Accept* on a row already seen.
-    assert [s["text"] for s in stuck_shapes] == [
-        "Review", "Move to…", "Retry", "Revert",
+    stuck_shapes = stuck_card.locator(".archive-action").evaluate_all(ROW_VERB_SHAPE_JS)
+    # Review · Move to… · Retry — no *Accept* on a row already seen — and
+    # *Revert*, which deletes the archived file, is never a visible verb: it
+    # is the last item of the card's kebab (fleet-config#1420).
+    assert [s["label"] for s in stuck_shapes] == [
+        "Review", "Move to…", "Retry",
     ], stuck_shapes
+    assert all(s["title"] == s["label"] for s in stuck_shapes), stuck_shapes   # the tooltip
     assert {s["tag"] for s in stuck_shapes} == {"BUTTON"}, stuck_shapes
     for key in ("height", "font", "pad"):
         assert len({s[key] for s in stuck_shapes}) == 1, f"row actions differ in {key}: {stuck_shapes}"
+    _assert_unpainted(stuck_shapes)
     assert_min_target(retry)
+    expect(stuck_card.get_by_text("Revert", exact=True)).to_have_count(0)
+    stuck_kebab = stuck_card.locator(".archive-kebab")
+    assert_min_target(stuck_kebab)
     assert_no_horizontal_overflow(p)
     # the open card holds its files and reason too now (#339): seat the whole
     # card, clear of the floating pill, not just its Retry
@@ -802,6 +820,12 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert seat["y"] >= 0 and seat["y"] + seat["height"] <= PHONE["height"] - 90, seat
     dismiss_toasts(p)
     shot(p, shots / "story-24-archive-10-phone.png")
+    stuck_kebab.tap()
+    menu_items = p.locator(".row-menu .row-menu-item")
+    expect(menu_items.last).to_have_text("Revert")
+    expect(menu_items.last).to_have_attribute("data-action", "revert")
+    p.keyboard.press("Escape")
+    expect(p.locator(".row-menu")).to_have_count(0)
 
     retry.tap()
     expect(stuck_card.locator(".archive-state")).to_have_text("filed")

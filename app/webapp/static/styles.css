@@ -1134,10 +1134,9 @@ a.chip:hover { text-decoration: underline; }
 .trow-code { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .trow-due { color: var(--fg); }
 /* Move (#392): the row's one visible verb, an unpainted 44px icon button on
-   the kebab's box (rows.js says why it is not the tinted .action-row-verb), on
-   a fine pointer only — a touch screen swipes the row left for the same date
-   sheet, and the ⋯ menu holds Move… everywhere (WCAG 2.5.1). */
-.trow .trow-move { --icon-btn-box: var(--row-sm); }
+   the kebab's box (the vendored .action-row-verb), on a fine pointer only — a
+   touch screen swipes the row left for the same date sheet, and the ⋯ menu
+   holds Move… everywhere (WCAG 2.5.1). */
 @media (pointer: coarse) { .trow-move { display: none; } }
 /* The completion circle (the vendored .action-row-fav): outline at rest, the
    check when closed. Done reads as success, not the favourite's attention. */
@@ -2380,17 +2379,17 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 
 /* ---- the per-row actions (the phone card's; the desktop row has its ⋮) ---- */
 .archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
-.archive-action { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--control-h); font-size: var(--font-body-sm); }
-.archive-action .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* The verbs are the vendored plain icon-buttons (fleet-config#1420), so their
+   cluster is the track-less `.icon-button-group` on the row box: the 44px
+   targets touch, none paints anything at rest. */
+.archive-row-actions.icon-button-group { --icon-btn-box: var(--row-sm); gap: 0; }
 /* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
-   *Revert* are all `.archive-action`, so an open panel may not invent a colour
-   of its own — the engaged look is the segmented control's `accent-soft` tint,
-   the one "this is the state you are in" tone the strip already uses. A
-   disclosure's engaged state is `aria-expanded` (its correct ARIA), not
-   `aria-pressed`, so the tint keys on that. */
-.archive-action[aria-expanded="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent-border-soft);
+   *Retry* are all `.archive-action`, so an open panel may not invent a colour
+   of its own — the engaged look is the glyph in the accent, the kebab's own
+   open state. A disclosure's engaged state is `aria-expanded` (its correct
+   ARIA), not `aria-pressed`, so the colour keys on that. */
+.archive-action[aria-expanded="true"],
+.archive-action[aria-expanded="true"]:not(:disabled):hover {
   color: var(--accent);
 }
 /* The panel is a full-width row under the mail's own (grid) or the block under
@@ -2579,7 +2578,6 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
   .archive-run,
   .archive-limit-input,
   .archive-run-pick,
-  .archive-action,
   .archive-other-input,
   .archive-other-go,
   .archive-hint,
@@ -2594,8 +2592,8 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
    neighbours is 8px, so the expanded rects meet edge to edge and never
    overlap. The inputs and the run picker beside them get there through the
    inset band (top of this sheet). */
-.archive-run, .archive-action, .archive-other-go, .archive-runbar .button-ghost { position: relative; }
-.archive-run::before, .archive-action::before, .archive-other-go::before,
+.archive-run, .archive-other-go, .archive-runbar .button-ghost { position: relative; }
+.archive-run::before, .archive-other-go::before,
 .archive-runbar .button-ghost::before {
   content: "";
   position: absolute;
@@ -2604,7 +2602,7 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 /* …and on touch they are 44px painted (the coarse block above), so the
    expansion resets. */
 @media (pointer: coarse) {
-  .archive-run::before, .archive-action::before, .archive-other-go::before,
+  .archive-run::before, .archive-other-go::before,
   .archive-runbar .button-ghost::before { inset: 0; }
 }
 
