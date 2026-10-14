@@ -433,14 +433,20 @@ export function mountArchive(opts) {
   }
 
   // ------------------------------------------------------------- actions
-  function actionButton(glyph, label, handler) {
+  /** A visible row verb (fleet-config#1420): the vendored plain icon-button,
+   *  glyph only, its word kept as the accessible name and the tooltip. */
+  function verbButton(glyph, label) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'button-ghost archive-action';
+    b.className = 'icon-button action-row-verb archive-action';
+    b.setAttribute('aria-label', label);
+    b.title = label;
     b.innerHTML = icon(glyph);
-    const t = document.createElement('span');
-    t.textContent = label;
-    b.appendChild(t);
+    return b;
+  }
+
+  function actionButton(glyph, label, handler) {
+    const b = verbButton(glyph, label);
     b.addEventListener('click', function () {
       runAction(b, handler);
     });
@@ -532,14 +538,9 @@ export function mountArchive(opts) {
    *  @param {{onToggle?: (open: boolean) => void}} [hooks]
    */
   function movePanel(item, hooks) {
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'button-ghost archive-action archive-move-toggle';
+    const toggle = verbButton('folder', isFiled(item) ? 'Move to…' : 'File it…');
+    toggle.classList.add('archive-move-toggle');
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.innerHTML = icon('folder');
-    const label = document.createElement('span');
-    label.textContent = isFiled(item) ? 'Move to…' : 'File it…';
-    toggle.appendChild(label);
 
     const body = document.createElement('div');
     body.className = 'archive-move-body';
@@ -661,7 +662,7 @@ export function mountArchive(opts) {
    *  panel lives in. */
   function actionsFor(item, hooks) {
     const wrap = document.createElement('div');
-    wrap.className = 'archive-row-actions';
+    wrap.className = 'archive-row-actions icon-button-group';
     if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
       wrap.appendChild(actionButton('check', 'Accept', function () { return acceptItem(item, null); }));
     }
@@ -676,12 +677,28 @@ export function mountArchive(opts) {
     if (canRetry(item)) {
       wrap.appendChild(actionButton('refresh-cw', 'Retry', function () { return retryItem(item); }));
     }
-    if (isFiled(item)) {
-      wrap.appendChild(actionButton('rotate-ccw', 'Revert', function () { return revertItem(item); }));
-    }
+    // Revert deletes the archived file, so it is never a visible verb: it is
+    // the last item of the card's kebab, behind its confirm (fleet-config#1420).
+    if (isFiled(item)) wrap.appendChild(revertKebab(item));
     const controls = wrap.childElementCount > 0;
     if (!controls) wrap.appendChild(nothingToPress(item));
     return { el: wrap, body: body, controls: controls };
+  }
+
+  /** The phone card's kebab: the destructive Revert, alone and last, behind
+   *  the same confirm the desktop row menu uses. */
+  function revertKebab(item) {
+    const kebab = document.createElement('button');
+    kebab.type = 'button';
+    kebab.className = 'icon-button archive-kebab action-row-kebab';
+    kebab.setAttribute('aria-label', 'More actions for ' + (item.subject || '(no subject)'));
+    kebab.title = 'More actions';
+    kebab.innerHTML = icon('ellipsis-vertical');
+    rowMenu.attach(String(item.id), kebab, [{
+      label: 'Revert', glyph: 'rotate-ccw', danger: true, dataset: { action: 'revert' },
+      onTap: function () { runAction(kebab, function () { return revertItem(item); }); },
+    }]);
+    return kebab;
   }
 
   /** A reverted mail is back in the Inbox and free to be filed by the next
@@ -872,14 +889,9 @@ export function mountArchive(opts) {
       const actions = actionsFor(item);
       const menu = document.createElement('div');
       menu.className = 'archive-menu';
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'button-ghost archive-action archive-menu-toggle';
+      const toggle = verbButton(actions.controls ? 'eye' : 'file-text', actions.controls ? 'Review' : 'Details');
+      toggle.classList.add('archive-menu-toggle');
       toggle.setAttribute('aria-expanded', 'false');
-      toggle.innerHTML = icon(actions.controls ? 'eye' : 'file-text');
-      const label = document.createElement('span');
-      label.textContent = actions.controls ? 'Review' : 'Details';
-      toggle.appendChild(label);
       const body = document.createElement('div');
       body.className = 'archive-menu-body';
       body.hidden = true;

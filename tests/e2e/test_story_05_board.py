@@ -533,7 +533,9 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert_action_row_budget(today_rows)
         verb = school.locator(".trow-move")
         expect(verb).to_be_visible()
+        expect(verb).to_have_class(re.compile(r"\baction-row-verb\b"))     # the vendored verb, no local un-painting
         assert verb.evaluate("e => getComputedStyle(e).backgroundColor") == "rgba(0, 0, 0, 0)"
+        assert verb.evaluate("e => getComputedStyle(e).borderTopWidth") == "0px"
         assert_min_target(verb)
         order = school.evaluate(
             "r => Array.from(r.children).map(c => Array.from(c.classList).find(k => k.startsWith('trow-')))")

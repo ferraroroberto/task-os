@@ -210,17 +210,15 @@ function doneToggle(t, handlers) {
 
 /**
  * Move (#392): the row's one visible verb, because re-dating is most of what
- * the owner does to a task — opening the date sheet beside the row. A plain
- * 44px icon button like the kebab beside it, not the vendored
- * `.action-row-verb`: that recipe paints a tint at rest, which the design
- * rubric's COMP-05 fails on every row (the conflict is the scaffold's to
- * settle: project-scaffolding#347). A fine pointer only (styles.css): a touch screen swipes the row
- * left for the same sheet.
+ * the owner does to a task — opening the date sheet beside the row. The
+ * vendored `.action-row-verb`: a plain 44px icon button like the kebab beside
+ * it, nothing painted at rest (fleet-config#1420). A fine pointer only
+ * (styles.css): a touch screen swipes the row left for the same sheet.
  */
 function moveVerb(t, menu) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'icon-button trow-move';
+  btn.className = 'icon-button action-row-verb trow-move';
   btn.setAttribute('aria-label', 'Move ' + t.title + ' to another date');
   btn.setAttribute('aria-haspopup', 'dialog');
   btn.title = 'Move… (D)';
