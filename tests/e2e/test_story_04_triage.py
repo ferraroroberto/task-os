@@ -969,6 +969,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     starts_input.fill("")
     starts_input.blur()
     expect(starts_input).to_have_value("")
+    # The input is empty the instant it is cleared, so on its own that proves
+    # nothing about the write. A bare "Starts" label is the re-render signal
+    # (`dateField` appends " · <caption>" only while a value is set): the PATCH
+    # came back and the drawer redrew from it, so the API read below cannot race.
+    expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
 
 

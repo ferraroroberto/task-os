@@ -548,11 +548,20 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(school).to_have_class(re.compile(r"\bis-key-target\b"))     # the row it moves stays marked
         shot(page, shots / "story-05-board-13-desktop.png")
         tomorrow = (E2E_ANCHOR + timedelta(days=1)).isoformat()
-        sheet.locator(".snooze-opt[data-phrase='tomorrow']").click()
+        # The toast is raised only after the write *and* a full refresh, so wait
+        # for them in the order they happen: the POST lands (bounded by the
+        # context's 15 s, not the 5 s of one `expect`), the list is redrawn
+        # without the row, then the toast. A single 5 s wait on the toast read a
+        # slow write as "no toast", which is not what the story is about.
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and r.url.endswith("/api/tasks/bulk")
+        ) as written:
+            sheet.locator(".snooze-opt[data-phrase='tomorrow']").click()
+        assert written.value.ok, f"the Move write answered {written.value.status}"
+        expect(page.locator(f"#paneToday section.today .today-group .trow[data-id='{sid}']")).to_have_count(0)
         moved = page.locator(".toast-success").last
         expect(moved).to_contain_text("Due ")
         assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow
-        expect(page.locator(f"#paneToday section.today .today-group .trow[data-id='{sid}']")).to_have_count(0)
         moved.locator(".toast-action").click()
         expect(_today_row(page, "School enrolment forms")).to_be_visible()
         assert _get(base, f"/api/tasks/{sid}")["due"] == E2E_ANCHOR.isoformat()

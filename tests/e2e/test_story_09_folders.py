@@ -297,6 +297,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.goto(base + "/?status=todo&scope=all")
     page.click("nav.tabs .tab[data-tab='board']")
     wrow = page.locator(f"#paneBoard .trow[data-id='{watering['id']}']")
+    # Rendered first: a count of zero is also what a Board that has not drawn
+    # its rows yet reads, and the icon-button census below needs them on screen.
+    expect(wrow.locator(".trow-kebab")).to_be_visible()
     expect(wrow.locator(".trow-ai")).to_have_count(0)      # #392: the link is the menu's, below
     # #357: the same icon-button rule across the Board (header, strip +, rows' ⋮)
     assert_icon_buttons_uniform(page, "body", min_count=5)
