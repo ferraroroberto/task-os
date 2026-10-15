@@ -633,10 +633,15 @@ def _walk_hash_open_loads_once(page: Page, base: str) -> None:
     page.goto(f"{base}/#task/{lib_id}")
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    # Today opens its first task in the drawer on its own (the split view), so a
+    # visible drawer is not yet *this* task's: clearing Starts there writes
+    # nothing, and the bare label it then shows is another task's.
+    expect(drawer.locator("#drawerTitle")).to_have_value("Return library books")
     page.remove_listener("request", on_request)
     assert len(loads) == 1, f"one hash navigation loaded the task {len(loads)} times"
     open_more_fields(drawer)   # Starts is a rare field (#394)
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
+    expect(starts_input).not_to_have_value("")      # the seeded date is on screen to clear
     starts_input.fill("")
     starts_input.blur()
     # The field's own label is the *re-render* signal: `dateField` appends
@@ -953,6 +958,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     page.goto(f"{base}/#task/{task_id}")
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
+    expect(drawer.locator("#drawerTitle")).to_have_value("School enrolment forms")   # not Today's own first task
     open_more_fields(drawer)
     starts_input = drawer.locator(".field-starts input[data-field='starts']")
     expect(starts_input).to_be_visible()
