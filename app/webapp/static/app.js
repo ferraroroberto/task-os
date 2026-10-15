@@ -35,6 +35,7 @@
 
 import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
+import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
 import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { initUsageLog } from './_vendored/usage-log/usage-log.js';
 import { actionById, createActions, failedOf, failureText } from './actions.js';
@@ -47,7 +48,7 @@ import { createDrawer } from './drawer.js';
 import {
   DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
 } from './filters.js';
-import { STATUSES, todayISO } from './format.js';
+import { addDays, STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
 import { createPalette } from './palette.js';
@@ -708,9 +709,7 @@ function renderTodayPane() {
  *  ever stated when the server said so. */
 function journalWindow() {
   const to = todayISO();
-  const from = new Date(to + 'T00:00:00');
-  from.setDate(from.getDate() - (7 * state.journal.weeks - 1));
-  return { from: todayISO(from), to: to };
+  return { from: addDays(to, -(7 * state.journal.weeks - 1)), to: to };
 }
 
 function journalParams() {
@@ -726,11 +725,10 @@ function journalParams() {
 async function loadJournal() {
   const w = journalWindow();
   const base = journalParams();
-  const before = new Date(w.from + 'T00:00:00');
-  before.setDate(before.getDate() - 1);
+  const before = addDays(w.from, -1);
   const [page, probe] = await Promise.all([
     api('/api/tasks' + qs(Object.assign({}, base, { done_from: w.from, done_to: w.to }))),
-    api('/api/tasks' + qs(Object.assign({}, base, { done_to: todayISO(before), limit: 1 })))
+    api('/api/tasks' + qs(Object.assign({}, base, { done_to: before, limit: 1 })))
       .catch(function () { return null; }),
   ]);
   state.journal.items = page.items || [];
@@ -796,14 +794,27 @@ function setHeadTitle(text, iconId) {
 
 /** The line beside the title names an exception or states a plain fact
  *  (#393, design.md `page-header`). On Today: `headLine` over the counts of
- *  the horizons Today just drew, so the header and the list never disagree.
- *  On the Board: `boardHeadParts` over the counts its lanes were drawn from —
- *  Inbox arrivals in the accent, then overdue / due today, each part in its
- *  own tone (#396). On Settings: the mails the last archiving run left for
- *  you, then the services in trouble, else how many are on (#397). The open
- *  count is not repeated here: it is the filter field's placeholder. The
- *  other views name their own exceptions in their redesign steps (#390);
- *  until then their line is empty rather than a count. */
+ *  the horizons Today just drew, so the header and the list never disagree —
+ *  one text node in one tone (`.status.is-attention`), never per-part spans:
+ *  Today's line is always a single sentence, and splitting it across spans
+ *  (as tried for #439) measurably shifts the browser's text shaping at the
+ *  word boundary — a sub-pixel kerning drift the screenshot gallery caught
+ *  that no eye would. On the Board: `boardHeadParts` over the counts its
+ *  lanes were drawn from — Inbox arrivals in the accent, *ahead of* overdue /
+ *  due today (#396). On Settings: the mails the last archiving run left for
+ *  you, ahead of a failing service even in the danger tone (#397) — "needs
+ *  you" matters more than severity. Both orderings put importance ahead of
+ *  severity, which the vendored renderer's `TONE_RANK` (danger, then
+ *  attention — nothing else ranked) cannot reproduce: handing it these two
+ *  arrays would have it silently re-sort them by severity and lose that
+ *  ordering. So Board and Settings paint their own two parts locally
+ *  (`paintParts` below) — sharing the vendored `.head-exception` markup/CSS
+ *  and its `HEAD_MAX_PARTS` cap (#439), short of the one piece that needs
+ *  project-scaffolding's say: ranking by the caller's own importance, not
+ *  just severity (and an 'accent' entry in `TONE_RANK` for the Board's own
+ *  case). The open count is not repeated here: it is the filter field's
+ *  placeholder. The other views name their own exceptions in their redesign
+ *  steps (#390); until then their line is empty rather than a count. */
 function renderHeadStatus() {
   const el = els.homeHeadStatus;
   let text = '';
@@ -821,12 +832,22 @@ function renderHeadStatus() {
     parts = settingsHeadParts();
   }
   el.classList.toggle('is-attention', attention);
-  if (!parts || !parts.length) { el.textContent = text; return; }
+  if (!parts) { el.textContent = text; return; }
+  paintParts(el, parts);
+}
+
+/** Paint an already-ordered, already-capped `{text, tone}[]` with the
+ *  vendored home-head markup (`.head-exception[data-tone]`) but without its
+ *  tone-ranked sort — see `renderHeadStatus` above for why Board and Settings
+ *  cannot use the vendored sort itself. */
+function paintParts(el, parts) {
+  if (!parts.length) { el.textContent = ''; delete el.dataset.tone; return; }
   el.replaceChildren();
   parts.forEach(function (part, i) {
     if (i) el.append(' · ');
     const span = document.createElement('span');
-    span.className = 'is-' + part.tone;
+    span.className = 'head-exception';
+    span.dataset.tone = part.tone;
     span.textContent = part.text;
     el.appendChild(span);
   });
@@ -834,14 +855,14 @@ function renderHeadStatus() {
 
 /** The Settings line's parts (#397): the archive's "needs you" first — the
  *  one exception that asks for a hand rather than a fix — then settings.js's
- *  own (failing services, or the plain count), at most two in all. */
+ *  own (failing services, or the plain count), at most `HEAD_MAX_PARTS`. */
 function settingsHeadParts() {
   const own = settings.headParts();
   const needs = archiveNeedsYou();
   if (!needs) return own;
   // An exception line names exceptions only: the plain count yields to it.
   return [{ text: needs + (needs === 1 ? ' mail needs' : ' mails need') + ' you', tone: 'attention' }]
-    .concat(own.filter(function (p) { return p.tone !== 'muted'; })).slice(0, 2);
+    .concat(own.filter(function (p) { return p.tone !== 'muted'; })).slice(0, HEAD_MAX_PARTS);
 }
 
 /** …a tab's name and glyph, read off its own nav button (one source). */

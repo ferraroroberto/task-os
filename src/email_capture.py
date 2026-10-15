@@ -57,14 +57,13 @@ import logging
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
 from src.config import AppConfig
 from src.placeholders import normalize_path, to_ref
 from src.poller import Poller
-from src.search.emails_adapter import email_db_uri
+from src.search.emails_adapter import is_archiver_index, open_readonly
 
 logger = logging.getLogger(__name__)
 
@@ -166,24 +165,19 @@ class FlaggedEmailIndex:
     def is_configured(self) -> tuple[bool, str | None]:
         """``(True, None)``, or ``False`` + the one reason that actually applies.
 
-        Four distinct failures, four distinct messages — a caller must be able
-        to tell "you never pointed me at an index" from "your archiver is too
-        old to record flags", because the fix is different for each.
+        Distinct failures, distinct messages — a caller must be able to tell
+        "you never pointed me at an index" from "your archiver is too old to
+        record flags", because the fix is different for each. The blank path /
+        missing file / cannot open / no ``emails`` table preamble is
+        ``src.search.emails_adapter``'s shared check — read "exactly as the
+        search adapter does" (CLAUDE.md); this adds only the flag-column check
+        a capture index also needs.
         """
-        if not self.db_path:
-            return False, "search.email_db not configured"
-        if not Path(self.db_path).is_file():
-            return False, f"email index not found at {self.db_path}"
+        ok, reason = is_archiver_index(self.db_path)
+        if not ok:
+            return ok, reason
+        conn = self._connect()
         try:
-            conn = self._connect()
-        except sqlite3.Error as exc:
-            return False, f"cannot open {self.db_path}: {exc}"
-        try:
-            has_emails = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'emails'"
-            ).fetchone() is not None
-            if not has_emails:
-                return False, f"no emails table in {self.db_path} — not an email-archiver index"
             if FLAG_COLUMN not in self._columns(conn):
                 return False, (
                     f"the email index has no {FLAG_COLUMN} column — this needs an email-archiver "
@@ -196,9 +190,7 @@ class FlaggedEmailIndex:
         return True, None
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(email_db_uri(self.db_path), uri=True, timeout=5, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return open_readonly(self.db_path)
 
     @staticmethod
     def _columns(conn: sqlite3.Connection) -> set[str]:

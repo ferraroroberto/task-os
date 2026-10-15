@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import time
 from datetime import date
 from typing import Any
@@ -66,7 +65,7 @@ from src import clock, quick_add
 from src.ai.json_payload import json_payload
 from src.config import AppConfig
 from src.dates import DateParseError, parse_date
-from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
+from src.hub_probe import CachedProbe, connect_failure, endpoint_of
 from src.pooled_http import pooled_request
 
 logger = logging.getLogger(__name__)
@@ -169,9 +168,7 @@ class EnrichClient:
         self.url = (config.enrich.url or "").strip()
         self.model = (config.enrich.model or "").strip()
         self.timeout = float(config.enrich.timeout_seconds or DEFAULT_TIMEOUT_S)
-        self._lock = threading.Lock()
-        self._verdict: tuple[float, bool, str | None] | None = None
-        self._checked_at: str | None = None
+        self._probe = CachedProbe[tuple[bool, str | None]]()
 
     # ------------------------------------------------------------- config
     @property
@@ -191,15 +188,12 @@ class EnrichClient:
         reason = self.unconfigured_reason
         if reason:
             return False, reason
-        with self._lock:
-            cached = self._verdict
-            if cached and not force and time.monotonic() < cached[0]:
-                return cached[1], cached[2]
-        failure = connect_failure(self.url)
-        with self._lock:
-            self._verdict = (time.monotonic() + PROBE_TTL_S, failure is None, failure)
-            self._checked_at = clock.now_iso()
-        return failure is None, failure
+
+        def compute() -> tuple[bool, str | None]:
+            failure = connect_failure(self.url)
+            return failure is None, failure
+
+        return self._probe.get(compute, force=force)
 
     def status(self) -> dict[str, Any]:
         """``/api/status``'s ``enrich`` key — what Settings and the CLI read."""
@@ -209,7 +203,7 @@ class EnrichClient:
             "reason": None if reachable else reason,
             "url": self.url,
             "model": self.model,
-            "checked_at": self._checked_at,
+            "checked_at": self._probe.checked_at,
         }
 
     # ------------------------------------------------------------- enrich
@@ -248,8 +242,7 @@ class EnrichClient:
             # socket timeout and the bare OSError into this one tree, so this
             # stays the single "did not answer" branch — the one that drops
             # the cached verdict, because only silence disproves it.
-            with self._lock:            # it just proved itself unreachable
-                self._verdict = None
+            self._probe.invalidate()    # it just proved itself unreachable
             raise EnrichError(f"{self.url} did not answer — "
                               f"{exc.__class__.__name__}: {exc}") from exc
         if res.status_code >= 400:

@@ -23,7 +23,7 @@
 'use strict';
 
 import { icon } from './_vendored/icons/icons.js';
-import { STATUSES, todayISO } from './format.js';
+import { addDays, isBlocked, isDeferred, STATUSES, todayISO } from './format.js';
 import { closeOnBackdrop, modalCard } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
@@ -104,20 +104,17 @@ export function matchesScope(t, scope) {
 /** `updated` window → the ISO date the list API's `updated_since` takes. */
 export function updatedSince(window, now) {
   if (!window || window.indexOf('stale') === 0) return '';
-  const d = now ? new Date(now) : new Date();
   const days = window === 'today' ? 0 : (window === 'week' ? 7 : 30);
-  d.setDate(d.getDate() - days);
-  return todayISO(d);
+  return addDays(now || todayISO(), -days);
 }
 
 /** `stale*` window → the ISO boundary `updated_before` takes: untouched > N
  * days = last touched strictly before today − N (a task touched exactly N
- * days ago is not YET stale). */
+ * days ago is not YET stale).
+ * @param {string} [now]  an ISO *date* (``YYYY-MM-DD``, not a datetime; tests) */
 export function updatedBefore(window, now) {
   if (!window || window.indexOf('stale') !== 0) return '';
-  const d = now ? new Date(now) : new Date();
-  d.setDate(d.getDate() - Number(window.slice(5)));
-  return todayISO(d);
+  return addDays(now || todayISO(), -Number(window.slice(5)));
 }
 
 /** The /api/tasks query for a filter state (undefined = not sent; arrays join with commas). */
@@ -148,11 +145,11 @@ export function matchesFilters(t, f, today) {
   // asymmetry with the server's default (#87): ticking `deferred` narrows to
   // the sleeping tasks here too, but NOT ticking it hides nothing — the only
   // caller is the Search tab, and a deferred task is meant to stay findable.
-  if (f.status.indexOf(DEFERRED) >= 0 && !(t.starts && t.starts > (today || todayISO()))) return false;
+  if (f.status.indexOf(DEFERRED) >= 0 && !isDeferred(t, today)) return false;
   // Same shape as deferred (#100): ticking `blocked` narrows to tasks with an
   // open blocker; not ticking it hides nothing (a blocked task stays findable
   // wherever this predicate runs — the Search tab).
-  if (f.status.indexOf(BLOCKED) >= 0 && !t.blocked) return false;
+  if (f.status.indexOf(BLOCKED) >= 0 && !isBlocked(t)) return false;
   const statuses = f.status.filter(function (s) { return s !== DEFERRED && s !== BLOCKED; });
   if (statuses.length) { if (statuses.indexOf(t.status) < 0) return false; }
   else if (CLOSED[t.status]) return false;
@@ -171,17 +168,14 @@ export function matchesFilters(t, f, today) {
     if (f.due === 'today' && t.due !== tIso) return false;
     if (f.due === 'overdue' && !(t.due < tIso)) return false;
     if (f.due === 'week') {
-      const end = new Date(tIso + 'T00:00:00');
-      end.setDate(end.getDate() + 7);
-      if (t.due < tIso || t.due > todayISO(end)) return false;
+      if (t.due < tIso || t.due > addDays(tIso, 7)) return false;
     }
   }
   if (f.updated) {
-    const ref = today ? today + 'T00:00:00' : undefined;
     const day = t.updated_at ? String(t.updated_at).slice(0, 10) : '';
-    const before = updatedBefore(f.updated, ref);
+    const before = updatedBefore(f.updated, today);
     if (before) { if (!day || day >= before) return false; }
-    else if (!day || day < updatedSince(f.updated, ref)) return false;
+    else if (!day || day < updatedSince(f.updated, today)) return false;
   }
   return true;
 }

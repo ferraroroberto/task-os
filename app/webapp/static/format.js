@@ -33,9 +33,25 @@ export function todayISO(d) {
   return t.getFullYear() + '-' + m + '-' + day;
 }
 
-function parseISO(iso) {
+/** A local-date ``YYYY-MM-DD`` as a local midnight ``Date`` — never
+ *  ``new Date(iso)``, which `format.js`'s own callers and every other file
+ *  doing date arithmetic on an ISO day used to construct by hand
+ *  (`new Date(iso + 'T00:00:00')`, nine sites across five files, #439): the
+ *  one place that turns an ISO day into a ``Date`` object. */
+export function parseISO(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+/** ``iso`` shifted by ``n`` local calendar days (negative = earlier) — the
+ *  one "parse, shift, re-format" the nine duplicated sites above did by hand.
+ *  An unparseable ``iso`` is returned unchanged rather than throwing: every
+ *  caller already only ever passes a real ISO day. */
+export function addDays(iso, n) {
+  const d = parseISO(iso);
+  if (!d) return iso;
+  d.setDate(d.getDate() + n);
+  return todayISO(d);
 }
 
 /**
@@ -67,7 +83,7 @@ export function relDue(iso, now) {
  * @param {string} [now] ISO date (tests)
  */
 export function isDeferred(t, now) {
-  return !!(t && t.starts) && t.starts > todayISO(now ? new Date(now + 'T00:00:00') : undefined);
+  return !!(t && t.starts) && t.starts > todayISO(now ? parseISO(now) : undefined);
 }
 
 /** Is this task blocked right now? — it has at least one still-open blocker
