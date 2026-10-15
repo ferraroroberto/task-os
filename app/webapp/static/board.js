@@ -45,8 +45,9 @@
 'use strict';
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
+import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
 import { icon } from './_vendored/icons/icons.js';
-import { fmtDay, todayISO } from './format.js';
+import { addDays, fmtDay, parseISO, todayISO } from './format.js';
 import { CLOSED, sortItems, taskRow } from './rows.js';
 
 export const BOARD_COLUMNS = [
@@ -65,12 +66,6 @@ const WEEK_KEYS = ['today', 'tomorrow', 'week', 'weekend', 'next', 'later'];
 // The group closing the Later lane: the open tasks with no due date.
 const NO_DATE_LABEL = 'No date';
 
-function addDays(iso, n) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return todayISO(d);
-}
-
 /**
  * Week mode's lanes on `today`, nearest first — exported for tests.
  * Each lane holds the due dates `from`…`to` (inclusive ISO; null = open
@@ -84,7 +79,7 @@ export function weekLanes(today) {
   const t = today || todayISO();
   const tomorrow = addDays(t, 1);
   // the week tomorrow belongs to ends on its Sunday (0 = Sunday)
-  const sunday = addDays(tomorrow, (7 - new Date(tomorrow + 'T00:00:00').getDay()) % 7);
+  const sunday = addDays(tomorrow, (7 - parseISO(tomorrow).getDay()) % 7);
   const saturday = addDays(sunday, -1);
   const afterTomorrow = addDays(t, 2);
   const lanes = [
@@ -130,7 +125,7 @@ export function boardHeadParts(counts) {
   if (counts.inbox) parts.push({ text: counts.inbox + ' in Inbox', tone: 'accent' });
   if (counts.overdue) parts.push({ text: counts.overdue + ' overdue', tone: 'attention' });
   if (counts.today) parts.push({ text: counts.today + ' due today', tone: 'attention' });
-  return parts.length ? parts.slice(0, 2) : [{ text: 'Nothing due today', tone: 'muted' }];
+  return parts.length ? parts.slice(0, HEAD_MAX_PARTS) : [{ text: 'Nothing due today', tone: 'muted' }];
 }
 
 function readMode() {

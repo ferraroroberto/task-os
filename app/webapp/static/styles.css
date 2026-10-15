@@ -463,15 +463,18 @@ html, body {
    accent-soft + accent-text, since it stands in for the tab it replaced. */
 .home-head .home-toggle[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
 /* The header line names an exception (#393): overdue / due today on Today wear
-   the tone map's attention text, the same as the row's due date. A plain fact
-   stays the vendored muted. */
+   the tone map's attention text, the same as the row's due date — one text
+   node, one class (`#homeHeadStatus.is-attention`), never per-part spans
+   (app.js's `renderHeadStatus`, #439). A plain fact stays the vendored muted. */
 .home-head .status.is-attention { color: var(--attention-text); }
-/* The Board's line names each part in its own tone (#396): an Inbox arrival
-   in the accent, overdue / due today in the attention text. */
-.home-head .status .is-accent { color: var(--accent-text); }
-.home-head .status .is-attention { color: var(--attention-text); }
-/* …and Settings' a failing service in the danger text (#397). */
-.home-head .status .is-danger { color: var(--danger-text); }
+/* The Board's and Settings' own lines name each part in its own tone (#396,
+   #397) via the vendored home-head's own `.head-exception[data-tone]` markup
+   (app.js's `paintParts`, #439) — attention and danger are already ruled
+   there (home-head.css). The Board's "N in Inbox" is the one tone the
+   vendored file deliberately has no rule for (an 'accent' entry in its
+   `TONE_RANK` is project-scaffolding's call, not this app's to fork), so it
+   stays local. */
+.home-head .status .head-exception[data-tone="accent"] { color: var(--accent-text); }
 :root[data-theme="dark"] .theme-icon-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-icon-sun { display: none; }
 

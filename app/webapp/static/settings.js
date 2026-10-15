@@ -63,6 +63,7 @@ import { codeEl, copyText, fmtTsShort, pct, statusPart } from './format.js';
 import { toast } from './toast.js';
 import { isDefault, rowPrefs, setRowPrefs } from './rowprefs.js';
 import { icon } from './_vendored/icons/icons.js';
+import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
 import { bindTextSize } from './_vendored/text-size/text-size.js';
 
 const SEARCH_KIND_ROWS = { tasks: 'statusSearchTasks', folders: 'statusSearchFolders', emails: 'statusSearchEmails', issues: 'statusSearchIssues' };
@@ -179,7 +180,7 @@ export function mountSettings(opts) {
         if (WORD_TONES[words[id]] === tone) parts.push({ text: SERVICE_NAMES[id] + ' ' + verbs[words[id]], tone: tone });
       });
     });
-    if (parts.length) return parts.slice(0, 2);
+    if (parts.length) return parts.slice(0, HEAD_MAX_PARTS);
     const on = ids.filter(function (id) { return OFF_WORDS.indexOf(words[id]) < 0; }).length;
     return [{ text: on + ' of ' + ids.length + ' services on', tone: 'muted' }];
   }

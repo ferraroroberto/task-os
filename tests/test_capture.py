@@ -20,6 +20,7 @@ from src import email_capture
 from src import tasks_repo as repo
 from src.config import AppConfig, CaptureConfig, SearchConfig
 from src.email_capture import EmailCaptureService, FlaggedEmailIndex, capture_once
+from src.search.emails_adapter import email_db_uri
 from tests.fixtures.emails_fixture import FLAGGED, build_emails_db
 
 
@@ -87,7 +88,7 @@ def test_a_pass_never_writes_to_the_archivers_file(
     assert Path(index.db_path).read_bytes() == before
 
     # and the read-only connection genuinely refuses a write
-    c = sqlite3.connect(email_capture.email_db_uri(index.db_path), uri=True)
+    c = sqlite3.connect(email_db_uri(index.db_path), uri=True)
     with pytest.raises(sqlite3.OperationalError):
         c.execute("UPDATE emails SET flag_status = 0")
     c.close()

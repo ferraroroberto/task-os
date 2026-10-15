@@ -38,7 +38,7 @@ from src.search.base import Hit, fts_query, mark_terms, terms
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["EmailsAdapter", "email_db_uri"]
+__all__ = ["EmailsAdapter", "email_db_uri", "is_archiver_index", "open_readonly"]
 
 FTS_TABLE = "emails_fts"
 BM25_WEIGHTS = "10.0, 3.0, 3.0, 1.0"        # subject, sender, recipients, body_preview
@@ -54,6 +54,43 @@ def email_db_uri(path: str | Path) -> str:
     return Path(path).resolve().as_uri() + "?mode=ro"
 
 
+def open_readonly(db_path: str) -> sqlite3.Connection:
+    """The archiver's ``emails.db``, opened read-only — the one connect every reader of this file shares."""
+    conn = sqlite3.connect(email_db_uri(db_path), uri=True, timeout=5, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def is_archiver_index(db_path: str) -> tuple[bool, str | None]:
+    """``(True, None)``, or ``False`` + why *db_path* is not a usable archiver index.
+
+    The one open-read-only / is-this-really-an-archiver-index preamble CLAUDE.md
+    requires capture to share with search "exactly as the search adapter does" —
+    blank path, missing file, cannot open, no ``emails`` table. Shared by
+    :meth:`EmailsAdapter.is_configured` and ``src.email_capture.FlaggedEmailIndex
+    .is_configured``, which adds only its own flag-column check on top.
+    """
+    if not db_path:
+        return False, "search.email_db not configured"
+    if not Path(db_path).is_file():
+        return False, f"email index not found at {db_path}"
+    try:
+        conn = open_readonly(db_path)
+    except sqlite3.Error as exc:
+        return False, f"cannot open {db_path}: {exc}"
+    try:
+        has_emails = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'emails'"
+        ).fetchone() is not None
+    except sqlite3.Error as exc:
+        return False, f"cannot read {db_path}: {exc}"
+    finally:
+        conn.close()
+    if not has_emails:
+        return False, f"no emails table in {db_path} — not an email-archiver index"
+    return True, None
+
+
 class EmailsAdapter:
     name = "emails"
     kind = "emails"
@@ -64,31 +101,10 @@ class EmailsAdapter:
 
     # ------------------------------------------------------------- state
     def is_configured(self) -> tuple[bool, str | None]:
-        if not self.db_path:
-            return False, "search.email_db not configured"
-        p = Path(self.db_path)
-        if not p.is_file():
-            return False, f"email index not found at {self.db_path}"
-        try:
-            conn = self._connect()
-        except sqlite3.Error as exc:
-            return False, f"cannot open {self.db_path}: {exc}"
-        try:
-            has_emails = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'emails'"
-            ).fetchone() is not None
-        except sqlite3.Error as exc:
-            return False, f"cannot read {self.db_path}: {exc}"
-        finally:
-            conn.close()
-        if not has_emails:
-            return False, f"no emails table in {self.db_path} — not an email-archiver index"
-        return True, None
+        return is_archiver_index(self.db_path)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(email_db_uri(self.db_path), uri=True, timeout=5, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return open_readonly(self.db_path)
 
     def _has_fts(self, conn: sqlite3.Connection) -> bool:
         return conn.execute(

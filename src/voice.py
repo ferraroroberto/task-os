@@ -57,7 +57,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import time
 import uuid
 from collections.abc import Mapping
@@ -65,9 +64,8 @@ from typing import Any
 
 import requests
 
-from src import clock
 from src.config import AppConfig
-from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
+from src.hub_probe import CachedProbe, connect_failure, endpoint_of
 from src.pooled_http import pooled_request
 
 logger = logging.getLogger(__name__)
@@ -192,10 +190,8 @@ class VoiceClient:
         #: browser off ``/api/status`` rather than hardcoded there, so the
         #: cadence is one install-level number and not two.
         self.partial_interval = float(config.voice.partial_interval_seconds or 0.0)
-        self._lock = threading.Lock()
-        #: (monotonic deadline, reachable, reason when not, serving, url)
-        self._verdict: tuple[float, bool, str | None, str | None, str] | None = None
-        self._checked_at: str | None = None
+        #: cached (reachable, reason when not, serving, url)
+        self._probe = CachedProbe[tuple[bool, str | None, str | None, str]]()
 
     # ------------------------------------------------------------- config
     @property
@@ -229,25 +225,20 @@ class VoiceClient:
         reason = self.unconfigured_reason
         if reason:
             return False, reason, None, self.primary
-        with self._lock:
-            cached = self._verdict
-            if cached and not force and time.monotonic() < cached[0]:
-                return cached[1], cached[2], cached[3], cached[4]
 
-        why: list[str] = []
-        ok, serving, live_url = False, None, self.primary
-        for name, url in self.targets():
-            failure = connect_failure(url)
-            if failure is None:
-                ok, serving, live_url = True, name, url
-                why = []
-                break
-            why.append(f"{_LABELS[name]}: {failure}")
-        reason_text = None if ok else " · ".join(why)
-        with self._lock:
-            self._verdict = (time.monotonic() + PROBE_TTL_S, ok, reason_text, serving, live_url)
-            self._checked_at = clock.now_iso()
-        return ok, reason_text, serving, live_url
+        def compute() -> tuple[bool, str | None, str | None, str]:
+            why: list[str] = []
+            ok, serving, live_url = False, None, self.primary
+            for name, url in self.targets():
+                failure = connect_failure(url)
+                if failure is None:
+                    ok, serving, live_url = True, name, url
+                    why = []
+                    break
+                why.append(f"{_LABELS[name]}: {failure}")
+            return ok, (None if ok else " · ".join(why)), serving, live_url
+
+        return self._probe.get(compute, force=force)
 
     def status(self) -> dict[str, Any]:
         """``/api/status``'s ``voice`` key — the mic button's hint, in JSON.
@@ -266,7 +257,7 @@ class VoiceClient:
             "url": url,
             "serving": serving,
             "partial_interval_seconds": self.partial_interval,
-            "checked_at": self._checked_at,
+            "checked_at": self._probe.checked_at,
         }
 
     # ---------------------------------------------------------- transcribe
@@ -331,8 +322,7 @@ class VoiceClient:
             )
             return text
 
-        with self._lock:      # every endpoint just proved itself unreachable
-            self._verdict = None
+        self._probe.invalidate()      # every endpoint just proved itself unreachable
         raise VoiceError(
             "no transcription endpoint answered",
             code="voice_unavailable", http_status=503,

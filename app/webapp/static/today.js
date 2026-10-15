@@ -36,7 +36,7 @@
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { calendarLane } from './calendar.js';
 import { collapsibleCard } from './collapsible.js';
-import { relDue, todayISO } from './format.js';
+import { addDays, relDue, todayISO } from './format.js';
 import { compareItems, rowList } from './rows.js';
 
 /** Later and No date's open state as the user left it (#393): closed until
@@ -48,9 +48,7 @@ const horizonOpen = { 'today-far': false, 'today-nodate': false };
  *  — exported for tests. Every task lands in exactly one. */
 export function bucketToday(items, today, sort) {
   const t = today || todayISO();
-  const end = new Date(t + 'T00:00:00');
-  end.setDate(end.getDate() + 7);
-  const weekEnd = todayISO(end);
+  const weekEnd = addDays(t, 7);
   const due = [];
   const week = [];
   const later = [];
@@ -80,7 +78,11 @@ export function bucketToday(items, today, sort) {
 /** The page header's line on Today (#393): the exceptions, named from the
  *  counts the horizons were drawn from, so the header and the list never
  *  disagree. Overdue and due today are the attention tone (the row's own due
- *  tone); with neither, the plain fact. Exported for tests.
+ *  tone); with neither, the plain fact. One text node, not per-part spans
+ *  (#439) — unlike Board's and Settings' own tone-mapped exceptions, this
+ *  line is always one sentence in one tone, and splitting it across spans
+ *  measurably reflows the browser's text shaping at the word boundary
+ *  (a sub-pixel kerning drift the gallery catches, #439). Exported for tests.
  *  @param {{overdue: number, today: number}} counts  `bucketToday(...).counts`
  *  @returns {{text: string, attention: boolean}} */
 export function headLine(counts) {

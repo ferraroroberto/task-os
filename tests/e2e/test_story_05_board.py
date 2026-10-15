@@ -257,8 +257,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         overdue_n = sum(1 for t in mine_open if t["due"] and t["due"] < E2E_ANCHOR.isoformat())
         head = page.locator("#homeHeadStatus")
         expect(head).to_have_text(f"{inbox_n} in Inbox · {overdue_n} overdue")
-        expect(head.locator(".is-accent")).to_have_text(f"{inbox_n} in Inbox")
-        expect(head.locator(".is-attention")).to_have_text(f"{overdue_n} overdue")
+        expect(head.locator('[data-tone="accent"]')).to_have_text(f"{inbox_n} in Inbox")
+        expect(head.locator('[data-tone="attention"]')).to_have_text(f"{overdue_n} overdue")
         # Triage works on the Inbox column: it is not on the week planner.
         expect(page.locator("#paneBoard .board-triage")).to_be_hidden()
         # A drag between two lanes changes the due date and nothing else: the

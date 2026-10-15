@@ -14,9 +14,8 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from src import clock
 from src.config import AppConfig
-from src.hub_probe import PROBE_TTL_S, connect_failure, endpoint_of
+from src.hub_probe import CachedProbe, connect_failure, endpoint_of
 
 if TYPE_CHECKING:
     import anthropic
@@ -53,9 +52,7 @@ class AIClient:
         self.base_url = (config.ai.base_url or "").strip().rstrip("/")
         self.model = ((model if model else config.ai.model) or "").strip()
         self.timeout = float(timeout if timeout else config.ai.timeout_seconds)
-        self._lock = threading.Lock()
-        self._verdict: tuple[float, bool, str | None] | None = None
-        self._checked_at: str | None = None
+        self._probe = CachedProbe[tuple[bool, str | None]]()
         self._client: anthropic.Anthropic | None = None
         self._request_lock = threading.Lock()
 
@@ -77,24 +74,17 @@ class AIClient:
         reason = self.unconfigured_reason
         if reason:
             return False, reason
-        with self._lock:
-            cached = self._verdict
-            if cached and not force and time.monotonic() < cached[0]:
-                return cached[1], cached[2]
-        # The shared connect (timeout vs refusal told apart, #262): its sentence
-        # is the diagnostic for the log; the public reason stays generic.
-        detail = connect_failure(self.base_url)
-        public_reason = None if detail is None else "local AI hub unavailable"
-        with self._lock:
-            self._verdict = (
-                time.monotonic() + PROBE_TTL_S,
-                detail is None,
-                public_reason,
-            )
-            self._checked_at = clock.now_iso()
-        if detail:
-            logger.info("ℹ️ ai: reachability check failed — %s", detail)
-        return detail is None, public_reason
+
+        def compute() -> tuple[bool, str | None]:
+            # The shared connect (timeout vs refusal told apart, #262): its
+            # sentence is the diagnostic for the log; the public reason stays
+            # generic.
+            detail = connect_failure(self.base_url)
+            if detail:
+                logger.info("ℹ️ ai: reachability check failed — %s", detail)
+            return detail is None, (None if detail is None else "local AI hub unavailable")
+
+        return self._probe.get(compute, force=force)
 
     def status(self) -> dict[str, Any]:
         """Status shape used by the Board, Settings, CLI and ``/api/status``."""
@@ -105,7 +95,7 @@ class AIClient:
             "reachable": reachable,
             "reason": reason,
             "model": self.model or None,
-            "checked_at": self._checked_at,
+            "checked_at": self._probe.checked_at,
         }
 
     def complete(self, *, system: str, user: str, max_tokens: int) -> str:
@@ -151,8 +141,7 @@ class AIClient:
                 detail=exc.__class__.__name__,
             ) from exc
         except anthropic.APIConnectionError as exc:
-            with self._lock:
-                self._verdict = None
+            self._probe.invalidate()
             logger.warning("⚠️ ai: hub connection failed — %s", exc)
             raise AIError(
                 "ai_unavailable", "local AI hub unavailable", http_status=503,

@@ -1,15 +1,21 @@
 """The reachability probe every local-hub client shares.
 
-One TCP connect, cached by the caller for :data:`PROBE_TTL_S`: the AI client
-(:mod:`src.ai.client`), the voice client (:mod:`src.voice`) and the enrich
-client (:mod:`src.enrich`) all ask "is anything accepting connections there?"
-the same way.
+One TCP connect, cached by :class:`CachedProbe` for :data:`PROBE_TTL_S`: the
+AI client (:mod:`src.ai.client`), the voice client (:mod:`src.voice`) and the
+enrich client (:mod:`src.enrich`) all ask "is anything accepting connections
+there?" the same way, and all cache the answer the same way — one lock, one
+TTL'd verdict, one ``checked_at`` stamp (#439).
 """
 
 from __future__ import annotations
 
 import socket
+import threading
+import time
+from collections.abc import Callable
 from urllib.parse import urlsplit
+
+from src import clock
 
 #: How long a reachability verdict is trusted before the port is touched again.
 #: Long enough that opening the quick-add dialog repeatedly costs one connect,
@@ -65,4 +71,43 @@ def connect_failure(url: str) -> str | None:
     return None
 
 
-__all__ = ["PROBE_TIMEOUT_S", "PROBE_TTL_S", "connect_failure", "endpoint_of"]
+class CachedProbe[T]:
+    """The lock + TTL'd verdict + ``checked_at`` stamp every client duplicated.
+
+    Each client's ``probe()`` knows its *own* connect and its *own* verdict
+    shape (``(ok, reason)`` here, ``(ok, reason, serving, url)`` there) — that
+    part stays in the client. What is identical everywhere is the caching
+    around it: take the lock, serve a fresh cached verdict, else call
+    ``compute`` (outside the lock, so a slow connect never blocks a second
+    caller's cache hit), store the result with a fresh deadline, and stamp
+    :attr:`checked_at`. ``compute`` is called at most once per miss.
+    """
+
+    def __init__(self, ttl_s: float = PROBE_TTL_S) -> None:
+        self._ttl_s = ttl_s
+        self._lock = threading.Lock()
+        self._deadline = 0.0
+        self._verdict: T | None = None
+        self.checked_at: str | None = None
+
+    def get(self, compute: Callable[[], T], *, force: bool = False) -> T:
+        """The cached verdict, or a fresh one from ``compute()`` on a miss."""
+        with self._lock:
+            if self._verdict is not None and not force and time.monotonic() < self._deadline:
+                return self._verdict
+        verdict = compute()
+        with self._lock:
+            self._deadline = time.monotonic() + self._ttl_s
+            self._verdict = verdict
+            self.checked_at = clock.now_iso()
+        return verdict
+
+    def invalidate(self) -> None:
+        """Drop the cached verdict — call once a later request proves it stale."""
+        with self._lock:
+            self._verdict = None
+
+
+__all__ = [
+    "CachedProbe", "PROBE_TIMEOUT_S", "PROBE_TTL_S", "connect_failure", "endpoint_of",
+]

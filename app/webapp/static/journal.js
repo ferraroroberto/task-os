@@ -29,7 +29,7 @@
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
 import { switchEl } from './_vendored/switch/switch.js';
-import { fmtDay, todayISO } from './format.js';
+import { addDays, fmtDay, todayISO } from './format.js';
 import { rowList } from './rows.js';
 
 /** [{day, items, done, cancelled}] by the local day of `done_at`, newest
@@ -56,10 +56,8 @@ export function groupByDay(items) {
 export function dayLabel(day, today) {
   const t = today || todayISO();
   if (!day) return 'No date';
-  const y = new Date(t + 'T00:00:00');
-  y.setDate(y.getDate() - 1);
   if (day === t) return 'Today · ' + fmtDay(day);
-  if (day === todayISO(y)) return 'Yesterday · ' + fmtDay(day);
+  if (day === addDays(t, -1)) return 'Yesterday · ' + fmtDay(day);
   return fmtDay(day);
 }
 
