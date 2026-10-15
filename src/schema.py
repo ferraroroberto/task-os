@@ -69,6 +69,28 @@ Version history:
        deleted. A second graph, so its cycle guard (``src/tasks_repo.py``)
        walks ``task_blocks`` alone — a blocks-edge may cross parent subtrees
        freely, unlike ``move()``'s parent-tree guard.
+    12 ai_suggestions(id, task_id, payload, status, created_at, resolved_at)
+       + its two indexes                                             (issue #95)
+       — staged AI suggestions. A resolved row is durable history; only one
+       ``pending`` row may exist per task, and a new triage run replaces it.
+    13 Doing retired — no DDL                                       (issue #153)
+       — existing ``doing`` rows are moved to ``todo``, and a guard trigger
+       rejects any further insert or update into that value (SQLite cannot
+       narrow ``tasks``'s CHECK in place because of its cascading child
+       tables; a fresh database gets the narrower CHECK directly).
+    14 archive_runs(id, started_at, finished_at, status, planned, archived,
+       needs_review, failed, error) + archive_items(id, run_id, message_id,
+       …) + their indexes                                            (issue #157)
+       — batch archiving of the Outlook Inbox through email-archiver. One
+       ``archive_runs`` row per batch run, one ``archive_items`` row per mail
+       it decided on; the partial unique index on ``message_id`` enforces a
+       mail is filed exactly once.
+    15 archive_corrections(id, item_id, message_id, …) + its index +
+       archive_runs.agreement (REAL, nullable)                       (issue #158)
+       — the local model's few-shot memory: one row each time a human
+       overrules or confirms a filing choice. ``agreement`` is the share of
+       model-ranked mails the archiver's own suggester would have filed the
+       same way; NULL means the model ranked nothing that run, never 0.0.
     16 tasks.recurrence_interval (INTEGER, nullable)                (issue #229)
        — repeat every N cadences ("every 7 weeks on Saturday"), beside the
        cadence and its anchor for v9's reason. NULL = every cadence, so every
