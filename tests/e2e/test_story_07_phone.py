@@ -268,8 +268,18 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         # picking a day commits it - the row re-renders on the new date (today,
         # so it stays on Today)
         new_due = E2E_ANCHOR.isoformat()
-        sheet.locator(".due-date").evaluate(
-            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
+        # The sheet closes the moment the pick lands, which is *before* the
+        # write and the refresh: `to_be_hidden` alone passes with the row still
+        # on the old date, and a single 5 s `expect` on the row then reads one
+        # slow write as "no effect". Wait in the order they happen: the bulk
+        # POST (bounded by the context's 15 s, and a pick that never sends one
+        # fails here by name), then the sheet, then the redrawn row.
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and r.url.endswith("/api/tasks/bulk")
+        ) as written:
+            sheet.locator(".due-date").evaluate(
+                "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
+        assert written.value.ok, f"the date pick's write answered {written.value.status}"
         expect(sheet).to_be_hidden()
         expect(page.locator(f"#paneToday .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
             "title", new_due)
