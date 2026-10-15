@@ -52,7 +52,12 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e._uniform import assert_focus_ring, assert_icon_buttons_uniform, pill_style
+from tests.e2e._uniform import (
+    assert_code_off_canvas_subtle,
+    assert_focus_ring,
+    assert_icon_buttons_uniform,
+    pill_style,
+)
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
@@ -178,6 +183,13 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(card.locator("details.opener-more summary")).to_have_text("Uninstall · folder paths for each PC · rescan folders")
     card.locator("details.opener-more summary").click()
     expect(card.locator("#openerEnv")).to_contain_text("onedrive=")
+    # the install, uninstall and env blocks are listings on the card frame in both
+    # themes, never the black hole in dark (COMP-17, #426)
+    theme = page.evaluate("document.documentElement.dataset.theme")
+    for mode in ("dark", "light"):
+        page.evaluate("t => { document.documentElement.dataset.theme = t; }", mode)
+        assert_code_off_canvas_subtle(page, min_count=3)
+    page.evaluate("t => { document.documentElement.dataset.theme = t; }", theme)
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
     # 4. drawer: the Folder editor folds an absolute path onto the placeholder.

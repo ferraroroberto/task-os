@@ -4,7 +4,9 @@ Every icon-only button draws one way: no fill, border or shadow at rest, one
 glyph size, an invisible >=44px target and a visible focus ring. Every
 reference pill (folder, AI conversation, issue, link) draws the AI pill's way.
 The design review never opens a drawer, so these rendered facts are measured
-here, on the views a story already walks.
+here, on the views a story already walks. Code is the third: no `code`, `kbd`
+or `pre` is filled with canvas-subtle (`--card-off`), true black inside a dark
+card (COMP-17, #426).
 """
 
 from __future__ import annotations
@@ -64,6 +66,21 @@ _PILL_JS = """el => { const s = getComputedStyle(el), r = el.getBoundingClientRe
     color: s.color }; }"""
 
 
+_CODE_HOLES_JS = """() => {
+  const probe = document.createElement('i');
+  probe.style.background = 'var(--card-off)';
+  document.body.appendChild(probe);
+  const hole = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  const shown = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const seen = [...document.querySelectorAll('kbd, code, pre')].filter(shown);
+  return { seen: seen.length, hole,
+    filled: seen.filter(e => getComputedStyle(e).backgroundColor === hole)
+      .map(e => e.tagName.toLowerCase() + (e.className ? '.' + e.className : '')) };
+}"""
+
+
 def icon_buttons(page: Page, scope: str = "body") -> list[dict[str, Any]]:
     """Every visible icon-only button under `scope`, measured at rest."""
     page.mouse.move(0, 0)                         # no hover on anything measured
@@ -96,3 +113,16 @@ def assert_focus_ring(page: Page, button: Locator) -> None:
 def pill_style(chip: Locator) -> dict[str, Any]:
     """The computed look of one reference pill."""
     return chip.evaluate(_PILL_JS)
+
+
+def assert_code_off_canvas_subtle(page: Page, min_count: int = 1) -> int:
+    """No visible `code`, `kbd` or `pre` is filled with `--card-off` (COMP-17).
+
+    In dark that token is true black inside a card: a hole, not a chip. Inline
+    code and keys take the `neutral-soft` chip, a listing the `card` frame.
+    Returns how many were measured so a call site can say it saw some.
+    """
+    found: dict[str, Any] = page.evaluate(_CODE_HOLES_JS)
+    assert found["seen"] >= min_count, found
+    assert not found["filled"], f"code filled with canvas-subtle {found['hole']}: {found['filled']!r}"
+    return int(found["seen"])
