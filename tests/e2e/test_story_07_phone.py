@@ -605,7 +605,8 @@ def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright
     # navigation itself uses — these are the shapes the two readings disagreed
     # on, and each one must come out on `base`.
     for payload in ("/\\host.invalid", "/\t/host.invalid", "/\n/host.invalid",
-                    "/\r/host.invalid", "//host.invalid", "https://host.invalid/x"):
+                    "/\r/host.invalid", "//host.invalid", "https://host.invalid/x",
+                    "/..//host.invalid", "/%2e//host.invalid", "/./\\host.invalid"):
         context = browser.new_context(viewport=DESKTOP, color_scheme="light")
         try:
             page = context.new_page()
