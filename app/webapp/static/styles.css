@@ -2315,9 +2315,8 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
    the state words reuse the Settings `.status-ok/-warn/-off`; its text is the
    14px body-sm role, never the caption (TYPE-01, #397). ---- */
 /* `minmax(0, …)`, like every other stack here: an implicit `auto` track is
-   sized to its content's min-content, and one un-wrappable reading (a status
-   line the phone draws `nowrap`) would then widen the card past the pane
-   instead of ellipsizing inside it. */
+   sized to its content's min-content, and one un-wrappable reading would then
+   widen the card past the pane instead of wrapping inside it. */
 .archive-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
 .archive-head .status-rows { grid-template-columns: minmax(0, 1fr); }
 .archive-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
@@ -2491,9 +2490,12 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
   .archive-limit-input { width: 3.5rem; }
 
   /* 2. No label column: the label is the line's own bold lead word and the
-     reading is the muted tail, one line each (archive.js writes the short
-     wording for this width). The card's foot loses the band the two-column
-     rows needed. */
+     reading is the muted tail (archive.js writes the short wording for this
+     width). A reading wraps when it outgrows the line, as it does on every
+     other Settings sheet: it must never be cut, because the Last run's tail is
+     the failure count (#427, LAYOUT-09). The base `.status-row dd` already
+     carries `overflow-wrap: anywhere`. The card's foot loses the band the
+     two-column rows needed. */
   .archive-head { padding-bottom: var(--space-sm); }
   .archive-head .status-rows { gap: 2px; }
   .archive-head .status-row {
@@ -2507,9 +2509,6 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
     flex: 1 1 auto;
     min-width: 0;
     color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   /* 3 + 5. The picker reaches the right edge, and the bulk button is a

@@ -291,8 +291,9 @@ def _items(base: str, run_id: int) -> list[dict]:
     return _get(base, f"/api/archive/runs/{run_id}")["items"]
 
 
-#: One caption line at this width, with room for the row's own leading. A
-#: status row taller than this has wrapped, which is the thing #168 removed.
+#: One caption line at this width, with room for the row's own leading. The
+#: card's second line taller than this has wrapped, which is the thing #168
+#: removed (the head's status readings may wrap since #427 — never be cut).
 _ONE_LINE_PX = 24.0
 
 # The visible row verbs on a phone card (fleet-config#1420): what each one is
@@ -699,9 +700,19 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("#statusArchiveRun")).to_have_text(
         re.compile(r"^\d{2}\D\d{2} \d{2}:\d{2} · done · 3 filed")
     )
+    # #427: a reading that is longer than the line wraps; it is never cut. The
+    # Last run row carries the failure count at its tail, which the old
+    # one-line-with-an-ellipsis rule hid at 390 (LAYOUT-09).
+    expect(p.locator("#statusArchiveRun")).to_contain_text("3 filed · 3 need you · 1 failed")
     for index in range(5):
-        row = _box(p.locator("#archiveCard .archive-head .status-row").nth(index))
-        assert row["height"] < _ONE_LINE_PX, f"status row {index} wraps ({row['height']}px)"
+        reading = p.locator("#archiveCard .archive-head .status-row dd").nth(index)
+        cut = reading.evaluate(
+            "el => ({ over: el.scrollWidth - el.clientWidth, ellipsis: getComputedStyle(el).textOverflow,"
+            " hidden: getComputedStyle(el).overflowX })"
+        )
+        assert cut["ellipsis"] != "ellipsis" and cut["over"] <= 0, (
+            f"status reading {index} is cut at {PHONE['width']}px: {cut}"
+        )
 
     # 10b. The picker reaches the right edge and the bulk button is a full-width
     #      one under it, counting exactly the rows that still offer *Accept*.
