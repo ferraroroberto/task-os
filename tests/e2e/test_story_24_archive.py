@@ -528,6 +528,8 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     # #350: the table is no ARIA grid any more — its rows are list rows
     expect(page.locator(".archive-table")).not_to_have_attribute("role", "grid")
     assert_min_target(page.locator(".archive-kebab"))
+    # #424: the ⋮ is named for the menu it opens, not for the row action
+    expect(stuck_row.locator(".archive-kebab")).to_have_attribute("aria-label", re.compile(r"^Actions for "))
     # the menu names the levels the row allows, Revert last behind its divider
     stuck_row.locator(".archive-kebab").click()
     expect(stuck_row.locator(".archive-kebab")).to_have_attribute("aria-expanded", "true")
@@ -715,6 +717,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     reviewed_card = p.locator(f".archive-card[data-id='{reviewed_item['id']}']")
     expect(reviewed_card.locator(".archive-state")).to_have_text("reviewed")
     expect(reviewed_card.locator(".archive-menu-toggle")).to_have_attribute("aria-label", "Details")
+    expect(reviewed_card.locator(".archive-menu-word")).to_have_text("Details")   # #424: the word is shown beside the glyph
     expect(reviewed_card).to_contain_text("nothing left to do")
     # #339: a card reads at a glance in two lines (the subject with its state,
     # then who · when · where): the files and the reason wait behind its
@@ -744,7 +747,9 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     p.emulate_media(color_scheme="dark")
     p.evaluate("document.documentElement.dataset.theme = 'dark'")
     open_card = p.locator(f".archive-card[data-id='{_item_id(base, run_id, OPEN_ID)}']")
-    open_card.locator(".archive-menu-toggle").tap()
+    expect(open_card.locator(".archive-menu-word")).to_have_text("Review")   # #424
+    open_card.locator(".archive-menu-word").tap()                           # …and the word presses the toggle
+    expect(open_card.locator(".archive-menu-toggle")).to_have_attribute("aria-expanded", "true")
     expect(open_card.locator(".archive-move-toggle")).to_be_visible()
     assert_min_target(open_card.locator(".archive-action"))
     shapes = open_card.locator(".archive-action").evaluate_all(ROW_VERB_SHAPE_JS)
