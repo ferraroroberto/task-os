@@ -30,6 +30,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._uniform import assert_code_off_canvas_subtle
 from tests.e2e.conftest import (
     assert_control_boundaries,
     close_settings_sheet,
@@ -273,6 +274,8 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     press("#paletteOpen")
     expect(page.locator("#palette")).to_be_visible()
     expect(page.locator("#paletteInput")).to_be_focused()
+    # the palette foot and the sheet's keys are chips, never the black hole (COMP-17, #426)
+    assert_code_off_canvas_subtle(page, min_count=4)
     page.keyboard.press("Escape")
     expect(page.locator("#palette")).not_to_be_visible()
     expect(page.locator("#paletteOpen")).to_be_visible()

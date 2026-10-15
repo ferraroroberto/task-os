@@ -322,7 +322,8 @@ html, body {
 .card-meta code, .status-row code, .markdown code {
   font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
   font-size: 0.92em;
-  background: var(--card-off);
+  background: var(--neutral-soft);   /* design.md code-inline: the chip fill, never canvas-subtle — true black in a dark card (COMP-17, #426) */
+  color: var(--fg);
   border-radius: var(--radius-sm);
   padding: 1px 5px;
 }
@@ -592,7 +593,7 @@ a.chip:hover { text-decoration: underline; }
   display: block;
   padding: 6px var(--space-sm);
   border-radius: var(--radius-sm);
-  background: var(--card-off);
+  background: var(--card);
   border: 1px solid var(--line);
   font-size: var(--font-caption);
   word-break: break-all;
@@ -646,8 +647,8 @@ a.chip:hover { text-decoration: underline; }
 .opener-block-title { font-size: var(--font-body-sm); color: var(--muted); }
 .opener-cmd {
   margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
-  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-off);
-  font-size: var(--font-body-sm); white-space: pre-wrap;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card);   /* design.md code-listing: the card on a hairline (COMP-17, #426) */
+  font-size: 13px; white-space: pre-wrap;                                                    /* the one sanctioned off-scale size, mono listings only */
   /* a long token (a path, a URL) breaks where it must; words still wrap whole —
      break-all split "Directory" and "-Force" mid-word (#281) */
   overflow-wrap: anywhere;
@@ -1484,7 +1485,7 @@ a.chip:hover { text-decoration: underline; }
 .markdown { font-size: var(--font-label); line-height: 1.5; }
 .markdown p, .markdown ul, .markdown ol, .markdown pre { margin: 0 0 6px; }
 .markdown h3, .markdown h4, .markdown h5 { margin: var(--space-sm) 0 var(--space-xs); font-size: var(--font-body); }
-.markdown pre { background: var(--card-off); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
+.markdown pre { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
 /* A link row's edit and delete are the one icon button (#357, first drawn
@@ -2117,8 +2118,8 @@ kbd {
   /* the sub-sm radius, spelled the one way: half of --radius-sm, as .check
      derives it, so 4px is never a second hand-picked corner. */
   border-radius: calc(var(--radius-sm) / 2);
-  background: var(--card-off);
-  color: var(--muted);
+  background: var(--neutral-soft);   /* the code-inline chip fill, text on it is fg (COMP-17, #426) */
+  color: var(--fg);
   font: inherit;
   font-size: var(--font-caption);
   line-height: 1.5;
