@@ -521,7 +521,7 @@ The flag is something the **archiver** records while scanning, in two columns th
 | `flag_status` | MAPI `PidTagFlagStatus` (`0x1090`) | `0`/absent = none · `1` = complete · `2` = flagged for follow-up |
 | `flag_request` | `PidLidFlagRequest` | the flag's text ("Follow up"), nullable |
 
-> **Not shipped yet.** `email-archiver` does not record these columns today, so on a current install this card reads **not configured**, naming the missing column. That is the honest state, not an empty result — the poller starts working the moment the archiver ships them, with no change here. The gesture it is built for is *flag in Outlook, then archive as usual*: the index covers archived mail, so a flagged message you never archive is never seen.
+> **Partially shipped.** `email-archiver` has recorded `flag_status` since email-archiver#52, so a current install captures flagged mail into Inbox. `flag_request` (the flag's own text) is not recorded yet, so the captured task's description falls back to sender · date · preview with no `Flag:` line — the poller starts carrying it the moment the archiver ships that column, with no change here. The gesture it is built for is *flag in Outlook, then archive as usual*: the index covers archived mail, so a flagged message you never archive is never seen.
 
 **WhatsApp messages.** whatsapp-radar owns its own data and its own UX; when you mark a message it POSTs `/api/tasks` with the message id as `external_id` and the bearer token. task-os just receives.
 
