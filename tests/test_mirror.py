@@ -49,10 +49,20 @@ def mirror(env) -> Mirror:
 
 
 def _touch(path: Path, text: str) -> None:
-    """Write and bump the mtime past the recorded one (2 s so coarse filesystems notice)."""
+    """Write and bump the mtime past the recorded one (2 s so coarse filesystems notice).
+
+    Past the *previous* version's mtime too: two writes landing in one filesystem tick (a
+    coarse-timestamp runner) would otherwise carry equal mtimes, and the mirror — which
+    keys "changed" and "this version already failed" on the mtime alone — reads the second
+    as the first (#431).
+    """
+    try:
+        before = path.stat().st_mtime_ns
+    except FileNotFoundError:
+        before = 0
     path.write_text(text, encoding="utf-8", newline="\n")
     st = path.stat()
-    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+    os.utime(path, ns=(st.st_atime_ns, max(st.st_mtime_ns, before) + 2_000_000_000))
 
 
 def _bathroom(env) -> tuple[int, Path]:
