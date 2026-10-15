@@ -379,7 +379,7 @@ export function mountFilters(opts) {
     badge.hidden = !n;
     button.classList.toggle('has-value', n > 0);
     const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: opts.hide });
-    const name = n ? 'Filters, ' + n + ' on: ' + words.join(' · ') : 'Filters';
+    const name = n ? 'Filter, ' + n + ' on: ' + words.join(' · ') : 'Filter';
     button.setAttribute('aria-label', name);
     button.title = name;
   }

@@ -413,7 +413,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page).to_have_url(f"{base}/?project={home['id']}")
         expect(sheet.locator(".filter-clear")).to_be_visible()
         close_filter_sheet(page)
-        expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: Home renovation")
+        expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filter, 1 on: Home renovation")
         filtered = _mine(_get(base, f"/api/board?project={home['id']}")["columns"])
         expect(_col(page, "todo").locator(".board-col-count")).to_have_text(str(len(filtered["todo"])))
         assert _counts(page) == {k: len(filtered[k]) for k in COLUMNS}
@@ -422,7 +422,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         assert shown and set(shown) <= allowed
         shot(page, shots / "story-05-board-2-desktop.png")
         page.click("nav.tabs .tab[data-tab='today']")
-        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filters, 1 on: Home renovation")
+        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filter, 1 on: Home renovation")
         expect(open_filter_sheet(page, "paneToday").locator("select[name='project']")).to_have_value(str(home["id"]))
         close_filter_sheet(page)
         page.click("nav.tabs .tab[data-tab='board']")
@@ -484,7 +484,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         )
         expect(head).to_have_class(re.compile(r"\bis-attention\b"))
         expect(page.locator("#paneToday section.today .today-head")).to_have_count(0)
-        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filters")
+        expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filter")
         open_rows = page.locator("#paneToday .trow[data-id]").count()
         expect(page.locator("#todayFilterText .filter-q")).to_have_attribute(
             "placeholder", f"Filter {open_rows} tasks…")
@@ -959,7 +959,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     projects = page.locator("#journalHost .trow-project").all_inner_texts()
     assert projects and set(projects) == {"Family admin"}, projects
     assert f"project={family['id']}" in page.url and page.url.endswith("#journal"), page.url
-    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filters, 1 on: Family admin")
+    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filter, 1 on: Family admin")
     open_filter_sheet(page, "paneJournal").locator(".filter-clear").click()
     close_filter_sheet(page)
     expect(page.locator("#journalHost .trow-project").first).not_to_have_text("Family admin")
@@ -981,7 +981,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     assert page.request.delete(f"{base}/api/tasks/{shut['id']}").ok
     page.goto(f"{base}/?_e2e=spent-gone#journal")   # the board in memory still held it
     expect(page.locator("#paneJournal")).to_be_visible()
-    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filters")   # …as the walk left it
+    expect(filter_button(page, "paneJournal")).to_have_attribute("aria-label", "Filter")   # …as the walk left it
 
     # 6. Older weeks load on demand, down to the seed's first closing day —
     #    and only then does the journal say it has reached the end.

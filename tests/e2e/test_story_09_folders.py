@@ -7,7 +7,7 @@
     appears under the chip: "Nothing opened? Install the opener" → the hint
     leads to Settings → Folder opener, the one-line install command with this
     address filled in → in the drawer the Folder field takes an absolute path
-    and stores it as {onedrive}/… → "Pick from folder index…" attaches a
+    and stores it as {onedrive}/… → "Find in folder index…" attaches a
     folder from the index → on the phone the chip shows the resolved path to
     copy instead of navigating.
 
@@ -255,7 +255,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     assert "chip-missing" not in (back.get_attribute("class") or "")
 
     # 5. the folder-index picker: search-as-you-type, Enter attaches the first hit
-    drawer.locator("button.folder-pick").click()
+    pick = drawer.locator("button.folder-pick")
+    expect(pick).to_have_attribute("aria-label", "Find in folder index")   # #424: Find is the mapped verb
+    expect(pick).to_have_attribute("title", "Find in folder index")
+    pick.click()
     q = drawer.locator(".folder-picker-q")
     expect(q).to_be_visible()
     q.fill("kitchen plans")

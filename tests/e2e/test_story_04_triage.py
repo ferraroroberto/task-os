@@ -158,7 +158,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # in words (#395) — so nothing needs the sheet open to read the state
         button = filter_button(page, "paneBoard")
         expect(button.locator(".filter-count")).to_have_text("1")
-        expect(button).to_have_attribute("aria-label", "Filters, 1 on: todo")
+        expect(button).to_have_attribute("aria-label", "Filter, 1 on: todo")
         # the sheet it opens leads with the sort; status is ticks in place, the
         # URL's one ticked (#48)
         sheet = open_filter_sheet(page, "paneBoard")
@@ -590,7 +590,7 @@ def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     rows = page.locator("#paneBoard .trow[data-id]")
     expect(rows).to_have_count(1)
     expect(rows.locator(".trow-title")).to_have_text("Sort the garage shelves")
-    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: untouched > 30 days")
+    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filter, 1 on: untouched > 30 days")
     expect(page.locator("#boardFilterText .filter-q")).to_have_attribute("placeholder", "Filter 1 task…")
     shot(page, shots / "story-04-triage-11-desktop.png")
     # the token round-trips: a fresh load of the shared URL is the same view
@@ -801,7 +801,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='deferred']").check()
     expect(page).to_have_url(f"{base}/?status=deferred")
     close_filter_sheet(page)
-    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filters, 1 on: deferred")
+    expect(filter_button(page, "paneBoard")).to_have_attribute("aria-label", "Filter, 1 on: deferred")
     rows = page.locator("#paneBoard .trow[data-id]")
     # the seed's own deferred task plus the one just created — and nothing else
     expect(rows).to_have_count(2)

@@ -1706,7 +1706,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Folder line 2 stays ONE line at 390px (#74): the picker drops to its
-     glyph. aria-label + title still say "Pick from folder index". A glyph
+     glyph. aria-label + title still say "Find in folder index". A glyph
      alone is an icon button, so it loses the ghost hairline too (#357). */
   .folder-pick-label { display: none; }
   .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; border-color: transparent; }
@@ -2464,6 +2464,11 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 /* the chip no longer clips (#305: its ::before band reaches outside it); the
    label already does — `.chip-label` is `overflow: hidden` with an ellipsis, so
    it is the part that shrinks */
+/* the toggle's word beside its glyph (#424): the glyph alone is no conventional name */
+.archive-menu-head { display: inline-flex; align-items: center; cursor: pointer; color: var(--muted); }
+.archive-menu-word { font-size: var(--font-caption); }
+.archive-menu-head:hover { color: var(--ink); }
+.archive-menu-head:has(.archive-menu-toggle[aria-expanded="true"]) { color: var(--accent); }
 /* the files, the reason and the actions, stacked under the toggle (#339) */
 .archive-menu-body { padding-top: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 @media (max-width: 520px) {

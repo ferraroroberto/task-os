@@ -1312,9 +1312,9 @@ export function createDrawer(el, opts) {
     pick.className = 'button-ghost folder-pick';
     // label span, not a bare text node: the phone drops it to keep line 2 on
     // one line (styles.css) - the accessible name lives on aria-label either way
-    pick.innerHTML = icon('search') + '<span class="folder-pick-label">Pick from index</span>';
-    pick.setAttribute('aria-label', 'Pick from folder index');
-    pick.title = 'Pick from folder index';
+    pick.innerHTML = icon('search') + '<span class="folder-pick-label">Find in folder index</span>';
+    pick.setAttribute('aria-label', 'Find in folder index');
+    pick.title = 'Find in folder index';
     pick.setAttribute('aria-expanded', String(pickerOpen));
     form.append(input, save, pick);
     form.addEventListener('submit', async function (ev) {

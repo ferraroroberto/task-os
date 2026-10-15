@@ -614,7 +614,9 @@ export function mountArchive(opts) {
     pickBtn.type = 'button';
     pickBtn.className = 'button-ghost folder-pick';
     pickBtn.setAttribute('aria-expanded', 'false');
-    pickBtn.innerHTML = icon('search') + '<span class="folder-pick-label">Pick from index</span>';
+    pickBtn.innerHTML = icon('search') + '<span class="folder-pick-label">Find in folder index</span>';
+    pickBtn.setAttribute('aria-label', 'Find in folder index');
+    pickBtn.title = 'Find in folder index';
     // The field and its picker are one group so the phone can draw them as one
     // box with the glyph inside the right edge (`display: contents` dissolves
     // the group again on a wide screen, where they are two controls on a row).
@@ -724,7 +726,7 @@ export function mountArchive(opts) {
     const kebab = document.createElement('button');
     kebab.type = 'button';
     kebab.className = 'icon-button archive-kebab action-row-kebab';
-    kebab.setAttribute('aria-label', 'Review ' + (item.subject || '(no subject)'));
+    kebab.setAttribute('aria-label', 'Actions for ' + (item.subject || '(no subject)'));
     kebab.innerHTML = icon('ellipsis-vertical');
     if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
       items.push({ label: 'Accept', glyph: 'check', dataset: { action: 'accept' },
@@ -889,9 +891,19 @@ export function mountArchive(opts) {
       const actions = actionsFor(item);
       const menu = document.createElement('div');
       menu.className = 'archive-menu';
-      const toggle = verbButton(actions.controls ? 'eye' : 'file-text', actions.controls ? 'Review' : 'Details');
+      // The glyph alone is not a conventional icon-only name (fleet design
+      // COMP-09, #424), so the word is shown beside it; the <label> makes the
+      // word a second place to press, the toggle itself unchanged.
+      const verb = actions.controls ? 'Review' : 'Details';
+      const toggle = verbButton(actions.controls ? 'eye' : 'file-text', verb);
       toggle.classList.add('archive-menu-toggle');
       toggle.setAttribute('aria-expanded', 'false');
+      const toggleHead = document.createElement('label');
+      toggleHead.className = 'archive-menu-head';
+      const toggleWord = document.createElement('span');
+      toggleWord.className = 'archive-menu-word';
+      toggleWord.textContent = verb;
+      toggleHead.append(toggle, toggleWord);
       const body = document.createElement('div');
       body.className = 'archive-menu-body';
       body.hidden = true;
@@ -902,7 +914,7 @@ export function mountArchive(opts) {
         body.hidden = !open;
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
-      menu.append(toggle, body);
+      menu.append(toggleHead, body);
 
       card.append(head, meta, menu);
       list.appendChild(card);
