@@ -13,7 +13,7 @@ description = "One master task list: nested projects, capture Inbox, calendar, v
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
 nav            = { src = "app/webapp/static/_vendored/nav",           sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/nav" }
-icons          = { src = "app/webapp/static/_vendored/icons",         sha = "c5b52c2ec67cc51d19396c9b0c22f3e43480665d", dest = "app/webapp/static/_vendored/icons" }
+icons          = { src = "app/webapp/static/_vendored/icons",         sha = "7d9b824bfc2dd4f3ec8a9d7424208bb36d42c556", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/card" }
 button         = { src = "app/webapp/static/_vendored/button",        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/button" }
 modal          = { src = "app/webapp/static/_vendored/modal",         sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/modal" }
@@ -23,9 +23,9 @@ select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "4c6
 switch         = { src = "app/webapp/static/_vendored/switch",        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/switch" }
 home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/home-head" }
 text-size      = { src = "app/webapp/static/_vendored/text-size",      sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/text-size" }
-action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "f52eb75625cbfd8dcef8a71731390a47b795508d", dest = "app/webapp/static/_vendored/action-row" }
+action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "59ae763c4dea588aef07a66c236ee3e57c8459ac", dest = "app/webapp/static/_vendored/action-row" }
 segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "f52eb75625cbfd8dcef8a71731390a47b795508d", dest = "app/webapp/static/_vendored/segmented" }
-row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/row-menu" }
+row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "bf56553ff4fd32ac2c652adde25c079cbbb00786", dest = "app/webapp/static/_vendored/row-menu" }
 page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/page-foot" }
 icon-button    = { src = "app/webapp/static/_vendored/icon-button",   sha = "f52eb75625cbfd8dcef8a71731390a47b795508d", dest = "app/webapp/static/_vendored/icon-button" }
 usage-log      = { src = "app/webapp/static/_vendored/usage-log",     sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/usage-log" }
