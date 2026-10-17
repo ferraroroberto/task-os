@@ -819,6 +819,27 @@ def test_search_title_description_and_comments(conn: sqlite3.Connection, seeded:
     assert [t["id"] for t in repo.list_tasks(conn, q="washer")] == [seeded["tap"]]
 
 
+def test_a_bracket_in_a_title_does_not_decide_where_a_search_matched(
+    conn: sqlite3.Connection,
+) -> None:
+    """#440 — ``[`` is both the highlight mark and was the "the title matched" test.
+
+    A title that merely contains ``[`` was always reported as a title hit with
+    its unmarked title as the snippet, even when only the description matched.
+    """
+    t = repo.create_task(conn, "[WIP] fix tap", description="the washer is worn out")
+
+    by_desc = repo.search(conn, "washer")
+    assert [h["id"] for h in by_desc] == [t["id"]]
+    assert by_desc[0]["matched_in"] == "description"
+    assert "[washer]" in by_desc[0]["snippet"]
+
+    by_title = repo.search(conn, "fix")
+    assert by_title[0]["matched_in"] == "title"
+    # The title's own brackets survive; the match is marked on top of them.
+    assert by_title[0]["snippet"] == "[WIP] [fix] tap"
+
+
 def test_fts_follows_updates_and_deletes(conn: sqlite3.Connection) -> None:
     t = repo.create_task(conn, "Alpha", description="first text")
     assert repo.search(conn, "alpha")
