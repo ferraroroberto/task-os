@@ -15,7 +15,7 @@ EXPECTED_TABLES = {
     "settings", "tasks", "links", "comments", "activity", "people", "issue_refs",
     "ai_suggestions", "archive_runs", "archive_items", "archive_corrections",
     "tasks_fts", "comments_fts", "mirror_state", "mirror_events", "task_blocks",
-    "capture_keys",
+    "capture_keys", "time_areas", "time_categories", "time_entries", "time_timers", "time_guesses",
 }
 
 
@@ -33,10 +33,10 @@ def _open(path: Path) -> sqlite3.Connection:
 
 
 def test_fresh_db_reaches_current_version(_temp_db: Path) -> None:
-    assert dbmod.init_db() == schema.SCHEMA_VERSION == 18
+    assert dbmod.init_db() == schema.SCHEMA_VERSION == 19
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 18
+        assert schema.current_version(conn) == 19
         assert EXPECTED_TABLES <= schema.table_names(conn)
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"idx_tasks_parent", "idx_tasks_status", "idx_tasks_due",
@@ -51,13 +51,13 @@ def test_migrations_are_idempotent(_temp_db: Path) -> None:
     conn = dbmod.connect()
     try:
         before = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
-        assert schema.migrate(conn) == 18
-        assert schema.migrate(conn) == 18
+        assert schema.migrate(conn) == 19
+        assert schema.migrate(conn) == 19
         after = conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0]
         assert before == after
     finally:
         conn.close()
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
 
 
 def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
@@ -71,10 +71,10 @@ def test_upgrade_from_step1_v1_database(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
-        assert schema.current_version(conn) == 18
+        assert schema.current_version(conn) == 19
         assert conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()[0] == "dark"
         assert "tasks" in schema.table_names(conn)
     finally:
@@ -94,7 +94,7 @@ def test_v9_adds_the_recurrence_anchor_to_an_existing_database(_temp_db: Path) -
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         row = conn.execute(
@@ -139,7 +139,7 @@ def test_v5_rebuild_keeps_links_and_accepts_ai_kind(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         rows = conn.execute("SELECT id, url, kind FROM links ORDER BY id").fetchall()
@@ -201,7 +201,7 @@ def test_v10_stamps_closed_at_on_cancelled_tasks(_temp_db: Path) -> None:
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         stamped = {r[0]: r[1] for r in conn.execute("SELECT id, done_at FROM tasks ORDER BY id").fetchall()}
@@ -228,11 +228,13 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
         # Same reason for everything v13 and later added: the marker is about to
         # be rewound to 12, so the file has to look like a v12 file or the
         # replayed migrations collide with their own tables and columns (#157's
-        # v14, #158's v15, #229's v16, #254's v17) — and put back what v18
-        # (#369) drops, so its replay has something to drop.
+        # v14, #158's v15, #229's v16, #254's v17, #457's v19) — and put back
+        # what v18 (#369) drops, so its replay has something to drop.
         conn.executescript(
             "DROP TABLE archive_corrections; DROP TABLE archive_items; DROP TABLE archive_runs;"
             " ALTER TABLE tasks DROP COLUMN recurrence_interval; DROP TABLE capture_keys;"
+            " DROP TABLE time_guesses; DROP TABLE time_timers; DROP TABLE time_entries;"
+            " DROP TABLE time_categories; DROP TABLE time_areas;"
             " ALTER TABLE tasks ADD COLUMN planned_on TEXT; ALTER TABLE tasks ADD COLUMN plan_order INTEGER;"
             " CREATE INDEX idx_tasks_planned_on ON tasks(planned_on);"
         )
@@ -256,7 +258,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
     finally:
         conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         task = conn.execute(
@@ -270,7 +272,7 @@ def test_v13_migrates_doing_tasks_to_todo_without_touching_related_data(_temp_db
             conn.execute(
                 "INSERT INTO tasks(title, status, created_at, updated_at) VALUES ('blocked', 'doing', 't', 't')"
             )
-        assert schema.migrate(conn) == 18
+        assert schema.migrate(conn) == 19
     finally:
         conn.close()
 
@@ -336,7 +338,7 @@ def test_v16_adds_the_interval_without_touching_existing_recurring_tasks(_temp_d
     before_sql = before_sql.replace(", planned_on TEXT", "").replace(", plan_order INTEGER", "")
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         after_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'tasks'").fetchone()[0]
@@ -384,7 +386,7 @@ def test_v17_backfills_the_capture_keys_of_tasks_captured_before_it(_temp_db: Pa
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         keys = dict(conn.execute("SELECT external_id, captured_at FROM capture_keys").fetchall())
@@ -403,7 +405,7 @@ def test_v17_backfills_the_capture_keys_of_tasks_captured_before_it(_temp_db: Pa
 def test_v18_drops_the_plan_columns_and_keeps_every_task(_temp_db: Path) -> None:
     """#369: a v17 file that planned tasks loses only ``planned_on``,
     ``plan_order`` and v8's index — every task, its other fields, its
-    children and its history survive, and the stamp reads 18."""
+    children and its history survive, through to the current version."""
     conn = _open(_temp_db)
     conn.execute("PRAGMA foreign_keys = ON")
     for target in range(1, 18):
@@ -429,7 +431,7 @@ def test_v18_drops_the_plan_columns_and_keeps_every_task(_temp_db: Path) -> None
     conn.commit()
     conn.close()
 
-    assert dbmod.init_db() == 18
+    assert dbmod.init_db() == 19
     conn = dbmod.connect()
     try:
         columns = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
@@ -448,5 +450,50 @@ def test_v18_drops_the_plan_columns_and_keeps_every_task(_temp_db: Path) -> None
         # the FTS triggers still fire on the rewritten table
         tasks_repo.update_task(conn, 3, title="Renamed task")
         assert [t["id"] for t in tasks_repo.search(conn, "Renamed")] == [3]
+    finally:
+        conn.close()
+
+
+def test_v19_adds_the_time_tables_with_their_seed_areas(_temp_db: Path) -> None:
+    """#457: a v18 file gains the five time tables and the four seed areas —
+    Home with the prototype's ten categories, every other area one ``general``
+    — and every task it already held is untouched."""
+    conn = _open(_temp_db)
+    conn.execute("PRAGMA foreign_keys = ON")
+    for target in range(1, 19):
+        conn.executescript(schema.MIGRATIONS[target])
+    conn.execute("INSERT INTO settings(key, value) VALUES ('schema_version', '18')")
+    conn.execute("INSERT INTO tasks(id, title, created_at, updated_at) VALUES (1, 'Keep me', 'c', 'u')")
+    conn.commit()
+    conn.close()
+
+    assert dbmod.init_db() == 19
+    conn = dbmod.connect()
+    try:
+        assert conn.execute("SELECT title FROM tasks").fetchall()[0][0] == "Keep me"
+        areas = [tuple(r) for r in conn.execute("SELECT slug, name, position FROM time_areas ORDER BY position")]
+        assert areas == [("home", "Home", 0), ("work", "Work", 1), ("personal", "Personal", 2), ("health", "Health", 3)]
+        home = [r[0] for r in conn.execute(
+            "SELECT c.slug FROM time_categories c JOIN time_areas a ON a.id = c.area_id "
+            "WHERE a.slug = 'home' ORDER BY c.position")]
+        assert home == ["kids-care", "kids-school", "kids-driving", "cooking", "cleaning", "laundry",
+                        "shopping", "home", "planning", "other"]
+        others = {tuple(r) for r in conn.execute(
+            "SELECT a.slug, c.slug FROM time_categories c JOIN time_areas a ON a.id = c.area_id "
+            "WHERE a.slug <> 'home'")}
+        assert others == {("work", "general"), ("personal", "general"), ("health", "general")}
+        cat = conn.execute("SELECT id FROM time_categories LIMIT 1").fetchone()[0]
+        # a clock range is both ends or neither; minutes stay within one day
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO time_entries(person, category_id, day, minutes, started_at, created_at, updated_at)"
+                " VALUES ('p1', ?, '2026-10-17', 30, '2026-10-17T09:00:00+02:00', 'c', 'u')", (cat,))
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO time_entries(person, category_id, day, minutes, created_at, updated_at)"
+                " VALUES ('p1', ?, '2026-10-17', 1441, 'c', 'u')", (cat,))
+        # an area with categories cannot be deleted: archived, never deleted
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute("DELETE FROM time_areas WHERE slug = 'home'")
     finally:
         conn.close()

@@ -36,6 +36,9 @@ Route families (each in ``app/webapp/routers/``):
                                    filed through email-archiver's batch CLI as a
                                    subprocess (#157); the service's own state
                                    rides /api/status's `archive`
+    time_tracker /api/time/…     → the Time tab (#457): timers (start / switch / stop /
+                                   discard), entries, summary, CSV, guesses, area +
+                                   category admin; every rule in src/time_repo.py
     auth    GET /login · POST /api/login|logout — the token / password →
             cookie swap (Step 7); GET /api/team · POST /api/team/name ·
             GET /api/team/avatars/{i} — team mode's pick-your-name (Step 12)
@@ -111,6 +114,7 @@ from app.webapp.routers import (
     people,
     search,
     tasks,
+    time_tracker,
     views,
     voice,
 )
@@ -315,6 +319,7 @@ def create_app() -> FastAPI:
     app.include_router(voice.router)
     app.include_router(ai.router)
     app.include_router(archive.router)
+    app.include_router(time_tracker.router)
     # The local usage log (#412): /api/usage/*, so AuthMiddleware gates it like
     # every other /api/ route — no per-route dependency.
     app.include_router(usage_router(usage_db_path()))

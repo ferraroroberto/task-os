@@ -260,6 +260,53 @@ class TeamConfig:
 
 
 @dataclass(frozen=True)
+class TimePerson:
+    """One person who tracks time: ``id`` is what every row stores, ``name``
+    only what the screen shows."""
+
+    id: str
+    name: str
+
+
+#: Who tracks time when the config names nobody: the owner, on their own.
+IMPLICIT_TIME_PERSON = TimePerson(id="me", name="Me")
+
+
+@dataclass(frozen=True)
+class TimeConfig:
+    """The time tracker (#457). ``people`` are who track time (never empty: a
+    missing or empty list is the one implicit person ``me``); with one person
+    there is no picker, head-to-head or guess card. ``compare_area`` is the
+    area slug the household comparison reads; ``long_timer_minutes`` how long
+    a timer runs before the card asks whether it was forgotten."""
+
+    people: tuple[TimePerson, ...] = (IMPLICIT_TIME_PERSON,)
+    compare_area: str = "home"
+    long_timer_minutes: int = 180
+
+    @property
+    def ids(self) -> tuple[str, ...]:
+        return tuple(p.id for p in self.people)
+
+    def name_of(self, person: str) -> str:
+        """The display name for ``person`` — the id itself when it is no longer configured."""
+        return next((p.name for p in self.people if p.id == person), person)
+
+
+def _time_people(value: Any) -> tuple[TimePerson, ...]:
+    """``time.people`` as validated people: an entry without an ``id``, or a
+    repeated one, is dropped with a warning; nothing usable = the implicit owner."""
+    people: list[TimePerson] = []
+    for item in value if isinstance(value, list) else []:
+        person_id = str(item.get("id", "") or "").strip() if isinstance(item, dict) else ""
+        if not person_id or any(p.id == person_id for p in people):
+            logger.warning("⚠️ config: ignoring time.people entry %r (needs a unique id)", item)
+            continue
+        people.append(TimePerson(id=person_id, name=str(item.get("name", "") or "").strip() or person_id))
+    return tuple(people) or (IMPLICIT_TIME_PERSON,)
+
+
+@dataclass(frozen=True)
 class AuthConfig:
     """Non-loopback access (Step 7). ``token`` is the bearer secret
     ``scripts/gen_token.py`` writes; ``password_hash`` the optional memorable
@@ -290,6 +337,7 @@ class AppConfig:
     archive: ArchiveConfig = field(default_factory=ArchiveConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
+    time: TimeConfig = field(default_factory=TimeConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
     source_path: Path | None = None
 
@@ -415,6 +463,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     archive = _as_dict(raw.get("archive"))
     calendar = _as_dict(raw.get("calendar"))
     team = _as_dict(raw.get("team"))
+    time_block = _as_dict(raw.get("time"))
     auth = _as_dict(raw.get("auth"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
     # same nested-map flattening as placeholders: web_roots.sharepoint.docs → "sharepoint:docs"
@@ -518,6 +567,13 @@ def load_config(path: Path | None = None) -> AppConfig:
             enabled=bool(team.get("enabled", False)),
             people=_as_str_list(team.get("people")),
             password_hash=str(team.get("password_hash", "") or "").strip(),
+        ),
+        time=TimeConfig(
+            people=_time_people(time_block.get("people")),
+            compare_area=str(time_block.get("compare_area", TimeConfig.compare_area) or "").strip(),
+            long_timer_minutes=_as_int(
+                time_block.get("long_timer_minutes"), TimeConfig.long_timer_minutes, "time.long_timer_minutes",
+            ),
         ),
         auth=AuthConfig(
             token=str(auth.get("token", "") or "").strip(),
