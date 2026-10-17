@@ -333,8 +333,17 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
 
 # ---------------------------------------------------------- phone story
 
-def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwright, shots: Path) -> None:
-    base = seeded_webapp
+def test_phone_install_metadata_and_story(
+    seeded_webapp: str, authed_webapp: str, playwright: Playwright, browser: Browser, shots: Path
+) -> None:
+    _phone_story(seeded_webapp, playwright, shots)
+    # The /login walk rides the same test function on its own token-configured
+    # instance: folded in so the e2e suite stays within its node budget (#457,
+    # the #96 / #279 precedent) — same steps, same shots.
+    _login_page_and_token_sign_in(authed_webapp, playwright, browser, shots)
+
+
+def _phone_story(base: str, playwright: Playwright, shots: Path) -> None:
     try:
         wk = playwright.webkit.launch(headless=HEADLESS)
     except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
@@ -564,8 +573,7 @@ def test_phone_install_metadata_and_story(seeded_webapp: str, playwright: Playwr
 
 # ------------------------------------------------------------- login page
 
-def test_login_page_and_token_sign_in(authed_webapp: str, playwright: Playwright, browser: Browser, shots: Path) -> None:
-    base = authed_webapp
+def _login_page_and_token_sign_in(base: str, playwright: Playwright, browser: Browser, shots: Path) -> None:
     # phone: the page renders (vendored card, one field) and a wrong secret is refused
     wk = playwright.webkit.launch(headless=HEADLESS)
     try:

@@ -17,7 +17,8 @@
  * the views never drift.
  *
  * Every tab is its own module and this file is the wiring: board.js ·
- * today.js · search.js · settings.js (issue #37 — the Settings cards used to
+ * today.js · time.js (the time tracker, #457 — loads nothing until its tab
+ * is first shown) · search.js · settings.js (issue #37 — the Settings cards used to
  * live here; inset groups and their sheets since #397) · archive.js (the
  * batch-archiving run and its report, #159 — a tab until #397, now the
  * Settings → Email archiving sheet) · journal.js (the done journal, #102 —
@@ -59,6 +60,7 @@ import { mountScope } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
+import { mountTime } from './time.js';
 import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
 import { headLine, renderToday } from './today.js';
@@ -145,6 +147,7 @@ const drawerBeside = window.matchMedia('(min-width: 1024px)');
 let preselectedId = null;
 let board = null;
 let search = null;
+let time = null;          // the Time tab (#457): show() on its first press, hide() off it
 let settings = null;
 let archive = null;       // the Email archiving sheet (#159, #397) — the batch run + its report
 let palette = null;
@@ -761,6 +764,7 @@ function refreshJournal() {
  *  (the nav re-shows its pane on its own — see boot()). */
 function openJournal() {
   hideSettings();
+  if (time) time.hide();
   if (!state.journal.open) {
     state.journal.open = true;
     const navEl = document.querySelector('nav.tabs');
@@ -828,6 +832,8 @@ function renderHeadStatus() {
     attention = line.attention;
   } else if (state.tab === 'board' && onPane && state.boardCounts) {
     parts = boardHeadParts(state.boardCounts);
+  } else if (state.tab === 'time' && onPane && time) {
+    text = time.headText();
   } else if (state.settingsOpen) {
     parts = settingsHeadParts();
   }
@@ -892,6 +898,8 @@ function openSettings() {
     setHeadTitle('Settings', 'i-settings');
     usage.trackView('settings');
     dropPreselected();
+    // Its poll stops under Settings, and its two Settings rows read its meta (#457).
+    if (time) { time.hide(); time.settingsShown(); }
     renderHeadStatus();
     const scroller = document.querySelector('.app');
     if (scroller) scroller.scrollTop = 0;
@@ -942,6 +950,7 @@ function showSettingsSheet(key) {
   if (!settings.showSheet(key)) return;
   if (fresh) usage.trackView('settings.' + key);
   if (fresh && key === 'archive') archive.refresh();
+  if (fresh && (key === 'timeperson' || key === 'timecats')) time.openSheet(key);
 }
 
 /** The sheet's × / Done / Escape: back to the Settings list. */
@@ -1199,6 +1208,7 @@ function paletteCommands() {
     ...(keys && keys.hasTarget() ? keys.commands() : []),
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
+    { id: 'go-time', label: 'Go to Time', icon: 'timer', run: go('time') },
     // The Archive tab until #397: Settings → Email archiving now, one command away still.
     { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: function () { openSettingsSheet('archive'); } },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
@@ -1352,6 +1362,8 @@ async function boot() {
   const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search');
   let searchQ = '';
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
+  // Before the nav: its first onChange restores a stored tab, Time among them.
+  time = mountTime({ onHead: renderHeadStatus });
   nav = initNavTabs({
     storageKey: TAB_KEY,
     defaultTab: 'today',
@@ -1367,6 +1379,8 @@ async function boot() {
       // the init call that restores the stored tab, which must keep the hash.
       if (nav) dropPendingPaneHash();
       if (tab === 'board' && board) board.show();
+      if (tab === 'time') time.show();
+      else time.hide();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
       renderHeadStatus();

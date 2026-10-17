@@ -274,8 +274,8 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     pin.fill(">go to")
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
     expect(cmds.first).to_contain_text("Go to Today")   # nav order: Today leads (#319)
-    # one per nav destination plus Settings — the four tabs since #350
-    expect(cmds).to_have_text([re.compile(rf"^Go to {name}") for name in ("Today", "Board", "Archive", "Search", "Settings")])
+    # one per nav destination plus Archive and Settings — Time joined in #457
+    expect(cmds).to_have_text([re.compile(rf"^Go to {name}") for name in ("Today", "Board", "Time", "Archive", "Search", "Settings")])
     shot(page, shots / "story-10-search-5-desktop.png")
     pin.fill(">go to board")
     expect(cmds.first).to_contain_text("Go to Board")

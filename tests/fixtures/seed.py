@@ -21,7 +21,11 @@ of them cancelled) and nine days back — so the done journal has days to
 group, a cancelled row to mute and an older week to load, and one
 **blocked-by pair** (#100) — "Release v0.2" blocked on "Write sensor
 driver" — so the lock glyph and the blocked filter have something real to
-show without anyone creating it.
+show without anyone creating it. And a fortnight of **tracked time** (#457)
+for the sample config's two placeholder people, ``p1`` and ``p2``: clocked
+entries in the Home area (so the household comparison has both sides) and a
+few in Work, Personal and Health, plus ``p2``'s share guess only, so the
+guess card has a hidden answer to reveal.
 
 Use it:
 
@@ -45,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
+from src import time_repo
 from src.db import connect, init_db
 
 # The frozen-clock unit suites (tests/test_repo.py, tests/test_views.py) pin
@@ -57,6 +62,27 @@ PEOPLE = [
     ("Alex Chen", "alex@example.com"),
     ("Jordan Lee", None),
 ]
+
+#: The time tracker's synthetic log (#457): (person, area, category, days
+#: before the anchor, start, minutes, note). The people are the sample
+#: config's placeholders; every start sits before the seed clock's 08:30 on
+#: the anchor day, so nothing is in the future.
+TIME_PEOPLE = ("p1", "p2")
+TIME_ENTRIES = [
+    ("p1", "home", "cooking", 0, "07:00", 45, ""),
+    ("p2", "home", "kids-care", 0, "06:45", 60, ""),
+    ("p1", "work", "general", 1, "09:00", 150, "quarterly report"),
+    ("p1", "home", "laundry", 1, "19:30", 30, ""),
+    ("p2", "home", "cooking", 1, "18:30", 75, ""),
+    ("p1", "home", "kids-driving", 2, "08:10", 40, "school run"),
+    ("p2", "home", "cleaning", 2, "10:00", 90, ""),
+    ("p1", "personal", "general", 3, "18:00", 60, "running"),
+    ("p2", "home", "shopping", 4, "11:15", 50, "groceries"),
+    ("p2", "health", "general", 5, "07:30", 30, ""),
+    ("p2", "home", "planning", 6, "21:00", 25, "school forms"),
+    ("p1", "home", "home", 8, "15:00", 120, "fixed the gate"),
+]
+TIME_GUESSES = [("p2", 60)]
 
 
 class _Clock:
@@ -241,6 +267,20 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
         # driver" — make that literal: it cannot ship before the driver task
         # is written, so the working views hide it (lock glyph everywhere else).
         repo.add_blocker(conn, ids["release"], ids["driver"], actor="seed")
+
+    # ---- tracked time (#457) --------------------------------------------
+    # Through time_repo, the one writer of those tables, on a fixed clock at
+    # 08:30 on the anchor day (each create stamps "now"; a fixed instant
+    # keeps every created_at identical run to run).
+    at = datetime.combine(anchor, datetime.min.time()).astimezone().replace(hour=8, minute=30)
+    with repo.use_clock(lambda: at):
+        for person, area, slug, days_ago, start, minutes, note in TIME_ENTRIES:
+            category = time_repo.category_by_slug(conn, area, slug)
+            assert category is not None, (area, slug)
+            time_repo.create_entry(conn, person=person, category_id=category, day=d(-days_ago),
+                                   minutes=minutes, start=start, note=note, people=TIME_PEOPLE)
+        for person, pct in TIME_GUESSES:
+            time_repo.set_guess(conn, person, pct, people=TIME_PEOPLE)
 
     return {"ids": ids, "counts": repo.counts(conn)}
 
