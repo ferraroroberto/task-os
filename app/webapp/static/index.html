@@ -569,8 +569,10 @@
               </button>
             </li>
             <!-- Who this device logs time for (#457): a label, never a
-                 credential; hidden with one person configured (time-settings.js). -->
-            <li class="action-row" id="timePersonRow" hidden>
+                 credential (time-settings.js). Present from the first paint
+                 whatever the config holds, so the rows below never move when
+                 the value arrives. -->
+            <li class="action-row" id="timePersonRow">
               <button type="button" class="action-row-main settings-link" data-settings-sheet="timeperson" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
                 <span class="action-row-title">Time tracking as</span>

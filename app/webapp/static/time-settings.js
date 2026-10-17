@@ -1,8 +1,8 @@
 /* task-os — the Time tab's two Settings rows and their sheets (#457).
  *
  *   This device → Time tracking as   who this device logs time for (a
- *                                    label, never a credential); shown only
- *                                    with two or more people configured
+ *                                    label, never a credential); with one
+ *                                    person configured it simply names them
  *   Tools → Time categories          areas and their categories: add,
  *                                    rename, reorder, move a category to
  *                                    another area, archive / unarchive —
@@ -37,7 +37,6 @@ function el(tag, cls, text) {
  */
 export function mountTimeSettings(opts) {
   const els = {
-    personRow: document.getElementById('timePersonRow'),
     personValue: document.getElementById('timePersonValue'),
     personList: document.getElementById('timePersonList'),
     catsValue: document.getElementById('timeCatsValue'),
@@ -45,12 +44,10 @@ export function mountTimeSettings(opts) {
   };
   const menu = createRowMenu({ className: 'time-admin-menu' });
 
-  /** The two rows' values (and the person row's presence). */
+  /** The two rows' values. */
   function render() {
     const meta = opts.meta();
     if (!meta) return;
-    const solo = meta.people.length < 2;
-    els.personRow.hidden = solo;
     const me = meta.people.find(function (p) { return p.id === opts.person(); });
     els.personValue.textContent = me ? me.name : 'Not picked';
     const areas = meta.areas.filter(function (a) { return !a.archived; });
