@@ -332,6 +332,49 @@ def test_the_batch_limit_caps_one_pass_and_the_rest_arrive_next_time(
     assert len(repo.list_tasks(conn, status=["inbox"])) == 2
 
 
+def test_a_backlog_larger_than_the_limit_drains_across_passes(
+    conn: sqlite3.Connection, tmp_path: Path, od: Path, placeholders: dict[str, str]
+) -> None:
+    """#440 — the oldest ``limit`` flagged mails used to be re-read every pass.
+
+    The flag on an archived ``.msg`` never clears, so once the oldest ``limit``
+    were captured they came back as "unchanged" forever and the mail after them
+    was never reached. Already-captured and dismissed keys must not use up the
+    limit.
+    """
+    index = _index(tmp_path, od, placeholders)
+    c = sqlite3.connect(index.db_path)
+    for n in range(1, 4):  # three more flagged mails, all older than the fixture's two
+        c.execute(
+            "INSERT INTO emails(file_path, folder_path, filename, subject, sender, date_sent,"
+            " file_mtime, flag_status, flag_request) VALUES (?, ?, ?, ?, ?, ?, 1.0, 2, NULL)",
+            (f"{placeholders['onedrive']}/backlog/m{n}.msg", f"{placeholders['onedrive']}/backlog",
+             f"m{n}.msg", f"Backlog {n}", "a@example.invalid", f"2026-01-0{n}T09:00:00"),
+        )
+    c.commit()
+    c.close()
+
+    first = capture_once(conn, index, limit=2)
+    assert first.created == 2 and first.listed == 2
+    # One of the two is deleted: a dismissal must not hold its place in the window either.
+    repo.delete_task(conn, first.created_ids[0])
+
+    second = capture_once(conn, index, limit=2)
+    assert second.created == 2
+    assert (second.unchanged, second.dismissed) == (1, 1)
+    assert second.listed == 4
+
+    third = capture_once(conn, index, limit=2)
+    assert third.created == 1
+    assert (third.unchanged, third.dismissed) == (3, 1)
+
+    assert len(repo.list_tasks(conn, status=["inbox"])) == 4  # five flagged, one dismissed
+
+    # Nothing left: a fourth pass lands nothing and reports every key as known.
+    fourth = capture_once(conn, index, limit=2)
+    assert fourth.created == 0 and fourth.unchanged + fourth.dismissed == fourth.listed == 5
+
+
 # ---------------------------------------------------------------- the service
 
 

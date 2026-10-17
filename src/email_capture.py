@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Container, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -197,25 +197,45 @@ class FlaggedEmailIndex:
         return {str(r["name"]) for r in conn.execute("PRAGMA table_info(emails)").fetchall()}
 
     # ------------------------------------------------------------ reading
-    def flagged(self, limit: int = BATCH_LIMIT) -> list[dict[str, Any]]:
-        """Every follow-up-flagged email, oldest first, as capture-ready dicts.
+    def flagged(
+        self, limit: int = BATCH_LIMIT, settled: Container[str] = ()
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Follow-up-flagged emails, oldest first → ``(new entries, settled keys)``.
 
         Oldest first so a backlog larger than ``limit`` drains in the order the
         mail arrived instead of the newest rows starving the older ones.
+
+        ``settled`` holds the capture keys already captured or dismissed. The
+        flag on an archived ``.msg`` never clears, so those rows come back on
+        every pass: they are stepped over and returned apart (the second list),
+        and only the rest count toward ``limit`` — otherwise the oldest
+        ``limit`` mails would fill the window forever and the next one would
+        never be reached (#440).
         """
         conn = self._connect()
         try:
             has_request = "flag_request" in self._columns(conn)
             request_col = "flag_request" if has_request else "NULL AS flag_request"
-            rows = conn.execute(
+            cursor = conn.execute(
                 f"SELECT id, file_path, folder_path, filename, subject, sender, date_sent, "
                 f"       body_preview, {request_col} "
-                f"  FROM emails WHERE {FLAG_COLUMN} = ? ORDER BY date_sent, id LIMIT ?",
-                (FLAG_FOLLOWUP, int(limit)),
-            ).fetchall()
+                f"  FROM emails WHERE {FLAG_COLUMN} = ? ORDER BY date_sent, id",
+                (FLAG_FOLLOWUP,),
+            )
+            entries: list[dict[str, Any]] = []
+            skipped: list[str] = []
+            for row in cursor:
+                entry = self._entry(row)
+                key = external_id_for(entry["ref"])
+                if key in settled:
+                    skipped.append(key)
+                    continue
+                entries.append(entry)
+                if len(entries) >= int(limit):
+                    break
         finally:
             conn.close()
-        return [self._entry(r) for r in rows]
+        return entries, skipped
 
     def _entry(self, e: sqlite3.Row) -> dict[str, Any]:
         path = normalize_path(e["file_path"] or "")
@@ -255,8 +275,17 @@ def capture_once(
     carries on.
     """
     result = CaptureResult()
-    entries = index.flagged(limit)
-    result.listed = len(entries)
+    # Keys already settled (captured, or captured and since deleted) are stepped
+    # over *before* the limit applies and counted from this map, so they cost the
+    # window nothing (#440) while the pass still reports them as before.
+    settled = repo.captured_keys(conn, EXTERNAL_ID_PREFIX)
+    entries, skipped = index.flagged(limit, settled)
+    for key in skipped:
+        if settled[key]:
+            result.unchanged += 1
+        else:
+            result.dismissed += 1
+    result.listed = len(entries) + len(skipped)
     for entry in entries:
         # The task and its link are one landing: a row the index can hand over
         # with an empty subject or path fails somewhere in here, and the whole
