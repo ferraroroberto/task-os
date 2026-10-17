@@ -1017,6 +1017,29 @@ def find_by_external_id(
     )
 
 
+def captured_keys(conn: sqlite3.Connection, prefix: str) -> dict[str, bool]:
+    """Every capture key starting with ``prefix`` → whether a task still carries it.
+
+    ``False`` is a dismissal (#254): captured once, task since deleted. What
+    :func:`capture_task` would answer ``unchanged`` / ``dismissed`` for, read in
+    one pass, so a source can step over keys it has already settled instead of
+    spending its batch limit on them (#440).
+    """
+    cut = len(prefix)
+    keys = {
+        str(r[0]): False
+        for r in conn.execute(
+            "SELECT external_id FROM capture_keys WHERE substr(external_id, 1, ?) = ?",
+            (cut, prefix),
+        )
+    }
+    for r in conn.execute(
+        "SELECT external_id FROM tasks WHERE substr(external_id, 1, ?) = ?", (cut, prefix)
+    ):
+        keys[str(r[0])] = True
+    return keys
+
+
 def capture_task(
     conn: sqlite3.Connection,
     *,
