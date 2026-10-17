@@ -298,6 +298,53 @@ def test_an_apply_failure_is_recorded_and_stays_revertible(
     assert reverted["status"] == "reverted" and reverted["files"] == []
 
 
+def test_a_whole_apply_failure_leaves_no_mail_claimed_as_filed(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A raised ``apply`` confirms nothing, so no row may say ``archived`` (#440).
+
+    Rows are inserted before ``apply`` runs; if the call raises as a whole
+    (timeout, exit-2 error document, unreadable output) they used to stay
+    ``archived`` with no files — and ``filed_message_ids`` then skipped those
+    mails on every later run while they sat in the Inbox.
+    """
+    repo = build_fake_archiver(
+        tmp_path / "archiver",
+        plan=[_three_mail_plan(), _three_mail_plan()],
+        apply=[
+            error_doc("apply", "outlook_unavailable", "Outlook went away"),
+            apply_doc([
+                apply_result("confident@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
+                _reused_result(),
+            ]),
+        ],
+    )
+    svc = service_for(repo)
+    failed_run = svc.run_now()
+    assert failed_run["status"] == "failed" and "Outlook went away" in failed_run["error"]
+
+    # Both apply-bound mails (a fresh filing and a finish of a file already on
+    # disk) are recorded as what happened to them: failed, not filed. The one
+    # that never went to ``apply`` keeps its own state, and the finish row keeps
+    # the file it already knew.
+    by_message = {i["message_id"]: i for i in archive_store.list_items(conn, failed_run["id"])}
+    assert by_message["confident@example.invalid"]["status"] == "failed"
+    assert "Outlook went away" in by_message["confident@example.invalid"]["error"]
+    assert by_message["unsure@example.invalid"]["status"] == "needs_review"
+    assert by_message["filed@example.invalid"]["status"] == "failed"
+    assert by_message["filed@example.invalid"]["files"] == [OLDER_FILE]
+    assert archive_store.filed_message_ids(conn) == set()
+
+    # So the next run offers them again and files them for real.
+    second = svc.run_now()
+    assert second["status"] == "done"
+    assert {i["message_id"]: i["status"] for i in archive_store.list_items(conn, second["id"])} == {
+        "confident@example.invalid": "archived",
+        "unsure@example.invalid": "needs_review",
+        "filed@example.invalid": "archived",
+    }
+
+
 def test_an_apply_failure_with_nothing_written_is_not_revertible(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
