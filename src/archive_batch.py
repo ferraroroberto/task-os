@@ -59,8 +59,11 @@ State machine, one ``archive_items`` row per mail:
                   (``apply`` fills ``files`` *before* the move on purpose) — and
                   ``retry``-able for exactly that reason (#174): the same
                   decision goes back to ``apply``, which reuses the file it has
-                  already written and finishes the move Outlook refused
-    reverted      the files are gone and the mail is back in the Inbox
+                  already written and finishes the move Outlook refused. Also
+                  every row handed to an ``apply`` that failed as a whole
+                  (timeout, error document, unreadable output): nothing was
+                  confirmed, so none may stay ``archived`` (#440)
+    reverted     the files are gone and the mail is back in the Inbox
     moved         re-filed into a folder a human picked
 
 ``archived`` and ``moved`` are the two "filed" states, and the partial unique
@@ -571,7 +574,14 @@ class ArchiveBatchService:
             run_id, len(mails), len(item_by_message), len(decisions), skipped,
         )
         if decisions:
-            result = self._spawn_with_payload("apply", "--decisions", decisions)
+            try:
+                result = self._spawn_with_payload("apply", "--decisions", decisions)
+            except Exception as exc:
+                # The rows went in as ``archived`` before the call; a whole-call
+                # failure confirmed none of them, and left that way they would
+                # be skipped by every later run while the mails sit in the Inbox.
+                self._fail_unconfirmed(conn, decisions, item_by_message, str(exc))
+                raise
             self._record_apply(conn, result, item_by_message)
             # Which mail is why a folder was re-sequenced: the first this run
             # filed into it. A second mail into the same folder rode the same
@@ -731,6 +741,23 @@ class ArchiveBatchService:
             "files_json": json.dumps(list(decision.files), ensure_ascii=False),
             "status": decision.status,
         }
+
+    @staticmethod
+    def _fail_unconfirmed(
+        conn: sqlite3.Connection, decisions: list[dict[str, Any]],
+        item_by_message: dict[str, int], reason: str,
+    ) -> None:
+        """Turn every row handed to a failed ``apply`` from ``archived`` into ``failed``.
+
+        ``files`` is left alone: a finish (#174) row already knows its ``.msg``,
+        and what a call that never answered wrote is not known either way.
+        """
+        message = f"apply failed as a whole, so this mail was not confirmed filed: {reason}"
+        for decision in decisions:
+            item_id = item_by_message.get(str(decision["message_id"]))
+            if item_id is not None:
+                update_item(conn, item_id, status="failed", error=message)
+        logger.warning("⚠️ archive: apply failed as a whole — %d mail(s) marked failed", len(decisions))
 
     def _record_apply(
         self, conn: sqlite3.Connection, result: dict[str, Any], item_by_message: dict[str, int]
