@@ -314,6 +314,7 @@ html, body {
    capped with the active pane, so the view never mixes two widths. The drawer
    is a fixed aside and is left out on purpose. */
 .app:has(> #paneSearch:not([hidden])) > :is(.home-head, .pane, .page-foot),
+.app:has(> #paneTime:not([hidden])) > :is(.home-head, .pane, .page-foot),
 .app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) {
   max-width: var(--layout-measure);
   margin-left: auto;
@@ -2615,3 +2616,158 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
   .archive-runbar .button-ghost::before { inset: 0; }
 }
 
+/* ================================================================ Time (#457) */
+/* The Time tab (time.js): one-dimensional, so it keeps the measure (above).
+   Every surface is a vendored component — segmented, action-row, card, modal,
+   row-menu, empty-state; what follows is only what none of them covers: the
+   card heads inside a full-bleed list card, the running clock, and the bars.
+   People are told apart by initial and by FILL (solid · hatched · dotted),
+   never by a second hue (design.md: one accent). */
+.time-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+.time-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--row-md);
+}
+.action-list > .time-card-head {
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-muted);
+}
+/* In a padded card the card's own padding is the inset: no extra row height. */
+.card:not(.action-list) > .time-card-head { min-height: 0; margin-bottom: var(--space-xs); }
+.time-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-body);
+  font-weight: 700;
+}
+.time-card-title .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
+.time-card-note { margin: 0; font-size: var(--font-body-sm); line-height: 1.45; }
+.action-list > .time-card-note { padding: var(--space-sm) 14px 0; }
+.time-group-title { margin: 0; }
+.action-list > .time-group-title { padding: 12px 14px 4px; }
+.time-avatar { font-weight: 700; font-size: var(--font-body-sm); }
+/* A glance row does nothing on tap (design.md action-row: no pressed background). */
+.time-glance-row .action-row-main { cursor: default; }
+.time-glance-value, .time-sum-row .action-row-value {
+  padding-right: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.time-add { width: 100%; }
+
+/* ---- the running timer ---- */
+.time-timer { display: grid; gap: var(--space-xs); }
+.time-timer .overline, .time-timer-meta { margin: 0; }
+.time-timer-cat { margin: 0; font-size: var(--font-heading-lg); font-weight: 700; line-height: 1.2; }
+.time-timer-meta { font-size: var(--font-body-sm); }
+.time-clock {
+  margin: var(--space-xs) 0;
+  font-size: var(--font-heading-xl);
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.time-long { display: grid; gap: var(--space-sm); }
+.time-long-warn { margin: 0; color: var(--attention-text); font-size: var(--font-body-sm); }
+.time-long-field, .time-guess-field { display: grid; gap: var(--space-xs); font-size: var(--font-label); font-weight: 600; }
+.time-minutes { width: 8rem; }
+.time-timer-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-sm); }
+.time-timer-actions > * { flex: 1; }
+
+/* ---- Totals ---- */
+.time-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.time-controls .time-period { flex: 1 1 18rem; }
+.time-controls .time-who { flex: 1 1 12rem; }
+.time-area { width: auto; min-width: 10rem; }
+.time-h2h {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+}
+.time-h2h-name { display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; }
+.time-h2h-big { margin-top: var(--space-sm); font-size: var(--font-heading-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.time-h2h-pct { font-size: var(--font-body-sm); }
+.time-coverage { margin: 0; font-size: var(--font-body-sm); }
+.time-split {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  margin: var(--space-md) 0 var(--space-sm);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--neutral-soft);
+}
+/* One accent, three fills: solid, hatched, dotted. The hairline keeps a
+   patterned fill's edge readable at any width. */
+.time-fill { display: block; height: 100%; background: var(--accent); }
+.time-fill[data-fill="hatched"] {
+  background: repeating-linear-gradient(135deg, var(--accent) 0 3px, transparent 3px 6px);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.time-fill[data-fill="dotted"] {
+  background: radial-gradient(var(--accent) 1.2px, transparent 1.6px) 0 0 / 5px 5px;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.time-swatch { display: inline-block; flex: none; width: 14px; height: 14px; border-radius: calc(var(--radius-sm) / 2); }
+.time-cat + .time-cat { margin-top: var(--space-md); }
+.time-cat-name { margin: var(--space-sm) 0 var(--space-xs); font-weight: 600; }
+.time-bar-line { display: flex; align-items: center; gap: var(--space-sm); min-height: 28px; }
+.time-initial { width: 1.5rem; flex: none; font-size: var(--font-body-sm); font-weight: 700; color: var(--muted); text-align: center; }
+.time-track {
+  flex: 1;
+  min-width: 0;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--neutral-soft);
+}
+.time-track .time-fill { border-radius: var(--radius-pill); }
+.time-bar-value { min-width: 4.5rem; text-align: right; font-size: var(--font-body-sm); font-variant-numeric: tabular-nums; }
+.time-guess-mine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin: 0; }
+.time-guess-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-sm); margin-top: var(--space-sm); }
+.time-guess-form .time-form-msg { flex-basis: 100%; }
+.time-cmp { width: 100%; margin-top: var(--space-sm); border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.time-cmp th { padding: var(--space-xs) var(--space-sm); font-size: var(--font-body-sm); font-weight: 600; color: var(--muted); text-align: left; }
+.time-cmp td { padding: var(--space-sm); border-top: 1px solid var(--line-muted); }
+.time-cmp td:first-child { display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; }
+.time-csv, .time-admin-add { justify-self: start; display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; }
+.time-more { justify-self: center; }
+
+/* ---- the editor and the small dialogs ---- */
+.time-form-msg { margin: 0; color: var(--danger-text); font-size: var(--font-body-sm); }
+.time-form-msg:empty { display: none; }
+.time-form-note { margin: 0; font-size: var(--font-body-sm); }
+.time-dialog-text { margin: 0 0 12px; }
+.time-field-stack { display: grid; gap: var(--space-sm); }
+.time-picks { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+/* A pick keeps the control height and reaches the 44px floor vertically:
+   the picks sit apart, so the grown targets never overlap (Touch targets). */
+.time-pick { position: relative; }
+.time-pick::before { content: ""; position: absolute; inset: -4px 0; }
+.time-pick[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border-soft);
+  color: var(--accent-text);
+}
+
+/* ---- Settings → Time ---- */
+.time-admin { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); }
+.time-admin-head .action-row-title { font-weight: 700; }
+.time-chip { flex: none; margin-left: var(--space-sm); }
+.time-check { display: inline-flex; margin-left: auto; padding-right: 14px; color: var(--accent); }

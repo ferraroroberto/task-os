@@ -697,7 +697,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
 
-    # 10. Phone: three destinations in the pill (Settings is the gear, #281;
+    # 10. Phone: four destinations in the pill (Settings is the gear, #281;
     #     Email archiving one of its rows, #397), and the report as cards whose
     #     actions live behind each row's own menu — the grid does not fit here.
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True,
@@ -705,7 +705,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     phone.add_init_script(INTERCEPT)
     p = phone.new_page()
     p.goto(base + "/")
-    expect(p.locator("nav.tabs .tab")).to_have_count(3)
+    expect(p.locator("nav.tabs .tab")).to_have_count(4)
     open_settings_sheet(p, "archive", tap=True)
     expect(p.locator(".archive-card")).to_have_count(7)
     expect(p.locator(".archive-grid")).to_have_count(0)

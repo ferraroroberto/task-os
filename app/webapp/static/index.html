@@ -338,6 +338,26 @@
     <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
     <path d="M10 12h4" />
   </symbol>
+  <!-- #457 glyphs (the Time tab): pasted verbatim from the scaffold sprite
+       (_vendored/icons/icons-sprite.html). -->
+  <symbol id="i-timer" viewBox="0 0 24 24" fill="none">
+    <line x1="10" x2="14" y1="2" y2="2" />
+    <line x1="12" x2="15" y1="14" y2="11" />
+    <circle cx="12" cy="14" r="8" />
+  </symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none">
+    <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+  </symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 16v-4" />
+    <path d="M12 8h.01" />
+  </symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none">
+    <path d="M12 15V3" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="m7 10 5 5 5-5" />
+  </symbol>
 </svg>
 
   <!-- Body-level nav, sibling of <main class="app"> — never nested inside it
@@ -354,6 +374,12 @@
             role="tab" aria-selected="false" aria-controls="paneBoard" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-square-kanban"></use></svg>
       <span class="tab-label">Board</span>
+    </button>
+    <!-- Time (#457): third, before the utility Search tab — used daily. -->
+    <button id="tabTime" type="button" class="tab" data-tab="time"
+            role="tab" aria-selected="false" aria-controls="paneTime" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
+      <span class="tab-label">Time</span>
     </button>
     <!-- No Archive tab since #397 (decision 3 of #390): the batch-archiving
          run and its report are Settings → Email archiving, a rarely run job. -->
@@ -458,6 +484,24 @@
         <div id="todayHost" data-empty="tasks"></div>
       </div>
     </section>
+    <!-- Time (#457): the time tracker — Log · Totals · History in one
+         segmented control (time.js). One-dimensional, so it keeps the 772px
+         measure. Nothing loads until the tab is first shown. On a first visit
+         with two or more people configured, the person picker stands in for
+         the views. -->
+    <section id="paneTime" class="pane" role="tabpanel" aria-labelledby="tabTime" aria-label="Time" hidden>
+      <div class="pane-body">
+        <div class="segmented time-views" id="timeViews" role="group" aria-label="Time view">
+          <button type="button" class="segmented-item" aria-pressed="true" data-view="log" data-track="time-view.log">Log</button>
+          <button type="button" class="segmented-item" aria-pressed="false" data-view="totals" data-track="time-view.totals">Totals</button>
+          <button type="button" class="segmented-item" aria-pressed="false" data-view="history" data-track="time-view.history">History</button>
+        </div>
+        <div id="timePicker" class="time-view" hidden></div>
+        <div id="timeLog" class="time-view"></div>
+        <div id="timeTotals" class="time-view" hidden></div>
+        <div id="timeHistory" class="time-view" hidden></div>
+      </div>
+    </section>
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
         <!-- One box, four indexes (Step 10): tasks_fts · the folder index · the
@@ -521,6 +565,18 @@
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
                 <span class="action-row-title">Row actions</span>
                 <span class="settings-link-value" id="rowActionsMeta"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <!-- Who this device logs time for (#457): a label, never a
+                 credential (time-settings.js). Present from the first paint
+                 whatever the config holds, so the rows below never move when
+                 the value arrives. -->
+            <li class="action-row" id="timePersonRow">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="timeperson" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
+                <span class="action-row-title">Time tracking as</span>
+                <span class="settings-link-value" id="timePersonValue"></span>
                 <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
               </button>
             </li>
@@ -592,6 +648,14 @@
         <h2 class="overline settings-overline" id="settingsGroupTools">Tools</h2>
         <section class="card action-list settings-group" aria-labelledby="settingsGroupTools">
           <ul class="action-rows">
+            <li class="action-row">
+              <button type="button" class="action-row-main settings-link" data-settings-sheet="timecats" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
+                <span class="action-row-title">Time categories</span>
+                <span class="settings-link-value" id="timeCatsValue"></span>
+                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
             <li class="action-row">
               <button type="button" class="action-row-main settings-link" data-settings-sheet="search" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
@@ -700,6 +764,13 @@
           <h4 class="row-actions-sub">The ⋯ menu</h4>
           <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
           <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
+        </section>
+        <section class="settings-sheet" id="timePersonCard" data-sheet="timeperson" hidden>
+          <p class="card-meta">Who this device logs time for. A label for this device only, not a sign-in: anyone with access can log or edit any entry.</p>
+          <div id="timePersonList"></div>
+        </section>
+        <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" hidden>
+          <div id="timeCatsHost" class="time-admin"></div>
         </section>
         <section class="settings-sheet" id="paletteCard" data-sheet="palette" hidden>
           <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
@@ -985,6 +1056,9 @@
        the Select bar). Same vendored shell; its single primary restates the
        tint recipe on danger, and every other way out means "no". -->
   <dialog class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
+  <!-- The Time tab's dialogs (#457, time-dialogs.js): the entry editor, the
+       Switch offer, names and moves for Settings → Time categories. -->
+  <dialog class="detail-dialog time-dialog" id="timeDialog" aria-labelledby="timeDialogTitle"></dialog>
   <!-- The date picker a row action opens on a phone (#311): Change date… and
        Snooze… from the row menu or a swipe, built per ask by snooze.js. -->
   <dialog class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
