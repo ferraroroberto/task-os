@@ -1207,6 +1207,7 @@ a.chip:hover { text-decoration: underline; }
   z-index: 2;
   transform: translateX(var(--swipe-x, 0));
 }
+/* 200ms is mirrored by SLIDE_MS / SETTLE_MS in swipe.js — keep them in step. */
 .trow:is(.is-settling, .is-leaving)::before,
 .trow:is(.is-settling, .is-leaving) > :not(.trow-reveal) { transition: transform 200ms ease-out; }
 .trow-reveal {

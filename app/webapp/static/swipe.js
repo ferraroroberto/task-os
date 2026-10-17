@@ -40,6 +40,12 @@ export const FLICK_MIN_PX = 48;
 export const EDGE_PX = 20;
 export const HOLD_MS = 500;
 
+// Both mirror `transition: transform 200ms ease-out` on `.trow.is-settling` /
+// `.is-leaving` in styles.css: the slide-out waits the transition, the settle
+// clean-up waits it plus a 20 ms margin. Change one side, change the other.
+const SLIDE_MS = 200;
+const SETTLE_MS = 220;
+
 /** May a touch that starts at `x` be tracked at all? */
 export function startAllowed(x, viewportWidth) {
   return x >= EDGE_PX && x <= viewportWidth - EDGE_PX;
@@ -141,7 +147,7 @@ export function bindSwipe(li, opts) {
       li.classList.remove('is-settling');
       if (r && r.parentNode) r.parentNode.removeChild(r);
     };
-    if (animate) setTimeout(done, 220); else done();
+    if (animate) setTimeout(done, SETTLE_MS); else done();
   }
 
   li.addEventListener('pointerdown', function (ev) {
@@ -194,7 +200,7 @@ export function bindSwipe(li, opts) {
           if (li.isConnected) { li.classList.remove('is-leaving'); reset(true); }
           else if (live === li) live = null;
         });
-      }, 200);
+      }, SLIDE_MS);
       return;
     }
     reset(true);
