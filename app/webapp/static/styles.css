@@ -1235,19 +1235,19 @@ a.chip:hover { text-decoration: underline; }
   .trow:is(.is-settling, .is-leaving) > :not(.trow-reveal) { transition-duration: 0.01ms; }
 }
 
-/* ------------------------------------------------------- data table */
+/* ------------------------------------------------------- archive grid */
 /* The Archive report's desktop grid: flat (no card wrapper), scrolling inside
    its own box (both axes) — the page never grows sideways; the sticky header
    sticks to the scroller's top. */
-.table-wrap { border-top: 0; }
-.table-scroll { overflow: auto; max-height: calc(100vh - 230px); }
-.task-table {
+.archive-grid-wrap { border-top: 0; }
+.archive-grid-scroll { overflow: auto; max-height: calc(100vh - 230px); }
+.archive-grid {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--font-label);
 }
-.task-table thead th {
+.archive-grid thead th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -1260,12 +1260,12 @@ a.chip:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--line-muted);
   white-space: nowrap;
 }
-.task-table td {
+.archive-grid td {
   padding: 6px 10px;
   border-top: 1px solid var(--line-muted);
   vertical-align: middle;
 }
-.task-table tbody tr:first-child td { border-top: 0; }
+.archive-grid tbody tr:first-child td { border-top: 0; }
 .folder-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
 /* The chips of a cell — the Archive report's file chips and its "+N more" —
    are 44px targets (#305), the recipe
@@ -2314,7 +2314,7 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
    batch run and its report, in the Settings sheet (the detail pane beside the
    list on a wide screen): the head carries the one button, the bound that
    makes a first run safe and the service's own state; the report is the
-   `.task-table` grid on a wide screen and stacked cards under 768 px,
+   `.archive-grid` grid on a wide screen and stacked cards under 768 px,
    where nine columns do not fit and the actions are the point. Tokens only —
    the state words reuse the Settings `.status-ok/-warn/-off`; its text is the
    14px body-sm role, never the caption (TYPE-01, #397). ---- */
@@ -2341,15 +2341,15 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 .archive-runbar .button-ghost { margin-left: auto; min-height: var(--control-h); }   /* + its 4px a side = 44 (#281) */
 
 /* ---- the report grid ---- */
-.archive-table-wrap { padding: 0; overflow: hidden; }
-.archive-table { font-size: var(--font-body-sm); }
+.archive-grid-wrap { padding: 0; overflow: hidden; }
+.archive-grid { font-size: var(--font-body-sm); }
 /* Centred, not top-aligned: the file-chip cell is the one column whose
    content can wrap to more than one line (#178) — a five-file row taller than
    its neighbours must not read as the other cells having drifted upward. */
-.archive-table td { vertical-align: middle; }
+.archive-grid td { vertical-align: middle; }
 /* Every one-line cell is capped so the nine columns still fit a 1440 desktop
    without the actions — the point of the screen — sliding off the right edge;
-   the full value is the title, and narrower windows scroll in `.table-scroll`. */
+   the full value is the title, and narrower windows scroll in `.archive-grid-scroll`. */
 .archive-subject { display: block; font-weight: 600; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-who { display: block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-dest { display: block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2374,7 +2374,7 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 }
 .archive-state { font-weight: 600; white-space: nowrap; }
 /* Enough room per column that a long reason cannot squeeze a neighbour to
-   one word a line; `.table-scroll` takes the overflow. The action column is
+   one word a line; `.archive-grid-scroll` takes the overflow. The action column is
    the row's ⋮ alone since #350 (or its "nothing left to do"), as narrow as
    that. */
 .c-subject { min-width: 10rem; }
