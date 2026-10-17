@@ -768,11 +768,11 @@ export function mountArchive(opts) {
 
   function renderTable(items) {
     const wrap = document.createElement('div');
-    wrap.className = 'card table-wrap archive-table-wrap';
+    wrap.className = 'card archive-grid-wrap';
     const scroll = document.createElement('div');
-    scroll.className = 'table-scroll';
+    scroll.className = 'archive-grid-scroll';
     const table = document.createElement('table');
-    table.className = 'task-table archive-table';
+    table.className = 'archive-grid';
     const thead = document.createElement('thead');
     const hrow = document.createElement('tr');
     COLUMNS.forEach(function (label) {

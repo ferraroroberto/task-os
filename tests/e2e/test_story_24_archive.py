@@ -333,9 +333,56 @@ def _pin_scroller(page: Page) -> None:
     control inside the panel can nudge the scroller — enough to reframe a shot
     between two runs of one commit (rule 3 in `docs/validation.md`).
     """
-    scroller = page.locator("#archiveCard .table-scroll")
+    scroller = page.locator("#archiveCard .archive-grid-scroll")
     scroller.evaluate("el => { el.scrollLeft = 0; }")
     assert scroller.evaluate("el => el.scrollLeft") == 0
+
+
+#: The desktop grid's computed look, captured before its classes were renamed
+#: from the Table view's `.task-table` / `.table-wrap` / `.table-scroll` to
+#: `.archive-grid*` (#442). A rename must not move a pixel, so the look is
+#: pinned here by element role (wrap › scroll › table › th / td), not by class.
+GRID_LOOK = {
+    "wrap": {
+        "border-top-width": "0px", "padding-top": "0px", "padding-left": "0px",
+        "overflow-x": "hidden", "overflow-y": "hidden", "background-color": "rgb(255, 255, 255)",
+    },
+    "scroll": {"overflow-x": "auto", "overflow-y": "auto", "max-height": "670px"},
+    "table": {
+        "border-collapse": "separate", "-webkit-border-horizontal-spacing": "0px",
+        "-webkit-border-vertical-spacing": "0px", "font-size": "14px",
+    },
+    "th": {
+        "position": "sticky", "top": "0px", "z-index": "1", "background-color": "rgb(255, 255, 255)",
+        "color": "rgb(101, 109, 118)", "font-size": "12px", "font-weight": "600", "text-align": "left",
+        "text-wrap-mode": "nowrap", "padding-top": "8px", "padding-left": "10px",
+        "border-bottom-width": "1px",
+    },
+    "td": {
+        "padding-top": "6px", "padding-left": "10px", "border-top-width": "0px",
+        "vertical-align": "middle",
+    },
+}
+
+
+def _assert_grid_look(page: Page) -> None:
+    """The report grid still paints as it did under its old class names."""
+    got = page.evaluate(
+        """(look) => {
+          const table = document.querySelector('#archiveCard table');
+          const scroll = table.parentElement;
+          const els = {wrap: scroll.parentElement, scroll, table,
+                       th: table.querySelector('thead th'), td: table.querySelector('tbody td')};
+          const out = {};
+          for (const [role, props] of Object.entries(look)) {
+            const cs = getComputedStyle(els[role]);
+            out[role] = Object.fromEntries(Object.keys(props).map(p => [p, cs.getPropertyValue(p)]));
+          }
+          return out;
+        }""",
+        GRID_LOOK,
+    )
+    assert got == GRID_LOOK
 
 
 def _confirm(page: Page, action: str) -> None:
@@ -463,7 +510,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     assert_no_overlap(long_row.locator(".archive-files .chip"))
     # #350: at rest a row carries its file chip, the "+N more" and the ⋮ —
     # the action-row budget (design.md) — with the review levels in the menu
-    assert_action_row_budget(page.locator(".archive-table tr.archive-row"))
+    assert_action_row_budget(page.locator(".archive-grid tr.archive-row"))
     long_row.locator(".archive-files-more").click()
     expect(long_row.locator(".archive-files a.chip")).to_have_count(5)
     expect(long_row.locator(".archive-files-more")).to_have_count(0)
@@ -486,7 +533,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
 
     # #339: the table fits the window, so every row's ⋮ is on screen rather
     # than scrolled past the right edge
-    scroller = page.locator("#archiveCard .table-scroll")
+    scroller = page.locator("#archiveCard .archive-grid-scroll")
     fit = scroller.evaluate("el => [el.scrollWidth, el.clientWidth]")
     assert fit[0] <= fit[1] + 1, f"the Archive grid scrolls sideways at {DESKTOP['width']}px: {fit}"
 
@@ -525,9 +572,10 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(page.locator("#archiveAcceptAll")).to_have_text("Accept all 4 that need you")
     dismiss_toasts(page)
     _pin_scroller(page)
+    _assert_grid_look(page)
     shot(page, shots / "story-24-archive-4-desktop.png")
     # #350: the table is no ARIA grid any more — its rows are list rows
-    expect(page.locator(".archive-table")).not_to_have_attribute("role", "grid")
+    expect(page.locator(".archive-grid")).not_to_have_attribute("role", "grid")
     assert_min_target(page.locator(".archive-kebab"))
     # #424: the ⋮ is named for the menu it opens, not for the row action
     expect(stuck_row.locator(".archive-kebab")).to_have_attribute("aria-label", re.compile(r"^Actions for "))
@@ -660,7 +708,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(p.locator("nav.tabs .tab")).to_have_count(3)
     open_settings_sheet(p, "archive", tap=True)
     expect(p.locator(".archive-card")).to_have_count(7)
-    expect(p.locator(".archive-table")).to_have_count(0)
+    expect(p.locator(".archive-grid")).to_have_count(0)
 
     # 10a-1. The long `.msg` name with three attachments beside it (#173):
     #        every chip stays inside the card, cut with an ellipsis, rather
