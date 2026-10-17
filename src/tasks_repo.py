@@ -2122,18 +2122,22 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
         return []
     match = _fts_query(q)
     hits: dict[int, dict[str, Any]] = {}
+    # The task text is free-form and may itself hold ``[`` (``[WIP] fix tap``),
+    # so "did the title match" is asked of a mark that cannot occur in text; the
+    # display ``[`` ``]`` are swapped in afterwards (#440).
     for r in conn.execute(
         """
         SELECT rowid AS id, bm25(tasks_fts) AS rank,
-               snippet(tasks_fts, 0, '[', ']', '…', 12) AS s_title,
-               snippet(tasks_fts, 1, '[', ']', '…', 12) AS s_desc,
-               highlight(tasks_fts, 0, '[', ']') AS h_title
+               snippet(tasks_fts, 0, char(1), char(2), '…', 12) AS s_title,
+               snippet(tasks_fts, 1, char(1), char(2), '…', 12) AS s_desc,
+               highlight(tasks_fts, 0, char(1), char(2)) AS h_title
           FROM tasks_fts WHERE tasks_fts MATCH ? ORDER BY rank LIMIT ?
         """,
         (match, limit),
     ).fetchall():
-        matched_in = "title" if "[" in (r["h_title"] or "") else "description"
+        matched_in = "title" if "\x01" in (r["h_title"] or "") else "description"
         snippet = r["s_title"] if matched_in == "title" else r["s_desc"]
+        snippet = (snippet or "").replace("\x01", "[").replace("\x02", "]")
         hits[r["id"]] = {"rank": r["rank"], "matched_in": matched_in, "snippet": snippet}
     for r in conn.execute(
         """
