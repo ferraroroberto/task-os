@@ -556,10 +556,84 @@ ALTER TABLE tasks DROP COLUMN planned_on;
 ALTER TABLE tasks DROP COLUMN plan_order;
 """
 
+# The time tracker (#457): its own five tables, written only by
+# ``src/time_repo.py``. Two levels — an area holds categories — and both are
+# archived, never deleted, so every past entry keeps a category and its
+# totals (RESTRICT is the guard). ``person`` is a ``time.people`` id from the
+# config, never a display name. An entry's clock range is both columns or
+# neither: an entry imported from the prototype has a duration and no range,
+# and must never gain one. ``source_id`` is the prototype document id the
+# importer dedupes on. One running timer per person is the timers PK. The
+# step seeds the four areas and the Home area's ten categories (generic labels).
+_V19 = """
+CREATE TABLE time_areas (
+    id          INTEGER PRIMARY KEY,
+    slug        TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT
+);
+CREATE TABLE time_categories (
+    id          INTEGER PRIMARY KEY,
+    area_id     INTEGER NOT NULL REFERENCES time_areas(id) ON DELETE RESTRICT,
+    slug        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    hint        TEXT NOT NULL DEFAULT '',
+    position    INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    UNIQUE (area_id, slug)
+);
+CREATE TABLE time_entries (
+    id          INTEGER PRIMARY KEY,
+    person      TEXT NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES time_categories(id) ON DELETE RESTRICT,
+    day         TEXT NOT NULL CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    minutes     INTEGER NOT NULL CHECK (minutes BETWEEN 1 AND 1440),
+    started_at  TEXT,
+    ended_at    TEXT,
+    note        TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 140),
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    source_id   TEXT UNIQUE,
+    CHECK ((started_at IS NULL) = (ended_at IS NULL))
+);
+CREATE INDEX idx_time_entries_day ON time_entries(day);
+CREATE INDEX idx_time_entries_person_day ON time_entries(person, day);
+CREATE TABLE time_timers (
+    person      TEXT PRIMARY KEY,
+    category_id INTEGER NOT NULL REFERENCES time_categories(id) ON DELETE RESTRICT,
+    started_at  TEXT NOT NULL
+);
+CREATE TABLE time_guesses (
+    person      TEXT PRIMARY KEY,
+    pct         INTEGER NOT NULL CHECK (pct BETWEEN 0 AND 100),
+    updated_at  TEXT NOT NULL
+);
+INSERT INTO time_areas(slug, name, position) VALUES
+    ('home', 'Home', 0), ('work', 'Work', 1), ('personal', 'Personal', 2), ('health', 'Health', 3);
+INSERT INTO time_categories(area_id, slug, name, hint, position)
+    SELECT a.id, c.slug, c.name, c.hint, c.position
+      FROM time_areas a
+      JOIN (SELECT 'kids-care' AS slug, 'Kids: care and play' AS name,
+                   'meals, bath, bedtime, playing' AS hint, 0 AS position
+            UNION ALL SELECT 'kids-school', 'Kids: school, therapy, medical', 'homework, appointments, therapy', 1
+            UNION ALL SELECT 'kids-driving', 'Kids: driving and activities', 'school runs, classes, pickups', 2
+            UNION ALL SELECT 'cooking', 'Cooking and dishes', 'meals, clearing up, dishwasher', 3
+            UNION ALL SELECT 'cleaning', 'Cleaning and tidying', 'floors, bathrooms, picking up', 4
+            UNION ALL SELECT 'laundry', 'Laundry and ironing', 'wash, hang, fold, put away', 5
+            UNION ALL SELECT 'shopping', 'Shopping and errands', 'groceries, post, returns', 6
+            UNION ALL SELECT 'home', 'Home repairs and upkeep', 'fixing, garden, contractors', 7
+            UNION ALL SELECT 'planning', 'Planning and admin', 'school forms, bookings, bills, lists', 8
+            UNION ALL SELECT 'other', 'Other', 'anything else', 9) c
+     WHERE a.slug = 'home';
+INSERT INTO time_categories(area_id, slug, name, position)
+    SELECT id, 'general', 'General', 0 FROM time_areas WHERE slug <> 'home';
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
-    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17, 18: _V18,
+    12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17, 18: _V18, 19: _V19,
 }
 
 #: The version a freshly migrated database carries.
