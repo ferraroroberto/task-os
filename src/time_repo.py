@@ -27,6 +27,9 @@ The rules worth knowing before changing anything:
   or picked, and every entry already in it keeps showing and counting.
 - **Totals count configured people only** — the prototype's ``validEntries``
   rule, so imported totals match it; History lists every entry.
+- **An import only ever adds** (:func:`import_rows`): keyed on the prototype's
+  document id, a re-run inserts nothing, and a guess changed here after the
+  import is never overwritten by it.
 
 ``people`` arguments are the configured ``time.people`` ids
 (``TimeConfig.ids``): the repo validates against them but never reads the
@@ -40,7 +43,7 @@ import io
 import logging
 import re
 import sqlite3
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -654,3 +657,37 @@ def set_guess(conn: sqlite3.Connection, person: str, pct: int, *, people: Collec
         )
     logger.info("ℹ️ time: %s locked in a guess", person)
     return get_guesses(conn, person, people=people)
+
+
+# ------------------------------------------------------------------ import
+
+
+def import_rows(conn: sqlite3.Connection, entries: Iterable[Mapping[str, Any]],
+                guesses: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """The prototype importer's one write (``scripts/import_time_prototype.py``),
+    all of it in one transaction — any bad row and nothing lands.
+
+    ``entries`` carry ``source_id`` (the prototype document id), ``person``,
+    ``category_id``, ``day``, ``minutes``, ``note`` and ``created_at``; they are
+    stored **without** a clock range (the prototype never recorded one) and an
+    id already imported is left alone. ``guesses`` carry ``person``, ``pct``
+    and ``updated_at``; a person who already has a guess keeps it."""
+    counts = {"entries_inserted": 0, "entries_existing": 0, "guesses_inserted": 0, "guesses_existing": 0}
+    with _immediate(conn):
+        for e in entries:
+            cur = conn.execute(
+                "INSERT INTO time_entries(person, category_id, day, minutes, note, created_at, updated_at, source_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source_id) DO NOTHING",
+                (e["person"], e["category_id"], _parse_day(e["day"]).isoformat(), _check_minutes(e["minutes"]),
+                 _check_note(e["note"]), e["created_at"], e["created_at"], e["source_id"]),
+            )
+            counts["entries_inserted" if cur.rowcount else "entries_existing"] += 1
+        for g in guesses:
+            if not isinstance(g["pct"], int) or not 0 <= g["pct"] <= 100:
+                raise ValidationError(f"guess for {g['person']!r} is not a percentage")
+            cur = conn.execute(
+                "INSERT INTO time_guesses(person, pct, updated_at) VALUES (?, ?, ?) ON CONFLICT(person) DO NOTHING",
+                (g["person"], g["pct"], g["updated_at"]),
+            )
+            counts["guesses_inserted" if cur.rowcount else "guesses_existing"] += 1
+    return counts

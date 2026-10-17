@@ -8,6 +8,7 @@ flowchart LR
     cli["tasks CLI<br/>src/cli.py · tasks.bat"]
     llm["LLM / scripts<br/>(HTTP or CLI --json)"]
     notion["scripts/import_notion.py<br/>Notion REST → one-shot import"]
+    timeimp["scripts/import_time_prototype.py (#457)<br/>the time prototype's export → one-time import<br/>idempotent on source_id · duration only, no invented range<br/>unknown person / category → exit 2, nothing written"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI) · GitLab (via glab api)<br/>issues assigned to me"]
     radar["whatsapp-radar · src/task_os/client.py<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
@@ -124,6 +125,7 @@ flowchart LR
   cli -->|"triage (HTTP or local)"| ai
   cli -->|"app down: direct"| repo
   notion -->|"import_task · add_comment(ts, external_id)"| repo
+  timeimp -->|"import_rows (one transaction)"| trepo
   cli --> dates
   tasksr --> repo
   tasksr --> qa
