@@ -126,6 +126,15 @@ window.__pickerOpens = [];
 HTMLInputElement.prototype.showPicker = function () { window.__pickerOpens.push(this.className); };
 """
 
+# Where story 25's first shot frames the open drawer: its "More fields" row 784 px
+# below the drawer's top edge, whatever the drawer was scrolled to getting there.
+_FRAME_MORE_FIELDS_JS = """() => {
+  const d = document.querySelector('#taskDrawer');
+  const row = d.querySelector('details.drawer-more > summary');
+  const top = row.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
+  d.scrollTop = Math.round(top) - 784;
+}"""
+
 
 # ----------------------------------------------------------- desktop leg
 
@@ -554,7 +563,18 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     label = "'every 7 weeks on Saturday'"
     expect(page.locator(f".trow-recur[title={label}], .due-recur[title={label}]").first).to_be_attached()
     expect(every).to_have_value("7")
+    # The Every field already reads 7 before the drawer's re-render lands, so that
+    # check settles nothing: the new activity rows are what the redraw adds (#459).
+    expect(drawer.locator(".activity-row").nth(0)).to_contain_text("recurrence_anchor")
+    expect(drawer.locator(".activity-row").nth(1)).to_contain_text("recurrence_interval")
     page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    # Frame the drawer rather than inherit its scroll offset (#459). Where it ends
+    # up is whatever Playwright's scroll-into-view and the redraws between them
+    # left, against a layout that was still moving (the drawer's content grows by
+    # tens of pixels as each redraw lands), so one capture sat 46 px off the
+    # baseline with every pixel of content identical. Park the "More fields" row at
+    # the offset the baseline shows it, in the settled layout.
+    page.evaluate(_FRAME_MORE_FIELDS_JS)
     shot(page, shots / "story-25-recurrence-interval-1-desktop.png")
 
     old_due = date.fromisoformat(review["due"])
