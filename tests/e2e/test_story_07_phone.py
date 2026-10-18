@@ -26,6 +26,10 @@ allowed on screen). What a browser can prove of the story:
   the project name cut at 390px; links in the menu), is passive; the date moves through the
   kebab's "Move…" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
   rows run edge to edge;
+- the drawer's parent tools (#468): Change parent opens the picker as a
+  full-screen sheet (no sideways scroll, 44px controls), the filter narrows it
+  to open tasks that are not the task or its children, a tap files the task
+  under the pick, Remove parent takes it back out;
 - the row's swipes, with synthetic touch pointers (#311): left opens the date
   sheet and writes nothing, a touch starting in the 20px edge zone is ignored,
   right completes with Undo. The feel of the gesture on a real iPhone is the
@@ -47,6 +51,7 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-8-desktop.png  /login on the desktop
     docs/screenshots/story-07-phone-9-phone.png    a slim row's tap targets (#311)
     docs/screenshots/story-07-phone-10-phone.png   the date sheet, a date beside each phrase (#391)
+    docs/screenshots/story-07-phone-11-phone.png   the parent picker, full-screen (#468)
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -325,9 +330,52 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         # deleted below: pulling it out from under the in-flight GETs aborts
         # them, and WebKit reports an aborted request as a page error.
         page.wait_for_load_state("networkidle")
+
+        # The drawer's parent tools (#468) on the phone: Change parent opens the
+        # picker as a full-screen sheet over the full-screen drawer.
+        row.locator(".trow-main").tap()
+        drawer = page.locator("#taskDrawer")
+        expect(drawer.locator("#drawerTitle")).to_have_value("Wire the moisture sensor")
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text([project["title"]])
+        tools = drawer.locator(".drawer-parent-tools button")
+        expect(tools).to_have_text(["Change parent", "Remove parent"])
+        assert_min_target(tools)
+        drawer.locator(".drawer-change-parent").tap()
+        picker = page.locator("dialog#parentDialog")
+        expect(picker).to_be_visible()
+        expect(picker.locator("h2")).to_have_text("Change parent")
+        vp = page.viewport_size
+        box = picker.bounding_box()
+        assert box and box["width"] >= vp["width"] - 0.5 and box["height"] >= vp["height"] - 0.5, (box, vp)
+        filt = picker.locator(".parent-filter")
+        assert filt.bounding_box()["height"] >= 44
+        assert_min_target(picker.locator(".parent-opt"))
+        assert_no_horizontal_overflow(page)
+        # the task itself and its child are not offered; the placeholder counts
+        offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
+        assert "Wire the moisture sensor" not in offered and "Solder the header pins" not in offered, offered
+        assert "Order the sensor cable" in offered and project["title"] in offered, offered
+        expect(filt).to_have_attribute("placeholder", f"Filter {len(offered)} open tasks")
+        shot(page, shots / "story-07-phone-11-phone.png")
+        filt.fill("sensor cable")
+        expect(picker.locator(".parent-opt:visible")).to_have_count(1)
+        picker.locator(".parent-opt:visible").tap()
+        expect(picker).to_be_hidden()
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Order the sensor cable"])
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] == blocker["id"]
+        # Remove parent: one tap, no confirmation
+        drawer.locator(".drawer-remove-parent").tap()
+        expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
+        expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
+        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] is None
+        drawer.locator(".drawer-close").tap()
+        expect(drawer).to_be_hidden()
+        page.wait_for_load_state("networkidle")
     finally:
-        # the project takes the task and its child with it
+        # the project takes the task and its child with it — unless the parent
+        # tools' leg took the task out of it, so the task goes on its own too
         page.request.delete(f"{base}/api/tasks/{project['id']}")
+        page.request.delete(f"{base}/api/tasks/{task['id']}")
         page.request.delete(f"{base}/api/tasks/{blocker['id']}")
 
 

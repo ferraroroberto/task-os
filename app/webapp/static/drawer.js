@@ -6,7 +6,8 @@
  *
  * Ordered by how often each part is used (#394, decision 7 on #390): most
  * edits are a due date pushed out, so Due comes first with its quick moves.
- * Top to bottom: breadcrumb → editable title → Due (the field, then the date
+ * Top to bottom: breadcrumb → its parent tools (Change parent, and Remove
+ * parent when there is one, #468) → editable title → Due (the field, then the date
  * sheet's phrases as one-tap moves, push-outs first, each with its date) →
  * status and priority → links as pills (the folder, the linked issue, every
  * link: open-only, the editors are under More fields) → description
@@ -17,8 +18,7 @@
  * sync's rows fold behind one toggle) → **More fields**, closed until opened
  * and then kept open for the page's life: starts, recurrence + its every-N
  * interval + its fixed-day anchor when the cadence takes one, person, code,
- * move-to (re-parent without the tree drag, the phone's path) → folder (the
- * ref as an opener chip, an editor that folds a pasted absolute path onto the
+ * folder (the ref as an opener chip, an editor that folds a pasted absolute path onto the
  * placeholders, a picker over the folder index — Step 9) → link editor
  * (label edit, remove, add) → blocked by (#100) → children (click to
  * navigate, add child) → issue panel: the linked issue (provider glyph,
@@ -42,6 +42,7 @@ import {
 } from './format.js';
 import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
 import { RECURRENCES, anchorOptions, intervalUnit } from './recurrence.js';
+import { openParentPicker } from './parentpick.js';
 import { statusOptions } from './rows.js';
 import { DUE_OPTIONS, phraseButtons } from './snooze.js';
 import { toast } from './toast.js';
@@ -57,7 +58,7 @@ let moreOpen = false;
  * @param {HTMLElement} el     the <aside id="taskDrawer">
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
- *          projects: () => Array<{id:number,title:string,depth?:number}>,
+ *          parentTargets: (id:number) => Array<{id:number,title:string,depth:number,path:string}>,
  *          allTasks: () => Array<{id:number,title:string,depth?:number}>,
  *          onMove: (id:number, parentId:number|null) => Promise<any>,
  *          onStatus: (id:number, status:string) => Promise<any>,
@@ -334,35 +335,6 @@ export function createDrawer(el, opts) {
     return wrap;
   }
 
-  /** "Move to…" — re-parent from the drawer (the phone has no tree drag):
-   *  projects + top level; the server's cycle guard answers a bad target. */
-  function moveField(t) {
-    const wrap = document.createElement('label');
-    wrap.className = 'field';
-    const l = document.createElement('span');
-    l.className = 'field-label';
-    l.textContent = 'Move to';
-    const sel = document.createElement('select');
-    sel.className = 'select-native field-control';
-    sel.dataset.field = 'parent';
-    const options = [{ id: '', title: 'top level', depth: 0 }]
-      .concat((opts.projects ? opts.projects() : []).filter(function (p) { return p.id !== t.id; }));
-    options.forEach(function (p) {
-      const o = document.createElement('option');
-      o.value = p.id === '' ? '' : String(p.id);
-      o.textContent = (p.depth ? ' '.repeat(p.depth) : '') + p.title;
-      if (String(p.id) === String(t.parent_id == null ? '' : t.parent_id)) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', function () {
-      const v = sel.value === '' ? null : Number(sel.value);
-      if (v === (t.parent_id == null ? null : t.parent_id)) return;
-      opts.onMove(t.id, v);   // toasts + refreshes; a cycle comes back as a toast
-    });
-    wrap.append(l, sel);
-    return wrap;
-  }
-
   function render() {
     const t = current;
     el.innerHTML = '';
@@ -402,6 +374,31 @@ export function createDrawer(el, opts) {
     close.addEventListener('click', function () { opts.onClose(); });
     head.append(crumbs, close);
     el.appendChild(head);
+
+    // ---- parent tools (#468): the breadcrumb is where the owner looks for the parent
+    const tools = document.createElement('div');
+    tools.className = 'drawer-parent-tools';
+    const change = document.createElement('button');
+    change.type = 'button';
+    change.className = 'button-ghost drawer-change-parent';
+    change.setAttribute('aria-label', 'Change parent of ' + t.title);
+    change.innerHTML = icon('corner-down-right') + '<span>Change parent</span>';
+    change.addEventListener('click', function () {
+      openParentPicker(t, opts.parentTargets ? opts.parentTargets(t.id) : [], function (parentId) {
+        opts.onMove(t.id, parentId);   // toasts + refreshes; a cycle comes back as a toast
+      });
+    });
+    tools.appendChild(change);
+    if (t.parent_id != null) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'button-ghost drawer-remove-parent';
+      remove.setAttribute('aria-label', 'Remove parent of ' + t.title);
+      remove.innerHTML = icon('x') + '<span>Remove parent</span>';
+      remove.addEventListener('click', function () { opts.onMove(t.id, null); });
+      tools.appendChild(remove);
+    }
+    el.appendChild(tools);
 
     // ---- title (editable)
     const titleRow = document.createElement('div');
@@ -574,7 +571,6 @@ export function createDrawer(el, opts) {
       return p ? p.name : '—';
     }));
     fields.appendChild(textField('Code', 'code', t.code, 'optional'));
-    fields.appendChild(moveField(t));
     more.body.append(
       fields,
       folderSection(t),        // Step 9
@@ -1203,9 +1199,9 @@ export function createDrawer(el, opts) {
     return issue;
   }
 
-  /** "Blocked by" (#100): the open blockers as removable rows, a Move-to-style
-   *  picker to add one — the server's cycle guard answers a bad pick, same as
-   *  the "Move to" field answers a bad re-parent. */
+  /** "Blocked by" (#100): the open blockers as removable rows, a select
+   *  to add one — the server's cycle guard answers a bad pick, same as it
+   *  answers a bad re-parent from Change parent. */
   function blockedBySection(t) {
     const sec = section('blocked', 'Blocked by', 'lock');
     const list = document.createElement('div');

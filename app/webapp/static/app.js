@@ -52,6 +52,7 @@ import {
 import { addDays, STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
+import { parentTargets } from './parentpick.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
@@ -223,9 +224,8 @@ async function loadStatus() {
 }
 
 /** Every open task, not just projects — the blocker picker (#100) offers any
- *  open task (a closed blocker gates nothing, #309), unlike Move-to which only
- *  offers a re-parent target. A closed project kept in the forest for its open
- *  descendants is context there, not an option. */
+ *  open task (a closed blocker gates nothing, #309). A closed project kept in
+ *  the forest for its open descendants is context there, not an option. */
 function flattenOpen(forest) {
   const out = [];
   (function walk(nodes) {
@@ -253,7 +253,7 @@ function beginLoad(resource) { return ++loadSeq[resource]; }
 function isLatest(resource, seq) { return loadSeq[resource] === seq; }
 
 /** The boot reads the open forest plus the project list (closed projects
- *  included, so the filter and Move-to lose nothing). */
+ *  included, so the project filter loses nothing). */
 async function loadTree(seq) {
   const res = await Promise.all([api('/api/tasks/tree?descriptions=false'), api('/api/projects')]);
   if (!isLatest('tree', seq)) return;
@@ -1300,7 +1300,7 @@ async function boot() {
     onOpen: openTask,
     onClose: closeTask,
     people: function () { return state.people; },
-    projects: function () { return state.projects; },
+    parentTargets: function (id) { return parentTargets(state.tree, id); },
     allTasks: function () { return state.taskIndex; },
     onMove: moveTask,
     onStatus: setStatus,
