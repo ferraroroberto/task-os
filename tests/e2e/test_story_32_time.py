@@ -2,7 +2,8 @@
 
     Open Time → pick who this device is → start a timer → switch it → stop and
     save → add time already spent → edit that entry to the other person →
-    read Totals on Home → lock in a guess and see the other one.
+    read Totals on Home → lock in a guess and see the other one → in Settings,
+    add a category by mistake and delete it (#463).
 
 One seeded disposable instance (the sample config's placeholder people ``p1``
 "Person 1" and ``p2`` "Person 2", the synthetic seed's fortnight of time). Its
@@ -12,7 +13,9 @@ ticking value. The second device is the API (``page.request``), the way a
 phone's request reaches the same server: its timer is independent, a second
 start for the same person is a 409, a second stop is a 409 that saves
 nothing. Every rule behind those answers is unit-tested in tests/test_time.py;
-this walk proves the screen says the same.
+this walk proves the screen says the same. The Settings leg runs after the
+last desktop shot, so it frames nothing: Delete is offered only on a category
+nothing points at, and the server refuses a used one with its own code.
 
 Shots:
     docs/screenshots/story-32-time-1-desktop.png  Log: today per person, the running timer
@@ -28,7 +31,13 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
-from tests.e2e.conftest import E2E_ANCHOR, dismiss_toasts, shot
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    close_settings_sheet,
+    dismiss_toasts,
+    open_settings_sheet,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -156,6 +165,27 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
         expect(csv).to_have_attribute("href", "/api/time/entries.csv?period=7&area=home")
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-3-desktop.png", full_page=True)
+
+        # ---- Settings → Time categories: a category made by mistake can be deleted, a used one cannot
+        cats = open_settings_sheet(page, "timecats")
+        menu_items = page.locator(".time-admin-menu [role=menuitem]")
+        cats.get_by_role("button", name="Area actions: Home").click()
+        menu_items.filter(has_text="Add category").click()
+        dialog.locator("input").fill("Made by mistake")
+        dialog.get_by_role("button", name="Add").click()
+        expect(cats.locator(".action-row-title", has_text="Made by mistake")).to_have_count(1)
+        cats.get_by_role("button", name="Category actions: Cooking and dishes").click()
+        expect(menu_items.filter(has_text="Delete")).to_have_count(0)        # it has entries: archive only
+        page.keyboard.press("Escape")
+        cats.get_by_role("button", name="Category actions: Made by mistake").click()
+        menu_items.filter(has_text="Delete").click()
+        confirm = page.locator("#confirmDialog")
+        expect(confirm.locator("h2")).to_have_text("Delete Made by mistake?")
+        confirm.get_by_role("button", name="Delete category").click()
+        expect(cats.locator(".action-row-title", has_text="Made by mistake")).to_have_count(0)
+        used = page.request.delete(f"{base}/api/time/categories/1")
+        assert used.status == 409 and used.json()["error"]["code"] == "category_in_use"
+        close_settings_sheet(page)
     finally:
         context.close()
 

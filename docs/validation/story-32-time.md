@@ -1,6 +1,6 @@
 # Story 32 — track time and compare shares (#457)
 
-**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The first visit on a device asks who is tracking time there, a label for that device and not a sign-in. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals on the Home area compare the people's logged shares and hide the other person's guess until yours is locked in.
+**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The first visit on a device asks who is tracking time there, a label for that device and not a sign-in. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals on the Home area compare the people's logged shares and hide the other person's guess until yours is locked in. In Settings → Time categories, a category added by mistake can be deleted; one with entries cannot (#463).
 
 ## Steps and expected
 
@@ -17,6 +17,7 @@
 | 9 | Add time already spent: Cleaning, 30 | The start defaults to 08:30 (it just ended at the pinned 09:00); saved |
 | 10 | History, edit that entry to Person 2 | The row read *08:30 to 09:00 · 30m · Person 1*, then *… · Person 2*; Person 1's today drops by exactly 30 and Person 2's rises by 30; the row menu holds Edit, Start again, Delete |
 | 11 | Totals, area Home, guess 40 | The head-to-head, split bar and coverage line; no table until the guess is locked; then Person 2's 60% shows and *The guesses add up to 100%*; the CSV link carries the period and area |
+| 11b | Settings → Time categories: add *Made by mistake* to Home, open its menu, Delete, confirm (#463) | *Cooking and dishes* (it has entries) offers no Delete; the new one does, the confirm reads *Delete Made by mistake?*, and the row goes; `DELETE` on a used category is 409 `category_in_use` |
 | 12 | Phone (390, dark), pick Person 2 | Log fits with no sideways scroll; the view segments are 44px targets |
 
 ## Proof
@@ -29,6 +30,8 @@
 **2026-10-18, before closing #457:** a second scripted walk on two disposable instances covered what the story's pinned clocks cannot. With the browser in another time zone (UTC−11, a day behind the server), Add time already spent defaults to the server's day and the entry lands on it. A timer aged four hours on the server shows the forgotten-timer warning, and the corrected 25 minutes are what is saved, on the day the timer started (the day before: the midnight rule, live). A category archived from Settings → Time categories leaves the start list and still shows in History and Totals. An instance with no `time` block has no picker, one *Me* row, and no head-to-head, guess card or Me · Everyone switch.
 
 Result: **verified** (e2e desktop and phone, unit, scripted walk, 2026-10-18). **Not verified:** two real devices at the same moment on the live install (a timer started on the phone and stopped on the PC, an edit moving an entry between people). The walk on the live install would write to the real database, so it is the owner's checklist below.
+
+**2026-10-18, #463 (delete an empty category):** step 11b runs after the last desktop shot, so the gallery is unchanged. Unit: `test_only_a_category_nothing_points_at_can_be_deleted` (an entry or a running timer blocks it, archived or not; the area closes the gap; a discarded timer frees it) and the delete leg of `test_api_area_and_category_admin` (204, 404, 409 `category_in_use`, `in_use` in the meta). Result: **verified** (e2e desktop, unit).
 
 ### Owner's checklist
 

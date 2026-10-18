@@ -354,6 +354,38 @@ def test_areas_and_categories_are_added_renamed_moved_and_reordered(conn: sqlite
         repo.update_category(conn, cat(conn, "general", "work"), area_id=hobby["id"])
 
 
+def _home(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return next(a for a in repo.list_areas(conn) if a["slug"] == "home")["categories"]
+
+
+def test_only_a_category_nothing_points_at_can_be_deleted(conn: sqlite3.Connection) -> None:
+    home = next(a for a in repo.list_areas(conn) if a["slug"] == "home")
+    mistake = repo.create_category(conn, home["id"], "Made by mistake")
+    assert mistake["in_use"] is False
+    cooking, laundry = cat(conn, "cooking"), cat(conn, "laundry")
+    repo.create_entry(conn, person="p1", category_id=cooking, day="2026-10-17", minutes=10, people=PEOPLE)
+    repo.start_timer(conn, "p2", laundry, people=PEOPLE)
+    flagged = {c["slug"]: c["in_use"] for c in _home(conn)}
+    assert flagged["cooking"] is True and flagged["laundry"] is True and flagged["made-by-mistake"] is False
+    # an entry or a running timer blocks it, archived or not
+    repo.update_category(conn, cooking, archived=True)
+    for used in (cooking, laundry):
+        with pytest.raises(repo.CategoryInUse):
+            repo.delete_category(conn, used)
+    # the empty one goes, and the area closes the gap it left
+    repo.update_category(conn, mistake["id"], position=0)
+    repo.delete_category(conn, mistake["id"])
+    assert "made-by-mistake" not in {c["slug"] for c in _home(conn)}
+    assert [c["position"] for c in _home(conn)] == list(range(len(_home(conn))))
+    with pytest.raises(NotFound):
+        repo.delete_category(conn, mistake["id"])
+    # once the timer is discarded, laundry has nothing pointing at it
+    repo.discard_timer(conn, "p2")
+    assert repo.update_category(conn, laundry, name="Laundry")["in_use"] is False
+    repo.delete_category(conn, laundry)
+    assert repo.category_by_slug(conn, "home", "laundry") is None
+
+
 # ------------------------------------------------------------------ totals
 
 
@@ -503,6 +535,16 @@ def test_api_area_and_category_admin(client: TestClient) -> None:
     archived = client.patch(f"/api/time/categories/{c.json()['id']}", json={"archived": True})
     assert archived.json()["archived"] is True
     assert client.patch(f"/api/time/areas/{area.json()['id']}", json={"name": "Learning"}).json()["name"] == "Learning"
+    # delete: an empty category goes (204), a used one is refused with its own code, a gone one is 404
+    assert client.delete(f"/api/time/categories/{c.json()['id']}").status_code == 204
+    assert client.delete(f"/api/time/categories/{c.json()['id']}").status_code == 404
+    used = client.get("/api/time/meta").json()["areas"][0]["categories"][0]
+    day = client.get("/api/time/meta").json()["today"]
+    client.post("/api/time/entries", json={"person": "p1", "category_id": used["id"], "day": day, "minutes": 5})
+    assert next(x for x in client.get("/api/time/meta").json()["areas"][0]["categories"]
+                if x["id"] == used["id"])["in_use"] is True
+    refused = client.delete(f"/api/time/categories/{used['id']}")
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "category_in_use"
 
 
 def test_api_time_routes_are_gated_off_loopback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
