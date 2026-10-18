@@ -2,7 +2,8 @@
 
     Open Time → pick who this device is → start a timer → switch it → stop and
     save → add time already spent → edit that entry to the other person →
-    read Totals on Home → lock in a guess and see the other one → in Settings,
+    read Totals, which opens on Home at 30 days → lock in a guess and see the
+    other one → in Settings,
     add a category with a subtitle, see it in Log, clear the subtitle, and
     delete the category made by mistake (#463).
 
@@ -21,7 +22,7 @@ nothing points at, and the server refuses a used one with its own code.
 Shots:
     docs/screenshots/story-32-time-1-desktop.png  Log: today per person, the running timer
     docs/screenshots/story-32-time-2-desktop.png  History: clock ranges, the moved entry
-    docs/screenshots/story-32-time-3-desktop.png  Totals on Home: head-to-head, guesses revealed
+    docs/screenshots/story-32-time-3-desktop.png  Totals (Home, 30 days by default): head-to-head, guesses revealed
     docs/screenshots/story-32-time-4-phone.png    Log on the phone (dark), the other person
 """
 
@@ -149,9 +150,10 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-2-desktop.png")
 
-        # ---- Totals on Home: the comparison, then a guess that reveals the other
+        # ---- Totals opens on Home at 30 days (#463): the comparison, then a guess that reveals the other
         page.locator("#timeViews [data-view='totals']").click()
-        page.locator(".time-area").select_option("home")
+        expect(page.locator(".time-area")).to_have_value("home")
+        expect(page.locator(".time-period .segmented-item[aria-pressed='true']")).to_have_text("30 days")
         compare = page.locator("#timeTotals .time-compare")
         expect(compare).to_be_visible()
         expect(compare.locator(".time-coverage")).to_contain_text("Days with something logged: Person 1")
@@ -163,7 +165,7 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
         expect(guess.locator("table tbody tr").nth(1).locator("td").nth(1)).to_have_text("60%")
         expect(guess.locator(".time-card-note")).to_have_text("The guesses add up to 100%. Accurate views would add up to 100%.")
         csv = page.locator("#timeTotals .time-csv")
-        expect(csv).to_have_attribute("href", "/api/time/entries.csv?period=7&area=home")
+        expect(csv).to_have_attribute("href", "/api/time/entries.csv?period=30&area=home")
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-3-desktop.png", full_page=True)
 
