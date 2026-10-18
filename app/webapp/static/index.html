@@ -446,11 +446,15 @@
           </button>
           <div class="bulk-bar" id="boardBulk" hidden></div>
         </div>
-        <!-- The line under the strip (#396): Mine · Issues · All (scope.js),
-             then board.js's Week · Status segment and, in Status mode while
-             the Inbox holds tasks, Triage. -->
+        <!-- The line under the strip (#396): Mine · Everyone (#477, two or more
+             members) and Tasks · Issues · All (scope.js), then board.js's
+             Week · Status segment and, in Status mode while the Inbox holds
+             tasks, Triage. -->
         <div class="board-bar" id="boardBar">
-          <div class="scope-host" id="boardScope" hidden></div>
+          <div class="view-switches">
+            <div class="scope-host whose-host" id="boardWhose" hidden></div>
+            <div class="scope-host" id="boardScope" hidden></div>
+          </div>
         </div>
         <!-- Week lanes or the status columns (board.js): side by side on a
              wide screen; on the phone Week is one list, Status a carousel. -->
@@ -475,9 +479,13 @@
           </button>
           <div class="bulk-bar" id="todayBulk" hidden></div>
         </div>
-        <!-- Mine · Issues · All (#391): the vendored segmented control over the
-             shared filter state's `scope` key (scope.js). -->
-        <div class="scope-host" id="todayScope" hidden></div>
+        <!-- Mine · Everyone (#477, two or more members) and Tasks · Issues ·
+             All (#391): the vendored segmented control over the shared filter
+             state's `whose` and `scope` keys (scope.js). -->
+        <div class="view-switches">
+          <div class="scope-host whose-host" id="todayWhose" hidden></div>
+          <div class="scope-host" id="todayScope" hidden></div>
+        </div>
         <!-- Due ≤ today grouped by project, sorted by due within a group;
              "Later this week" collapsed below (today.js). The phone's
              landing tab. -->

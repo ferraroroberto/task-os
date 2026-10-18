@@ -35,6 +35,9 @@ one-column scroll-snap carousel — with the geometry checks:
     docs/screenshots/story-05-board-14-phone.png  (Board Week mode, one list)
     docs/screenshots/story-05-board-10-phone.png  (§ #81 Select mode + bulk bar)
     docs/screenshots/story-05-board-15-{desktop,phone}.png  (§ #476 the drawer's Owner)
+    docs/screenshots/story-05-board-16-desktop.png          (§ #477 Everyone on the Board)
+    docs/screenshots/story-05-board-{17,18}-phone.png       (§ #477 a second member's phone: Mine, Everyone)
+    docs/screenshots/story-05-board-19-phone-dark.png       (§ #477 their Board, dark)
 
 § #81 (multi-select, folded into this story rather than a 15th e2e test, the
 way #77 rides inside story 09): Select mode across Board and Today over ONE
@@ -46,6 +49,15 @@ selection to the second member in one pick, and the drawer's Owner — in the
 head beside status and priority, on the desktop panel and the phone's
 full-screen drawer — hands one task over, logs ``owner old → new`` by name,
 and a reload keeps it.
+
+§ #477 (Mine · Everyone, same reason): the pages open on the signed-in member's
+own tasks, so the tasks the bulk bar just handed to the second member leave
+the Board and Everyone — one tap, kept per device and mirrored in ``?whose=`` —
+brings them back (``_walk_whose_switch``); a phone signed in as that second
+member (the owner's loopback is member one) lands on their own tasks, taps
+Everyone, reloads and is still on it while a second device is unaffected
+(``_walk_second_member_phone``); an install with one member has no switch at all
+(``_walk_one_member``). The existing scope reads Tasks · Issues · All.
 
 § #99 (``_walk_keyboard_actions``, same reason): a keyboard-only triage —
 the row keys and their undo, the inert-while-typing and inert-while-the-
@@ -122,12 +134,16 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import (
     E2E_ANCHOR,
+    E2E_P2_TOKEN,
+    _boot,
     _get,
+    _terminate,
     assert_action_row_budget,
     assert_date_sheet,
     board_mode,
     close_filter_sheet,
     dismiss_toasts,
+    e2e_workdir,
     filter_button,
     open_filter_sheet,
     scroll_to_bottom,
@@ -197,7 +213,9 @@ def _lane_of(due: str | None) -> str:
 
 # ----------------------------------------------------------- desktop leg
 
-def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Playwright, shots: Path) -> None:
+def test_desktop_board_day(
+    seeded_webapp: str, authed_webapp: str, browser: Browser, playwright: Playwright, shots: Path
+) -> None:
     """The desktop walk, then the phone leg on the same instance.
 
     One collected test, not two: the phone leg was its own test function until
@@ -703,6 +721,15 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
             log = next(a for a in detail["activity"] if a["field"] == "owner")
             assert (log["old_value"], log["new_value"]) == ("p1", "p2"), log
         assert _get(base, f"/api/tasks/{ids[1]}")["owner"] == "p1"
+        # 11c. The page opened on the owner's own tasks (#477), so the two just
+        #      handed to the second member are off the Board; Everyone, one tap
+        #      away, brings them back — the rest of the walk goes on under it.
+        for i in (ids[0], ids[2]):
+            expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(0)
+        expect(page.locator("#boardWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+        page.locator("#boardWhose .whose-switch .segmented-item[data-whose='everyone']").click()
+        for i in (ids[0], ids[2]):
+            expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(1)
 
         # 12. A bulk move (#392): the bar's Move opens the one date sheet a row
         #     opens — the push-outs, each beside its date — and a pick moves the
@@ -743,6 +770,8 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         page.keyboard.press("Escape")                    # the row keys are inert under the drawer
         expect(page.locator("#taskDrawer")).to_be_hidden()
 
+        _walk_whose_switch(page, base, shots, ids[0])
+
         _walk_keyboard_actions(page, base, shots)
         _walk_done_journal(page, base, shots)
         _walk_delete_task(page, base, shots)
@@ -752,6 +781,238 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
     finally:
         context.close()
     _walk_phone_today_landing_and_board_carousel(base, playwright, shots)
+    _walk_second_member_phone(authed_webapp, playwright, shots)
+    _walk_one_member(playwright)
+
+
+_JSON = {"content-type": "application/json"}
+
+
+def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
+    """§ #477 — Mine · Everyone on the Board (Today shares the key), as the owner.
+
+    Step 11c left this device on Everyone with the second member's task
+    ``handed`` on the Board. The pick is the device's (``task-os.whose``) and
+    the URL's (``?whose=everyone``, Mine writing no key); an explicit URL value
+    beats the stored one, and reading a link never rewrites the device's pick.
+    The journal follows the switch. Leaves the device on Mine, the task back
+    with the owner, as the rest of the story expects.
+    """
+    switch = page.locator("#boardWhose .segmented.whose-switch")
+    item = lambda who: switch.locator(f".segmented-item[data-whose='{who}']")  # noqa: E731
+    pressed = switch.locator(".segmented-item[aria-pressed='true']")
+    row = page.locator(f"#paneBoard .trow[data-id='{handed}']")
+    stored = "() => localStorage.getItem('task-os.whose')"
+
+    def board(url: str) -> None:
+        page.goto(f"{base}{url}")
+        page.click("nav.tabs .tab[data-tab='board']")
+
+    def hand(task_id: int, owner: str) -> None:
+        res = page.request.post(f"{base}/api/tasks/bulk", data=json.dumps({"ids": [task_id], "owner": owner}),
+                                headers=_JSON)
+        assert res.ok, res.status
+
+    # 1. Everyone, from step 11c: on the URL, on the device, the row on the Board
+    expect(pressed).to_have_text("Everyone")
+    expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
+    assert page.evaluate(stored) == "everyone"
+    expect(row).to_be_visible()
+    expect(switch.locator(".segmented-item")).to_have_text(["Mine", "Everyone"])
+    _clear_toasts(page)
+    shot(page, shots / "story-05-board-16-desktop.png")
+    # 2. the scope beside it reads Tasks · Issues · All and is its own axis
+    expect(page.locator("#boardScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+    # 3. a reload keeps Everyone even with the key gone from the address
+    board("/")
+    expect(pressed).to_have_text("Everyone")
+    expect(row).to_be_visible()
+    # 4. an explicit ?whose=mine beats the stored Everyone, and only the tap
+    #    rewrites the device's pick
+    board("/?whose=mine")
+    expect(pressed).to_have_text("Mine")
+    expect(row).to_have_count(0)
+    assert page.evaluate(stored) == "everyone"
+    # 5. …the journal follows: a closed task of the second member's is off it on
+    #    Mine and on it under Everyone (the seed's, handed over and back)
+    kettle = _get(base, "/api/tasks?q=descale%20the%20kettle&include_closed=true")["items"][0]
+    hand(kettle["id"], "p2")
+    journal_row = page.locator("#journalHost .trow", has=page.locator(".trow-title", has_text="Descale the kettle"))
+    page.goto(f"{base}/?whose=mine#journal")
+    expect(page.locator("#paneJournal")).to_be_visible()
+    expect(page.locator("#journalHost .trow").first).to_be_visible()
+    expect(journal_row).to_have_count(0)
+    page.goto(f"{base}/?whose=everyone#journal")
+    expect(journal_row).to_have_count(1)
+    hand(kettle["id"], "p1")
+    # 6. Mine by the tap, then an explicit ?whose=everyone beats the stored Mine
+    board("/?whose=mine")
+    item("everyone").click()
+    item("mine").click()
+    assert page.evaluate(stored) == "mine"
+    expect(page).not_to_have_url(re.compile(r"[?&]whose="))
+    board("/?whose=everyone")
+    expect(pressed).to_have_text("Everyone")
+    expect(row).to_be_visible()
+    assert page.evaluate(stored) == "mine"
+    # 7. the way back: the task to the owner, the device on Mine, no key
+    hand(handed, "p1")
+    board("/")
+    expect(pressed).to_have_text("Mine")
+    expect(row).to_be_visible()
+
+
+_LABELS_FIT_JS = """sel => [...document.querySelectorAll(sel)].filter(b => b.offsetParent).map(b => {
+  const r = document.createRange(); r.selectNodeContents(b);
+  const t = r.getBoundingClientRect(), box = b.getBoundingClientRect();
+  return t.left >= box.left - 0.5 && t.right <= box.right + 0.5;
+})"""
+
+
+def _assert_labels_fit(page: Page, selector: str) -> None:
+    """Every segment's label sits inside its own segment (a crowded row ran
+    "Mine" into "Everyone" on a phone while every box still met the 44px rule)."""
+    fits = page.evaluate(_LABELS_FIT_JS, selector)
+    assert fits and all(fits), (selector, fits)
+
+
+def _walk_second_member_phone(base: str, playwright: Playwright, shots: Path) -> None:
+    """§ #477 — a phone signed in as the second member: no picker step, their own
+    tasks first, Everyone one tap, kept across a reload and per device.
+
+    ``base`` is the instance with a token for each member. The owner's loopback
+    browser is member one; presenting the second member's token (the cookie the
+    /login page sets) makes this one member two. Two tasks are theirs; the seed's
+    are the owner's. Search covers everyone either way (story 10).
+    """
+    api = playwright.request.new_context(base_url=base)
+    try:
+        for title in ("Water the ferns", "Order paint samples"):
+            res = api.post("/api/tasks", data={"title": title, "owner": "p2", "due": E2E_ANCHOR.isoformat()})
+            assert res.ok, res.status
+    finally:
+        api.dispose()
+    try:
+        wk = playwright.webkit.launch(headless=True)
+    except Exception as exc:  # noqa: BLE001 — a missing browser is a hard failure, named
+        pytest.fail(f"WebKit is required for the phone leg: {exc}")
+    try:
+        def phone(scheme: str = "light", *, member: bool = True):
+            ctx = wk.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True,
+                                 color_scheme=scheme)
+            if member:
+                ctx.add_cookies([{"name": "taskos_token", "value": E2E_P2_TOKEN, "url": base}])
+            return ctx
+
+        def owners(page: Page) -> set[str]:
+            ids = page.locator("#paneToday .trow[data-id]").evaluate_all("els => els.map(e => e.dataset.id)")
+            assert ids, "Today shows rows"
+            return {_get(base, f"/api/tasks/{i}")["owner"] for i in ids}
+
+        context = phone()
+        try:
+            page = context.new_page()
+            page.goto(f"{base}/")
+            assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
+            # 1. no picker: Today opens on their own tasks, the switch says Mine
+            expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+            whose = page.locator("#todayWhose .segmented.whose-switch")
+            pressed = whose.locator(".segmented-item[aria-pressed='true']")
+            expect(pressed).to_have_text("Mine")
+            expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+            for title in ("Water the ferns", "Order paint samples"):
+                expect(_today_row(page, title)).to_be_visible()
+            assert owners(page) == {"p2"}
+            expect(page).not_to_have_url(re.compile(r"[?&]whose="))
+            assert_min_target(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
+            assert_no_overlap(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
+            _assert_labels_fit(page, "#todayWhose .segmented-item, #todayScope .segmented-item")
+            assert_no_horizontal_overflow(page)
+            shot(page, shots / "story-05-board-17-phone.png")
+            # 2. one tap on Everyone: both members' tasks, the choice in the URL and on the device
+            whose.locator(".segmented-item[data-whose='everyone']").tap()
+            expect(pressed).to_have_text("Everyone")
+            expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
+            page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
+            assert owners(page) == {"p1", "p2"}
+            shot(page, shots / "story-05-board-18-phone.png")
+            # 3. the pick follows to the Board (one filter state) and survives a reload
+            page.click("nav.tabs .tab[data-tab='board']")
+            expect(page.locator("#boardWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
+            assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
+            _assert_labels_fit(page, "#boardBar .segmented-item")
+            assert_no_horizontal_overflow(page)
+            page.goto(f"{base}/")
+            page.click("nav.tabs .tab[data-tab='today']")
+            expect(pressed).to_have_text("Everyone")
+            page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
+            assert owners(page) == {"p1", "p2"}
+        finally:
+            context.close()
+        # 4. a second device is unaffected: the owner's phone (no member token, a
+        #    fresh store) opens on Mine, the owner's tasks, none of theirs
+        other = phone(member=False)
+        try:
+            page = other.new_page()
+            page.goto(f"{base}/")
+            assert page.request.get(f"{base}/api/me").json()["id"] == "p1"
+            expect(page.locator("#todayWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+            expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
+            assert owners(page) == {"p1"}
+            expect(_today_row(page, "Water the ferns")).to_have_count(0)
+        finally:
+            other.close()
+        # 5. dark: the switch beside the scope on the second member's Board
+        dark = phone("dark")
+        try:
+            page = dark.new_page()
+            page.goto(f"{base}/")
+            page.click("nav.tabs .tab[data-tab='board']")
+            expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+            expect(page.locator("#boardWhose .whose-switch")).to_be_visible()
+            assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
+            _assert_labels_fit(page, "#boardBar .segmented-item")
+            assert_no_horizontal_overflow(page)
+            shot(page, shots / "story-05-board-19-phone-dark.png")
+        finally:
+            dark.close()
+    finally:
+        wk.close()
+
+
+def _walk_one_member(playwright: Playwright) -> None:
+    """§ #477 — an install with one member has no Mine · Everyone switch, and
+    Today and the Board read as before apart from the scope's renamed label.
+    A throwaway instance on the sample with its second member removed."""
+    from tests.conftest import write_test_config
+    from tests.fixtures.seed import seed_db
+
+    work = e2e_workdir("one-member")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
+    cfg = write_test_config(work / "config.json")
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    raw["time"]["people"] = raw["time"]["people"][:1]
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    proc, base, log = _boot(work, work / "tasks.db", cfg)
+    try:
+        assert len(_get(base, "/api/me")["people"]) == 1
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport=DESKTOP)
+            page.goto(f"{base}/")
+            expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+            expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
+            expect(page.locator(".whose-switch")).to_have_count(0)
+            expect(page.locator("#todayWhose")).to_be_hidden()
+            page.click("nav.tabs .tab[data-tab='board']")
+            expect(page.locator("#boardScope .scope-switch")).to_be_visible()
+            expect(page.locator(".whose-switch")).to_have_count(0)
+            expect(page.locator("#paneBoard .trow[data-id]").first).to_be_visible()
+        finally:
+            browser.close()
+    finally:
+        _terminate(proc)
+        log.close()
 
 
 def _walk_drawer_owner(page: Page, base: str, task_id: int, to: str) -> None:
@@ -1603,7 +1864,7 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     issue_ids = sorted(t["id"] for t in open_items if t.get("issue_ref"))
     assert issue_ids, "the seed carries one synced coding task"
     # 1. Mine is the default: on screen, and absent from the URL
-    expect(pressed).to_have_text("Mine")
+    expect(pressed).to_have_text("Tasks")
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
     _assert_scope_switch_spans_row(page)   # #399: the row's full width on desktop
     for tid in issue_ids:
@@ -1629,7 +1890,7 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     for tid in issue_ids:
         expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(1)
     switch.locator(".segmented-item[data-scope='mine']").click()
-    expect(pressed).to_have_text("Mine")
+    expect(pressed).to_have_text("Tasks")
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
 
 

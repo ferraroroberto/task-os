@@ -718,6 +718,19 @@ a.chip:hover { text-decoration: underline; }
    when no choice is stored, so "follows the system" lands on this rule too. */
 [data-theme="dark"] .scope-switch { --card: var(--line); }
 
+/* The two switches under a strip (#477): Mine · Everyone beside Tasks · Issues
+   · All, sharing the row by their segment counts (2 : 3) so every segment is the
+   same width. Mine · Everyone is absent with one member, and the scope then
+   fills the row exactly as it did. */
+.view-switches { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
+.view-switches .scope-host { flex: 3 1 0; min-width: 0; }
+.view-switches .whose-host { flex: 2 1 0; }
+.view-switches .whose-host[hidden] { display: none; }
+/* Nothing in it (no tasks yet hides both): no empty flex box for the pane's gap to count. */
+.view-switches:not(:has(> :not([hidden]))) { display: none; }
+.whose-switch { width: 100%; }
+[data-theme="dark"] .whose-switch { --card: var(--line); }
+
 /* ------------------------------------------- the pane's top strip (#80) */
 /* Board / Today open with the filter reached for most — the
    live text box, with the filter button beside it (#395) — plus the Select
@@ -1767,7 +1780,15 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
    holds tasks, Triage at its own width. */
 .board-bar { display: flex; align-items: center; gap: var(--gap); }
 .board-bar[hidden] { display: none; }
-.board-bar .scope-host { flex: 3 1 0; min-width: 0; }
+.board-bar .view-switches { flex: 3 1 0; }
+.board-bar .view-switches:has(.whose-host:not([hidden])) { flex-grow: 5; }
+/* Seven segments do not share a phone's row (Everyone ran into Mine): with the
+   whose switch up, Mine · Everyone + Tasks · Issues · All take a row of their
+   own and Week · Status (+ Triage) the one under it. */
+@media (max-width: 600px) {
+  .board-bar { flex-wrap: wrap; }
+  .board-bar .view-switches:has(.whose-host:not([hidden])) { flex-basis: 100%; }
+}
 .board-modes { flex: 2 1 0; min-width: 0; }
 .board-bar .board-triage { flex: none; }
 /* The dark lift the scope switch carries, for the same reason (see .scope-switch). */

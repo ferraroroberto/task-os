@@ -64,7 +64,6 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -72,7 +71,6 @@ from urllib.parse import quote
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
-from tests.conftest import write_test_config
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -81,12 +79,11 @@ from tests.e2e._geometry import (
 )
 from tests.e2e.conftest import (
     E2E_ANCHOR,
-    _boot,
-    _terminate,
+    E2E_P2_TOKEN,
+    E2E_TOKEN,
     assert_control_boundaries,
     assert_date_sheet,
     board_mode,
-    e2e_workdir,
     open_settings_sheet,
     settle,
     shot,
@@ -96,8 +93,6 @@ PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
 DESKTOP = {"width": 1440, "height": 900}
 COLUMNS = ["inbox", "todo", "standby", "done"]
-E2E_TOKEN = "e2e-story-07-token"
-E2E_P2_TOKEN = "e2e-story-07-second-member-token"   # the sample's second member, p2 (#474)
 SIGNED_IN_AS = "#accessRows dt:text-is('Signed in as') + dd"
 # E2E_HEADED=1 shows the WebKit window — the headed walk of the same story.
 HEADLESS = os.environ.get("E2E_HEADED", "") != "1"
@@ -119,25 +114,6 @@ def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
     return pw.new_context(
         viewport=viewport, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme=scheme,
     )
-
-
-@pytest.fixture(scope="module")
-def authed_webapp() -> Iterator[str]:
-    """A seeded disposable instance whose config carries an auth token — the /login walk."""
-    from tests.fixtures.seed import seed_db
-
-    work = e2e_workdir("authed")
-    seed_db(work / "tasks.db", E2E_ANCHOR)
-    cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
-    raw = json.loads(cfg.read_text(encoding="utf-8"))
-    raw["auth"] = {"token": E2E_TOKEN, "password_hash": "", "people": {"p2": {"token": E2E_P2_TOKEN}}}
-    cfg.write_text(json.dumps(raw), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
-        yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
