@@ -31,7 +31,13 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
-from tests.e2e.conftest import E2E_ANCHOR, close_settings_sheet, dismiss_toasts, open_settings_sheet, shot
+from tests.e2e.conftest import (
+    E2E_ANCHOR,
+    close_settings_sheet,
+    dismiss_toasts,
+    open_settings_sheet,
+    shot,
+)
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
