@@ -5,7 +5,8 @@
  *   openEntryEditor   add time already spent, or edit any entry (either
  *                     person's): person, category, day, start, minutes, note
  *   askSwitch         a timer is running — "Stop and start <category>"
- *   promptText        a name (add / rename an area or a category)
+ *   promptText        a name (add / rename an area)
+ *   promptCategory    a category's name and subtitle (add / edit, #463)
  *   pickOption        one choice from a list (move a category to an area)
  *   showInfo          a read-only explanation (the comparison's ⓘ)
  *
@@ -357,6 +358,42 @@ export function promptText(o) {
     card.append(row(o.label, input), go.actions);
     sync();
     return input;
+  });
+}
+
+/** A category's name and its optional subtitle (the `hint` under the name,
+ *  #463), and one primary. Resolves to {name, hint} trimmed — an empty hint
+ *  clears it — or null. */
+export function promptCategory(o) {
+  return openDialog(o.title, function (card, finish) {
+    const field = function (label, value, placeholder) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'input-native';
+      input.maxLength = 80;
+      input.value = value || '';
+      if (placeholder) input.placeholder = placeholder;
+      input.setAttribute('aria-label', label);
+      return input;
+    };
+    const name = field('Name', o.name);
+    const hint = field('Subtitle', o.hint, 'Optional');
+    const go = primary(o.action || 'Save');
+    const answer = function () { return { name: name.value.trim(), hint: hint.value.trim() }; };
+    const sync = function () {
+      const a = answer();
+      go.button.disabled = !a.name || (a.name === (o.name || '') && a.hint === (o.hint || ''));
+    };
+    [name, hint].forEach(function (input) {
+      input.addEventListener('input', sync);
+      input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && !go.button.disabled) finish(answer());
+      });
+    });
+    go.button.addEventListener('click', function () { finish(answer()); });
+    card.append(row('Name', name), row('Subtitle', hint), go.actions);
+    sync();
+    return name;
   });
 }
 

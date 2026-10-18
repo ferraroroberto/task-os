@@ -4,7 +4,8 @@
  *                                    label, never a credential); with one
  *                                    person configured it simply names them
  *   Tools → Time categories          areas and their categories: add,
- *                                    rename, reorder, move a category to
+ *                                    rename (a category's subtitle too,
+ *                                    #463), reorder, move a category to
  *                                    another area, archive / unarchive;
  *                                    delete only a category nothing points
  *                                    at (`in_use` false, #463), so every
@@ -22,7 +23,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
-import { pickOption, promptText } from './time-dialogs.js';
+import { pickOption, promptCategory, promptText } from './time-dialogs.js';
 import { initialOf } from './time-format.js';
 import { toast } from './toast.js';
 
@@ -116,9 +117,20 @@ export function mountTimeSettings(opts) {
     renderCategories();
   }
 
-  function rename(kind, item) {
-    promptText({ title: 'Rename ' + kind, label: 'Name', value: item.name }).then(function (name) {
-      if (name) write('/api/time/' + (kind === 'area' ? 'areas/' : 'categories/') + item.id, 'PATCH', { name: name }, 'Renamed');
+  function renameArea(a) {
+    promptText({ title: 'Rename area', label: 'Name', value: a.name }).then(function (name) {
+      if (name) write('/api/time/areas/' + a.id, 'PATCH', { name: name }, 'Renamed');
+    });
+  }
+
+  /** Name and subtitle; only what changed is sent, and an emptied subtitle clears it. */
+  function editCategory(c) {
+    promptCategory({ title: 'Edit category', name: c.name, hint: c.hint }).then(function (v) {
+      if (!v) return;
+      const body = {};
+      if (v.name !== c.name) body.name = v.name;
+      if (v.hint !== (c.hint || '')) body.hint = v.hint;
+      write('/api/time/categories/' + c.id, 'PATCH', body, 'Saved ' + v.name);
     });
   }
 
@@ -135,10 +147,10 @@ export function mountTimeSettings(opts) {
 
   function areaItems(a, index, count) {
     return [
-      { label: 'Rename', glyph: 'pencil', onTap: function () { rename('area', a); } },
+      { label: 'Rename', glyph: 'pencil', onTap: function () { renameArea(a); } },
       { label: 'Add category', glyph: 'plus', onTap: function () {
-        promptText({ title: 'Add a category to ' + a.name, label: 'Name', action: 'Add' }).then(function (name) {
-          if (name) write('/api/time/categories', 'POST', { area_id: a.id, name: name }, 'Added ' + name);
+        promptCategory({ title: 'Add a category to ' + a.name, action: 'Add' }).then(function (v) {
+          if (v) write('/api/time/categories', 'POST', { area_id: a.id, name: v.name, hint: v.hint }, 'Added ' + v.name);
         });
       } },
       { label: 'Move up', glyph: 'arrow-up', hidden: index === 0, onTap: function () {
@@ -155,7 +167,7 @@ export function mountTimeSettings(opts) {
 
   function categoryItems(meta, a, c, index, count) {
     return [
-      { label: 'Rename', glyph: 'pencil', onTap: function () { rename('category', c); } },
+      { label: 'Edit', glyph: 'pencil', onTap: function () { editCategory(c); } },
       { label: 'Move up', glyph: 'arrow-up', hidden: index === 0, onTap: function () {
         write('/api/time/categories/' + c.id, 'PATCH', { position: index - 1 });
       } },
