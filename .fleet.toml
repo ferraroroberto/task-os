@@ -6,7 +6,7 @@ layer       = "working-web"
 icon        = "✅"
 port        = ":8448"
 tag         = ["→", "GitHub"]
-description = "One master task list: nested projects, capture Inbox, calendar, voice add, mail archiving, time tracking."
+description = "One task list: projects, Inbox capture, calendar, voice add, mail archiving, time tracking."
 
 # Vendored byte-for-byte from project-scaffolding (and the two fleet reference
 # apps for the modules the scaffold does not ship yet). sha = the source repo
