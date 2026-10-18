@@ -37,7 +37,15 @@ Rules enforced here (plan §04):
   then never touches it again (#98) — an import reconciles, a capture only
   ever lands. Its key is remembered in ``capture_keys`` apart from the row,
   so deleting the task *dismisses* the capture rather than inviting the
-  source to land it again (#254).
+  source to land it again (#254);
+- a task's ``owner`` (#476) is a member id from the config, plugged in by
+  :func:`set_members`; a NULL owner means the install owner (the first
+  member), so a task nobody gave one — every task from before v20, a synced
+  issue, an email capture — is the owner's without a data write. Every task
+  shape carries the *effective* owner (never null), the ``owner`` filter of
+  :func:`list_tasks` counts NULL as the install owner's, and setting one that
+  is no member is a :class:`ValidationError`. ``owner`` is not ``person_id``,
+  which stays the contact a task is about.
 
 Timestamps come from ``src.clock``'s :func:`now_iso` (local time, second
 precision, offset kept), re-exported here with :func:`use_clock` and
@@ -63,7 +71,7 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, timedelta
 from typing import Any
 
@@ -94,7 +102,7 @@ DEFAULT_ACTOR = "me"
 _TASK_FIELDS = (
     "parent_id", "code", "title", "type", "status", "priority", "due", "starts", "recurrence",
     "recurrence_anchor", "recurrence_interval", "description", "folder_ref",
-    "next_action", "person_id",
+    "next_action", "person_id", "owner",
 )
 #: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
 DATE_FIELDS = ("due", "starts")
@@ -137,6 +145,37 @@ class CaptureDismissed(RepoError):
 
     code = "capture_dismissed"
     http_status = 410
+
+
+# --------------------------------------------------------------- members
+
+#: The install's member ids, the owner first (#476) — ``config.people``, set by
+#: the app's lifespan and the CLI's local backend. Unset = the one implicit
+#: member ``me`` (``src.config.IMPLICIT_PERSON``), the install on its own.
+_members: tuple[str, ...] = (DEFAULT_ACTOR,)
+
+
+def set_members(ids: Sequence[str] | None) -> None:
+    """Plug in the members an ``owner`` may name, the install owner first;
+    ``None`` (or an empty list) restores the one implicit member."""
+    global _members
+    _members = tuple(str(i) for i in ids) if ids else (DEFAULT_ACTOR,)
+
+
+def install_owner() -> str:
+    """The member a NULL ``owner`` stands for — the first member."""
+    return _members[0]
+
+
+def _owner_of(row: dict[str, Any]) -> str:
+    """A task row's effective owner: its own, else the install owner's."""
+    return row.get("owner") or install_owner()
+
+
+def _validate_owner(value: Any) -> str:
+    if value not in _members:
+        raise ValidationError(f"owner must be one of {', '.join(_members)} (got {value!r})")
+    return str(value)
 
 
 # ------------------------------------------------------- folder resolver
@@ -468,6 +507,7 @@ def _summary_from(
     out["child_count"] = pre["children"].get(row["id"], 0)
     out["is_project"] = out["child_count"] > 0
     out["issue_ref"] = pre["refs"].get(row["id"])
+    out["owner"] = _owner_of(row)
     if row.get("person_id") is not None:
         out["person"] = people.get(row["person_id"])
     else:
@@ -524,6 +564,7 @@ def create_task(
         "priority": "none", "due": None, "starts": None, "recurrence": None,
         "recurrence_anchor": None, "recurrence_interval": None,
         "description": "", "folder_ref": None, "next_action": None, "person_id": None,
+        "owner": None,
     }
     values.update({k: v for k, v in fields.items() if k != "title"})
     values["title"] = title
@@ -552,6 +593,8 @@ def create_task(
         _require_task(conn, int(values["parent_id"]))
     if values["person_id"] is not None:
         _require_person(conn, int(values["person_id"]))
+    if values["owner"] is not None:
+        values["owner"] = _validate_owner(values["owner"])
 
     ts = now_iso()
     actor = actor or DEFAULT_ACTOR
@@ -559,12 +602,12 @@ def create_task(
         """
         INSERT INTO tasks(parent_id, code, title, type, status, priority, due, starts, recurrence,
                           recurrence_anchor, recurrence_interval,
-                          description, folder_ref, next_action, person_id, created_by,
+                          description, folder_ref, next_action, person_id, owner, created_by,
                           created_at, updated_at, done_at)
         VALUES (:parent_id, :code, :title, :type, :status, :priority, :due, :starts, :recurrence,
                 :recurrence_anchor, :recurrence_interval, :description,
                 :folder_ref,
-                :next_action, :person_id, :created_by, :ts, :ts, :done_at)
+                :next_action, :person_id, :owner, :created_by, :ts, :ts, :done_at)
         """,
         {
             **values,
@@ -593,7 +636,9 @@ def update_task(
     last, in the same transaction as the other fields — a rejected field never
     leaves the task re-parented; ``type='coding'`` is refused unless an
     issue_ref exists; ``status='done'`` stamps ``done_at`` (and leaving
-    ``done`` clears it).
+    ``done`` clears it). ``owner`` is compared, and logged, as the effective
+    owner (#476): naming the install owner on a task whose NULL already means
+    them changes nothing.
     """
     unknown = set(changes) - set(_TASK_FIELDS)
     if unknown:
@@ -625,6 +670,11 @@ def update_task(
             value = int(value) if value is not None else None
             if value is not None:
                 _require_person(conn, value)
+        elif field == "owner":
+            value = _validate_owner(value)
+            if value != _owner_of(current):
+                sets[field] = value
+            continue
         if value != current[field]:
             sets[field] = value
 
@@ -684,7 +734,8 @@ def update_task(
     for field, value in sets.items():
         if field in ("updated_at", "done_at"):
             continue
-        _log(conn, task_id, actor, "parent" if field == "parent_id" else field, current[field], value, ts)
+        old = _owner_of(current) if field == "owner" else current[field]
+        _log(conn, task_id, actor, "parent" if field == "parent_id" else field, old, value, ts)
     conn.commit()
     _touched(task_id, *((current["parent_id"], new_parent) if reparent else ()))
     return get_task(conn, task_id)
@@ -1239,6 +1290,7 @@ def list_tasks(
     due_to: str | None = None,
     type: str | None = None,
     person_id: int | list[int] | None = None,
+    owner: str | list[str] | None = None,
     q: str | None = None,
     include_closed: bool = False,
     limit: int | None = None,
@@ -1258,6 +1310,8 @@ def list_tasks(
     - ``project``: descendant-of ``project`` (any depth);
     - ``due``: ``today`` · ``week`` · ``overdue`` · a date; or ``due_from``/``due_to``;
     - ``person_id``: one id or a list (the filter card's multi-select);
+    - ``owner``: one member id or a list (#476) — a NULL owner counts as the
+      install owner's, so naming them also returns every task nobody gave one;
     - ``q``: FTS over title/description/comments (see :func:`search`);
     - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
       on that day (the Board's *Done today* column; ``done_at`` is a local
@@ -1404,6 +1458,15 @@ def list_tasks(
             where.append(f"t.person_id IN ({', '.join('?' * len(people))})")
             args.extend(people)
 
+    if owner is not None:
+        owners = [str(o) for o in (owner if isinstance(owner, (list, tuple)) else [owner])]
+        if owners:
+            clause = f"t.owner IN ({', '.join('?' * len(owners))})"
+            if install_owner() in owners:
+                clause = f"({clause} OR t.owner IS NULL)"
+            where.append(clause)
+            args.extend(owners)
+
     if done_on:
         where.append("substr(t.done_at, 1, 10) = ?")
         args.append(_validate_date(done_on, "done_on"))
@@ -1549,6 +1612,7 @@ def tree(
             node = dict(row)
             node["depth"] = depth
             node["issue_ref"] = refs.get(row["id"])
+            node["owner"] = _owner_of(row)
             node.update(blocked_fields(row["id"]))
             node["children"] = build(row["id"], depth + 1)
             node["child_count"] = len(by_parent.get(row["id"], []))
@@ -1567,6 +1631,7 @@ def tree(
         node.pop("description", None)
     node["depth"] = 0
     node["issue_ref"] = refs.get(root_id)
+    node["owner"] = _owner_of(root)
     node.update(blocked_fields(root_id))
     node["children"] = build(root_id, 1)
     node["child_count"] = len(by_parent.get(root_id, []))

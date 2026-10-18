@@ -113,6 +113,7 @@ const els = {
 const state = {
   filters: filtersFromSearch(location.search),
   people: [],
+  members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first (#476)
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
   tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker (#309)
@@ -198,6 +199,12 @@ function renderNoTasks() {
 // ------------------------------------------------------------------ data
 async function loadPeople() {
   try { state.people = (await api('/api/people')).items || []; } catch (_) { state.people = []; }
+}
+
+/** Who a task can belong to (#476). Unknown (the call failed) reads as one
+ *  member, so no owner control offers a choice it cannot make. */
+async function loadMembers() {
+  try { state.members = (await api('/api/me')).people || []; } catch (_) { state.members = []; }
 }
 
 function indexSuggestions(items) {
@@ -1072,6 +1079,7 @@ function wireSelectMode() {
       onApply: bulkApply,
       onDelete: bulkDelete,
       onExit: function () { selection.setActive(false); },
+      members: function () { return state.members; },
     }));
   });
   // One store, two views. Entering/leaving Select mode changes the rows'
@@ -1300,6 +1308,7 @@ async function boot() {
     onOpen: openTask,
     onClose: closeTask,
     people: function () { return state.people; },
+    members: function () { return state.members; },
     parentTargets: function (id) { return parentTargets(state.tree, id); },
     allTasks: function () { return state.taskIndex; },
     onMove: moveTask,
@@ -1431,7 +1440,7 @@ async function boot() {
   window.addEventListener('popstate', onHashChange);
   fetchVersion();
   settings.refreshStatus();
-  await loadPeople();
+  await Promise.all([loadPeople(), loadMembers()]);
   await Promise.all([refreshAll(), fetchIssuesStatus(), loadStatus()]);
   if (state.total) renderBoardPane();
   onHashChange();

@@ -34,11 +34,18 @@ one-column scroll-snap carousel — with the geometry checks:
     docs/screenshots/story-05-board-9-phone.png   (Board carousel, one column)
     docs/screenshots/story-05-board-14-phone.png  (Board Week mode, one list)
     docs/screenshots/story-05-board-10-phone.png  (§ #81 Select mode + bulk bar)
+    docs/screenshots/story-05-board-15-{desktop,phone}.png  (§ #476 the drawer's Owner)
 
 § #81 (multi-select, folded into this story rather than a 15th e2e test, the
 way #77 rides inside story 09): Select mode across Board and Today over ONE
 selection store, the bulk status / due actions, and the partial-failure
 report. Story 12 in ``docs/validation.md`` points here.
+
+§ #476 (an owner per task, same reason): the bulk bar's Set owner… hands a
+selection to the second member in one pick, and the drawer's Owner — in the
+head beside status and priority, on the desktop panel and the phone's
+full-screen drawer — hands one task over, logs ``owner old → new`` by name,
+and a reload keeps it.
 
 § #99 (``_walk_keyboard_actions``, same reason): a keyboard-only triage —
 the row keys and their undo, the inert-while-typing and inert-while-the-
@@ -651,7 +658,7 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
             " const t = e.tagName === 'SELECT' ? parseFloat(cs.borderTopWidth) : 0;"
             " const b = e.tagName === 'SELECT' ? parseFloat(cs.borderBottomWidth) : 0;"
             " return {y: r.y + t, h: r.height - t - b, w: r.width}; })")
-        assert len(boxes) == 4, boxes                        # Move · status select · delete · ✕
+        assert len(boxes) == 5, boxes      # Move · status select · Set owner… (#476) · delete · ✕
         # Move is the bar's first action, as it is the row's (#392)
         expect(bar.locator("select, button").first).to_have_class(re.compile(r"\bbulk-move\b"))
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
@@ -680,6 +687,22 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
             assert log["new_value"] == "standby", log
         # Select mode is still on — the next pick needs no second trip to the toggle
         expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+
+        # 11b. Set owner… (#476): two members, so the bar offers them; one pick
+        #      hands the selection to the second member, each with its row.
+        page.locator(f"#paneBoard .trow[data-id='{ids[0]}'] .trow-check").check()
+        page.locator(f"#paneBoard .trow[data-id='{ids[2]}'] .trow-check").check()
+        owner_sel = page.locator("#boardBulk .bulk-owner-select")
+        expect(page.locator("#boardBulk .bulk-owner")).to_be_visible()
+        assert owner_sel.locator("option").all_inner_texts() == ["Set owner…", "Person 1", "Person 2"]
+        owner_sel.select_option("p2")
+        expect(page.locator("#boardBulk")).to_be_hidden()
+        for i in (ids[0], ids[2]):
+            detail = _get(base, f"/api/tasks/{i}")
+            assert detail["owner"] == "p2", detail
+            log = next(a for a in detail["activity"] if a["field"] == "owner")
+            assert (log["old_value"], log["new_value"]) == ("p1", "p2"), log
+        assert _get(base, f"/api/tasks/{ids[1]}")["owner"] == "p1"
 
         # 12. A bulk move (#392): the bar's Move opens the one date sheet a row
         #     opens — the push-outs, each beside its date — and a pick moves the
@@ -712,6 +735,14 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
         expect(page.locator("#paneBoard .trow-check")).to_have_count(0)
         expect(page.locator("#paneBoard [data-quick-add]")).to_be_visible()
 
+        # 15. The drawer's Owner (#476): in the head beside status and
+        #     priority, it hands one task back; the log names both members,
+        #     and a reload keeps the pick.
+        _walk_drawer_owner(page, base, ids[2], "p1")
+        shot(page, shots / "story-05-board-15-desktop.png")
+        page.keyboard.press("Escape")                    # the row keys are inert under the drawer
+        expect(page.locator("#taskDrawer")).to_be_hidden()
+
         _walk_keyboard_actions(page, base, shots)
         _walk_done_journal(page, base, shots)
         _walk_delete_task(page, base, shots)
@@ -721,6 +752,35 @@ def test_desktop_board_day(seeded_webapp: str, browser: Browser, playwright: Pla
     finally:
         context.close()
     _walk_phone_today_landing_and_board_carousel(base, playwright, shots)
+
+
+def _walk_drawer_owner(page: Page, base: str, task_id: int, to: str) -> None:
+    """Open ``task_id``'s drawer, pick ``to`` in its Owner, prove the write, the
+    named activity row and a reload (#476). Leaves the drawer open on it."""
+    names = {"p1": "Person 1", "p2": "Person 2"}
+    before = _get(base, f"/api/tasks/{task_id}")
+    page.goto(f"{base}/#task/{task_id}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer.locator("#drawerTitle")).to_have_value(before["title"])
+    head = drawer.locator(".drawer-fields-main")
+    owner = head.locator("select[data-field='owner']")
+    expect(owner).to_be_visible()
+    expect(owner).to_have_value(before["owner"])
+    # one row with status and priority, never under More fields
+    ys = head.locator("select").evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().y))")
+    assert len(ys) == 3 and len(set(ys)) == 1, ys
+    with page.expect_response(
+        lambda r: r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{task_id}")
+    ) as written:
+        owner.select_option(to)
+    assert written.value.ok, f"the owner write answered {written.value.status}"
+    row = drawer.locator(".activity-row[data-field='owner']").first
+    expect(row.locator(".activity-old")).to_have_text(names[before["owner"]])
+    expect(row.locator(".activity-new")).to_have_text(names[to])
+    assert _get(base, f"/api/tasks/{task_id}")["owner"] == to
+    page.reload()
+    expect(drawer.locator("#drawerTitle")).to_have_value(before["title"])
+    expect(drawer.locator("select[data-field='owner']")).to_have_value(to)
 
 
 def _clear_toasts(page: Page) -> None:
@@ -1340,14 +1400,14 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         assert bar_box and nav_box
         # the bar lives in the top strip — it never reaches the floating pill
         assert bar_box["y"] + bar_box["height"] < nav_box["y"], (bar_box, nav_box)
-        assert_min_target(bar.locator("button"))
-        assert_no_overlap(bar.locator("button"))
+        assert_min_target(bar.locator("button, .bulk-owner"))
+        assert_no_overlap(bar.locator("button, .bulk-owner"))
         # ONE line, and one height: every control shares the row's centre and
         # the two square buttons match the strip's own (they wrapped to a
         # second line, and the date was a phrase box, before the owner's call)
         boxes = bar.locator("select, button").evaluate_all(
             "els => els.map(e => e.getBoundingClientRect()).map(r => ({y: r.y, h: r.height, w: r.width}))")
-        assert len(boxes) == 4, boxes                       # Move · status select · delete · ✕
+        assert len(boxes) == 5, boxes      # Move · status select · Set owner… (#476) · delete · ✕
         assert max(b["y"] for b in boxes) - min(b["y"] for b in boxes) < 2, boxes
         assert len({round(b["h"]) for b in boxes}) == 1, boxes
         squares = boxes[:1] + boxes[2:]
@@ -1355,6 +1415,17 @@ def _walk_phone_today_landing_and_board_carousel(base: str, playwright: Playwrig
         assert bar_box["height"] < 2 * boxes[0]["h"], bar_box   # never wrapped
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-10-phone.png")
+
+        # 11b. #476 on the phone: the full-screen drawer's head carries the
+        #      Owner too, and a pick there hands the task over and holds.
+        bar.locator(".bulk-exit").tap()                  # the bar holds the strip: its ✕ leaves
+        expect(bar).to_be_hidden()
+        picked = int(_col(page, "standby").locator(".trow").first.get_attribute("data-id"))
+        current = _get(base, f"/api/tasks/{picked}")["owner"]
+        _walk_drawer_owner(page, base, picked, "p1" if current == "p2" else "p2")
+        assert_min_target(page.locator("#taskDrawer select[data-field='owner']"))
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-05-board-15-phone.png")
 
         # 12. § #102 on the phone: #journal deep-links the journal (no tab
         #     lit), the rows and the head fit the width, the pill stays.

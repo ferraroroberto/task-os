@@ -798,6 +798,31 @@ a.chip:hover { text-decoration: underline; }
    across a 1440px board — it is a control, and the ✕ keeps the right edge. */
 .bulk-status { flex: 1 1 auto; min-width: 0; max-width: 220px; height: var(--control-h); }
 .bulk-exit { margin-left: auto; }
+/* Set owner… (#476): an icon square whose whole face is its native select,
+   transparent, so a tap opens the platform's own picker. The select carries
+   the focus, so the square draws the app's one ring for it. */
+.bulk-owner { overflow: hidden; }
+.bulk-owner[hidden] { display: none; }
+.bulk-owner-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;   /* iOS zooms into a focused control under 16px */
+}
+.bulk-owner-select:disabled { cursor: default; }
+.bulk-owner:has(.bulk-owner-select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bulk-owner:has(.bulk-owner-select:disabled) { color: var(--line); }
+/* The owner square costs the status select its width on a phone: there the
+   WORD goes so "Set status…" stays readable — the count stays, as below. */
+@media (max-width: 520px) {
+  .bulk-bar:has(.bulk-owner:not([hidden])) .bulk-word { display: none; }
+}
 @media (max-width: 360px) {
   /* the narrowest phones: drop the WORD so the select keeps a readable width
      and the row still never wraps — the count itself always stays, it is what
@@ -1429,6 +1454,8 @@ a.chip:hover { text-decoration: underline; }
    fields keep the grid above, under More fields. */
 .drawer-fields.drawer-fields-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .drawer-fields-main > .field-due, .drawer-fields-main > .quick-moves { grid-column: 1 / -1; }
+/* With an Owner (#476) the three selects share one row, phone included. */
+.drawer-fields.drawer-fields-main.has-owner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 /* The date sheet's phrases (snooze.js phraseButtons) as one-tap buttons: the
    phrase over the date it resolves to, two by two, four across once the
    drawer is wide enough that "This weekend" still fits one line (Today's

@@ -260,6 +260,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("⚠️ search: %s adapter off — %s", a["kind"], a["reason"])
     repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
     repo.set_folder_web_resolver(lambda ref: placeholders.web_url(ref, config.web_roots))
+    repo.set_members([p.id for p in config.people])
     app.state.mirror.start()
     app.state.backup.start()
     app.state.issues.start()
@@ -278,6 +279,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.archive.stop()
         repo.set_folder_resolver(None)
         repo.set_folder_web_resolver(None)
+        repo.set_members(None)
 
 
 def _install_error_handlers(app: FastAPI) -> None:

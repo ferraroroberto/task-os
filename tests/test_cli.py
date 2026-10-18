@@ -214,6 +214,25 @@ def test_block_unblock_and_ls_blocked_over_both_backends(run: Runner) -> None:
     assert code == 0 and {t["title"] for t in _json(out)} == {"X", "Y"}
 
 
+def test_owner_over_both_backends(run: Runner) -> None:
+    """#476 CLI parity: `add --owner`, `ls --owner`, `set --owner` — the same
+    effective owner in `--json` either way (a NULL one is the install owner's)."""
+    code, out, _ = run("add", "Mine", "--json")
+    assert code == 0 and _json(out)["owner"] == "p1"
+    code, out, _ = run("add", "Theirs", "--owner", "p2", "--json")
+    assert code == 0 and _json(out)["owner"] == "p2"
+    code, out, _ = run("ls", "--owner", "p1", "--json")
+    assert code == 0 and [t["title"] for t in _json(out)] == ["Mine"]
+    code, out, _ = run("ls", "--owner", "p1,p2", "--json")
+    assert code == 0 and len(_json(out)) == 2
+    code, out, _ = run("set", "1", "--owner", "p2", "--json")
+    assert code == 0 and _json(out)["owner"] == "p2"
+    code, out, _ = run("ls", "--owner", "p2", "--json")
+    assert code == 0 and {t["title"] for t in _json(out)} == {"Mine", "Theirs"}
+    code, out, _ = run("set", "1", "--owner", "nobody", "--json")
+    assert code == 1 and _json(out)["error"]["code"] == "validation_error"
+
+
 def test_ls_updated_before_over_both_backends(run: Runner) -> None:
     """#101 CLI parity: `--updated-before` takes a date or `Nd` (= N days ago,
     resolved CLI-side so the wire only ever sees a plain date)."""

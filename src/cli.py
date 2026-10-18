@@ -2,14 +2,14 @@
 
     tasks add "Renew passport" --due fri [--starts oct 1] [--parent N] [--priority high]
               [--recurrence weekly [--recurrence-anchor fri] [--recurrence-interval 7]]
-              [--person "Sam"]
+              [--person "Sam"] [--owner <member id>]
               [--desc "..."] [--folder "{onedrive}/..."] [--link URL [--link-label "..."]]
     tasks ls [--status todo,standby|open|all] [--project N] [--due today|week|overdue]
-             [--deferred] [--blocked] [--updated-before <date|30d>]
+             [--deferred] [--blocked] [--updated-before <date|30d>] [--owner <member id>[,…]]
     tasks show N
     tasks tree [N]
     tasks comment N "text"
-    tasks set N [--title] [--status] [--priority] [--desc] [--folder ref|none]   edit fields (#257)
+    tasks set N [--title] [--status] [--priority] [--desc] [--folder ref|none] [--owner id]   edit fields (#257)
     tasks link N URL [--label "..."] [--kind web|folder|email|issue|ai]   kind inferred when omitted
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
     tasks starts N <date>       the day it starts mattering; same vocabulary, "none" clears
@@ -289,6 +289,8 @@ class LocalBackend:
 
         self.actor = actor
         self._repo = tasks_repo
+        # who an `owner` may name, and who a NULL one is (#476) — as the app's lifespan does
+        tasks_repo.set_members([p.id for p in load_config().people])
         init_db()
         self.conn: sqlite3.Connection = connect()
         # Writes made here bypass the app's debounced exporter, so collect the
@@ -342,6 +344,7 @@ class LocalBackend:
             due=filters.get("due"),
             type=filters.get("type"),
             person_id=filters.get("person"),
+            owner=[o for o in filters["owner"].split(",") if o] if filters.get("owner") else None,
             q=filters.get("q"),
             include_closed=bool(filters.get("include_closed")),
             updated_before=filters.get("updated_before"),
@@ -1081,6 +1084,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             fields["recurrence_interval"] = args.recurrence_interval
         if args.person:
             fields["person_id"] = _resolve_person(backend, args.person)
+        if args.owner:
+            fields["owner"] = args.owner
         if args.desc:
             fields["description"] = args.desc
         if args.folder:
@@ -1111,6 +1116,8 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             filters["due"] = args.due
         if args.person:
             filters["person"] = _resolve_person(backend, args.person)
+        if args.owner:
+            filters["owner"] = args.owner
         if args.deferred:
             filters["deferred"] = True
         if args.blocked:
@@ -1151,8 +1158,10 @@ def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[
             changes["description"] = args.desc
         if args.folder is not None:
             changes["folder_ref"] = _folder_arg(args.folder)
+        if args.owner:
+            changes["owner"] = args.owner
         if not changes:
-            raise CliError("set needs at least one of --title --status --priority --desc --folder", code="usage")
+            raise CliError("set needs at least one of --title --status --priority --desc --folder --owner", code="usage")
         t = backend.update(args.id, **changes)
         return t, f"updated {_fmt_task_line(t)}"
     if cmd == "link":
@@ -1279,6 +1288,7 @@ def build_parser() -> argparse.ArgumentParser:
              "--recurrence-interval 7 is every 7 weeks on Saturday",
     )
     a.add_argument("--person", help="person id or name")
+    a.add_argument("--owner", help="the member whose task it is (a people id; default: you)")
     a.add_argument("--desc", help="description (markdown)")
     a.add_argument("--folder", help="folder ref ({onedrive}/…) or absolute path — the per-PC opener's chip")
     a.add_argument("--link", help="one link to attach (its kind is inferred: an AI chat URL wears the bot chip)")
@@ -1289,6 +1299,7 @@ def build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--project", type=int, help="only descendants of this task")
     ls.add_argument("--due", help="today · week · overdue · YYYY-MM-DD")
     ls.add_argument("--person", help="person id or name")
+    ls.add_argument("--owner", help="comma list of member ids — the install owner's include tasks nobody gave one")
     ls.add_argument("--updated-before",
                     help="only tasks last touched strictly before this day (a date, or Nd = N days ago)")
     ls.add_argument("--deferred", action="store_true",
@@ -1312,7 +1323,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("id", type=int)
     c.add_argument("text")
 
-    se_ = sub.add_parser("set", parents=[common], help="edit fields — title, status, priority, description, folder")
+    se_ = sub.add_parser("set", parents=[common], help="edit fields — title, status, priority, description, folder, owner")
     se_.add_argument("id", type=int)
     se_.add_argument("--title")
     se_.add_argument("--status", choices=TASK_STATUSES,
@@ -1320,6 +1331,7 @@ def build_parser() -> argparse.ArgumentParser:
     se_.add_argument("--priority", choices=TASK_PRIORITIES)
     se_.add_argument("--desc", help="replace the description (markdown); \"\" clears")
     se_.add_argument("--folder", help="folder ref or absolute path; 'none' clears")
+    se_.add_argument("--owner", help="hand the task to another member (a people id)")
 
     lk = sub.add_parser("link", parents=[common], help="attach a link to a task")
     lk.add_argument("id", type=int)

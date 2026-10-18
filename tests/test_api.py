@@ -37,7 +37,7 @@ def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_version_reports_schema(client: TestClient) -> None:
-    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 19
+    assert client.get("/api/version").json()["schema_version"] == SCHEMA_VERSION == 20
 
 
 def test_story_02_over_http(client: TestClient) -> None:

@@ -5,7 +5,7 @@
                                          (a capture source's own id, #98) the
                                          create is idempotent — a replay gets
                                          the same task back untouched on 200
-    POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?} → per-id results
+    POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?, owner?} → per-id results
     POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
     GET    /api/tasks/tree?root=N        nested forest (or N's subtree); descriptions=false drops them (the boot, #280)
     GET    /api/projects                 every task with children, closed too: {id, title, depth, status} (#309)
@@ -35,7 +35,9 @@
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
 · ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``
-(repeatable / comma-separated ids), ``q`` (full text), ``updated_since``
+(repeatable / comma-separated ids), ``owner`` (repeatable / comma-separated
+member ids; the install owner's include every task nobody gave one, #476),
+``q`` (full text), ``updated_since``
 (date), ``updated_before`` (date — the stale windows' inverse twin, #101),
 ``done_on`` (date), ``done_from`` / ``done_to`` (dates — the done journal's
 window, #102; newest closing first), ``include_closed``, ``limit``.
@@ -54,6 +56,10 @@ natural phrases the CLI does (``tomorrow``, ``next friday``, ``this
 weekend``, ``in 2 weeks``, ISO) — resolved here through
 ``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
 unknown phrase is a 422, never a silently unset date.
+
+A new task's ``owner`` (#476) is the body's, else the viewer's — the member
+whose credential made the request (``src.auth.resolve_viewer``: the install
+owner on plain loopback). A subtask is its creator's, never its parent's.
 
 The actor written to ``activity`` / ``comments`` is the body's ``actor`` /
 ``author`` field, else the ``X-Actor`` header, else the configured default
@@ -100,6 +106,8 @@ class TaskCreate(BaseModel):
     folder_ref: str | None = None
     next_action: str | None = None
     person_id: int | None = None
+    #: a member id (#476); omitted → the viewer
+    owner: str | None = None
     actor: str | None = None
 
 
@@ -121,6 +129,7 @@ class TaskUpdate(BaseModel):
     folder_ref: str | None = None
     next_action: str | None = None
     person_id: int | None = None
+    owner: str | None = None
     actor: str | None = None
 
 
@@ -136,6 +145,7 @@ class BulkBody(BaseModel):
     ``starts`` and ``priority`` joined the body with the single-key row
     actions (issue #99): the same keystroke has to mean the same thing on a
     selection as on one row, and the row keys snooze and cycle priority.
+    ``owner`` (#476) is the bar's Set owner…: a selection reassigned at once.
     """
 
     ids: list[int] = Field(min_length=1, max_length=500)
@@ -143,6 +153,7 @@ class BulkBody(BaseModel):
     due: str | None = None
     starts: str | None = None
     priority: str | None = None
+    owner: str | None = None
     actor: str | None = None
 
 
@@ -258,6 +269,7 @@ def list_tasks(
     due_to: str | None = None,
     type: str | None = None,
     person: list[str] | None = Query(default=None),
+    owner: list[str] | None = Query(default=None),
     q: str | None = None,
     updated_since: str | None = None,
     updated_before: str | None = None,
@@ -282,6 +294,7 @@ def list_tasks(
                     people.append(int(p))
                 except ValueError as exc:
                     raise repo.ValidationError(f"person must be an id, got {p!r}") from exc
+    owners = [o.strip() for s in owner or [] for o in s.split(",") if o.strip()]
     parent_id: int | str | None = None
     if parent is not None:
         try:
@@ -298,6 +311,7 @@ def list_tasks(
         due_to=due_to,
         type=type,
         person_id=people or None,
+        owner=owners or None,
         q=q,
         include_closed=include_closed,
         limit=limit,
@@ -329,6 +343,10 @@ def create_task(
     fields = _resolve_dates(
         body.model_dump(exclude={"title", "actor", "external_id"}, exclude_none=True)
     )
+    if "owner" not in fields:
+        viewer = getattr(request.state, "viewer", None)
+        if viewer is not None and viewer.id is not None:
+            fields["owner"] = viewer.id
     actor = resolve_actor(request, body.actor)
     if body.external_id is None:
         return repo.create_task(db, body.title, actor=actor, **fields)
@@ -360,7 +378,9 @@ def bulk_tasks(
     changes = body.model_dump(exclude={"ids", "actor", "status"}, exclude_unset=True)
     complete = body.status == "complete"
     if body.status is None and not changes:
-        raise repo.ValidationError("a bulk change needs a status, a due date, a start date or a priority")
+        raise repo.ValidationError(
+            "a bulk change needs a status, a due date, a start date, a priority or an owner"
+        )
     if complete and "due" in changes:
         raise repo.ValidationError("'complete' rolls the due date itself — don't set one too")
     if body.status is not None and not complete:
