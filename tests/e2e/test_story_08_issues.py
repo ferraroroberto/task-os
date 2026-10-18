@@ -2,7 +2,7 @@
 
     Settings → Sync now → my open issues appear as coding tasks in To do → open one: the
     drawer's issue panel (repo#N, state, labels, last synced) → file it under
-    a project with the drawer's Move to → the issue is closed on the forge → Sync now → the task
+    a project with the drawer head's Change parent → the issue is closed on the forge → Sync now → the task
     is done and the log says ``sync`` → "Create issue" on a plain task → it
     turns coding with the new number, chip on the Board.
 
@@ -125,14 +125,18 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         page.keyboard.press("Escape")
         expect(drawer).to_be_hidden()
 
-        # 3. File it under the garden-bot project with the drawer's Move to
-        #    (#350: the one re-parent path since the Tree went); the code
-        #    travels with it, and the Board row names its new project.
+        # 3. File it under the garden-bot project with the drawer head's Change
+        #    parent (#468; #350: the one re-parent path since the Tree went);
+        #    the code travels with it, and the Board row names its new project.
         bot_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Side project: garden-bot")
         row = page.locator(f"#paneBoard .trow[data-id='{sensor['id']}']")
         row.locator(".trow-main").click()
         expect(drawer).to_be_visible()
-        drawer.locator("select[data-field='parent']").select_option(str(bot_id))
+        drawer.locator(".drawer-change-parent").click()
+        picker = page.locator("#parentDialog")
+        picker.locator(".parent-filter").fill("garden-bot")
+        picker.locator(f".parent-opt[data-id='{bot_id}']").click()
+        expect(picker).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("under Side project: garden-bot")
         moved = _get(base, f"/api/tasks/{sensor['id']}")
         assert moved["parent_id"] == bot_id and moved["activity"][0]["field"] == "parent"
@@ -161,7 +165,7 @@ def test_an_issue_becomes_a_task(issues_webapp, browser: Browser, shots: Path) -
         expect(panel.locator(".issue-state")).to_have_text("closed")
         expect(panel.locator(".chip-issue-closed")).to_be_visible()
         # the sync's rows fold behind one toggle (#394, decision 7): the
-        # owner's own change (the Move to above) leads the log
+        # owner's own change (the Change parent above) leads the log
         expect(drawer.locator(".activity-row").first).to_have_attribute("data-field", "parent")
         expect(drawer.locator(".activity-row[data-field='status']")).to_have_count(0)
         sync_toggle = drawer.locator(".activity-sync-toggle")

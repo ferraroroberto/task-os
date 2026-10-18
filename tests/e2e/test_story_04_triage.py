@@ -5,8 +5,10 @@
     time → open a drawer → add a comment containing a link → the link is a
     clickable chip → the + opens the quick-add dialog (#80) → "renew passport
     next friday" → the parsed date shows as a chip → create → file it under a
-    project with the drawer's Move to → the breadcrumb appears (the Table and
-    its Tree, where this story used to run, were removed in #350).
+    project with the drawer head's Change parent → the breadcrumb appears;
+    Remove parent takes it back out (the Table and its Tree, where this story
+    used to run, were removed in #350; the More-fields Move to select went in
+    #468).
 
 Walks the story against the **seeded** disposable instance (conftest
 ``seeded_webapp`` over ``tests/fixtures/seed.py`` — synthetic data, the only
@@ -14,6 +16,7 @@ dataset allowed on screen) at 1440×900 desktop, saving the numbered proof
 shots the validation record links to:
 
     docs/screenshots/story-04-triage-{1..8}-desktop.png
+    docs/screenshots/story-04-triage-12-desktop.png   (the parent picker, #468)
     docs/screenshots/story-04-triage-11-desktop.png   (stale window, #101)
 
 then — in the same test function since #96 — the drawer at 390×844 (WebKit,
@@ -339,15 +342,27 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         dismiss_toasts(page)
         shot(page, shots / "story-04-triage-6-desktop.png")
 
-        # 7. File it under a project from the drawer's Move to (#350: the Tree
-        #    and its drag are gone; this is the one re-parent path, on every
-        #    pointer) → moved, toast, breadcrumb, activity.
+        # 7. File it under a project from the drawer head's Change parent
+        #    (#468; #350: the Tree and its drag are gone, and the More-fields
+        #    Move to select with them — this is the one re-parent path, on
+        #    every pointer) → moved, toast, breadcrumb, activity.
         family_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Family admin")
         new_row.locator(".trow-main").click()
         expect(drawer).to_be_visible()
-        open_more_fields(drawer)   # Move to is a rare field (#394)
-        expect(drawer.locator("select[data-field='parent']")).to_have_value("")   # top level
-        drawer.locator("select[data-field='parent']").select_option(str(family_id))
+        expect(drawer.locator("#drawerTitle")).to_have_value("renew passport")
+        expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
+        expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)   # nothing to remove yet
+        expect(drawer.locator("select[data-field='parent']")).to_have_count(0)   # one way, not two
+        drawer.locator(".drawer-change-parent").click()
+        picker = page.locator("#parentDialog")
+        expect(picker).to_be_visible()
+        offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
+        assert "renew passport" not in offered and "Family admin" in offered, offered   # never itself
+        picker.locator(".parent-filter").fill("family")
+        expect(picker.locator(".parent-opt:visible .parent-opt-title").first).to_have_text("Family admin")
+        shot(page, shots / "story-04-triage-12-desktop.png")
+        picker.locator(f".parent-opt[data-id='{family_id}']").click()
+        expect(picker).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
         moved = _get(base, f"/api/tasks/{new_id}")
         assert moved["parent_id"] == family_id
@@ -357,16 +372,45 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # …and the row says where it lives now (the meta line's project part)
         expect(_trow(page, "renew passport", "#paneBoard").locator(".trow-project")).to_have_text("Family admin")
         shot(page, shots / "story-04-triage-7-desktop.png")
-        # a cycle is refused and surfaced as a toast, nothing changes: Home
-        # renovation is offered its own child project, Kitchen, and refuses it
+        # Remove parent: one tap from the head, no confirmation, back to the top level
+        drawer.locator(".drawer-remove-parent").click()
+        expect(page.locator(".toast-success").last).to_contain_text("to the top level")
+        expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
+        expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
+        assert _get(base, f"/api/tasks/{new_id}")["parent_id"] is None
+        # …and back under the project from the keyboard: filter, Enter picks the first match
+        drawer.locator(".drawer-change-parent").click()
+        picker.locator(".parent-filter").fill("family admin")
+        picker.locator(".parent-filter").press("Enter")
+        expect(picker).to_be_hidden()
+        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Family admin"])
+        assert _get(base, f"/api/tasks/{new_id}")["parent_id"] == family_id
+        # The picker never offers a task's own descendants: Home renovation's
+        # child project, Kitchen, is not on its list. The server stays the
+        # authority all the same: a cycle that appears after the picker was
+        # drawn (Kitchen filed away, offered, then filed back under Home
+        # renovation by someone else) is refused and surfaced as a toast.
         projects = {p["title"]: p["id"] for p in _get(base, "/api/projects")["items"]}
-        home_id = projects["Home renovation"]
+        home_id, kitchen_id = projects["Home renovation"], projects["Kitchen"]
         page.goto(f"{base}/#task/{home_id}")
         expect(drawer.locator("#drawerTitle")).to_have_value("Home renovation")
-        open_more_fields(drawer)
-        drawer.locator("select[data-field='parent']").select_option(str(projects["Kitchen"]))
+        drawer.locator(".drawer-change-parent").click()
+        expect(picker).to_be_visible()
+        assert "Kitchen" not in picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
+        page.keyboard.press("Escape")
+        expect(picker).to_be_hidden()
+        moved_away = page.request.post(f"{base}/api/tasks/{kitchen_id}/move", data={"parent_id": None})
+        assert moved_away.ok, moved_away.text()
+        page.reload()
+        expect(drawer.locator("#drawerTitle")).to_have_value("Home renovation")
+        drawer.locator(".drawer-change-parent").click()
+        expect(picker.locator(f".parent-opt[data-id='{kitchen_id}']")).to_have_count(1)
+        back = page.request.post(f"{base}/api/tasks/{kitchen_id}/move", data={"parent_id": home_id})
+        assert back.ok, back.text()
+        picker.locator(f".parent-opt[data-id='{kitchen_id}']").click()
         expect(page.locator(".toast-error").last).to_contain_text("cycle")
         assert _get(base, f"/api/tasks/{home_id}")["parent_id"] is None
+        assert _get(base, f"/api/tasks/{kitchen_id}")["parent_id"] == home_id
 
         # 8. Deep link: a fresh load of #task/<id> opens the drawer with the breadcrumb.
         page.goto(f"{base}/#task/{new_id}")

@@ -876,7 +876,7 @@ def assert_date_sheet(menu: Locator, base: str) -> None:
 def open_more_fields(drawer: Locator) -> Locator:
     """Open the drawer's **More fields** (#394) and return the disclosure.
 
-    The rare fields and the editors (starts, repeat, person, code, Move to,
+    The rare fields and the editors (starts, repeat, person, code,
     folder, link editor, blockers, children, issue panel) live there, closed
     by default. It stays open for the page's life once opened, so on a page
     that already opened it this only checks; a fresh load closes it again.

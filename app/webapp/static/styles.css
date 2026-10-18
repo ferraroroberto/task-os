@@ -1382,6 +1382,9 @@ a.chip:hover { text-decoration: underline; }
 .crumb:hover { background: var(--accent-soft); }
 .crumb-root { color: var(--muted); cursor: default; }
 .crumb-sep { color: var(--muted); }
+.drawer-parent-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin: 0 0 var(--space-xs) calc(-1 * var(--space-xs)); }
+.drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 34px; padding: 0 var(--space-sm); color: var(--muted); }
+.drawer-parent-tools .button-ghost:hover { color: var(--fg); }
 .drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long
@@ -2262,6 +2265,64 @@ kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-al
 .confirm-body { margin: var(--gap) 0 0; font-size: var(--font-label); color: var(--ink); }
 .confirm-body p { margin: 0 0 var(--space-sm); }
 .confirm-warn { color: var(--danger); font-weight: 600; }
+
+/* ---- the parent picker (#468): the vendored modal shell holding a filter and
+   a list of every open task in tree order — a centred card on a desktop, the
+   whole screen on a phone. The depth indents a row; the path is its muted
+   second line. */
+.detail-dialog.parent-dialog { width: min(520px, 94vw); margin-top: 8vh; }
+.parent-card { display: flex; flex-direction: column; gap: var(--space-sm); }
+.parent-card .detail-header { margin-bottom: 0; }
+.parent-task { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parent-filter {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--row-sm);
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-body);
+}
+.parent-filter:focus { outline: none; border-color: var(--accent); }
+.parent-filter::placeholder { color: var(--muted); }
+.parent-list { display: flex; flex-direction: column; max-height: min(52vh, 480px); overflow-y: auto; overscroll-behavior: contain; }
+.parent-opt {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: none;
+  min-height: var(--row-sm);
+  padding: var(--space-xs) 10px var(--space-xs) calc(10px + var(--depth, 0) * var(--space-md));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.parent-opt[hidden] { display: none; }
+.parent-opt:hover, .parent-opt:focus-visible { background: var(--card-2); }
+.parent-opt[aria-current] { background: var(--accent-soft); }
+.parent-opt-title { font-size: var(--font-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parent-opt-path { font-size: var(--font-body-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parent-empty { margin: 0; padding: var(--space-sm) 10px; font-size: var(--font-body-sm); }
+@media (max-width: 520px) {
+  .detail-dialog.parent-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+  .parent-card { box-sizing: border-box; min-height: 100%; border-radius: 0; padding-top: calc(env(safe-area-inset-top, 0px) + 18px); }
+  .parent-list { flex: 1 1 auto; max-height: none; }
+}
 
 /* ---- the drawer's delete foot (#121) */
 .drawer-danger { padding: 14px 0 18px; }

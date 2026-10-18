@@ -135,6 +135,32 @@ def test_move_cycle_done_and_delete(client: TestClient) -> None:
     assert client.get(f"/api/tasks/{a}").status_code == 404
 
 
+def test_move_makes_a_leaf_a_project_and_null_takes_it_back(client: TestClient) -> None:
+    """#468: the drawer's Change parent offers any open task, so a leaf must
+    become a project the moment a child is filed under it, and stop being one
+    when Remove parent (`parent_id: null`) takes the child out again."""
+    leaf = client.post("/api/tasks", json={"title": "Leaf"}).json()["id"]
+    kid = client.post("/api/tasks", json={"title": "Kid"}).json()["id"]
+    assert client.get(f"/api/tasks/{leaf}").json()["is_project"] is False
+    assert client.get("/api/projects").json()["items"] == []
+
+    moved = client.post(f"/api/tasks/{kid}/move", json={"parent_id": leaf})
+    assert moved.status_code == 200 and moved.json()["parent_id"] == leaf
+    assert [c["title"] for c in moved.json()["breadcrumb"]] == ["Leaf"]
+    assert client.get(f"/api/tasks/{leaf}").json()["is_project"] is True
+    assert [p["id"] for p in client.get("/api/projects").json()["items"]] == [leaf]
+
+    # and a project may not be filed under its own child — the picker never
+    # offers it, the server refuses it all the same
+    cyc = client.post(f"/api/tasks/{leaf}/move", json={"parent_id": kid})
+    assert cyc.status_code == 409 and cyc.json()["error"]["code"] == "cycle"
+
+    out = client.post(f"/api/tasks/{kid}/move", json={"parent_id": None})
+    assert out.status_code == 200 and out.json()["parent_id"] is None and out.json()["breadcrumb"] == []
+    assert client.get(f"/api/tasks/{leaf}").json()["is_project"] is False
+    assert client.get("/api/projects").json()["items"] == []
+
+
 def test_blockers_add_remove_cycle_and_the_blocked_filter(client: TestClient) -> None:
     """#100: POST/GET/DELETE /api/tasks/{id}/blockers, a self-block and a
     cycle both 409, and the status list's `blocked` pseudo-filter narrows
@@ -683,7 +709,7 @@ def test_list_descriptions_are_opt_out_and_default_unchanged(client: TestClient)
 
 def test_projects_lists_every_task_with_children_closed_ones_too(client: TestClient) -> None:
     """A project whose children are all closed is a leaf in the open forest, so
-    the filter and Move-to read this list instead."""
+    the project filter reads this list instead."""
     open_p = client.post("/api/tasks", json={"title": "Open project"}).json()["id"]
     client.post("/api/tasks", json={"title": "Open child", "parent_id": open_p})
     sub = client.post("/api/tasks", json={"title": "Sub project", "parent_id": open_p}).json()["id"]

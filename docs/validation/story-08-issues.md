@@ -6,7 +6,7 @@
 
 1. Board → **↻** in the header (visible only when the provider is configured) → toast *Issues synced: 3 open · 2 new* → the two open issues without a task become **coding** tasks in **To do** (title = issue title, `code = repo#N`, description = the issue body, an `issue` link, `created_by = sync`), each with a GitHub chip; the seeded coding task (`garden-bot#12`, already linked) is matched, not duplicated.
 2. Open one → the drawer's **Issue** panel: provider glyph, `repo#N` chip linking to the issue, `open` pill, the labels from the last sync (`enhancement`), *github · last synced …*, **Sync now**, **Unlink**.
-3. The drawer's **Move to** → *Side project: garden-bot* → filed under it: the breadcrumb, the code `garden-bot#14` and the Board row's project all follow, activity `parent`.
+3. The drawer head's **Change parent** → *Side project: garden-bot* → filed under it: the breadcrumb, the code `garden-bot#14` and the Board row's project all follow, activity `parent`.
 4. The issue is **closed on the forge** (the test edits the fake's file) → **↻** → toast *… 1 closed* → the task is **done** (`done_at` set, ref `closed`); activity `status todo → done · sync` and `issue_state open → closed · sync`; the drawer shows status *done*, the `closed` pill and the muted chip with a check. The seeded coding task, still open on the forge, is untouched.
 5. A plain task's Issue panel offers **Create issue** (repo from the last-seen list or typed) and **Link existing** (`owner/repo#N` or URL) → *Create issue* in `example/garden-bot` → toast *Created example/garden-bot#15* → the task is coding, `code = garden-bot#15`, the chip is in the panel and on its Board card; the forge file gained issue 15 with the task's title.
 6. Settings (dark) → *Issues as tasks* card: **enabled · github · every 10 min · next …**, last sync with the counts (*2 open issue(s) · 0 new · 0 retitled · 0 reopened · 1 closed*), the repos seen, **Sync now** enabled.
@@ -58,3 +58,5 @@
 **2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 3 files the task with the drawer's Move to instead of the Tree's drag.
 
 **2026-10-10 (#394):** the linked issue is one of the drawer's link pills, shown once (the `issue` link the link step stores is the same target, so the pill row does not repeat it); the issue panel with Unlink and the create / link forms is under More fields. Step 4 now proves the folded sync: the owner's Move to leads the activity log, the sync's rows are behind *Show N sync updates*, and the toggle brings them back. Result: **verified** (e2e desktop).
+
+**2026-10-18 (#468):** step 3 files the task with the drawer head's **Change parent** (the picker, filtered to *garden-bot*) instead of the removed *Move to* select; the breadcrumb, code, Board row and the `parent` activity row are asserted as before. Result: **verified** (e2e desktop).
