@@ -27,16 +27,28 @@ import { addDays, isBlocked, isDeferred, STATUSES, todayISO } from './format.js'
 import { closeOnBackdrop, modalCard } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
-export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine' };
+export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine' };
 /**
- * Whose tasks a list shows (#391, decision 1 of #390): the owner's own, the
- * issues the forge sync brings in, or both. A task is an issue when it carries
- * an `issue_ref` — the coding task the sync made (`coding` ⇔ issue_ref). One
- * URL key, `scope`, absent for the default Mine. It is not a sheet control:
- * the segmented switch under the strip owns it (scope.js), so the sheet
- * neither counts it nor resets it on Clear.
+ * Which kind of task a list shows (#391, decision 1 of #390): the ones you
+ * make, the issues the forge sync brings in, or both — labelled Tasks · Issues
+ * · All since #477, when "Mine" became the other axis (`WHOSE`). A task is an
+ * issue when it carries an `issue_ref` — the coding task the sync made
+ * (`coding` ⇔ issue_ref). One URL key, `scope`, absent for the default (its
+ * id stays `mine`, so every saved `?scope=` link keeps working). It is not a
+ * sheet control: the segmented switch under the strip owns it (scope.js), so
+ * the sheet neither counts it nor resets it on Clear.
  */
-export const SCOPES = [['mine', 'Mine'], ['issues', 'Issues'], ['all', 'All']];
+export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
+/**
+ * Whose tasks a list shows (#477, Step 4/4 of #471): the viewer's own or every
+ * member's. A separate axis from `SCOPES`, not folded into it. One URL key,
+ * `whose`, written only for Everyone (absent = Mine); the pick is also kept
+ * per device under `WHOSE_KEY` and an explicit URL value wins over it. Like
+ * the scope it is the segmented switch's, never the sheet's, so Clear leaves
+ * it alone. The Search tab ignores it: search covers everyone.
+ */
+export const WHOSE = [['mine', 'Mine'], ['everyone', 'Everyone']];
+export const WHOSE_KEY = 'task-os.whose';
 /**
  * The status multi-select's pseudo-value (#87). Not a status: it flips the
  * list from the awake tasks to the sleeping ones (a `starts` date still in the
@@ -65,7 +77,18 @@ function csv(value) {
 }
 
 // ------------------------------------------------------------ URL state
-export function filtersFromSearch(search) {
+/** The device's remembered whose pick: Everyone only when it says so, Mine for
+ *  anything else — an empty, odd or unreadable store (private mode throws). */
+export function storedWhose(storage) {
+  try { return storage && storage.getItem(WHOSE_KEY) === 'everyone' ? 'everyone' : 'mine'; } catch (_) { return 'mine'; }
+}
+
+/**
+ * @param {string} search  `location.search`
+ * @param {string} [stored]  the device's remembered whose pick (`storedWhose`);
+ *   used when the URL carries no `whose` key — an explicit one wins
+ */
+export function filtersFromSearch(search, stored) {
   const p = new URLSearchParams(search || '');
   const f = Object.assign({}, DEFAULT_FILTERS);
   f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED || s === BLOCKED; });
@@ -76,6 +99,8 @@ export function filtersFromSearch(search) {
   f.q = p.get('q') || '';
   f.sort = SORTS.some(function (s) { return s[0] === p.get('sort'); }) ? p.get('sort') : 'due';
   f.scope = SCOPES.some(function (s) { return s[0] === p.get('scope'); }) ? p.get('scope') : 'mine';
+  const whose = p.get('whose');
+  f.whose = WHOSE.some(function (w) { return w[0] === whose; }) ? whose : (stored === 'everyone' ? 'everyone' : 'mine');
   return f;
 }
 
@@ -89,6 +114,7 @@ export function filtersToSearch(f) {
   if (f.q) p.set('q', f.q);
   if (f.sort && f.sort !== 'due') p.set('sort', f.sort);
   if (f.scope && f.scope !== 'mine') p.set('scope', f.scope);
+  if (f.whose === 'everyone') p.set('whose', 'everyone');
   const s = p.toString();
   return s ? '?' + s : '';
 }
@@ -117,9 +143,24 @@ export function updatedBefore(window, now) {
   return addDays(now || todayISO(), -Number(window.slice(5)));
 }
 
-/** The /api/tasks query for a filter state (undefined = not sent; arrays join with commas). */
-export function listParams(f) {
+/**
+ * The member a Mine view narrows to, or undefined when nothing narrows: the
+ * switch is on Everyone, the install has fewer than two members (no switch,
+ * nothing to narrow), or the viewer is not known — an unknown never hides a
+ * task. The server counts a NULL owner as the install owner's (#476).
+ * @param {object} f  the filter state
+ * @param {string|null} viewer  `GET /api/me`'s id
+ * @param {number} members  how many members the install has
+ */
+export function ownerOf(f, viewer, members) {
+  return f.whose === 'mine' && viewer && members >= 2 ? String(viewer) : undefined;
+}
+
+/** The /api/tasks query for a filter state (undefined = not sent; arrays join with commas).
+ *  `owner` is `ownerOf`'s answer — the whose switch's narrowing, sent to the server. */
+export function listParams(f, owner) {
   return {
+    owner: owner || undefined,
     status: f.status.length ? f.status : undefined,
     project: f.project || undefined,
     person: f.person.length ? f.person : undefined,
@@ -208,7 +249,7 @@ export function describeFilters(f, options) {
 
 /** How many settings the sheet's Clear would reset — the number on the filter
  *  button (#395). Neither the text (the field beside the button shows it) nor
- *  the scope (the switch's) counts; a non-default sort does, since Clear
+ *  the scope or whose (the switches') counts; a non-default sort does, since Clear
  *  resets it too. A hidden control's value is not applied, so not counted. */
 export function activeFilterCount(f, hide) {
   const hidden = new Set(hide || []);
@@ -222,9 +263,9 @@ export function activeFilterCount(f, hide) {
   return n;
 }
 
-/** Do two states draw the same sheet? (the text and the scope are not on it) */
+/** Do two states draw the same sheet? (the text, the scope and whose are not on it) */
 function sameControls(a, b) {
-  const strip = { q: '', scope: 'mine' };
+  const strip = { q: '', scope: 'mine', whose: 'mine' };
   return filtersToSearch(Object.assign({}, a, strip)) === filtersToSearch(Object.assign({}, b, strip));
 }
 
@@ -473,7 +514,7 @@ export function mountFilters(opts) {
     clear.hidden = !activeFilterCount(f, opts.hide);
     clear.addEventListener('click', function () {
       const base = drawn || f;
-      drawn = Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : base.q, scope: base.scope });
+      drawn = Object.assign({}, DEFAULT_FILTERS, { q: opts.textHost ? '' : base.q, scope: base.scope, whose: base.whose });
       opts.onChange(drawn);
       drawSheet(dialog);
       focusClose(dialog);

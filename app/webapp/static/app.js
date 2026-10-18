@@ -47,7 +47,8 @@ import { mountBulkBar } from './bulkbar.js';
 import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
-  DEFAULT_FILTERS, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
+  DEFAULT_FILTERS, WHOSE_KEY, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
+  ownerOf, storedWhose,
 } from './filters.js';
 import { addDays, STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
@@ -57,7 +58,7 @@ import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
 import { CLOSED } from './rows.js';
-import { mountScope } from './scope.js';
+import { mountScope, mountWhose } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
@@ -99,8 +100,10 @@ const els = {
   boardHost: document.getElementById('boardHost'),
   boardBar: document.getElementById('boardBar'),
   boardScope: document.getElementById('boardScope'),
+  boardWhose: document.getElementById('boardWhose'),
   todayFilterText: document.getElementById('todayFilterText'),
   todayScope: document.getElementById('todayScope'),
+  todayWhose: document.getElementById('todayWhose'),
   todayHost: document.getElementById('todayHost'),
   searchScope: document.getElementById('searchScope'),
   paneJournal: document.getElementById('paneJournal'),
@@ -111,9 +114,10 @@ const els = {
 };
 
 const state = {
-  filters: filtersFromSearch(location.search),
+  filters: filtersFromSearch(location.search, storedWhose(safeStorage())),
   people: [],
   members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first (#476)
+  viewer: null,     // /api/me's id — who this request is; null = not established (#477)
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
   tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker (#309)
@@ -162,7 +166,8 @@ let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 // /api/usage/events, never anywhere else. Views: the three tabs, `settings`,
 // `settings.<sheet>` and `journal`.
 const usage = initUsageLog();
-const scopes = {};        // tab → its Mine · Issues · All switch (scope.js, #391; Search since #395)
+const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js, #391; Search since #395)
+const whoses = {};        // tab → its Mine · Everyone switch (Today · Board only, two or more members, #477)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
 
@@ -190,7 +195,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'todayWhose', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -201,10 +206,25 @@ async function loadPeople() {
   try { state.people = (await api('/api/people')).items || []; } catch (_) { state.people = []; }
 }
 
-/** Who a task can belong to (#476). Unknown (the call failed) reads as one
- *  member, so no owner control offers a choice it cannot make. */
+/** Who a task can belong to (#476) and who is asking (#477). Unknown (the call
+ *  failed) reads as one member and no viewer, so no owner control offers a
+ *  choice it cannot make and no list is narrowed to someone it cannot name. */
 async function loadMembers() {
-  try { state.members = (await api('/api/me')).people || []; } catch (_) { state.members = []; }
+  try {
+    const me = await api('/api/me');
+    state.members = me.people || [];
+    state.viewer = me.id || null;
+  } catch (_) { state.members = []; state.viewer = null; }
+}
+
+/** The device's storage, or null where reading it throws (private mode). */
+function safeStorage() {
+  try { return window.localStorage; } catch (_) { return null; }
+}
+
+/** The member the lists narrow to — `ownerOf`'s answer for the live state. */
+function whoseOwner() {
+  return ownerOf(state.filters, state.viewer, state.members.length);
 }
 
 function indexSuggestions(items) {
@@ -277,7 +297,7 @@ async function loadTree(seq) {
  *  task never lands back on the Board by itself. */
 async function loadItems(seq) {
   const f = state.filters;
-  const params = listParams(f);
+  const params = listParams(f, whoseOwner());
   // No view reads a description off the list (the drawer fetches its own task), #309.
   const slim = { descriptions: false };
   const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
@@ -542,8 +562,8 @@ function boardItems() {
   return state.items.filter(function (t) { return matchesScope(t, state.filters.scope); });
 }
 
-/** The switch moved: the scope is applied in the browser, so the list the
- *  server sent stays; only the URL key and the views that read it change. */
+/** The scope switch moved: the scope is applied in the browser, so the list
+ *  the server sent stays; only the URL key and the views that read it change. */
 function onScopeChange(scope) {
   state.filters = Object.assign({}, state.filters, { scope: scope });
   syncUrl();
@@ -564,6 +584,25 @@ function renderScope(tab, host) {
 }
 
 function renderSearchScope() { renderScope('search', els.searchScope); }
+
+/** Whose switch moved (#477): the choice is kept per device and mirrored in
+ *  the URL, and — unlike the scope — it narrows the server's list, so the
+ *  lists and the journal are read again under it. Search never follows. */
+function onWhoseChange(whose) {
+  try { localStorage.setItem(WHOSE_KEY, whose); } catch (_) { /* private mode: this page only */ }
+  onFilterChange(Object.assign({}, state.filters, { whose: whose }));
+}
+
+/** One tab's Mine · Everyone switch, only with two or more members (one
+ *  member has nothing to switch between). Mounted on first use like the scope's. */
+function renderWhose(tab, host) {
+  if (!host) return;
+  const show = state.members.length >= 2;
+  host.hidden = !show;
+  if (!show) return;
+  if (!whoses[tab]) whoses[tab] = mountWhose(host, onWhoseChange);
+  whoses[tab].render(state.filters.whose);
+}
 
 async function moveTask(id, parentId) {
   try {
@@ -688,6 +727,7 @@ function renderBoardPane() {
     }, els.boardBar);
   }
   els.boardBar.hidden = false;
+  renderWhose('board', els.boardWhose);
   renderScope('board', els.boardScope);
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   state.boardCounts = board.render(boardItems(), state.filters, Object.assign({
@@ -698,6 +738,7 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
+  renderWhose('today', els.todayWhose);
   renderScope('today', els.todayScope);
   state.todayCounts = renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: setStatus,
@@ -726,6 +767,7 @@ function journalParams() {
   const f = state.filters;
   return {
     status: state.journal.cancelled ? ['done', 'cancelled'] : ['done'],
+    owner: whoseOwner() || undefined,
     project: f.project || undefined,
     person: f.person.length ? f.person : undefined,
     q: f.q || undefined,
@@ -1230,7 +1272,7 @@ function paletteCommands() {
     } });
   });
   cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {
-    onFilterChange(Object.assign({}, DEFAULT_FILTERS, { scope: state.filters.scope }));
+    onFilterChange(Object.assign({}, DEFAULT_FILTERS, { scope: state.filters.scope, whose: state.filters.whose }));
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
   cmds.push({ id: 'reindex-folders', label: 'Rescan folders', hint: 'refresh the folder index now', icon: 'folder', run: async function () {

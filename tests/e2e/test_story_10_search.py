@@ -165,7 +165,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
     assert names == ["sort", "status", "project", "person", "due", "updated"], names
     close_filter_sheet(page)
-    expect(page.locator("#searchScope .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+    expect(page.locator("#searchScope .segmented-item[aria-pressed='true']")).to_have_text("Tasks")
 
     # 1. type a word → four groups, open, each headed by its kind and count,
     #    all populated. Mine is the default scope: the synced issue's task is
@@ -321,4 +321,25 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(p.locator(".search-group[data-kind='folders'] .search-hit", has_text="longprobe-")).to_be_visible()
     widths = p.evaluate("({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth})")
     assert widths["scroll"] <= widths["client"], f"the page scrolls sideways: {widths}"
+
+    # 9. search covers everyone, whichever way Mine · Everyone is set (#477): a
+    # task of the install's second member is found from the owner's phone on
+    # Mine and on Everyone, the Search tab carries no whose switch, and the
+    # palette finds it too. Today on Mine does not list it.
+    zebra = _task_post(base, {"title": "Zebra paperwork", "owner": "p2", "due": "2026-09-07"})
+    assert zebra["owner"] == "p2"
+    for whose in ("", "&whose=everyone"):
+        p.goto(f"{base}/?q=zebra{whose}#search")
+        expect(p.locator("#paneSearch")).to_be_visible()
+        expect(_task_hit(p, "Zebra paperwork")).to_be_visible()
+        expect(p.locator("#paneSearch .whose-switch")).to_have_count(0)
+    p.goto(f"{base}/")
+    p.click("nav.tabs .tab[data-tab='today']")
+    expect(p.locator("#todayWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+    expect(p.locator("#paneToday .trow[data-id]").first).to_be_visible()
+    expect(p.locator("#paneToday .trow", has=p.locator(".trow-title", has_text="Zebra paperwork"))).to_have_count(0)
+    p.keyboard.press("Control+K")
+    p.locator("#paletteInput").fill("zebra")
+    expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Zebra paperwork")
+    p.keyboard.press("Escape")
     phone.close()

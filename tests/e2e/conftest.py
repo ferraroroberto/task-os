@@ -411,6 +411,36 @@ def seeded_webapp(request: pytest.FixtureRequest) -> Iterator[str]:
         log.close()
 
 
+E2E_TOKEN = "e2e-story-07-token"                        # the install owner's, p1 (#474)
+E2E_P2_TOKEN = "e2e-story-07-second-member-token"       # the sample's second member, p2 (#474)
+
+
+@pytest.fixture(scope="module")
+def authed_webapp(request: pytest.FixtureRequest) -> Iterator[str]:
+    """A seeded disposable instance whose config carries an owner token and one for
+    member p2 — story 07's /login walk, and any story that must be a second member.
+
+    A browser on this instance's loopback is the owner until it presents a
+    member's token (cookie or bearer): then it is that member (``GET /api/me``).
+    """
+    if os.environ.get(LIVE_ENV) == "1":
+        pytest.skip(f"{LIVE_ENV}=1: the seeded fixture never runs against the live database")
+    from tests.fixtures.seed import seed_db
+
+    work = e2e_workdir(f"authed-{request.module.__name__.rsplit('.', 1)[-1]}")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
+    cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    raw["auth"] = {"token": E2E_TOKEN, "password_hash": "", "people": {"p2": {"token": E2E_P2_TOKEN}}}
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    proc, base, log = _boot(work, work / "tasks.db", cfg)
+    try:
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
 class MirroredInstance:
     """What story 06 needs: the base URL plus the folders the instance writes."""
 
