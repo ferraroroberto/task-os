@@ -1,6 +1,6 @@
 # Story 32 — track time and compare shares (#457)
 
-**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The first visit on a device asks who is tracking time there, a label for that device and not a sign-in. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals on the Home area compare the people's logged shares and hide the other person's guess until yours is locked in. In Settings → Time categories, a category is added with a subtitle that shows under its name in Log, the subtitle is cleared from its Edit dialog, and a category added by mistake can be deleted; one with entries cannot (#463).
+**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The first visit on a device asks who is tracking time there, a label for that device and not a sign-in. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals opens on the Home area at 30 days and compares the people's logged shares and hide the other person's guess until yours is locked in. In Settings → Time categories, a category is added with a subtitle that shows under its name in Log, the subtitle is cleared from its Edit dialog, and a category added by mistake can be deleted; one with entries cannot (#463).
 
 ## Steps and expected
 
@@ -16,7 +16,7 @@
 | 8 | Stop and save; the other device stops again | The card goes, Person 1 reads 47m; the second stop is 409 `no_timer` and saves nothing |
 | 9 | Add time already spent: Cleaning, 30 | The start defaults to 08:30 (it just ended at the pinned 09:00); saved |
 | 10 | History, edit that entry to Person 2 | The row read *08:30 to 09:00 · 30m · Person 1*, then *… · Person 2*; Person 1's today drops by exactly 30 and Person 2's rises by 30; the row menu holds Edit, Start again, Delete |
-| 11 | Totals, area Home, guess 40 | The head-to-head, split bar and coverage line; no table until the guess is locked; then Person 2's 60% shows and *The guesses add up to 100%*; the CSV link carries the period and area |
+| 11 | Totals (it opens on Home at 30 days, #463), guess 40 | The head-to-head, split bar and coverage line; no table until the guess is locked; then Person 2's 60% shows and *The guesses add up to 100%*; the CSV link carries the period and area |
 | 11a | Settings → Time categories: add *Made by mistake* to Home with the subtitle *one to delete*; open Log; Edit it and empty the subtitle (#463) | The subtitle shows under the name in Settings and on its Log start row; Edit opens with it filled, and after Save the row has no subtitle |
 | 11b | Open the same category's menu, Delete, confirm (#463) | *Cooking and dishes* (it has entries) offers no Delete; the new one does, the confirm reads *Delete Made by mistake?*, and the row goes; `DELETE` on a used category is 409 `category_in_use` |
 | 12 | Phone (390, dark), pick Person 2 | Log fits with no sideways scroll; the view segments are 44px targets |
@@ -35,6 +35,8 @@ Result: **verified** (e2e desktop and phone, unit, scripted walk, 2026-10-18). *
 **2026-10-18, #463 (delete an empty category):** step 11b runs after the last desktop shot, so the gallery is unchanged. Unit: `test_only_a_category_nothing_points_at_can_be_deleted` (an entry or a running timer blocks it, archived or not; the area closes the gap; a discarded timer frees it) and the delete leg of `test_api_area_and_category_admin` (204, 404, 409 `category_in_use`, `in_use` in the meta). Result: **verified** (e2e desktop, unit).
 
 **2026-10-18, #463 (category subtitle):** step 11a, also after the last desktop shot; the category it adds is deleted in 11b, so the phone shot is unchanged. Unit: `test_a_category_subtitle_is_set_changed_and_cleared` (trimmed, kept by a rename, cleared by an empty one, 80 characters at most) and the 422 in `test_api_area_and_category_admin`. Result: **verified** (e2e desktop, unit).
+
+**2026-10-18, #463 (Totals defaults):** step 11 no longer picks Home; it asserts Home and 30 days are the defaults and the CSV link carries `period=30`. `story-32-time-3-desktop.png` is re-baselined deliberately (30 days instead of 7; two runs byte-identical). Scripted look on a disposable instance with every time entry and guess removed, at 1440 light and 390 dark: the comparison shows both people at *0m · nothing logged*, the guess card offers Lock in, and the empty state sits where the bars would be; no console errors. The empty period is not an e2e step (it would need its own instance). Result: **verified** (e2e desktop, scripted look).
 
 ### Owner's checklist
 

@@ -11,7 +11,10 @@
  *   Totals   Today · 7 days · 30 days · All, an area filter and, outside the
  *            compare area, Me · Everyone; on the compare area with two or
  *            more people, the household comparison: head-to-head, the split
- *            bar, coverage, the guess card, the per-category bars
+ *            bar, coverage, the guess card, the per-category bars. With two
+ *            or more people it opens there, at 30 days (the prototype's
+ *            Totals, #463), and the comparison and the guess card stay up
+ *            with nothing logged: only the bars give way to the empty state
  *   History  date-grouped rows, a filter above 12, "Show older entries";
  *            the row (and its menu's Edit) opens the editor, Start again,
  *            Delete last behind the confirm
@@ -87,7 +90,7 @@ export function mountTime(opts) {
     timers: [],
     todaySummary: null,      // everyone, today: the glance card and the header line
     recent: [],
-    totals: { period: '7', area: '', who: 'me' },
+    totals: { period: null, area: null, who: 'me' },   // null until the meta picks the defaults
     history: { items: [], total: 0, q: '' },
     shown: false,
     poll: null,
@@ -113,6 +116,12 @@ export function mountTime(opts) {
       const ids = meta.people.map(function (p) { return p.id; });
       const stored = storedPerson();
       st.person = ids.length === 1 ? ids[0] : (ids.indexOf(stored) >= 0 ? stored : null);
+      if (st.totals.area === null) {
+        // first read: the household comparison at 30 days when there is one, else everything at 7
+        const compare = ids.length > 1 && meta.areas.some(function (a) { return a.slug === meta.compare_area; });
+        st.totals.area = compare ? meta.compare_area : '';
+        st.totals.period = compare ? '30' : '7';
+      }
       if (st.totals.area && !meta.areas.some(function (a) { return a.slug === st.totals.area; })) st.totals.area = '';
       settings.render();
       return meta;
@@ -587,6 +596,8 @@ export function mountTime(opts) {
   function renderTotals(q, s, guesses) {
     const parts = [totalsControls(q)];
     const people = Object.keys(s.by_person);
+    // the comparison and the guess card stand with nothing logged (a guess can come first)
+    if (q.compare) parts.push(compareCard(s, people), guessCard(s, people, guesses));
     if (!s.total_minutes) {
       parts.push(emptyStateEl('clock', 'Nothing logged in this period', {
         actionLabel: 'Log some time', onAction: function () { showView('log'); },
@@ -594,9 +605,7 @@ export function mountTime(opts) {
       els.totals.replaceChildren.apply(els.totals, parts);
       return;
     }
-    if (q.compare) {
-      parts.push(compareCard(s, people), guessCard(s, people, guesses));
-    } else {
+    if (!q.compare) {
       const sum = el('section', 'card action-list time-sum');
       const ul = el('ul', 'action-rows');
       const total = el('li', 'action-row time-sum-row');
@@ -652,6 +661,7 @@ export function mountTime(opts) {
         ],
       });
     });
+    const share = function (p) { return Math.round(s.by_person[p] / s.total_minutes * 100); };
     const area = st.meta.areas.find(function (a) { return a.slug === s.area; });
     card.appendChild(cardHead('activity', (area ? area.name : 'Area') + ' · ' + PERIOD_LABELS[s.period], info));
     const h2h = el('div', 'time-h2h');
@@ -659,20 +669,19 @@ export function mountTime(opts) {
       const col = el('div', 'time-h2h-person');
       const name = el('div', 'time-h2h-name');
       name.append(avatar(nameOf(p)), document.createTextNode(nameOf(p)), swatch(fillFor(p)));
-      const share = s.total_minutes ? Math.round(s.by_person[p] / s.total_minutes * 100) : 0;
       col.append(name, el('div', 'time-h2h-big', fmtMinutes(s.by_person[p])),
-        el('div', 'muted time-h2h-pct', share + '% of logged time'));
+        el('div', 'muted time-h2h-pct', s.total_minutes ? share(p) + '% of logged time' : 'nothing logged'));
       h2h.appendChild(col);
     });
     const split = el('div', 'time-split');
     split.setAttribute('role', 'img');
-    split.setAttribute('aria-label', people.map(function (p) {
-      return nameOf(p) + ' ' + Math.round(s.by_person[p] / s.total_minutes * 100) + '%';
-    }).join(', '));
+    split.setAttribute('aria-label', s.total_minutes ? people.map(function (p) {
+      return nameOf(p) + ' ' + share(p) + '%';
+    }).join(', ') : 'Nothing logged yet');
     people.forEach(function (p) {
       const f = el('span', 'time-fill');
       f.dataset.fill = fillFor(p);
-      f.style.width = (s.by_person[p] / s.total_minutes * 100) + '%';
+      f.style.width = (s.total_minutes ? s.by_person[p] / s.total_minutes * 100 : 0) + '%';
       split.appendChild(f);
     });
     const coverage = el('p', 'muted time-coverage', 'Days with something logged: ' + people.map(function (p) {
