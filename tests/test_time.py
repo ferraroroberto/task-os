@@ -354,6 +354,21 @@ def test_areas_and_categories_are_added_renamed_moved_and_reordered(conn: sqlite
         repo.update_category(conn, cat(conn, "general", "work"), area_id=hobby["id"])
 
 
+def test_a_category_subtitle_is_set_changed_and_cleared(conn: sqlite3.Connection) -> None:
+    home = next(a for a in repo.list_areas(conn) if a["slug"] == "home")
+    made = repo.create_category(conn, home["id"], "Garden", "  mowing, weeding  ")
+    assert made["hint"] == "mowing, weeding"
+    assert repo.update_category(conn, made["id"], hint="mowing")["hint"] == "mowing"
+    # a rename alone leaves the subtitle; an empty one clears it
+    assert repo.update_category(conn, made["id"], name="Garden work")["hint"] == "mowing"
+    assert repo.update_category(conn, made["id"], hint="   ")["hint"] == ""
+    with pytest.raises(ValidationError):
+        repo.update_category(conn, made["id"], hint="x" * 81)
+    with pytest.raises(ValidationError):
+        repo.create_category(conn, home["id"], "Pets", "x" * 81)
+    assert repo.update_category(conn, made["id"], hint="x" * 80)["hint"] == "x" * 80
+
+
 def _home(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return next(a for a in repo.list_areas(conn) if a["slug"] == "home")["categories"]
 
@@ -535,6 +550,10 @@ def test_api_area_and_category_admin(client: TestClient) -> None:
     archived = client.patch(f"/api/time/categories/{c.json()['id']}", json={"archived": True})
     assert archived.json()["archived"] is True
     assert client.patch(f"/api/time/areas/{area.json()['id']}", json={"name": "Learning"}).json()["name"] == "Learning"
+    hinted = client.patch(f"/api/time/categories/{c.json()['id']}", json={"hint": "books"})
+    assert hinted.json()["hint"] == "books"
+    too_long = client.patch(f"/api/time/categories/{c.json()['id']}", json={"hint": "x" * 81})
+    assert too_long.status_code == 422 and too_long.json()["error"]["code"] == "validation_error"
     # delete: an empty category goes (204), a used one is refused with its own code, a gone one is 404
     assert client.delete(f"/api/time/categories/{c.json()['id']}").status_code == 204
     assert client.delete(f"/api/time/categories/{c.json()['id']}").status_code == 404

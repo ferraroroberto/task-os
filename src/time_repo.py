@@ -125,6 +125,14 @@ def _clean_name(name: str, what: str) -> str:
     return cleaned
 
 
+def _clean_hint(hint: str | None) -> str:
+    """A category's subtitle (the ``hint`` under its name): optional, so empty clears it."""
+    cleaned = (hint or "").strip()
+    if len(cleaned) > 80:
+        raise ValidationError("a subtitle is longer than 80 characters")
+    return cleaned
+
+
 def _check_person(person: str, people: Collection[str]) -> None:
     if person not in people:
         raise ValidationError(f"unknown person {person!r}")
@@ -282,6 +290,7 @@ def update_area(conn: sqlite3.Connection, area_id: int, *, name: str | None = No
 
 def create_category(conn: sqlite3.Connection, area_id: int, name: str, hint: str = "") -> dict[str, Any]:
     name = _clean_name(name, "a category")
+    hint = _clean_hint(hint)
     slug = slugify(name)
     with _immediate(conn):
         _area_row(conn, area_id)
@@ -289,7 +298,7 @@ def create_category(conn: sqlite3.Connection, area_id: int, name: str, hint: str
             raise SlugTaken(f"this area already has a category called {name!r}")
         cid = int(conn.execute(
             "INSERT INTO time_categories(area_id, slug, name, hint, position) VALUES (?, ?, ?, ?, 0)",
-            (area_id, slug, name, (hint or "").strip()),
+            (area_id, slug, name, hint),
         ).lastrowid)
         _reorder(conn, "time_categories", "area_id", area_id, cid, None)
     logger.info("ℹ️ time: category %d %r added to area %d", cid, slug, area_id)
@@ -308,7 +317,7 @@ def update_category(conn: sqlite3.Connection, category_id: int, *, name: str | N
             conn.execute("UPDATE time_categories SET name = ? WHERE id = ?",
                          (_clean_name(name, "a category"), category_id))
         if hint is not None:
-            conn.execute("UPDATE time_categories SET hint = ? WHERE id = ?", (hint.strip(), category_id))
+            conn.execute("UPDATE time_categories SET hint = ? WHERE id = ?", (_clean_hint(hint), category_id))
         if archived is not None and archived != (row["archived_at"] is not None):
             conn.execute("UPDATE time_categories SET archived_at = ? WHERE id = ?",
                          (clock.now_iso() if archived else None, category_id))

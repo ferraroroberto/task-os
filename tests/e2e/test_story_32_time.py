@@ -3,7 +3,8 @@
     Open Time → pick who this device is → start a timer → switch it → stop and
     save → add time already spent → edit that entry to the other person →
     read Totals on Home → lock in a guess and see the other one → in Settings,
-    add a category by mistake and delete it (#463).
+    add a category with a subtitle, see it in Log, clear the subtitle, and
+    delete the category made by mistake (#463).
 
 One seeded disposable instance (the sample config's placeholder people ``p1``
 "Person 1" and ``p2`` "Person 2", the synthetic seed's fortnight of time). Its
@@ -166,14 +167,29 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-3-desktop.png", full_page=True)
 
-        # ---- Settings → Time categories: a category made by mistake can be deleted, a used one cannot
+        # ---- Settings → Time categories: a category with a subtitle, shown in Log; then cleared
         cats = open_settings_sheet(page, "timecats")
         menu_items = page.locator(".time-admin-menu [role=menuitem]")
         cats.get_by_role("button", name="Area actions: Home").click()
         menu_items.filter(has_text="Add category").click()
-        dialog.locator("input").fill("Made by mistake")
+        dialog.get_by_label("Name").fill("Made by mistake")
+        dialog.get_by_label("Subtitle").fill("one to delete")
         dialog.get_by_role("button", name="Add").click()
-        expect(cats.locator(".action-row-title", has_text="Made by mistake")).to_have_count(1)
+        made = cats.locator(".action-row", has=page.locator(".action-row-title", has_text="Made by mistake"))
+        expect(made.locator(".action-row-meta")).to_have_text("one to delete")
+        close_settings_sheet(page)
+        page.locator("nav.tabs .tab[data-tab='time']").click()
+        page.locator("#timeViews [data-view='log']").click()
+        expect(_start_row(page, "Made by mistake").locator(".action-row-meta")).to_have_text("one to delete")
+        cats = open_settings_sheet(page, "timecats")
+        cats.get_by_role("button", name="Category actions: Made by mistake").click()
+        menu_items.filter(has_text="Edit").click()
+        expect(dialog.get_by_label("Subtitle")).to_have_value("one to delete")
+        dialog.get_by_label("Subtitle").fill("")
+        dialog.get_by_role("button", name="Save").click()
+        expect(made.locator(".action-row-meta")).to_have_count(0)
+
+        # ---- a category made by mistake can be deleted, a used one cannot
         cats.get_by_role("button", name="Category actions: Cooking and dishes").click()
         expect(menu_items.filter(has_text="Delete")).to_have_count(0)        # it has entries: archive only
         page.keyboard.press("Escape")
