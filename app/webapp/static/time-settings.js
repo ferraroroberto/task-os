@@ -1,19 +1,15 @@
-/* task-os — the Time tab's two Settings rows and their sheets (#457).
+/* task-os — the Time tab's Settings row and its sheet (#457).
  *
- *   This device → Time tracking as   who this device logs time for (a
- *                                    label, never a credential); with one
- *                                    person configured it simply names them
- *   Tools → Time categories          areas and their categories: add,
- *                                    rename (a category's subtitle too,
- *                                    #463), reorder, move a category to
- *                                    another area, archive / unarchive;
- *                                    delete only a category nothing points
- *                                    at (`in_use` false, #463), so every
- *                                    past entry keeps its category and its
- *                                    totals
+ *   Tools → Time categories   areas and their categories: add, rename (a
+ *                             category's subtitle too, #463), reorder, move
+ *                             a category to another area, archive /
+ *                             unarchive; delete only a category nothing
+ *                             points at (`in_use` false, #463), so every
+ *                             past entry keeps its category and its totals
  *
- * The rows and sheet bodies are markup in index.html (the Settings pattern,
- * #397); this fills them. Every write goes to `/api/time/{areas,categories}`
+ * Who the tab logs as is not set here any more (#475): it is whoever is
+ * signed in. The row and sheet body are markup in index.html (the Settings
+ * pattern, #397); this fills them. Every write goes to `/api/time/{areas,categories}`
  * and then `onMetaChanged()` re-reads the meta the Time tab draws from.
  */
 
@@ -24,7 +20,6 @@ import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { api } from './api.js';
 import { confirmDialog } from './confirm.js';
 import { pickOption, promptCategory, promptText } from './time-dialogs.js';
-import { initialOf } from './time-format.js';
 import { toast } from './toast.js';
 
 function el(tag, cls, text) {
@@ -35,74 +30,31 @@ function el(tag, cls, text) {
 }
 
 /**
- * @param {{meta: () => (object|null), person: () => (string|null),
- *          onPerson: (id: string) => void, onMetaChanged: () => Promise<any>}} opts
+ * @param {{meta: () => (object|null), onMetaChanged: () => Promise<any>}} opts
  * @returns {{render: () => void, openSheet: (key: string) => void}}
  */
 export function mountTimeSettings(opts) {
   const els = {
-    personValue: document.getElementById('timePersonValue'),
-    personList: document.getElementById('timePersonList'),
     catsValue: document.getElementById('timeCatsValue'),
     catsHost: document.getElementById('timeCatsHost'),
   };
   const menu = createRowMenu({ className: 'time-admin-menu' });
 
-  /** The two rows' values. */
+  /** The row's value. */
   function render() {
     const meta = opts.meta();
     if (!meta) return;
-    const me = meta.people.find(function (p) { return p.id === opts.person(); });
-    els.personValue.textContent = me ? me.name : 'Not picked';
     const areas = meta.areas.filter(function (a) { return !a.archived; });
     const cats = areas.reduce(function (n, a) {
       return n + a.categories.filter(function (c) { return !c.archived; }).length;
     }, 0);
     els.catsValue.textContent = areas.length + (areas.length === 1 ? ' area · ' : ' areas · ') + cats
       + (cats === 1 ? ' category' : ' categories');
-    if (!els.personList.closest('[hidden]')) renderPeople();
     if (!els.catsHost.closest('[hidden]')) renderCategories();
   }
 
   function openSheet(key) {
-    if (key === 'timeperson') renderPeople();
     if (key === 'timecats') renderCategories();
-  }
-
-  // ------------------------------------------------------------ people
-  function renderPeople() {
-    const meta = opts.meta();
-    if (!meta) return;
-    const ul = el('ul', 'action-rows');
-    meta.people.forEach(function (p) {
-      const li = el('li', 'action-row');
-      const btn = el('button', 'action-row-main');
-      btn.type = 'button';
-      btn.dataset.track = 'time-person';
-      const chosen = p.id === opts.person();
-      if (chosen) btn.setAttribute('aria-current', 'true');
-      const av = el('span', 'action-row-avatar time-avatar', initialOf(p.name));
-      av.setAttribute('aria-hidden', 'true');
-      const text = el('span', 'action-row-text');
-      text.appendChild(el('span', 'action-row-title', p.name));
-      btn.append(av, text);
-      if (chosen) {
-        const check = el('span', 'time-check');
-        check.innerHTML = icon('check');
-        check.setAttribute('aria-label', 'This device');
-        btn.appendChild(check);
-      }
-      btn.addEventListener('click', function () {
-        if (chosen) return;
-        opts.onPerson(p.id);
-        toast('This device now logs time for ' + p.name);
-      });
-      li.appendChild(btn);
-      ul.appendChild(li);
-    });
-    const card = el('section', 'card action-list');
-    card.appendChild(ul);
-    els.personList.replaceChildren(card);
   }
 
   // -------------------------------------------------------- categories

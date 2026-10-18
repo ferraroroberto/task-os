@@ -1,21 +1,23 @@
 """Time route family — the time tracker behind the Time tab (#457).
 
-    GET    /api/time/meta                 people, areas + categories, compare area,
-                                          long-timer threshold, the server's today / now
+    GET    /api/time/meta                 people, ``you`` (the viewer's member id or null), areas +
+                                          categories, compare area, long-timer threshold,
+                                          the server's today / now
     GET    /api/time/timers               {items, now} — every running timer
-    POST   /api/time/timers               {person, category_id, switch?} → 201 {timer, entry}
+    POST   /api/time/timers               {person?, category_id, switch?} → 201 {timer, entry}
                                           (409 timer_running unless switch)
     POST   /api/time/timers/{person}/stop {minutes?} → the saved entry (409 no_timer)
     DELETE /api/time/timers/{person}      discard, nothing saved → 204 (409 no_timer)
     GET    /api/time/entries?q=&limit=&offset=      History, newest first
-    POST   /api/time/entries              {person, category_id, day, minutes, start?, note?} → 201
+    POST   /api/time/entries              {person?, category_id, day, minutes, start?, note?} → 201
     PATCH  /api/time/entries/{id}         any field above; 404 if deleted meanwhile
     DELETE /api/time/entries/{id}         → 204
-    PUT    /api/time/entries/by-source/{source_id}   {person, category_id, day, minutes, note?}
+    PUT    /api/time/entries/by-source/{source_id}   {person?, category_id, day, minutes, note?}
                                           → 201 created / 200 replaced (idempotent; no start)
     DELETE /api/time/entries/by-source/{source_id}   → 204 (404 when none)
     GET    /api/time/entries.csv?period=|from=&to=&area=&person=
-    GET    /api/time/recent?person=       the person's last five categories (ids)
+    GET    /api/time/recent?person=       the person's last five categories (ids);
+                                          ``person`` omitted = the viewer
     GET    /api/time/summary?period=&area=&person=
     GET    /api/time/guesses/{person}     yours, and the others' once yours is in
     PUT    /api/time/guesses/{person}     {pct}
@@ -27,7 +29,9 @@
 
 Every rule is in ``src/time_repo.py``; the routes only hand it the configured
 people (``config.time``). Gated by ``AuthMiddleware`` like every ``/api/``
-route — the person a device picks is a label, never a credential. Named
+route. A write is for the viewer (#475: their own token, or the install owner
+on loopback) unless the body names someone, so the owner can still edit the
+other person's entry from the PC; the person is a label, never a credential. Named
 ``time_tracker`` so the module can never shadow the stdlib ``time``.
 """
 
@@ -57,8 +61,27 @@ def _names(cfg: TimeConfig) -> dict[str, str]:
     return {p.id: p.name for p in cfg.people}
 
 
+def _viewer_id(request: Request) -> str | None:
+    """The time member behind this request, or ``None`` when nobody is
+    established or the viewer is no time member."""
+    viewer = getattr(request.state, "viewer", None)
+    if viewer is None or viewer.id is None or viewer.id not in _time(request).ids:
+        return None
+    return str(viewer.id)
+
+
+def _person(request: Request, explicit: str | None) -> str:
+    """The person a write is for: the one the body names, else the viewer (#475)."""
+    if explicit:
+        return explicit
+    you = _viewer_id(request)
+    if you is None:
+        raise ValidationError("person is required: this request is not signed in as a member")
+    return you
+
+
 class TimerStart(BaseModel):
-    person: str = Field(min_length=1)
+    person: str | None = Field(default=None, min_length=1)
     category_id: int
     switch: bool = False
 
@@ -68,7 +91,7 @@ class TimerStop(BaseModel):
 
 
 class EntryCreate(BaseModel):
-    person: str = Field(min_length=1)
+    person: str | None = Field(default=None, min_length=1)
     category_id: int
     day: str
     minutes: int
@@ -81,7 +104,7 @@ class EntryBySource(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    person: str = Field(min_length=1)
+    person: str | None = Field(default=None, min_length=1)
     category_id: int
     day: str
     minutes: int
@@ -131,6 +154,7 @@ def meta(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str
     cfg = _time(request)
     return {
         "people": [{"id": p.id, "name": p.name} for p in cfg.people],
+        "you": _viewer_id(request),
         "compare_area": cfg.compare_area,
         "long_timer_minutes": cfg.long_timer_minutes,
         "max_minutes": repo.MAX_MINUTES,
@@ -148,7 +172,7 @@ def list_timers(db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
 
 @router.post("/timers", status_code=201)
 def start_timer(body: TimerStart, request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
-    return repo.start_timer(db, body.person, body.category_id, people=_time(request).ids, switch=body.switch)
+    return repo.start_timer(db, _person(request, body.person), body.category_id, people=_time(request).ids, switch=body.switch)
 
 
 @router.post("/timers/{person}/stop")
@@ -176,7 +200,7 @@ def list_entries(
 @router.post("/entries", status_code=201)
 def create_entry(body: EntryCreate, request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     return repo.create_entry(
-        db, person=body.person, category_id=body.category_id, day=body.day, minutes=body.minutes,
+        db, person=_person(request, body.person), category_id=body.category_id, day=body.day, minutes=body.minutes,
         start=body.start, note=body.note, people=_time(request).ids,
     )
 
@@ -188,7 +212,7 @@ def put_entry_by_source(
 ) -> dict[str, Any]:
     """Create (201) or replace (200) the entry a pushing app keys on ``source_id``."""
     entry, created = repo.upsert_by_source(
-        db, source_id, person=body.person, category_id=body.category_id, day=body.day, minutes=body.minutes,
+        db, source_id, person=_person(request, body.person), category_id=body.category_id, day=body.day, minutes=body.minutes,
         note=body.note, people=_time(request).ids,
     )
     response.status_code = 201 if created else 200
@@ -247,8 +271,9 @@ def delete_entry(entry_id: int, db: sqlite3.Connection = Depends(get_db)) -> Res
 
 
 @router.get("/recent")
-def recent(person: str, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
-    return {"person": person, "category_ids": repo.recent_categories(db, person)}
+def recent(request: Request, person: str | None = None, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
+    who = _person(request, person)
+    return {"person": who, "category_ids": repo.recent_categories(db, who)}
 
 
 @router.get("/summary")

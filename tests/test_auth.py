@@ -493,6 +493,50 @@ def test_loopback_is_the_owner_unless_it_presents_a_members_cookie(make_app) -> 
         assert me["id"] == "p1"                                              # …a non-ASCII one too, never a 500
 
 
+def test_time_logs_as_the_viewer_unless_the_body_names_someone(make_app) -> None:
+    """#475: a write that leaves ``person`` out is the viewer's; an explicit one wins."""
+    app = _two_members(make_app)
+    as_p2 = {"Authorization": f"Bearer {P2_TOKEN}"}
+    with TestClient(app, client=PHONE) as c:
+        assert c.get("/api/time/meta", headers=as_p2).json()["you"] == "p2"
+        assert c.get("/api/time/meta", headers={"Authorization": f"Bearer {TOKEN}"}).json()["you"] == "p1"
+        cat = c.get("/api/time/meta", headers=as_p2).json()["areas"][0]["categories"][0]["id"]
+        started = c.post("/api/time/timers", json={"category_id": cat}, headers=as_p2)
+        assert started.status_code == 201 and started.json()["timer"]["person"] == "p2"
+        assert [t["person"] for t in c.get("/api/time/timers", headers=as_p2).json()["items"]] == ["p2"]
+        assert c.post("/api/time/timers/p2/stop", headers=as_p2).json()["person"] == "p2"
+        body = {"category_id": cat, "day": "2026-10-14", "minutes": 5}
+        assert c.post("/api/time/entries", json=body, headers=as_p2).json()["person"] == "p2"
+        explicit = c.post("/api/time/entries", json={**body, "person": "p1"}, headers=as_p2)
+        assert explicit.json()["person"] == "p1"                                  # an explicit person still works
+        put = c.put("/api/time/entries/by-source/usage:test:2026-10-14", json=body, headers=as_p2)
+        assert put.status_code == 201 and put.json()["person"] == "p2"
+        assert c.get("/api/time/recent", headers=as_p2).json() == {"person": "p2", "category_ids": [cat]}
+        assert c.get("/api/time/recent?person=p1", headers=as_p2).json()["person"] == "p1"
+
+
+def test_time_on_loopback_logs_as_the_owner_and_a_non_member_must_say_who(make_app) -> None:
+    with TestClient(_two_members(make_app), client=LOOPBACK) as c:
+        meta = c.get("/api/time/meta").json()
+        assert meta["you"] == "p1"
+        cat = meta["areas"][0]["categories"][0]["id"]
+        made = c.post("/api/time/entries", json={"category_id": cat, "day": "2026-10-14", "minutes": 5})
+        assert made.json()["person"] == "p1"
+        # …and the owner at the PC can still log for the other person
+        other = c.post("/api/time/entries", json={"category_id": cat, "day": "2026-10-14", "minutes": 5, "person": "p2"})
+        assert other.json()["person"] == "p2"
+    team = _team()
+    with TestClient(make_app(team=team), client=PHONE) as c:
+        c.post("/api/login", json={"secret": TEAM_PASSWORD})
+        c.post("/api/team/name", json={"name": "Sam Rivera"})                     # a team name, no member
+        meta = c.get("/api/time/meta").json()
+        assert meta["you"] is None
+        cat = meta["areas"][0]["categories"][0]["id"]
+        refused = c.post("/api/time/timers", json={"category_id": cat})
+        assert refused.status_code == 422 and "person is required" in refused.json()["error"]["message"]
+        assert c.post("/api/time/timers", json={"category_id": cat, "person": "p2"}).status_code == 201
+
+
 def test_a_member_signs_what_they_write_and_the_owner_is_unchanged(make_app) -> None:
     app = _two_members(make_app, team=_team(enabled=False))
     with TestClient(app, client=PHONE) as c:

@@ -1,13 +1,13 @@
 # Story 32 — track time and compare shares (#457)
 
-**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The first visit on a device asks who is tracking time there, a label for that device and not a sign-in. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals opens on the Home area at 30 days and compares the people's logged shares and hide the other person's guess until yours is locked in. In Settings → Time categories, a category is added with a subtitle that shows under its name in Log, the subtitle is cleared from its Edit dialog, and a category added by mistake can be deleted; one with entries cannot (#463).
+**Story.** A Time tab sits third in the nav (Today · Board · Time · Search). The tab logs as whoever is signed in (#475), so there is no "who is this device?" step. Log shows today per person, starts a timer with one tap and switches it in one call, and stops and saves it. Add time already spent saves an entry whose end follows from its start and minutes. History lists every entry by day with its clock range; any entry, whoever logged it, can be edited (moved to the other person, for one) or deleted from its row menu. Totals opens on the Home area at 30 days and compares the people's logged shares and hide the other person's guess until yours is locked in. In Settings → Time categories, a category is added with a subtitle that shows under its name in Log, the subtitle is cleared from its Edit dialog, and a category added by mistake can be deleted; one with entries cannot (#463).
 
 ## Steps and expected
 
 | # | Step | Expected |
 | --- | --- | --- |
 | 1 | Open the app on Today | Four tabs; no `/api/time/` request until Time is opened |
-| 2 | Open Time | The header reads *Time*; the person picker stands in for the views; picking *Person 1* stores `task-os.time.person` |
+| 2 | Open Time (a stale `task-os.time.person` = `p2` is in storage) | The header reads *Time*; no picker, the views are there; `/api/time/meta` says `you` = `p1` (this PC is the owner) and the stale key is removed, not obeyed (#475) |
 | 3 | Read Log | *Today so far*: Person 1 45m, Person 2 1h (the seed); the header line *45m today* |
 | 4 | Tap *Cooking and dishes* | The timer card, clock 0:00 (both clocks pinned); the header *1 running* |
 | 5 | The other device starts Person 2's timer; a second start for Person 1 | 201 for Person 2; 409 `timer_running` for Person 1 |
@@ -17,9 +17,10 @@
 | 9 | Add time already spent: Cleaning, 30 | The start defaults to 08:30 (it just ended at the pinned 09:00); saved |
 | 10 | History, edit that entry to Person 2 | The row read *08:30 to 09:00 · 30m · Person 1*, then *… · Person 2*; Person 1's today drops by exactly 30 and Person 2's rises by 30; the row menu holds Edit, Start again, Delete |
 | 11 | Totals (it opens on Home at 30 days, #463), guess 40 | The head-to-head, split bar and coverage line; no table until the guess is locked; then Person 2's 60% shows and *The guesses add up to 100%*; the CSV link carries the period and area |
+| 11c | Settings (#475) | There is no *Time tracking as* row |
 | 11a | Settings → Time categories: add *Made by mistake* to Home with the subtitle *one to delete*; open Log; Edit it and empty the subtitle (#463) | The subtitle shows under the name in Settings and on its Log start row; Edit opens with it filled, and after Save the row has no subtitle |
 | 11b | Open the same category's menu, Delete, confirm (#463) | *Cooking and dishes* (it has entries) offers no Delete; the new one does, the confirm reads *Delete Made by mistake?*, and the row goes; `DELETE` on a used category is 409 `category_in_use` |
-| 12 | Phone (390, dark), pick Person 2 | Log fits with no sideways scroll; the view segments are 44px targets |
+| 12 | Phone (390, dark): `/login` with Person 2's own token, open Time, start *Cooking and dishes*, stop (#475) | No picker; the glance reads 47m / 1h 30m; the running timer is `p2`'s on the server, the stop saves the 1-minute floor as `p2` (1h 31m); Log fits with no sideways scroll; the view segments are 44px targets |
 
 ## Proof
 
@@ -40,7 +41,9 @@ Result: **verified** (e2e desktop and phone, unit, scripted walk, 2026-10-18). *
 
 ### Owner's checklist
 
-- [ ] Add the `time` block to `config/config.json` (two people, ids matching the prototype's keys), `tray.bat --restart`, open Time on the phone and on the PC and pick a person on each.
+- [ ] Add the `time` block to `config/config.json` (two people, ids matching the prototype's keys), `tray.bat --restart`, open Time on the phone (signed in with its own token) and on the PC; each logs as its own person.
 - [ ] Start a timer on the phone, see it on the PC within 15 s, stop it on the PC; the phone shows it stopped.
 - [ ] Both people's timers running at once from two devices; a switch on one; an edit moving an entry to the other person.
 - [ ] Import the prototype's final export (`scripts/import_time_prototype.py`), compare the Home totals with the prototype, then stop using the prototype.
+
+**2026-10-18, #475 (log as the signed-in person):** steps 2, 11c and 12 changed; the desktop and phone legs run on one seeded instance whose config carries a token per member (the owner's and `p2`'s), and the phone signs in at `/login` instead of picking. Shots 3 (the viewer marked *(you)* in the head-to-head and the guess table) and 4 (the signed-in phone, after its own timer) are re-baselined; shots 1 and 2 are byte-identical. Unit: `tests/test_auth.py::test_time_logs_as_the_viewer_unless_the_body_names_someone` (timers, entries, `by-source`, `recent` and `meta.you` for a spoofed non-loopback client with the second member's token; an explicit `person` wins) and `::test_time_on_loopback_logs_as_the_owner_and_a_non_member_must_say_who`. Result: **verified** (unit, e2e desktop and phone). **Not verified:** the second person's real phone on the live install.

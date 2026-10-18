@@ -24,10 +24,11 @@
  * totals are re-read every POLL_MS, so a timer the other device started
  * appears without a reload. "Today" is always the server's.
  *
- * The person is a per-device label (`task-os.time.person`), never a
- * credential: the first visit with two or more people asks once, Settings →
- * This device changes it. People are told apart by their initial and, in the
- * bars, by solid vs hatched fill — never a second hue.
+ * The tab logs as whoever is signed in (#475): `/api/time/meta` says who
+ * (`you`), so there is no per-device picker and nothing is stored. Only a
+ * request that is no member (a team sign-in whose name matches nobody) is
+ * asked once per visit, in memory. People are told apart by their initial and,
+ * in the bars, by solid vs hatched fill — never a second hue.
  */
 
 'use strict';
@@ -44,7 +45,8 @@ import {
 import { mountTimeSettings } from './time-settings.js';
 import { toast } from './toast.js';
 
-export const PERSON_KEY = 'task-os.time.person';
+//: The per-device person key #457 stored; ignored since #475 and removed on the first read.
+const STALE_PERSON_KEY = 'task-os.time.person';
 const POLL_MS = 15000;
 const HISTORY_PAGE = 50;
 const FILTER_ABOVE = 12;   // design.md action-row.filterAboveRows
@@ -61,8 +63,8 @@ function el(tag, cls, text) {
   return e;
 }
 
-function storedPerson() {
-  try { return localStorage.getItem(PERSON_KEY); } catch (_) { return null; }
+function dropStalePerson() {
+  try { localStorage.removeItem(STALE_PERSON_KEY); } catch (_) { /* private mode */ }
 }
 
 /**
@@ -100,8 +102,6 @@ export function mountTime(opts) {
   const historyMenu = createRowMenu({ className: 'time-menu' });
   const settings = mountTimeSettings({
     meta: function () { return st.meta; },
-    person: function () { return st.person; },
-    onPerson: setPerson,
     onMetaChanged: function () { return loadMeta(true).then(rerender); },
   });
 
@@ -114,8 +114,8 @@ export function mountTime(opts) {
       st.now = meta.now;
       st.skew = Date.parse(meta.now) - Date.now();
       const ids = meta.people.map(function (p) { return p.id; });
-      const stored = storedPerson();
-      st.person = ids.length === 1 ? ids[0] : (ids.indexOf(stored) >= 0 ? stored : null);
+      dropStalePerson();
+      st.person = ids.length === 1 ? ids[0] : (ids.indexOf(meta.you) >= 0 ? meta.you : st.person);
       if (st.totals.area === null) {
         // first read: the household comparison at 30 days when there is one, else everything at 7
         const compare = ids.length > 1 && meta.areas.some(function (a) { return a.slug === meta.compare_area; });
@@ -132,6 +132,10 @@ export function mountTime(opts) {
     return st.metaLoad;
   }
 
+  /** A person's name in a list that holds both people: the viewer's is marked. */
+  function nameYou(id) {
+    return id === st.person && !solo() ? nameOf(id) + ' (you)' : nameOf(id);
+  }
   function solo() { return !st.meta || st.meta.people.length < 2; }
   function nameOf(id) {
     const p = st.meta && st.meta.people.find(function (x) { return x.id === id; });
@@ -238,8 +242,6 @@ export function mountTime(opts) {
 
   function setPerson(id) {
     st.person = id;
-    try { localStorage.setItem(PERSON_KEY, id); } catch (_) { /* private mode */ }
-    settings.render();
     rerender();
   }
 
@@ -247,8 +249,8 @@ export function mountTime(opts) {
   function renderPicker() {
     const card = el('section', 'card action-list time-picker-card');
     const head = el('div', 'time-card-head');
-    head.append(el('h2', 'time-card-title', 'Who is tracking time on this device?'));
-    const note = el('p', 'muted time-card-note', 'Only a label for this device; change it in Settings.');
+    head.append(el('h2', 'time-card-title', 'Who is tracking time?'));
+    const note = el('p', 'muted time-card-note', 'This sign-in is not one of the members, so say who this is for. Only a label for this visit.');
     const list = el('ul', 'action-rows');
     st.meta.people.forEach(function (p) {
       const li = el('li', 'action-row');
@@ -563,7 +565,7 @@ export function mountTime(opts) {
     bar.appendChild(area);
     if (!solo() && !q.compare) {
       bar.appendChild(segmented('Whose time', [
-        { value: 'me', label: nameOf(st.person), track: 'time-who' },
+        { value: 'me', label: 'Me', track: 'time-who' },
         { value: 'all', label: 'Everyone', track: 'time-who' },
       ], st.totals.who, function (v) { st.totals.who = v; loadTotals(); }, 'time-who'));
     }
@@ -625,7 +627,7 @@ export function mountTime(opts) {
         people.forEach(function (p) {
           const li = el('li', 'action-row time-sum-row');
           const main = el('div', 'action-row-main');
-          main.append(avatar(nameOf(p)), titleText(nameOf(p)));
+          main.append(avatar(nameOf(p)), titleText(nameYou(p)));
           li.append(main, el('span', 'action-row-value', fmtMinutes(s.by_person[p])));
           ul.appendChild(li);
         });
@@ -668,7 +670,7 @@ export function mountTime(opts) {
     people.forEach(function (p) {
       const col = el('div', 'time-h2h-person');
       const name = el('div', 'time-h2h-name');
-      name.append(avatar(nameOf(p)), document.createTextNode(nameOf(p)), swatch(fillFor(p)));
+      name.append(avatar(nameOf(p)), document.createTextNode(nameYou(p)), swatch(fillFor(p)));
       col.append(name, el('div', 'time-h2h-big', fmtMinutes(s.by_person[p])),
         el('div', 'muted time-h2h-pct', s.total_minutes ? share(p) + '% of logged time' : 'nothing logged'));
       h2h.appendChild(col);
@@ -726,7 +728,7 @@ export function mountTime(opts) {
       sum += pct;
       const tr = el('tr');
       const who = el('td');
-      who.append(avatar(nameOf(p)), document.createTextNode(nameOf(p)), swatch(fillFor(p)));
+      who.append(avatar(nameOf(p)), document.createTextNode(nameYou(p)), swatch(fillFor(p)));
       tr.append(who, el('td', '', pct + '%'),
         el('td', '', s.total_minutes ? Math.round(s.by_person[p] / s.total_minutes * 100) + '%' : '–'));
       tbody.appendChild(tr);

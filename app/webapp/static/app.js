@@ -950,7 +950,7 @@ function showSettingsSheet(key) {
   if (!settings.showSheet(key)) return;
   if (fresh) usage.trackView('settings.' + key);
   if (fresh && key === 'archive') archive.refresh();
-  if (fresh && (key === 'timeperson' || key === 'timecats')) time.openSheet(key);
+  if (fresh && key === 'timecats') time.openSheet(key);
 }
 
 /** The sheet's × / Done / Escape: back to the Settings list. */
