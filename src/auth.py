@@ -15,6 +15,16 @@ Two classes of caller:
 No token configured (the committed sample) means **only loopback can use the
 app**: the gate is closed, not open, and startup says so loudly.
 
+**One token per person** (#474): those two secrets are the install owner's
+(the first member); another member gets their own (``auth.people.<id>``,
+``gen_token.py --person`` / ``set_password.py --person``), so the credential
+itself says who signed in. Each passes the gate exactly as the owner's does,
+``/login`` hands a member back their own token as the cookie, and a member
+removed from the config has no token any more (401). :func:`resolve_viewer`
+reads the member — only from a credential that already passed — onto
+``scope["state"]["viewer"]`` (``GET /api/me``). A person binding is never a
+credential by itself.
+
 **Team mode** (``team.enabled``, Step 12) adds one more way through the same
 gate and loosens nothing: ``/login`` also accepts the shared team password
 (``scripts/set_team_password.py``, the same PBKDF2 hash) and hands back a
@@ -44,14 +54,15 @@ import hashlib
 import hmac
 import logging
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from src.config import AuthConfig, TeamConfig
+from src.config import IMPLICIT_PERSON, AuthConfig, Person, TeamConfig
 from src.team import NAME_COOKIE, member_from_cookie
 
 logger = logging.getLogger(__name__)
@@ -117,10 +128,22 @@ def is_public_path(path: str) -> bool:
     return path in PUBLIC_EXACT or path.startswith(PUBLIC_PREFIXES)
 
 
+def token_person(presented: str | None, auth: AuthConfig) -> str | None:
+    """The member a presented token belongs to — the owner for ``auth.token``,
+    a member for their own ``auth.people`` token (#474) — else ``None``."""
+    if not presented:
+        return None
+    # Bytes, not str: compare_digest refuses a non-ASCII str, and a cookie is
+    # now read on loopback too, where a stray one must be no one, never a 500.
+    candidate = presented.encode("utf-8", "surrogatepass")
+    for person_id, token in auth.tokens():
+        if hmac.compare_digest(candidate, token.encode("utf-8")):
+            return person_id
+    return None
+
+
 def token_matches(presented: str | None, auth: AuthConfig) -> bool:
-    if not presented or not auth.token:
-        return False
-    return hmac.compare_digest(presented, auth.token)
+    return token_person(presented, auth) is not None
 
 
 def team_session(auth: AuthConfig, team: TeamConfig) -> str | None:
@@ -142,18 +165,30 @@ def team_session_matches(presented: str | None, auth: AuthConfig, team: TeamConf
     return hmac.compare_digest(presented, expected)
 
 
-def check_secret(secret: str, auth: AuthConfig, team: TeamConfig | None = None) -> str | None:
-    """What ``/login`` accepts: the token itself, the optional password, or —
-    in team mode — the shared team password.
+@dataclass(frozen=True)
+class SignIn:
+    """A secret ``/login`` accepted: ``via`` is ``"token"`` / ``"password"`` /
+    ``"team"``; ``token`` the bearer the ``taskos_token`` cookie carries —
+    the signing-in member's own ("" for the team sign-in, whose cookie is
+    derived)."""
 
-    Returns ``"token"`` / ``"password"`` / ``"team"`` on success, ``None`` when refused.
-    """
-    if token_matches(secret, auth):
-        return "token"
-    if auth.password_hash and verify_password(secret, auth.password_hash):
-        return "password"
+    via: str
+    token: str = ""
+
+
+def check_secret(secret: str, auth: AuthConfig, team: TeamConfig | None = None) -> SignIn | None:
+    """What ``/login`` accepts: a member's token itself, a member's optional
+    password (the owner's or their own, #474), or — in team mode — the shared
+    team password. ``None`` when refused."""
+    person = token_person(secret, auth)
+    if person is not None:
+        return SignIn("token", secret)
+    for person, stored in auth.password_hashes():
+        # A password only unlocks a token: a member with none has nothing to hand back.
+        if auth.token_of(person) and verify_password(secret, stored):
+            return SignIn("password", auth.token_of(person))
     if team is not None and team_session(auth, team) and verify_password(secret, team.password_hash):
-        return "team"
+        return SignIn("team")
     return None
 
 
@@ -196,6 +231,43 @@ def classify(scope: Scope, auth: AuthConfig, team: TeamConfig | None = None) -> 
     return "denied"
 
 
+@dataclass(frozen=True)
+class Viewer:
+    """Who a request is (#474) — ``GET /api/me``'s body. ``id`` / ``name`` are
+    the member; ``via`` how that was established: ``"token"`` (their own
+    token, as a bearer header or the cookie a token or password sign-in set),
+    ``"team"`` (the team sign-in: the name it picked, ``id`` ``None`` when
+    that name is no member, both ``None`` before a pick) or ``"loopback"``
+    (this PC with no credential: the install owner)."""
+
+    id: str | None
+    name: str | None
+    via: str
+
+
+def resolve_viewer(
+    scope: Scope, verdict: str, auth: AuthConfig, team: TeamConfig, people: Sequence[Person]
+) -> Viewer | None:
+    """The member behind a request the gate let through (``verdict`` is
+    :func:`classify`'s), read only from a credential that passed it: a
+    member's token on any client, loopback included → that member; a team
+    sign-in → the member its name step picked; plain loopback → the install
+    owner (the first member). A denied or anonymous public request is nobody."""
+    names = {p.id: p.name for p in people}
+    headers = scope.get("headers", [])
+    for presented in (_bearer_value(headers), _cookie_value(headers)):
+        person = token_person(presented, auth)
+        if person is not None and person in names:
+            return Viewer(person, names[person], "token")
+    if verdict == "team":
+        picked = member_from_cookie(_cookie_value(headers, NAME_COOKIE), team)
+        member = next((p.id for p in people if p.name == picked), None) if picked else None
+        return Viewer(member, picked, "team")
+    if verdict == "loopback" and people:
+        return Viewer(people[0].id, people[0].name, "loopback")
+    return None
+
+
 def _login_redirect(scope: Scope, extra: str = "") -> RedirectResponse:
     path: str = scope.get("path", "")
     query = scope.get("query_string", b"").decode("latin-1")
@@ -211,10 +283,12 @@ class AuthMiddleware:
         app: ASGIApp,
         get_auth: Callable[[], AuthConfig],
         get_team: Callable[[], TeamConfig] = TeamConfig,
+        get_people: Callable[[], Sequence[Person]] = lambda: (IMPLICIT_PERSON,),
     ) -> None:
         self.app = app
         self._get_auth = get_auth
         self._get_team = get_team
+        self._get_people = get_people
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -223,7 +297,9 @@ class AuthMiddleware:
         auth = self._get_auth()
         team = self._get_team()
         verdict = classify(scope, auth, team)
-        scope.setdefault("state", {})["auth"] = verdict
+        state = scope.setdefault("state", {})
+        state["auth"] = verdict
+        state["viewer"] = resolve_viewer(scope, verdict, auth, team, self._get_people())
         path: str = scope.get("path", "")
         if verdict == "team" and not path.startswith("/api/") and not is_public_path(path):
             # A teammate names themselves before any page loads, so nothing

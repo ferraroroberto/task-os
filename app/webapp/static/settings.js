@@ -209,10 +209,19 @@ export function mountSettings(opts) {
     return [dt, dd];
   }
 
-  function renderAccessCard(st, team) {
+  // Who this browser is (#474): a row only once the install has two or more
+  // members. `me` is GET /api/me's body, or an Error when that call failed.
+  function meRow(me) {
+    if (me instanceof Error) return accessRow('Signed in as', false, 'unknown — ' + me.message);
+    if (!me || !me.name || !me.people || me.people.length < 2) return [];
+    return accessRow('Signed in as', null, me.name);
+  }
+
+  function renderAccessCard(st, team, me) {
     const client = { loopback: 'this PC', token: 'signed in', team: 'team member', public: 'public', denied: 'denied' }[st.auth.client] || st.auth.client;
     els.accessClient.textContent = client;
     els.accessRows.replaceChildren(
+      ...meRow(me),
       ...accessRow('HTTPS', st.https, st.https ? 'on — Tailscale certificate' : 'off — plain HTTP (run scripts/gen_tailscale_cert.py)'),
       ...accessRow('Access token', st.auth.enabled, st.auth.enabled ? 'configured — other devices sign in at /login' : 'not set — only this PC can use the app (scripts/gen_token.py)'),
       ...accessRow('Password', null, st.auth.password ? 'set — accepted at /login' : 'not set (optional; scripts/set_password.py)'),
@@ -362,11 +371,12 @@ export function mountSettings(opts) {
   // The card headers carry a state word (on · synced · indexed · off), never a count.
   async function refreshStatus() {
     try {
-      const [body, team] = await Promise.all([
+      const [body, team, me] = await Promise.all([
         api('/api/status'),
         api('/api/team').catch(function (err) { return err; }),
+        api('/api/me').catch(function (err) { return err; }),
       ]);
-      renderAccessCard(body, team);
+      renderAccessCard(body, team, me);
       renderMirrorRow(els.statusMirror, body.mirror);
       renderBackupRow(els.statusBackup, body.backup);
       renderMirrorEventsRow(body.mirror).catch(function () {});

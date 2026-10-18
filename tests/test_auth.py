@@ -24,12 +24,19 @@ PHONE = ("100.101.102.103", 50000)  # a tailnet client
 TOKEN = "t0ken-for-tests-only"
 
 
-def _write_config(path: Path, token: str = "", password_hash: str = "", team: dict | None = None) -> Path:
+def _write_config(
+    path: Path, token: str = "", password_hash: str = "", team: dict | None = None,
+    auth_people: dict | None = None, people: list | None = None,
+) -> Path:
     write_test_config(path)                                  # sample, mirror / backup dirs blanked
     raw = json.loads(path.read_text(encoding="utf-8"))
     raw["auth"] = {"token": token, "password_hash": password_hash}
     if team is not None:
         raw["team"] = team
+    if auth_people is not None:
+        raw["auth"]["people"] = auth_people
+    if people is not None:
+        raw["people"] = people
     path.write_text(json.dumps(raw), encoding="utf-8")
     return path
 
@@ -38,8 +45,9 @@ def _write_config(path: Path, token: str = "", password_hash: str = "", team: di
 def make_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
 
-    def _make(token: str = TOKEN, password_hash: str = "", team: dict | None = None):
-        cfg = _write_config(tmp_path / "config.json", token, password_hash, team)
+    def _make(token: str = TOKEN, password_hash: str = "", team: dict | None = None,
+              auth_people: dict | None = None, people: list | None = None):
+        cfg = _write_config(tmp_path / "config.json", token, password_hash, team, auth_people, people)
         monkeypatch.setenv(cfgmod.CONFIG_PATH_ENV, str(cfg))
         from app.webapp.server import create_app
 
@@ -367,3 +375,171 @@ def test_set_team_password_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "longenough" not in capsys.readouterr().out
     with pytest.raises(ValueError):
         cfgmod.save_team_password_hash("h", path=cfgmod.CONFIG_SAMPLE_PATH)
+
+
+# ------------------------------------------------- one token per person (#474)
+# The sample's members are time.people's p1 ("Person 1", the owner) and p2.
+
+P2_TOKEN = "p2-token-for-tests-only"
+P2_PASSWORD = "p2-password-for-tests"
+
+
+def _two_members(make_app, p2_hash: str = "", **kwargs):
+    return make_app(auth_people={"p2": {"token": P2_TOKEN, "password_hash": p2_hash}}, **kwargs)
+
+
+def test_members_fall_back_from_people_to_time_people_to_the_implicit_owner(tmp_path: Path) -> None:
+    sample = cfgmod.load_config(cfgmod.CONFIG_SAMPLE_PATH)
+    assert [p.id for p in sample.people] == ["p1", "p2"] and sample.owner.id == "p1"
+    assert sample.auth.owner == "p1"
+    cfg = _write_config(tmp_path / "c.json", team=_team(enabled=False))
+    assert cfgmod.load_config(cfg).team.people == PEOPLE        # no people block: team.people as is
+    cfg = _write_config(tmp_path / "c.json", people=[{"id": "a", "name": "Ada"}, {"id": "b", "name": "Bo"}])
+    loaded = cfgmod.load_config(cfg)
+    assert [p.id for p in loaded.people] == ["a", "b"]
+    assert loaded.team.people == ["Ada", "Bo"]                 # the name step lists the members
+    assert [p.id for p in loaded.time.people] == ["p1", "p2"]  # time.people still wins for Time
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    del raw["time"]["people"]
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    assert [p.id for p in cfgmod.load_config(cfg).time.people] == ["a", "b"]  # …and falls back on people
+    del raw["people"]
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    assert cfgmod.load_config(cfg).people == (cfgmod.IMPLICIT_PERSON,)
+
+
+def test_a_members_token_passes_the_gate_and_names_them(make_app) -> None:
+    with TestClient(_two_members(make_app), client=PHONE) as c:
+        assert c.get("/api/me").status_code == 401                               # gated like every /api/ route
+        me = c.get("/api/me", headers={"Authorization": f"Bearer {P2_TOKEN}"}).json()
+        assert (me["id"], me["name"], me["via"]) == ("p2", "Person 2", "token")
+        assert me["people"] == [{"id": "p1", "name": "Person 1"}, {"id": "p2", "name": "Person 2"}]
+        owner = c.get("/api/me", headers={"Authorization": f"Bearer {TOKEN}"}).json()
+        assert (owner["id"], owner["name"], owner["via"]) == ("p1", "Person 1", "token")
+        st = c.get("/api/status", headers={"Authorization": f"Bearer {P2_TOKEN}"}).json()
+        assert st["auth"] == {"enabled": True, "password": False, "client": "token"}  # the status shape is unchanged
+        # the cookie: a member's token at /login comes back as their own cookie
+        ok = c.post("/api/login", json={"secret": P2_TOKEN})
+        assert ok.json() == {"ok": True, "via": "token"} and c.cookies.get(COOKIE_NAME) == P2_TOKEN
+        assert c.get("/api/me").json()["id"] == "p2"
+
+
+def test_a_members_password_hands_back_their_own_token(make_app) -> None:
+    app = _two_members(make_app, password_hash=hash_password("owner horse"), p2_hash=hash_password(P2_PASSWORD))
+    with TestClient(app, client=PHONE) as c:
+        assert c.post("/api/login", json={"secret": "wrong horse"}).status_code == 401
+        ok = c.post("/api/login", json={"secret": P2_PASSWORD})
+        assert ok.status_code == 200 and ok.json()["via"] == "password"
+        assert c.cookies.get(COOKIE_NAME) == P2_TOKEN
+        assert c.get("/api/me").json()["name"] == "Person 2"
+        c.cookies.clear()
+        c.post("/api/login", json={"secret": "owner horse"})
+        assert c.cookies.get(COOKIE_NAME) == TOKEN                                # the owner's is unchanged
+
+
+def test_a_members_password_without_their_token_unlocks_nothing(make_app) -> None:
+    app = make_app(auth_people={"p2": {"token": "", "password_hash": hash_password(P2_PASSWORD)}})
+    with TestClient(app, client=PHONE) as c:
+        assert c.post("/api/login", json={"secret": P2_PASSWORD}).status_code == 401
+
+
+def test_a_members_token_alone_keeps_the_gate_closed_to_everyone_else(make_app) -> None:
+    app = make_app(token="", auth_people={"p2": {"token": P2_TOKEN}})
+    with TestClient(app, client=PHONE) as c:
+        assert c.get("/api/tasks").status_code == 401
+        assert c.post("/api/login", json={"secret": "anything"}).status_code == 401
+        assert c.get("/api/tasks", headers={"Authorization": f"Bearer {P2_TOKEN}"}).status_code == 200
+
+
+def test_removing_a_member_signs_them_out(make_app, tmp_path: Path) -> None:
+    app = _two_members(make_app)
+    with TestClient(app, client=PHONE) as c:
+        c.post("/api/login", json={"secret": P2_TOKEN})
+        assert c.get("/api/tasks").status_code == 200
+        cfg_path = tmp_path / "config.json"
+        raw = json.loads(cfg_path.read_text(encoding="utf-8"))
+        raw["time"]["people"] = [{"id": "p1", "name": "Person 1"}]          # p2 leaves; their secret stays in the file
+        cfg_path.write_text(json.dumps(raw), encoding="utf-8")
+        app.state.config = cfgmod.load_config(cfg_path)                       # what a restart does
+        assert c.get("/api/tasks").status_code == 401
+        assert c.get("/api/tasks", headers={"Authorization": f"Bearer {P2_TOKEN}"}).status_code == 401
+        assert c.get("/api/tasks", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 200
+
+
+def test_the_team_cookie_is_still_keyed_on_the_owners_token_alone(make_app) -> None:
+    plain = make_app(team=_team())
+    before = team_session(plain.state.config.auth, plain.state.config.team)
+    withp2 = _two_members(make_app, team=_team())
+    assert team_session(withp2.state.config.auth, withp2.state.config.team) == before
+    with TestClient(withp2, client=PHONE) as c:
+        assert c.post("/api/login", json={"secret": TEAM_PASSWORD}).json()["via"] == "team"
+        me = c.get("/api/me").json()
+        assert (me["id"], me["name"], me["via"]) == (None, None, "team")     # no name picked yet
+        c.post("/api/team/name", json={"name": "Sam Rivera"})
+        assert c.get("/api/me").json() == {**me, "name": "Sam Rivera"}       # a team name, not a member
+
+
+def test_loopback_is_the_owner_unless_it_presents_a_members_cookie(make_app) -> None:
+    with TestClient(_two_members(make_app), client=LOOPBACK) as c:
+        me = c.get("/api/me").json()
+        assert (me["id"], me["name"], me["via"]) == ("p1", "Person 1", "loopback")
+        c.cookies.set(COOKIE_NAME, P2_TOKEN)
+        me = c.get("/api/me").json()
+        assert (me["id"], me["via"]) == ("p2", "token")
+        assert c.get("/api/status").json()["auth"]["client"] == "loopback"   # the gate's verdict is unchanged
+        c.cookies.set(COOKIE_NAME, "not-a-token")
+        assert c.get("/api/me").json()["id"] == "p1"                         # a bad cookie is no one: the owner
+        me = c.get("/api/me", headers={"Cookie": f"{COOKIE_NAME}=caf\xe9".encode("latin-1")}).json()
+        assert me["id"] == "p1"                                              # …a non-ASCII one too, never a 500
+
+
+def test_a_member_signs_what_they_write_and_the_owner_is_unchanged(make_app) -> None:
+    app = _two_members(make_app, team=_team(enabled=False))
+    with TestClient(app, client=PHONE) as c:
+        c.post("/api/login", json={"secret": P2_TOKEN})
+        tid = _task(c)
+        assert c.post(f"/api/tasks/{tid}/comments", json={"body": "mine"}).json()["author"] == "Person 2"
+        c.patch(f"/api/tasks/{tid}", json={"priority": "high"})
+        top = c.get(f"/api/tasks/{tid}").json()["activity"][0]
+        assert (top["field"], top["actor"]) == ("priority", "Person 2")
+        assert c.post(f"/api/tasks/{tid}/comments", json={"body": "x", "author": "cli"}).json()["author"] == "cli"
+        hdr = {"X-Actor": "bot"}
+        assert c.post(f"/api/tasks/{tid}/comments", json={"body": "y"}, headers=hdr).json()["author"] == "bot"
+    with TestClient(app, client=LOOPBACK) as c:
+        # the owner keeps the name they sign with now (team.people[0]) until a people block names them
+        assert c.post(f"/api/tasks/{tid}/comments", json={"body": "owner"}).json()["author"] == "Alex Chen"
+
+
+def test_gen_token_and_set_password_for_a_person(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    from scripts import gen_token, set_password
+
+    target = tmp_path / "config.json"
+    write_test_config(target)
+    monkeypatch.setattr(cfgmod, "CONFIG_PATH", target)
+    monkeypatch.setattr(gen_token, "CONFIG_PATH", target)
+    monkeypatch.setattr(set_password, "CONFIG_PATH", target)
+    assert gen_token.main(["--person", "nobody"]) == 1                    # not a member
+    assert gen_token.main(["--person", "p1"]) == 1                        # the owner: no --person
+    assert set_password.main(["--person", "nobody", "longenough"]) == 1
+    assert set_password.main(["--person", "p2", "longenough"]) == 1       # no token of theirs yet
+    assert gen_token.main([]) == 0
+    owner = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
+    assert gen_token.main(["--person", "p2"]) == 0
+    auth = json.loads(target.read_text(encoding="utf-8"))["auth"]
+    p2 = auth["people"]["p2"]["token"]
+    assert auth["token"] == owner and len(p2) >= 32 and p2 != owner
+    capsys.readouterr()
+    assert gen_token.main(["--person", "p2"]) == 0                        # already set → no change, not printed
+    assert gen_token.main([]) == 0
+    out = capsys.readouterr().out
+    assert p2 not in out and owner not in out
+    assert json.loads(target.read_text(encoding="utf-8"))["auth"]["people"]["p2"]["token"] == p2
+    assert set_password.main(["--person", "p2", "longenough"]) == 0
+    auth = json.loads(target.read_text(encoding="utf-8"))["auth"]
+    assert verify_password("longenough", auth["people"]["p2"]["password_hash"]) and auth["password_hash"] == ""
+    assert "longenough" not in capsys.readouterr().out
+    cfg = cfgmod.load_config(target)
+    assert cfg.auth.token_of("p2") == p2 and cfg.auth.token_of("p1") == owner
+    assert gen_token.main(["--person", "p2", "--clear"]) == 0
+    auth = json.loads(target.read_text(encoding="utf-8"))["auth"]
+    assert auth["people"]["p2"]["token"] == "" and auth["token"] == owner  # only p2 is signed out

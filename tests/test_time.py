@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from src import clock
 from src import db as dbmod
 from src import time_repo as repo
-from src.config import IMPLICIT_TIME_PERSON, load_config
+from src.config import IMPLICIT_PERSON, load_config
 from src.tasks_repo import NotFound, ValidationError
 from tests.conftest import write_test_config
 
@@ -477,7 +477,7 @@ def test_time_config_people_and_the_implicit_owner(tmp_path: Path) -> None:
     raw = json.loads((tmp_path / "sample.json").read_text(encoding="utf-8"))
     raw.pop("time")
     (tmp_path / "none.json").write_text(json.dumps(raw), encoding="utf-8")
-    assert load_config(tmp_path / "none.json").time.people == (IMPLICIT_TIME_PERSON,)
+    assert load_config(tmp_path / "none.json").time.people == (IMPLICIT_PERSON,)
     raw["time"] = {"people": [{"id": "a", "name": "A"}, {"id": "a", "name": "Dup"}, {"name": "no id"}, "junk"]}
     (tmp_path / "odd.json").write_text(json.dumps(raw), encoding="utf-8")
     odd = load_config(tmp_path / "odd.json").time

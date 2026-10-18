@@ -4,13 +4,17 @@ and the access status.
     GET  /login        → the sign-in page (one field: token or password), and
                          in team mode the pick-your-name step (``?step=name``);
                          public — it is where a denied page request lands
-    POST /api/login    → {secret} → verifies the bearer token or the optional
+    POST /api/login    → {secret} → verifies a member's bearer token or optional
                          password (src.auth) and sets the ``taskos_token``
-                         cookie for 90 days; in team mode the team password
+                         cookie for 90 days to that member's own token (the
+                         owner's, or a member's ``auth.people`` one, #474);
+                         in team mode the team password
                          sets the ``taskos_team`` cookie instead (``via:
                          "team"``); 401 on refusal, 503 when no token is
                          configured (nothing to hand back)
     POST /api/logout   → clears the cookie (and, in team mode, the team + name cookies)
+    GET  /api/me       → {id, name, via, people: [{id, name}]} — who this request
+                         is (``src.auth.resolve_viewer``) and the install's members
     GET  /api/team     → {enabled, people: [{name, avatar}], you} — who can be
                          picked and who this browser is
     POST /api/team/name → {name} → sets the ``taskos_name`` cookie (an
@@ -37,7 +41,14 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
-from src.auth import COOKIE_MAX_AGE, COOKIE_NAME, TEAM_COOKIE, check_secret, team_session
+from src.auth import (
+    COOKIE_MAX_AGE,
+    COOKIE_NAME,
+    TEAM_COOKIE,
+    check_secret,
+    team_session,
+    token_person,
+)
 from src.config import AuthConfig, TeamConfig
 from src.team import NAME_COOKIE, avatar_file, encode_name, member_from_cookie
 
@@ -94,12 +105,13 @@ async def login(body: LoginBody, request: Request) -> JSONResponse:
     if not auth.enabled:
         logger.warning("⚠️ login attempt from %s but no auth token is configured (scripts/gen_token.py)", host)
         raise HTTPException(status_code=503, detail="no auth token configured — run scripts/gen_token.py on the host")
-    how = check_secret(body.secret.strip(), auth, team)
-    if how is None:
+    signed = check_secret(body.secret.strip(), auth, team)
+    if signed is None:
         logger.warning("🚨 failed sign-in from %s (%d chars presented)", host, len(body.secret))
         raise HTTPException(status_code=401, detail="wrong token or password")
-    logger.info("🔓 sign-in from %s via %s", host, how)
+    how = signed.via
     if how == "team":
+        logger.info("🔓 sign-in from %s via team", host)
         session = team_session(auth, team)
         if session is None:  # unreachable: check_secret answers "team" only when one exists
             raise HTTPException(status_code=401, detail="wrong token or password")
@@ -107,8 +119,10 @@ async def login(body: LoginBody, request: Request) -> JSONResponse:
         response = JSONResponse({"ok": True, "via": how, "you": you})
         _set_cookie(response, request, TEAM_COOKIE, session)
         return response
+    # The member's own token: the cookie is what says who signed in (#474).
+    logger.info("🔓 sign-in from %s via %s as member %s", host, how, token_person(signed.token, auth))
     response = JSONResponse({"ok": True, "via": how})
-    _set_cookie(response, request, COOKIE_NAME, auth.token)
+    _set_cookie(response, request, COOKIE_NAME, signed.token)
     return response
 
 
@@ -121,6 +135,17 @@ async def logout(request: Request) -> JSONResponse:
         response.delete_cookie(TEAM_COOKIE, path="/")
         response.delete_cookie(NAME_COOKIE, path="/")
     return response
+
+
+@router.get("/api/me")
+async def me(request: Request) -> dict[str, Any]:
+    viewer = getattr(request.state, "viewer", None)
+    return {
+        "id": viewer.id if viewer else None,
+        "name": viewer.name if viewer else None,
+        "via": viewer.via if viewer else "unknown",
+        "people": [{"id": p.id, "name": p.name} for p in request.app.state.config.people],
+    }
 
 
 @router.get("/api/team")
