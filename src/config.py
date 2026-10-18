@@ -260,16 +260,16 @@ class TeamConfig:
 
 
 @dataclass(frozen=True)
-class TimePerson:
-    """One person who tracks time: ``id`` is what every row stores, ``name``
-    only what the screen shows."""
+class Person:
+    """One member of the install (#474): ``id`` is what every row stores and
+    what ``auth.people`` keys a secret by, ``name`` only what the screen shows."""
 
     id: str
     name: str
 
 
-#: Who tracks time when the config names nobody: the owner, on their own.
-IMPLICIT_TIME_PERSON = TimePerson(id="me", name="Me")
+#: Who uses the install when the config names nobody: the owner, on their own.
+IMPLICIT_PERSON = Person(id="me", name="Me")
 
 
 @dataclass(frozen=True)
@@ -280,7 +280,7 @@ class TimeConfig:
     area slug the household comparison reads; ``long_timer_minutes`` how long
     a timer runs before the card asks whether it was forgotten."""
 
-    people: tuple[TimePerson, ...] = (IMPLICIT_TIME_PERSON,)
+    people: tuple[Person, ...] = (IMPLICIT_PERSON,)
     compare_area: str = "home"
     long_timer_minutes: int = 180
 
@@ -293,17 +293,29 @@ class TimeConfig:
         return next((p.name for p in self.people if p.id == person), person)
 
 
-def _time_people(value: Any) -> tuple[TimePerson, ...]:
-    """``time.people`` as validated people: an entry without an ``id``, or a
-    repeated one, is dropped with a warning; nothing usable = the implicit owner."""
-    people: list[TimePerson] = []
+def _people(value: Any, key: str) -> tuple[Person, ...]:
+    """A ``[{id, name}]`` block as validated people: an entry without an
+    ``id``, or a repeated one, is dropped with a warning. Empty when nothing
+    is usable — the caller picks the fallback."""
+    people: list[Person] = []
     for item in value if isinstance(value, list) else []:
         person_id = str(item.get("id", "") or "").strip() if isinstance(item, dict) else ""
         if not person_id or any(p.id == person_id for p in people):
-            logger.warning("⚠️ config: ignoring time.people entry %r (needs a unique id)", item)
+            logger.warning("⚠️ config: ignoring %s entry %r (needs a unique id)", key, item)
             continue
-        people.append(TimePerson(id=person_id, name=str(item.get("name", "") or "").strip() or person_id))
-    return tuple(people) or (IMPLICIT_TIME_PERSON,)
+        people.append(Person(id=person_id, name=str(item.get("name", "") or "").strip() or person_id))
+    return tuple(people)
+
+
+@dataclass(frozen=True)
+class PersonSecret:
+    """One member's own sign-in (#474): the bearer ``token``
+    (``scripts/gen_token.py --person``) and the optional ``password_hash``
+    (``scripts/set_password.py --person``)."""
+
+    id: str
+    token: str = ""
+    password_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -311,14 +323,33 @@ class AuthConfig:
     """Non-loopback access (Step 7). ``token`` is the bearer secret
     ``scripts/gen_token.py`` writes; ``password_hash`` the optional memorable
     alternative ``scripts/set_password.py`` stores (PBKDF2, never plaintext).
-    Both empty (the committed sample) = only this PC can use the app."""
+    Both are the install owner's (``owner``: the first member's id). ``people``
+    holds the other members' own secrets (#474) — only for ids still in the
+    members list, so removing a member signs them out. No token anywhere (the
+    committed sample) = only this PC can use the app."""
 
     token: str = ""
     password_hash: str = ""
+    owner: str = IMPLICIT_PERSON.id
+    people: tuple[PersonSecret, ...] = ()
 
     @property
     def enabled(self) -> bool:
-        return bool(self.token)
+        return bool(self.token) or any(p.token for p in self.people)
+
+    def tokens(self) -> list[tuple[str, str]]:
+        """``(member id, token)`` for every configured token, the owner's first."""
+        pairs = [(self.owner, self.token)] if self.token else []
+        return pairs + [(p.id, p.token) for p in self.people if p.token]
+
+    def password_hashes(self) -> list[tuple[str, str]]:
+        """``(member id, password hash)`` for every configured password, the owner's first."""
+        pairs = [(self.owner, self.password_hash)] if self.password_hash else []
+        return pairs + [(p.id, p.password_hash) for p in self.people if p.password_hash]
+
+    def token_of(self, person_id: str) -> str:
+        """The token a member's sign-in hands back as the cookie ("" for none)."""
+        return next((token for pid, token in self.tokens() if pid == person_id), "")
 
 
 @dataclass(frozen=True)
@@ -339,7 +370,27 @@ class AppConfig:
     team: TeamConfig = field(default_factory=TeamConfig)
     time: TimeConfig = field(default_factory=TimeConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
+    people: tuple[Person, ...] = (IMPLICIT_PERSON,)
     source_path: Path | None = None
+
+    @property
+    def owner(self) -> Person:
+        """The install owner — the first member."""
+        return self.people[0]
+
+    def person(self, person_id: str | None) -> Person | None:
+        """The member with ``person_id``, or ``None`` when it is not (or no longer) one."""
+        return next((p for p in self.people if p.id == person_id), None)
+
+    def member_secret_problem(self, person_id: str) -> str | None:
+        """Why ``person_id`` cannot hold a secret of its own
+        (``gen_token.py`` / ``set_password.py --person``), else ``None``."""
+        if person_id == self.owner.id:
+            return f"{person_id!r} is the install owner — their secrets are auth.token / auth.password_hash; drop --person"
+        if self.person(person_id) is None:
+            ids = ", ".join(p.id for p in self.people)
+            return f"{person_id!r} is not a member (people: {ids}) — add them to the people block first"
+        return None
 
 
 def config_path() -> Path:
@@ -475,6 +526,14 @@ def load_config(path: Path | None = None) -> AppConfig:
         logger.warning("⚠️ config: invalid port %r — falling back to %d", raw.get("port"), DEFAULT_PORT)
         port = DEFAULT_PORT
 
+    # One members list (#474): the top-level ``people`` block; until there is
+    # one, ``time.people`` (the deprecated spelling — same ids, so no time row
+    # is ever rewritten); else the implicit owner. Each falls back on the other.
+    listed = _people(raw.get("people"), "people")
+    time_people = _people(time_block.get("people"), "time.people")
+    people = listed or time_people or (IMPLICIT_PERSON,)
+    team_people = [p.name for p in listed] if listed else _as_str_list(team.get("people"))
+
     return AppConfig(
         site=str(raw.get("site", "home")),
         port=port,
@@ -565,11 +624,11 @@ def load_config(path: Path | None = None) -> AppConfig:
         ),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),
-            people=_as_str_list(team.get("people")),
+            people=team_people,
             password_hash=str(team.get("password_hash", "") or "").strip(),
         ),
         time=TimeConfig(
-            people=_time_people(time_block.get("people")),
+            people=time_people or people,
             compare_area=str(time_block.get("compare_area", TimeConfig.compare_area) or "").strip(),
             long_timer_minutes=_as_int(
                 time_block.get("long_timer_minutes"), TimeConfig.long_timer_minutes, "time.long_timer_minutes",
@@ -578,28 +637,64 @@ def load_config(path: Path | None = None) -> AppConfig:
         auth=AuthConfig(
             token=str(auth.get("token", "") or "").strip(),
             password_hash=str(auth.get("password_hash", "") or "").strip(),
+            owner=people[0].id,
+            people=_person_secrets(auth.get("people"), people),
         ),
+        people=people,
         source_path=src,
     )
 
 
-def save_auth(*, token: str | None = None, password_hash: str | None = None, path: Path | None = None) -> Path:
-    """Write ``auth.token`` / ``auth.password_hash`` into the **real** config.
+def _person_secrets(value: Any, people: tuple[Person, ...]) -> tuple[PersonSecret, ...]:
+    """``auth.people`` (``{<member id>: {token, password_hash}}``) for the ids
+    still in the members list. A secret whose member is gone is dropped — that
+    is how removing someone from the config signs them out."""
+    members = {p.id for p in people}
+    secrets: list[PersonSecret] = []
+    for person_id, entry in _as_dict(value).items():
+        if person_id not in members:
+            logger.warning("⚠️ config: auth.people has a secret for %r, who is not a member — ignored", person_id)
+            continue
+        entry = _as_dict(entry)
+        secrets.append(PersonSecret(
+            id=person_id,
+            token=str(entry.get("token", "") or "").strip(),
+            password_hash=str(entry.get("password_hash", "") or "").strip(),
+        ))
+    return tuple(secrets)
+
+
+def save_auth(
+    *,
+    token: str | None = None,
+    password_hash: str | None = None,
+    person: str | None = None,
+    path: Path | None = None,
+) -> Path:
+    """Write ``auth.token`` / ``auth.password_hash`` into the **real** config —
+    or, with ``person``, that member's ``auth.people.<id>`` pair (#474).
 
     Only the fields passed (non-``None``) change; everything else in the file
     is preserved. A missing ``config/config.json`` is created from the
     committed sample first — the sample itself is never written (it is the
-    public twin and must keep both fields empty). Used by ``scripts/gen_token.py``
+    public twin and must keep every secret empty). Used by ``scripts/gen_token.py``
     and ``scripts/set_password.py``; the running app re-reads config on
     restart only (``tray.bat --restart``).
     """
     target, raw = _read_for_secret_write(path)
     auth = _as_dict(raw.get("auth"))
+    people = {str(k): _as_dict(v) for k, v in _as_dict(auth.get("people")).items()}
+    entry = people.setdefault(person, {}) if person is not None else auth
     if token is not None:
-        auth["token"] = token
+        entry["token"] = token
     if password_hash is not None:
-        auth["password_hash"] = password_hash
+        entry["password_hash"] = password_hash
     raw["auth"] = {"token": str(auth.get("token", "")), "password_hash": str(auth.get("password_hash", ""))}
+    if people:
+        raw["auth"]["people"] = {
+            pid: {"token": str(e.get("token", "")), "password_hash": str(e.get("password_hash", ""))}
+            for pid, e in people.items()
+        }
     return _write_secret_config(target, raw)
 
 

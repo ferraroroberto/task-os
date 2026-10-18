@@ -26,8 +26,10 @@ ACTOR_HEADER = "X-Actor"
 
 def resolve_actor(request: Request, explicit: str | None = None) -> str:
     """Who is acting: an explicit body field → the ``X-Actor`` header → in
-    team mode, the name this browser picked (``src.team``) → the first
-    configured team member → ``"me"``."""
+    team mode, the name this browser picked (``src.team``) → a member signed
+    in with their own token (#474) → the first configured team member (the
+    owner's name: with a top-level ``people`` block, the first member's) →
+    ``"me"``."""
     if explicit and explicit.strip():
         return explicit.strip()
     header = request.headers.get(ACTOR_HEADER, "").strip()
@@ -39,6 +41,9 @@ def resolve_actor(request: Request, explicit: str | None = None) -> str:
         picked = member_from_cookie(request.cookies.get(NAME_COOKIE), team)
         if picked:
             return picked
+    viewer = getattr(request.state, "viewer", None)
+    if viewer is not None and viewer.name and config is not None and viewer.id != config.owner.id:
+        return viewer.name
     people = getattr(team, "people", None) or []
     return str(people[0]) if people else DEFAULT_ACTOR
 

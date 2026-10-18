@@ -215,13 +215,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # Access + transport, said once and loudly: an unestablished fact is its
     # own visible state, never folded into "fine".
-    if app.state.config.auth.enabled:
-        logger.info("🔐 auth: token configured — non-loopback clients sign in at /login")
+    auth_cfg = app.state.config.auth
+    if auth_cfg.enabled:
+        logger.info(
+            "🔐 auth: token configured — non-loopback clients sign in at /login (%d token(s) · %d member(s))",
+            len(auth_cfg.tokens()), len(app.state.config.people),
+        )
     else:
         logger.warning("⚠️ auth: no token in config — only this PC (loopback) can use the app; run scripts/gen_token.py")
     team = app.state.config.team
     if team.enabled:
-        if not (team.password_hash and app.state.config.auth.enabled):
+        if not (team.password_hash and auth_cfg.token):
             logger.warning("⚠️ team mode: on, but teammates cannot sign in — it needs both a token and a team password (scripts/set_team_password.py)")
         else:
             logger.info("👥 team mode: on — %d people to pick from at /login", len(team.people))
@@ -302,7 +306,10 @@ def create_app() -> FastAPI:
     # Starlette's gzip skips ``text/event-stream`` and anything under the minimum.
     app.add_middleware(GZipMiddleware, minimum_size=_GZIP_MIN_BYTES, compresslevel=6)
     app.add_middleware(
-        AuthMiddleware, get_auth=lambda: app.state.config.auth, get_team=lambda: app.state.config.team
+        AuthMiddleware,
+        get_auth=lambda: app.state.config.auth,
+        get_team=lambda: app.state.config.team,
+        get_people=lambda: app.state.config.people,
     )
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")

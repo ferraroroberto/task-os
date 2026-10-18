@@ -36,7 +36,8 @@ allowed on screen). What a browser can prove of the story:
   owner's checklist (story 29);
 - the /login page renders (phone + desktop shot) and signs in with the token
   against an instance booted with a temp config that carries one — the cookie
-  comes back and the shell loads. The non-loopback gate itself is unit-level
+  comes back and the shell loads; a second member's own token (#474) signs in
+  as them, and Settings reads "Signed in as" their name. The non-loopback gate itself is unit-level
   (``tests/test_auth.py``: a spoofed client address gets 401 / a redirect).
 
 Screenshots the validation record links to:
@@ -96,6 +97,8 @@ PHONE_LG = {"width": 430, "height": 932}
 DESKTOP = {"width": 1440, "height": 900}
 COLUMNS = ["inbox", "todo", "standby", "done"]
 E2E_TOKEN = "e2e-story-07-token"
+E2E_P2_TOKEN = "e2e-story-07-second-member-token"   # the sample's second member, p2 (#474)
+SIGNED_IN_AS = "#accessRows dt:text-is('Signed in as') + dd"
 # E2E_HEADED=1 shows the WebKit window — the headed walk of the same story.
 HEADLESS = os.environ.get("E2E_HEADED", "") != "1"
 
@@ -127,7 +130,7 @@ def authed_webapp() -> Iterator[str]:
     seed_db(work / "tasks.db", E2E_ANCHOR)
     cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
     raw = json.loads(cfg.read_text(encoding="utf-8"))
-    raw["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
+    raw["auth"] = {"token": E2E_TOKEN, "password_hash": "", "people": {"p2": {"token": E2E_P2_TOKEN}}}
     cfg.write_text(json.dumps(raw), encoding="utf-8")
     proc, base, log = _boot(work, work / "tasks.db", cfg)
     try:
@@ -650,8 +653,21 @@ def _login_page_and_token_sign_in(base: str, playwright: Playwright, browser: Br
         open_settings_sheet(page, "access", tap=True)
         expect(page.locator("#accessClient")).to_have_text("this PC")
         expect(page.locator("#accessRows")).to_contain_text("configured")
+        expect(page.locator(SIGNED_IN_AS)).to_have_text("Person 1")   # the owner's token (#474)
         st = page.request.get(f"{base}/api/status").json()
         assert st["auth"]["enabled"] is True and st["https"] is False
+        context.close()
+        # A second member signs in with their own token (#474): the cookie
+        # carries them, and Settings names them.
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        page.goto(f"{base}/login")
+        page.fill("#loginSecret", E2E_P2_TOKEN)
+        page.locator("#loginSubmit").tap()
+        expect(page.locator("nav.tabs .tab.active")).to_be_visible()
+        open_settings_sheet(page, "access", tap=True)
+        expect(page.locator(SIGNED_IN_AS)).to_have_text("Person 2")
+        assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
         context.close()
     finally:
         wk.close()
