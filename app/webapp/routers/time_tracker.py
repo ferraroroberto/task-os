@@ -11,6 +11,9 @@
     POST   /api/time/entries              {person, category_id, day, minutes, start?, note?} → 201
     PATCH  /api/time/entries/{id}         any field above; 404 if deleted meanwhile
     DELETE /api/time/entries/{id}         → 204
+    PUT    /api/time/entries/by-source/{source_id}   {person, category_id, day, minutes, note?}
+                                          → 201 created / 200 replaced (idempotent; no start)
+    DELETE /api/time/entries/by-source/{source_id}   → 204 (404 when none)
     GET    /api/time/entries.csv?period=|from=&to=&area=&person=
     GET    /api/time/recent?person=       the person's last five categories (ids)
     GET    /api/time/summary?period=&area=&person=
@@ -35,7 +38,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src import clock
 from src import time_repo as repo
@@ -70,6 +73,18 @@ class EntryCreate(BaseModel):
     day: str
     minutes: int
     start: str | None = None
+    note: str | None = None
+
+
+class EntryBySource(BaseModel):
+    """A pushed entry is duration-only, so a ``start`` is refused rather than dropped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    person: str = Field(min_length=1)
+    category_id: int
+    day: str
+    minutes: int
     note: str | None = None
 
 
@@ -164,6 +179,26 @@ def create_entry(body: EntryCreate, request: Request, db: sqlite3.Connection = D
         db, person=body.person, category_id=body.category_id, day=body.day, minutes=body.minutes,
         start=body.start, note=body.note, people=_time(request).ids,
     )
+
+
+@router.put("/entries/by-source/{source_id}")
+def put_entry_by_source(
+    source_id: str, body: EntryBySource, request: Request, response: Response,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict[str, Any]:
+    """Create (201) or replace (200) the entry a pushing app keys on ``source_id``."""
+    entry, created = repo.upsert_by_source(
+        db, source_id, person=body.person, category_id=body.category_id, day=body.day, minutes=body.minutes,
+        note=body.note, people=_time(request).ids,
+    )
+    response.status_code = 201 if created else 200
+    return entry
+
+
+@router.delete("/entries/by-source/{source_id}", status_code=204)
+def delete_entry_by_source(source_id: str, db: sqlite3.Connection = Depends(get_db)) -> Response:
+    repo.delete_by_source(db, source_id)
+    return Response(status_code=204)
 
 
 def _day_param(value: str | None, name: str) -> date | None:
