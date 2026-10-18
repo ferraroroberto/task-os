@@ -1,6 +1,7 @@
 """Story 32 — Track time and compare shares (#457).
 
-    Open Time → pick who this device is → start a timer → switch it → stop and
+    Open Time (no "who is this?" step: the tab logs as whoever is signed in,
+    #475) → start a timer → switch it → stop and
     save → add time already spent → edit that entry to the other person →
     read Totals, which opens on Home at 30 days → lock in a guess and see the
     other one → in Settings,
@@ -8,7 +9,9 @@
     delete the category made by mistake (#463).
 
 One seeded disposable instance (the sample config's placeholder people ``p1``
-"Person 1" and ``p2`` "Person 2", the synthetic seed's fortnight of time). Its
+"Person 1" and ``p2`` "Person 2", the synthetic seed's fortnight of time; the
+config carries a token for each, so the phone leg signs in at ``/login`` as the
+second person with their own). Its
 clock and the browser's are both pinned to ``E2E_NOW``, so a timer started
 here reads 0:00 and a stop saves the one-minute floor: the shots never frame a
 ticking value. The second device is the API (``page.request``), the way a
@@ -23,20 +26,27 @@ Shots:
     docs/screenshots/story-32-time-1-desktop.png  Log: today per person, the running timer
     docs/screenshots/story-32-time-2-desktop.png  History: clock ranges, the moved entry
     docs/screenshots/story-32-time-3-desktop.png  Totals (Home, 30 days by default): head-to-head, guesses revealed
-    docs/screenshots/story-32-time-4-phone.png    Log on the phone (dark), the other person
+    docs/screenshots/story-32-time-4-phone.png    Log on the phone (dark), signed in as the other person
 """
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import Browser, expect
 
+from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e.conftest import (
     E2E_ANCHOR,
+    _boot,
+    _terminate,
     close_settings_sheet,
     dismiss_toasts,
+    e2e_workdir,
     open_settings_sheet,
     shot,
 )
@@ -44,6 +54,28 @@ from tests.e2e.conftest import (
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 TODAY = E2E_ANCHOR.isoformat()
+OWNER_TOKEN = "e2e-story-32-owner-token"
+P2_TOKEN = "e2e-story-32-second-member-token"   # the sample's second member, p2 (#474)
+STALE_PERSON_KEY = "task-os.time.person"        # what #457 stored per device; ignored since #475
+
+
+@pytest.fixture(scope="module")
+def member_webapp() -> Iterator[str]:
+    """A seeded disposable instance whose config carries a token per member (the owner's and p2's)."""
+    from tests.fixtures.seed import seed_db
+
+    work = e2e_workdir("seeded-test_story_32_time")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
+    cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    raw["auth"] = {"token": OWNER_TOKEN, "password_hash": "", "people": {"p2": {"token": P2_TOKEN}}}
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    proc, base, log = _boot(work, work / "tasks.db", cfg)
+    try:
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
 
 
 def _start_row(page, name: str):
@@ -55,8 +87,8 @@ def _today(page, base: str) -> dict:
     return page.request.get(f"{base}/api/time/summary?period=today").json()["by_person"]
 
 
-def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, shots: Path) -> None:
-    base = seeded_webapp
+def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, shots: Path) -> None:
+    base = member_webapp
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
@@ -68,14 +100,15 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
         page.wait_for_load_state("networkidle")
         assert time_calls == [], "Today's load must not touch the time tracker"
 
-        # ---- first visit: who is this device?
+        # ---- first visit: no "who is this?" — this PC is the install owner (#475), and the
+        # device label an older build stored (here: the other person) changes nothing
+        page.evaluate(f"localStorage.setItem('{STALE_PERSON_KEY}', 'p2')")
         page.locator("nav.tabs .tab[data-tab='time']").click()
         expect(page.locator(".home-head h1.home-title")).to_have_text("Time")
-        picker = page.locator("#timePicker")
-        expect(picker).to_be_visible()
-        expect(page.locator("#timeViews")).to_be_hidden()
-        picker.locator(".action-row-main", has_text="Person 1").click()
-        assert page.evaluate("localStorage.getItem('task-os.time.person')") == "p1"
+        expect(page.locator("#timeViews")).to_be_visible()
+        expect(page.locator("#timePicker")).to_be_hidden()
+        page.wait_for_function(f"localStorage.getItem('{STALE_PERSON_KEY}') === null")
+        assert page.request.get(f"{base}/api/time/meta").json()["you"] == "p1"
 
         # ---- Log: today per person, then a timer
         glance = page.locator("#timeLog .time-glance")
@@ -171,6 +204,7 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
 
         # ---- Settings → Time categories: a category with a subtitle, shown in Log; then cleared
         cats = open_settings_sheet(page, "timecats")
+        expect(page.locator("[data-settings-sheet='timeperson']")).to_have_count(0)   # no "Time tracking as" row
         menu_items = page.locator(".time-admin-menu [role=menuitem]")
         cats.get_by_role("button", name="Area actions: Home").click()
         menu_items.filter(has_text="Add category").click()
@@ -207,19 +241,32 @@ def test_track_time_and_compare_shares(seeded_webapp: str, browser: Browser, sho
     finally:
         context.close()
 
-    # ---- the phone, as the other person (dark)
+    # ---- the phone, signed in as the other person with their own token (dark)
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True,
                                 color_scheme="dark")
     try:
         page = phone.new_page()
-        page.goto(f"{base}/")
+        page.goto(f"{base}/login")
+        page.fill("#loginSecret", P2_TOKEN)
+        page.locator("#loginSubmit").tap()
+        expect(page.locator("nav.tabs .tab.active")).to_be_visible()      # the shell, signed in
+        page.wait_for_load_state("networkidle")
         page.locator("nav.tabs .tab[data-tab='time']").tap()
-        page.locator("#timePicker .action-row-main", has_text="Person 2").tap()
+        expect(page.locator("#timePicker")).to_be_hidden()            # signed in, so no question
         expect(page.locator("#timeLog .time-glance .time-glance-value")).to_have_text(["47m", "1h 30m"])
+        # a timer started here is theirs: the server fills the person from the sign-in
+        _start_row(page, "Cooking and dishes").tap()
+        expect(page.locator("#timeLog .time-timer-cat")).to_have_text("Cooking and dishes")
+        assert [t["person"] for t in page.request.get(f"{base}/api/time/timers").json()["items"]] == ["p2"]
+        page.locator("#timeLog .time-timer").get_by_role("button", name="Stop and save").tap()
+        expect(page.locator("#timeLog .time-timer")).to_have_count(0)
+        assert _today(page, base) == {"p1": 47, "p2": 91}             # the one-minute floor, saved as p2
+        expect(page.locator("#timeLog .time-glance .time-glance-value")).to_have_text(["47m", "1h 31m"])
         for item in page.locator("#timeViews .segmented-item").all():
             assert_min_target(item)
         assert_no_horizontal_overflow(page)
         dismiss_toasts(page)
+        page.evaluate("window.scrollTo(0, 0)")   # the tap on a start row scrolled the page; frame the top
         shot(page, shots / "story-32-time-4-phone.png")
     finally:
         phone.close()

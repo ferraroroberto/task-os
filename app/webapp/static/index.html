@@ -568,18 +568,6 @@
                 <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
               </button>
             </li>
-            <!-- Who this device logs time for (#457): a label, never a
-                 credential (time-settings.js). Present from the first paint
-                 whatever the config holds, so the rows below never move when
-                 the value arrives. -->
-            <li class="action-row" id="timePersonRow">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="timeperson" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
-                <span class="action-row-title">Time tracking as</span>
-                <span class="settings-link-value" id="timePersonValue"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
             <li class="action-row">
               <button type="button" class="action-row-main settings-link" data-settings-sheet="palette" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
@@ -764,10 +752,6 @@
           <h4 class="row-actions-sub">The ⋯ menu</h4>
           <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
           <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
-        </section>
-        <section class="settings-sheet" id="timePersonCard" data-sheet="timeperson" hidden>
-          <p class="card-meta">Who this device logs time for. A label for this device only, not a sign-in: anyone with access can log or edit any entry.</p>
-          <div id="timePersonList"></div>
         </section>
         <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" hidden>
           <div id="timeCatsHost" class="time-admin"></div>
