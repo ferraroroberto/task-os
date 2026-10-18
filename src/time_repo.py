@@ -32,6 +32,11 @@ The rules worth knowing before changing anything:
 - **An import only ever adds** (:func:`import_rows`): keyed on the prototype's
   document id, a re-run inserts nothing, and a guess changed here after the
   import is never overwritten by it.
+- **A pushing app owns its entries** (:func:`upsert_by_source`, #469): an entry
+  whose ``source_id`` is namespaced (``usage:app-launcher:2026-10-14``) is
+  created or replaced by the app that pushed it, so a hand edit is overwritten
+  by the next push and a hand delete is recreated. The pattern needs a colon,
+  which no prototype document id carries, so the two key spaces cannot meet.
 
 ``people`` arguments are the configured ``time.people`` ids
 (``TimeConfig.ids``): the repo validates against them but never reads the
@@ -60,6 +65,8 @@ MAX_MINUTES = 1440
 MAX_NOTE_CHARS = 140
 #: Totals periods: today, the last 7 / 30 days (today included), everything.
 PERIODS = ("today", "7", "30", "all")
+#: A pushed entry's key: a lowercase namespace, a colon, then the caller's own id.
+SOURCE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*:[A-Za-z0-9:._-]{1,120}")
 CSV_COLUMNS = ("day", "start", "end", "minutes", "person_id", "person_name", "area", "category", "note")
 
 
@@ -468,6 +475,61 @@ def delete_entry(conn: sqlite3.Connection, entry_id: int) -> None:
         if conn.execute("DELETE FROM time_entries WHERE id = ?", (entry_id,)).rowcount == 0:
             raise NotFound(f"entry {entry_id} not found (deleted meanwhile?)")
     logger.info("ℹ️ time: entry %d deleted", entry_id)
+
+
+def _check_source_id(source_id: str) -> str:
+    if not SOURCE_ID_RE.fullmatch(source_id or ""):
+        raise ValidationError(
+            f"source_id {source_id!r} must be <namespace>:<id>, e.g. usage:app-launcher:2026-10-14")
+    return source_id
+
+
+def upsert_by_source(conn: sqlite3.Connection, source_id: str, *, person: str, category_id: int, day: str,
+                     minutes: int, people: Collection[str], note: str | None = None) -> tuple[dict[str, Any], bool]:
+    """Create or replace the duration-only entry a pushing app keys on
+    ``source_id`` (#469); returns ``(entry, created)``. The same checks as
+    :func:`create_entry`. Re-sending what is already stored changes nothing,
+    ``updated_at`` included, so a nightly re-push does not churn."""
+    _check_source_id(source_id)
+    _check_person(person, people)
+    minutes = _check_minutes(minutes)
+    note = _check_note(note)
+    the_day = _check_day(day).isoformat()
+    with _immediate(conn):
+        _check_pickable(conn, category_id)
+        row = conn.execute("SELECT * FROM time_entries WHERE source_id = ?", (source_id,)).fetchone()
+        if row is None:
+            now = clock.now_iso()
+            entry_id = int(conn.execute(
+                "INSERT INTO time_entries(person, category_id, day, minutes, note, created_at, updated_at, source_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (person, category_id, the_day, minutes, note, now, now, source_id),
+            ).lastrowid)
+            created = True
+            logger.info("ℹ️ time: entry %d added by its source %s (%s, %d min on %s)",
+                        entry_id, source_id, person, minutes, the_day)
+        else:
+            entry_id, created = int(row["id"]), False
+            wanted = {"person": person, "category_id": category_id, "day": the_day, "minutes": minutes,
+                      "note": note, "started_at": None, "ended_at": None}
+            if any(row[k] != v for k, v in wanted.items()):
+                conn.execute(
+                    f"UPDATE time_entries SET {', '.join(f'{k} = ?' for k in wanted)}, updated_at = ? WHERE id = ?",
+                    (*wanted.values(), clock.now_iso(), entry_id),
+                )
+                logger.info("ℹ️ time: entry %d replaced by its source %s", entry_id, source_id)
+            else:
+                logger.info("ℹ️ time: entry %d already matches its source %s", entry_id, source_id)
+    return get_entry(conn, entry_id), created
+
+
+def delete_by_source(conn: sqlite3.Connection, source_id: str) -> None:
+    """Remove the entry a pushing app keyed on ``source_id`` (404 when none is)."""
+    _check_source_id(source_id)
+    with _immediate(conn):
+        if conn.execute("DELETE FROM time_entries WHERE source_id = ?", (source_id,)).rowcount == 0:
+            raise NotFound(f"no entry has source_id {source_id!r}")
+    logger.info("ℹ️ time: entry with source %s deleted", source_id)
 
 
 def list_entries(conn: sqlite3.Connection, *, names: Mapping[str, str], q: str | None = None,

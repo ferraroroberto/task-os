@@ -540,6 +540,96 @@ def test_api_entries_edit_delete_summary_csv_guesses(client: TestClient) -> None
     assert gone.status_code == 404 and gone.json()["error"]["code"] == "not_found"
 
 
+SRC = "usage:app-launcher:2026-10-14"
+
+
+def _push(client: TestClient, source_id: str = SRC, **over: Any) -> Any:
+    cid = client.get("/api/time/meta").json()["areas"][0]["categories"][3]["id"]
+    body = {"person": "p1", "category_id": cid, "day": "2026-10-14", "minutes": 42, **over}
+    return client.put(f"/api/time/entries/by-source/{source_id}", json=body)
+
+
+def test_api_put_by_source_creates_then_replaces_then_is_a_no_op(client: TestClient, clk: dict) -> None:
+    first = _push(client, note="  screen time ")
+    assert first.status_code == 201
+    entry = first.json()
+    assert entry["source_id"] == SRC and entry["minutes"] == 42 and entry["note"] == "screen time"
+    assert entry["started_at"] is None and entry["ended_at"] is None     # duration-only
+
+    clk["now"] += timedelta(hours=1)
+    changed = _push(client, minutes=50)
+    assert changed.status_code == 200 and changed.json()["id"] == entry["id"]
+    assert changed.json()["minutes"] == 50 and changed.json()["note"] == ""   # a replace, not a merge
+    assert changed.json()["created_at"] == entry["created_at"] and changed.json()["updated_at"] != entry["updated_at"]
+
+    clk["now"] += timedelta(hours=1)
+    again = _push(client, minutes=50)
+    assert again.status_code == 200 and again.json() == changed.json()    # updated_at untouched too
+    assert client.get("/api/time/entries").json()["total"] == 1
+
+
+def test_api_put_by_source_replaces_every_field_it_carries(client: TestClient) -> None:
+    other = client.get("/api/time/meta").json()["areas"][0]["categories"][5]["id"]
+    entry = _push(client).json()
+    moved = _push(client, person="p2", category_id=other, day="2026-10-13").json()
+    assert (moved["id"], moved["person"], moved["category_id"], moved["day"]) == (entry["id"], "p2", other, "2026-10-13")
+
+
+def test_api_put_by_source_validates_like_a_hand_entry(client: TestClient) -> None:
+    meta = client.get("/api/time/meta").json()
+    laundry = next(c for c in meta["areas"][0]["categories"] if c["slug"] == "laundry")["id"]
+    client.patch(f"/api/time/categories/{laundry}", json={"archived": True})
+    refused = {
+        "unknown person": _push(client, person="nobody"),
+        "no minutes": _push(client, minutes=0),
+        "over a day": _push(client, minutes=1441),
+        "future day": _push(client, day="2026-10-18"),
+        "bad day": _push(client, day="yesterday"),
+        "archived category": _push(client, category_id=laundry),
+        "long note": _push(client, note="x" * 141),
+        "a start": _push(client, start="09:00"),
+        "no namespace": _push(client, source_id="2026-10-14"),
+        "upper-case namespace": _push(client, source_id="Usage:x"),
+        "empty id": _push(client, source_id="usage:"),
+        "id too long": _push(client, source_id="usage:" + "a" * 121),
+    }
+    for what, r in refused.items():
+        assert r.status_code == 422, what
+        assert r.json()["error"]["code"] == "validation_error", what
+    assert _push(client, category_id=9999).status_code == 404    # as POST /entries: no such category
+    assert client.get("/api/time/entries").json()["total"] == 0
+
+
+def test_api_delete_by_source_is_204_then_404(client: TestClient) -> None:
+    _push(client)
+    assert client.delete(f"/api/time/entries/by-source/{SRC}").status_code == 204
+    repeat = client.delete(f"/api/time/entries/by-source/{SRC}")
+    assert repeat.status_code == 404 and repeat.json()["error"]["code"] == "not_found"
+    assert client.delete("/api/time/entries/by-source/usage:never-sent").status_code == 404
+    assert client.delete("/api/time/entries/by-source/no-namespace").status_code == 422
+    assert _push(client).status_code == 201     # a delete frees the key: the next push recreates
+
+
+def test_by_source_leaves_entries_without_a_source_untouched(conn: sqlite3.Connection) -> None:
+    hand = repo.create_entry(conn, person="p1", category_id=cat(conn, "cooking"), day="2026-10-14",
+                             minutes=42, start="08:00", people=PEOPLE)
+    repo.import_rows(conn, [{"source_id": "protodoc1", "person": "p1", "category_id": cat(conn, "cooking"),
+                             "day": "2026-10-14", "minutes": 42, "note": "", "created_at": "2026-10-01T00:00:00+02:00"}], [])
+    before = [dict(r) for r in entries(conn)]
+    pushed, created = repo.upsert_by_source(conn, SRC, person="p1", category_id=cat(conn, "cooking"),
+                                            day="2026-10-14", minutes=42, people=PEOPLE)
+    assert created and pushed["id"] not in {r["id"] for r in before}
+    repo.upsert_by_source(conn, SRC, person="p1", category_id=cat(conn, "cooking"), day="2026-10-14",
+                          minutes=60, people=PEOPLE)
+    repo.delete_by_source(conn, SRC)
+    assert [dict(r) for r in entries(conn)] == before
+    assert repo.get_entry(conn, hand["id"])["started_at"] == hand["started_at"]
+    with pytest.raises(ValidationError):    # the importer's ids are not in the pushed key space
+        repo.delete_by_source(conn, "protodoc1")
+    with pytest.raises(NotFound):
+        repo.delete_by_source(conn, SRC)
+
+
 def test_api_area_and_category_admin(client: TestClient) -> None:
     area = client.post("/api/time/areas", json={"name": "Study"})
     assert area.status_code == 201 and area.json()["slug"] == "study"
@@ -573,3 +663,6 @@ def test_api_time_routes_are_gated_off_loopback(tmp_path: Path, monkeypatch: pyt
     with TestClient(create_app(), client=("100.64.0.9", 50000)) as c:
         assert c.get("/api/time/meta").status_code == 401
         assert c.post("/api/time/timers", json={"person": "p1", "category_id": 1}).status_code == 401
+        body = {"person": "p1", "category_id": 1, "day": "2026-10-14", "minutes": 5}
+        assert c.put(f"/api/time/entries/by-source/{SRC}", json=body).status_code == 401
+        assert c.delete(f"/api/time/entries/by-source/{SRC}").status_code == 401
