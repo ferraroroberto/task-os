@@ -23,8 +23,10 @@ The rules worth knowing before changing anything:
   (an entry crossing midnight stays on its start day), in the process clock's
   zone (``src/clock.py``); "today" and "not in the future" are the server's
   date, never the browser's.
-- **Archived, never deleted**: an archived area or category cannot be started
-  or picked, and every entry already in it keeps showing and counting.
+- **Archived, not deleted**: an archived area or category cannot be started
+  or picked, and every entry already in it keeps showing and counting. Only a
+  category nothing points at — no entry, no running timer — can be deleted
+  (:func:`delete_category`, #463): one made by mistake.
 - **Totals count configured people only** — the prototype's ``validEntries``
   rule, so imported totals match it; History lists every entry.
 - **An import only ever adds** (:func:`import_rows`): keyed on the prototype's
@@ -79,6 +81,13 @@ class SlugTaken(RepoError):
     """An area or category name whose slug is already used where it would land."""
 
     code = "slug_taken"
+    http_status = 409
+
+
+class CategoryInUse(RepoError):
+    """Deleting a category an entry or a running timer still points at — archive it instead."""
+
+    code = "category_in_use"
     http_status = 409
 
 
@@ -174,14 +183,28 @@ def list_areas(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         for r in conn.execute("SELECT * FROM time_areas ORDER BY position, id")
     ]
     by_id = {a["id"]: a for a in areas}
+    used = _used_category_ids(conn)
     for r in conn.execute("SELECT * FROM time_categories ORDER BY position, id"):
-        by_id[r["area_id"]]["categories"].append(_category_dict(r))
+        by_id[r["area_id"]]["categories"].append(_category_dict(r, r["id"] in used))
     return areas
 
 
-def _category_dict(r: sqlite3.Row) -> dict[str, Any]:
+def _used_category_ids(conn: sqlite3.Connection, category_id: int | None = None) -> set[int]:
+    """The categories an entry or a running timer points at (only ``category_id``'s
+    row, when given) — the ones :func:`delete_category` refuses."""
+    where, args = ("WHERE category_id = ?", (category_id, category_id)) if category_id is not None else ("", ())
+    return {int(r[0]) for r in conn.execute(
+        f"SELECT category_id FROM time_entries {where} UNION SELECT category_id FROM time_timers {where}", args)}
+
+
+def _category_dict(r: sqlite3.Row, in_use: bool) -> dict[str, Any]:
     return {"id": r["id"], "area_id": r["area_id"], "slug": r["slug"], "name": r["name"],
-            "hint": r["hint"], "position": r["position"], "archived": r["archived_at"] is not None}
+            "hint": r["hint"], "position": r["position"], "archived": r["archived_at"] is not None,
+            "in_use": in_use}
+
+
+def _category_out(conn: sqlite3.Connection, category_id: int) -> dict[str, Any]:
+    return _category_dict(_category_row(conn, category_id), bool(_used_category_ids(conn, category_id)))
 
 
 def _area_row(conn: sqlite3.Connection, area_id: int) -> sqlite3.Row:
@@ -270,7 +293,7 @@ def create_category(conn: sqlite3.Connection, area_id: int, name: str, hint: str
         ).lastrowid)
         _reorder(conn, "time_categories", "area_id", area_id, cid, None)
     logger.info("ℹ️ time: category %d %r added to area %d", cid, slug, area_id)
-    return _category_dict(_category_row(conn, cid))
+    return _category_out(conn, cid)
 
 
 def update_category(conn: sqlite3.Connection, category_id: int, *, name: str | None = None,
@@ -300,7 +323,22 @@ def update_category(conn: sqlite3.Connection, category_id: int, *, name: str | N
             target = area_id
         if position is not None or target != row["area_id"]:
             _reorder(conn, "time_categories", "area_id", target, category_id, position)
-    return _category_dict(_category_row(conn, category_id))
+    return _category_out(conn, category_id)
+
+
+def delete_category(conn: sqlite3.Connection, category_id: int) -> None:
+    """Delete a category made by mistake: only one no entry and no running
+    timer points at (409 ``category_in_use`` otherwise — archive that one), in
+    the same transaction as the check, so a timer started meanwhile on another
+    device either lands first and blocks the delete or finds the category gone.
+    The area's remaining categories close the gap."""
+    with _immediate(conn):
+        row = _category_row(conn, category_id)
+        if _used_category_ids(conn, category_id):
+            raise CategoryInUse(f"category {row['name']!r} has entries or a running timer; archive it instead")
+        conn.execute("DELETE FROM time_categories WHERE id = ?", (category_id,))
+        _reorder(conn, "time_categories", "area_id", row["area_id"])
+    logger.info("ℹ️ time: category %d %r deleted from area %d", category_id, row["slug"], row["area_id"])
 
 
 def category_by_slug(conn: sqlite3.Connection, area_slug: str, slug: str) -> int | None:

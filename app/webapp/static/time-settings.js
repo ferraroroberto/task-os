@@ -5,9 +5,11 @@
  *                                    person configured it simply names them
  *   Tools → Time categories          areas and their categories: add,
  *                                    rename, reorder, move a category to
- *                                    another area, archive / unarchive —
- *                                    never delete, so every past entry keeps
- *                                    its category and its totals
+ *                                    another area, archive / unarchive;
+ *                                    delete only a category nothing points
+ *                                    at (`in_use` false, #463), so every
+ *                                    past entry keeps its category and its
+ *                                    totals
  *
  * The rows and sheet bodies are markup in index.html (the Settings pattern,
  * #397); this fills them. Every write goes to `/api/time/{areas,categories}`
@@ -19,6 +21,7 @@
 import { icon } from './_vendored/icons/icons.js';
 import { createRowMenu } from './_vendored/row-menu/row-menu.js';
 import { api } from './api.js';
+import { confirmDialog } from './confirm.js';
 import { pickOption, promptText } from './time-dialogs.js';
 import { initialOf } from './time-format.js';
 import { toast } from './toast.js';
@@ -119,6 +122,17 @@ export function mountTimeSettings(opts) {
     });
   }
 
+  /** Delete a category no entry or timer points at; the server refuses (409
+   *  `category_in_use`) if one landed since the meta was read. */
+  async function deleteCategory(a, c) {
+    const ok = await confirmDialog({
+      title: 'Delete ' + c.name + '?',
+      lines: ['It has no entries, so no totals change. It leaves ' + a.name + ' for good.'],
+      action: 'Delete category',
+    });
+    if (ok) write('/api/time/categories/' + c.id, 'DELETE', undefined, 'Deleted ' + c.name);
+  }
+
   function areaItems(a, index, count) {
     return [
       { label: 'Rename', glyph: 'pencil', onTap: function () { rename('area', a); } },
@@ -159,6 +173,7 @@ export function mountTimeSettings(opts) {
       { label: c.archived ? 'Unarchive' : 'Archive', glyph: 'archive', onTap: function () {
         write('/api/time/categories/' + c.id, 'PATCH', { archived: !c.archived }, c.archived ? 'Unarchived ' + c.name : 'Archived ' + c.name);
       } },
+      { label: 'Delete', glyph: 'trash-2', danger: true, hidden: c.in_use, onTap: function () { deleteCategory(a, c); } },
     ];
   }
 
@@ -181,7 +196,7 @@ export function mountTimeSettings(opts) {
   function renderCategories() {
     const meta = opts.meta();
     if (!meta) return;
-    const parts = [el('p', 'card-meta', 'Areas hold the categories you start timers on. Archived ones leave the start list and the pickers but keep their past entries and totals.')];
+    const parts = [el('p', 'card-meta', 'Areas hold the categories you start timers on. Archived ones leave the start list and the pickers but keep their past entries and totals. A category with no entries can be deleted.')];
     meta.areas.forEach(function (a, ai) {
       const card = el('section', 'card action-list time-admin-area');
       const head = el('div', 'action-row time-admin-head');

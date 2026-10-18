@@ -20,6 +20,7 @@
     PATCH  /api/time/areas/{id}           {name?, position?, archived?}
     POST   /api/time/categories           {area_id, name, hint?} → 201
     PATCH  /api/time/categories/{id}      {name?, hint?, position?, area_id?, archived?}
+    DELETE /api/time/categories/{id}      → 204 (409 category_in_use: entries or a running timer)
 
 Every rule is in ``src/time_repo.py``; the routes only hand it the configured
 people (``config.time``). Gated by ``AuthMiddleware`` like every ``/api/``
@@ -254,3 +255,9 @@ def create_category(body: CategoryCreate, db: sqlite3.Connection = Depends(get_d
 @router.patch("/categories/{category_id}")
 def update_category(category_id: int, body: CategoryUpdate, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     return repo.update_category(db, category_id, **body.model_dump(exclude_unset=True))
+
+
+@router.delete("/categories/{category_id}", status_code=204)
+def delete_category(category_id: int, db: sqlite3.Connection = Depends(get_db)) -> Response:
+    repo.delete_category(db, category_id)
+    return Response(status_code=204)
