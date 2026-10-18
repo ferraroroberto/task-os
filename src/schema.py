@@ -630,10 +630,21 @@ INSERT INTO time_categories(area_id, slug, name, position)
     SELECT id, 'general', 'General', 0 FROM time_areas WHERE slug <> 'home';
 """
 
+# A task's owner (#476): the member whose task it is — a ``people`` /
+# ``time.people`` id from the config, never a display name, and never the
+# ``person_id`` contact a task is *about*. Purely additive: no existing row is
+# rewritten, so every task already here keeps NULL, which
+# ``src/tasks_repo.py`` reads as the install owner (the first member).
+_V20 = """
+ALTER TABLE tasks ADD COLUMN owner TEXT;
+CREATE INDEX idx_tasks_owner ON tasks(owner);
+"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
     12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17, 18: _V18, 19: _V19,
+    20: _V20,
 }
 
 #: The version a freshly migrated database carries.

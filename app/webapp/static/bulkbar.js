@@ -5,7 +5,7 @@
  * stacking a third row above the board: the pane keeps its height, and on the
  * phone nothing lands near the floating bottom-nav pill.
  *
- *   ☑ 3 selected   📅 Move   [Set status…▾]   🗑   ✕
+ *   ☑ 3 selected   📅 Move   [Set status…▾]   👤 Set owner…   🗑   ✕
  *
  * One line, and every control the same square height as the strip's own
  * buttons. Two edits, both applying the moment they are given a value — the
@@ -16,6 +16,11 @@
  * per task what it means (issue #54 semantics, applied in bulk). The third
  * action, delete (#121), is the one that asks first — the caller owns the
  * confirmation and the request; the bar only locks while it runs.
+ *
+ * Set owner… (#476) is there only when the install has two or more members:
+ * a square like Move, so a phone strip still has one elastic control, whose
+ * native select is the square's whole face (transparent) — the platform
+ * picker opens on a tap, the owner applies on its pick like a status.
  *
  * Mounted once per pane (Board, Today); every instance reads the one selection
  * store, so both bars always say the same number.
@@ -32,9 +37,10 @@ const STATUS_PLACEHOLDER = '';
 
 /**
  * @param {HTMLElement} host   the `.bulk-bar` container in a pane's top strip
- * @param {{onApply: (changes: {status?: string, due?: string}) => Promise<any>,
+ * @param {{onApply: (changes: {status?: string, due?: string, owner?: string}) => Promise<any>,
  *          onDelete: () => Promise<any>,
- *          onExit: () => void}} handlers
+ *          onExit: () => void,
+ *          members: () => Array<{id:string,name:string}>}} handlers
  * @returns {{render: () => void}}
  */
 export function mountBulkBar(host, handlers) {
@@ -93,6 +99,41 @@ export function mountBulkBar(host, handlers) {
     openDatePicker(subject, 'due', host, function (phrase) { apply({ due: phrase }, function () {}); });
   });
 
+  // Set owner… (#476): the square's face is its native select, so the picker
+  // is the platform's; its options follow the members list on every render.
+  const owner = document.createElement('label');
+  owner.className = 'icon-button bulk-owner';
+  owner.title = 'Set owner of the selected tasks…';
+  owner.innerHTML = icon('user');
+  const ownerSel = document.createElement('select');
+  ownerSel.className = 'bulk-owner-select';
+  ownerSel.setAttribute('aria-label', 'Set owner of the selected tasks');
+  owner.appendChild(ownerSel);
+  let ownerKey = null;
+  function syncOwners() {
+    const members = (handlers.members && handlers.members()) || [];
+    owner.hidden = members.length < 2;
+    const key = JSON.stringify(members);
+    if (key === ownerKey) return;
+    ownerKey = key;
+    ownerSel.textContent = '';
+    const ph = document.createElement('option');
+    ph.value = STATUS_PLACEHOLDER;
+    ph.textContent = 'Set owner…';
+    ownerSel.appendChild(ph);
+    members.forEach(function (m) {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.name;
+      ownerSel.appendChild(o);
+    });
+  }
+  ownerSel.addEventListener('change', function () {
+    const value = ownerSel.value;
+    if (value === STATUS_PLACEHOLDER) return;
+    apply({ owner: value }, function () { ownerSel.value = STATUS_PLACEHOLDER; });
+  });
+
   // Delete (#121): the caller confirms and posts; this square only locks the
   // bar while that runs, exactly like an apply.
   const del = document.createElement('button');
@@ -146,14 +187,16 @@ export function mountBulkBar(host, handlers) {
   function setDisabled(on) {
     move.disabled = on;
     status.disabled = on;
+    ownerSel.disabled = on;
     del.disabled = on;
   }
 
-  host.append(count, move, status, del, exit);
+  host.append(count, move, status, owner, del, exit);
 
   function render() {
     const n = selection.size();
     host.hidden = !(selection.isActive() && n > 0);
+    syncOwners();
     countText.textContent = String(n);
     // the visible text can lose the word on a narrow phone, so the whole
     // phrase lives on the label screen readers and the tests read

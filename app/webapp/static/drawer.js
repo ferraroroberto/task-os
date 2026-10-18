@@ -9,7 +9,7 @@
  * Top to bottom: breadcrumb → its parent tools (Change parent, and Remove
  * parent when there is one, #468) → editable title → Due (the field, then the date
  * sheet's phrases as one-tap moves, push-outs first, each with its date) →
- * status and priority → links as pills (the folder, the linked issue, every
+ * status and priority (and owner, with two or more members — #476) → links as pills (the folder, the linked issue, every
  * link: open-only, the editors are under More fields) → description
  * (markdown, edit/preview) → comments newest-first with URLs as clickable
  * chips + composer (Ctrl+Enter sends, origin=ui) — each row carries a pencil
@@ -58,6 +58,7 @@ let moreOpen = false;
  * @param {HTMLElement} el     the <aside id="taskDrawer">
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
+ *          members: () => Array<{id:string,name:string}>,
  *          parentTargets: (id:number) => Array<{id:number,title:string,depth:number,path:string}>,
  *          allTasks: () => Array<{id:number,title:string,depth?:number}>,
  *          onMove: (id:number, parentId:number|null) => Promise<any>,
@@ -446,6 +447,14 @@ export function createDrawer(el, opts) {
     fields.appendChild(quickMoves());
     fields.appendChild(statusField(t));
     fields.appendChild(selectField('Priority', 'priority', PRIORITIES, t.priority));
+    // Whose task it is (#476) — beside status and priority, never under More
+    // fields, so handing a task over is one pick on the phone too. One member
+    // has nobody to hand it to, so there is no control.
+    const members = opts.members() || [];
+    if (members.length > 1) {
+      fields.classList.add('has-owner');
+      fields.appendChild(selectField('Owner', 'owner', members.map(function (m) { return m.id; }), t.owner, memberName));
+    }
     el.appendChild(fields);
 
     el.appendChild(linkPills(t));
@@ -456,6 +465,13 @@ export function createDrawer(el, opts) {
 
     // ---- delete (#121): the one destructive control, last and quiet
     el.appendChild(renderDeleteFoot(t));
+  }
+
+  /** A member id as the name the members list gives it — the id itself once
+   *  that member is gone (an old activity row, a task never reassigned). */
+  function memberName(id) {
+    const m = (opts.members() || []).find(function (x) { return x.id === id; });
+    return m ? m.name : (id || '—');
   }
 
   /** The date sheet's phrases as one-tap moves under Due (#394): push-outs
@@ -846,13 +862,15 @@ export function createDrawer(el, opts) {
       change.appendChild(document.createTextNode(' '));
       const oldV = document.createElement('span');
       oldV.className = 'activity-old';
-      oldV.textContent = a.old_value == null ? '∅' : a.old_value;
+      // an owner is stored as a member id; the log reads it as the name (#476)
+      const shown = a.field === 'owner' ? memberName : function (v) { return v; };
+      oldV.textContent = a.old_value == null ? '∅' : shown(a.old_value);
       const arrow = document.createElement('span');
       arrow.className = 'activity-arrow';
       arrow.innerHTML = ' ' + icon('arrow-right') + ' ';
       const newV = document.createElement('span');
       newV.className = 'activity-new';
-      newV.textContent = a.new_value == null ? '∅' : a.new_value;
+      newV.textContent = a.new_value == null ? '∅' : shown(a.new_value);
       change.append(oldV, arrow, newV);
       const meta = document.createElement('span');
       meta.className = 'activity-meta';
