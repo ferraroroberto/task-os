@@ -81,6 +81,7 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
     assert_date_sheet,
+    assert_on_crumb_line,
     board_mode,
     close_filter_sheet,
     dismiss_toasts,
@@ -355,6 +356,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         expect(drawer.locator("#drawerTitle")).to_have_value("renew passport")
         expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
         expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)   # nothing to remove yet
+        assert_on_crumb_line(drawer)                                       # #486: on the breadcrumb's line
         expect(drawer.locator("select[data-field='parent']")).to_have_count(0)   # one way, not two
         drawer.locator(".drawer-change-parent").click()
         picker = page.locator("#parentDialog")
@@ -911,7 +913,8 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     pressed = done.evaluate("""el => { el.setAttribute('aria-pressed', 'true'); const c = getComputedStyle(el).color;
       el.setAttribute('aria-pressed', 'false'); return c; }""")
     assert pressed == want
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    before = _get(base, f"/api/tasks/{task_id}")
+    assert before["starts"] is None
     row.locator(".trow-kebab").click()
     page.locator(".row-menu [data-action='snooze']").click()
     menu = page.locator(".snooze-pop .snooze-menu")
@@ -923,14 +926,21 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     next_week = (today + timedelta(days=7)).isoformat()
     toast = page.locator(".toast-success").last
     expect(toast).to_contain_text("Snoozed to")
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] == next_week
+    snoozed = _get(base, f"/api/tasks/{task_id}")
+    assert snoozed["starts"] == next_week
+    # #486: the due date travels with the start when it would fall before it,
+    # so the task is never left asleep past its own due day
+    assert before["due"] and before["due"] < next_week, before["due"]
+    assert snoozed["due"] == next_week
+    expect(toast).to_contain_text("due moved too")
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_have_count(0)
     # the change is in the log like any other field change
     assert "starts" in [a["field"] for a in _get(base, f"/api/tasks/{task_id}")["activity"]]
 
     toast.locator(".toast-action").click()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    undone = _get(base, f"/api/tasks/{task_id}")
+    assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores both
 
     # 4b. Story 29 (#311): the row's ⋯ menu, read in full. The kebab lists the
     #     row's actions — the shared table's, offered only where they apply,

@@ -83,6 +83,7 @@ from tests.e2e.conftest import (
     E2E_TOKEN,
     assert_control_boundaries,
     assert_date_sheet,
+    assert_on_crumb_line,
     board_mode,
     open_settings_sheet,
     settle,
@@ -319,6 +320,7 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         tools = drawer.locator(".drawer-parent-tools button")
         expect(tools).to_have_text(["Change parent", "Remove parent"])
         assert_min_target(tools)
+        assert_on_crumb_line(drawer, may_wrap=True)   # #486: on the crumb's line, or cleanly under it
         drawer.locator(".drawer-change-parent").tap()
         picker = page.locator("dialog#parentDialog")
         expect(picker).to_be_visible()

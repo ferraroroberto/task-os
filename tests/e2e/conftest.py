@@ -904,6 +904,24 @@ def assert_date_sheet(menu: Locator, base: str) -> None:
     expect(opts.locator(".snooze-opt-date")).to_have_text([f"{d:%a} {d.day} {d:%b}" for d in days])
 
 
+def assert_on_crumb_line(drawer: Locator, *, may_wrap: bool = False) -> None:
+    """The drawer head's parent tools sit on the breadcrumb's line (#486), inside
+    the drawer, clear of the crumbs. `may_wrap`: a phone, where a long trail
+    pushes the tools under it — still clear of the crumbs and still inside."""
+    crumbs = drawer.locator(".drawer-crumbs").bounding_box()
+    box = drawer.bounding_box()
+    tools = drawer.locator(".drawer-parent-tools button")
+    assert crumbs and box and tools.count(), (crumbs, box)
+    first = tools.first.bounding_box()
+    for i in range(tools.count()):
+        b = tools.nth(i).bounding_box()
+        assert b["x"] >= box["x"] - 0.5 and b["x"] + b["width"] <= box["x"] + box["width"] + 0.5, (i, b, box)
+    same_line = abs((first["y"] + first["height"] / 2) - (crumbs["y"] + crumbs["height"] / 2)) <= 4
+    beside = first["x"] >= crumbs["x"] + crumbs["width"] - 0.5
+    below = first["y"] >= crumbs["y"] + crumbs["height"] - 0.5
+    assert (same_line and beside) or (may_wrap and below), ("crumbs", crumbs, "tools", first)
+
+
 def open_more_fields(drawer: Locator) -> Locator:
     """Open the drawer's **More fields** (#394) and return the disclosure.
 

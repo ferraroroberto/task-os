@@ -1420,9 +1420,12 @@ a.chip:hover { text-decoration: underline; }
 .crumb:hover { background: var(--accent-soft); }
 .crumb-root { color: var(--muted); cursor: default; }
 .crumb-sep { color: var(--muted); }
-.drawer-parent-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin: 0 0 var(--space-xs) calc(-1 * var(--space-xs)); }
-.drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 34px; padding: 0 var(--space-sm); color: var(--muted); }
-.drawer-parent-tools .button-ghost:hover { color: var(--fg); }
+.drawer-trail { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-xs); }
+/* The tools' wrapper adds no box of its own: each button joins the crumbs' line
+   and wraps on its own, so Change parent stays inline when Remove parent cannot (#486). */
+.drawer-parent-tools { display: contents; }
+.drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--hit-min); padding: 0 var(--space-sm); border-color: transparent; background: transparent; color: var(--muted); }
+.drawer-parent-tools .button-ghost:hover { color: var(--fg); background: var(--accent-soft); }
 .drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long

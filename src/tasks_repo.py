@@ -678,6 +678,14 @@ def update_task(
         if value != current[field]:
             sets[field] = value
 
+    # Snooze (#486): `starts` pushed past `due` would hide the task until the
+    # day after it was due. The start carries the due with it — unless the
+    # caller named `due` itself, which is their own pair and stays as sent.
+    if sets.get("starts") and "due" not in changes:
+        due = current["due"]
+        if due and due < sets["starts"]:
+            sets["due"] = sets["starts"]
+
     # Recurrence anchor (#112) — resolved against the cadence the task *ends*
     # with, so PATCHing both at once validates the pair, and changing only the
     # cadence re-checks the anchor already stored (dropping it when the new

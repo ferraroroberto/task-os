@@ -373,10 +373,10 @@ export function createDrawer(el, opts) {
     close.setAttribute('aria-label', 'Close');
     close.innerHTML = icon('x');
     close.addEventListener('click', function () { opts.onClose(); });
-    head.append(crumbs, close);
-    el.appendChild(head);
-
-    // ---- parent tools (#468): the breadcrumb is where the owner looks for the parent
+    // ---- parent tools (#468): the breadcrumb is where the owner looks for the
+    // parent, so they sit on its line (#486) and wrap under it when it is long
+    const trail = document.createElement('div');
+    trail.className = 'drawer-trail';
     const tools = document.createElement('div');
     tools.className = 'drawer-parent-tools';
     const change = document.createElement('button');
@@ -399,7 +399,9 @@ export function createDrawer(el, opts) {
       remove.addEventListener('click', function () { opts.onMove(t.id, null); });
       tools.appendChild(remove);
     }
-    el.appendChild(tools);
+    trail.append(crumbs, tools);
+    head.append(trail, close);
+    el.appendChild(head);
 
     // ---- title (editable)
     const titleRow = document.createElement('div');

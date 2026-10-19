@@ -139,11 +139,15 @@ export const ACTIONS = [
     id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: 'starts',
     label: 'Snooze…', hint: 'tomorrow · this weekend · next week · a date',
     plan: function (tasks, phrase) { return oneGroup(tasks, { starts: phrase }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['starts']); },
+    // A snooze past a task's due carries the due with it (tasks_repo, #486), so
+    // the undo puts both back.
+    invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
     applies: isOpen,
     message: function (tasks, arg, after) {
       const s = after && after.length === 1 ? after[0].starts : null;
-      return s ? 'Snoozed to ' + fmtDay(s) : 'Snoozed';
+      if (!s) return 'Snoozed';
+      const moved = tasks.length === 1 && after[0].due !== tasks[0].due;
+      return 'Snoozed to ' + fmtDay(s) + (moved ? ' · due moved too' : '');
     },
   },
   {
