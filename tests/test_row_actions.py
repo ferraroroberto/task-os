@@ -140,7 +140,10 @@ def test_every_undo_puts_back_each_tasks_own_prior_value() -> None:
     assert got == [
         [{"ids": [1], "changes": {"due": "2026-10-01"}}, {"ids": [2], "changes": {"due": "2026-10-02"}},
          {"ids": [3], "changes": {"due": None}}],
-        [{"ids": [1, 2], "changes": {"starts": None}}, {"ids": [3], "changes": {"starts": "2026-10-09"}}],
+        # snooze can move `due` with `starts` (#486), so its undo puts both back
+        [{"ids": [1], "changes": {"starts": None, "due": "2026-10-01"}},
+         {"ids": [2], "changes": {"starts": None, "due": "2026-10-02"}},
+         {"ids": [3], "changes": {"starts": "2026-10-09", "due": None}}],
         [{"ids": [1], "changes": {"priority": "low"}}, {"ids": [2], "changes": {"priority": "none"}},
          {"ids": [3], "changes": {"priority": "high"}}],
         [{"ids": [1], "changes": {"status": "todo"}}, {"ids": [2], "changes": {"status": "inbox"}},
