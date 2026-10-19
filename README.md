@@ -130,7 +130,8 @@ scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determin
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py, set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
-                          email-archiver index) + e2e/ (Playwright, one story test per step)
+                          email-archiver index) + e2e/ (Playwright, one story test per step; its tests tag every surface they open with
+                          the vendored `surface(page, "<tab>.<surface>")` hook, a no-op unless `/design-review measure task-os --e2e` arms it)
 docs/                     validation.md (the story index + phase gates) + validation/ (each story's and UX round's full
                           write-up) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)

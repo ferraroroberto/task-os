@@ -34,6 +34,7 @@ tray_watchdog  = { src = "app/tray/watchdog.py",                      sha = "4c6
 e2e_live_guard = { src = "tests/e2e/_e2e_live_guard.py",              sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_e2e_live_guard.py" }
 geometry       = { src = "tests/e2e/_geometry.py",                    sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_geometry.py" }
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_browser_sweep.py" }
+surface_capture = { src = "tests/e2e/_surface.py",                   sha = "5c4d3a7947dae8b3b4a028bf636c0f052ea3b1f7", dest = "tests/e2e/_surface.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "scripts/classify_e2e.py" }
 no_window      = { src = "src/no_window.py",                          sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/no_window.py" }
 pooled_http    = { src = "src/pooled_http.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/pooled_http.py" }
@@ -161,6 +162,12 @@ path = ".gitattributes"
 [[e2e.rule]]
 tier = "none"
 path = "LICENSE"
+
+# /design-review's e2e capture (tests/e2e/_surface.py) flips light/dark in place on an open
+# surface; this app stamps html[data-theme] at load from task-os.theme (else the OS
+# scheme), so the hook has to set that key too or its dark shots stay light.
+[design.review]
+theme_storage_key = "task-os.theme"
 
 # /design-review (fleet-config skills/design-review): Settings is no tab since
 # #281 (five destinations is the pill's ceiling) but the header gear, so the

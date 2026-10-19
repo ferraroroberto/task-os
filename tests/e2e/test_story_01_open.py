@@ -30,6 +30,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._surface import surface
 from tests.e2e._uniform import assert_code_off_canvas_subtle
 from tests.e2e.conftest import (
     assert_control_boundaries,
@@ -88,6 +89,16 @@ def test_story_01_open(
     desktop opens, the phone opens."""
     _api_leg(webapp)
     sha = _version(webapp)["git_sha"]
+    # The design-inventory hook finds a test by `surface(` in its own body, not in
+    # a leg it delegates to, so the fresh install's Today is tagged here.
+    context = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    try:
+        page = context.new_page()
+        page.goto(webapp)
+        _assert_shell(page, sha)
+        surface(page, "today.empty-install")
+    finally:
+        context.close()
     _desktop_leg(webapp, browser, shots, sha)
     _phone_leg(webapp, playwright, shots, sha)
 

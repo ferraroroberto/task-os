@@ -71,6 +71,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     INTERCEPT,
     _boot,
@@ -456,6 +457,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     expect(pane.locator("#archiveRun")).to_be_enabled()
     expect(pane.locator("#archiveHost .empty-state-message")).to_contain_text("No run yet")
     shot(page, shots / "story-24-archive-3-desktop.png")
+    surface(page, "settings.archive-empty")
 
     # 4. Press it. While the child is working the button is disabled and a
     #    second run is refused by the API with its own reason — one Outlook,

@@ -71,6 +71,7 @@ from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
 from tests.e2e._host_identity import RENDERED_TEXT_JS, describe, leaks
+from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
 from tests.e2e._work_root_lock import WorkRootBusy, boot_lock
 from tests.e2e._work_root_lock import acquire as acquire_work_root
 

@@ -132,6 +132,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     E2E_P2_TOKEN,
@@ -388,6 +389,7 @@ def test_desktop_board_day(
             assert _col(page, k).evaluate("el => getComputedStyle(el).borderRadius") == "0px", k
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-1-desktop.png")
+        surface(page, "board.columns")
 
         # 2. The top strip (#80): the text filter is on screen without opening
         #    anything — typing filters the board live — and the + opens the one
@@ -547,6 +549,7 @@ def test_desktop_board_day(
         assert mine_week < today["counts"]["week"]                    # the seed has an issue due this week
         expect(soon.locator(".collapse-count")).to_have_text(str(mine_week))
         shot(page, shots / "story-05-board-5-desktop.png")
+        surface(page, "today.soon")
 
         # 6b. Move (#392): on a fine pointer every open row carries the one
         #     visible verb — a 44px icon button between the title and the
@@ -572,6 +575,7 @@ def test_desktop_board_day(
         assert_date_sheet(sheet, base)
         expect(school).to_have_class(re.compile(r"\bis-key-target\b"))     # the row it moves stays marked
         shot(page, shots / "story-05-board-13-desktop.png")
+        surface(page, "today.date-popover")
         tomorrow = (E2E_ANCHOR + timedelta(days=1)).isoformat()
         # The toast is raised only after the write *and* a full refresh, so wait
         # for them in the order they happen: the POST lands (bounded by the
@@ -684,6 +688,7 @@ def test_desktop_board_day(
         assert all(round(s["w"]) == round(s["h"]) for s in boxes[:1] + boxes[2:]), boxes
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-10-desktop.png")
+        surface(page, "board.select-bar")
 
         # 10. The selection carries to Today: its own Select bar is up, counting
         #     the same three — one store, not a set per view.
@@ -1190,6 +1195,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
+    surface(page, "app.keys-help")
     page.keyboard.press("Escape")
     expect(page.locator("#keysHelp")).to_be_hidden()
 
@@ -1207,6 +1213,7 @@ def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
     expect(page.locator(".palette-item").first).to_contain_text("Cycle priority")
     expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
     shot(page, shots / "story-16-keyboard-triage-5-desktop.png")
+    surface(page, "app.palette")
     page.keyboard.press("Escape")
     expect(page.locator("#palette")).to_be_hidden()
 
@@ -1269,6 +1276,7 @@ def _walk_done_journal(page: Page, base: str, shots: Path) -> None:
     _open_issue_from_menu(page, drift, "garden-bot/issues/12")   # a closed task's menu still carries the link
     expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
     shot(page, shots / "story-18-done-journal-1-desktop.png")
+    surface(page, "journal.done-days")
 
     # 4. The cancelled switch drops the muted rows (and the count follows).
     page.click(".journal-toggle .toggle")
@@ -1404,6 +1412,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(dialog.locator(".confirm-body")).to_contain_text("cannot be undone")
     expect(dialog.locator(".confirm-warn")).to_have_count(0)     # not a synced coding task
     shot(page, shots / "story-19-delete-task-1-desktop.png")
+    surface(page, "app.confirm-delete")
 
     # 2. Escape is "no": the drawer stays, the task is still there.
     page.keyboard.press("Escape")

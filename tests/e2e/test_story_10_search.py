@@ -44,6 +44,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     FAKE_ISSUES,
@@ -221,6 +222,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(page.locator(".search-hit mark").first).to_be_visible()
     assert "q=kitchen" in page.url                                # ?q= keeps the query
     shot(page, shots / "story-10-search-1-desktop.png", full_page=True)
+    surface(page, "search.results")
 
     # 2. open a task (the Kitchen task) from its row → the drawer beside the results
     kitchen_hit.locator(".trow-main").click()
