@@ -76,6 +76,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
@@ -238,6 +239,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         assert board_box and drawer_box and board_box["x"] + board_box["width"] <= drawer_box["x"] + 1
         assert drawer_box["width"] >= 400
         shot(page, shots / "story-04-triage-3-desktop.png")
+        surface(page, "board.drawer")
 
         # 3b. Due leads the drawer with the date sheet's phrases as one-tap
         #     moves (#394): push-outs first, each with the date it resolves to;
@@ -314,6 +316,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         quick_add.locator(".quick-add-link-url").fill("https://example.com/passport-form")
         quick_add.locator(".quick-add-link-label").fill("application form")
         shot(page, shots / "story-04-triage-5-desktop.png")
+        surface(page, "app.quick-add")
 
         # 6. Enter creates it with everything set and closes the dialog; the new
         #    row is focused (default filter = open).
@@ -361,6 +364,7 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         picker.locator(".parent-filter").fill("family")
         expect(picker.locator(".parent-opt:visible .parent-opt-title").first).to_have_text("Family admin")
         shot(page, shots / "story-04-triage-12-desktop.png")
+        surface(page, "app.parent-picker")
         picker.locator(f".parent-opt[data-id='{family_id}']").click()
         expect(picker).to_be_hidden()
         expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
@@ -753,6 +757,7 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     assert kebab and kebab["x"] + kebab["width"] <= drawer_box["x"], "the ⋯ must sit inside the list half"
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-1-desktop.png")
+    surface(page, "today.split-drawer")
     # the keymap stays on beside it: a focused row still takes a key
     first.locator(".trow-main").focus()
     page.keyboard.press("?")
@@ -788,6 +793,7 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     assert list_box["x"] + list_box["width"] <= drawer_box["x"] + 1, (list_box, drawer_box)
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-2-desktop.png")
+    surface(page, "today.drawer-empty")
 
     # 3. The cold deep link opens its own task on Today (the landing tab),
     #    not the first due one, without an overlay.
@@ -945,6 +951,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert actions[-1] == "open"
     expect(menu.locator(".row-menu-item").first).to_be_focused()
     shot(page, shots / "story-29-row-actions-1-desktop.png")
+    surface(page, "today.row-menu")
     menu.locator("[data-action='snooze']").click()
     expect(menu).to_be_hidden()
     picker = page.locator(".snooze-pop .snooze-menu")
@@ -1217,6 +1224,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         assert_min_target(menu.locator(".snooze-opt"))
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-13-starts-snooze-6-phone.png")
+        surface(page, "today.date-sheet")
         page.keyboard.press("Escape")
         expect(menu).to_be_hidden()
 

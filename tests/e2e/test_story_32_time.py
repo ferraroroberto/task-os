@@ -40,6 +40,7 @@ from playwright.sync_api import Browser, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _boot,
@@ -133,11 +134,13 @@ def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, sho
         expect(page.locator("#homeHeadStatus")).to_have_text("2 running")
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-1-desktop.png")
+        surface(page, "time.log-running")
 
         # ---- Switch: another category while one runs is one call
         _start_row(page, "Laundry and ironing").click()
         dialog = page.locator("#timeDialog")
         expect(dialog.locator("h2")).to_have_text("A timer is running")
+        surface(page, "time.dialog-running")
         dialog.get_by_role("button", name="Stop and start Laundry and ironing").click()
         expect(timer.locator(".time-timer-cat")).to_have_text("Laundry and ironing")
         expect(glance.locator(".time-glance-value").first).to_have_text("46m")   # the 1-minute floor saved
@@ -154,6 +157,7 @@ def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, sho
         # ---- Add time already spent: 30 minutes of cleaning that just ended
         page.locator("#timeLog .time-add").click()
         expect(dialog.locator("h2")).to_have_text("Add time already spent")
+        surface(page, "time.dialog-add")
         dialog.locator("select").select_option(label="Cleaning and tidying")
         dialog.locator(".time-pick", has_text="30").click()
         expect(dialog.locator("input[type='time']")).to_have_value("08:30")      # it ended now (09:00)
@@ -201,6 +205,7 @@ def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, sho
         expect(csv).to_have_attribute("href", "/api/time/entries.csv?period=30&area=home")
         dismiss_toasts(page)
         shot(page, shots / "story-32-time-3-desktop.png", full_page=True)
+        surface(page, "time.totals")
 
         # ---- Settings → Time categories: a category with a subtitle, shown in Log; then cleared
         cats = open_settings_sheet(page, "timecats")

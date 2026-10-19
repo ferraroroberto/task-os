@@ -43,6 +43,7 @@ from playwright.sync_api import Browser, Page, expect
 from src.auth import hash_password
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
@@ -143,6 +144,7 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
         assert cookies["taskos_team"]["httpOnly"] is True
         assert "taskos_token" not in cookies                                   # never the owner's token
         shot(page, shots / "story-27-team-1-desktop.png")
+        surface(page, "app.team-name-picker")
 
         pick.get_by_role("button", name="Sam Rivera").click()
         drawer = page.locator("#taskDrawer")

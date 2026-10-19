@@ -44,6 +44,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
+from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _boot,
@@ -158,6 +159,7 @@ def test_today_calendar_lane(
         expect(lane).not_to_contain_text("No events today")
         expect(lane.locator(".cal-counts")).to_have_text("unavailable")
         shot(page, shots / "story-28-calendar-2-desktop.png")
+        surface(page, "today.calendar-unavailable")
 
         # 3. An answer that is not a calendar (a sign-in page), through the
         #    Settings sheet's Refresh now.
@@ -215,6 +217,7 @@ def test_today_calendar_lane(
         expect(lane).not_to_contain_text("Lunch with Jordan")  # cancelled
         expect(lane.locator(".cal-counts")).to_have_text("6 events")
         shot(page, shots / "story-28-calendar-4-desktop.png")
+        surface(page, "today.calendar-lane")
 
         # The address is a secret: nothing the page or the API holds names it.
         assert SECRET not in page.content()
