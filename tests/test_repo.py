@@ -1059,3 +1059,44 @@ def test_add_link_without_kind_infers_it(conn: sqlite3.Connection) -> None:
     t = repo.create_task(conn, "Chat")
     assert repo.add_link(conn, t["id"], "https://chatgpt.com/c/9")["kind"] == "ai"
     assert repo.add_link(conn, t["id"], "https://example.com", kind="folder")["kind"] == "folder"
+
+
+# ------------------------------------------- snooze never strands a task (#486)
+
+def test_snoozing_a_task_due_today_moves_its_due_with_it(conn: sqlite3.Connection, frozen) -> None:
+    """#486: the Board's snooze sets only `starts`; a task due today then hid
+    until tomorrow and came back overdue. `due` now travels with it."""
+    t = repo.create_task(conn, "Pay the invoice", status="todo", due="2026-08-17")
+    snoozed = repo.set_starts(conn, t["id"], "2026-08-18", actor="me")
+    assert (snoozed["starts"], snoozed["due"]) == ("2026-08-18", "2026-08-18")
+    assert ("due", "2026-08-17", "2026-08-18") in _fields(snoozed["activity"])
+    # the task is asleep today and awake, on its due day, tomorrow
+    assert t["id"] not in [r["id"] for r in repo.list_tasks(conn, deferred="hide")]
+    with repo.use_clock(lambda: datetime(2026, 8, 18, 9, 0, 0).astimezone()):
+        awake = [r for r in repo.list_tasks(conn, deferred="hide") if r["id"] == t["id"]]
+    assert awake and awake[0]["due"] == "2026-08-18"
+
+
+def test_snooze_leaves_a_later_due_and_an_undated_task_alone(conn: sqlite3.Connection) -> None:
+    later = repo.create_task(conn, "Later", due="2026-09-30")
+    assert repo.set_starts(conn, later["id"], "2026-08-18")["due"] == "2026-09-30"
+    same_day = repo.create_task(conn, "Same day", due="2026-08-18")
+    assert repo.set_starts(conn, same_day["id"], "2026-08-18")["due"] == "2026-08-18"
+    undated = repo.create_task(conn, "Undated")
+    snoozed = repo.set_starts(conn, undated["id"], "2026-08-18")
+    assert (snoozed["starts"], snoozed["due"]) == ("2026-08-18", None)
+    assert "due" not in [f for f, _, _ in _fields(snoozed["activity"])]
+
+
+def test_snooze_rule_covers_update_bulk_and_respects_an_explicit_due(conn: sqlite3.Connection) -> None:
+    a = repo.create_task(conn, "A", due="2026-08-17")
+    b = repo.create_task(conn, "B", due="2026-08-17")
+    rows = repo.bulk_update(conn, [a["id"], b["id"]], starts="2026-08-20")
+    assert [r["task"]["due"] for r in rows] == ["2026-08-20", "2026-08-20"]
+    # a patch that names `due` itself is the caller's own pair — never rewritten
+    c = repo.create_task(conn, "C", due="2026-08-17")
+    kept = repo.update_task(conn, c["id"], starts="2026-08-20", due="2026-08-19")
+    assert (kept["starts"], kept["due"]) == ("2026-08-20", "2026-08-19")
+    # clearing the snooze does not touch due
+    cleared = repo.update_task(conn, a["id"], starts=None)
+    assert cleared["due"] == "2026-08-20"
