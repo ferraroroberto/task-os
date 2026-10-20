@@ -190,6 +190,10 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
         page.evaluate("t => { document.documentElement.dataset.theme = t; }", mode)
         assert_code_off_canvas_subtle(page, min_count=3)
     page.evaluate("t => { document.documentElement.dataset.theme = t; }", theme)
+    # The command carries this instance's ephemeral port (asserted above against the real
+    # `base`); the gallery frames it on the app's own port so two runs write the same bytes (#459).
+    cmd.evaluate("(el, [real, shown]) => { el.textContent = el.textContent.replaceAll(real, shown); }",
+                 [base.removeprefix("http://"), "127.0.0.1:8448"])
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
     # 4. drawer: the Folder editor folds an absolute path onto the placeholder.

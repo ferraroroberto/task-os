@@ -456,13 +456,15 @@ class MirroredInstance:
 def mirrored_webapp() -> Iterator[MirroredInstance]:
     """A seeded disposable instance with ``mirror.dir`` / ``backup_dir`` under a temp folder.
 
-    The one instance that runs on the **real** clock (``TASKOS_CLOCK`` blanked).
-    The mirror's import-conflict rule is *defined* in terms of a clock that
+    The one instance whose clock **advances** (``TASKOS_CLOCK_TICK=1``). The
+    mirror's import-conflict rule is *defined* in terms of a clock that
     advances — the DB wins when the field's latest ``activity.ts`` is later than
     the file's recorded ``exported_at`` — so a frozen clock makes those two
-    stamps equal and the conflict story cannot happen at all. Story 06's five
-    shots are the stated exception to the byte-identical gallery (#134); every
-    other story runs pinned.
+    stamps equal and the conflict story cannot happen at all. It starts at
+    ``E2E_CLOCK`` and counts real elapsed time from there, so story 06's five
+    shots read the same "last export" / backup date / build line every run
+    (they used to read the machine's own minute, #134 → #459); the walk is
+    seconds long, well inside the minute those shots print.
     """
     if os.environ.get(LIVE_ENV) == "1":
         pytest.skip(f"{LIVE_ENV}=1: the mirrored fixture never runs against the live database")
@@ -475,7 +477,7 @@ def mirrored_webapp() -> Iterator[MirroredInstance]:
     backup_dir = work / "backup"
     mirror_dir.mkdir()
     config = write_test_config(work / "config.json", dir=str(mirror_dir), backup_dir=str(backup_dir))
-    proc, base, log = _boot(work, db, config, extra_env={"TASKOS_CLOCK": ""})
+    proc, base, log = _boot(work, db, config, extra_env={"TASKOS_CLOCK_TICK": "1"})
     try:
         yield MirroredInstance(base, mirror_dir, backup_dir, db)
     finally:

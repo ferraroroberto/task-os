@@ -29,6 +29,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from src import clock
 from src.config import AppConfig
 from src.db import db_path
 from src.mirror import resolve_dir
@@ -40,8 +41,13 @@ BACKUP_HOUR = 3
 FILE_RE = re.compile(r"^tasks-(\d{8})\.db$")
 
 
+def _now() -> datetime:
+    """The process clock (``src.clock``, pinned by the e2e instances) as a naive local time."""
+    return clock.now().replace(tzinfo=None)
+
+
 def backup_name(day: date | None = None) -> str:
-    return f"tasks-{(day or date.today()).strftime('%Y%m%d')}.db"
+    return f"tasks-{(day or _now().date()).strftime('%Y%m%d')}.db"
 
 
 def list_backups(dest_dir: Path) -> list[Path]:
@@ -133,7 +139,7 @@ class BackupScheduler:
         """One backup (also the scheduler's tick body); errors are recorded, never raised past here."""
         if self.dir is None:
             return None
-        self._attempted = date.today()
+        self._attempted = _now().date()
         try:
             target = run_backup(self.source or db_path(), self.dir, keep=self.keep)
         except Exception as exc:  # noqa: BLE001 — a failed backup is a status, not a crash
@@ -141,7 +147,7 @@ class BackupScheduler:
             logger.error("❌ backup failed: %s", self.last_error)
             return None
         self.last_error = None
-        self.last_run = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.last_run = clock.now_iso()
         self.last_file = target.name
         return target
 
@@ -156,21 +162,21 @@ class BackupScheduler:
         """
         if self.dir is None:
             return False
-        today = (now or datetime.now()).date()
+        today = (now or _now()).date()
         return not (self.dir / backup_name(today)).exists() and self._attempted != today
 
     def due_now(self, now: datetime | None = None) -> bool:
         """The scheduled time has passed — the only thing the 30 s tick decides on."""
         if self.dir is None:
             return False
-        now = now or datetime.now()
+        now = now or _now()
         return self.next_run is not None and now >= self.next_run
 
     def start(self) -> None:
         if not self.enabled or self._thread is not None:
             return
         self._stop.clear()
-        self.next_run = next_run_after(datetime.now(), self.hour)
+        self.next_run = next_run_after(_now(), self.hour)
         self._thread = threading.Thread(target=self._run, name="task-os-backup", daemon=True)
         self._thread.start()
         logger.info("ℹ️ backup: daily at %02d:00 → %s (next %s)", self.hour, self.dir, self.next_run.isoformat(timespec="minutes"))
@@ -186,7 +192,7 @@ class BackupScheduler:
         if self.missing_today():
             self.run_now()
         while not self._stop.wait(30):
-            now = datetime.now()
+            now = _now()
             if self.due_now(now):
                 self.run_now()
                 self.next_run = next_run_after(now, self.hour)

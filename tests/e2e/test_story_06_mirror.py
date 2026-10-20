@@ -134,9 +134,9 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
         #    wins and the rejected file value is recorded as a mirror event (issue #84),
         #    never as a comment on the task.
         n_comments_before_conflict = len(detail["comments"])
-        # A distinct second from the last export (the baseline is second-precise): wait for the
-        # next second boundary, which is never more than a second away.
-        time.sleep(1.02 - time.time() % 1)
+        # A distinct second from the last export (the baseline is second-precise, and the
+        # instance's clock counts from its own start, not the wall second): a full second.
+        time.sleep(1.1)
         _send(base, "PATCH", f"/api/tasks/{task_id}", {"due": "2026-11-11"}, actor="ui")
         text = path.read_text(encoding="utf-8").replace("\ndue: 2026-12-24\n", "\ndue: 2026-10-10\n", 1)
         _edit(path, text)
