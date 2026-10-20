@@ -99,22 +99,11 @@ from src.no_window import NO_WINDOW
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
 
-#: Shots whose *content* legitimately cannot be pinned, with the reason.
-ALLOWED_TO_DIFFER = {
-    # Story 06's instance runs on the real clock: the import-conflict rule it
-    # walks is defined by a clock that advances (the DB wins when a field's
-    # latest `activity.ts` is later than the file's recorded `exported_at`), so
-    # the minute the run reached each step is on the shot.
-    "story-06-mirror-1-desktop.png": "mirror story — instance runs on the real clock",
-    "story-06-mirror-2-desktop.png": "mirror story — instance runs on the real clock",
-    "story-06-mirror-3-desktop.png": "mirror story — instance runs on the real clock",
-    "story-06-mirror-4-desktop.png": "mirror story — instance runs on the real clock",
-    "story-06-mirror-5-desktop.png": "mirror story — instance runs on the real clock",
-    # The folder-opener install command carries the instance's own URL, and a
-    # disposable instance binds a free port on purpose — a fixed one would
-    # collide with :8448 and with a parallel worktree run.
-    "story-09-folders-3-desktop.png": "shows the install command, which carries the instance's ephemeral port",
-}
+#: Shots whose *content* legitimately cannot be pinned, with the reason. Empty
+#: since #459: story 06's instance now starts its clock at the suite's instant
+#: (`TASKOS_CLOCK_TICK`) and story 09's install-command shot is framed on the
+#: app's own port, so no shot is exempt from the byte-identical gallery.
+ALLOWED_TO_DIFFER: dict[str, str] = {}
 
 #: The raster-noise escape: at most this many pixels, each off by at most this
 #: much on any channel. Measured on this suite — a real run lands well under

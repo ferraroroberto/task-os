@@ -14,8 +14,10 @@ Two ways to pin it:
   gallery in ``docs/screenshots/`` is only proof if a change in it means a
   change in the app, and an unpinned instance writes the run's own minute onto
   every activity row, comment and build footer, so two runs of one commit
-  disagree. The one exception is the mirror instance, whose import-conflict
-  rule is *defined* by a clock that advances — see ``tests/e2e/conftest.py``.
+  disagree. The mirror instance, whose import-conflict rule is *defined* by a
+  clock that advances, adds ``TASKOS_CLOCK_TICK=1``: the instant becomes a
+  start, and the clock counts real elapsed time from it (#459), so its
+  timestamps still advance but begin at the same place every run.
 
 Nothing in production sets ``TASKOS_CLOCK``; an unparseable value is a hard
 failure rather than a silent fall back to the wall clock, which would be a
@@ -26,13 +28,16 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 CLOCK_ENV = "TASKOS_CLOCK"
+#: With ``TASKOS_CLOCK`` set, ``1`` makes the instant a *start*, not a freeze.
+TICK_ENV = "TASKOS_CLOCK_TICK"
 
 
 def _initial_clock() -> Callable[[], datetime]:
@@ -44,6 +49,10 @@ def _initial_clock() -> Callable[[], datetime]:
         fixed = datetime.fromisoformat(pinned).astimezone()
     except ValueError as exc:
         raise ValueError(f"{CLOCK_ENV}={pinned!r} is not an ISO 8601 datetime") from exc
+    if os.environ.get(TICK_ENV, "").strip() == "1":
+        started = time.monotonic()
+        logger.info("ℹ️ clock starts at %s by %s and advances", fixed.isoformat(timespec="seconds"), CLOCK_ENV)
+        return lambda: fixed + timedelta(seconds=time.monotonic() - started)
     logger.info("ℹ️ clock pinned to %s by %s", fixed.isoformat(timespec="seconds"), CLOCK_ENV)
     return lambda: fixed
 

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from src import clock
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.backup import KEEP, BackupScheduler, backup_name, list_backups, next_run_after, run_backup
@@ -142,3 +143,19 @@ def test_scheduler_thread_starts_and_stops(db: Path, tmp_path: Path) -> None:
     finally:
         s.stop()
     assert s.status()["running"] is False
+
+
+def test_scheduler_follows_the_process_clock(db: Path, tmp_path: Path) -> None:
+    """A pinned process (the e2e mirror instance) dates its copy and its next run from `src.clock` (#459)."""
+    pinned = datetime(2026, 9, 7, 9, 0).astimezone()
+    s = BackupScheduler(load_config(write_test_config(tmp_path / "c.json", backup_dir=str(tmp_path / "b"))), source=db)
+    with clock.use_clock(lambda: pinned):
+        assert backup_name() == "tasks-20260907.db"
+        assert s.missing_today()
+        target = s.run_now()
+        assert target is not None and target.name == "tasks-20260907.db"
+        assert s.last_run == pinned.isoformat(timespec="seconds")
+        assert not s.missing_today()
+        s.start()
+        s.stop()
+    assert s.next_run == datetime(2026, 9, 8, 3, 0)
