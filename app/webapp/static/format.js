@@ -241,6 +241,19 @@ export function hideFolderPopover() {
   if (pop) pop.hidden = true;
 }
 
+/** Put `row` in the popover `el` and show it under `anchor`, flipped above when it would run off the bottom. */
+function placeFolderPopover(el, row, anchor) {
+  el.appendChild(row);
+  el.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth || 320;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  let top = r.bottom + 6;
+  if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
 /** Clipboard write with the button flashing "Copied" (exported for the drawer + Settings). */
 export async function copyText(text, btn) {
   try {
@@ -306,15 +319,7 @@ export function showFolderPopover(anchor, info, mode) {
     web.innerHTML = icon('globe') + ' Open web link';
     row.appendChild(web);
   }
-  el.appendChild(row);
-  el.hidden = false;
-  const r = anchor.getBoundingClientRect();
-  const w = el.offsetWidth || 320;
-  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
-  let top = r.bottom + 6;
-  if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
-  el.style.left = left + 'px';
-  el.style.top = top + 'px';
+  placeFolderPopover(el, row, anchor);
 }
 
 /**
@@ -425,15 +430,7 @@ function showAiPopover(anchor, url) {
     cli.addEventListener('click', hideFolderPopover);
     row.appendChild(cli);
   }
-  el.appendChild(row);
-  el.hidden = false;
-  const r = anchor.getBoundingClientRect();
-  const w = el.offsetWidth || 320;
-  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
-  let top = r.bottom + 6;
-  if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
-  el.style.left = left + 'px';
-  el.style.top = top + 'px';
+  placeFolderPopover(el, row, anchor);
 }
 
 /** The `taskos://resume` link for a Claude Code conversation, else null. */
