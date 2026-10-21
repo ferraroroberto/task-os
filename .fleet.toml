@@ -36,6 +36,7 @@ geometry       = { src = "tests/e2e/_geometry.py",                    sha = "4c6
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_browser_sweep.py" }
 surface_capture = { src = "tests/e2e/_surface.py",                   sha = "5c4d3a7947dae8b3b4a028bf636c0f052ea3b1f7", dest = "tests/e2e/_surface.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "scripts/classify_e2e.py" }
+static_ratchet = { src = "scripts/static_ratchet.py",               sha = "2f1e2f7c81b9a91a062271881fc87830104808ae", dest = "scripts/static_ratchet.py" }
 no_window      = { src = "src/no_window.py",                          sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/no_window.py" }
 pooled_http    = { src = "src/pooled_http.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/pooled_http.py" }
 runtime_data   = { src = "src/runtime_data.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/runtime_data.py" }
@@ -51,6 +52,18 @@ foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sh
 #   verbatim, only the docstring's issue/port/path references re-pointed at this repo)
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
 #   BuildInfo/stamp_html/stamp_js; only the no_window import path adapted)
+
+# [static_ratchet] -- the scaffold's baseline-and-ratchet static analysis. The gate
+# (scripts/verify-before-ship.ps1) runs scripts/static_ratchet.py, which fails on a
+# duplicate block (jscpd via npx, Python and JS) or an unused import/variable (ruff
+# F401,F841) that is not in .static-ratchet-baseline.json. Needs Node and ruff in
+# the gate's venv; a detector that cannot run exits 3, which fails the gate. Vendored
+# copies are duplicates by design, so they are excluded. Procedure + limits:
+# project-scaffolding docs/static-ratchet.md.
+[static_ratchet]
+enabled  = true
+baseline = ".static-ratchet-baseline.json"
+exclude  = ["**/_vendored/**"]
 
 # /perf-review (fleet-config skills/perf-review): "ready" is Today's due-count line
 # visible, not first contentful paint, which goes green on a painted shell before any
@@ -169,6 +182,9 @@ path = ".gitignore"
 [[e2e.rule]]
 tier = "none"
 path = ".gitattributes"
+[[e2e.rule]]
+tier = "none"
+path = ".static-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = "LICENSE"

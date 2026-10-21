@@ -7,13 +7,18 @@
     Stages, fail-fast:
       1. byte-compile      — every .py under app/ src/ scripts/ tests/ + launcher.py parses
       2. ruff              — lint the whole repo (pyproject.toml owns strictness)
-      3. pytest (unit)     — hermetic suite, tests/e2e excluded
-      4. pytest (e2e)      — diff-proportionate: the browser slice is routed by
+      3. static ratchet    — no new duplicate block (jscpd via npx) or unused
+                             import/variable (ruff F401,F841) beyond
+                             .static-ratchet-baseline.json. Whole tree, never
+                             routed; exit 3 (a detector could not run) is
+                             NOT CONFIRMED and fails, never a pass or a skip.
+      4. pytest (unit)     — hermetic suite, tests/e2e excluded
+      5. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
-      5. gallery baseline  — whatever shots stage 4 rewrote, compared against
+      6. gallery baseline  — whatever shots stage 5 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
                              leaves rewritten PNGs behind (#225). Re-baselining
@@ -57,6 +62,9 @@ function Invoke-Stage {
 
 Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests opener launcher.py }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }
+# The wrapper maps the script's exit 3 to NOT CONFIRMED (tests/test_static_ratchet_gate.py
+# pins it); call it, never scripts/static_ratchet.py directly.
+Invoke-Stage "static ratchet"          { & $py -m scripts.static_ratchet_gate }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing
