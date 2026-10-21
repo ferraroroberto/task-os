@@ -6,7 +6,7 @@ Claude Code reads this file as project memory; other agents reach it via the `AG
 
 ## This repository
 
-Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray tray, PC-first, port **8448**. See `README.md` for setup, layout, config and the step roadmap (issue #1). Every build step is a GitHub issue ("Step N/13") whose user story is proven on screen before it closes.
+Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray tray, PC-first, port **8448**. See `README.md` for setup, the feature index and the step roadmap (issue #1); the per-feature reference, layout, config and data model live in `docs/<topic>.md`, linked from it. Every build step is a GitHub issue ("Step N/13") whose user story is proven on screen before it closes.
 
 **Project specifics:**
 

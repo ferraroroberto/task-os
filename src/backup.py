@@ -12,7 +12,7 @@ time while the app is up (the loop wakes every 30 s and compares against
 the next due time, so a sleeping PC just runs late rather than never).
 ``tasks backup`` is the same function from the CLI, for an external
 scheduler (Task Scheduler / an app-launcher job) as an alternative — see
-README "Backups".
+docs/mirror-and-backups.md "Backups".
 
 Enabled only when ``mirror.backup_dir`` resolves to a path whose parent
 exists (the leaf is created); otherwise the status carries the reason.
