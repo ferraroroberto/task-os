@@ -79,6 +79,7 @@ from tests.e2e._geometry import (
 from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
+    SWIPE_JS,
     _get,
     assert_date_sheet,
     assert_on_crumb_line,
@@ -108,19 +109,6 @@ def _trow(page: Page, title: str, scope: str = ""):
     (the seed has both "Renew passports" and the story's "renew passport")."""
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
 
-
-# A sideways touch on a row, as synthetic Pointer Events (swipe.js, #311): it
-# proves the wiring — which action a side runs — not the feel of the gesture,
-# which is the owner's iPhone walk (story 29).
-_SWIPE = """(el, [x0, x1]) => {
-  const r = el.getBoundingClientRect();
-  const y = r.top + r.height / 2;
-  const fire = (type, x) => el.dispatchEvent(new PointerEvent(type, {
-    pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: x, clientY: y }));
-  fire('pointerdown', x0);
-  for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
-  fire('pointerup', x1);
-}"""
 
 # A native date picker is an OS widget no browser automation can see or drive,
 # so `showPicker()` is recorded instead: the call is what "the picker opened"
@@ -1022,7 +1010,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert actions[0] == "snooze" and "priority" not in actions, actions
     page.keyboard.press("Escape")
     expect(page.locator(".row-menu")).to_have_count(0)
-    row.locator(".trow-main").evaluate(_SWIPE, [900, 300])          # synthetic touch: the wiring
+    row.locator(".trow-main").evaluate(SWIPE_JS, [900, 300])          # synthetic touch: the wiring
     picker = page.locator(".snooze-pop .snooze-menu")
     expect(picker).to_have_attribute("data-field", "starts")
     page.keyboard.press("Escape")

@@ -15,17 +15,11 @@ sheet's Clear would reset.
 
 from __future__ import annotations
 
-import json
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
-
-from src.no_window import NO_WINDOW
+from tests.fixtures.node_js import call_js, requires_node
 
 MODULE = Path(__file__).resolve().parents[1] / "app" / "webapp" / "static" / "filters.js"
-NODE = shutil.which("node")
 
 # Reads [[fn, arg, arg2], …] on stdin and prints each result as one JSON array.
 _RUNNER = """
@@ -47,17 +41,11 @@ const out = JSON.parse(input).map(([fn, a, b]) => {
 process.stdout.write(JSON.stringify(out));
 """
 
-pytestmark = pytest.mark.skipif(NODE is None, reason="node is not on PATH — the JS side cannot be loaded")
+pytestmark = requires_node
 
 
 def _call_js(calls: list[list]) -> list:
-    proc = subprocess.run(
-        [NODE, "--input-type=module", "-e", _RUNNER, MODULE.as_uri()],
-        input=json.dumps(calls), capture_output=True, encoding="utf-8", timeout=60,
-        creationflags=NO_WINDOW, check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    return json.loads(proc.stdout)
+    return call_js(MODULE, _RUNNER, calls)
 
 
 def test_mine_is_the_default_and_never_written() -> None:

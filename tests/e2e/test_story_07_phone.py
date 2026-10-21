@@ -81,6 +81,7 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     E2E_P2_TOKEN,
     E2E_TOKEN,
+    SWIPE_JS,
     assert_control_boundaries,
     assert_date_sheet,
     assert_on_crumb_line,
@@ -276,28 +277,19 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         # (that is the owner's iPhone walk): left opens the date sheet and
         # writes nothing, a touch starting in the 20px edge zone is ignored,
         # right completes with Undo.
-        swipe = """(el, [x0, x1]) => {
-          const r = el.getBoundingClientRect();
-          const y = r.top + r.height / 2;
-          const fire = (type, x) => el.dispatchEvent(new PointerEvent(type, {
-            pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: x, clientY: y }));
-          fire('pointerdown', x0);
-          for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
-          fire('pointerup', x1);
-        }"""
         row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
         expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
-        row.locator(".trow-main").evaluate(swipe, [300, 100])
+        row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
         expect(sheet).to_be_visible()
         expect(sheet.locator("h2")).to_have_text("Move to a date")
         sheet.locator(".detail-close").tap()
         expect(sheet).to_be_hidden()
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
-        row.locator(".trow-main").evaluate(swipe, [5, 250])
+        row.locator(".trow-main").evaluate(SWIPE_JS, [5, 250])
         expect(row.locator(".trow-reveal")).to_have_count(0)
         expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
         assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"
-        row.locator(".trow-main").evaluate(swipe, [100, 300])
+        row.locator(".trow-main").evaluate(SWIPE_JS, [100, 300])
         toast = page.locator(".toast-success").last
         expect(toast).to_contain_text("Completed")
         expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")

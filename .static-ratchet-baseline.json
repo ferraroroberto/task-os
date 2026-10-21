@@ -1,11 +1,5 @@
 {
   "version": 1,
   "tools": {"jscpd": "5.4.0", "ruff": "0.17.1"},
-  "entries": [
-    {"key": "dup:0234dc0ab82c:tests/test_row_actions.py|tests/test_scope.py", "files": ["tests/test_row_actions.py", "tests/test_scope.py"]},
-    {"key": "dup:4104fc85cf2f:app/webapp/static/format.js|app/webapp/static/format.js", "files": ["app/webapp/static/format.js", "app/webapp/static/format.js"]},
-    {"key": "dup:69e7a9ce3dad:tests/fixtures/chat_fake.py|tests/fixtures/whisper_fake.py", "files": ["tests/fixtures/chat_fake.py", "tests/fixtures/whisper_fake.py"]},
-    {"key": "dup:703fc8944c7a:tests/e2e/test_story_04_triage.py|tests/e2e/test_story_07_phone.py", "files": ["tests/e2e/test_story_04_triage.py", "tests/e2e/test_story_07_phone.py"]},
-    {"key": "dup:ab3a49413cdf:tests/test_recurrence_label_parity.py|tests/test_swipe.py", "files": ["tests/test_recurrence_label_parity.py", "tests/test_swipe.py"]}
-  ]
+  "entries": []
 }

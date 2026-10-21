@@ -17,21 +17,18 @@ response parse — only the model is imaginary.
 ``status`` / ``text`` / ``body`` are settable between calls so one test can
 walk the endpoint answering, refusing and going away.
 
-**``stop()`` closes the connections it is still serving**, not just the
-listening socket. ``src.pooled_http`` holds keep-alive sockets open between
-posts (#185) and this handler speaks HTTP/1.1, so a bare ``shutdown()`` leaves
-a handler thread happily answering the socket the pool kept — the endpoint
-would look *up* to the code under test after the test had taken it away. A
-real endpoint going away closes its connections; so does this one.
+``stop()`` closes the connections it is still serving (see
+:class:`tests.fixtures.loopback_fake.LoopbackFake`): ``src.pooled_http`` holds
+keep-alive sockets open between posts (#185).
 """
 
 from __future__ import annotations
 
 import json
-import socket
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from typing import Any
+
+from tests.fixtures.loopback_fake import LoopbackFake
 
 INFERENCE_PATH = "/v1/audio/transcriptions"
 
@@ -74,84 +71,30 @@ def _quoted(headers: str, prefix: str) -> str | None:
     return headers.split(prefix, 1)[1].split('"', 1)[0]
 
 
-class FakeWhisper:
+class FakeWhisper(LoopbackFake):
     """A threaded loopback HTTP server speaking whisper-server's answer shape."""
 
+    PATH = INFERENCE_PATH
+
     def __init__(self, *, text: str = "", status: int = 200, body: bytes | None = None) -> None:
+        super().__init__()
         self.text = text
         self.status = status
         #: Overrides the JSON answer entirely (whisper's own refusal is the
         #: plain-text ``Invalid request``, not JSON — see src/voice.py).
         self.body = body
-        self.requests: list[dict[str, Any]] = []
-        #: The sockets currently being served, so stop() can close them.
-        self._live: set[socket.socket] = set()
-        fake = self
+        self._start(self._answer)
 
-        class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def setup(self) -> None:
-                super().setup()
-                fake._live.add(self.connection)
-
-            def finish(self) -> None:
-                fake._live.discard(self.connection)
-                super().finish()
-
-            def do_POST(self) -> None:            # noqa: N802 — BaseHTTPRequestHandler's name
-                length = int(self.headers.get("Content-Length", "0") or 0)
-                raw = self.rfile.read(length)
-                content_type = self.headers.get("Content-Type", "")
-                record = {
-                    "path": self.path, "content_type": content_type, "length": length,
-                    #: The client's (host, port) — two posts over one keep-alive
-                    #: connection share it, two fresh connections do not (#185).
-                    "peer": self.client_address,
-                }
-                record.update(parse_multipart(raw, content_type))
-                fake.requests.append(record)
-                if fake.body is not None:
-                    payload = fake.body
-                else:
-                    payload = json.dumps({"text": fake.text}).encode("utf-8")
-                self.send_response(fake.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-            def log_message(self, *args: Any) -> None:
-                """Silence: pytest's captured output is for the test, not this."""
-
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
-
-    @property
-    def port(self) -> int:
-        return int(self._server.server_address[1])
-
-    @property
-    def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}{INFERENCE_PATH}"
-
-    def stop(self) -> None:
-        """Gone: the listener closed *and* every connection still open dropped."""
-        self._server.shutdown()
-        self._server.server_close()
-        for sock in list(self._live):
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except OSError:              # already dead — nothing left to close
-                pass
-            finally:
-                sock.close()
-        self._live.clear()
-        self._thread.join(timeout=5)
-
-    def __enter__(self) -> FakeWhisper:
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        self.stop()
+    def _answer(self, handler: BaseHTTPRequestHandler) -> None:
+        raw = self.read_body(handler)
+        content_type = handler.headers.get("Content-Type", "")
+        record = {
+            "path": handler.path, "content_type": content_type, "length": len(raw),
+            #: The client's (host, port) — two posts over one keep-alive
+            #: connection share it, two fresh connections do not (#185).
+            "peer": handler.client_address,
+        }
+        record.update(parse_multipart(raw, content_type))
+        self.requests.append(record)
+        payload = self.body if self.body is not None else json.dumps({"text": self.text}).encode("utf-8")
+        self.respond(handler, self.status, payload)

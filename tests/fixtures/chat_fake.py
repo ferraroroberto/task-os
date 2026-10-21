@@ -20,31 +20,32 @@ never wrapped or tidied on the way out. ``status`` / ``body`` / ``content``
 are settable between calls so one test can walk the endpoint answering,
 refusing and going away.
 
-**``stop()`` closes the connections it is still serving**, for the same reason
-``FakeWhisper.stop()`` does: ``src.enrich`` posts through
-``src.pooled_http``'s keep-alive session (#185), so closing only the listening
-socket would leave a handler thread answering the socket the pool kept — the
-endpoint would look *up* after the test had taken it away.
+``stop()`` closes the connections it is still serving (see
+:class:`tests.fixtures.loopback_fake.LoopbackFake`): ``src.enrich`` posts
+through ``src.pooled_http``'s keep-alive session (#185).
 """
 
 from __future__ import annotations
 
 import json
-import socket
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from typing import Any
+
+from tests.fixtures.loopback_fake import LoopbackFake
 
 CHAT_PATH = "/v1/chat/completions"
 
 
-class FakeChat:
+class FakeChat(LoopbackFake):
     """A threaded loopback HTTP server speaking the chat-completions shape."""
+
+    PATH = CHAT_PATH
 
     def __init__(
         self, *, content: str = "{}", status: int = 200, body: bytes | None = None,
         served_model: str | None = None,
     ) -> None:
+        super().__init__()
         self.content = content
         self.status = status
         #: Overrides the whole JSON answer (a gateway's HTML error page, say).
@@ -52,79 +53,24 @@ class FakeChat:
         #: What the hub's ``x-hub-served-model`` header says, when it says
         #: anything — the breadcrumb that answers "which model actually ran".
         self.served_model = served_model
-        self.requests: list[dict[str, Any]] = []
-        #: The sockets currently being served, so stop() can close them.
-        self._live: set[socket.socket] = set()
-        fake = self
+        self._start(self._answer)
 
-        class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def setup(self) -> None:
-                super().setup()
-                fake._live.add(self.connection)
-
-            def finish(self) -> None:
-                fake._live.discard(self.connection)
-                super().finish()
-
-            def do_POST(self) -> None:            # noqa: N802 — BaseHTTPRequestHandler's name
-                length = int(self.headers.get("Content-Length", "0") or 0)
-                raw = self.rfile.read(length)
-                try:
-                    sent = json.loads(raw)
-                except ValueError:
-                    sent = {"_unparseable": raw.decode("utf-8", errors="replace")}
-                fake.requests.append({"path": self.path, **sent})
-                if fake.body is not None:
-                    payload = fake.body
-                else:
-                    payload = json.dumps({
-                        "choices": [{"message": {"role": "assistant", "content": fake.content}}],
-                    }).encode("utf-8")
-                self.send_response(fake.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                if fake.served_model:
-                    self.send_header("x-hub-served-model", fake.served_model)
-                self.end_headers()
-                self.wfile.write(payload)
-
-            def log_message(self, *args: Any) -> None:
-                """Silence: pytest's captured output is for the test, not this."""
-
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
+    def _answer(self, handler: BaseHTTPRequestHandler) -> None:
+        raw = self.read_body(handler)
+        try:
+            sent = json.loads(raw)
+        except ValueError:
+            sent = {"_unparseable": raw.decode("utf-8", errors="replace")}
+        self.requests.append({"path": handler.path, **sent})
+        if self.body is not None:
+            payload = self.body
+        else:
+            payload = json.dumps({
+                "choices": [{"message": {"role": "assistant", "content": self.content}}],
+            }).encode("utf-8")
+        extra = {"x-hub-served-model": self.served_model} if self.served_model else None
+        self.respond(handler, self.status, payload, extra)
 
     def says(self, **fields: Any) -> None:
         """Set the reply to one clean JSON object — the ordinary happy path."""
         self.content = json.dumps(fields)
-
-    @property
-    def port(self) -> int:
-        return int(self._server.server_address[1])
-
-    @property
-    def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}{CHAT_PATH}"
-
-    def stop(self) -> None:
-        """Gone: the listener closed *and* every connection still open dropped."""
-        self._server.shutdown()
-        self._server.server_close()
-        for sock in list(self._live):
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except OSError:              # already dead — nothing left to close
-                pass
-            finally:
-                sock.close()
-        self._live.clear()
-        self._thread.join(timeout=5)
-
-    def __enter__(self) -> FakeChat:
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        self.stop()
