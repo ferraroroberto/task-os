@@ -9,38 +9,19 @@ feel is the owner's iPhone checklist.
 
 from __future__ import annotations
 
-import json
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from src.no_window import NO_WINDOW
+from tests.fixtures.node_js import CALL_RUNNER, call_js, requires_node
 
 MODULE = Path(__file__).resolve().parents[1] / "app" / "webapp" / "static" / "swipe.js"
-NODE = shutil.which("node")
 
-# Reads [[fn, args], …] on stdin, prints each result as one JSON array.
-_RUNNER = """
-const mod = await import(process.argv[1]);
-let input = '';
-for await (const chunk of process.stdin) input += chunk;
-const out = JSON.parse(input).map(([fn, args]) => mod[fn](...args));
-process.stdout.write(JSON.stringify(out));
-"""
-
-pytestmark = pytest.mark.skipif(NODE is None, reason="node is not on PATH — the JS side cannot be loaded")
+pytestmark = requires_node
 
 
 def _call_js(calls: list[tuple[str, list]]) -> list:
-    proc = subprocess.run(
-        [NODE, "--input-type=module", "-e", _RUNNER, MODULE.as_uri()],
-        input=json.dumps(calls), capture_output=True, encoding="utf-8", timeout=60,
-        creationflags=NO_WINDOW, check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    return json.loads(proc.stdout)
+    return call_js(MODULE, CALL_RUNNER, calls)
 
 
 def test_a_touch_in_the_edge_zone_is_never_tracked() -> None:
