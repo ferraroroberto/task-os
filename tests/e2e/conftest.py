@@ -810,6 +810,21 @@ def text_contrast(text: Locator) -> float:
     return text.evaluate(_TEXT_CONTRAST_JS)
 
 
+# A sideways touch on a row, as synthetic Pointer Events (swipe.js, #311):
+# `row.locator(".trow-main").evaluate(SWIPE_JS, [x0, x1])`. It proves the wiring
+# — which action a side runs — not the feel of the gesture, which is the
+# owner's iPhone walk.
+SWIPE_JS = """(el, [x0, x1]) => {
+  const r = el.getBoundingClientRect();
+  const y = r.top + r.height / 2;
+  const fire = (type, x) => el.dispatchEvent(new PointerEvent(type, {
+    pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: x, clientY: y }));
+  fire('pointerdown', x0);
+  for (let i = 1; i <= 8; i++) fire('pointermove', x0 + (x1 - x0) * i / 8);
+  fire('pointerup', x1);
+}"""
+
+
 def open_filter_sheet(page: Page, pane: str) -> Locator:
     """Open the one filter sheet from *pane*'s filter button, like a user would (#395).
 
