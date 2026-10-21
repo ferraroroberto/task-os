@@ -27,7 +27,9 @@ pytest-playwright>=0.5
 # The gate runs the full e2e tier on workers (-n, --dist loadfile; #288).
 pytest-xdist>=3.5
 playwright>=1.45
-ruff>=0.5
+# Also the unused-import / unused-variable pass of the gate's static ratchet
+# (scripts/static_ratchet.py selects F401,F841 itself).
+ruff>=0.17.1
 # Brand-icon generation only (scripts/gen_icons.py -> project-scaffolding's
 # brand_gen). The generated PNG/ICO assets are committed; the runtime never
 # imports this.
