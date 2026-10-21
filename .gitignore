@@ -23,3 +23,8 @@ test-results/
 # --- agent noise (real config lives machine-scope; AGENTS.md IS committed) --
 .agents/
 .codex/
+# .claude/ stays private except the reviewed project skill (project-scaffolding docs/agents/project-skills.md)
+**/.claude/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/verify-task-os/

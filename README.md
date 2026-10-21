@@ -84,6 +84,12 @@ tray.bat --restart                     # orphan-proof reclaim-then-start; verifi
 
 The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()`, on a frozen clock, so two runs of one commit produce the same files and a run months from now still produces the ones in the repo. `python -m scripts.shot_determinism` runs the suite twice and proves the capture is stable; `--check-tree` compares what a run rewrote against the committed gallery and restores it (the gate's last stage). `docs/validation.md` states the five capture rules a new story inherits.
 
+### Project skill: `verify-task-os`
+
+`.claude/skills/verify-task-os/` (scope: this repository) is the committed launch-and-drive skill: how to boot a disposable instance from an empty data directory, a read-only Doctor, one pytest node per feature, evidence rules and cleanup, plus `features/` with one file per view. Claude Code loads it natively from that path. For Codex or Pi, link it once per checkout (ignored, never committed): `New-Item -ItemType Junction -Path .agents\skills\verify-task-os -Target .claude\skills\verify-task-os` (after `New-Item -ItemType Directory -Force .agents\skills`).
+
+The skill is generated, not hand-written: run project-scaffolding's `scripts/gen_verify_skill.py --repo <this checkout>` after a `surface()` call, a `[[design.review.extra_steps]]` entry or `.fleet.toml [verify]` changes, and `--check` (add `--live-url` and `--junit` for the live half) reports `STATIC` / `MAINTAIN` `clean | changed | blocked`. Only the `## Gotchas` sections are hand-written.
+
 ## Roadmap
 
 Issue #1 in this repo lists the 13 steps (home v1 → integrations → a second site with a small team). Each step closes with its automated story test, on-screen screenshots and a `docs/validation.md` entry.
