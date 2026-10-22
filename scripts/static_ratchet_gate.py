@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from src.no_window import NO_WINDOW
@@ -45,26 +46,35 @@ def classify_exit(code: int) -> tuple[bool, str]:
     return False, _FAIL_LABELS.get(code, f"unexpected exit {code}")
 
 
-def run(script: Path = SCRIPT) -> int:
+def run_script(
+    script: Path, stage: str, classify: Callable[[int], tuple[bool, str]], timeout_s: int
+) -> int:
     """Run `script` under this interpreter (the venv python, which has ruff),
-    echo its output, then the verdict. Returns the gate's exit code."""
+    echo its output, then the `stage` verdict from `classify`. A script that
+    hangs or cannot start is exit 3, NOT CONFIRMED. Returns the gate's exit code.
+    `scripts/docs_ratchet_gate.py` shares this runner."""
     try:
         proc = subprocess.run(
             [sys.executable, str(script)],
             cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8",
             errors="replace", stdin=subprocess.DEVNULL, creationflags=NO_WINDOW,
-            timeout=RUN_TIMEOUT_S, check=False,
+            timeout=timeout_s, check=False,
         )
         code, output = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     except subprocess.TimeoutExpired:
-        code, output = EXIT_NOT_CONFIRMED, f"{script.name} did not finish in {RUN_TIMEOUT_S}s\n"
+        code, output = EXIT_NOT_CONFIRMED, f"{script.name} did not finish in {timeout_s}s\n"
     except OSError as exc:
         code, output = EXIT_NOT_CONFIRMED, f"{script.name} could not start: {exc}\n"
     if output:
         sys.stdout.write(output if output.endswith("\n") else output + "\n")
-    ok, label = classify_exit(code)
-    print(f"{'OK' if ok else 'FAIL'}: static ratchet: {label}")
+    ok, label = classify(code)
+    print(f"{'OK' if ok else 'FAIL'}: {stage}: {label}")
     return 0 if ok else 1
+
+
+def run(script: Path = SCRIPT) -> int:
+    """The static-ratchet stage: `script` judged by `classify_exit`."""
+    return run_script(script, "static ratchet", classify_exit, RUN_TIMEOUT_S)
 
 
 if __name__ == "__main__":

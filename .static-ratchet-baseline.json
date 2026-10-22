@@ -1,5 +1,7 @@
 {
   "version": 1,
   "tools": {"jscpd": "5.4.0", "ruff": "0.17.1"},
-  "entries": []
+  "entries": [
+    {"key": "dup:4306bb086600:scripts/docs_ratchet.py|scripts/static_ratchet.py", "files": ["scripts/docs_ratchet.py", "scripts/static_ratchet.py"]}
+  ]
 }
