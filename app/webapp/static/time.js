@@ -187,7 +187,14 @@ export function mountTime(opts) {
     stopPolling();
     st.poll = window.setInterval(function () {
       if (!st.shown || document.hidden) return;
-      refreshLive().then(function () { renderGlance(); renderTimer(); }).catch(function () {});
+      const before = timerSignature(timerOf(st.person));
+      refreshLive().then(function () {
+        renderGlance();
+        // Rebuild the timer card only when the running timer itself changed
+        // (stopped/switched/started elsewhere) — a same-timer poll must never
+        // discard a typed "minutes to save" correction or steal focus (#502).
+        if (timerSignature(timerOf(st.person)) !== before) renderTimer();
+      }).catch(function () {});
     }, POLL_MS);
     st.tick = window.setInterval(tick, 1000);
   }
@@ -316,6 +323,12 @@ export function mountTime(opts) {
 
   function timerOf(person) {
     return st.timers.find(function (t) { return t.person === person; }) || null;
+  }
+
+  /** Identity of the running timer card — same person/category/start means the
+   *  poll must leave the card (and any typed correction) alone. */
+  function timerSignature(t) {
+    return t ? [t.person, t.category_id, t.started_at].join('|') : null;
   }
 
   function renderGlance() {
