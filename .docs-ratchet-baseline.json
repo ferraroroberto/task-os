@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "entries": [
+    {"key": "README.md", "markers": 2},
+    {"key": "docs/access.md", "markers": 2},
+    {"key": "docs/ai-conversation-links.md", "markers": 2},
+    {"key": "docs/api.md", "markers": 11},
+    {"key": "docs/cli.md", "markers": 1},
+    {"key": "docs/configuration.md", "markers": 5},
+    {"key": "docs/data-model.md", "markers": 2},
+    {"key": "docs/folders.md", "markers": 2},
+    {"key": "docs/inbox-archive.md", "markers": 5},
+    {"key": "docs/inbox.md", "markers": 2},
+    {"key": "docs/mirror-and-backups.md", "markers": 4},
+    {"key": "docs/search.md", "markers": 6},
+    {"key": "docs/task-workflow.md", "markers": 5},
+    {"key": "docs/time-tracking.md", "markers": 6},
+    {"key": "docs/views.md", "markers": 54}
+  ]
+}

@@ -37,6 +37,7 @@ browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "4c6
 surface_capture = { src = "tests/e2e/_surface.py",                   sha = "5c4d3a7947dae8b3b4a028bf636c0f052ea3b1f7", dest = "tests/e2e/_surface.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "scripts/classify_e2e.py" }
 static_ratchet = { src = "scripts/static_ratchet.py",               sha = "2f1e2f7c81b9a91a062271881fc87830104808ae", dest = "scripts/static_ratchet.py" }
+docs_ratchet   = { src = "scripts/docs_ratchet.py",                 sha = "f9300a05540313bb26f442e1daa491c9308541d2", dest = "scripts/docs_ratchet.py" }
 no_window      = { src = "src/no_window.py",                          sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/no_window.py" }
 pooled_http    = { src = "src/pooled_http.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/pooled_http.py" }
 runtime_data   = { src = "src/runtime_data.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/runtime_data.py" }
@@ -64,6 +65,19 @@ foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sh
 enabled  = true
 baseline = ".static-ratchet-baseline.json"
 exclude  = ["**/_vendored/**"]
+
+# [docs_ratchet] -- the scaffold's docs ratchet. The gate (scripts/verify-before-ship.ps1)
+# runs scripts/docs_ratchet.py, which fails when README.md grows past 40 KiB or when
+# README.md / docs/**/*.md gains a history marker (issue reference, dated heading,
+# changelog heading) beyond .docs-ratchet-baseline.json. A check that cannot run
+# exits 3, which fails the gate. Convention: project-scaffolding docs/readme-and-docs.md;
+# mechanism + limits: docs/docs-ratchet.md.
+[docs_ratchet]
+enabled  = true
+baseline = ".docs-ratchet-baseline.json"
+# The validation record is dated by contract (CLAUDE.md: story, steps, result, date per
+# entry), so its walk logs and index are exempt; the feature docs stay measured.
+exclude  = ["docs/validation.md", "docs/validation/**"]
 
 # /perf-review (fleet-config skills/perf-review): "ready" is Today's due-count line
 # visible, not first contentful paint, which goes green on a painted shell before any
@@ -185,6 +199,9 @@ path = ".gitattributes"
 [[e2e.rule]]
 tier = "none"
 path = ".static-ratchet-baseline.json"
+[[e2e.rule]]
+tier = "none"
+path = ".docs-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = "LICENSE"
