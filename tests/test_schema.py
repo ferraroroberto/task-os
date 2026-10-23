@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -296,6 +297,15 @@ def test_only_schema_spells_the_closed_pair() -> None:
             if "'done', 'cancelled'" in line or '"done", "cancelled"' in line:
                 offenders.append(f"{path.relative_to(root).as_posix()}:{n}")
     assert offenders == [], "restates the closed pair instead of reading schema.CLOSED_STATUSES/CLOSED_SQL"
+
+
+def test_every_migration_has_a_version_history_line() -> None:
+    """The module docstring's "Version history" is the readable record of the
+    schema, so a new ``MIGRATIONS`` step cannot ship without its line there."""
+    history = (schema.__doc__ or "").split("Version history:", 1)[1].split("Contract", 1)[0]
+    documented = {int(m) for m in re.findall(r"^ {4}(\d+) ", history, flags=re.MULTILINE)}
+    assert sorted(set(schema.MIGRATIONS) - documented) == [], "add a 'Version history' line to src/schema.py"
+    assert sorted(documented - set(schema.MIGRATIONS)) == []
 
 
 # (id, title, due, recurrence, anchor) → the due ``done()`` rolled to on Mon
