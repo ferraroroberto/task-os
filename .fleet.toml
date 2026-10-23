@@ -78,6 +78,8 @@ baseline = ".docs-ratchet-baseline.json"
 # The validation record is dated by contract (CLAUDE.md: story, steps, result, date per
 # entry), so its walk logs and index are exempt; the feature docs stay measured.
 exclude  = ["docs/validation.md", "docs/validation/**"]
+# Literal examples, not history: a toast showing a failed task's id, and the quick-add `#12` parent syntax.
+allow_refs = ["#36", "#12"]
 
 # /perf-review (fleet-config skills/perf-review): "ready" is Today's due-count line
 # visible, not first contentful paint, which goes green on a painted shell before any
