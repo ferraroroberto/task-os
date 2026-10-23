@@ -196,22 +196,6 @@ def uninstall(dest: Path, scheme: str = SCHEME) -> None:
             pass
 
 
-def is_installed(dest: Path, scheme: str = SCHEME) -> bool:
-    if sys.platform != "win32":
-        return False
-    import winreg
-
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path(scheme) + r"\shell\open\command") as k:
-            value, _ = winreg.QueryValueEx(k, None)
-    except OSError:
-        return False
-    registered = str(value).lower()
-    # either shape counts as installed — which one it is, is the *mode*, not the fact
-    return ((LAUNCHER_NAME in registered and (dest / LAUNCHER_NAME).exists())
-            or (HANDLER_NAME in registered and (dest / HANDLER_NAME).exists()))
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="install the task-os folder opener for this user")
     p.add_argument("--dest", type=Path, default=default_dest(), help="handler folder (default: %%LOCALAPPDATA%%\\task-os)")

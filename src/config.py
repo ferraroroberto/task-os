@@ -288,10 +288,6 @@ class TimeConfig:
     def ids(self) -> tuple[str, ...]:
         return tuple(p.id for p in self.people)
 
-    def name_of(self, person: str) -> str:
-        """The display name for ``person`` — the id itself when it is no longer configured."""
-        return next((p.name for p in self.people if p.id == person), person)
-
 
 def _people(value: Any, key: str) -> tuple[Person, ...]:
     """A ``[{id, name}]`` block as validated people: an entry without an

@@ -481,7 +481,7 @@ def test_time_config_people_and_the_implicit_owner(tmp_path: Path) -> None:
     raw["time"] = {"people": [{"id": "a", "name": "A"}, {"id": "a", "name": "Dup"}, {"name": "no id"}, "junk"]}
     (tmp_path / "odd.json").write_text(json.dumps(raw), encoding="utf-8")
     odd = load_config(tmp_path / "odd.json").time
-    assert odd.ids == ("a",) and odd.name_of("a") == "A" and odd.name_of("gone") == "gone"
+    assert odd.ids == ("a",) and odd.people[0].name == "A"
 
 
 # --------------------------------------------------------------------- API

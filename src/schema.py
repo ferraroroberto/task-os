@@ -107,6 +107,16 @@ Version history:
     18 drops tasks.planned_on, tasks.plan_order and v8's index         (issue #369)
        — the "My plan" feature was removed. Every other column and row is
        untouched; v8 stays as shipped so an old database still reaches here.
+    19 time_areas / time_categories / time_entries / time_timers /
+       time_guesses + their indexes, seeded areas and categories       (issue #457)
+       — the time tracker, written only by ``src/time_repo.py``. An area holds
+       categories and both are archived, never deleted, so a past entry keeps
+       its category. ``person`` is a ``time.people`` id, never a display name;
+       an entry's clock range is both columns or neither.
+    20 tasks.owner (TEXT, nullable) + idx_tasks_owner               (issue #476)
+       — the member whose task it is, a ``people`` id and never the ``person_id``
+       contact a task is about. NULL reads as the install owner, so every
+       existing row keeps working untouched.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
