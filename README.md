@@ -2,7 +2,7 @@
 
 A personal, open-source task manager: one master list for everything, self-hosted on your own PC. Nested tasks that become projects by having children, comments with clickable links, an activity log, local-folder links that resolve per machine, GitHub/GitLab issues as first-class tasks, and one search box over tasks, folders, emails and issues. PC-first, with width following the shape of each view (the two-dimensional views span the window, Search and Settings keep the 772px measure); the phone gets the same views as an installable PWA over Tailscale; an LLM reaches it through a CLI, a JSON API and a markdown mirror.
 
-Built step by step: each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)); the step list is issue #1. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
+Built step by step: each step is a GitHub issue with a user story that is proven on screen before it closes ([`docs/validation.md`](docs/validation.md)); the step list is the roadmap issue. Internal map: [`docs/architecture.mmd`](docs/architecture.mmd).
 
 ## Stack
 
@@ -92,4 +92,4 @@ The skill is generated, not hand-written: run project-scaffolding's `scripts/gen
 
 ## Roadmap
 
-Issue #1 in this repo lists the 13 steps (home v1 → integrations → a second site with a small team). Each step closes with its automated story test, on-screen screenshots and a `docs/validation.md` entry.
+The roadmap issue in this repo lists the 13 steps (home v1 → integrations → a second site with a small team). Each step closes with its automated story test, on-screen screenshots and a `docs/validation.md` entry.
