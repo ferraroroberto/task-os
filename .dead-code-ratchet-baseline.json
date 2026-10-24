@@ -1,6 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": "tests/e2e/test_story_10_search.py", "names": ["_task_by_title"]}
-  ]
+  "entries": []
 }

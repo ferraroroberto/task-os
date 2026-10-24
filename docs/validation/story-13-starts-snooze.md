@@ -26,7 +26,7 @@ Unit legs: `tests/test_repo.py` (field + activity + clearing; the three `deferre
 
 ## Real walk (this PC, 2026-08-30)
 
-Real Chrome against a **disposable seeded instance** on `:8459` (never the live `:8448`; mirror and backup blanked via `tests.conftest.write_test_config`, synthetic seed only), dark and light:
+Real Chrome against a **disposable seeded instance** on a free port (never the live `:8448`; mirror and backup blanked via `tests.conftest.write_test_config`, synthetic seed only), dark and light:
 
 - Board and Today confirmed clear of the seed's `Book boiler service`; the Tree kept it with `starts 19 Sep`.
 - Snooze walked three times through the real control — *This weekend* on `School enrolment forms` (→ Sat 5 Sep, the coming Saturday from a Sunday, as the rule says), *Tomorrow* on `Practice scales`, *Next week* on `Vocabulary review`. Each left Today, each confirmed against `/api/tasks/{id}` rather than only on screen.

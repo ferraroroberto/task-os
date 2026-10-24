@@ -1,6 +1,6 @@
 # Project Instructions — task-os
 
-Claude Code reads this file as project memory; other agents reach it via the `AGENTS.md` pointer.
+Coding agents read this file as project memory; those that do not load `CLAUDE.md` natively reach it via the `AGENTS.md` pointer.
 
 > Universal dev-workflow directives live once in `~/.claude/CLAUDE.md` and are not restated here. Fleet-wide *shape* conventions for a FastAPI + static PWA + tray app (visual identity, vendored components, cache-busting, event-loop pinning, `CREATE_NO_WINDOW`, one `get_db`, tray self-heal, e2e routing) are owned by `project-scaffolding`'s `CLAUDE.md`. Read `README.md` first.
 

@@ -115,11 +115,6 @@ def _task_post(base: str, body: dict) -> dict:
         return json.loads(res.read().decode("utf-8"))
 
 
-def _task_by_title(base: str, title: str) -> dict:
-    items = _get(base, "/api/tasks?q=" + urllib.request.quote(title) + "&include_closed=true")["items"]
-    return next(t for t in items if t["title"] == title)
-
-
 def _open_group(page: Page, kind: str):
     """A result group: there only when its kind has hits, and open (#395)."""
     g = page.locator(f".search-group[data-kind='{kind}']")
