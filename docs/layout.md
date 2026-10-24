@@ -18,7 +18,7 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{c
                           · search (/api/search — federated, /api/search/status)
                           · usage (/api/usage/events|summary — the vendored src/usage_log.py, see Usage log)
 app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens in base.css, then one sheet per view or shared surface, linked in cascade order by both pages), app.js (state + routing), board.js,
-                          today.js, drawer.js (the drawer's composer: open / close / refresh and the `ctx` its parts share; each part is a `js/drawer/<part>.js` taking `ctx` first), quickadd.js (the add dialog's composer — each part is a `js/quickadd/<part>.js` taking `ctx` first), search.js (the Search tab), time.js (the Time tab's composer, #457 — each part is a `js/time/<part>.js` taking `ctx` first) + time-dialogs.js · time-settings.js · time-format.js,
+                          today.js, drawer.js (the drawer's composer: open / close / refresh and the `ctx` its parts share; each part is a `js/drawer/<part>.js` taking `ctx` first), quickadd.js (the add dialog's composer — each part is a `js/quickadd/<part>.js` taking `ctx` first), search.js (the Search tab's composer — each part is a `js/search/<part>.js` taking `ctx` first), time.js (the Time tab's composer, #457 — each part is a `js/time/<part>.js` taking `ctx` first) + time-dialogs.js · time-settings.js · time-format.js,
                           rows.js (the one task row), filters.js (the one filter state + its sheet), journal.js (the done journal),
                           selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), rowmenu.js (the row's ⋯ menu), keys.js (the one keymap), snooze.js (the one date picker),
                           confirm.js + modal.js (the editor-modal card shell and backdrop close), folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
@@ -103,4 +103,4 @@ Every offender that existed on adoption is recorded in `.structure-ratchet-basel
 
 ### Baselined offenders and their way out
 
-The baseline holds 9 files over 1,000 lines (the app script, `index.html`, three `src/` modules, two e2e files and two unit test files), 35 functions over 100 lines (the view closure `mountSearch` the longest) and the flat `tests/` directory. Splitting each is its own change; the drawer, the Settings pane, the Time tab, the Email archiving sheet and the add dialog are the five already split.
+The baseline holds 9 files over 1,000 lines (the app script, `index.html`, three `src/` modules, two e2e files and two unit test files), 34 functions over 100 lines and the flat `tests/` directory. Splitting each is its own change; the drawer, the Settings pane, the Time tab, the Email archiving sheet, the add dialog and the Search tab are the six already split.

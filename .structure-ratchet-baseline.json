@@ -9,7 +9,6 @@
     {"key": "fn:app/webapp/static/filters.js:mountFilters", "lines": 196},
     {"key": "fn:app/webapp/static/keys.js:mountKeys", "lines": 267},
     {"key": "fn:app/webapp/static/palette.js:createPalette", "lines": 139},
-    {"key": "fn:app/webapp/static/search.js:mountSearch", "lines": 316},
     {"key": "fn:app/webapp/static/swipe.js:bindSwipe", "lines": 112},
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor", "lines": 145},
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor.<anonymous>", "lines": 140},
