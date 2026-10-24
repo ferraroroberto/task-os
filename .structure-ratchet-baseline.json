@@ -17,7 +17,6 @@
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor", "lines": 145},
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor.<anonymous>", "lines": 140},
     {"key": "fn:app/webapp/static/time-settings.js:mountTimeSettings", "lines": 174},
-    {"key": "fn:app/webapp/static/time.js:mountTime", "lines": 894},
     {"key": "fn:app/webapp/static/voice.js:mountMic", "lines": 239},
     {"key": "fn:src/archive_batch.py:ArchiveBatchService.move", "lines": 142},
     {"key": "fn:src/cli.py:build_parser", "lines": 148},
