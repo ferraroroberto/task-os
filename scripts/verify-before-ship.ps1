@@ -17,13 +17,19 @@
                              docs/**/*.md beyond .docs-ratchet-baseline.json. Whole
                              tree, never routed; exit 3 (count not established) is
                              NOT CONFIRMED and fails, never a pass or a skip.
-      5. pytest (unit)     — hermetic suite, tests/e2e excluded
-      6. pytest (e2e)      — diff-proportionate: the browser slice is routed by
+      5. structure ratchet — no new file over 1,000 lines, function over 100 lines or
+                             directory over 40 modules, no src/ import of app/, and the
+                             root folders match `shape` + `extra_roots`, beyond
+                             .structure-ratchet-baseline.json. Whole tree, never
+                             routed; exit 3 (tree not measured) is NOT CONFIRMED and
+                             fails, never a pass or a skip.
+      6. pytest (unit)     — hermetic suite, tests/e2e excluded
+      7. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
-      7. gallery baseline  — whatever shots stage 6 rewrote, compared against
+      8. gallery baseline  — whatever shots stage 7 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
                              leaves rewritten PNGs behind (#225). Re-baselining
@@ -73,6 +79,9 @@ Invoke-Stage "static ratchet"          { & $py -m scripts.static_ratchet_gate }
 # Same wrapper shape: it maps the docs script's exit 3 to NOT CONFIRMED
 # (tests/test_docs_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "docs ratchet"            { & $py -m scripts.docs_ratchet_gate }
+# Same wrapper shape: it maps the layout script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_structure_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "structure ratchet"       { & $py -m scripts.structure_ratchet_gate }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing

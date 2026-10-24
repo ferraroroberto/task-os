@@ -65,7 +65,7 @@ One line each; the full reference for a feature is the page it links to.
 
 | Page | Holds |
 | --- | --- |
-| [Layout](docs/layout.md) | The repository tree |
+| [Layout](docs/layout.md) | The repository tree, the structure ratchet and where new code goes |
 | [Configuration](docs/configuration.md) | Every key of `config/config.json` |
 | [Data model](docs/data-model.md) | The SQLite tables, the schema version and the rules the repo layer enforces |
 | [Validation](docs/validation.md) | Each step's user story, its steps, screenshots and result |
@@ -78,7 +78,7 @@ One line each; the full reference for a feature is the page it links to.
 ## Verify, restart, prove
 
 ```powershell
-& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → static ratchet (needs Node) → docs ratchet → pytest → routed e2e (disposable instance) → gallery baseline
+& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → static ratchet (needs Node) → docs ratchet → structure ratchet → pytest → routed e2e (disposable instance) → gallery baseline
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 
