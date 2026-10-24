@@ -1,5 +1,7 @@
 {
   "version": 1,
   "tools": {"jscpd": "5.4.0", "ruff": "0.17.1"},
-  "entries": []
+  "entries": [
+    {"key": "dup:fa87eb205481:tests/gates/test_conventions_ratchet_gate.py|tests/gates/test_dead_code_ratchet_gate.py", "files": ["tests/gates/test_conventions_ratchet_gate.py", "tests/gates/test_dead_code_ratchet_gate.py"]}
+  ]
 }
