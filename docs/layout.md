@@ -70,3 +70,37 @@ webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watc
 ## Stylesheets
 
 One stylesheet per view or shared surface under `app/webapp/static/styles/`, none over 1,000 lines (the structure ratchet's file cap, pinned by `tests/test_smoke.py`). `base.css` holds the tokens, the base rules, the layout and the cards; every other sheet opens with one comment saying what it owns. `index.html` and `login.html` link the same set in the same order, because rule order is the cascade: a later sheet overrides an earlier one, so a rule moves between sheets only with its order kept. A new view adds a sheet and a `<link>` in both pages (the content-hash `?v=` stamp is added at serve time).
+
+## Structure ratchet
+
+The tree above is held to the fleet's `webapp-tray` shape by the structure ratchet (`scripts/structure_ratchet.py`, vendored byte-for-byte from the scaffold, never edited here; the gate runs it through `scripts/structure_ratchet_gate.py`, which fails exit 3 as NOT CONFIRMED). It checks five things:
+
+- **File size**: a file over 1,000 lines does not grow; code, stylesheets, markup and tests alike.
+- **Function length**: a Python or JS function over 100 lines does not grow. A nested function counts inside its outer one, so a view's `mount<View>()` closure is held as a whole.
+- **Flat directory**: a directory past 40 modules (`.py`, `.js`, `.mjs`, `.css`; `__init__.py` aside) takes no new module.
+- **Layer contract**: `src/` never imports `app/`; a helper both need lives in `src/`.
+- **Root layout**: the tracked root folders match the shape plus the declared extras below. This one is not baselined.
+
+Every offender that existed on adoption is recorded in `.structure-ratchet-baseline.json` at its size that day, with nothing excluded. A baselined entry may shrink but never grow, and a new offender fails by name. After splitting or shortening one, lower the baseline with `scripts/structure_ratchet.py --update-baseline`; only `--allow-additions` raises it, and that shows in review.
+
+### Root folders
+
+| Folder | Why it is there |
+|---|---|
+| `app/` · `src/` · `tests/` · `docs/` | the shape's required folders: the UI and tray, the logic, the suites, the reference |
+| `scripts/` · `config/` · `assets/` · `brand/` | allowed by the shape: ops CLIs, committed config and its samples, static files the app ships, the icon masters |
+| `opener/` | the declared exception (`extra_roots` in `.fleet.toml`): the per-PC folder opener, a native install helper (PowerShell, a command handler, an installer) that a user runs on another machine, so it belongs to neither the app nor the logic |
+
+`data/` and `webapp/` are gitignored runtime output and never tracked, so the check does not see them.
+
+### Where new code goes
+
+- A new endpoint: `app/webapp/routers/<concern>.py`, parsing the request and returning the response; the rule lives in `src/` (domain rules in `src/tasks_repo.py`, time-tracker rules in `src/time_repo.py`).
+- A new view: its own stylesheet under `app/webapp/static/styles/` linked from both `index.html` and `login.html`, and its own script beside the other views' scripts. Never a new block in `base.css` or another view's sheet.
+- A new logic module: `src/` is flat past the cap, so a new module goes in a domain subpackage (`src/<domain>/`, as `src/search/`, `src/ai/` and `src/issues/` already are), not beside the flat ones.
+- A new test: `tests/` is flat past the cap and takes no new module, so a new file goes in a subfolder named for its subject (`tests/gates/` for the gate wrappers' tests, `tests/e2e/` for stories), with an `__init__.py`.
+- A new ops script: `scripts/`; a helper the app imports belongs in `src/`.
+
+### Baselined offenders and their way out
+
+The baseline holds 13 files over 1,000 lines (the app, archive and drawer scripts, `index.html`, four `src/` modules, three e2e files and two unit test files), 49 functions over 100 lines (the view-mount closures `createDrawer`, `mountArchive` and `mountTime` the longest) and the flat `tests/` directory. Splitting each is its own change; none is done by this adoption.
