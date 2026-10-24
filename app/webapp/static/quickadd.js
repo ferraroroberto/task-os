@@ -27,19 +27,21 @@
  * preview typing it would have produced, one confirming Enter away. Dictation
  * appends to whatever was already on the line rather than replacing it.
  * Nothing else about the dialog changes.
+ *
+ * This file is the composer: it builds the `ctx` its parts share (the dialog,
+ * the looked-up fields, the draft state) and hands back `open` / `close`. Each
+ * part lives in js/quickadd/<part>.js and takes `ctx` as its first argument; a
+ * call that would make two parts import each other goes through a `ctx` slot.
  */
 
 'use strict';
 
-import { api } from './api.js';
-import { icon } from './_vendored/icons/icons.js';
-import { closeOnBackdrop } from './modal.js';
-import { STATUSES, relDue } from './format.js';
-import { mountFolderPicker, resolveFolderRef } from './folderpick.js';
-import { toast } from './toast.js';
-import { mountMic } from './voice.js';
+import { STATUSES } from './format.js';
+import { mountDictation } from './js/quickadd/dictate.js';
+import { resetForm, wireSubmit } from './js/quickadd/form.js';
+import { showDate } from './js/quickadd/preview.js';
+import { wireQuickAdd } from './js/quickadd/wire.js';
 
-const PARSE_DEBOUNCE_MS = 180;
 // To Do, not Inbox (#148): Inbox is the arrivals tray for what came in on
 // its own, and a task you are typing here has already been triaged by the
 // act of writing it. The select still opens on this, so it stays one change
@@ -53,279 +55,56 @@ const DEFAULT_STATUS = 'todo';
  * @returns {{open: (preset?: {status?: string, due?: string}) => void, close: () => void}}
  */
 export function createQuickAdd(dialog, opts) {
-  const form = dialog.querySelector('.quickadd-card');
-  const input = dialog.querySelector('.quick-add-input');
-  const submit = dialog.querySelector('.quick-add-submit');
-  const chips = dialog.querySelector('.quick-add-chips');
-  const desc = dialog.querySelector('.quick-add-desc');
-  const due = dialog.querySelector('.quick-add-due');
-  const starts = dialog.querySelector('.quick-add-starts');
-  const status = dialog.querySelector('.quick-add-status');
-  const folder = dialog.querySelector('.quick-add-folder');
-  const pick = dialog.querySelector('.quick-add-pick');
-  const picker = dialog.querySelector('.quick-add-picker');
-  const link = dialog.querySelector('.quick-add-link-url');
-  const linkLabel = dialog.querySelector('.quick-add-link-label');
-  const mic = dialog.querySelector('.quick-add-mic');
-  const voiceHint = dialog.querySelector('.quick-add-voice-hint');
+  const q = function (sel) { return dialog.querySelector(sel); };
+  const ctx = {
+    dialog: dialog,
+    opts: opts,
+    defaultStatus: DEFAULT_STATUS,
+    els: {
+      form: q('.quickadd-card'),
+      input: q('.quick-add-input'),
+      submit: q('.quick-add-submit'),
+      chips: q('.quick-add-chips'),
+      desc: q('.quick-add-desc'),
+      due: q('.quick-add-due'),
+      starts: q('.quick-add-starts'),
+      status: q('.quick-add-status'),
+      folder: q('.quick-add-folder'),
+      pick: q('.quick-add-pick'),
+      picker: q('.quick-add-picker'),
+      link: q('.quick-add-link-url'),
+      linkLabel: q('.quick-add-link-label'),
+      mic: q('.quick-add-mic'),
+      voiceHint: q('.quick-add-voice-hint'),
+    },
+    st: {
+      parsed: null,
+      timer: 0,
+      seq: 0,
+      enrichSeq: 0,
+      // Once a date is set by hand the parser stops writing it — one flag per
+      // field, so correcting the due never freezes the start date too (#87).
+      touched: { due: false, starts: false },
+      // What line 1 held when recording started; dictation appends after it.
+      spokenPrefix: '',
+    },
+    voice: null,
+    // the call the submit listener and the dialog's wiring share
+    close: close,
+  };
+  const els = ctx.els;
 
   STATUSES.forEach(function (s) {
     const o = document.createElement('option');
     o.value = s;
     o.textContent = s;
     if (s === DEFAULT_STATUS) o.selected = true;
-    status.appendChild(o);
+    els.status.appendChild(o);
   });
 
-  let parsed = null;
-  let timer = 0;
-  let seq = 0;
-  // Once a date is set by hand the parser stops writing it — one flag per
-  // field, so correcting the due never freezes the start date too (#87).
-  const touched = { due: false, starts: false };
-
-  /** The parse preview: the parent only — the due is in the Due field, where
-   *  it can be corrected, so a chip repeating it would be a second truth. */
-  function renderChips() {
-    chips.innerHTML = '';
-    if (!parsed || !parsed.parent_ref) return;
-    const c = document.createElement('span');
-    c.className = 'chip chip-parent' + (parsed.parent ? '' : ' chip-missing');
-    c.innerHTML = icon('corner-down-right');
-    const t = document.createElement('span');
-    t.className = 'chip-label';
-    if (parsed.parent) {
-      c.dataset.parentId = String(parsed.parent.id);
-      t.textContent = 'in ' + parsed.parent.title + ' (#' + parsed.parent.id + ')';
-    } else {
-      const ref = parsed.parent_ref.id != null ? '#' + parsed.parent_ref.id : parsed.parent_ref.title;
-      t.textContent = 'no such parent: ' + ref;
-    }
-    c.appendChild(t);
-    chips.appendChild(c);
-  }
-
-  /** The phrase the parser understood, next to the date it produced. Both date
-   *  fields fill this way, so `due oct 15 starts oct 1` previews as two
-   *  correctable dates rather than one date and a mystery (#87). */
-  function showDate(el, iso, phrase) {
-    el.value = iso || '';
-    const rel = iso ? relDue(iso) : { text: '' };
-    el.title = iso
-      ? (phrase ? '"' + phrase + '"' : '') + (rel.text ? (phrase ? ' · ' : '') + rel.text : '')
-      : '';
-  }
-
-  /** Apply a parse result to the preview — the one place chips and the two
-   *  date fields are written, whether the line was typed or spoken. */
-  function applyParse(res, text) {
-    parsed = res;
-    parsed._for = text;
-    renderChips();
-    if (!touched.due) showDate(due, parsed.due, parsed.due_phrase);
-    if (!touched.starts) showDate(starts, parsed.starts, parsed.starts_phrase);
-  }
-
-  async function parseNow() {
-    const text = input.value.trim();
-    const my = ++seq;
-    if (!text) {
-      parsed = null;
-      renderChips();
-      if (!touched.due) showDate(due, '', '');
-      if (!touched.starts) showDate(starts, '', '');
-      return;
-    }
-    try {
-      const res = await api('/api/parse', { method: 'POST', body: { text: text } });
-      if (my !== seq) return;           // a newer keystroke superseded this parse
-      applyParse(res, text);
-    } catch (_) {
-      // Parsing is a convenience: a failed parse just means no preview.
-      if (my === seq) { parsed = null; renderChips(); }
-    }
-  }
-
-  input.addEventListener('input', function () {
-    // Typing over a partial makes it yours: it stops being provisional the
-    // moment you edit it, whatever the recorder does next.
-    input.classList.remove('is-dictating', 'is-enriching');
-    submit.disabled = !input.value.trim();
-    window.clearTimeout(timer);
-    timer = window.setTimeout(parseNow, PARSE_DEBOUNCE_MS);
-  });
-  due.addEventListener('input', function () { touched.due = true; due.title = ''; });
-  starts.addEventListener('input', function () { touched.starts = true; starts.title = ''; });
-
-  // Folder: type a ref / an absolute path, or search the index (folderpick.js,
-  // the same picker the drawer's Folder section uses).
-  function setPicker(open) {
-    picker.hidden = !open;
-    pick.setAttribute('aria-expanded', String(open));
-    if (!open) return;
-    mountFolderPicker(picker, {
-      onPick: function (ref) { folder.value = ref; setPicker(false); folder.focus(); },
-      onClose: function () { pick.setAttribute('aria-expanded', 'false'); },
-    });
-    picker.querySelector('input').focus();
-  }
-  pick.addEventListener('click', function () { setPicker(picker.hidden); });
-
-  function reset() {
-    input.value = '';
-    input.classList.remove('is-dictating');
-    spokenPrefix = '';
-    desc.value = '';
-    showDate(due, '', '');
-    showDate(starts, '', '');
-    status.value = DEFAULT_STATUS;
-    folder.value = '';
-    link.value = '';
-    linkLabel.value = '';
-    setPicker(false);
-    parsed = null;
-    touched.due = false;
-    touched.starts = false;
-    submit.disabled = true;
-    renderChips();
-  }
-
-  form.addEventListener('submit', async function (ev) {
-    ev.preventDefault();
-    const text = input.value.trim();
-    if (!text) return;
-    window.clearTimeout(timer);
-    // Make sure the parse reflects the final text before creating.
-    if (!parsed || parsed._for !== text) {
-      try {
-        parsed = await api('/api/parse', { method: 'POST', body: { text: text } });
-        parsed._for = text;
-      } catch (_) { parsed = null; }
-    }
-    const body = { title: (parsed && parsed.title) || text, status: status.value };
-    if (due.value) body.due = due.value;
-    if (starts.value) body.starts = starts.value;
-    if (desc.value.trim()) body.description = desc.value.trim();
-    if (parsed && parsed.parent_ref) {
-      if (!parsed.parent) {
-        toast('No task matches that parent — nothing created', 'error');
-        return;
-      }
-      body.parent_id = parsed.parent.id;
-    }
-    submit.disabled = true;
-    const ref = folder.value.trim();
-    if (ref) {
-      const resolved = await resolveFolderRef(ref);
-      if (resolved === undefined) { submit.disabled = false; return; }   // said why
-      body.folder_ref = resolved;
-    }
-    let task;
-    try {
-      task = await api('/api/tasks', { method: 'POST', body: body });
-    } catch (err) {
-      toast(err.message || 'Could not add the task', 'error');
-      submit.disabled = false;
-      return;
-    }
-    // The task exists from here on: a failing link is reported on its own and
-    // never rolls the task back or keeps the dialog holding a duplicate.
-    const url = link.value.trim();
-    if (url) {
-      try {
-        await api('/api/tasks/' + task.id + '/links', {
-          method: 'POST',
-          body: { url: url, label: linkLabel.value.trim() || null },
-        });
-      } catch (err) {
-        toast('Added #' + task.id + ', but the link failed: ' + (err.message || 'unknown error'), 'error');
-      }
-    }
-    close();                            // the `close` listener clears the draft
-    toast('Added #' + task.id + ' ' + task.title, 'success');
-    if (opts && opts.onCreated) opts.onCreated(task);
-  });
-
-  // Dictation writes into line 1 *after* whatever was already typed, so
-  // pressing the mic mid-thought adds to the line instead of eating it. The
-  // prefix is fixed at the moment recording starts; every partial and the
-  // final transcript replace only the part after it.
-  let spokenPrefix = '';
-
-  function renderSpoken(text, provisional) {
-    const sep = spokenPrefix && !/\s$/.test(spokenPrefix) ? ' ' : '';
-    const line = spokenPrefix + (text ? sep + text : '');
-    input.value = line;
-    submit.disabled = !line.trim();
-    input.classList.toggle('is-dictating', !!provisional);
-    return line;
-  }
-
-  // The final transcript brings its own parse with it — the route returns
-  // both, so a spoken line costs one round trip, not two. Partials carry no
-  // parse on purpose: a due date appearing and moving while the sentence is
-  // still landing is noise, so the chips and dates wait for the end.
-  // The model may replace the title and fill the description; the dates it
-  // proposes are resolved server-side from phrases it had to quote out of
-  // the transcript, so a date it invented cannot reach the form. Every
-  // failure is reported as `source: "parser"` and simply leaves the
-  // deterministic answer standing — losing a tidy-up must not look like a
-  // broken microphone.
-  let enrichSeq = 0;
-  async function enrich(text) {
-    const my = ++enrichSeq;
-    input.classList.add('is-enriching');
-    try {
-      const res = await api('/api/enrich', { method: 'POST', body: { text: text } });
-      if (my !== enrichSeq || !dialog.open) return;
-      if (res.source !== 'llm' || !res.title) return;   // the parser's answer stands
-      input.value = res.title;
-      submit.disabled = !res.title.trim();
-      // Only ever *fills* the description, never overwrites one you typed.
-      if (res.description && !desc.value.trim()) desc.value = res.description;
-      seq++;                            // this line is not what /api/parse saw
-      applyParse(res, res.title);
-    } catch (_) {
-      // The route answers 200 even when the model could not be reached, so
-      // this is a genuinely broken request — and still not worth a toast:
-      // the transcript and its parse are already on the line.
-    } finally {
-      if (my === enrichSeq) input.classList.remove('is-enriching');
-    }
-  }
-
-  const voice = mountMic(mic, voiceHint, {
-    onStart: function () {
-      spokenPrefix = input.value;
-      window.clearTimeout(timer);
-      seq++;                            // supersede any parse still in flight
-    },
-    onPartial: function (text) { renderSpoken(text, true); },
-    onResult: function (r) {
-      const line = renderSpoken(r.text, false);
-      seq++;                            // …and any that started during the take
-      // The parse that rode back describes the *transcript*. That is the whole
-      // line only when nothing was typed before the mic was pressed; with a
-      // prefix it describes a fragment, so the line is re-parsed rather than
-      // labelled with an answer to a different question.
-      if (line === r.text) applyParse(r.parse, line);
-      else parseNow();
-      input.focus();
-      // …and then, only for a spoken line, ask the hub's light model to make
-      // a title and a description of the sentence (#147). Deliberately a
-      // second round trip rather than folded into /api/transcribe: the
-      // transcript and its parse are on screen *now*, and the tidy-up is
-      // worth ~1.5 s of waiting only because nothing is waiting on it.
-      enrich(line);
-    },
-    onError: function (message) {
-      input.classList.remove('is-dictating');
-      toast(message, 'error');
-    },
-    // Closing the dialog mid-recording abandons it: nothing is uploaded and
-    // no transcript arrives late into a dialog that is no longer open.
-    isLive: function () { return dialog.open; },
-  });
+  wireSubmit(ctx);
+  ctx.voice = mountDictation(ctx);
+  wireQuickAdd(ctx);
 
   /** @param {{status?: string, due?: string}} [preset] where the add came
    *  from (#339): an empty Board column presets its status, Today's empty
@@ -333,42 +112,18 @@ export function createQuickAdd(dialog, opts) {
    *  parse of the typed line does not clear it (the field still edits). */
   function open(preset) {
     const p = preset || {};
-    if (p.status && STATUSES.indexOf(p.status) >= 0) status.value = p.status;
-    if (p.due) { showDate(due, p.due, ''); touched.due = true; }
+    if (p.status && STATUSES.indexOf(p.status) >= 0) els.status.value = p.status;
+    if (p.due) { showDate(els.due, p.due, ''); ctx.st.touched.due = true; }
     if (!dialog.open) dialog.showModal();
-    voice.refresh();
-    input.focus();
-    input.select();
+    ctx.voice.refresh();
+    els.input.focus();
+    els.input.select();
   }
 
   function close() {
     if (dialog.open) dialog.close();
   }
 
-  // Escape closes the folder picker first, the dialog second — one keystroke
-  // per thing open, so it never discards a draft the user was still filling.
-  // Capture, not `cancel`: the picker's own Escape handler (folderpick.js) runs
-  // on the way to the target and would already have hidden it, leaving `cancel`
-  // to see a closed picker and let the dialog go.
-  dialog.addEventListener('keydown', function (ev) {
-    if (ev.key !== 'Escape' || picker.hidden) return;
-    ev.preventDefault();          // ... and so the dialog's own close-request too
-    ev.stopPropagation();
-    setPicker(false);
-    folder.focus();
-  }, true);
-  dialog.querySelector('.detail-close').addEventListener('click', close);
-  closeOnBackdrop(dialog, close);
-  // Escape / backdrop / × / a successful add all discard the draft (the
-  // editor-modal contract: nothing persists but the primary action).
-  dialog.addEventListener('close', function () {
-    window.clearTimeout(timer);
-    seq++;
-    enrichSeq++;                        // a late model answer has nowhere to land
-    voice.cancel();                     // never leave the microphone open
-    reset();
-  });
-
-  reset();
+  resetForm(ctx);
   return { open: open, close: close };
 }
