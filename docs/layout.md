@@ -17,7 +17,7 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{c
                           · archive (/api/archive/run, /api/archive/runs[/{id}], per-item revert|move|accept|retry)
                           · search (/api/search — federated, /api/search/status)
                           · usage (/api/usage/events|summary — the vendored src/usage_log.py, see Usage log)
-app/webapp/static/        the PWA: index.html, login.html, styles.css (fleet tokens), app.js (state + routing), board.js,
+app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens in base.css, then one sheet per view or shared surface, linked in cascade order by both pages), app.js (state + routing), board.js,
                           today.js, drawer.js, quickadd.js, search.js (the Search tab), time.js + time-dialogs.js · time-settings.js · time-format.js (the Time tab, #457),
                           rows.js (the one task row), filters.js (the one filter state + its sheet), journal.js (the done journal),
                           selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), rowmenu.js (the row's ⋯ menu), keys.js (the one keymap), snooze.js (the one date picker),
@@ -66,3 +66,7 @@ brand/ assets/            Lucide list-checks master → favicon / touch icons / 
 data/                     tasks.db, folder_index.txt, logs, avatars, backups — gitignored, never committed
 webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log, webapp.log (the tray-spawned webapp's stdout/stderr — a boot traceback lands here) — gitignored
 ```
+
+## Stylesheets
+
+One stylesheet per view or shared surface under `app/webapp/static/styles/`, none over 1,000 lines (the structure ratchet's file cap, pinned by `tests/test_smoke.py`). `base.css` holds the tokens, the base rules, the layout and the cards; every other sheet opens with one comment saying what it owns. `index.html` and `login.html` link the same set in the same order, because rule order is the cascade: a later sheet overrides an earlier one, so a rule moves between sheets only with its order kept. A new view adds a sheet and a `<link>` in both pages (the content-hash `?v=` stamp is added at serve time).

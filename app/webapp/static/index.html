@@ -51,7 +51,19 @@
   <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
   <link rel="stylesheet" href="/static/_vendored/row-menu/row-menu.css">
   <link rel="stylesheet" href="/static/_vendored/segmented/segmented.css">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles/base.css">
+  <link rel="stylesheet" href="/static/styles/settings.css">
+  <link rel="stylesheet" href="/static/styles/components.css">
+  <link rel="stylesheet" href="/static/styles/sheets.css">
+  <link rel="stylesheet" href="/static/styles/rows.css">
+  <link rel="stylesheet" href="/static/styles/drawer.css">
+  <link rel="stylesheet" href="/static/styles/board.css">
+  <link rel="stylesheet" href="/static/styles/today.css">
+  <link rel="stylesheet" href="/static/styles/login.css">
+  <link rel="stylesheet" href="/static/styles/search.css">
+  <link rel="stylesheet" href="/static/styles/overlays.css">
+  <link rel="stylesheet" href="/static/styles/archive.css">
+  <link rel="stylesheet" href="/static/styles/time.css">
   <title>task-os</title>
 </head>
 <body>
@@ -723,7 +735,7 @@
     <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
            aria-labelledby="drawerTitle" hidden></aside>
     <!-- Today's split view (#336): on desktop the right half is always the
-         detail pane. While no task is open this is what sits there; styles.css
+         detail pane. While no task is open this is what sits there; styles/drawer.css
          shows it only on Today at >= 1024px with the drawer closed. -->
     <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
       <div class="empty-state">
@@ -936,7 +948,7 @@
 
   <!-- Command palette (Step 10): the vendored editor-modal shell (native
        <dialog>, showModal / close, Esc), one input + a list built by palette.js.
-       Full-width sheet on the phone (styles.css). -->
+       Full-width sheet on the phone (styles/overlays.css). -->
   <dialog class="detail-dialog palette-dialog" id="palette" aria-label="Command palette">
     <div class="detail-card palette-card">
       <div class="palette-input-row">

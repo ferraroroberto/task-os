@@ -1,0 +1,92 @@
+/* Search. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* ====================================================== Step 10 surfaces */
+/* Search tab (one box, four collapsible result groups) and the command
+   palette (the vendored editor-modal shell + a list). Markup + token values
+   only: modal.css is untouched — the palette variation lives on its own class. */
+
+/* ------------------------------------------------------------ search */
+/* The box is the header bar's height (52px, home-head) — one size of bar. The
+   card is the field, so its edge is the input's boundary: control-border, not
+   the card hairline (design.md, #339). */
+.search-box { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border-color: var(--control-border); }
+.search-box > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-body);
+  outline: none;
+}
+.search-input::placeholder { color: var(--muted); }
+.search-input::-webkit-search-cancel-button { cursor: pointer; }
+.search-meta { font-size: var(--font-label); white-space: nowrap; }
+/* The results (#395): before a query, the hint and the folded line; with
+   one, a flat section per kind that has hits (the overline header Today's
+   horizons use, #391), then the folded line for the rest. */
+.search-host { display: grid; gap: var(--space-sm); }
+/* min-width 0: a grid item's auto minimum is its nowrap content, so one long
+   hit meta row widened the group, and the page, past a phone (#417). */
+.search-group { margin: 0; min-width: 0; }
+.search-group-count { white-space: nowrap; }
+.search-hits { list-style: none; margin: 0; padding: 0; }
+.search-hit:first-child { border-top: 0; }
+.search-hit:hover, .search-hit.is-active { background: var(--card-2); }
+/* The title IS the link: plain text in the row's title style, no chip box, no glyph. */
+.search-hit-link .icon { display: none; }
+.search-hit-link, a.chip.search-hit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.search-hit-link:hover { text-decoration: underline; }
+.search-hit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block !important; max-width: 100%; }
+.search-hit-snippet { font-size: var(--font-body-sm); overflow-wrap: anywhere; }
+.search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+/* The hint, the folded line, the error and a hit's snippet are what a person
+   reads: the 14px body-sm role, never the caption (TYPE-01, #408). */
+.search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-body-sm); }
+.search-fold a { color: var(--accent); }
+/* The inline Settings link is one word: 14px of padding around its line is
+   the room its 44px target takes, invisibly (#281). */
+.search-fold { padding-top: 14px; padding-bottom: 14px; }
+.search-fold a { position: relative; }
+.search-fold a::before { content: ""; position: absolute; inset: -14px -4px; }
+.search-err { color: var(--danger); }
+kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  /* the sub-sm radius, spelled the one way: half of --radius-sm, as .check
+     derives it, so 4px is never a second hand-picked corner. */
+  border-radius: calc(var(--radius-sm) / 2);
+  background: var(--neutral-soft);   /* the code-inline chip fill, text on it is fg (COMP-17, #426) */
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-caption);
+  line-height: 1.5;
+  text-align: center;
+}
+/* A key drawn as a glyph (⌘, ↑, ↓) sits on the 16px inline step, never 1em of
+   the 12px key label (COMP-02: the palette foot and Settings → Command
+   palette, #397). */
+kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
+

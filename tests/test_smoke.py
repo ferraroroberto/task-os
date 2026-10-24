@@ -8,6 +8,7 @@ override so its ``get_db`` resolves the temp path per request.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -140,8 +141,27 @@ def test_index_is_stamped_and_no_cache(client: TestClient) -> None:
     assert "no-cache" in r.headers["cache-control"]
     html = r.text
     assert "Add your first task" not in html  # rendered by JS, not baked in
-    assert 'href="/static/styles.css?v=' in html
+    assert 'href="/static/styles/base.css?v=' in html
     assert 'src="/static/app.js?v=' in html
+
+
+def test_every_stylesheet_is_linked_in_order_and_under_the_cap() -> None:
+    """The sheet set is the cascade: a file in ``static/styles/`` that a page
+    forgets to link silently drops its rules, so both pages must link every one,
+    in one order, and no sheet may grow past the structure ratchet's file cap."""
+    static = REPO_ROOT / "app" / "webapp" / "static"
+    sheets = sorted(p.name for p in (static / "styles").glob("*.css"))
+    assert sheets
+    orders = []
+    for page in ("index.html", "login.html"):
+        html = (static / page).read_text(encoding="utf-8")
+        orders.append(re.findall(r'href="/static/styles/([\w-]+\.css)"', html))
+    assert orders[0] == orders[1]
+    assert sorted(orders[0]) == sheets
+    assert orders[0][0] == "base.css"
+    for name in sheets:
+        n = len((static / "styles" / name).read_text(encoding="utf-8").splitlines())
+        assert n <= 1000, f"{name} is {n} lines"
 
 
 def test_static_js_is_import_stamped_and_immutable(client: TestClient) -> None:

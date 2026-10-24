@@ -1,0 +1,98 @@
+/* Today and its calendar lane. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* ------------------------------------------------------------- today */
+/* Flat: a heading line, project groups on hairlines, the shared rows,
+   Soon / Later / No date as flat disclosures below with breathing room (#350). */
+.today { display: flex; flex-direction: column; }
+.today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
+.today-title { margin: 0; }
+.today-counts { color: var(--muted); font-size: var(--font-label); }
+.today-group { padding: 0; border-top: 1px solid var(--line); }
+.today-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 10px var(--space-xs);
+  color: var(--fg);
+  font-size: var(--font-label);
+  font-weight: 600;
+}
+.today-group-title.is-loose { color: var(--muted); }
+.today-group-link {
+  border: 0;
+  padding: 2px var(--space-xs);
+  margin-left: -4px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.today-group-link:hover { background: var(--accent-soft); }
+/* The project name is a 25px text button in its group title; it reaches the
+   44px floor invisibly inside the title's own 10px padding above and below
+   (#281, #301) — the first row's open target starts under that padding, so the
+   two never meet. */
+.today-group-link { position: relative; }
+.today-group-link::before { content: ""; position: absolute; inset: -10px 0; }
+.today-group-count { color: var(--muted); font-weight: 400; font-size: var(--font-caption); }
+.today-list > .trow:first-child { border-top: 0; }
+.today-horizon .today-group:first-child { border-top: 0; }
+.today .empty-state { padding: var(--space-lg) var(--space-md); }
+
+/* ------------------------------------------------- calendar lane (#96) */
+/* Desktop only: the task stack on the left, a slim read-only column of today's
+   events on the right (calendar.js). Below 1024 px the lane is not drawn and
+   the layout wrapper is a plain block, so the phone renders as it did. */
+.cal-lane { display: none; }
+@media (min-width: 1024px) {
+  /* Only while a lane is drawn: with no calendar configured (#320) the wrapper
+     stays a plain block and the task column takes the width. */
+  .today-layout.has-cal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17.5rem;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+  .cal-lane {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding-left: var(--space-md);
+    border-left: 1px solid var(--line);
+  }
+}
+.cal-lane .empty-state { padding: var(--space-lg) var(--space-md); }
+/* A failure is a callout, never a blank: the red-washed box of the danger tier. */
+.cal-notice {
+  display: grid;
+  gap: 2px;
+  padding: 10px var(--gap);
+  border: 1px solid var(--deficit-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--deficit-soft);
+}
+.cal-notice-title { display: flex; align-items: center; gap: var(--space-sm); margin: 0; color: var(--danger); font-size: var(--font-label); font-weight: 600; }
+.cal-notice-title .icon { flex: none; width: var(--icon-inline); height: var(--icon-inline); }
+.cal-notice-detail { margin: 0; font-size: var(--font-caption); line-height: 1.4; overflow-wrap: anywhere; }
+.cal-note { margin: 0; padding: 0 var(--space-xs); color: var(--muted); font-size: var(--font-caption); line-height: 1.4; }
+.cal-note.is-attention { color: var(--attention); font-weight: 600; }
+.cal-allday { display: grid; gap: var(--space-xs); padding: var(--space-sm) var(--space-xs); border-top: 1px solid var(--line); }
+.cal-allday-label { color: var(--muted); font-size: var(--font-caption); }
+.cal-allday-list { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.cal-events { margin: 0; padding: 0; list-style: none; }
+.cal-event {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: baseline;
+  padding: var(--space-sm) var(--space-xs);
+  border-top: 1px solid var(--line);
+}
+.cal-time { color: var(--muted); font-size: var(--font-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-body { display: grid; min-width: 0; }
+.cal-summary { font-size: var(--font-label); overflow-wrap: anywhere; }
+.cal-span { color: var(--muted); font-size: var(--font-caption); }
+

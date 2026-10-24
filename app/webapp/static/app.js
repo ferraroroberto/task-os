@@ -146,7 +146,7 @@ const state = {
 
 let nav = null;
 let drawer = null;
-// The drawer's own desktop breakpoint (styles.css): at and above it the drawer
+// The drawer's own desktop breakpoint (styles/drawer.css): at and above it the drawer
 // is a panel beside the list (Today's right half), below it a full-screen sheet.
 const drawerBeside = window.matchMedia('(min-width: 1024px)');
 // The task desktop Today opened by itself (#393), until the user picks one.

@@ -1,0 +1,192 @@
+/* Board. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* ======================================================= Step 5 surfaces */
+/* Board (status columns — the launcher's board layout, ported) and Today
+   (due ≤ today grouped by project). Same rule as above: markup + token
+   values on top of the vendored components, no vendored file touched. */
+
+/* ------------------------------------------------------------- board */
+.board { display: flex; flex-direction: column; gap: var(--gap); }
+/* The line under the strip (#396): Mine · Issues · All, then Week · Status —
+   two vendored segmented controls sharing the row by their segment counts,
+   so every segment is the same width — and, in Status mode while the Inbox
+   holds tasks, Triage at its own width. */
+.board-bar { display: flex; align-items: center; gap: var(--gap); }
+.board-bar[hidden] { display: none; }
+.board-bar .view-switches { flex: 3 1 0; }
+.board-bar .view-switches:has(.whose-host:not([hidden])) { flex-grow: 5; }
+/* Seven segments do not share a phone's row (Everyone ran into Mine): with the
+   whose switch up, Mine · Everyone + Tasks · Issues · All take a row of their
+   own and Week · Status (+ Triage) the one under it. */
+@media (max-width: 600px) {
+  .board-bar { flex-wrap: wrap; }
+  .board-bar .view-switches:has(.whose-host:not([hidden])) { flex-basis: 100%; }
+}
+.board-modes { flex: 2 1 0; min-width: 0; }
+.board-bar .board-triage { flex: none; }
+/* The dark lift the scope switch carries, for the same reason (see .scope-switch). */
+[data-theme="dark"] .board-modes { --card: var(--line); }
+
+/* Phone strip (Status mode): column switcher + counts — a segmented control
+   that doubles as the column header while the carousel shows one column at a
+   time. */
+.board-strip { display: flex; gap: var(--space-xs); }
+.board-strip[hidden] { display: none; }
+.board-strip-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit-min);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  padding: 6px 1px;
+  font: inherit;
+  font-size: var(--font-caption);
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-strip-btn.active { background: var(--card-2); color: var(--fg); border-color: var(--accent-border-soft); }
+.board-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);   /* the chip recipe: neutral-soft + fg (#281) */
+  color: var(--fg);
+  font-size: var(--font-caption);
+  font-weight: 600;
+  text-align: center;
+}
+.board-strip-btn.active .board-count { background: var(--accent-soft); color: var(--accent-text); }
+
+/* A lane's header: the `overline` section header Today's horizons use, its
+   count beside it. Hidden on the phone carousel, where the strip names the
+   column. */
+.board-col-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: var(--row-sm);
+}
+.board-col-title .board-col-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-status .board-col-title { display: none; }
+
+/* Carousel (Status mode, phone / narrow): one column per viewport, swipe
+   between them — scroll-snap gives the swipe for free, no gesture JS. */
+.board-columns[hidden] { display: none; }
+.board-status {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.board-status::-webkit-scrollbar { display: none; }
+.board-status .board-col { flex: 0 0 100%; scroll-snap-align: start; overflow: hidden; }
+.board-col { min-width: 0; display: flex; flex-direction: column; padding: 0; }
+/* Week mode on the phone: one list, the lanes stacked as its sections. */
+.board-week { display: flex; flex-direction: column; gap: var(--space-md); }
+.board-list { border-top: 1px solid var(--line-muted); }
+.board-list > .trow:first-child { border-top: 0; }
+/* The group closing a lane (Later's "No date", #414): a quiet sub-heading on
+   the lane's own hairline, the overline role like the lane titles above it. */
+.board-list-sub {
+  list-style: none;
+  padding: var(--space-md) var(--space-xs) var(--space-xs);
+  border-top: 1px solid var(--line-muted);
+  color: var(--muted);
+}
+.board-list > .board-list-sub:first-child { border-top: 0; padding-top: var(--space-sm); }
+/* An empty lane collapses: off the phone entirely (nothing to show, and no
+   drag there to drop on it). */
+@media (max-width: 1023px) {
+  .board-col.is-empty, .board-strip-btn.is-empty { display: none; }
+}
+@media (max-width: 520px) {
+  /* the lists bleed (see the full-bleed rule above); the headers keep the gutter */
+  .board-week .board-col-title { padding-inline: var(--gap); }
+}
+/* Drop target: the whole lane lights up while a row hovers over it. */
+.board-col.is-drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+/* Every lane empty: one way forward instead of a row of bare headers. */
+.board-empty[hidden] { display: none; }
+
+/* AI Inbox triage (#95): one quiet action on the mode line, then one staged
+   strip inside the row. The two adjacent decision controls use real 44px
+   geometry; invisible hit-area expansion would make them overlap. */
+.board-triage {
+  min-width: 0;
+  height: 34px;             /* + .hit-target's 5px a side = 44 (#281) */
+  padding: 0 var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-caption);
+}
+.board-triage[hidden] { display: none; }
+.board-triage .icon { width: var(--icon-inline); height: var(--icon-inline); }
+.board-triage[data-state="loading"] { color: var(--accent); }
+.ai-suggestion {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
+  border: 1px solid var(--accent-border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: var(--font-caption);
+}
+.ai-suggestion-summary { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.ai-suggestion-actions { display: grid; grid-template-columns: repeat(2, 44px); }
+.ai-suggestion-action { --icon-btn-box: var(--row-sm); }   /* the one icon button (#357), 44px real */
+
+/* Desktop / wide: the lanes side by side using the full width, each
+   scrolling on its own under a sticky header with the count. Flat regions,
+   not cards (#32): a vertical 1px hairline between lanes is the only
+   separation. A lane with nothing in it collapses to its header — still a
+   drop target, at its header's width — and the filled lanes share the rest.
+   Six week lanes share the window the same way and never scroll it sideways
+   (#414): a title is one ellipsized line (the row contract), so a narrow lane
+   shortens it instead of widening the board. The status columns are four. */
+@media (min-width: 1024px) {
+  .board-strip { display: none; }
+  .board-columns, .board-status {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+  .board-col, .board-status .board-col {
+    flex: 1 1 0;
+    max-height: calc(100vh - 300px);
+    min-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 10px;
+  }
+  .board-col.is-empty, .board-status .board-col.is-empty { flex: 0 0 auto; }
+  .board-col + .board-col { border-left: 1px solid var(--line-muted); }
+  .board-col-title, .board-status .board-col-title {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: var(--row-md);   /* holds the journal link's 44px target below (#281) */
+    padding: var(--space-sm) var(--space-xs);
+    background: var(--bg);
+    border-bottom: 1px solid var(--line-muted);
+  }
+  .board-list { border-top: 0; }
+}
+
