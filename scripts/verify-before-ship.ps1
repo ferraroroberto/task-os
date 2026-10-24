@@ -7,8 +7,9 @@
     Stages, fail-fast:
       1. byte-compile      — every .py under app/ src/ scripts/ tests/ + launcher.py parses
       2. ruff              — lint the whole repo (pyproject.toml owns strictness)
-      3. static ratchet    — no new duplicate block (jscpd via npx) or unused
-                             import/variable (ruff F401,F841) beyond
+      3. static ratchet    — no new duplicate block (jscpd via npx), unused
+                             import/variable (ruff F401,F841) or likely-bug /
+                             security pattern (curated ruff B and S codes) beyond
                              .static-ratchet-baseline.json. Whole tree, never
                              routed; exit 3 (a detector could not run) is
                              NOT CONFIRMED and fails, never a pass or a skip.
@@ -39,13 +40,19 @@
                              routed (deleting the last caller in one file strands a
                              definition in another); exit 3 (a file not parsed) is NOT
                              CONFIRMED and fails, never a pass or a skip.
-      9. pytest (unit)     — hermetic suite, tests/e2e excluded
-     10. pytest (e2e)      — diff-proportionate: the browser slice is routed by
+      9. conventions ratchet — no rule hit above .conventions-ratchet-baseline.json for
+                             no-window (subprocess spawns), logging-not-print (library
+                             code) or no-drive-path (hardcoded drive literals). Whole
+                             tree, never routed (a new rule must see every file); exit 3
+                             (a file not parsed) is NOT CONFIRMED and fails, never a
+                             pass or a skip.
+     10. pytest (unit)     — hermetic suite, tests/e2e excluded
+     11. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
-     11. gallery baseline  — whatever shots stage 10 rewrote, compared against
+     12. gallery baseline  — whatever shots stage 11 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
                              leaves rewritten PNGs behind (#225). Re-baselining
@@ -107,6 +114,9 @@ Invoke-Stage "doc-refs ratchet"        { & $py -m scripts.doc_refs_ratchet_gate 
 # Same wrapper shape: it maps the dead-code script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_dead_code_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "dead-code ratchet"       { & $py -m scripts.dead_code_ratchet_gate }
+# Same wrapper shape: it maps the conventions script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_conventions_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "conventions ratchet"     { & $py -m scripts.conventions_ratchet_gate }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing
