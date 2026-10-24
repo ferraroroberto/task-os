@@ -13,7 +13,6 @@
     {"key": "fn:app/webapp/static/palette.js:createPalette", "lines": 139},
     {"key": "fn:app/webapp/static/quickadd.js:createQuickAdd", "lines": 320},
     {"key": "fn:app/webapp/static/search.js:mountSearch", "lines": 316},
-    {"key": "fn:app/webapp/static/settings.js:mountSettings", "lines": 845},
     {"key": "fn:app/webapp/static/swipe.js:bindSwipe", "lines": 112},
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor", "lines": 145},
     {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor.<anonymous>", "lines": 140},
