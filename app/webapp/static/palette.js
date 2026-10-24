@@ -11,7 +11,7 @@
  *
  * ↑↓ move, Enter runs the active row, Esc closes, click runs. Works from any
  * tab (the caller binds the shortcut + the header button); on the phone the
- * dialog is a full-width sheet (styles.css).
+ * dialog is a full-width sheet (styles/overlays.css).
  */
 
 'use strict';

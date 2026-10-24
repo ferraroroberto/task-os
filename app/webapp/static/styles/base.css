@@ -1,0 +1,343 @@
+/* task-os — app stylesheet.
+ *
+ * Tokens are the fleet design system's (~/.claude/design.md light,
+ * design.dark.md dark) wired as CSS custom properties: light on :root, dark on
+ * [data-theme="dark"] (stamped pre-paint by index.html's boot script). Token
+ * NAMES follow the vendored components' contracts (card.css, nav-tabs.css,
+ * home-head.css, …); token VALUES are the spec's. Nothing here re-authors a
+ * vendored component — per-app variation is markup + token values only.
+ *
+ * The one deliberate difference from the phone-first siblings: this app is
+ * PC-first and full-width (plan §06/§07) — `.app` has no 772px column cap on
+ * desktop; the phone gets the same views as an adaptive second rendering.
+ *
+ * Issue #46: Board, Today and Search render the ONE task row
+ * (`.trow`, rows.js) on flat hairlines, narrowed through the ONE filter state
+ * (the strip's filter button and its sheet, filters.js). Titles are never uppercase.
+ */
+
+/* ============================================================ design tokens */
+:root {
+  /* colors — neutrals */
+  --bg: #ffffff;             /* canvas */
+  --card: #ffffff;           /* elevated card surface */
+  --card-2: #f6f8fa;         /* elevation-2: hover/active + raised chrome */
+  --card-off: #f6f8fa;       /* canvas-subtle: inset chips / code blocks */
+  --fg: #1f2328;             /* primary text */
+  --ink: #1f2328;            /* vendored card.css token name (== --fg) */
+  --muted: #656d76;          /* fg-muted */
+  --line: #d1d9e0;           /* border — the dominant hairline */
+  --line-muted: #d8dee4;     /* border-muted — quieter dividers */
+  /* colors — accent + status */
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --accent-fill: #0969da;    /* accent FILL for a solid primary (fleet-config#963) */
+  --accent-text: #0550ae;    /* accent TEXT on an accent-soft tint (active nav tab) */
+  --success: #1a7f37;
+  --attention: #9a6700;
+  --danger: #cf222e;
+  --danger-text: #a40e26;    /* danger TEXT on a deficit-soft tint (fleet-config#963) */
+  --attention-text: #7d4e00; /* attention TEXT on its own 16% tint (the status chip, #391) */
+  --control-border: #818b98; /* inline control borders / switch off-track, 3:1+ vs card (fleet-config#963) */
+  /* accent derivatives — theme-independent color-mix over the per-theme accent */
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border-soft: color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-border-strong: color-mix(in srgb, var(--accent) 28%, transparent);
+  /* chip / count fill (design.md neutral-soft) — text on it is fg, never muted */
+  --neutral-soft: color-mix(in srgb, var(--muted) 16%, transparent);
+  /* vendored button.css danger-tier names — alias the status red, never a second red */
+  --deficit: var(--danger);
+  --deficit-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+  --deficit-border-soft: color-mix(in srgb, var(--danger) 30%, transparent);
+  /* elevation — cards lean on surface + hairline; the floating bar has the one real shadow */
+  --shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
+  --tabbar-bg: rgba(255, 255, 255, 0.85);
+  --tabbar-border: rgba(31, 35, 40, 0.12);
+  /* radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 16px;            /* rounded.lg — cards */
+  --radius-pill: 9999px;
+  --radius-nav: 30px;
+  /* spacing + the uniform gutter */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --gap: 12px;
+  --layout-measure: 772px; /* design.md layout.measure: one-dimensional views keep it */
+  /* typography roles */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading-xl: 2rem;
+  --font-heading-lg: 1.5rem;
+  --font-body: 1rem;
+  --font-body-sm: 0.875rem;   /* typography.body-sm — a row's meta line (the vendored action-row) */
+  --font-label: 0.875rem;
+  --font-caption: 0.75rem;
+  /* controls + rows */
+  --control-h: 36px;
+  /* hit-target.min (design.md) — the 44px effective pointer-target floor. A
+     native input/select is a replaced element that can't carry the .hit-target
+     ::before expansion, so it gets the real 44px box and paints its 36px
+     control inside a transparent --control-inset band (#281, the
+     home-automation #779 recipe). */
+  --hit-min: 44px;
+  --control-inset: calc((var(--hit-min) - var(--control-h)) / 2);
+  --row-sm: 44px;
+  --row-md: 52px;
+  --row-lg: 60px;
+  /* icon-size steps */
+  --icon-inline: 16px;
+  --icon-title: 18px;
+  --icon-feature: 24px;
+  /* the vendored icon-button's painted-nothing box: the hover and focus area
+     around its glyph; its ::before grows it to --hit-min. Set here so the gap
+     below reads the same value as the buttons (#357, #377) */
+  --icon-btn-box: 28px;
+  /* two icon buttons side by side: their 44px targets touch, never overlap */
+  --icon-btn-gap: calc(var(--hit-min) - var(--icon-btn-box));
+  /* vendored component fills. The header toggles and the modal × are icon
+     buttons, unshaded at rest like every other one (#357): --close-bg is left
+     unset, so the vendored default (transparent) applies. */
+  --input-bg: var(--card-off);       /* select-native / modal controls */
+  --toggle-track: var(--line);       /* switch.css */
+  --toggle-knob: #ffffff;
+  --on: var(--success);
+  color-scheme: light;
+  /* --bottom-tabs-* geometry is deliberately undefined: nav-tabs.css's own
+     var(..., fallback) defaults are the phone-validated fleet standard. */
+}
+
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --card: #161b22;
+  --card-2: #21262d;
+  --card-off: #010409;
+  --fg: #e6edf3;
+  --ink: #e6edf3;
+  --muted: #7d8590;
+  --line: #30363d;
+  --line-muted: #21262d;
+  --accent: #2f81f7;
+  --accent-fg: #ffffff;
+  --accent-fill: #1f6feb;
+  --accent-text: #58a6ff;
+  --success: #3fb950;
+  --attention: #d29922;
+  --danger: #f85149;
+  --danger-text: #ff7b72;
+  --attention-text: #e3b341;
+  --control-border: #6e7681;
+  --shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
+  --tabbar-bg: rgba(22, 27, 34, 0.86);
+  --tabbar-border: rgba(255, 255, 255, 0.13);
+  --input-bg: var(--line-muted);
+  --toggle-knob: var(--ink);
+  color-scheme: dark;
+}
+
+/* P3 wide-gamut twins — the spec's exact oklch values; sRGB displays keep the hex. */
+@media (color-gamut: p3) {
+  :root {
+    --accent: oklch(0.52 0.18 256);
+    --success: oklch(0.55 0.14 150);
+    --danger: oklch(0.55 0.20 25);
+    --attention: oklch(0.55 0.11 80);
+  }
+  [data-theme="dark"] {
+    --accent: oklch(0.64 0.18 256);
+    --success: oklch(0.72 0.18 150);
+    --danger: oklch(0.68 0.20 25);
+    --attention: oklch(0.77 0.13 85);
+  }
+}
+
+/* ================================================================== base */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* Form controls do not inherit the page font by default (WebKit renders a
+   bare <button> in its UA serif) — every control takes the app font. */
+button, input, select, textarea { font: inherit; }
+
+/* One tokenized focus ring app-wide (design.md focus contract). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Lucide sprite glyphs — the _vendored/icons required CSS contract, verbatim. */
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.15em;
+}
+/* Decorative icons never win hit-testing — taps land on the owning button. */
+.icon { pointer-events: none; }
+
+/* 44px hit-area expansion for an isolated compact control (the 34px theme
+   toggle, a filter pill): visual stays compact, the invisible ::before grows
+   the target — design.md "Touch targets" ships the utility once. */
+.hit-target { position: relative; }
+.hit-target::before { content: ""; position: absolute; inset: -5px; }
+
+/* The header title is the page's h1 (#339): the vendored rule sets its size
+   and weight, the UA's heading margin goes. */
+h1.home-title { margin: 0; }
+
+/* Native inputs/selects reach the 44px floor with real geometry (#281): the
+   element box is --hit-min tall, the visible 36px control is its padding box
+   inside a transparent vertical --control-inset border, and the 1px boundary
+   is an inset shadow on that padding box, in control-border (design.md: an
+   input or select draws its boundary there). The radius pair keeps the
+   visible corners at rounded.md and the focus ring hugs the visible box.
+   `.input-native` is declared whole here: the vendored select-native.css
+   copy predates the scaffold's shared `.input-native` rule, so the text
+   inputs had no recipe at all. Textareas keep their own height. The task
+   row's status select wears the same recipe with a wider band (its own
+   `--control-inset`, so it still paints the compact 30px it always did, #301),
+   and on touch every native control drops the band and is 44px painted, so
+   the strip and the filter sheet keep one height (the coarse block below). */
+input.input-native {
+  font-size: var(--font-label);
+  padding: 0 10px;
+  color: var(--ink);
+  font-family: inherit;
+}
+input.input-native,
+select.select-native,
+summary.select-native {
+  height: var(--hit-min);
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--control-inset) 0;
+  border-radius: var(--radius-md) / calc(var(--radius-md) + var(--control-inset));
+  background: var(--input-bg) padding-box;
+  box-shadow: inset 0 0 0 1px var(--control-border);
+}
+/* WebKit paints no box-shadow on a native <select> (iOS Safari; Playwright's
+   WebKit computes `box-shadow: none`), so the inset edge above left every
+   select on the iPhone with no boundary but its 1.06:1 fill (#339). Wherever
+   the band is zero (the drawer on every pointer, every native control on
+   touch, which is 44px painted there), the boundary is the element's own 1px
+   border instead, which every engine draws. Only the desktop band keeps the
+   inset edge. */
+.drawer :is(input.input-native, select.select-native, summary.select-native) {
+  border: 1px solid var(--control-border);
+  box-shadow: none;
+}
+@media (pointer: coarse) {
+  :root { --control-inset: 0px; }
+  input.input-native,
+  select.select-native,
+  summary.select-native {
+    border: 1px solid var(--control-border);
+    box-shadow: none;
+  }
+}
+/* A textarea is as tall as its rows, so it needs no band: the same surface,
+   boundary and radius, drawn on its own border. */
+textarea.input-native {
+  font-size: var(--font-label);
+  color: var(--ink);
+  font-family: inherit;
+  background: var(--input-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+}
+input.input-native:focus-visible,
+select.select-native:focus-visible,
+summary.select-native:focus-visible { outline-offset: calc(2px - var(--control-inset)); }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--font-body);
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  scrollbar-gutter: stable;
+}
+
+/* ================================================================== layout */
+/* PC-first, full width: no 772px column cap. Left/right padding only — the
+   bottom padding is split out below so the coarse-pointer breakpoint in
+   nav-tabs.css (which reserves .app's bottom padding for the floating pill
+   with a shorthand `padding`) is never clobbered by a later shorthand here. */
+.app {
+  max-width: none;
+  margin: 0;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-left: var(--gap);
+  padding-right: var(--gap);
+}
+@media (pointer: fine), (min-width: 521px) {
+  .app {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0) + var(--space-lg));
+    scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+  }
+}
+
+/* Every pane body is a single-column stack pinned to minmax(0, 1fr) so a
+   wide child (the Archive grid, a Board row) scrolls inside its own box
+   instead of widening the page (design.md Layout). */
+.pane-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+/* ================================================================== cards */
+/* Surface/border/radius/padding come from the vendored card.css; the app
+   adds only the inter-card gutter. */
+.card { margin: 0 0 var(--gap); }
+.pane-body .card { margin: 0; }
+
+/* Width follows the shape of the view (design.md Layout, fleet-config#1113): the
+   Board and Today tabs are two-dimensional (lanes, a calendar lane) and span
+   the window; Search (results as cards) and Settings (inset groups) are
+   one-dimensional and keep the centred measure — until a Settings sheet is up
+   beside it on a wide screen, when the list and the sheet share the window
+   (master-detail, below). The declaration is .fleet.toml [design] wide_views.
+   One measure per view: the persistent header row and the build footer are
+   capped with the active pane, so the view never mixes two widths. The drawer
+   is a fixed aside and is left out on purpose. */
+.app:has(> #paneSearch:not([hidden])) > :is(.home-head, .pane, .page-foot),
+.app:has(> #paneTime:not([hidden])) > :is(.home-head, .pane, .page-foot),
+.app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) {
+  max-width: var(--layout-measure);
+  margin-left: auto;
+  margin-right: auto;
+}
+.card-meta code, .status-row code, .markdown code {
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  font-size: 0.92em;
+  background: var(--neutral-soft);   /* design.md code-inline: the chip fill, never canvas-subtle — true black in a dark card (COMP-17, #426) */
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
+/* A flat disclosure: the vendored details/summary without the card box —
+   a hairline above, no radius, no border (Today's Soon / Later / No date). */
+.card.disclosure-flat {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  margin-top: var(--space-sm);
+}
+.card.disclosure-flat > .collapse-summary { padding-left: var(--space-xs); padding-right: var(--space-xs); }
+.card.disclosure-flat > .collapse-body { padding: 0 0 var(--space-xs); }
+

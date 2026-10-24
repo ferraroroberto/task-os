@@ -19,7 +19,7 @@
  * calendar that *is* configured and failing keeps the lane, so a broken feed
  * stays visible rather than quietly disappearing.
  *
- * Built for every width and hidden below 1024 px by styles.css: the phone
+ * Built for every width and hidden below 1024 px by styles/today.css: the phone
  * skips the lane this pass (#96, out of scope).
  */
 

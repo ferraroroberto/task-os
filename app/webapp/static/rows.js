@@ -213,7 +213,7 @@ function doneToggle(t, handlers) {
  * the owner does to a task — opening the date sheet beside the row. The
  * vendored `.action-row-verb`: a plain 44px icon button like the kebab beside
  * it, nothing painted at rest (fleet-config#1420). A fine pointer only
- * (styles.css): a touch screen swipes the row left for the same sheet.
+ * (styles/rows.css): a touch screen swipes the row left for the same sheet.
  */
 function moveVerb(t, menu) {
   const btn = document.createElement('button');

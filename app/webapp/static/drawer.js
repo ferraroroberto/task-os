@@ -1327,7 +1327,7 @@ export function createDrawer(el, opts) {
     pick.type = 'button';
     pick.className = 'button-ghost folder-pick';
     // label span, not a bare text node: the phone drops it to keep line 2 on
-    // one line (styles.css) - the accessible name lives on aria-label either way
+    // one line (styles/drawer.css) - the accessible name lives on aria-label either way
     pick.innerHTML = icon('search') + '<span class="folder-pick-label">Find in folder index</span>';
     pick.setAttribute('aria-label', 'Find in folder index');
     pick.title = 'Find in folder index';

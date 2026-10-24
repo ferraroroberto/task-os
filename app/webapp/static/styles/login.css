@@ -1,0 +1,45 @@
+/* Sign-in page, team name step and the Phone access card. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* ------------------------------------------------- login page (Step 7) */
+/* /login: one vendored card centred on the canvas, one field, one button.
+   Where a non-loopback page request lands (src/auth.py); the SPA redirects
+   here on a 401 (api.js). Safe-area padded so it sits right on the phone. */
+.login-body { min-height: 100dvh; display: grid; }
+.login-main {
+  display: grid;
+  place-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--space-xl)) var(--gap)
+           calc(env(safe-area-inset-bottom, 0px) + var(--space-xl));
+}
+.login-card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--space-md); }
+.login-card .card-title { font-size: var(--font-heading-lg); }
+.login-card .card-head-meta { display: inline-flex; color: var(--muted); }
+.login-card .card-head-meta .icon { width: var(--icon-title); height: var(--icon-title); }
+.login-card .card-meta { margin: 0; }
+.login-card .input-native { height: var(--row-md); font-size: var(--font-body); }
+.login-card .button-primary { min-height: var(--row-md); }
+.login-error { margin: 0; color: var(--danger); font-size: var(--font-label); }
+/* Team mode's pick-your-name step (Step 12): one full-width row per person,
+   the surface button tier (the current name on the tint tier), at the
+   login field's row height so each name is a comfortable phone target. */
+.team-people { display: flex; flex-direction: column; gap: var(--space-sm); }
+.team-person {
+  display: flex; align-items: center; gap: var(--space-sm);
+  width: 100%; height: auto; min-height: var(--row-md); padding: 0 var(--space-md);
+  font-size: var(--font-body); text-align: left;
+}
+.team-person.button-surface { color: var(--fg); }
+.team-avatar { width: var(--icon-feature); height: var(--icon-feature); flex: none; border-radius: var(--radius-pill); object-fit: cover; }
+.team-initials { display: inline-grid; place-items: center; background: var(--line); color: var(--muted); font-size: var(--font-caption); font-weight: 700; }
+.team-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Settings → Phone access card: status rows from GET /api/status. A coloured
+   state word is always bold — one rule for every Settings row (#48). */
+.access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-xs) var(--gap); margin: 0; font-size: var(--font-body-sm); }
+.access-rows dt { color: var(--muted); }
+.access-rows dd { margin: 0; }
+.access-rows .ok { color: var(--fg); font-weight: 600; }   /* never success green as text (#397) */
+.access-rows .warn { color: var(--danger-text); font-weight: 600; }
+.access-rows a { color: var(--accent); }
+.access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }
+

@@ -10,7 +10,7 @@
  * Two halves. The top of the file is a pure classifier with no DOM, loaded
  * bare under node by the unit tests: when does a touch become a swipe, which
  * way, and does its release commit. The bottom binds it to a row with Pointer
- * Events and `touch-action: pan-y` (styles.css), so the browser keeps the
+ * Events and `touch-action: pan-y` (styles/rows.css), so the browser keeps the
  * vertical scroll and this code only ever sees sideways travel — no touchmove
  * listener, no preventDefault on a scroll.
  *
@@ -41,7 +41,7 @@ export const EDGE_PX = 20;
 export const HOLD_MS = 500;
 
 // Both mirror `transition: transform 200ms ease-out` on `.trow.is-settling` /
-// `.is-leaving` in styles.css: the slide-out waits the transition, the settle
+// `.is-leaving` in styles/rows.css: the slide-out waits the transition, the settle
 // clean-up waits it plus a 20 ms margin. Change one side, change the other.
 const SLIDE_MS = 200;
 const SETTLE_MS = 220;

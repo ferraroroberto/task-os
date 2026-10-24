@@ -580,7 +580,7 @@ export function renderMarkdown(md) {
 export const TONES = ['neutral', 'accent', 'attention', 'danger'];
 
 /**
- * The ONE status chip: the chip's shape, its colour the tone (styles.css
+ * The ONE status chip: the chip's shape, its colour the tone (styles/components.css
  * `.chip[data-tone]`). For an exception only — a normal state gets no chip.
  * @param {string} text   sentence case
  * @param {'neutral'|'accent'|'attention'|'danger'} tone

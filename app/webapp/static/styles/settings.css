@@ -1,0 +1,116 @@
+/* Settings: the inset groups and the sheet a row opens. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* ------------------------------------------------------------ settings */
+/* Inset groups (#397, design.md `settings group`, the shape home-automation's
+   Settings has): an overline over each group card, each row a lead glyph, its
+   label, the current value muted (in its tone when it is an exception) and a
+   chevron to its sheet. The rows are the vendored action-row; only the
+   settings-specific row layout lives here. */
+.settings-groups { gap: 0; }
+.settings-overline { margin: var(--space-md) 14px var(--space-sm); }
+.settings-overline:first-child { margin-top: 0; }
+.settings-group { margin-bottom: var(--gap); }
+.settings-link {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-sm);
+}
+/* The label never gives way to its value: the value ellipsizes first. */
+.settings-link .action-row-title { flex: 1 0 auto; overflow: visible; }
+.settings-link-icon { flex: none; width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+.settings-link-value {
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--font-body-sm);
+}
+.settings-link-value[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
+.settings-link-value[data-tone="danger"] { color: var(--danger-text); font-weight: 600; }
+.settings-link-chevron { flex: none; width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
+/* The row whose sheet is up, beside it on a wide screen (design.md Layout:
+   the selected row keeps the accent-soft tint). */
+.settings-link[aria-current="true"] { background: var(--accent-soft); }
+/* Muted text falls under AA on that tint (COLOR-02): the selected row's plain
+   value and glyphs take the accent-text the active nav tab pairs with it. */
+.settings-link[aria-current="true"] :is(.settings-link-value:not([data-tone]), .settings-link-icon, .settings-link-chevron) { color: var(--accent-text); }
+/* Text size, changed in place: the label, the vendored segmented group, one
+   hint line. A single minmax(0, 1fr) track so Large never widens the card. */
+.action-row.settings-text-size {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-sm);
+  padding: var(--space-sm) 14px var(--space-md);
+}
+.settings-link-label { display: flex; align-items: center; gap: var(--space-sm); min-height: var(--row-sm); }
+.settings-text-size-hint { margin: 0; font-size: var(--font-body-sm); }
+
+/* The sheet (#settingsSheet): the task drawer's geometry (.drawer) — a
+   full-screen sheet on the phone, the detail pane from 1024px. Its head stays
+   in view and the body under it scrolls (the archive report is long); each
+   body is the card it replaced, its text the 14px body-sm role (TYPE-01).
+   Two classes, to win over .drawer's own scroller and panel width. */
+.drawer.settings-detail { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.drawer.settings-detail[hidden] { display: none; }
+.settings-sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 calc(-1 * var(--space-md));
+  padding: 0 var(--space-md) calc(env(safe-area-inset-bottom, 0px) + var(--space-md));
+}
+.settings-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: var(--row-md);
+  margin-bottom: var(--space-sm);
+}
+.settings-sheet-head h2 { margin: 0; font-size: var(--font-heading-lg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-sheet-close .icon { width: var(--icon-title); height: var(--icon-title); }
+.settings-sheet { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); font-size: var(--font-body-sm); }
+.settings-sheet[hidden] { display: none; }
+.settings-sheet .card-meta { margin: 0; font-size: var(--font-body-sm); line-height: 1.5; }
+.settings-sheet .button-ghost, .settings-sheet .button-surface { font-size: var(--font-body-sm); }
+/* Instant model: Done only closes, so it ends the sheet in the flow rather
+   than pinned over its last controls (the filter sheet's lesson, #395). */
+.settings-sheet-actions { margin-top: var(--space-md); padding-top: 12px; border-top: 1px solid var(--line); }
+.settings-sheet-actions .button-primary { width: 100%; }
+@media (max-width: 1023px) {
+  body[data-settings-sheet] { overflow: hidden; }
+  body[data-settings-sheet] nav.tabs { visibility: hidden; }
+}
+@media (min-width: 1024px) {
+  /* Master-detail (design.md Layout, list : detail = 1 : 1.5): while a sheet
+     is up, the Settings list takes the left share and the sheet the right. */
+  body[data-settings-sheet]:not([data-settings-sheet="archive"]) .app:has(> #paneSettings:not([hidden])) {
+    --split-w: calc((100vw - var(--split-rail, 0px) - var(--gap) * 3) * 0.6);
+    padding-right: calc(var(--split-w) + var(--gap) * 2);
+  }
+  body[data-settings-sheet]:not([data-settings-sheet="archive"]) .app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) { max-width: none; }
+  .drawer.settings-detail { --drawer-w: var(--split-w); box-shadow: none; }
+  /* …except the Email archiving report, a nine-column table (the Archive tab
+     until #397): two-dimensional, so its sheet spans the content width
+     (design.md: width follows the shape of the view) and the list waits
+     under it, as it was, one × away. */
+  body[data-settings-sheet="archive"] .drawer.settings-detail {
+    --drawer-w: calc(100vw - var(--split-rail, 0px) - var(--gap) * 2);
+  }
+}
+
+.status-rows { margin: 0; display: grid; gap: var(--space-xs); }
+.status-row { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--space-sm); align-items: baseline; }
+.status-row dt { color: var(--muted); font-size: var(--font-body-sm); }
+.status-row dd { margin: 0; font-size: var(--font-body-sm); overflow-wrap: anywhere; }
+/* A state word in its tone (design.md status chip tone map): a plain "on" is
+   ink, never success green as text (#390's diagnosis 10); broken is danger. */
+.status-row .status-ok { color: var(--fg); font-weight: 600; }
+.status-row .status-off { color: var(--muted); font-weight: 600; }
+.status-row .status-warn { color: var(--danger-text); font-weight: 600; }
+

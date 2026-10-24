@@ -317,7 +317,7 @@ function mountLanes(kind, skeleton, handlers) {
     const h = document.createElement('h3');
     h.className = 'board-col-title';
     // the overline role on the name alone: the count beside it is a number,
-    // never transformed (styles.css `.overline`)
+    // never transformed (styles/components.css `.overline`)
     const label = document.createElement('span');
     label.className = 'board-col-label overline';
     const n = document.createElement('span');
