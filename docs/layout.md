@@ -28,7 +28,7 @@ app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens
                           palette.js (Ctrl+K), format.js, api.js, toast.js, collapsible.js (the runtime disclosure cards),
                           manifest, icons/, _vendored/
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
-src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks_repo.py (domain rules + write hooks)
+src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks/ (domain rules + write hooks: schema · queries · mutations · related) · tasks_repo.py (re-export shim over it)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py · config.py
                           hub_probe.py (the cached TCP reachability probe the AI, voice and enrich clients share) · voice.py (voice quick-add: the hub transcribes, local whisper only as fallback) · enrich.py (the
                           spoken sentence → title + description through the hub's light model; dates stay src/dates.py's)
@@ -95,7 +95,7 @@ Every offender that existed on adoption is recorded in `.structure-ratchet-basel
 
 ### Where new code goes
 
-- A new endpoint: `app/webapp/routers/<concern>.py`, parsing the request and returning the response; the rule lives in `src/` (domain rules in `src/tasks_repo.py`, time-tracker rules in `src/time_repo.py`).
+- A new endpoint: `app/webapp/routers/<concern>.py`, parsing the request and returning the response; the rule lives in `src/` (domain rules in `src/tasks/` — a read in `queries.py`, a task write in `mutations.py`, a comment / link / issue-ref / person write in `related.py`; callers import through the `src/tasks_repo.py` shim — time-tracker rules in `src/time_repo.py`).
 - A new view: its own stylesheet under `app/webapp/static/styles/` linked from both `index.html` and `login.html`, and its own script beside the other views' scripts. Never a new block in `base.css` or another view's sheet.
 - A new logic module: `src/` is flat past the cap, so a new module goes in a domain subpackage (`src/<domain>/`, as `src/search/`, `src/ai/` and `src/issues/` already are), not beside the flat ones.
 - A new test: `tests/` is flat past the cap and takes no new module, so a new file goes in a subfolder named for its subject (`tests/gates/` for the gate wrappers' tests, `tests/e2e/` for stories), with an `__init__.py`.
