@@ -132,6 +132,22 @@ def _saved_shots(tree: ast.Module) -> set[str]:
     return saved
 
 
+def _saved_shots_with_steps(path: Path, tree: ast.Module) -> set[str]:
+    """Shots a story file saves itself plus those in the step modules it imports.
+
+    A long story keeps its walk in ``tests/e2e/_*_steps.py`` modules and its
+    test function as the outline, so a docstring's shot list is produced by the
+    file *and* the helpers it calls.
+    """
+    saved = _saved_shots(tree)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("tests.e2e._"):
+            helper = E2E_DIR / f"{node.module.rsplit('.', 1)[1]}.py"
+            if helper.is_file():
+                saved |= _saved_shots(ast.parse(helper.read_text(encoding="utf-8")))
+    return saved
+
+
 def _all_saved_shots() -> set[str]:
     """Every filename any e2e module saves — helpers and sweeps included.
 
@@ -156,10 +172,10 @@ def test_story_tests_exist() -> None:
 @pytest.mark.parametrize("path", STORY_TESTS, ids=lambda p: p.name)
 def test_docstring_shot_list_is_produced(path: Path) -> None:
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    orphans = sorted(_listed_shots(tree) - _saved_shots(tree))
+    orphans = sorted(_listed_shots(tree) - _saved_shots_with_steps(path, tree))
     assert not orphans, (
         f"{path.name}'s docstring lists {orphans}, which no shot() call in that "
-        "file produces: either the step that saved it is gone (retire the line, "
+        "file or its step modules produces: either the step that saved it is gone (retire the line, "
         "the committed PNG and the validation row) or a shot() call was lost."
     )
 
