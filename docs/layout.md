@@ -22,7 +22,7 @@ app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens
                           rows.js (the one task row), filters.js (the one filter state + its sheet), journal.js (the done journal),
                           selection.js + bulkbar.js (the one selection + its bulk actions), actions.js (the one table of row actions + their undo), rowmenu.js (the row's ⋯ menu), keys.js (the one keymap), snooze.js (the one date picker),
                           confirm.js + modal.js (the editor-modal card shell and backdrop close), folderpick.js, dueinput.js, voice.js + voice-worklet.js (the mic → 16 kHz mono WAV),
-                          archive.js (Settings → Email archiving: the batch run + its report, retry a refused move), settings.js (the Settings pane's composer — the header gear, no tab, #281; inset groups + their sheets, #397 — each card is a `js/settings/<part>.js` taking `ctx` first),
+                          archive.js (Settings → Email archiving: the batch run + its report, retry a refused move — the composer; each part is a `js/archive/<part>.js` taking `ctx` first), settings.js (the Settings pane's composer — the header gear, no tab, #281; inset groups + their sheets, #397 — each card is a `js/settings/<part>.js` taking `ctx` first),
                           calendar.js (the calendar lane beside Today),
                           recurrence.js (the recurrence vocabulary — the picker's mirror of src/dates.py),
                           palette.js (Ctrl+K), format.js, api.js, toast.js, collapsible.js (the runtime disclosure cards),
@@ -103,4 +103,4 @@ Every offender that existed on adoption is recorded in `.structure-ratchet-basel
 
 ### Baselined offenders and their way out
 
-The baseline holds 10 files over 1,000 lines (the app and archive scripts, `index.html`, three `src/` modules, two e2e files and two unit test files), 38 functions over 100 lines (the view-mount closure `mountArchive` the longest) and the flat `tests/` directory. Splitting each is its own change; the drawer, the Settings pane and the Time tab are the three already split.
+The baseline holds 9 files over 1,000 lines (the app script, `index.html`, three `src/` modules, two e2e files and two unit test files), 36 functions over 100 lines (the view closures `createQuickAdd` and `mountSearch` the longest) and the flat `tests/` directory. Splitting each is its own change; the drawer, the Settings pane, the Time tab and the Email archiving sheet are the four already split.

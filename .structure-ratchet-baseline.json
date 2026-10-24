@@ -3,8 +3,6 @@
   "entries": [
     {"key": "dir:tests", "modules": 49},
     {"key": "fn:app/webapp/static/app.js:boot", "lines": 146},
-    {"key": "fn:app/webapp/static/archive.js:mountArchive", "lines": 1009},
-    {"key": "fn:app/webapp/static/archive.js:mountArchive.movePanel", "lines": 115},
     {"key": "fn:app/webapp/static/board.js:mountBoard", "lines": 138},
     {"key": "fn:app/webapp/static/board.js:mountLanes", "lines": 156},
     {"key": "fn:app/webapp/static/bulkbar.js:mountBulkBar", "lines": 163},
@@ -41,7 +39,6 @@
     {"key": "fn:tests/e2e/test_story_32_time.py:test_track_time_and_compare_shares", "lines": 187},
     {"key": "fn:tests/fixtures/seed.py:seed", "lines": 183},
     {"key": "size:app/webapp/static/app.js", "lines": 1492},
-    {"key": "size:app/webapp/static/archive.js", "lines": 1164},
     {"key": "size:app/webapp/static/index.html", "lines": 1083},
     {"key": "size:src/archive_batch.py", "lines": 1298},
     {"key": "size:src/cli.py", "lines": 1446},
