@@ -34,13 +34,18 @@
                              Whole tree, never routed (a code move strands a doc without
                              touching it); exit 3 (docs not read) is NOT CONFIRMED and
                              fails, never a pass or a skip.
-      8. pytest (unit)     — hermetic suite, tests/e2e excluded
-      9. pytest (e2e)      — diff-proportionate: the browser slice is routed by
+      8. dead-code ratchet — no new function, class or method that nothing references,
+                             beyond .dead-code-ratchet-baseline.json. Whole tree, never
+                             routed (deleting the last caller in one file strands a
+                             definition in another); exit 3 (a file not parsed) is NOT
+                             CONFIRMED and fails, never a pass or a skip.
+      9. pytest (unit)     — hermetic suite, tests/e2e excluded
+     10. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
-     10. gallery baseline  — whatever shots stage 9 rewrote, compared against
+     11. gallery baseline  — whatever shots stage 10 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
                              leaves rewritten PNGs behind (#225). Re-baselining
@@ -99,6 +104,9 @@ Invoke-Stage "instruction ratchet"     { & $py -m scripts.instruction_ratchet_ga
 # Same wrapper shape: it maps the doc-refs script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_doc_refs_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "doc-refs ratchet"        { & $py -m scripts.doc_refs_ratchet_gate }
+# Same wrapper shape: it maps the dead-code script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_dead_code_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "dead-code ratchet"       { & $py -m scripts.dead_code_ratchet_gate }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing
