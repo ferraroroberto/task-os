@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "entries": [
+    {"key": "docs/validation/story-09-folders.md", "refs": [":8459"]},
+    {"key": "docs/validation/story-13-starts-snooze.md", "refs": [":8459"]},
+    {"key": "docs/validation/story-21-capture.md", "refs": ["tests/e2e/test_story_21_capture.py"]}
+  ]
+}
