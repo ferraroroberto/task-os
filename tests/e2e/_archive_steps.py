@@ -446,7 +446,7 @@ def _reused_row_and_kebab(
     expect(stuck_row.locator(".archive-kebab")).to_be_focused()
 
 def _file_unsure_by_hand(
-    page: Page, inst: ArchiveInstance, shots: Path, items: list[dict], run_id: int, stuck_row
+    page: Page, inst: ArchiveInstance, shots: Path, items: list[dict], run_id: int
 ) -> None:
     """File the mail the ranking would not decide into a candidate with a hint."""
     base = inst.base
