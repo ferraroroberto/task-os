@@ -173,6 +173,68 @@ function personControl(people, current) {
   return { el: seg, value: function () { return value; }, onChange: function (fn) { listeners.push(fn); } };
 }
 
+/** A native input of `type`, labelled for screen readers, holding `value`. */
+function input(type, label, value) {
+  const el = document.createElement('input');
+  el.type = type;
+  el.className = 'input-native';
+  el.value = value;
+  el.setAttribute('aria-label', label);
+  return el;
+}
+
+/** A field with its pick buttons stacked under it. */
+function fieldStack(control, picksEl) {
+  const box = document.createElement('div');
+  box.className = 'time-field-stack';
+  box.append(control, picksEl);
+  return box;
+}
+
+function importedNote() {
+  const p = document.createElement('p');
+  p.className = 'muted time-form-note';
+  p.textContent = 'Imported with a duration only, so it has no start time.';
+  return p;
+}
+
+/** The entry editor's fields as a request body; `start` only on a clocked
+ *  entry that has one, `person` only when there is a choice. */
+function entryPayload(f, person, clocked) {
+  const body = {
+    category_id: Number(f.cat.value) || null,
+    day: f.day.value,
+    minutes: Number(f.minutes.value),
+    note: f.note.value.trim(),
+  };
+  if (person) body.person = person.value();
+  if (clocked && f.start.value) body.start = f.start.value;
+  return body;
+}
+
+/** Can the entry editor's payload `b` be saved at all? */
+function entryValid(b, o, clocked) {
+  return !!b.category_id && !!b.day && b.day <= o.today && Number.isInteger(b.minutes)
+    && b.minutes >= 1 && b.minutes <= o.meta.max_minutes && (!clocked || !!b.start);
+}
+
+/** Does the payload differ from the entry `e` being edited? */
+function entryChanged(b, e, clocked) {
+  return (b.person !== undefined && b.person !== e.person) || b.category_id !== e.category_id
+    || b.day !== e.day || b.minutes !== e.minutes || b.note !== (e.note || '')
+    || (clocked && b.start !== clockOf(e.started_at));
+}
+
+/** The PATCH body: only the payload keys whose value moved off `e`'s. */
+function entryPatch(b, e) {
+  const patch = {};
+  Object.keys(b).forEach(function (k) {
+    const before = k === 'start' ? clockOf(e.started_at) : (k === 'note' ? (e.note || '') : e[k]);
+    if (b[k] !== before) patch[k] = b[k];
+  });
+  return patch;
+}
+
 /**
  * Add time already spent (`entry` null) or edit an entry. Resolves to the
  * saved entry, or null when dismissed.
@@ -187,59 +249,33 @@ export function openEntryEditor(o) {
     const people = o.meta.people;
     const person = people.length > 1 ? personControl(people, editing ? e.person : o.person) : null;
     const cat = categorySelect(o.meta, editing ? e.category_id : null);
-    const day = document.createElement('input');
-    day.type = 'date';
-    day.className = 'input-native';
+    const day = input('date', 'Day', editing ? e.day : o.today);
     day.max = o.today;
-    day.value = editing ? e.day : o.today;
-    day.setAttribute('aria-label', 'Day');
     const dayPicks = picks([
       { value: o.today, label: 'Today' }, { value: addDaysISO(o.today, -1), label: 'Yesterday' },
     ], 'Day', function (v) { day.value = v; sync(); });
-    const minutes = document.createElement('input');
-    minutes.type = 'number';
+    const minutes = input('number', 'Minutes', editing ? String(e.minutes) : '');
     minutes.inputMode = 'numeric';
     minutes.min = '1';
     minutes.max = String(o.meta.max_minutes);
-    minutes.className = 'input-native time-minutes';
-    minutes.value = editing ? String(e.minutes) : '';
-    minutes.setAttribute('aria-label', 'Minutes');
+    minutes.classList.add('time-minutes');
     const minutePicks = picks(MINUTE_CHIPS.map(function (m) { return { value: m, label: String(m) }; }),
       'Minutes', function (v) { minutes.value = String(v); sync(); });
-    const start = document.createElement('input');
-    start.type = 'time';
-    start.className = 'input-native';
-    start.setAttribute('aria-label', 'Start');
+    const start = input('time', 'Start', editing ? clockOf(e.started_at) : '');
     let startTouched = editing;
-    start.value = editing ? clockOf(e.started_at) : '';
     start.addEventListener('input', function () { startTouched = true; });
-    const note = document.createElement('input');
-    note.type = 'text';
+    const note = input('text', 'Note', editing ? (e.note || '') : '');
     note.maxLength = 140;
-    note.className = 'input-native';
-    note.value = editing ? (e.note || '') : '';
     note.placeholder = 'Optional';
-    note.setAttribute('aria-label', 'Note');
     const msg = message();
     const save = primary(editing ? 'Save' : 'Add', editing ? 'time-edit-save' : 'time-add-save');
 
     if (person) card.appendChild(row('Person', person.el));
     card.appendChild(row('Category', cat));
-    const dayBox = document.createElement('div');
-    dayBox.className = 'time-field-stack';
-    dayBox.append(day, dayPicks.el);
-    card.appendChild(row('Day', dayBox));
+    card.appendChild(row('Day', fieldStack(day, dayPicks.el)));
     if (clocked) card.appendChild(row('Start', start));
-    const minBox = document.createElement('div');
-    minBox.className = 'time-field-stack';
-    minBox.append(minutes, minutePicks.el);
-    card.appendChild(row('Minutes', minBox));
-    if (!clocked) {
-      const p = document.createElement('p');
-      p.className = 'muted time-form-note';
-      p.textContent = 'Imported with a duration only, so it has no start time.';
-      card.appendChild(p);
-    }
+    card.appendChild(row('Minutes', fieldStack(minutes, minutePicks.el)));
+    if (!clocked) card.appendChild(importedNote());
     card.appendChild(row('Note', note));
     card.append(msg, save.actions);
 
@@ -254,27 +290,7 @@ export function openEntryEditor(o) {
     }
 
     function payload() {
-      const body = {
-        category_id: Number(cat.value) || null,
-        day: day.value,
-        minutes: Number(minutes.value),
-        note: note.value.trim(),
-      };
-      if (person) body.person = person.value();
-      if (clocked && start.value) body.start = start.value;
-      return body;
-    }
-
-    function valid(b) {
-      return !!b.category_id && !!b.day && b.day <= o.today && Number.isInteger(b.minutes)
-        && b.minutes >= 1 && b.minutes <= o.meta.max_minutes && (!clocked || !!b.start);
-    }
-
-    function changed(b) {
-      if (!editing) return true;
-      return (b.person !== undefined && b.person !== e.person) || b.category_id !== e.category_id
-        || b.day !== e.day || b.minutes !== e.minutes || b.note !== (e.note || '')
-        || (clocked && b.start !== clockOf(e.started_at));
+      return entryPayload({ cat: cat, day: day, minutes: minutes, note: note, start: start }, person, clocked);
     }
 
     let gone = false;
@@ -284,7 +300,7 @@ export function openEntryEditor(o) {
       dayPicks.sync(day.value);
       minutePicks.sync(minutes.value);
       const b = payload();
-      save.button.disabled = !(valid(b) && changed(b));
+      save.button.disabled = !(entryValid(b, o, clocked) && (!editing || entryChanged(b, e, clocked)));
     }
 
     [cat, day, minutes, start, note].forEach(function (el) { el.addEventListener('input', sync); });
@@ -300,12 +316,7 @@ export function openEntryEditor(o) {
       try {
         let saved;
         if (editing) {
-          const patch = {};
-          Object.keys(b).forEach(function (k) {
-            const before = k === 'start' ? clockOf(e.started_at) : (k === 'note' ? (e.note || '') : e[k]);
-            if (b[k] !== before) patch[k] = b[k];
-          });
-          saved = await api('/api/time/entries/' + e.id, { method: 'PATCH', body: patch });
+          saved = await api('/api/time/entries/' + e.id, { method: 'PATCH', body: entryPatch(b, e) });
         } else {
           saved = await api('/api/time/entries', { method: 'POST', body: b });
         }

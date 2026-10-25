@@ -40,6 +40,20 @@ export function parentTargets(forest, taskId) {
   return out;
 }
 
+/** Every open task, not just projects — the blocker picker offers any
+ *  open task (a closed blocker gates nothing). A closed project kept in
+ *  the forest for its open descendants is context there, not an option. */
+export function flattenOpen(forest) {
+  const out = [];
+  (function walk(nodes) {
+    nodes.forEach(function (n) {
+      if (!CLOSED[n.status]) out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
+      if (n.children && n.children.length) walk(n.children);
+    });
+  })(forest);
+  return out;
+}
+
 /**
  * @param {{id:number, title:string, parent_id?:number|null}} t   the task being moved
  * @param {Array<{id:number, title:string, depth:number, path:string}>} targets  from parentTargets()

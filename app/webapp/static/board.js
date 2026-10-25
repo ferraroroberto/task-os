@@ -150,19 +150,7 @@ export function mountBoard(handlers, barHost) {
   let last = null;   // the last render's arguments, to redraw on a mode switch
 
   // The mode line: Week · Status, then (Status mode, Inbox not empty) Triage.
-  const modes = document.createElement('div');
-  modes.className = 'segmented board-modes';
-  modes.setAttribute('role', 'group');
-  modes.setAttribute('aria-label', 'Board layout');
-  BOARD_MODES.forEach(function (m) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'segmented-item';
-    b.dataset.mode = m[0];
-    b.dataset.track = 'board.mode.' + m[0];
-    b.textContent = m[1];
-    modes.appendChild(b);
-  });
+  const modes = modesSegment();
   modes.addEventListener('click', function (ev) {
     const seg = ev.target.closest('.segmented-item');
     if (!seg || seg.dataset.mode === mode) return;
@@ -220,37 +208,12 @@ export function mountBoard(handlers, barHost) {
     // the keymap, the selection marks and a new task's focus find that one.
     (mode === 'week' ? status : week).clear();
     if (mode === 'week') {
-      const lanes = weekLanes(t);
-      const byLane = {};
-      const undated = [];
-      WEEK_KEYS.forEach(function (k) { byLane[k] = []; });
-      open.forEach(function (x) { (x.due ? byLane[laneOf(x.due, lanes)] : undated).push(x); });
-      week.fill(WEEK_KEYS.map(function (k) {
-        const lane = lanes.find(function (l) { return l.key === k; });
-        if (!lane) return null;
-        const entry = { key: k, label: lane.label, title: laneSpan(lane), drop: lane.drop, rows: byLane[k] };
-        if (k === 'later') entry.tail = { label: NO_DATE_LABEL, rows: undated };
-        return entry;
-      }), f.sort, rowOpts);
+      week.fill(weekEntries(open, t), f.sort, rowOpts);
       shown = open.length;
     } else {
-      const byStatus = {};
-      BOARD_COLUMNS.forEach(function (c) { byStatus[c.key] = []; });
-      all.forEach(function (x) { if (byStatus[x.status]) byStatus[x.status].push(x); });
-      const wantsDone = f.status.indexOf('done') >= 0;
-      // Only a REAL status pill narrows which columns show — a pseudo-value
-      // ticked alone (`deferred`, `blocked`) is not a column key, so
-      // treating it as one hid every column instead of leaving all four up and
-      // letting the (already server-filtered) items land in their own status.
-      const realStatuses = f.status.filter(function (s) {
-        return BOARD_COLUMNS.some(function (c) { return c.key === s; });
-      });
-      status.fill(BOARD_COLUMNS.map(function (col) {
-        if (realStatuses.length && realStatuses.indexOf(col.key) < 0) return null;
-        const label = col.key === 'done' && wantsDone ? 'Done' : col.label;
-        return { key: col.key, label: label, title: label, drop: col.key, rows: byStatus[col.key] };
-      }), f.sort, rowOpts);
-      shown = BOARD_COLUMNS.reduce(function (n, c) { return n + byStatus[c.key].length; }, 0);
+      const cols = statusEntries(all, f.status);
+      status.fill(cols.entries, f.sort, rowOpts);
+      shown = cols.shown;
     }
 
     // Every lane collapsed: one way forward instead of a row of bare headers.
@@ -261,14 +224,7 @@ export function mountBoard(handlers, barHost) {
       } : undefined));
     }
 
-    const ai = o.ai || {};
-    triage.hidden = mode !== 'status' || counts.inbox === 0;
-    triage.disabled = !ai.enabled || !!o.triaging;
-    triage.dataset.state = o.triaging ? 'loading' : ai.enabled ? 'ready' : 'error';
-    triage.title = o.triaging ? 'Generating suggestions…'
-      : !ai.enabled ? (ai.reason || 'AI triage unavailable') : 'Stage AI suggestions for every Inbox task';
-    triage.querySelector('span').textContent = o.triaging ? 'Triaging…'
-      : !ai.enabled ? (ai.configured ? 'AI unavailable' : 'Triage off') : 'Triage Inbox';
+    paintTriage(triage, o, mode !== 'status' || counts.inbox === 0);
     if (mode === 'status') status.place(false, true);
     return counts;
   }
@@ -280,6 +236,77 @@ export function mountBoard(handlers, barHost) {
     // column once it has layout (no animation on arrival).
     show: function () { requestAnimationFrame(function () { status.place(false); }); },
   };
+}
+
+// --------------------------------------------------------- render parts
+/** The Week · Status segment (its buttons; the board wires the click). */
+function modesSegment() {
+  const modes = document.createElement('div');
+  modes.className = 'segmented board-modes';
+  modes.setAttribute('role', 'group');
+  modes.setAttribute('aria-label', 'Board layout');
+  BOARD_MODES.forEach(function (m) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'segmented-item';
+    b.dataset.mode = m[0];
+    b.dataset.track = 'board.mode.' + m[0];
+    b.textContent = m[1];
+    modes.appendChild(b);
+  });
+  return modes;
+}
+
+/** Week mode's lane entries: the open tasks by due-date lane, the undated
+ *  ones as Later's tail. */
+function weekEntries(open, t) {
+  const lanes = weekLanes(t);
+  const byLane = {};
+  const undated = [];
+  WEEK_KEYS.forEach(function (k) { byLane[k] = []; });
+  open.forEach(function (x) { (x.due ? byLane[laneOf(x.due, lanes)] : undated).push(x); });
+  return WEEK_KEYS.map(function (k) {
+    const lane = lanes.find(function (l) { return l.key === k; });
+    if (!lane) return null;
+    const entry = { key: k, label: lane.label, title: laneSpan(lane), drop: lane.drop, rows: byLane[k] };
+    if (k === 'later') entry.tail = { label: NO_DATE_LABEL, rows: undated };
+    return entry;
+  });
+}
+
+/** Status mode's columns → `{entries, shown}`: one entry per column (null = a
+ *  column the status filter leaves out) and every task with a column. */
+function statusEntries(all, picked) {
+  const byStatus = {};
+  BOARD_COLUMNS.forEach(function (c) { byStatus[c.key] = []; });
+  all.forEach(function (x) { if (byStatus[x.status]) byStatus[x.status].push(x); });
+  const wantsDone = picked.indexOf('done') >= 0;
+  // Only a REAL status pill narrows which columns show — a pseudo-value
+  // ticked alone (`deferred`, `blocked`) is not a column key, so
+  // treating it as one hid every column instead of leaving all four up and
+  // letting the (already server-filtered) items land in their own status.
+  const realStatuses = picked.filter(function (s) {
+    return BOARD_COLUMNS.some(function (c) { return c.key === s; });
+  });
+  const entries = BOARD_COLUMNS.map(function (col) {
+    if (realStatuses.length && realStatuses.indexOf(col.key) < 0) return null;
+    const label = col.key === 'done' && wantsDone ? 'Done' : col.label;
+    return { key: col.key, label: label, title: label, drop: col.key, rows: byStatus[col.key] };
+  });
+  const shown = BOARD_COLUMNS.reduce(function (n, c) { return n + byStatus[c.key].length; }, 0);
+  return { entries: entries, shown: shown };
+}
+
+/** The Triage button's face for the AI state and a run in flight. */
+function paintTriage(triage, o, hidden) {
+  const ai = o.ai || {};
+  triage.hidden = hidden;
+  triage.disabled = !ai.enabled || !!o.triaging;
+  triage.dataset.state = o.triaging ? 'loading' : ai.enabled ? 'ready' : 'error';
+  triage.title = o.triaging ? 'Generating suggestions…'
+    : !ai.enabled ? (ai.reason || 'AI triage unavailable') : 'Stage AI suggestions for every Inbox task';
+  triage.querySelector('span').textContent = o.triaging ? 'Triaging…'
+    : !ai.enabled ? (ai.configured ? 'AI unavailable' : 'Triage off') : 'Triage Inbox';
 }
 
 // ------------------------------------------------------------------ lanes
@@ -310,52 +337,15 @@ function mountLanes(kind, skeleton, handlers) {
   let positioned = false;
 
   skeleton.forEach(function (lane) {
-    const section = document.createElement('section');
-    section.className = 'board-col';
-    section.dataset.col = lane.key;
-    const h = document.createElement('h3');
-    h.className = 'board-col-title';
-    // the overline role on the name alone: the count beside it is a number,
-    // never transformed (styles/components.css `.overline`)
-    const label = document.createElement('span');
-    label.className = 'board-col-label overline';
-    const n = document.createElement('span');
-    n.className = 'board-col-count section-count';
-    n.dataset.col = lane.key;
-    h.append(label, n);
-    if (lane.key === 'done') {
-      // the reading surface behind this column — a link, not a tab
-      const link = document.createElement('a');
-      link.className = 'board-col-link';
-      link.href = '#journal';
-      link.textContent = 'journal';
-      link.title = 'Done journal — everything closed, by day';
-      h.appendChild(link);
-    }
-    section.appendChild(h);
-    const list = document.createElement('ul');
-    list.className = 'trows board-list';
-    list.setAttribute('role', 'list');
-    list.dataset.col = lane.key;
-    section.appendChild(list);
-    wireDropTarget(section, kind, handlers);
-    columns.appendChild(section);
-
-    parts[lane.key] = { section: section, label: label, count: n, list: list };
+    const part = laneSection(lane);
+    wireDropTarget(part.section, kind, handlers);
+    columns.appendChild(part.section);
+    parts[lane.key] = part;
     if (kind !== 'status') return;
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'board-strip-btn';
-    b.dataset.col = lane.key;
-    b.setAttribute('role', 'tab');
-    const bl = document.createElement('span');
-    bl.textContent = lane.short;
-    const bn = document.createElement('span');
-    bn.className = 'board-count';
-    b.append(bl, ' ', bn);
+    const b = stripButton(lane);
     b.addEventListener('click', function () { current = lane.key; place(true); });
     strip.appendChild(b);
-    Object.assign(parts[lane.key], { strip: b, stripCount: bn });
+    Object.assign(part, { strip: b, stripCount: b.querySelector('.board-count') });
   });
 
   function phone() { return window.matchMedia(PHONE_MQ).matches; }
@@ -413,32 +403,7 @@ function mountLanes(kind, skeleton, handlers) {
       const p = parts[skeleton[i].key];
       p.section.hidden = !lane;
       if (p.strip) p.strip.hidden = !lane;
-      if (!lane) return;
-      const rows = sortItems(lane.rows, sort);
-      const tail = lane.tail && lane.tail.rows.length ? sortItems(lane.tail.rows, sort) : [];
-      const total = rows.length + tail.length;
-      p.section.dataset.drop = lane.drop == null ? '' : lane.drop;
-      p.section.setAttribute('aria-label', lane.label);
-      p.section.classList.toggle('is-empty', total === 0);
-      p.label.textContent = lane.label;
-      p.label.parentElement.title = lane.title;
-      p.count.textContent = String(total);
-      p.count.setAttribute('aria-label', total + (total === 1 ? ' task' : ' tasks'));
-      if (p.strip) {
-        p.strip.classList.toggle('is-empty', total === 0);
-        p.strip.title = lane.label;
-        p.stripCount.textContent = String(total);
-      }
-      p.list.replaceChildren();
-      rows.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
-      if (tail.length) {
-        const sub = document.createElement('li');
-        sub.className = 'board-list-sub overline';
-        sub.dataset.group = 'tail';
-        sub.textContent = lane.tail.label;
-        p.list.appendChild(sub);
-        tail.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
-      }
+      if (lane) paintLane(p, lane, sort, handlers, rowOpts);
     });
   }
 
@@ -447,6 +412,84 @@ function mountLanes(kind, skeleton, handlers) {
   }
 
   return { columns: columns, strip: strip, fill: fill, clear: clear, place: place };
+}
+
+/** One lane's column: its heading (name, count; Done links to the journal) and list. */
+function laneSection(lane) {
+  const section = document.createElement('section');
+  section.className = 'board-col';
+  section.dataset.col = lane.key;
+  const h = document.createElement('h3');
+  h.className = 'board-col-title';
+  // the overline role on the name alone: the count beside it is a number,
+  // never transformed (styles/components.css `.overline`)
+  const label = document.createElement('span');
+  label.className = 'board-col-label overline';
+  const n = document.createElement('span');
+  n.className = 'board-col-count section-count';
+  n.dataset.col = lane.key;
+  h.append(label, n);
+  if (lane.key === 'done') {
+    // the reading surface behind this column — a link, not a tab
+    const link = document.createElement('a');
+    link.className = 'board-col-link';
+    link.href = '#journal';
+    link.textContent = 'journal';
+    link.title = 'Done journal — everything closed, by day';
+    h.appendChild(link);
+  }
+  section.appendChild(h);
+  const list = document.createElement('ul');
+  list.className = 'trows board-list';
+  list.setAttribute('role', 'list');
+  list.dataset.col = lane.key;
+  section.appendChild(list);
+  return { section: section, label: label, count: n, list: list };
+}
+
+/** Fill one lane's parts `p` from its entry: heading, count, strip and rows
+ *  (a `tail` closes the list under its own sub-heading). */
+function paintLane(p, lane, sort, handlers, rowOpts) {
+  const rows = sortItems(lane.rows, sort);
+  const tail = lane.tail && lane.tail.rows.length ? sortItems(lane.tail.rows, sort) : [];
+  const total = rows.length + tail.length;
+  p.section.dataset.drop = lane.drop == null ? '' : lane.drop;
+  p.section.setAttribute('aria-label', lane.label);
+  p.section.classList.toggle('is-empty', total === 0);
+  p.label.textContent = lane.label;
+  p.label.parentElement.title = lane.title;
+  p.count.textContent = String(total);
+  p.count.setAttribute('aria-label', total + (total === 1 ? ' task' : ' tasks'));
+  if (p.strip) {
+    p.strip.classList.toggle('is-empty', total === 0);
+    p.strip.title = lane.label;
+    p.stripCount.textContent = String(total);
+  }
+  p.list.replaceChildren();
+  rows.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
+  if (tail.length) {
+    const sub = document.createElement('li');
+    sub.className = 'board-list-sub overline';
+    sub.dataset.group = 'tail';
+    sub.textContent = lane.tail.label;
+    p.list.appendChild(sub);
+    tail.forEach(function (t) { p.list.appendChild(buildRow(t, handlers, rowOpts)); });
+  }
+}
+
+/** Status mode's phone switcher button for one column. */
+function stripButton(lane) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'board-strip-btn';
+  b.dataset.col = lane.key;
+  b.setAttribute('role', 'tab');
+  const bl = document.createElement('span');
+  bl.textContent = lane.short;
+  const bn = document.createElement('span');
+  bn.className = 'board-count';
+  b.append(bl, ' ', bn);
+  return b;
 }
 
 // ------------------------------------------------------------------ rows

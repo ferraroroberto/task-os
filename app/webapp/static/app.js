@@ -52,7 +52,7 @@ import {
 import { addDays, STATUSES, todayISO } from './format.js';
 import { renderJournal } from './journal.js';
 import { mountKeys } from './keys.js';
-import { parentTargets } from './parentpick.js';
+import { flattenOpen, parentTargets } from './parentpick.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
@@ -247,20 +247,6 @@ async function loadStatus() {
     state.archive = null;
     indexSuggestions([]);
   }
-}
-
-/** Every open task, not just projects — the blocker picker offers any
- *  open task (a closed blocker gates nothing). A closed project kept in
- *  the forest for its open descendants is context there, not an option. */
-function flattenOpen(forest) {
-  const out = [];
-  (function walk(nodes) {
-    nodes.forEach(function (n) {
-      if (!CLOSED[n.status]) out.push({ id: n.id, title: n.title, depth: n.depth || 0 });
-      if (n.children && n.children.length) walk(n.children);
-    });
-  })(forest);
-  return out;
 }
 
 /** Latest-wins guard for the reads that replace shared state.
@@ -1340,9 +1326,7 @@ function wirePalette() {
 }
 
 // ---------------------------------------------------------------- boot
-async function boot() {
-  wireTheme();
-  wireActions();
+function wireDrawer() {
   drawer = createDrawer(els.drawer, {
     onChanged: refreshAll,
     onOpen: openTask,
@@ -1356,8 +1340,11 @@ async function boot() {
     issues: function () { return state.issues; },
     onSyncIssues: syncIssues,
   });
-  // The Settings pane owns its own cards (settings.js); mounted before the nav
-  // because restoring the stored tab can fire onChange straight into it.
+}
+
+/** The Settings pane owns its own cards (settings.js) and the Email archiving
+ *  sheet its run and report. */
+function wireSettings() {
   settings = mountSettings({
     onSyncIssues: syncIssues,
     // The phone's way into the palette: Ctrl+K needs a hardware keyboard.
@@ -1397,6 +1384,31 @@ async function boot() {
     // task, and nothing outside the pane shows the run's count.
     onChanged: function () {},
   });
+}
+
+/** Escape closes what is on top: a Settings sheet or the drawer, then Select mode. */
+function wireEscape() {
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    // A field where you are typing owns Escape (revert / clear its own value).
+    // A checkbox does not: after ticking a row the focus sits on one, and
+    // Escape there has to leave Select mode or the key looks broken.
+    if (ev.target.closest('textarea, select, input:not([type="checkbox"])')) return;
+    // an open dialog (palette, quick-add, the keys card, a confirmation) owns
+    // Escape natively — it must not also close the drawer underneath
+    if (document.querySelector('dialog[open]')) return;
+    if (settings.currentSheet()) closeSettingsSheet();
+    else if (drawer.currentId() != null) closeTask();
+    else if (selection.isActive()) selection.setActive(false);
+  });
+}
+
+async function boot() {
+  wireTheme();
+  wireActions();
+  wireDrawer();
+  // Before the nav: restoring the stored tab can fire onChange straight into Settings.
+  wireSettings();
   // The filters are shared by every tab, so a shared URL never moves the tab
   // by itself. First visit: Today, on every pointer — the first tab in the nav.
   const f = state.filters;
@@ -1462,20 +1474,7 @@ async function boot() {
   // Select mode when all it should do is close its popover (keys.js).
   wireKeys();
   wirePalette();
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key !== 'Escape') return;
-    // A field where you are typing owns Escape (revert / clear its own value).
-    // A checkbox does not: after ticking a row the focus sits on one, and
-    // Escape there has to leave Select mode or the key looks broken.
-    if (ev.target.closest('textarea, select, input:not([type="checkbox"])')) return;
-    // an open dialog (palette, quick-add, the keys card, a confirmation) owns
-    // Escape natively — it must not also close the drawer underneath
-    if (document.querySelector('dialog[open]')) return;
-    // a Settings sheet or the drawer first (the thing on top), then Select mode
-    if (settings.currentSheet()) closeSettingsSheet();
-    else if (drawer.currentId() != null) closeTask();
-    else if (selection.isActive()) selection.setActive(false);
-  });
+  wireEscape();
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   fetchVersion();

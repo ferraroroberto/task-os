@@ -35,22 +35,23 @@ import { openDatePicker } from './snooze.js';
 
 const STATUS_PLACEHOLDER = '';
 
-/**
- * @param {HTMLElement} host   the `.bulk-bar` container in a pane's top strip
- * @param {{onApply: (changes: {status?: string, due?: string, owner?: string}) => Promise<any>,
- *          onDelete: () => Promise<any>,
- *          onExit: () => void,
- *          members: () => Array<{id:string,name:string}>}} handlers
- * @returns {{render: () => void}}
- */
-export function mountBulkBar(host, handlers) {
-  host.classList.add('bulk-bar');
-  host.setAttribute('role', 'toolbar');
-  host.setAttribute('aria-label', 'Bulk actions');
+/** A square `.icon-button` with its glyph, tooltip and accessible name. */
+function iconButton(cls, title, label, glyph) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'icon-button ' + cls;
+  b.title = title;
+  b.setAttribute('aria-label', label);
+  b.innerHTML = icon(glyph);
+  return b;
+}
 
-  // The number is the one thing that must survive a narrow phone — it is what
-  // says how much this next click changes. Only the word "selected" is
-  // droppable (CSS), never the count itself.
+function setDisabled(controls, on) {
+  controls.forEach(function (c) { c.disabled = on; });
+}
+
+/** "☑ N selected" — the number lives in `.bulk-n`; only the word is droppable. */
+function countEl() {
   const count = document.createElement('span');
   count.className = 'bulk-count';
   count.innerHTML = icon('square-check');
@@ -60,7 +61,11 @@ export function mountBulkBar(host, handlers) {
   countWord.className = 'bulk-word';
   countWord.textContent = 'selected';
   count.append(countText, countWord);
+  return count;
+}
 
+/** Set status…: the placeholder, then every status, `complete` included. */
+function statusSelect() {
   const status = document.createElement('select');
   status.className = 'select-native bulk-status';
   status.setAttribute('aria-label', 'Set status of the selected tasks');
@@ -81,17 +86,63 @@ export function mountBulkBar(host, handlers) {
     o.textContent = s;
     status.appendChild(o);
   });
+  return status;
+}
+
+/** Set owner…: a square whose face is its (transparent) native select. */
+function ownerControl() {
+  const owner = document.createElement('label');
+  owner.className = 'icon-button bulk-owner';
+  owner.title = 'Set owner of the selected tasks…';
+  owner.innerHTML = icon('user');
+  const ownerSel = document.createElement('select');
+  ownerSel.className = 'bulk-owner-select';
+  ownerSel.setAttribute('aria-label', 'Set owner of the selected tasks');
+  owner.appendChild(ownerSel);
+  return owner;
+}
+
+/** Set owner…'s options: the placeholder, then one per member. */
+function fillOwners(sel, members) {
+  sel.textContent = '';
+  const ph = document.createElement('option');
+  ph.value = STATUS_PLACEHOLDER;
+  ph.textContent = 'Set owner…';
+  sel.appendChild(ph);
+  members.forEach(function (m) {
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.name;
+    sel.appendChild(o);
+  });
+}
+
+/**
+ * @param {HTMLElement} host   the `.bulk-bar` container in a pane's top strip
+ * @param {{onApply: (changes: {status?: string, due?: string, owner?: string}) => Promise<any>,
+ *          onDelete: () => Promise<any>,
+ *          onExit: () => void,
+ *          members: () => Array<{id:string,name:string}>}} handlers
+ * @returns {{render: () => void}}
+ */
+export function mountBulkBar(host, handlers) {
+  host.classList.add('bulk-bar');
+  host.setAttribute('role', 'toolbar');
+  host.setAttribute('aria-label', 'Bulk actions');
+
+  // The number is the one thing that must survive a narrow phone — it is what
+  // says how much this next click changes. Only the word "selected" is
+  // droppable (CSS), never the count itself.
+  const count = countEl();
+  const countText = count.querySelector('.bulk-n');
+
+  const status = statusSelect();
 
   // Move is the bar's first action, as it is the row's: the one date
   // sheet every re-date opens (snooze.js) — the push-out phrases, Pick a date…
   // and No date — so a selection moves the way a single row does.
-  const move = document.createElement('button');
-  move.type = 'button';
-  move.className = 'icon-button bulk-move';
-  move.title = 'Move the selected tasks…';
-  move.setAttribute('aria-label', 'Move the selected tasks to another date');
+  const move = iconButton('bulk-move', 'Move the selected tasks…', 'Move the selected tasks to another date', 'calendar-days');
   move.setAttribute('aria-haspopup', 'dialog');
-  move.innerHTML = icon('calendar-days');
   move.addEventListener('click', function () {
     if (busy) return;
     const n = selection.size();
@@ -101,14 +152,8 @@ export function mountBulkBar(host, handlers) {
 
   // Set owner…: the square's face is its native select, so the picker
   // is the platform's; its options follow the members list on every render.
-  const owner = document.createElement('label');
-  owner.className = 'icon-button bulk-owner';
-  owner.title = 'Set owner of the selected tasks…';
-  owner.innerHTML = icon('user');
-  const ownerSel = document.createElement('select');
-  ownerSel.className = 'bulk-owner-select';
-  ownerSel.setAttribute('aria-label', 'Set owner of the selected tasks');
-  owner.appendChild(ownerSel);
+  const owner = ownerControl();
+  const ownerSel = owner.querySelector('select');
   let ownerKey = null;
   function syncOwners() {
     const members = (handlers.members && handlers.members()) || [];
@@ -116,79 +161,52 @@ export function mountBulkBar(host, handlers) {
     const key = JSON.stringify(members);
     if (key === ownerKey) return;
     ownerKey = key;
-    ownerSel.textContent = '';
-    const ph = document.createElement('option');
-    ph.value = STATUS_PLACEHOLDER;
-    ph.textContent = 'Set owner…';
-    ownerSel.appendChild(ph);
-    members.forEach(function (m) {
-      const o = document.createElement('option');
-      o.value = m.id;
-      o.textContent = m.name;
-      ownerSel.appendChild(o);
-    });
+    fillOwners(ownerSel, members);
   }
-  ownerSel.addEventListener('change', function () {
-    const value = ownerSel.value;
-    if (value === STATUS_PLACEHOLDER) return;
-    apply({ owner: value }, function () { ownerSel.value = STATUS_PLACEHOLDER; });
-  });
+  applyOnPick(ownerSel, 'owner');
 
   // Delete: the caller confirms and posts; this square only locks the
   // bar while that runs, exactly like an apply.
-  const del = document.createElement('button');
-  del.type = 'button';
-  del.className = 'icon-button danger bulk-delete';
-  del.title = 'Delete the selected tasks';
-  del.setAttribute('aria-label', 'Delete the selected tasks');
-  del.innerHTML = icon('trash-2');
-  del.addEventListener('click', function () {
-    if (busy) return;
-    busy = true;
-    setDisabled(true);
-    Promise.resolve(handlers.onDelete())
-      .catch(function () { /* toasted by the caller */ })
-      .finally(function () { busy = false; setDisabled(false); });
-  });
+  const del = iconButton('danger bulk-delete', 'Delete the selected tasks', 'Delete the selected tasks', 'trash-2');
+  del.addEventListener('click', function () { locked(function () { return handlers.onDelete(); }, function () {}); });
 
-  const exit = document.createElement('button');
-  exit.type = 'button';
   // the one icon button the strip's + wears too, so the bar's three
   // glyphs are one control by construction, not by three rules agreeing
-  exit.className = 'icon-button bulk-exit';
-  exit.title = 'Leave select mode';
-  exit.setAttribute('aria-label', 'Leave select mode');
-  exit.innerHTML = icon('x');
+  const exit = iconButton('bulk-exit', 'Leave select mode', 'Leave select mode', 'x');
   exit.addEventListener('click', function () { handlers.onExit(); });
 
-  status.addEventListener('change', function () {
-    const value = status.value;
-    if (value === STATUS_PLACEHOLDER) return;
-    apply({ status: value }, function () { status.value = STATUS_PLACEHOLDER; });
-  });
+  applyOnPick(status, 'status');
 
   let busy = false;
-  /** One apply: the controls lock so a second click can't double-post, and the
-   *  control resets whether the batch succeeded or not — its value said what
-   *  to do once, not what the selection now is. */
+  /** A select that applies `{[field]: value}` on its pick, then shows its placeholder again. */
+  function applyOnPick(sel, field) {
+    sel.addEventListener('change', function () {
+      const value = sel.value;
+      if (value === STATUS_PLACEHOLDER) return;
+      const changes = {};
+      changes[field] = value;
+      apply(changes, function () { sel.value = STATUS_PLACEHOLDER; });
+    });
+  }
   function apply(changes, reset) {
+    locked(function () { return handlers.onApply(changes); }, reset);
+  }
+
+  /** Run `work` with the controls locked, so a second click can't double-post;
+   *  `reset` runs whether it succeeded or not — a control's value said what to
+   *  do once, not what the selection now is. */
+  function locked(work, reset) {
     if (busy) return;
     busy = true;
-    setDisabled(true);
-    Promise.resolve(handlers.onApply(changes))
+    const controls = [move, status, ownerSel, del];
+    setDisabled(controls, true);
+    Promise.resolve(work())
       .catch(function () { /* toasted by the caller */ })
       .finally(function () {
         busy = false;
         reset();
-        setDisabled(false);
+        setDisabled(controls, false);
       });
-  }
-
-  function setDisabled(on) {
-    move.disabled = on;
-    status.disabled = on;
-    ownerSel.disabled = on;
-    del.disabled = on;
   }
 
   host.append(count, move, status, owner, del, exit);

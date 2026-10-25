@@ -24,6 +24,54 @@ import { closeOnBackdrop } from './modal.js';
 const DEBOUNCE_MS = 150;
 const TASK_LIMIT = 8;
 
+/** One palette row: icon, label (+ status mark), hint, key. */
+function itemEl(it, isActive) {
+  const li = document.createElement('li');
+  li.className = 'palette-item' + (isActive ? ' is-active' : '');
+  li.dataset.kind = it.kind;
+  li.setAttribute('role', 'option');
+  li.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  li.innerHTML = icon(it.icon || (it.kind === 'task' ? 'list-checks' : 'chevron-right'), 'palette-item-icon');
+  const main = document.createElement('div');
+  main.className = 'palette-item-main';
+  const label = document.createElement('div');
+  label.className = 'palette-item-label';
+  label.textContent = it.label;
+  if (it.status) label.appendChild(statusMark(it.status));
+  main.appendChild(label);
+  if (it.hint) {
+    const hint = document.createElement('div');
+    hint.className = 'palette-item-hint muted';
+    hint.textContent = it.hint;
+    main.appendChild(hint);
+  }
+  li.appendChild(main);
+  if (it.kbd) {
+    const k = document.createElement('kbd');
+    k.textContent = it.kbd;
+    li.appendChild(k);
+  }
+  return li;
+}
+
+/** The commands whose label or hint holds `filter`, as palette items. */
+function commandItems(commands, filter) {
+  const f = (filter || '').trim().toLowerCase();
+  return commands
+    .filter(function (c) { return !f || (c.label + ' ' + (c.hint || '')).toLowerCase().indexOf(f) >= 0; })
+    .map(function (c) { return { kind: 'command', label: c.label, hint: c.hint, icon: c.icon || 'chevron-right', run: c.run, kbd: c.kbd }; });
+}
+
+/** A task search hit as a palette item. */
+function taskItem(h, onOpenTask) {
+  return {
+    kind: 'task', label: h.title, status: h.status,
+    hint: [breadcrumbText(h.breadcrumb), h.code].filter(Boolean).join(' · ') || null,
+    icon: 'list-checks',
+    run: function () { onOpenTask(h.task_id); },
+  };
+}
+
 /**
  * @param {HTMLDialogElement} dialog
  * @param {{commands: () => Array<{id:string,label:string,hint?:string,icon?:string,run:() => any}>,
@@ -47,44 +95,13 @@ export function createPalette(dialog, opts) {
       return;
     }
     items.forEach(function (it, i) {
-      const li = document.createElement('li');
-      li.className = 'palette-item' + (i === active ? ' is-active' : '');
-      li.dataset.kind = it.kind;
-      li.setAttribute('role', 'option');
-      li.setAttribute('aria-selected', i === active ? 'true' : 'false');
-      li.innerHTML = icon(it.icon || (it.kind === 'task' ? 'list-checks' : 'chevron-right'), 'palette-item-icon');
-      const main = document.createElement('div');
-      main.className = 'palette-item-main';
-      const label = document.createElement('div');
-      label.className = 'palette-item-label';
-      label.textContent = it.label;
-      if (it.status) label.appendChild(statusMark(it.status));
-      main.appendChild(label);
-      if (it.hint) {
-        const hint = document.createElement('div');
-        hint.className = 'palette-item-hint muted';
-        hint.textContent = it.hint;
-        main.appendChild(hint);
-      }
-      li.appendChild(main);
-      if (it.kbd) {
-        const k = document.createElement('kbd');
-        k.textContent = it.kbd;
-        li.appendChild(k);
-      }
+      const li = itemEl(it, i === active);
       li.addEventListener('mousemove', function () { if (active !== i) { active = i; paint(); } });
       li.addEventListener('click', function () { run(it); });
       list.appendChild(li);
     });
     const el = list.children[active];
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
-  }
-
-  function commandItems(filter) {
-    const f = (filter || '').trim().toLowerCase();
-    return opts.commands()
-      .filter(function (c) { return !f || (c.label + ' ' + (c.hint || '')).toLowerCase().indexOf(f) >= 0; })
-      .map(function (c) { return { kind: 'command', label: c.label, hint: c.hint, icon: c.icon || 'chevron-right', run: c.run, kbd: c.kbd }; });
   }
 
   async function taskItems(q) {
@@ -97,14 +114,7 @@ export function createPalette(dialog, opts) {
     }
     if (my !== seq || dialog.open === false) return;
     const g = (res.groups || []).find(function (x) { return x.kind === 'tasks'; });
-    items = ((g && g.hits) || []).map(function (h) {
-      return {
-        kind: 'task', label: h.title, status: h.status,
-        hint: [breadcrumbText(h.breadcrumb), h.code].filter(Boolean).join(' · ') || null,
-        icon: 'list-checks',
-        run: function () { opts.onOpenTask(h.task_id); },
-      };
-    });
+    items = ((g && g.hits) || []).map(function (h) { return taskItem(h, opts.onOpenTask); });
     active = 0;
     paint();
   }
@@ -112,16 +122,10 @@ export function createPalette(dialog, opts) {
   function refresh() {
     clearTimeout(timer);
     const v = input.value;
-    if (v.trim().charAt(0) === '>') {
+    const command = v.trim().charAt(0) === '>';
+    if (command || !v.trim()) {
       seq++;                                   // drop any task answer in flight
-      items = commandItems(v.trim().slice(1));
-      active = 0;
-      paint();
-      return;
-    }
-    if (!v.trim()) {
-      seq++;
-      items = commandItems('');
+      items = commandItems(opts.commands(), command ? v.trim().slice(1) : '');
       active = 0;
       paint();
       return;
