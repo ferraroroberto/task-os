@@ -3,7 +3,8 @@
  *
  * The + button in every pane's top strip opens `<dialog id="quickAdd">` — the
  * same vendored editor-modal shell the command palette uses (native showModal
- * / close, Esc closes; markup in index.html, so this module is behaviour only).
+ * / close, Esc closes; its form is js/quickadd/markup.js, filled into the empty
+ * shell first).
  *
  * Line 1 stays the natural-language line: POST /api/parse splits it
  * server-side (so the CLI and the UI agree on what "next friday" means) and
@@ -39,6 +40,7 @@
 import { STATUSES } from './format.js';
 import { mountDictation } from './js/quickadd/dictate.js';
 import { resetForm, wireSubmit } from './js/quickadd/form.js';
+import { fillQuickAdd } from './js/quickadd/markup.js';
 import { showDate } from './js/quickadd/preview.js';
 import { wireQuickAdd } from './js/quickadd/wire.js';
 
@@ -55,6 +57,7 @@ const DEFAULT_STATUS = 'todo';
  * @returns {{open: (preset?: {status?: string, due?: string}) => void, close: () => void}}
  */
 export function createQuickAdd(dialog, opts) {
+  fillQuickAdd(dialog);
   const q = function (sel) { return dialog.querySelector(sel); };
   const ctx = {
     dialog: dialog,

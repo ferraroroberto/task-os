@@ -1,8 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": "fn:app/webapp/static/voice.js:mountMic", "lines": 239},
-    {"key": "size:app/webapp/static/app.js", "lines": 1489},
-    {"key": "size:app/webapp/static/index.html", "lines": 1083}
-  ]
+  "entries": []
 }

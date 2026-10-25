@@ -218,224 +218,42 @@ const LISTENING = 'Listening… click the square to stop.';
  * @returns {{refresh: () => Promise<void>, cancel: () => void}}
  */
 export function mountMic(btn, hint, opts) {
-  const glyph = btn.querySelector('use');
-  let ctx = null;           // AudioContext, alive only while recording
-  let stream = null;        // the granted MediaStream
-  let node = null;          // the worklet tap
-  let blocks = [];          // every Float32Array the tap has handed over
-  let captured = 0;         // samples in `blocks`, the snapshot's version
-  let recording = false;
-  let busy = false;         // the final clip is being encoded / transcribed
-  let ready = false;        // the install + this browser can actually record
-  let partialMs = FALLBACK_PARTIAL_MS;   // 0 = no live transcript
-  let poller = 0;           // the partial interval
-  let inFlight = null;      // the AbortController of the partial in flight
-  let lastSent = 0;         // `captured` at the last partial post
-  let shown = 0;            // `captured` behind the transcript on screen
-  // Set by `cancel()` — the surface closed while the mic was open. The flag
-  // alone is not enough, because the two things that end a recording race:
-  // closing the dialog can reach the button's own handlers before the dialog's
-  // close handler calls `cancel()`. `opts.isLive` is the caller's own answer
-  // to "is this control still on screen and wanted", so the two guards
-  // together cover either order.
-  let abandoned = false;
-  const live = opts.isLive || function () { return true; };
-  const onPartial = opts.onPartial || function () {};
-  const onStart = opts.onStart || function () {};
-
-  function setHint(text) {
-    hint.textContent = text || '';
-    hint.hidden = !text;
-  }
-
-  /** The standing "voice cannot record here, and this is why" state. Only
-   *  this disables the button — the elapsed-time hint must never look like a
-   *  reason, so it goes through `setHint` instead. */
-  function say(reason) {
-    setHint(reason ? 'Voice off — ' + reason : '');
-    btn.disabled = !!reason;
-    btn.title = reason ? 'Voice off — ' + reason : 'Dictate (click to start)';
-  }
-
-  /** Ask the install (cached) and this browser what voice can do here. */
-  async function refresh() {
-    const blocked = browserBlocker();
-    if (blocked) { ready = false; say(blocked); return; }
-    const state = await voiceState();
-    ready = !!state.enabled;
-    // A cadence the install did not state is not a reason to hardcode one
-    // silently — but it is also not worth failing over, so the fallback is
-    // used and stays a constant with a name.
-    partialMs = typeof state.partial_interval_seconds === 'number'
-      ? Math.round(state.partial_interval_seconds * 1000)
-      : FALLBACK_PARTIAL_MS;
-    say(ready ? null : (state.reason || 'unknown'));
-  }
-
-  function setState(cls) {
-    btn.classList.toggle('is-recording', cls === 'recording');
-    btn.classList.toggle('is-working', cls === 'working');
-    if (glyph) glyph.setAttribute('href', cls === 'recording' ? '#i-square' : '#i-mic');
-    btn.setAttribute('aria-pressed', cls === 'recording' ? 'true' : 'false');
-    const label = cls === 'recording' ? 'Stop recording'
-      : cls === 'working' ? 'Transcribing…' : 'Dictate (click to start)';
-    btn.setAttribute('aria-label', label);
-    if (cls !== 'working') btn.title = label;
-  }
-
-  /** Tear the audio graph down and release the microphone. Idempotent. */
-  function release() {
-    window.clearInterval(poller); poller = 0;
-    if (node) { try { node.port.onmessage = null; node.disconnect(); } catch (_) { /* already gone */ } }
-    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
-    if (ctx && ctx.close) { try { ctx.close(); } catch (_) { /* already closed */ } }
-    node = null; stream = null; ctx = null;
-    recording = false;
-  }
-
-  /** One POST of the current take. `parse` is false for a partial. */
-  async function post(wav, parse) {
-    const control = new AbortController();
-    if (!parse) inFlight = control;
-    try {
-      const res = await fetch('/api/transcribe' + (parse ? '' : '?parse=0'), {
-        method: 'POST', body: wav, cache: 'no-store', credentials: 'same-origin',
-        headers: { 'Content-Type': 'audio/wav' }, signal: control.signal,
-      });
-      const body = await res.json().catch(function () { return null; });
-      if (!res.ok) {
-        const e = (body && body.error) || {};
-        const err = new Error(e.message || ('Transcription failed (HTTP ' + res.status + ')'));
-        err.reported = true;
-        throw err;
-      }
-      return body;
-    } finally {
-      if (inFlight === control) inFlight = null;
-    }
-  }
-
-  /** One rolling pass: the take so far, transcribed, shown on the line.
-   *
-   *  Three guards, the same ones `voice-transcriber`'s rolling worker uses:
-   *  never overlap two passes, never re-transcribe audio that has not grown,
-   *  and never post less than a phrase. A pass that fails is simply skipped —
-   *  the final transcript on stop is the source of truth, and shouting about
-   *  a dropped partial would be noise mid-sentence. */
-  async function partial() {
-    if (!recording || inFlight || captured === lastSent) return;
-    if (captured > MAX_PARTIAL_SECONDS * ctx.sampleRate) {
-      window.clearInterval(poller); poller = 0;
-      return;
-    }
-    const version = captured;
-    const wav = encodeSnapshot(blocks, ctx.sampleRate);
-    if (!wav) return;
-    lastSent = version;
-    let body;
-    try {
-      body = await post(wav, false);
-    } catch (_) {
-      return;                      // a dropped partial costs nothing
-    }
-    // Late answers are dropped rather than allowed to walk the line backwards:
-    // a slow pass can land after a newer, longer one.
-    if (!recording || abandoned || !live() || version < shown) return;
-    if (body && typeof body.text === 'string' && body.text) {
-      shown = version;
-      onPartial(body.text);
-    }
-  }
-
-  async function start() {
-    if (recording || busy || !ready) return;
-    abandoned = false;
-    blocks = []; captured = 0; lastSent = 0; shown = 0;
-    try {
-      // `channelCount: 1` here and on the node below: a phone's second channel
-      // is the same voice twice, and asking the graph to downmix is cheaper
-      // and more correct than averaging afterwards.
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
-    } catch (err) {
-      // A refused microphone is a standing state, not a one-off toast: the
-      // button has to stop claiming it can record.
-      release();
-      ready = false;
-      say('the browser refused the microphone — ' + (err.message || err.name || 'permission denied'));
-      return;
-    }
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    ctx = new Ctx();
-    try {
-      await ctx.audioWorklet.addModule(WORKLET_URL);
-      node = new AudioWorkletNode(ctx, 'voice-tap', {
-        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-        channelCount: 1, channelCountMode: 'explicit',
-      });
-    } catch (err) {
-      release();
-      ready = false;
-      say('the microphone tap would not load — ' + (err.message || err.name || 'AudioWorklet failed'));
-      return;
-    }
-    if (abandoned) { release(); return; }     // cancelled while the mic opened
-    node.port.onmessage = function (ev) { blocks.push(ev.data); captured += ev.data.length; };
-    // The graph is pull-based: a node nothing downstream listens to is not
-    // guaranteed to be run at all. A muted gain into the destination is the
-    // cheapest way to make the tap unambiguously live without putting the
-    // microphone through the speakers.
-    const muted = ctx.createGain();
-    muted.gain.value = 0;
-    ctx.createMediaStreamSource(stream).connect(node);
-    node.connect(muted).connect(ctx.destination);
-    // A context constructed after an `await` is past the click's synchronous
-    // window, and an autoplay policy can hand it back suspended — in which
-    // case nothing is pulled through the graph and the tap never fires.
-    if (ctx.state === 'suspended' && ctx.resume) { try { await ctx.resume(); } catch (_) { /* best effort */ } }
-
-    recording = true;
-    setState('recording');
-    setHint(LISTENING);
-    if (partialMs > 0) poller = window.setInterval(partial, partialMs);
-    onStart();
-  }
-
-  async function stop() {
-    if (!recording) return;
-    const rate = ctx.sampleRate;
-    const wav = encodeSnapshot(blocks, rate);
-    if (inFlight) inFlight.abort();          // the take is over; the partial is moot
-    release();
-    setHint('');
-    // Nothing is uploaded for a recording that was walked away from.
-    if (abandoned || !live()) { setState(''); return; }
-    if (!wav) { setState(''); opts.onError('Too short — say a little more'); return; }
-    busy = true;
-    setState('working');
-    btn.disabled = true;
-    try {
-      const body = await post(wav, true);
-      if (abandoned || !live()) return;
-      if (!body || !body.text) { opts.onError('Nothing was heard — try again closer to the mic'); return; }
-      opts.onResult(body);
-    } catch (err) {
-      // The endpoint just told us something the cached status does not know
-      // yet — drop it so the next open re-probes rather than showing "on".
-      cached = null;
-      opts.onError(err.message || 'Could not transcribe the recording');
-      refresh();
-    } finally {
-      busy = false;
-      setState('');
-      btn.disabled = !ready;
-    }
-  }
+  // One button's whole recording state; every helper below takes it first.
+  const m = {
+    btn: btn,
+    hint: hint,
+    opts: opts,
+    glyph: btn.querySelector('use'),
+    ctx: null,              // AudioContext, alive only while recording
+    stream: null,           // the granted MediaStream
+    node: null,             // the worklet tap
+    blocks: [],             // every Float32Array the tap has handed over
+    captured: 0,            // samples in `blocks`, the snapshot's version
+    recording: false,
+    busy: false,            // the final clip is being encoded / transcribed
+    ready: false,           // the install + this browser can actually record
+    partialMs: FALLBACK_PARTIAL_MS,   // 0 = no live transcript
+    poller: 0,              // the partial interval
+    inFlight: null,         // the AbortController of the partial in flight
+    lastSent: 0,            // `captured` at the last partial post
+    shown: 0,               // `captured` behind the transcript on screen
+    // Set by `cancel()` — the surface closed while the mic was open. The flag
+    // alone is not enough, because the two things that end a recording race:
+    // closing the dialog can reach the button's own handlers before the dialog's
+    // close handler calls `cancel()`. `opts.isLive` is the caller's own answer
+    // to "is this control still on screen and wanted", so the two guards
+    // together cover either order.
+    abandoned: false,
+    live: opts.isLive || function () { return true; },
+    onPartial: opts.onPartial || function () {},
+    onStart: opts.onStart || function () {},
+  };
 
   // One click toggles. Space and Enter reach this natively through the
   // button, which is why no bespoke key handling is needed.
   btn.addEventListener('click', function (ev) {
     ev.preventDefault();
-    if (recording) stop(); else start();
+    if (m.recording) stop(m); else start(m);
   });
 
   // Until the first `refresh()` answers, the button is off with no claim
@@ -444,15 +262,215 @@ export function mountMic(btn, hint, opts) {
   btn.title = 'Checking the transcription server…';
   hint.hidden = true;
 
-  /** The surface closed: abandon the take, upload nothing, say nothing. */
-  function cancel() {
-    abandoned = true;
-    if (inFlight) inFlight.abort();
-    release();
-    setHint('');
-    setState('');
-    if (!busy) btn.disabled = !ready;
-  }
+  return {
+    refresh: function () { return refresh(m); },
+    cancel: function () { cancel(m); },
+  };
+}
 
-  return { refresh: refresh, cancel: cancel };
+function setHint(m, text) {
+  m.hint.textContent = text || '';
+  m.hint.hidden = !text;
+}
+
+/** The standing "voice cannot record here, and this is why" state. Only
+ *  this disables the button — the elapsed-time hint must never look like a
+ *  reason, so it goes through `setHint` instead. */
+function say(m, reason) {
+  setHint(m, reason ? 'Voice off — ' + reason : '');
+  m.btn.disabled = !!reason;
+  m.btn.title = reason ? 'Voice off — ' + reason : 'Dictate (click to start)';
+}
+
+/** Ask the install (cached) and this browser what voice can do here. */
+async function refresh(m) {
+  const blocked = browserBlocker();
+  if (blocked) { m.ready = false; say(m, blocked); return; }
+  const state = await voiceState();
+  m.ready = !!state.enabled;
+  // A cadence the install did not state is not a reason to hardcode one
+  // silently — but it is also not worth failing over, so the fallback is
+  // used and stays a constant with a name.
+  m.partialMs = typeof state.partial_interval_seconds === 'number'
+    ? Math.round(state.partial_interval_seconds * 1000)
+    : FALLBACK_PARTIAL_MS;
+  say(m, m.ready ? null : (state.reason || 'unknown'));
+}
+
+function setState(m, cls) {
+  const btn = m.btn;
+  btn.classList.toggle('is-recording', cls === 'recording');
+  btn.classList.toggle('is-working', cls === 'working');
+  if (m.glyph) m.glyph.setAttribute('href', cls === 'recording' ? '#i-square' : '#i-mic');
+  btn.setAttribute('aria-pressed', cls === 'recording' ? 'true' : 'false');
+  const label = cls === 'recording' ? 'Stop recording'
+    : cls === 'working' ? 'Transcribing…' : 'Dictate (click to start)';
+  btn.setAttribute('aria-label', label);
+  if (cls !== 'working') btn.title = label;
+}
+
+/** Tear the audio graph down and release the microphone. Idempotent. */
+function release(m) {
+  window.clearInterval(m.poller); m.poller = 0;
+  if (m.node) { try { m.node.port.onmessage = null; m.node.disconnect(); } catch (_) { /* already gone */ } }
+  if (m.stream) m.stream.getTracks().forEach(function (t) { t.stop(); });
+  if (m.ctx && m.ctx.close) { try { m.ctx.close(); } catch (_) { /* already closed */ } }
+  m.node = null; m.stream = null; m.ctx = null;
+  m.recording = false;
+}
+
+/** One POST of the current take. `parse` is false for a partial. */
+async function post(m, wav, parse) {
+  const control = new AbortController();
+  if (!parse) m.inFlight = control;
+  try {
+    const res = await fetch('/api/transcribe' + (parse ? '' : '?parse=0'), {
+      method: 'POST', body: wav, cache: 'no-store', credentials: 'same-origin',
+      headers: { 'Content-Type': 'audio/wav' }, signal: control.signal,
+    });
+    const body = await res.json().catch(function () { return null; });
+    if (!res.ok) {
+      const e = (body && body.error) || {};
+      const err = new Error(e.message || ('Transcription failed (HTTP ' + res.status + ')'));
+      err.reported = true;
+      throw err;
+    }
+    return body;
+  } finally {
+    if (m.inFlight === control) m.inFlight = null;
+  }
+}
+
+/** One rolling pass: the take so far, transcribed, shown on the line.
+ *
+ *  Three guards, the same ones `voice-transcriber`'s rolling worker uses:
+ *  never overlap two passes, never re-transcribe audio that has not grown,
+ *  and never post less than a phrase. A pass that fails is simply skipped —
+ *  the final transcript on stop is the source of truth, and shouting about
+ *  a dropped partial would be noise mid-sentence. */
+async function partial(m) {
+  if (!m.recording || m.inFlight || m.captured === m.lastSent) return;
+  if (m.captured > MAX_PARTIAL_SECONDS * m.ctx.sampleRate) {
+    window.clearInterval(m.poller); m.poller = 0;
+    return;
+  }
+  const version = m.captured;
+  const wav = encodeSnapshot(m.blocks, m.ctx.sampleRate);
+  if (!wav) return;
+  m.lastSent = version;
+  let body;
+  try {
+    body = await post(m, wav, false);
+  } catch (_) {
+    return;                      // a dropped partial costs nothing
+  }
+  // Late answers are dropped rather than allowed to walk the line backwards:
+  // a slow pass can land after a newer, longer one.
+  if (!m.recording || m.abandoned || !m.live() || version < m.shown) return;
+  if (body && typeof body.text === 'string' && body.text) {
+    m.shown = version;
+    m.onPartial(body.text);
+  }
+}
+
+/** Open the microphone and the worklet tap; `false` when either refused
+ *  (the reason is already on the button). */
+async function openTap(m) {
+  try {
+    // `channelCount: 1` here and on the node below: a phone's second channel
+    // is the same voice twice, and asking the graph to downmix is cheaper
+    // and more correct than averaging afterwards.
+    m.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+  } catch (err) {
+    // A refused microphone is a standing state, not a one-off toast: the
+    // button has to stop claiming it can record.
+    release(m);
+    m.ready = false;
+    say(m, 'the browser refused the microphone — ' + (err.message || err.name || 'permission denied'));
+    return false;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  m.ctx = new Ctx();
+  try {
+    await m.ctx.audioWorklet.addModule(WORKLET_URL);
+    m.node = new AudioWorkletNode(m.ctx, 'voice-tap', {
+      numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+      channelCount: 1, channelCountMode: 'explicit',
+    });
+  } catch (err) {
+    release(m);
+    m.ready = false;
+    say(m, 'the microphone tap would not load — ' + (err.message || err.name || 'AudioWorklet failed'));
+    return false;
+  }
+  return true;
+}
+
+async function start(m) {
+  if (m.recording || m.busy || !m.ready) return;
+  m.abandoned = false;
+  m.blocks = []; m.captured = 0; m.lastSent = 0; m.shown = 0;
+  if (!(await openTap(m))) return;
+  if (m.abandoned) { release(m); return; }     // cancelled while the mic opened
+  const ctx = m.ctx;
+  m.node.port.onmessage = function (ev) { m.blocks.push(ev.data); m.captured += ev.data.length; };
+  // The graph is pull-based: a node nothing downstream listens to is not
+  // guaranteed to be run at all. A muted gain into the destination is the
+  // cheapest way to make the tap unambiguously live without putting the
+  // microphone through the speakers.
+  const muted = ctx.createGain();
+  muted.gain.value = 0;
+  ctx.createMediaStreamSource(m.stream).connect(m.node);
+  m.node.connect(muted).connect(ctx.destination);
+  // A context constructed after an `await` is past the click's synchronous
+  // window, and an autoplay policy can hand it back suspended — in which
+  // case nothing is pulled through the graph and the tap never fires.
+  if (ctx.state === 'suspended' && ctx.resume) { try { await ctx.resume(); } catch (_) { /* best effort */ } }
+
+  m.recording = true;
+  setState(m, 'recording');
+  setHint(m, LISTENING);
+  if (m.partialMs > 0) m.poller = window.setInterval(function () { partial(m); }, m.partialMs);
+  m.onStart();
+}
+
+async function stop(m) {
+  if (!m.recording) return;
+  const rate = m.ctx.sampleRate;
+  const wav = encodeSnapshot(m.blocks, rate);
+  if (m.inFlight) m.inFlight.abort();          // the take is over; the partial is moot
+  release(m);
+  setHint(m, '');
+  // Nothing is uploaded for a recording that was walked away from.
+  if (m.abandoned || !m.live()) { setState(m, ''); return; }
+  if (!wav) { setState(m, ''); m.opts.onError('Too short — say a little more'); return; }
+  m.busy = true;
+  setState(m, 'working');
+  m.btn.disabled = true;
+  try {
+    const body = await post(m, wav, true);
+    if (m.abandoned || !m.live()) return;
+    if (!body || !body.text) { m.opts.onError('Nothing was heard — try again closer to the mic'); return; }
+    m.opts.onResult(body);
+  } catch (err) {
+    // The endpoint just told us something the cached status does not know
+    // yet — drop it so the next open re-probes rather than showing "on".
+    cached = null;
+    m.opts.onError(err.message || 'Could not transcribe the recording');
+    refresh(m);
+  } finally {
+    m.busy = false;
+    setState(m, '');
+    m.btn.disabled = !m.ready;
+  }
+}
+
+/** The surface closed: abandon the take, upload nothing, say nothing. */
+function cancel(m) {
+  m.abandoned = true;
+  if (m.inFlight) m.inFlight.abort();
+  release(m);
+  setHint(m, '');
+  setState(m, '');
+  if (!m.busy) m.btn.disabled = !m.ready;
 }
