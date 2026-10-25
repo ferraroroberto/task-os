@@ -1,4 +1,4 @@
-/* task-os — the flagged-email poller (#98): its status rows and "Check now". */
+/* task-os — the flagged-email poller: its status rows and "Check now". */
 
 'use strict';
 
@@ -7,7 +7,7 @@ import { fmtTsShort, statusPart } from '../../format.js';
 import { toast } from '../../toast.js';
 import { setWord } from './words.js';
 
-/** The flagged-email poller's half of `GET /api/status` (#98). Off always
+/** The flagged-email poller's half of `GET /api/status`. Off always
  *  carries its reason — an unconfigured channel is a visible state, not a
  *  quiet nothing. `null` = the status call itself failed. */
 export function renderCapture(ctx, st) {

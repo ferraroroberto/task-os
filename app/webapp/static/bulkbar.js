@@ -1,4 +1,4 @@
-/* task-os — the bulk-action bar: what you do with a selection (#81).
+/* task-os — the bulk-action bar: what you do with a selection.
  *
  * While Select mode is on and at least one task is ticked, this bar TAKES OVER
  * the pane's top strip (the text filter and the quick-add +) rather than
@@ -13,11 +13,11 @@
  * change; a date applies on its pick in the date sheet), so nothing here needs a Save
  * the rest of the app doesn't have. `complete` is offered alongside the plain
  * statuses because the selection may hold recurring tasks; the server decides
- * per task what it means (issue #54 semantics, applied in bulk). The third
- * action, delete (#121), is the one that asks first — the caller owns the
+ * per task what it means (the single-task semantics, applied in bulk). The third
+ * action, delete, is the one that asks first — the caller owns the
  * confirmation and the request; the bar only locks while it runs.
  *
- * Set owner… (#476) is there only when the install has two or more members:
+ * Set owner… is there only when the install has two or more members:
  * a square like Move, so a phone strip still has one elastic control, whose
  * native select is the square's whole face (transparent) — the platform
  * picker opens on a tap, the owner applies on its pick like a status.
@@ -82,7 +82,7 @@ export function mountBulkBar(host, handlers) {
     status.appendChild(o);
   });
 
-  // Move (#392) is the bar's first action, as it is the row's: the one date
+  // Move is the bar's first action, as it is the row's: the one date
   // sheet every re-date opens (snooze.js) — the push-out phrases, Pick a date…
   // and No date — so a selection moves the way a single row does.
   const move = document.createElement('button');
@@ -99,7 +99,7 @@ export function mountBulkBar(host, handlers) {
     openDatePicker(subject, 'due', host, function (phrase) { apply({ due: phrase }, function () {}); });
   });
 
-  // Set owner… (#476): the square's face is its native select, so the picker
+  // Set owner…: the square's face is its native select, so the picker
   // is the platform's; its options follow the members list on every render.
   const owner = document.createElement('label');
   owner.className = 'icon-button bulk-owner';
@@ -134,7 +134,7 @@ export function mountBulkBar(host, handlers) {
     apply({ owner: value }, function () { ownerSel.value = STATUS_PLACEHOLDER; });
   });
 
-  // Delete (#121): the caller confirms and posts; this square only locks the
+  // Delete: the caller confirms and posts; this square only locks the
   // bar while that runs, exactly like an apply.
   const del = document.createElement('button');
   del.type = 'button';
@@ -153,7 +153,7 @@ export function mountBulkBar(host, handlers) {
 
   const exit = document.createElement('button');
   exit.type = 'button';
-  // the one icon button the strip's + wears too (#357), so the bar's three
+  // the one icon button the strip's + wears too, so the bar's three
   // glyphs are one control by construction, not by three rules agreeing
   exit.className = 'icon-button bulk-exit';
   exit.title = 'Leave select mode';

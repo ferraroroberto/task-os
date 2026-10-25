@@ -33,7 +33,7 @@ function linkChip(l) {
 }
 
 /** Everything the task points at, one row of pills that only open: the
- *  folder, the linked issue, then every link (one home per fact, #390).
+ *  folder, the linked issue, then every link (one home per fact).
  *  Changing any of them is under More fields. */
 export function linkPills(t) {
   const sec = section('pills', 'Links', 'link');
@@ -111,7 +111,7 @@ function linkRow(ctx, t, l) {
   actions.className = 'link-actions';
   const edit = document.createElement('button');
   edit.type = 'button';
-  edit.className = 'icon-button';   // the one icon button (#357): unshaded, 44px via ::before
+  edit.className = 'icon-button';   // the one icon button: unshaded, 44px via ::before
   edit.setAttribute('aria-label', 'Edit label for ' + (l.label || l.url));
   edit.innerHTML = icon('pencil');
   edit.addEventListener('click', function () { ctx.editingLinkId = l.id; ctx.render(); });
@@ -151,7 +151,7 @@ function linkAddForm(ctx, t) {
     const u = url.value.trim();
     if (!u) return;
     try {
-      // no kind: the server classifies the URL (one rule, #257)
+      // no kind: the server classifies the URL (one rule)
       await api('/api/tasks/' + t.id + '/links', { method: 'POST', body: { url: u, label: label.value.trim() || null } });
       await ctx.refresh();
     } catch (err) { toast(err.message, 'error'); }

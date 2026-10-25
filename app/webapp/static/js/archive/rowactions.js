@@ -29,7 +29,7 @@ export function actionsFor(ctx, item, hooks) {
     wrap.appendChild(actionButton(ctx, 'refresh-cw', 'Retry', function () { return retryItem(item); }));
   }
   // Revert deletes the archived file, so it is never a visible verb: it is
-  // the last item of the card's kebab, behind its confirm (fleet-config#1420).
+  // the last item of the card's kebab, behind its confirm.
   if (isFiled(item)) wrap.appendChild(revertKebab(ctx, item));
   const controls = wrap.childElementCount > 0;
   if (!controls) wrap.appendChild(nothingToPress(item));
@@ -63,7 +63,7 @@ function nothingToPress(item) {
   return none;
 }
 
-/** The desktop row's review levels behind one ⋮ (#350, design.md
+/** The desktop row's review levels behind one ⋮ (design.md
  *  action-row): the same Accept · Move to… / File it… · Retry · Revert the
  *  phone card holds, as the vendored row menu's items, so the row itself
  *  carries only its file chips and the kebab. *Move to…* opens the move

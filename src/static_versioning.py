@@ -188,7 +188,7 @@ def rewrite_js_imports(body: str, hashes: Dict[str, str], from_dir: str = "") ->
 
 
 #: Test-only override for the build SHA, the ``TASKOS_CLOCK`` of build identity
-#: (#225). The ``Build:`` footer is on every gallery screenshot, so an honest
+#: . The ``Build:`` footer is on every gallery screenshot, so an honest
 #: SHA rewrote 19 of them on every commit and the committed gallery could never
 #: be compared against a regeneration. Nothing in production sets it; the e2e
 #: conftest sets it for its disposable instances, and an override is logged
@@ -246,7 +246,7 @@ class BuildInfo:
         self.fleet_hash: str = fleet_hash_of(self.asset_hashes)
         self.git_sha: str = _git_short_sha(repo_root)
         # Through `src.clock`, not `datetime.now`, so a pinned process (the
-        # e2e instances, #134) does not stamp the run's own minute onto the
+        # e2e instances) does not stamp the run's own minute onto the
         # build footer of every screenshot in the gallery.
         self.built_at: str = clock.now().astimezone(timezone.utc).isoformat(
             timespec="seconds"

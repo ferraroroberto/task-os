@@ -72,13 +72,13 @@ from datetime import date, timedelta
 from src import clock
 
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
-#: Cadences that can carry a fixed-day anchor (#112) — the rest are pure offsets.
+#: Cadences that can carry a fixed-day anchor — the rest are pure offsets.
 ANCHORED_RECURRENCES = ("weekly", "monthly")
 #: Canonical weekday abbreviations, Monday-first (``date.weekday()`` order).
 WEEKDAY_ABBR = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 #: The weekday-list anchor behind "every weekday".
 WEEKDAYS_ANCHOR = "mon,tue,wed,thu,fri"
-#: The largest "every N" a task can carry (#229) — far past any real cadence,
+#: The largest "every N" a task can carry — far past any real cadence,
 #: and low enough that no roll can walk a date off the end of the calendar.
 MAX_INTERVAL = 999
 
@@ -495,7 +495,7 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
     if s == "yesterday":
         return today - timedelta(days=1)
     if s in ("this weekend", "weekend"):
-        # The coming Saturday — the snooze menu's middle option (#87). Saturday
+        # The coming Saturday — the snooze menu's middle option. Saturday
         # itself stays Saturday; Sunday means the Saturday six days out, which
         # is what "push this to the weekend" asks for on a Sunday.
         return _coming_weekday(today, 5)

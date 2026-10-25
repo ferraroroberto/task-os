@@ -5,7 +5,7 @@ Why a launcher at all, when opener.cmd does the work: a URL scheme registered
 straight onto a .cmd reaches it as a *command line*, and cmd re-parses that
 string before the handler ever starts. A quote inside the URL closes the
 argument and everything after it becomes a second command. Measured on Windows
-11 (task-os#40): every cmd-based registration shape - wrapped, bare, /s,
+11: every cmd-based registration shape - wrapped, bare, /s,
 unquoted %1, caret-escaped - injects at some quote count, and the attacker
 picks the count. An executable that takes argv does not: PowerShell binds -Url
 to one argument and no command interpreter ever sees the string.
@@ -15,7 +15,7 @@ the environment, which cmd's delayed expansion never re-tokenises:
 
     conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File opener.ps1 -Url "%1"
 
-The conhost.exe --headless wrap is task-os#130: ShellExecute allocates a
+The conhost.exe --headless wrap exists because ShellExecute allocates a
 console for any console-subsystem exe before a line of the script runs, and on
 this PC (Windows Terminal as default terminal) even `-WindowStyle Hidden`
 still flashes that console — measured, not assumed. The headless pseudo-
@@ -90,7 +90,7 @@ if ($Url.Contains('"')) {
 #
 # The read buffer is allocated once and reused: a fresh 1 MB char[] per file
 # costs 25 GB of allocation churn across this PC's 12k transcripts, and cutting
-# it took a full no-hit traversal from 12.1 s to 7.6 s (measured, #227).
+# it took a full no-hit traversal from 12.1 s to 7.6 s (measured).
 $script:TranscriptBuf = $null
 function Get-TranscriptMatch {
     param([string]$Path, [string]$Marker, [string]$Bare)
@@ -131,7 +131,7 @@ function Get-TranscriptMatch {
 }
 
 # taskos://resume?session=<session_01…> — reopen a Claude Code session in a
-# terminal on THIS PC (#77). The web session id is embedded in the local
+# terminal on THIS PC. The web session id is embedded in the local
 # transcript (.jsonl) Claude Code wrote, so one recursive search maps it to the
 # local session uuid and the project folder it ran in. Unknown here (another
 # PC's session, pruned transcripts) -> open the conversation on the web instead.
@@ -154,7 +154,7 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
         # The old shape filtered *then* sorted, and Sort-Object blocks the
         # pipeline - so Select-Object -First 1 could not stop the upstream filter
         # and every one of this PC's 12k transcripts was read on every resume
-        # (~170 s), twice over on a miss (#227).
+        # (~170 s), twice over on a miss.
         $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
         # A transcript that merely MENTIONS another session's id (a grep result,
@@ -196,7 +196,7 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
     # quoting of the argument, so a `;`-separated -Command turned one resume
     # into three tabs: a bare prompt, a tab that tried to run `Write-Host` as an
     # executable (0x80070002), and a `claude` that never saw -d and so started
-    # in system32 (#227). The base64 alphabet contains no `;`, nothing can
+    # in system32. The base64 alphabet contains no `;`, nothing can
     # split, and -NoExit still applies.
     $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($inner))
     # -d is the one part of the tab's directory wt reads off its command line,

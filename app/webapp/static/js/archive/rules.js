@@ -13,7 +13,7 @@ const FILED = ['archived', 'moved'];
 /** A row that asked for a human and got one. The API keeps its status — the
  *  mail really is still `needs_review` where it sits — but the screen must
  *  not keep asking: a decided row shows what it is and offers nothing, which
- *  is what makes the bulk button's count and the rows agree (#168). */
+ *  is what makes the bulk button's count and the rows agree. */
 export function isDecided(item) {
   return REVIEWABLE.indexOf(item.status) >= 0 && !!item.decided_at;
 }
@@ -26,7 +26,7 @@ export function canMove(item) {
   return isFiled(item) || (item.status === 'needs_review' && !item.decided_at);
 }
 
-/** A move Outlook refused *after* the file was written (#174) — the one row
+/** A move Outlook refused *after* the file was written — the one row
  *  where sending the same decision again finishes the mail rather than filing
  *  it a second time. Deliberately not gated on `decided_at`: saying "I have
  *  seen this" does not take the mail out of the Inbox, so the offer stands. */

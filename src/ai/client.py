@@ -76,7 +76,7 @@ class AIClient:
             return False, reason
 
         def compute() -> tuple[bool, str | None]:
-            # The shared connect (timeout vs refusal told apart, #262): its
+            # The shared connect (timeout vs refusal told apart): its
             # sentence is the diagnostic for the log; the public reason stays
             # generic.
             detail = connect_failure(self.base_url)

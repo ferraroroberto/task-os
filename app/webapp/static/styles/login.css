@@ -34,11 +34,11 @@
 .team-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Settings → Phone access card: status rows from GET /api/status. A coloured
-   state word is always bold — one rule for every Settings row (#48). */
+   state word is always bold — one rule for every Settings row. */
 .access-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-xs) var(--gap); margin: 0; font-size: var(--font-body-sm); }
 .access-rows dt { color: var(--muted); }
 .access-rows dd { margin: 0; }
-.access-rows .ok { color: var(--fg); font-weight: 600; }   /* never success green as text (#397) */
+.access-rows .ok { color: var(--fg); font-weight: 600; }   /* never success green as text */
 .access-rows .warn { color: var(--danger-text); font-weight: 600; }
 .access-rows a { color: var(--accent); }
 .access-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-sm); }

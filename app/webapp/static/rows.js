@@ -1,19 +1,19 @@
-/* task-os — the ONE task row every view renders (issue #46, #311).
+/* task-os — the ONE task row every view renders.
  *
  * Board, Today, the done journal and the Search tab's
  * task hits are different *renderings* of the same list, not different
  * features — so they share one row and one sort, built here. The row is the
- * fleet's vendored action-row (#311): tapping it opens the task, and
+ * fleet's vendored action-row: tapping it opens the task, and
  *
  *   leading   the completion circle — the one toggle a row shows: an open
  *             task completes (a recurring one rolls to its next date), a
  *             closed one reopens; both through the shared action runner, so
  *             both come with Undo
  *   main      the title (one line, ellipsized) over ONE quiet meta line on a
- *             budget (#392, `metaLine`): due · exception chips · one context
+ *             budget (`metaLine`): due · exception chips · one context
  *             name · at most two counts. Passive text: nothing on it is its
  *             own tap target, so the whole line opens the task
- *   verb      Move — the one visible action, on a fine pointer (#392): the
+ *   verb      Move — the one visible action, on a fine pointer: the
  *             date sheet, because re-dating is most of the owner's edits
  *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
  *             move, snooze, priority, folder, AI, issue). Right-
@@ -75,7 +75,7 @@ export function sortLabel(sort) {
 /**
  * The status options for a task: the plain statuses, plus a `complete`
  * pseudo-action spliced in right before `done` when the task recurs — never
- * a persisted status (issue #54), just a trigger for the roll-forward
+ * a persisted status, just a trigger for the roll-forward
  * `POST /tasks/{id}/done`. `done` itself always means closed for good, for
  * a recurring task too.
  * @param {object} t
@@ -100,7 +100,7 @@ function metaPart(cls, iconName, text, title) {
   return el;
 }
 
-/** An exception chip on the meta line (#392): the one tone chip (#391), its
+/** An exception chip on the meta line: the one tone chip, its
  *  text in a label that ellipsizes before the chip leaves the line. */
 function flagChip(cls, iconName, text, tone, title) {
   const chip = toneChip('', tone);
@@ -123,12 +123,12 @@ const QUIET_STATUSES = { todo: 1, done: 1 };
 function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 /**
- * Build the meta line (#392's budget): one quiet line that never loses a part
+ * Build the meta line on its budget: one quiet line that never loses a part
  * to the ellipsis on a 390px phone —
  *
  *   due        relative, the repeat glyph beside it when the task recurs
  *   flags      exception chips only, in the status chip's tone map: Blocked or
- *              the day a snooze ends (blocked wins, #100), an Inbox / Standby
+ *              the day a snooze ends (blocked wins), an Inbox / Standby
  *              status where the view does not already say it, and High. No
  *              mark for medium or low, and no danger tone: priority is a mode,
  *              not an alarm
@@ -174,7 +174,7 @@ export function metaLine(t, opts) {
   if (t.priority === 'high') meta.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
   const project = t.root && !o.hideProject ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
-  // three levels down reads "Home renovation › Kitchen" on hover, #102)
+  // three levels down reads "Home renovation › Kitchen" on hover)
   if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
   else if (t.code) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
   if (t.child_count) meta.appendChild(metaPart('kids trow-count', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
@@ -209,10 +209,10 @@ function doneToggle(t, handlers) {
 }
 
 /**
- * Move (#392): the row's one visible verb, because re-dating is most of what
+ * Move: the row's one visible verb, because re-dating is most of what
  * the owner does to a task — opening the date sheet beside the row. The
  * vendored `.action-row-verb`: a plain 44px icon button like the kebab beside
- * it, nothing painted at rest (fleet-config#1420). A fine pointer only
+ * it, nothing painted at rest. A fine pointer only
  * (styles/rows.css): a touch screen swipes the row left for the same sheet.
  */
 function moveVerb(t, menu) {
@@ -257,14 +257,14 @@ function rowKebab(t, menu, li) {
  *          menu?: {attach: (t:object, kebab:HTMLElement)=>void,
  *                  toggleDone: (t:object, el:HTMLElement)=>void,
  *                  move: (t:object, el:HTMLElement)=>void}}} handlers
- *          menu (optional) is the view's row menu (rowmenu.js, #311) — the kebab,
+ *          menu (optional) is the view's row menu (rowmenu.js) — the kebab,
  *          the circle and the Move verb all commit through it
  * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
  *          selected?: boolean, swipe?: boolean, verb?: boolean}} [opts]
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
- *          selectable = Select mode is on (#81): the checkbox replaces the
+ *          selectable = Select mode is on: the checkbox replaces the
  *                       circle, the kebab goes, and the row gesture ticks;
  *          swipe      = false where the view owns the sideways swipe (the Board);
  *          verb       = false where a column is too narrow for a third square
@@ -315,7 +315,7 @@ export function taskRow(t, handlers, opts) {
 
   if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.verb !== false) li.appendChild(moveVerb(t, handlers.menu));
   if (handlers.menu && !o.selectable) li.appendChild(rowKebab(t, handlers.menu, li));
-  // A touch swipe runs a row action (swipe.js, #311) — an open task's row
+  // A touch swipe runs a row action (swipe.js) — an open task's row
   // only (a closed one's circle reopens it), never in Select mode, and not
   // where the view swipes sideways itself (the phone Board's carousel).
   if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.swipe !== false) handlers.menu.swipe(t, li);
@@ -331,7 +331,7 @@ export function taskRow(t, handlers, opts) {
  * @param {Array<object>} items
  * @param {{onOpen: Function, onStatus: Function, onToggleSelect?: Function, menu?: object}} handlers
  * @param {object} [opts]  forwarded to every row; `isSelected(id)` resolves
- *                         each row's `selected` flag (#81)
+ *                         each row's `selected` flag
  */
 export function rowList(items, handlers, opts) {
   const o = opts || {};

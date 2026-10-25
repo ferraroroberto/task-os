@@ -1,4 +1,4 @@
-/* task-os — single-key row actions, one-level undo, and the shortcuts sheet (#99).
+/* task-os — single-key row actions, one-level undo, and the shortcuts sheet.
  *
  * Triage speed without a mouse: with a row focused (Board · Today · the
  * Search tab's task hits) one key does the thing —
@@ -6,11 +6,11 @@
  *   e  complete   1-3 status   t/w due tomorrow / next week
  *   s  snooze     p   priority cycle          z undo     ? this list
  *
- * and with tasks ticked (Select mode, #81) the same key does it to the whole
+ * and with tasks ticked (Select mode) the same key does it to the whole
  * selection.
  *
  * The actions themselves, their one write path and the undo live in
- * actions.js (#311), which the row's own controls read too. This file owns
+ * actions.js, which the row's own controls read too. This file owns
  * what is keyboard-only: which row a key means, putting focus back after the
  * write, the snooze popover a key opens, the shortcuts sheet, and the palette
  * entries (`commands()`, which is how the keys are *visible* rather than

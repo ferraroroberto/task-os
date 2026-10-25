@@ -7,7 +7,7 @@
 
 /* ------------------------------------------------------------- board */
 .board { display: flex; flex-direction: column; gap: var(--gap); }
-/* The line under the strip (#396): Mine · Issues · All, then Week · Status —
+/* The line under the strip: Mine · Issues · All, then Week · Status —
    two vendored segmented controls sharing the row by their segment counts,
    so every segment is the same width — and, in Status mode while the Inbox
    holds tasks, Triage at its own width. */
@@ -56,7 +56,7 @@
   min-width: 18px;
   padding: 1px 5px;
   border-radius: var(--radius-pill);
-  background: var(--neutral-soft);   /* the chip recipe: neutral-soft + fg (#281) */
+  background: var(--neutral-soft);   /* the chip recipe: neutral-soft + fg */
   color: var(--fg);
   font-size: var(--font-caption);
   font-weight: 600;
@@ -95,7 +95,7 @@
 .board-week { display: flex; flex-direction: column; gap: var(--space-md); }
 .board-list { border-top: 1px solid var(--line-muted); }
 .board-list > .trow:first-child { border-top: 0; }
-/* The group closing a lane (Later's "No date", #414): a quiet sub-heading on
+/* The group closing a lane (Later's "No date"): a quiet sub-heading on
    the lane's own hairline, the overline role like the lane titles above it. */
 .board-list-sub {
   list-style: none;
@@ -118,12 +118,12 @@
 /* Every lane empty: one way forward instead of a row of bare headers. */
 .board-empty[hidden] { display: none; }
 
-/* AI Inbox triage (#95): one quiet action on the mode line, then one staged
+/* AI Inbox triage: one quiet action on the mode line, then one staged
    strip inside the row. The two adjacent decision controls use real 44px
    geometry; invisible hit-area expansion would make them overlap. */
 .board-triage {
   min-width: 0;
-  height: 34px;             /* + .hit-target's 5px a side = 44 (#281) */
+  height: 34px;             /* + .hit-target's 5px a side = 44 */
   padding: 0 var(--space-sm);
   display: inline-flex;
   align-items: center;
@@ -148,15 +148,15 @@
 }
 .ai-suggestion-summary { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .ai-suggestion-actions { display: grid; grid-template-columns: repeat(2, 44px); }
-.ai-suggestion-action { --icon-btn-box: var(--row-sm); }   /* the one icon button (#357), 44px real */
+.ai-suggestion-action { --icon-btn-box: var(--row-sm); }   /* the one icon button, 44px real */
 
 /* Desktop / wide: the lanes side by side using the full width, each
    scrolling on its own under a sticky header with the count. Flat regions,
-   not cards (#32): a vertical 1px hairline between lanes is the only
+   not cards: a vertical 1px hairline between lanes is the only
    separation. A lane with nothing in it collapses to its header — still a
    drop target, at its header's width — and the filled lanes share the rest.
    Six week lanes share the window the same way and never scroll it sideways
-   (#414): a title is one ellipsized line (the row contract), so a narrow lane
+   a title is one ellipsized line (the row contract), so a narrow lane
    shortens it instead of widening the board. The status columns are four. */
 @media (min-width: 1024px) {
   .board-strip { display: none; }
@@ -182,7 +182,7 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    min-height: var(--row-md);   /* holds the journal link's 44px target below (#281) */
+    min-height: var(--row-md);   /* holds the journal link's 44px target below */
     padding: var(--space-sm) var(--space-xs);
     background: var(--bg);
     border-bottom: 1px solid var(--line-muted);

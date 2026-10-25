@@ -8,7 +8,7 @@
 /* ------------------------------------------------------------ search */
 /* The box is the header bar's height (52px, home-head) — one size of bar. The
    card is the field, so its edge is the input's boundary: control-border, not
-   the card hairline (design.md, #339). */
+   the card hairline (design.md). */
 .search-box { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border-color: var(--control-border); }
 .search-box > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
 .search-input {
@@ -25,12 +25,12 @@
 .search-input::placeholder { color: var(--muted); }
 .search-input::-webkit-search-cancel-button { cursor: pointer; }
 .search-meta { font-size: var(--font-label); white-space: nowrap; }
-/* The results (#395): before a query, the hint and the folded line; with
+/* The results: before a query, the hint and the folded line; with
    one, a flat section per kind that has hits (the overline header Today's
-   horizons use, #391), then the folded line for the rest. */
+   horizons use), then the folded line for the rest. */
 .search-host { display: grid; gap: var(--space-sm); }
 /* min-width 0: a grid item's auto minimum is its nowrap content, so one long
-   hit meta row widened the group, and the page, past a phone (#417). */
+   hit meta row widened the group, and the page, past a phone. */
 .search-group { margin: 0; min-width: 0; }
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
@@ -60,11 +60,11 @@
 .search-hit-snippet { font-size: var(--font-body-sm); overflow-wrap: anywhere; }
 .search-hit mark { background: color-mix(in srgb, var(--attention) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 /* The hint, the folded line, the error and a hit's snippet are what a person
-   reads: the 14px body-sm role, never the caption (TYPE-01, #408). */
+   reads: the 14px body-sm role, never the caption (TYPE-01). */
 .search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-body-sm); }
 .search-fold a { color: var(--accent); }
 /* The inline Settings link is one word: 14px of padding around its line is
-   the room its 44px target takes, invisibly (#281). */
+   the room its 44px target takes, invisibly. */
 .search-fold { padding-top: 14px; padding-bottom: 14px; }
 .search-fold a { position: relative; }
 .search-fold a::before { content: ""; position: absolute; inset: -14px -4px; }
@@ -78,7 +78,7 @@ kbd {
   /* the sub-sm radius, spelled the one way: half of --radius-sm, as .check
      derives it, so 4px is never a second hand-picked corner. */
   border-radius: calc(var(--radius-sm) / 2);
-  background: var(--neutral-soft);   /* the code-inline chip fill, text on it is fg (COMP-17, #426) */
+  background: var(--neutral-soft);   /* the code-inline chip fill, text on it is fg (COMP-17) */
   color: var(--fg);
   font: inherit;
   font-size: var(--font-caption);
@@ -87,6 +87,6 @@ kbd {
 }
 /* A key drawn as a glyph (⌘, ↑, ↓) sits on the 16px inline step, never 1em of
    the 12px key label (COMP-02: the palette foot and Settings → Command
-   palette, #397). */
+   palette). */
 kbd > .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
 

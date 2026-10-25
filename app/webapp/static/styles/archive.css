@@ -1,13 +1,13 @@
 /* Settings: Email archiving report. Linked after the file before it in index.html: rule order is the cascade. */
 
-/* ---- Settings → Email archiving (#159; the Archive tab until #397) — the
+/* ---- Settings → Email archiving (the Archive tab) — the
    batch run and its report, in the Settings sheet (the detail pane beside the
    list on a wide screen): the head carries the one button, the bound that
    makes a first run safe and the service's own state; the report is the
    `.archive-grid` grid on a wide screen and stacked cards under 768 px,
    where nine columns do not fit and the actions are the point. Tokens only —
    the state words reuse the Settings `.status-ok/-warn/-off`; its text is the
-   14px body-sm role, never the caption (TYPE-01, #397). ---- */
+   14px body-sm role, never the caption (TYPE-01). ---- */
 /* `minmax(0, …)`, like every other stack here: an implicit `auto` track is
    sized to its content's min-content, and one un-wrappable reading would then
    widen the card past the pane instead of wrapping inside it. */
@@ -28,13 +28,13 @@
 .archive-runbar { justify-content: flex-start; flex-wrap: wrap; }
 .archive-runbar-label { color: var(--muted); font-size: var(--font-body-sm); }
 .archive-run-pick { min-height: var(--control-h); max-width: min(100%, 26rem); }
-.archive-runbar .button-ghost { margin-left: auto; min-height: var(--control-h); }   /* + its 4px a side = 44 (#281) */
+.archive-runbar .button-ghost { margin-left: auto; min-height: var(--control-h); }   /* + its 4px a side = 44 */
 
 /* ---- the report grid ---- */
 .archive-grid-wrap { padding: 0; overflow: hidden; }
 .archive-grid { font-size: var(--font-body-sm); }
 /* Centred, not top-aligned: the file-chip cell is the one column whose
-   content can wrap to more than one line (#178) — a five-file row taller than
+   content can wrap to more than one line — a five-file row taller than
    its neighbours must not read as the other cells having drifted upward. */
 .archive-grid td { vertical-align: middle; }
 /* Every one-line cell is capped so the nine columns still fit a 1440 desktop
@@ -44,7 +44,7 @@
 .archive-who { display: block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-dest { display: block; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* One line on the grid, the whole sentence in the title: a row keeps to its
-   subject line (#339), and a reason is worth reading, not worth pushing every
+   subject line, and a reason is worth reading, not worth pushing every
    other column off the screen. The phone reads it whole, behind Review. */
 .archive-reason {
   display: -webkit-box;
@@ -53,19 +53,19 @@
   overflow: hidden;
   color: var(--muted);
 }
-.archive-reason-error { color: var(--danger-text); }   /* the AA text tone, not the fill (#397) */
+.archive-reason-error { color: var(--danger-text); }   /* the AA text tone, not the fill */
 .archive-confidence { font-variant-numeric: tabular-nums; }
 .archive-files .chip { max-width: 9rem; }
-/* The desktop cap's own chip (#178): same pill, a button rather than a link,
+/* The desktop cap's own chip: same pill, a button rather than a link,
    quiet until hovered — expanding it is not a destination. */
-.archive-files-more { cursor: pointer; font: inherit; }   /* fg on the chip fill, #281 */
+.archive-files-more { cursor: pointer; font: inherit; }   /* fg on the chip fill */
 .archive-files-more:hover, .archive-files-more:focus-visible {
   color: var(--accent); border-color: var(--accent-border-soft); background: var(--accent-soft);
 }
 .archive-state { font-weight: 600; white-space: nowrap; }
 /* Enough room per column that a long reason cannot squeeze a neighbour to
    one word a line; `.archive-grid-scroll` takes the overflow. The action column is
-   the row's ⋮ alone since #350 (or its "nothing left to do"), as narrow as
+   the row's ⋮ alone (or its "nothing left to do"), as narrow as
    that. */
 .c-subject { min-width: 10rem; }
 .c-why { min-width: 13rem; }
@@ -73,11 +73,11 @@
 
 /* ---- the per-row actions (the phone card's; the desktop row has its ⋮) ---- */
 .archive-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-sm); }
-/* The verbs are the vendored plain icon-buttons (fleet-config#1420), so their
+/* The verbs are the vendored plain icon-buttons, so their
    cluster is the track-less `.icon-button-group` on the row box: the 44px
    targets touch, none paints anything at rest. */
 .archive-row-actions.icon-button-group { --icon-btn-box: var(--row-sm); gap: 0; }
-/* One shape for every review level (#168): *Review*, *Accept*, *File it…* and
+/* One shape for every review level: *Review*, *Accept*, *File it…* and
    *Retry* are all `.archive-action`, so an open panel may not invent a colour
    of its own — the engaged look is the glyph in the accent, the kebab's own
    open state. A disclosure's engaged state is `aria-expanded` (its correct
@@ -135,7 +135,7 @@
 /* ---- the phone drawing: one card per mail, actions behind its own menu ---- */
 /* Every track is `minmax(0, …)` and every cell may shrink below its content:
    one long subject or one absolute path must ellipsize inside its card, never
-   widen the pane into a sideways scroll (#168). */
+   widen the pane into a sideways scroll. */
 .archive-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); }
 .archive-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .archive-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
@@ -149,28 +149,28 @@
 .archive-card-why .archive-reason { display: block; max-width: none; overflow-wrap: anywhere; }
 /* A file chip is `.archive-files`' own flex item, which — like any flex item —
    defaults to an `auto` min-width, so a name longer than the card widened the
-   row and the card together instead of being cut (#173). `min-width: 0` on
+   row and the card together instead of being cut. `min-width: 0` on
    the row lets it shrink to the card's width; each chip then ellipsizes at
    its own edge and the next one wraps to its own line, rather than the whole
    row stretching to fit its longest chip. */
 .archive-card .archive-files { min-width: 0; }
 .archive-card .archive-files .chip { max-width: 100%; min-width: 0; }
-/* the chip no longer clips (#305: its ::before band reaches outside it); the
+/* the chip no longer clips (its ::before band reaches outside it); the
    label already does — `.chip-label` is `overflow: hidden` with an ellipsis, so
    it is the part that shrinks */
-/* the toggle's word beside its glyph (#424): the glyph alone is no conventional name */
+/* the toggle's word beside its glyph: the glyph alone is no conventional name */
 .archive-menu-head { display: inline-flex; align-items: center; cursor: pointer; color: var(--muted); }
 .archive-menu-word { font-size: var(--font-caption); }
 .archive-menu-head:hover { color: var(--ink); }
 .archive-menu-head:has(.archive-menu-toggle[aria-expanded="true"]) { color: var(--accent); }
-/* the files, the reason and the actions, stacked under the toggle (#339) */
+/* the files, the reason and the actions, stacked under the toggle */
 .archive-menu-body { padding-top: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 @media (max-width: 520px) {
   .archive-other { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- the phone drawing of the head, the run bar and the *File it…* panel
-   (#168). First real use at 390 px: the head wasted a line on a label column,
+   . First real use at 390 px: the head wasted a line on a label column,
    the picker stopped short of the right edge, the bulk button floated and the
    panel's controls sat at three different heights. Everything here is layout —
    the report's own two drawings are unchanged. ---- */
@@ -187,7 +187,7 @@
      reading is the muted tail (archive.js writes the short wording for this
      width). A reading wraps when it outgrows the line, as it does on every
      other Settings sheet: it must never be cut, because the Last run's tail is
-     the failure count (#427, LAYOUT-09). The base `.status-row dd` already
+     the failure count (LAYOUT-09). The base `.status-row dd` already
      carries `overflow-wrap: anywhere`. The card's foot loses the band the
      two-column rows needed. */
   .archive-head { padding-bottom: var(--space-sm); }
@@ -287,7 +287,7 @@
   .archive-limit-input, .archive-run-pick, .archive-other-input, .archive-hint { --control-inset: 0px; }
 }
 /* On a fine pointer the buttons keep the 36px control height and reach the
-   44px floor invisibly, 4px a side (#281): every gap between them and their
+   44px floor invisibly, 4px a side: every gap between them and their
    neighbours is 8px, so the expanded rects meet edge to edge and never
    overlap. The inputs and the run picker beside them get there through the
    inset band (top of this sheet). */

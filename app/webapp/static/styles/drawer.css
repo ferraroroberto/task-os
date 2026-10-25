@@ -7,7 +7,7 @@
 .drawer {
   /* The drawer is an editor: line after line of inputs beside buttons, so
      its controls are 44px painted on every pointer, the way touch already
-     drew them (#281) — an inset band here would leave each 36px button 4px
+     drew them — an inset band here would leave each 36px button 4px
      off its input's centre. */
   --control-inset: 0px;
   --drawer-w: 440px;
@@ -44,7 +44,7 @@
   body[data-drawer="open"] { overflow: hidden; }
   body[data-drawer="open"] nav.tabs { visibility: hidden; }
 }
-/* Today's split view (#336): at the drawer's own desktop breakpoint the Today
+/* Today's split view: at the drawer's own desktop breakpoint the Today
    tab is two columns, the list on the left and the detail pane on the right,
    so a row's ⋯ stays near its title instead of at the far edge of the window.
    The pane is the same fixed drawer, widened to half the content area; the
@@ -78,7 +78,7 @@
 /* The drawer's secondary text — crumbs, field labels, comment and activity
    meta, the empty lines — is the 14px body-sm role, not the 12px caption: on
    a task with a history the caption runs were over half the text on screen
-   (TYPE-01, #394). Its glyphs sit on the 16px inline step unless a rule below
+   (TYPE-01). Its glyphs sit on the 16px inline step unless a rule below
    names another (COMP-02: a bare `.icon` is 1em, 12px in a caption button). */
 .drawer .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .drawer .button-ghost { font-size: var(--font-body-sm); }
@@ -99,15 +99,15 @@
 .crumb-sep { color: var(--muted); }
 .drawer-trail { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-xs); }
 /* The tools' wrapper adds no box of its own: each button joins the crumbs' line
-   and wraps on its own, so Change parent stays inline when Remove parent cannot (#486). */
+   and wraps on its own, so Change parent stays inline when Remove parent cannot. */
 .drawer-parent-tools { display: contents; }
 .drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--hit-min); padding: 0 var(--space-sm); border-color: transparent; background: transparent; color: var(--muted); }
 .drawer-parent-tools .button-ghost:hover { color: var(--fg); background: var(--accent-soft); }
 .drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long
-   title wraps to 2–3 lines, never an ellipsis and never a sideways clip (#32).
-   It is a field, so it draws a field's boundary at rest (#394, COLOR-03 —
+   title wraps to 2–3 lines, never an ellipsis and never a sideways clip.
+   It is a field, so it draws a field's boundary at rest (COLOR-03 —
    WCAG 1.4.11): a border that only appeared on hover hid that the title is
    editable, and a phone has no hover at all. */
 .drawer-title {
@@ -127,8 +127,8 @@
   overflow-wrap: anywhere;
 }
 /* Phone: the code prefix sits on its own line ABOVE the title instead of
-   inline pushing it off-screen (#32). The title keeps heading-lg here too —
-   the textarea wraps and grows, so there is nothing to shrink it for (#218). */
+   inline pushing it off-screen. The title keeps heading-lg here too —
+   the textarea wraps and grows, so there is nothing to shrink it for. */
 @media (max-width: 1023px) {
   .drawer-title-row { flex-wrap: wrap; gap: 2px var(--space-sm); }
   .drawer-code { flex: 1 1 100%; }
@@ -142,12 +142,12 @@
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-/* The fields that lead (#394): Due across the row with its quick moves under
+/* The fields that lead: Due across the row with its quick moves under
    it, then status and priority side by side, on every width. The rest of the
    fields keep the grid above, under More fields. */
 .drawer-fields.drawer-fields-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .drawer-fields-main > .field-due, .drawer-fields-main > .quick-moves { grid-column: 1 / -1; }
-/* With an Owner (#476) the three selects share one row, phone included. */
+/* With an Owner the three selects share one row, phone included. */
 .drawer-fields.drawer-fields-main.has-owner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 /* The date sheet's phrases (snooze.js phraseButtons) as one-tap buttons: the
    phrase over the date it resolves to, two by two, four across once the
@@ -187,12 +187,12 @@
 .field-due-row .field-control { flex: 1 1 auto; }
 .drawer .button-surface, .drawer .button-ghost { min-height: var(--hit-min); }
 .field-due-row .due-date.is-visible { height: var(--control-h); }
-/* Every: the interval input + its unit ("weeks"), read as one phrase (#229). */
+/* Every: the interval input + its unit ("weeks"), read as one phrase. */
 .field-interval-row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 .field-interval-row .field-control { flex: 1 1 auto; }
 .field-unit { color: var(--muted); font-size: var(--font-body-sm); white-space: nowrap; }
 /* Section headings: the app's title font (vendored card-title metrics) with
-   the section glyph — never uppercase (#46). */
+   the section glyph — never uppercase. */
 .drawer-section { padding: 14px 0 6px; }
 .drawer-section + .drawer-section { border-top: 1px solid var(--line-muted); }
 .drawer-section-title {
@@ -216,8 +216,8 @@
 .markdown pre { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
 .markdown pre code { background: transparent; padding: 0; }
 .markdown a { color: var(--accent); }
-/* A link row's edit and delete are the one icon button (#357, first drawn
-   here for #77: a bordered square dwarfed the link pill). Its ::before
+/* A link row's edit and delete are the one icon button (first drawn
+   here because a bordered square dwarfed the link pill). Its ::before
    carries the 44px hit rect, so the ROW floor is one --row-sm pitch less the
    10px gap = 34px, and the expanded rects of stacked rows never overlap
    (design.md "Touch targets"). Written as that subtraction rather than a bare
@@ -228,12 +228,12 @@
 .link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: calc(var(--row-sm) - 10px); }
 .link-actions { display: flex; align-items: center; gap: var(--icon-btn-gap); flex: none; }
 .link-label-edit { flex: 1 1 auto; min-width: 0; }
-/* Add-link: ONE line — url · label · Add — on every width (#46). */
+/* Add-link: ONE line — url · label · Add — on every width. */
 .link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
 .link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
-/* Blocked by (#100) — same row/form shape as Links: a flat list of removable
+/* Blocked by — same row/form shape as Links: a flat list of removable
    rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
    the-gap floor. */
 .drawer-blockers { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--space-sm); }
@@ -270,7 +270,7 @@
 .comment:first-child { border-top: 0; }
 .comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-body-sm); margin-bottom: 2px; }
 .comment-meta strong { color: var(--fg); }
-/* Pencil + trash park at the right end of the meta line (#155) — the Links
+/* Pencil + trash park at the right end of the meta line — the Links
    row's pair of icon buttons; `margin-left: auto` is the only thing it adds. */
 .comment-actions { display: flex; align-items: center; gap: var(--icon-btn-gap); flex: none; margin-left: auto; }
 /* The inline editor is the composer, re-pointed at an existing body: it wears
@@ -281,7 +281,7 @@
    textarea's is ~20 columns, which overflows a 390px phone). Save is the
    composer's Send button in the accent tint — colour only, never
    `.button-tint`, whose 48px/13px/700 block recipe is for a full-width
-   primary and towered over the thread it lives in (#155). */
+   primary and towered over the thread it lives in. */
 .comment-edit-wrap { margin: var(--space-xs) 0 0; }
 .comment-edit { min-width: 0; }
 .comment-edit-save {
@@ -309,7 +309,7 @@
 .activity-arrow { color: var(--muted); }
 .activity-meta { color: var(--muted); white-space: nowrap; }
 .activity-sync-toggle { margin-top: var(--space-xs); }
-/* Links as pills (#394): the folder, the issue and every link on one wrapping
+/* Links as pills: the folder, the issue and every link on one wrapping
    row of 44px pills (the .folder-chips recipe), nothing to edit on it. */
 .drawer-pill-row { margin-top: -11px; }
 /* More fields: a flat disclosure after the activity log. Its summary names
@@ -360,7 +360,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .card-actions { display: flex; gap: 6px; margin-top: var(--space-sm); }
 .card-actions .button-surface { display: inline-flex; align-items: center; gap: var(--space-xs); }
 /* Every Settings button is pressed on its own in a sheet body, never in a
-   cluster, so it simply is 44px tall (#281) — the vendored 36px control
+   cluster, so it simply is 44px tall — the vendored 36px control
    height is a floor the min-height lifts. Its glyph is the icons.size inline
    step (16px), not 1em of its label (COMP-02; .drawer's own rule covers the
    sheet's, this keeps it whatever holds the button). */
@@ -397,7 +397,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .toast-error { border-color: var(--deficit-border-soft); color: var(--danger); }
 .toast-success { color: var(--success); }
 .toast span { flex: 1 1 auto; color: var(--fg); }
-/* The optional inline action (#87's snooze undo) — a ghost button: transparent
+/* The optional inline action (the snooze undo) — a ghost button: transparent
    on a hairline, never a tinted fill competing with the toast's own surface. */
 .toast-action {
   flex: none;
@@ -421,7 +421,7 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   }
   .filter-select, .drawer .select-native, .drawer .input-native,
   .bulk-status { height: var(--row-sm); }
-  /* the strip's square buttons are one family — same square, always (#81) */
+  /* the strip's square buttons are one family — same square, always */
   .strip-square { width: var(--row-sm); height: var(--row-sm); }
   .pane-top .icon-button { --icon-btn-box: var(--row-sm); }
   /* These already carry real 44px geometry here, so the invisible expansion
@@ -434,9 +434,9 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 }
 @media (max-width: 520px) {
   .drawer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* Folder line 2 stays ONE line at 390px (#74): the picker drops to its
+  /* Folder line 2 stays ONE line at 390px: the picker drops to its
      glyph. aria-label + title still say "Find in folder index". A glyph
-     alone is an icon button, so it loses the ghost hairline too (#357). */
+     alone is an icon button, so it loses the ghost hairline too. */
   .folder-pick-label { display: none; }
   .folder-pick { width: var(--row-sm); padding: 0; justify-content: center; border-color: transparent; }
 }

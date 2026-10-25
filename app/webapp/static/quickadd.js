@@ -1,5 +1,5 @@
 /* task-os — quick-add: the fields worth setting while the task is still in
- * your head, in one dialog (#80).
+ * your head, in one dialog.
  *
  * The + button in every pane's top strip opens `<dialog id="quickAdd">` — the
  * same vendored editor-modal shell the command palette uses (native showModal
@@ -9,8 +9,8 @@
  * server-side (so the CLI and the UI agree on what "next friday" means) and
  * the result lands where it can still be changed — the dates it finds fill the
  * **Due** and **Starts** fields, the parent shows as a chip. Under it, the
- * fields that used to force a second trip through the drawer (#80 round 2):
- * description, due, starts (#87), status, folder (with the shared
+ * fields that used to force a second trip through the drawer:
+ * description, due, starts, status, folder (with the shared
  * folder-index picker) and one link.
  * Everything but the title is optional and sensible by default — no date,
  * status To Do — so `type · Enter` is still the whole fast path.
@@ -20,8 +20,8 @@
  * NOT lose the task: it is created, said so, and the link failure is its own
  * message.
  *
- * The mic beside line 1 (#92, behaviour in voice.js) fills that same line by
- * voice: click to start, and the words appear **while you speak** (#146) —
+ * The mic beside line 1 (behaviour in voice.js) fills that same line by
+ * voice: click to start, and the words appear **while you speak** —
  * shown provisionally under `.is-dictating` until you click again, when the
  * final transcript settles with the parse already applied, the identical
  * preview typing it would have produced, one confirming Enter away. Dictation
@@ -42,7 +42,7 @@ import { resetForm, wireSubmit } from './js/quickadd/form.js';
 import { showDate } from './js/quickadd/preview.js';
 import { wireQuickAdd } from './js/quickadd/wire.js';
 
-// To Do, not Inbox (#148): Inbox is the arrivals tray for what came in on
+// To Do, not Inbox: Inbox is the arrivals tray for what came in on
 // its own, and a task you are typing here has already been triaged by the
 // act of writing it. The select still opens on this, so it stays one change
 // away — and the server's own default (tasks_repo.DEFAULT_STATUS) is the
@@ -83,7 +83,7 @@ export function createQuickAdd(dialog, opts) {
       seq: 0,
       enrichSeq: 0,
       // Once a date is set by hand the parser stops writing it — one flag per
-      // field, so correcting the due never freezes the start date too (#87).
+      // field, so correcting the due never freezes the start date too.
       touched: { due: false, starts: false },
       // What line 1 held when recording started; dictation appends after it.
       spokenPrefix: '',
@@ -107,7 +107,7 @@ export function createQuickAdd(dialog, opts) {
   wireQuickAdd(ctx);
 
   /** @param {{status?: string, due?: string}} [preset] where the add came
-   *  from (#339): an empty Board column presets its status, Today's empty
+   *  from: an empty Board column presets its status, Today's empty
    *  list today's date. A preset date is a choice already made, so the
    *  parse of the typed line does not clear it (the field still edits). */
   function open(preset) {

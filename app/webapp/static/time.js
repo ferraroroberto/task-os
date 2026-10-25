@@ -1,4 +1,4 @@
-/* task-os — the Time tab (#457): a time tracker with household shares.
+/* task-os — the Time tab: a time tracker with household shares.
  *
  * Three views in one segmented control, all over `/api/time/*`
  * (`src/time_repo.py` owns every rule; this file only draws and asks):
@@ -13,7 +13,7 @@
  *            more people, the household comparison: head-to-head, the split
  *            bar, coverage, the guess card, the per-category bars. With two
  *            or more people it opens there, at 30 days (the prototype's
- *            Totals, #463), and the comparison and the guess card stay up
+ *            Totals), and the comparison and the guess card stay up
  *            with nothing logged: only the bars give way to the empty state
  *   History  date-grouped rows, a filter above 12, "Show older entries";
  *            the row (and its menu's Edit) opens the editor, Start again,
@@ -24,7 +24,7 @@
  * totals are re-read every POLL_MS, so a timer the other device started
  * appears without a reload. "Today" is always the server's.
  *
- * The tab logs as whoever is signed in (#475): `/api/time/meta` says who
+ * The tab logs as whoever is signed in: `/api/time/meta` says who
  * (`you`), so there is no per-device picker and nothing is stored. Only a
  * request that is no member (a team sign-in whose name matches nobody) is
  * asked once per visit, in memory. People are told apart by their initial and,

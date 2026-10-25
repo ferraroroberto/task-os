@@ -1,4 +1,4 @@
-/* task-os — the ONE selection, shared by every view that can multi-select (#81).
+/* task-os — the ONE selection, shared by every view that can multi-select.
  *
  * Select mode turns a card/row from "open the task" into "tick the task", and
  * the ticked set is state, not DOM: Board and Today read the same store, so

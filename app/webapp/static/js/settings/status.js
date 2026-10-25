@@ -31,7 +31,7 @@ export async function refreshStatus(ctx) {
     renderMirrorEventsRow(ctx, body.mirror).catch(function () {});
     ctx.statusFailed = false;
     const on = [body.mirror && body.mirror.enabled, body.backup && body.backup.enabled].filter(Boolean).length;
-    // A backup that failed is the row's word, whatever else is on (#397: the
+    // A backup that failed is the row's word, whatever else is on (the
     // header names it, "Backup failing").
     setWord(ctx, ctx.els.mirrorCardMeta, body.backup && body.backup.last_error ? 'error'
       : on === 2 ? 'both on' : on === 1 ? 'one of two on' : 'off');
@@ -42,7 +42,7 @@ export async function refreshStatus(ctx) {
     renderCapture(ctx, body.capture);
     renderArchive(ctx, body.archive);
     // A run this page did not start (another device): hand it to the Archive
-    // pane, which follows it and publishes the outcome back (#262).
+    // pane, which follows it and publishes the outcome back.
     if (body.archive && body.archive.running) ctx.opts.onArchiveRun();
     renderCalendar(ctx, body.calendar);
     renderVoice(ctx, body.voice);

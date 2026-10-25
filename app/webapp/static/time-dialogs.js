@@ -1,4 +1,4 @@
-/* task-os — the Time tab's dialogs (#457), on the vendored editor modal.
+/* task-os — the Time tab's dialogs, on the vendored editor modal.
  *
  * One `<dialog id="timeDialog">` shell, built per ask like confirm.js does:
  *
@@ -6,7 +6,7 @@
  *                     person's): person, category, day, start, minutes, note
  *   askSwitch         a timer is running — "Stop and start <category>"
  *   promptText        a name (add / rename an area)
- *   promptCategory    a category's name and subtitle (add / edit, #463)
+ *   promptCategory    a category's name and subtitle (add / edit)
  *   pickOption        one choice from a list (move a category to an area)
  *   showInfo          a read-only explanation (the comparison's ⓘ)
  *
@@ -361,8 +361,8 @@ export function promptText(o) {
   });
 }
 
-/** A category's name and its optional subtitle (the `hint` under the name,
- *  #463), and one primary. Resolves to {name, hint} trimmed — an empty hint
+/** A category's name and its optional subtitle (the `hint` under the name),
+ *  and one primary. Resolves to {name, hint} trimmed — an empty hint
  *  clears it — or null. */
 export function promptCategory(o) {
   return openDialog(o.title, function (card, finish) {

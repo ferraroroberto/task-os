@@ -1,4 +1,4 @@
-/* task-os — Row actions (#311): the two swipes and the ⋯ menu's list. */
+/* task-os — Row actions: the two swipes and the ⋯ menu's list. */
 
 'use strict';
 
@@ -6,7 +6,7 @@ import { ACTIONS, actionById } from '../../actions.js';
 import { icon } from '../../_vendored/icons/icons.js';
 import { isDefault, rowPrefs, setRowPrefs } from '../../rowprefs.js';
 
-/** Row actions (#311): the two swipes and the ⋯ menu's list, choices from
+/** Row actions: the two swipes and the ⋯ menu's list, choices from
  *  the one action table. Every change is stored at once (rowprefs.js) and
  *  handed to `ctx.opts.onRowActions`, which redraws the rows — a menu reads its
  *  list when its row is drawn. An action a swipe runs is ticked and locked

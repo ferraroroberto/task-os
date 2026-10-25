@@ -78,7 +78,7 @@ export async function startRun(ctx) {
     renderReport(ctx);
     startPolling(ctx);
     // The Settings row beside this sheet reads "running" from the status it
-    // is handed (#397): hand it the one that says so.
+    // is handed: hand it the one that says so.
     await refreshStatus(ctx);
   } catch (err) {
     // 409 archive_in_flight is the honest answer to a second click, and the

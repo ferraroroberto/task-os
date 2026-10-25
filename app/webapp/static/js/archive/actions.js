@@ -11,7 +11,7 @@ import { toast } from '../../toast.js';
 import { isFiled } from './rules.js';
 import { shortFolder } from './text.js';
 
-/** A visible row verb (fleet-config#1420): the vendored plain icon-button,
+/** A visible row verb: the vendored plain icon-button,
  *  glyph only, its word kept as the accessible name and the tooltip. */
 export function verbButton(glyph, label) {
   const b = document.createElement('button');

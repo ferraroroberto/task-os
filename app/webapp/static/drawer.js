@@ -4,12 +4,12 @@
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash).
  *
- * Ordered by how often each part is used (#394, decision 7 on #390): most
+ * Ordered by how often each part is used: most
  * edits are a due date pushed out, so Due comes first with its quick moves.
  * Top to bottom: breadcrumb → its parent tools (Change parent, and Remove
- * parent when there is one, #468) → editable title → Due (the field, then the date
+ * parent when there is one) → editable title → Due (the field, then the date
  * sheet's phrases as one-tap moves, push-outs first, each with its date) →
- * status and priority (and owner, with two or more members — #476) → links as pills (the folder, the linked issue, every
+ * status and priority (and owner, with two or more members) → links as pills (the folder, the linked issue, every
  * link: open-only, the editors are under More fields) → description
  * (markdown, edit/preview) → comments newest-first with URLs as clickable
  * chips + composer (Ctrl+Enter sends, origin=ui) — each row carries a pencil
@@ -20,7 +20,7 @@
  * interval + its fixed-day anchor when the cadence takes one, person, code,
  * folder (the ref as an opener chip, an editor that folds a pasted absolute path onto the
  * placeholders, a picker over the folder index — Step 9) → link editor
- * (label edit, remove, add) → blocked by (#100) → children (click to
+ * (label edit, remove, add) → blocked by → children (click to
  * navigate, add child) → issue panel: the linked issue (provider glyph,
  * repo#N link, state, labels from the last sync, last synced, unlink) or —
  * for a plain task — "Create issue…" and "Link existing" → delete.
@@ -53,8 +53,8 @@ import { renderDrawer } from './js/drawer/render.js';
  *          onSyncIssues: () => Promise<any>}} opts
  */
 export function createDrawer(el, opts) {
-  // Every load of the payload takes a number, and only the newest may render
-  // (#236). One hash navigation fires `popstate` *and* `hashchange`, so
+  // Every load of the payload takes a number, and only the newest may render.
+  // One hash navigation fires `popstate` *and* `hashchange`, so
   // `open()` used to run twice for one click and fetch twice: the slower
   // answer, read before an edit, then painted over the edit's own refresh and
   // the drawer showed the old value of a field the server had already
@@ -70,8 +70,8 @@ export function createDrawer(el, opts) {
     descEditing: false,
     pickerOpen: false,         // the folder-index picker under the Folder field
     editingLinkId: null,
-    editingCommentId: null,    // the comment whose body sits in the inline editor (#155)
-    syncShown: false,          // the issue sync's activity rows, unfolded (#394)
+    editingCommentId: null,    // the comment whose body sits in the inline editor
+    syncShown: false,          // the issue sync's activity rows, unfolded
     render: function () { renderDrawer(ctx); },
     refresh: refresh,
     patch: patch,

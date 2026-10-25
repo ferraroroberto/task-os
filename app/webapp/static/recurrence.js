@@ -11,14 +11,14 @@
 
 export const RECURRENCES = ['', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
-/* Fixed-day anchors (#112) — the cadences that take one, and the options each
+/* Fixed-day anchors — the cadences that take one, and the options each
  * offers. */
 const WEEKDAY_ABBR = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const WEEKDAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const WEEKDAYS_ANCHOR = 'mon,tue,wed,thu,fri';
 const ORDINAL_WORDS = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', last: 'last' };
 
-/* Intervals (#229) — the unit "every N" counts, per cadence. */
+/* Intervals — the unit "every N" counts, per cadence. */
 const INTERVAL_UNITS = {
   daily: 'days', weekly: 'weeks', monthly: 'months', quarterly: 'quarters', yearly: 'years',
 };

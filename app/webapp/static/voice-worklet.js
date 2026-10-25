@@ -1,4 +1,4 @@
-/* task-os — the microphone tap behind the live transcript (#146).
+/* task-os — the microphone tap behind the live transcript.
  *
  * All this does is hand the main thread a copy of every block of samples the
  * audio graph produces. It is an `AudioWorkletProcessor` rather than the

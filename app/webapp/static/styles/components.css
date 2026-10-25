@@ -3,19 +3,18 @@
 /* ============================================================ theme toggle */
 /* Both glyphs ship in the button; CSS keyed on html[data-theme] shows the
    ACTION: moon in light (tap → dark), sun in dark (tap → light). */
-/* pressed darkens the glyph only — an icon button never paints a square (#357) */
+/* pressed darkens the glyph only — an icon button never paints a square */
 .home-head .home-toggle:is(:hover, :active) { color: var(--fg); }
-/* The Settings gear while its pane is up (#281): the active nav tab's
+/* The Settings gear while its pane is up: the active nav tab's
    accent-soft + accent-text, since it stands in for the tab it replaced. */
 .home-head .home-toggle[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
-/* The header line names an exception (#393): overdue / due today on Today wear
+/* The header line names an exception: overdue / due today on Today wear
    the tone map's attention text, the same as the row's due date — one text
    node, one class (`#homeHeadStatus.is-attention`), never per-part spans
-   (app.js's `renderHeadStatus`, #439). A plain fact stays the vendored muted. */
+   (app.js's `renderHeadStatus`). A plain fact stays the vendored muted. */
 .home-head .status.is-attention { color: var(--attention-text); }
-/* The Board's and Settings' own lines name each part in its own tone (#396,
-   #397) via the vendored home-head's own `.head-exception[data-tone]` markup
-   (app.js's `paintParts`, #439) — attention and danger are already ruled
+/* The Board's and Settings' own lines name each part in its own tone via the vendored home-head's own `.head-exception[data-tone]` markup
+   (app.js's `paintParts`) — attention and danger are already ruled
    there (home-head.css). The Board's "N in Inbox" is the one tone the
    vendored file deliberately has no rule for (an 'accent' entry in its
    `TONE_RANK` is project-scaffolding's call, not this app's to fork), so it
@@ -46,7 +45,7 @@
    only the paint, so the label pairing, Space, :checked and the form value
    are still the platform's.
    /design-sync's `no-native-checkbox` contract FAILs on this and is wrong to
-   (#191): it reads every checkbox as a boolean setting owed the switch, but
+   it reads every checkbox as a boolean setting owed the switch, but
    design.md's Base UI table maps Checkbox to shadcn's *Checkbox*, a component
    of its own, and warns against hand-rolling a primitive the platform already
    gets right. Settled — re-skin, don't replace. */
@@ -85,12 +84,12 @@
 .check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ------------------------------------------------------------- chips */
-/* ONE pill app-wide (#357): every chip (a reference, a tag, a calendar
+/* ONE pill app-wide: every chip (a reference, a tag, a calendar
    event) and every status pill is this shape — pill radius, hairline, the
    caption step, one padding — and only its colours say what it is. The
    reference pill (folder, AI conversation, issue, link: an <a>) is the AI
    pill's look, accent-text on the accent tint; anything that is not a link
-   is the neutral chip; a status chip wears its tone (below, #391). No
+   is the neutral chip; a status chip wears its tone (below). No
    context resizes it into a box. */
 .chip {
   display: inline-flex;
@@ -106,22 +105,22 @@
   white-space: nowrap;
 }
 .chip {
-  background: var(--neutral-soft);   /* design.md chip — never canvas-subtle inside a card (#281) */
+  background: var(--neutral-soft);   /* design.md chip — never canvas-subtle inside a card */
   color: var(--fg);
   text-decoration: none;
 }
 .chip .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; }
 /* Text on the accent tint is accent-text (design.md): the base accent drops
-   under 4.5:1 on its own 16% tint in both themes (#281). */
+   under 4.5:1 on its own 16% tint in both themes. */
 a.chip { color: var(--accent-text); border-color: var(--accent-border-soft); background: var(--accent-soft); }
 a.chip:hover { text-decoration: underline; }
 .chip-parent { color: var(--accent-text); background: var(--accent-soft); border-color: var(--accent-border-soft); }
 /* `a.chip` above is (0,1,1), so a bare `.chip-missing` would lose to it on a
-   link chip - the unresolvable-folder chip (#74) is one. Both selectors. */
+   link chip - the unresolvable-folder chip is one. Both selectors. */
 .chip-missing, a.chip.chip-missing { color: var(--deficit); background: var(--deficit-soft); border-color: var(--deficit-border-soft); }
 /* No muted chip text: fg-muted on the neutral-soft fill is under 4.5:1 in both
-   themes (design.md chip — the fill is what makes it quiet, #281). */
+   themes (design.md chip — the fill is what makes it quiet). */
 
 /* Folder popover (format.js): the path to copy on a phone / no opener, or the
    one-time "Nothing opened? Install the opener" hint under the chip. Fixed,
@@ -162,13 +161,13 @@ a.chip:hover { text-decoration: underline; }
 
 /* Drawer: Folder section — chip + delete, then ref editor + folder-index picker */
 .drawer-folder { display: grid; gap: var(--space-sm); }
-/* Two lines, never more (#74): [chip + delete] then [ref + Change + Pick].
+/* Two lines, never more: [chip + delete] then [ref + Change + Pick].
    Line 1 mirrors line 2's grid — same gutter, same trailing auto column — so
    the delete button's right edge lands on the picker's and the chip's left
    edge on the input's. The resolved path is not repeated here: it is the
    chip's own title, and the phone reads it from the chip's copy popover. */
 .folder-current { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
-/* The chip is the one reference pill (#357), the AI pill's twin on the Links
+/* The chip is the one reference pill, the AI pill's twin on the Links
    rows below — never a control-height box. It starts on the input's left
    edge and a long ref ellipsizes on one line rather than wrapping: the full
    ref is on the chip's title, in the input, and in the copy popover. */
@@ -196,19 +195,19 @@ a.chip:hover { text-decoration: underline; }
 .opener-block-title { font-size: var(--font-body-sm); color: var(--muted); }
 .opener-cmd {
   margin: 0; padding: var(--space-sm) 10px; max-height: 160px; overflow: auto;
-  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card);   /* design.md code-listing: the card on a hairline (COMP-17, #426) */
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card);   /* design.md code-listing: the card on a hairline (COMP-17) */
   font-size: 13px; white-space: pre-wrap;                                                    /* the one sanctioned off-scale size, mono listings only */
   /* a long token (a path, a URL) breaks where it must; words still wrap whole —
-     break-all split "Directory" and "-Force" mid-word (#281) */
+     break-all split "Directory" and "-Force" mid-word */
   overflow-wrap: anywhere;
 }
 .opener-more summary { cursor: pointer; font-size: var(--font-body-sm); color: var(--muted); }
-/* 12 + 20 + 12 = the 44px floor for a one-line summary (#281); it stays a
+/* 12 + 20 + 12 = the 44px floor for a one-line summary; it stays a
    list-item so the disclosure keeps its marker. */
 .opener-more > summary { padding-block: 12px; line-height: 20px; }
 .opener-more { display: grid; gap: var(--space-sm); }
 
-/* The status chip (#391, design.md "status chip"): the chip's shape in ONE
+/* The status chip (design.md "status chip"): the chip's shape in ONE
    tone map, for exceptions only — `toneChip()` in format.js is its one
    builder, the tone a `data-tone`, never a chip style per surface. Neutral is
    a plain fact (standby, snoozed, blocked, high), accent is new work (an
@@ -230,11 +229,11 @@ a.chip:hover { text-decoration: underline; }
 .status-word { color: var(--muted); font-size: var(--font-label); white-space: nowrap; }
 .status-word.is-cancelled { text-decoration: line-through; }
 
-/* Due tones (#392's tone map): overdue and due today both need you soon —
+/* Due tones (the tone map): overdue and due today both need you soon —
    attention text, never the danger tone, which means broken. */
 .due-overdue, .due-today { color: var(--attention-text) !important; }
 
-/* ------------------------------------------ section headers (#391) */
+/* ------------------------------------------ section headers */
 /* A list's section header that only separates (Today's horizons): design.md's
    `overline` role, the one legal caps use, with its count beside it in the
    same quiet caption. Numbers are never transformed, so the count is its own
@@ -249,9 +248,9 @@ a.chip:hover { text-decoration: underline; }
 }
 .section-count { color: var(--muted); font-size: var(--font-caption); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* The scope switch (#391): the vendored segmented control, the full width of
+/* The scope switch: the vendored segmented control, the full width of
    its row on every width with the three segments sharing it equally (the
-   control's own equal columns; #399 dropped the 360px cap that stopped it
+   control's own equal columns; no 360px cap stops it
    short of the row). The row under the strip on every width. */
 .scope-switch { width: 100%; }
 /* Dark only: the switch sits on the canvas, not in a card, and there the dark
@@ -263,7 +262,7 @@ a.chip:hover { text-decoration: underline; }
    when no choice is stored, so "follows the system" lands on this rule too. */
 [data-theme="dark"] .scope-switch { --card: var(--line); }
 
-/* The two switches under a strip (#477): Mine · Everyone beside Tasks · Issues
+/* The two switches under a strip: Mine · Everyone beside Tasks · Issues
    · All, sharing the row by their segment counts (2 : 3) so every segment is the
    same width. Mine · Everyone is absent with one member, and the scope then
    fills the row exactly as it did. */
@@ -276,9 +275,9 @@ a.chip:hover { text-decoration: underline; }
 .whose-switch { width: 100%; }
 [data-theme="dark"] .whose-switch { --card: var(--line); }
 
-/* ------------------------------------------- the pane's top strip (#80) */
+/* ------------------------------------------- the pane's top strip */
 /* Board / Today open with the filter reached for most — the
-   live text box, with the filter button beside it (#395) — plus the Select
+   live text box, with the filter button beside it — plus the Select
    toggle and the + that opens the quick-add dialog. Every other filter is in
    the sheet the button opens. */
 /* justify-end so the + keeps its right-hand seat in the true-empty state,
@@ -286,7 +285,7 @@ a.chip:hover { text-decoration: underline; }
 .pane-top { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
 .filter-text { flex: 1 1 auto; min-width: 0; }
 /* The top strip's icon buttons — the quick-add +, the bulk bar's date,
-   delete and ✕ — are the one icon button (#357) on the strip's own box: the
+   delete and ✕ — are the one icon button on the strip's own box: the
    control height, so their 4px of invisible expansion meets the Select
    toggle's in the 8px gap (and 44px real on touch, where the strip is 44px
    tall). The Select toggle is a labelled button and keeps its square. */
@@ -304,11 +303,11 @@ a.chip:hover { text-decoration: underline; }
 /* They stand shoulder to shoulder with an 8px gap, so each may take exactly
    half of it: 4px of invisible expansion on every side makes the 36px square
    44px effective with neighbouring hit rects edge to edge, never overlapping —
-   design.md's "adjacent cluster" rule (#281). On touch the squares are 44px
+   design.md's "adjacent cluster" rule. On touch the squares are 44px
    real and the expansion resets (the coarse block). */
 .strip-square { position: relative; }
 .strip-square::before { content: ""; position: absolute; inset: -4px; }
-/* The Select toggle says what it is beside the glyph (#339): no convention
+/* The Select toggle says what it is beside the glyph: no convention
    fixes a checklist glyph's meaning,
    and a tooltip never shows on touch. Same height as the squares, the width
    follows the label; the + keeps its square, a glyph everyone reads. */
@@ -318,7 +317,7 @@ a.chip:hover { text-decoration: underline; }
    "Select" is a text button). */
 @media (max-width: 520px) { .strip-square.has-label .icon { display: none; } }
 
-/* ------------------------------------------------- select mode (#81) */
+/* ------------------------------------------------- select mode */
 /* The Select toggle sits beside the +, same geometry. Once tasks are ticked
    the bulk bar takes the whole strip over — the toggle, the + and the text
    filter step aside rather than stacking a third row above the board, so the
@@ -356,7 +355,7 @@ a.chip:hover { text-decoration: underline; }
    across a 1440px board — it is a control, and the ✕ keeps the right edge. */
 .bulk-status { flex: 1 1 auto; min-width: 0; max-width: 220px; height: var(--control-h); }
 .bulk-exit { margin-left: auto; }
-/* Set owner… (#476): an icon square whose whole face is its native select,
+/* Set owner…: an icon square whose whole face is its native select,
    transparent, so a tap opens the platform's own picker. The select carries
    the focus, so the square draws the app's one ring for it. */
 .bulk-owner { overflow: hidden; }

@@ -1,14 +1,13 @@
 /* task-os — the Board tab: a week planner, with the status columns behind a segment.
  *
  * Two modes over the one shared list, picked by the Week · Status segment
- * (the vendored segmented control) and remembered on this device (#396,
- * decision 2 of #390):
+ * (the vendored segmented control) and remembered on this device:
  *
  *   Week    the default. Lanes by due date — Today (overdue included, as on
  *           the Today tab) · Tomorrow · This week · This weekend · Next week ·
  *           Later (`weekLanes`), the tasks with no due date closing Later under
  *           a "No date" sub-heading, so six lanes share the window and nothing
- *           scrolls sideways (#414). A week runs Monday to Sunday, and
+ *           scrolls sideways. A week runs Monday to Sunday, and
  *           on a Sunday "this week" is the one tomorrow starts. This week is
  *           there only while days sit between tomorrow and Saturday, This
  *           weekend only while a weekend day comes after tomorrow, so every
@@ -32,11 +31,11 @@
  * lane skeleton of each mode is built once and every refresh only swaps the
  * rows, so the carousel position survives.
  *
- * Rows are the ONE task row (rows.js, issue #46) — the same row Today and
+ * Rows are the ONE task row (rows.js) — the same row Today and
  * Search render. The list arrives already narrowed to the scope switch's
  * Mine · Issues · All (app.js, scope.js).
  *
- * The AI triage action (#95) works on the Inbox column, so it sits on the
+ * The AI triage action works on the Inbox column, so it sits on the
  * mode line in Status mode while the Inbox has tasks, never in a lane head.
  * The pointer at the Archive tab that used to sit there is gone: the Settings
  * header and the palette's Go to Archive hint carry the last run's count.
@@ -113,7 +112,7 @@ function laneSpan(lane) {
 }
 
 /**
- * The page header's line on the Board (#396, design.md `page-header`): Inbox
+ * The page header's line on the Board (design.md `page-header`): Inbox
  * arrivals in the accent, then what is overdue or due today in the attention
  * tone — at most two parts, from the very counts the lanes were drawn from.
  * With neither, the plain fact. Exported for tests.
@@ -240,7 +239,7 @@ export function mountBoard(handlers, barHost) {
       all.forEach(function (x) { if (byStatus[x.status]) byStatus[x.status].push(x); });
       const wantsDone = f.status.indexOf('done') >= 0;
       // Only a REAL status pill narrows which columns show — a pseudo-value
-      // ticked alone (`deferred` #87, `blocked` #100) is not a column key, so
+      // ticked alone (`deferred`, `blocked`) is not a column key, so
       // treating it as one hid every column instead of leaving all four up and
       // letting the (already server-filtered) items land in their own status.
       const realStatuses = f.status.filter(function (s) {
@@ -325,7 +324,7 @@ function mountLanes(kind, skeleton, handlers) {
     n.dataset.col = lane.key;
     h.append(label, n);
     if (lane.key === 'done') {
-      // the reading surface behind this column (#102) — a link, not a tab
+      // the reading surface behind this column — a link, not a tab
       const link = document.createElement('a');
       link.className = 'board-col-link';
       link.href = '#journal';
@@ -456,7 +455,7 @@ function buildRow(t, handlers, opts) {
   const week = o.mode === 'week';
   const selected = o.isSelected ? o.isSelected(t.id) : false;
   // Drag is off in Select mode: a card that both drags to another lane and
-  // ticks on tap turns every slightly-moved tap into a change (#81).
+  // ticks on tap turns every slightly-moved tap into a change.
   const li = taskRow(t, handlers, {
     draggable: !o.selectable, selectable: o.selectable, selected: selected,
     // a status column already says the status; a week lane does not

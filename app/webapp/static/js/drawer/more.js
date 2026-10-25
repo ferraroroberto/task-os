@@ -1,5 +1,5 @@
-/* task-os — the drawer's More fields: the rarely used fields and editors
- * (#394, decision 7), one disclosure. */
+/* task-os — the drawer's More fields: the rarely used fields and editors,
+ * in one disclosure. */
 
 'use strict';
 
@@ -13,7 +13,7 @@ import { linksSection } from './links.js';
 import { blockedBySection, childrenSection } from './relations.js';
 
 // More fields stays as the owner left it for the page's life, across every
-// task and every re-render a write causes; a reload closes it again (#394).
+// task and every re-render a write causes; a reload closes it again.
 let moreOpen = false;
 
 /** What More fields holds that is set, so its summary says it while closed. */
@@ -38,8 +38,8 @@ function moreFields(ctx, t) {
   fields.className = 'drawer-fields';
   fields.appendChild(dateField(ctx, t, 'starts', 'Starts',
     isDeferred(t) ? relDue(t.starts).text : 'passed'));
-  // Repeat is a composer (#112): the cadence, then — once there is one — how
-  // many of it to wait (#229), then — only for the cadences that can carry
+  // Repeat is a composer: the cadence, then — once there is one — how
+  // many of it to wait, then — only for the cadences that can carry
   // one — the fixed day it lands on. Switching the cadence re-renders, and
   // the server has already dropped an anchor the new cadence cannot hold, so
   // the On select never shows a stale day.
@@ -67,7 +67,7 @@ export function moreSection(ctx, t) {
     moreFields(ctx, t),
     folderSection(ctx, t),        // Step 9
     linksSection(ctx, t),
-    blockedBySection(ctx, t),     // #100
+    blockedBySection(ctx, t),
     childrenSection(ctx, t),
     renderIssuePanel(ctx, t));
   return more.card;

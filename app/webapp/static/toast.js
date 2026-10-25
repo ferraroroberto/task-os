@@ -12,8 +12,8 @@ import { icon } from './_vendored/icons/icons.js';
 const TTL_MS = 4500;
 // A toast carrying an action stays up longer: 4.5 s is enough to *read* a
 // result, not enough to notice an Undo, move the pointer and click it. Caught
-// on the #87 walk — the snooze toast was gone before it could be used.
-// Exported because the keyboard undo buffer (#99) expires with its toast: one
+// when walked by hand — the snooze toast was gone before it could be used.
+// Exported because the keyboard undo buffer expires with its toast: one
 // window, not a second timer that could outlive the offer on screen.
 export const ACTION_TTL_MS = 10000;
 
@@ -22,7 +22,7 @@ export const ACTION_TTL_MS = 10000;
  * @param {'info'|'success'|'error'} [kind='info']
  * @param {{label: string, onClick: () => any}} [action]
  *        one optional inline action — the undo a reversible command offers
- *        (snoozing a task, #87). It runs and dismisses the toast; the caller
+ *        (snoozing a task). It runs and dismisses the toast; the caller
  *        owns what "undo" means, this only shows the button. Never a second
  *        action, and never the only way to reach an outcome: the toast expires.
  */
@@ -50,7 +50,7 @@ export function toast(message, kind, action) {
   }
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'icon-button toast-close';   // the one icon button (#357)
+  close.className = 'icon-button toast-close';   // the one icon button
   close.setAttribute('aria-label', 'Dismiss');
   close.innerHTML = icon('x');
   close.addEventListener('click', function () { el.remove(); });

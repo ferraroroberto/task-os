@@ -1,7 +1,7 @@
-/* task-os — Settings → Email archiving: run the batch, read the report, fix what is wrong (#159).
+/* task-os — Settings → Email archiving: run the batch, read the report, fix what is wrong.
  *
  * Step 3/3 of batch email archiving. One button files the whole Outlook Inbox
- * through email-archiver (#157) with the local model picking the folder (#158);
+ * through email-archiver with the local model picking the folder;
  * this module is the screen that starts that run and then lets a human review
  * every mail it touched. It is **read-mostly over the Step 1 API** — no domain
  * rule lives here:
@@ -20,7 +20,7 @@
  * an `archived` row is finished, not reviewed, and the API answers 409 there),
  * *revert* only reaches a row with files on disk, and *move* reaches both those
  * and a `needs_review` mail still sitting in the Inbox — filing it for the
- * first time is the commonest thing anyone does on this screen. *Retry* (#174)
+ * first time is the commonest thing anyone does on this screen. *Retry*
  * reaches exactly one shape: a `failed` mail whose files were written before
  * Outlook refused the move, which is the only row where re-sending the same
  * decision finishes something instead of filing it twice. A control that
@@ -29,11 +29,11 @@
  * The discarded candidates come straight off the row (`candidates`, kept
  * verbatim by the run), so offering them costs no re-plan. The optional
  * one-line **hint** rides the accept/move body into `archive_corrections` and
- * becomes a few-shot line in every later prompt (#158) — explained once, not
+ * becomes a few-shot line in every later prompt — explained once, not
  * repeated.
  *
  * Two renderings of one report, like every other view here: the grid on a
- * wide screen (in the detail pane beside the Settings list since #397),
+ * wide screen (in the detail pane beside the Settings list),
  * stacked cards with the actions behind a per-row disclosure under 768 px.
  * Both are built from the same row objects.
  *
@@ -54,7 +54,7 @@ import { wireArchive } from './js/archive/wire.js';
 const PHONE_MQ = '(max-width: 767px)';
 //: Narrower than the grid→cards switch: the width at which the head's label
 //: column, the long status wording and a full absolute path stop fitting on a
-//: line (#168). The CSS phone block keys on the same 600px.
+//: line. The CSS phone block keys on the same 600px.
 const NARROW_MQ = '(max-width: 600px)';
 
 /**
@@ -99,7 +99,7 @@ export function mountArchive(opts) {
       polling: false,
       busy: false,     // a run or a review action is in flight
     },
-    // The desktop rows' ⋮ menus (#350): one controller, at most one menu open.
+    // The desktop rows' ⋮ menus: one controller, at most one menu open.
     rowMenu: createRowMenu({ className: 'archive-row-menu' }),
     // the calls two parts would otherwise import from each other
     reload: function () { return reload(ctx); },

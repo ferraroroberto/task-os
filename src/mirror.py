@@ -444,7 +444,7 @@ def resolve_dir(raw: str, placeholders: dict[str, str], *, label: str) -> tuple[
         # A harness / disposable instance (the one thing TASKOS_DB_PATH is for)
         # only mirrors beside its own database. One pointed at the real synced
         # folder rendered a temp DB over the live files, and the live watcher
-        # imported that as human edits (#126) — so this is refused, loudly,
+        # imported that as human edits — so this is refused, loudly,
         # rather than left to whoever copies the sample config next.
         root = Path(override).expanduser().resolve().parent
         try:
@@ -746,7 +746,7 @@ class Mirror:
             self._apply_blocked_by(conn, task, parsed, result, foreign=foreign)
             if foreign is not None:
                 # Not an edit of our file: another task-os instance rendered its
-                # own database into this folder (#126). Nothing was applied —
+                # own database into this folder. Nothing was applied —
                 # every differing value is a standing event — and the file is
                 # rewritten to canonical below so a later human edit of it is
                 # read as an edit again. A file under a name we never wrote is
@@ -852,7 +852,7 @@ class Mirror:
                 continue
             if foreign is not None:
                 # another instance's rendering of its own task: kept as a standing
-                # event, never applied — the DB it describes is not this one (#126)
+                # event, never applied — the DB it describes is not this one
                 self._note(
                     conn, task_id, result.conflicts, kind="conflict", field=key,
                     file_value=self._fmt(raw), kept_value=self._show(task, key), detail=foreign,
@@ -937,7 +937,7 @@ class Mirror:
         # A field that imported cleanly clears any standing event for it, the
         # same rule every scalar field follows — but only once every edge in
         # this pass applied: a rejected edge's event must survive this call,
-        # or the very note just recorded above would erase itself (#100).
+        # or the very note just recorded above would erase itself.
         if not any_rejected:
             repo.resolve_mirror_field(conn, task_id, "blocked_by")
 
@@ -984,7 +984,7 @@ class Mirror:
         #     the row it had itself created, and was re-inserted on every pass;
         #   · a "-" author — the file's sentinel for NULL, which comes back in as
         #     the configured owner, so keying on the raw token had the same effect.
-        # Both sides normalise through _comment_key so they cannot drift (#123).
+        # Both sides normalise through _comment_key so they cannot drift.
         # The app's own re-export hides this (it rewrites the file to "· md:" with
         # a resolved author), so it only bites a file the app did not write:
         # hand-edited, restored by a sync client, or dropped in from elsewhere.

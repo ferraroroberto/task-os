@@ -45,7 +45,7 @@ def loads(raw: Any, default: Any) -> Any:
 # ------------------------------------------------------------- renumbering
 # The archiver re-sequences a folder after the two verbs that disturb it, so
 # its ``NNN`` prefixes stay contiguous and in sent-date order
-# (email-archiver#61) — ``revert`` leaves a hole, ``apply`` always allocates
+# ``revert`` leaves a hole, ``apply`` always allocates
 # ``max + 1``. That renames files **this** database holds paths to, and the
 # archiver heals only its own index: "the consumer must heal its stored paths
 # from the map" is its contract, and this is that heal. Three places store a

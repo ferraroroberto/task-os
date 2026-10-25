@@ -29,7 +29,7 @@ function teamRow(team) {
   return [dt, dd];
 }
 
-// Who this browser is (#474): a row only once the install has two or more
+// Who this browser is: a row only once the install has two or more
 // members. `me` is GET /api/me's body, or an Error when that call failed.
 function meRow(me) {
   if (me instanceof Error) return accessRow('Signed in as', false, 'unknown — ' + me.message);

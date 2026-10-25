@@ -1,7 +1,7 @@
 /* Settings: the inset groups and the sheet a row opens. Linked after the file before it in index.html: rule order is the cascade. */
 
 /* ------------------------------------------------------------ settings */
-/* Inset groups (#397, design.md `settings group`, the shape home-automation's
+/* Inset groups (design.md `settings group`, the shape home-automation's
    Settings has): an overline over each group card, each row a lead glyph, its
    label, the current value muted (in its tone when it is an exception) and a
    chevron to its sheet. The rows are the vendored action-row; only the
@@ -79,7 +79,7 @@
 .settings-sheet .card-meta { margin: 0; font-size: var(--font-body-sm); line-height: 1.5; }
 .settings-sheet .button-ghost, .settings-sheet .button-surface { font-size: var(--font-body-sm); }
 /* Instant model: Done only closes, so it ends the sheet in the flow rather
-   than pinned over its last controls (the filter sheet's lesson, #395). */
+   than pinned over its last controls (the filter sheet's lesson). */
 .settings-sheet-actions { margin-top: var(--space-md); padding-top: 12px; border-top: 1px solid var(--line); }
 .settings-sheet-actions .button-primary { width: 100%; }
 @media (max-width: 1023px) {
@@ -96,7 +96,7 @@
   body[data-settings-sheet]:not([data-settings-sheet="archive"]) .app:has(> #paneSettings:not([hidden])) > :is(.home-head, .pane, .page-foot) { max-width: none; }
   .drawer.settings-detail { --drawer-w: var(--split-w); box-shadow: none; }
   /* …except the Email archiving report, a nine-column table (the Archive tab
-     until #397): two-dimensional, so its sheet spans the content width
+): two-dimensional, so its sheet spans the content width
      (design.md: width follows the shape of the view) and the list waits
      under it, as it was, one × away. */
   body[data-settings-sheet="archive"] .drawer.settings-detail {
@@ -109,7 +109,7 @@
 .status-row dt { color: var(--muted); font-size: var(--font-body-sm); }
 .status-row dd { margin: 0; font-size: var(--font-body-sm); overflow-wrap: anywhere; }
 /* A state word in its tone (design.md status chip tone map): a plain "on" is
-   ink, never success green as text (#390's diagnosis 10); broken is danger. */
+   ink, never success green as text; broken is danger. */
 .status-row .status-ok { color: var(--fg); font-weight: 600; }
 .status-row .status-off { color: var(--muted); font-weight: 600; }
 .status-row .status-warn { color: var(--danger-text); font-weight: 600; }

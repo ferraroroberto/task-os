@@ -1,4 +1,4 @@
-/* task-os — swipe a task row on a touch screen (#311).
+/* task-os — swipe a task row on a touch screen.
  *
  * Swipe right and swipe left each run one row action (by default: complete,
  * and change the date). The gesture is a shortcut, never the only way: the

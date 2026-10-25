@@ -1,4 +1,4 @@
-/* task-os — the Today tab's calendar lane (#96): read-only, desktop only.
+/* task-os — the Today tab's calendar lane: read-only, desktop only.
  *
  * A slim column beside the task list with today's events from the private ICS
  * address in `calendar.ics_url` — so planning the day happens against the free
@@ -13,14 +13,14 @@
  * the time it was fetched beside it. Recurring events the server could not
  * expand, and events it could not read, are counted, never hidden.
  *
- * No calendar configured is not a state of the lane but its absence (#320):
+ * No calendar configured is not a state of the lane but its absence:
  * `calendarLane` answers null and Today's task column takes the width. How to
  * connect one is the Settings → Calendar card's job, not a column of its own. A
  * calendar that *is* configured and failing keeps the lane, so a broken feed
  * stays visible rather than quietly disappearing.
  *
  * Built for every width and hidden below 1024 px by styles/today.css: the phone
- * skips the lane this pass (#96, out of scope).
+ * skips the lane this pass (out of scope).
  */
 
 'use strict';
@@ -53,7 +53,7 @@ function el(tag, className, text) {
 
 /**
  * @param {object|null} cal  GET /api/today's `calendar` group; null = unknown
- * @returns {HTMLElement|null}  null when no calendar is configured (#320)
+ * @returns {HTMLElement|null}  null when no calendar is configured
  */
 export function calendarLane(cal) {
   if (cal && (!cal.configured || cal.state === 'off')) return null;

@@ -23,7 +23,7 @@ export function renderMirrorRow(dd, m) {
   if (m.error_files && m.error_files.length) dd.append(' · skipped: ' + m.error_files.join(', '));
 }
 
-// Mirror import diagnostics (issue #84) — recorded as `mirror_events` rows,
+// Mirror import diagnostics — recorded as `mirror_events` rows,
 // never as a comment on the task; this row is the "visible at app level"
 // half of the fix, with an inline preview (inspect) and a Clear action.
 export async function renderMirrorEventsRow(ctx, m) {

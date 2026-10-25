@@ -1,4 +1,4 @@
-/* task-os — the done journal (#102): everything closed, grouped by day.
+/* task-os — the done journal: everything closed, grouped by day.
  *
  * A reading surface, not a working view: reverse-chronological, one flat
  * heading per local calendar day (`Fri 28 Aug · 5 done`), the shared task

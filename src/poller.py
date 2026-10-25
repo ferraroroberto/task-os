@@ -113,7 +113,7 @@ class Poller[ResultT]:
         self._stop.clear()
         # The clock, not `datetime.now()`: this value is displayed on the
         # Settings card (and so on a story screenshot), never waited on —
-        # the loop's own `_stop.wait()` does the scheduling (#134).
+        # the loop's own `_stop.wait()` does the scheduling.
         self.next_run = clock.now() + timedelta(seconds=self.initial_delay)
         self._thread = threading.Thread(target=self._run, name=self.THREAD_NAME, daemon=True)
         self._thread.start()

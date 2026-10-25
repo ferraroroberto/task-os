@@ -119,7 +119,7 @@ async def login(body: LoginBody, request: Request) -> JSONResponse:
         response = JSONResponse({"ok": True, "via": how, "you": you})
         _set_cookie(response, request, TEAM_COOKIE, session)
         return response
-    # The member's own token: the cookie is what says who signed in (#474).
+    # The member's own token: the cookie is what says who signed in.
     logger.info("🔓 sign-in from %s via %s as member %s", host, how, token_person(signed.token, auth))
     response = JSONResponse({"ok": True, "via": how})
     _set_cookie(response, request, COOKIE_NAME, signed.token)

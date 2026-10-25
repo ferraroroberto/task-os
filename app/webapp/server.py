@@ -238,9 +238,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.folders = FolderIndexService(config)
     app.state.capture = EmailCaptureService(config)
     # No thread and nothing to start: the voice client is a cached reachability
-    # probe plus one forwarding POST (#92).
+    # probe plus one forwarding POST.
     app.state.voice = VoiceClient(config)
-    # Same shape, same reason (#147): a cached probe plus one POST per
+    # Same shape, same reason: a cached probe plus one POST per
     # spoken line. Enrichment is a tidy-up on an answer that already
     # exists, so it never has anything to keep running.
     app.state.enrich = EnrichClient(config)
@@ -248,9 +248,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # No worker of its own: a cached reachability probe plus explicit requests.
     app.state.ai = AIClient(config)
     # No thread of its own either: a run is started on demand and drives the
-    # archiver's batch CLI in one worker thread for its lifetime (#157).
+    # archiver's batch CLI in one worker thread for its lifetime.
     app.state.archive = ArchiveBatchService(config)
-    # No thread of its own either (#96): a fetch starts when a Today request
+    # No thread of its own either: a fetch starts when a Today request
     # finds the copy expired, and runs in one short-lived worker bounded by
     # `calendar.timeout_seconds`.
     app.state.calendar = CalendarService(config)
@@ -329,7 +329,7 @@ def create_app() -> FastAPI:
     app.include_router(ai.router)
     app.include_router(archive.router)
     app.include_router(time_tracker.router)
-    # The local usage log (#412): /api/usage/*, so AuthMiddleware gates it like
+    # The local usage log: /api/usage/*, so AuthMiddleware gates it like
     # every other /api/ route — no per-route dependency.
     app.include_router(usage_router(usage_db_path()))
     return app

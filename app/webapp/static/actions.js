@@ -1,8 +1,8 @@
-/* task-os — the ONE table of row actions, their runner and the undo (#99, #311).
+/* task-os — the ONE table of row actions, their runner and the undo.
  *
  * Every surface that changes a task from a row reads this file: the keymap and
  * its shortcuts sheet (keys.js), the command palette (through keys.commands()),
- * the row's status control, and — as the row redesign lands (#311) — the ⋯ menu
+ * the row's status control, and — as the row redesign lands — the ⋯ menu
  * and the swipes. An action added here shows up on all of them or on none, and
  * they share one write path instead of one per surface that must agree.
  *
@@ -93,7 +93,7 @@ export const ACTIONS = [
     applies: isOpen,
     message: function (tasks, arg, after) {
       // One recurring task rolled: say where it went, as the status select
-      // always has (issue #54).
+      // always has.
       const t = after && after.length === 1 ? after[0] : null;
       if (t && t.recurrence && t.due) return 'Completed — next: ' + fmtDay(t.due) + ' (' + relDue(t.due).text + ')';
       return 'Completed';
@@ -139,7 +139,7 @@ export const ACTIONS = [
     id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: 'starts',
     label: 'Snooze…', hint: 'tomorrow · this weekend · next week · a date',
     plan: function (tasks, phrase) { return oneGroup(tasks, { starts: phrase }); },
-    // A snooze past a task's due carries the due with it (tasks_repo, #486), so
+    // A snooze past a task's due carries the due with it (tasks_repo), so
     // the undo puts both back.
     invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
     applies: isOpen,

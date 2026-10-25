@@ -12,7 +12,7 @@ import {
 import { actionsFor, rowMenuFor } from './rowactions.js';
 import { REVIEWABLE } from './rules.js';
 
-// Who sent it and when ride under the subject (#339): two columns fewer is
+// Who sent it and when ride under the subject: two columns fewer is
 // what lets the grid fit the window, the row's actions on screen.
 const COLUMNS = ['Subject', 'Destination', 'Files', 'Confidence', 'Why', 'State', ''];
 
@@ -145,7 +145,7 @@ function renderCards(ctx, items) {
     head.className = 'archive-card-head';
     head.append(subjectEl(item), stateChip(item));
 
-    // Two lines at a glance (#339): the subject with its state, then one
+    // Two lines at a glance: the subject with its state, then one
     // line of who · when · where it went. The files, the confidence and the
     // reason are what a review reads, so they sit behind the card's own
     // disclosure with the actions.
@@ -171,7 +171,7 @@ function renderCards(ctx, items) {
 }
 
 /** *Review* is the fourth review level, so it wears the same button as the
- *  three behind it (#168) — a disclosure, not a link, and not a `<summary>`
+ *  three behind it — a disclosure, not a link, and not a `<summary>`
  *  whose shape nothing else on the row shares. A card with nothing left to
  *  press still has its details to read, so the same disclosure says Details
  *  there and holds no actions. */
@@ -180,7 +180,7 @@ function cardMenu(ctx, item, dest, why) {
   const menu = document.createElement('div');
   menu.className = 'archive-menu';
   // The glyph alone is not a conventional icon-only name (fleet design
-  // COMP-09, #424), so the word is shown beside it; the <label> makes the
+  // COMP-09), so the word is shown beside it; the <label> makes the
   // word a second place to press, the toggle itself unchanged.
   const verb = actions.controls ? 'Review' : 'Details';
   const toggle = verbButton(actions.controls ? 'eye' : 'file-text', verb);

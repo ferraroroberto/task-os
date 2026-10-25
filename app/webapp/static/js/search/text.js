@@ -26,7 +26,7 @@ function listWords(words) {
 }
 
 /**
- * What one folded line says about the kinds without a group (#395). Pure, so
+ * What one folded line says about the kinds without a group. Pure, so
  * the wording is tested without a browser.
  * @param {{none?: string[], hidden?: number, off?: string[]}} fold
  *        none   labels of the kinds that matched nothing (a configured-but-not-

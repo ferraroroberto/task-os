@@ -40,7 +40,7 @@ _TASK_FIELDS = (
 )
 
 
-#: Date columns — validated the same way, cleared by ``None`` / ``""`` (#87).
+#: Date columns — validated the same way, cleared by ``None`` / ``""``.
 DATE_FIELDS = ("due", "starts")
 
 
@@ -84,7 +84,7 @@ class CaptureDismissed(RepoError):
     http_status = 410
 
 
-#: The install's member ids, the owner first (#476) — ``config.people``, set by
+#: The install's member ids, the owner first — ``config.people``, set by
 #: the app's lifespan and the CLI's local backend. Unset = the one implicit
 #: member ``me`` (``src.config.IMPLICIT_PERSON``), the install on its own.
 _members: tuple[str, ...] = (DEFAULT_ACTOR,)
@@ -459,7 +459,7 @@ def _summary_from(
                 out["folder_url"] = _folder_web_resolver(str(ref))
             except Exception:  # noqa: BLE001 — a resolver bug never breaks a list
                 logger.exception("⚠️ folder web resolver failed for %r", ref)
-    # The AI-conversation chip on the row (#77): first links(kind=ai), same
+    # The AI-conversation chip on the row: first links(kind=ai), same
     # shape as folder_url — the UI never scans a task's links list-side.
     ai = pre["ai_links"].get(row["id"])
     out["ai_url"] = ai["url"] if ai else None

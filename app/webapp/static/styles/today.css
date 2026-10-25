@@ -2,7 +2,7 @@
 
 /* ------------------------------------------------------------- today */
 /* Flat: a heading line, project groups on hairlines, the shared rows,
-   Soon / Later / No date as flat disclosures below with breathing room (#350). */
+   Soon / Later / No date as flat disclosures below with breathing room. */
 .today { display: flex; flex-direction: column; }
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
 .today-title { margin: 0; }
@@ -33,7 +33,7 @@
 .today-group-link:hover { background: var(--accent-soft); }
 /* The project name is a 25px text button in its group title; it reaches the
    44px floor invisibly inside the title's own 10px padding above and below
-   (#281, #301) — the first row's open target starts under that padding, so the
+   the first row's open target starts under that padding, so the
    two never meet. */
 .today-group-link { position: relative; }
 .today-group-link::before { content: ""; position: absolute; inset: -10px 0; }
@@ -42,13 +42,13 @@
 .today-horizon .today-group:first-child { border-top: 0; }
 .today .empty-state { padding: var(--space-lg) var(--space-md); }
 
-/* ------------------------------------------------- calendar lane (#96) */
+/* ------------------------------------------------- calendar lane */
 /* Desktop only: the task stack on the left, a slim read-only column of today's
    events on the right (calendar.js). Below 1024 px the lane is not drawn and
    the layout wrapper is a plain block, so the phone renders as it did. */
 .cal-lane { display: none; }
 @media (min-width: 1024px) {
-  /* Only while a lane is drawn: with no calendar configured (#320) the wrapper
+  /* Only while a lane is drawn: with no calendar configured the wrapper
      stays a plain block and the task column takes the width. */
   .today-layout.has-cal {
     display: grid;

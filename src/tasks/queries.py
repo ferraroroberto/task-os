@@ -108,7 +108,7 @@ def get_task(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
     row = _require_task(conn, task_id)
     out = _summary(conn, row)
     # the whole subtree, not just the direct children — what a delete takes
-    # with it, so a confirmation can name the count (#121)
+    # with it, so a confirmation can name the count
     out["descendant_count"] = len(_descendant_ids(conn, task_id))
     out["breadcrumb"] = _ancestors(conn, task_id)
     out["children"] = _summaries(
@@ -453,7 +453,7 @@ def tree(
         by_parent.setdefault(r["parent_id"], []).append(row)
         all_by_id[r["id"]] = row
     refs = {r["task_id"]: dict(r) for r in conn.execute("SELECT * FROM issue_refs").fetchall()}
-    # blocked-by (#100), prefetched like issue_refs above: one query for the
+    # blocked-by, prefetched like issue_refs above: one query for the
     # whole tree rather than a per-node lookup. Ordered by blocker id, the
     # order :func:`_blocker_rows` gives every other task shape.
     blockers_by: dict[int, list[int]] = {}
@@ -623,7 +623,7 @@ def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[st
     hits: dict[int, dict[str, Any]] = {}
     # The task text is free-form and may itself hold ``[`` (``[WIP] fix tap``),
     # so "did the title match" is asked of a mark that cannot occur in text; the
-    # display ``[`` ``]`` are swapped in afterwards (#440).
+    # display ``[`` ``]`` are swapped in afterwards.
     for r in conn.execute(
         """
         SELECT rowid AS id, bm25(tasks_fts) AS rank,

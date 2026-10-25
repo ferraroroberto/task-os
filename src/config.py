@@ -495,7 +495,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         # synced folder on the developer's machine. A checkout without its own
         # config/config.json (a fresh clone, a git worktree) must therefore
         # never mirror or back up into it: two databases rendering into one
-        # folder is how the live one lost data (#126). Everything read-only
+        # folder is how the live one lost data. Everything read-only
         # (search roots, the issue provider) keeps working from the sample.
         mirror = {"dir": "", "backup_dir": ""}
         logger.warning(
@@ -522,7 +522,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         logger.warning("⚠️ config: invalid port %r — falling back to %d", raw.get("port"), DEFAULT_PORT)
         port = DEFAULT_PORT
 
-    # One members list (#474): the top-level ``people`` block; until there is
+    # One members list: the top-level ``people`` block; until there is
     # one, ``time.people`` (the deprecated spelling — same ids, so no time row
     # is ever rewritten); else the implicit owner. Each falls back on the other.
     listed = _people(raw.get("people"), "people")

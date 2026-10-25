@@ -8,7 +8,7 @@ import { relDue, statusMark } from '../../format.js';
 import { toast } from '../../toast.js';
 import { formButton, section } from './dom.js';
 
-/** "Blocked by" (#100): the open blockers as removable rows, a select
+/** "Blocked by": the open blockers as removable rows, a select
  *  to add one — the server's cycle guard answers a bad pick, same as it
  *  answers a bad re-parent from Change parent. */
 function blockerRow(ctx, t, b) {

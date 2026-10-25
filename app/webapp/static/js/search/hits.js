@@ -24,7 +24,7 @@ export function taskHitRow(ctx, t, idx) {
   const h = t._hit;
   const extra = snippetLine(h, t.title);
   // A hit's row is rebuilt from `h.task` on every render, so a write from the
-  // row (#107) reaches it through `rerun()` — the app re-reads the query once
+  // row reaches it through `rerun()` — the app re-reads the query once
   // the write has landed, instead of patching this cache by hand.
   const li = taskRow(t, { onOpen: opts.onOpenTask, onStatus: opts.onStatus, menu: opts.menu },
     extra ? { extra: extra } : undefined);
@@ -107,7 +107,7 @@ export function hitRow(ctx, h, idx) {
   main.appendChild(title);
   li.appendChild(main);
 
-  // the meta line sits inside the row's main column, as on a task row (#311)
+  // the meta line sits inside the row's main column, as on a task row
   const metaLine = document.createElement('span');
   metaLine.className = 'trow-meta';
   const bits = metaBits(h);
