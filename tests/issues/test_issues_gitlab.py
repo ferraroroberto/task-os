@@ -1,12 +1,12 @@
 """GitLab issue provider (Step 11) — the ``glab api`` wrapper over a subprocess
 stub, its selection from config, and the unchanged sync rules driven by it.
 
-Hermetic like ``tests/test_issues.py``: ``subprocess.run`` is stubbed and
+Hermetic like ``tests/issues/test_issues.py``: ``subprocess.run`` is stubbed and
 answers with **recorded** ``glab api`` output. The JSON is synthetic — shaped
 after GitLab's REST v4 issue / user objects, on an invented host and group —
 because no GitLab host or ``glab`` is available where this was built; no test
 spawns ``glab`` or touches the network. The GitHub path keeps its own tests,
-unchanged, in ``tests/test_issues.py``.
+unchanged, in ``tests/issues/test_issues.py``.
 """
 
 from __future__ import annotations

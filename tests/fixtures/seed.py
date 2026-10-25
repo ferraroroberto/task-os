@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,7 @@ from src import tasks_repo as repo
 from src import time_repo
 from src.db import connect, init_db
 
-# The frozen-clock unit suites (tests/test_repo.py, tests/test_views.py) pin
+# The frozen-clock unit suites (tests/tasks/, tests/test_views.py) pin
 # the repo clock to this date and must seed with the same anchor so the two
 # clocks agree; everything else seeds with the default (the real today).
 PINNED_ANCHOR = date(2026, 8, 17)
@@ -100,6 +101,180 @@ def _iso(anchor: date, days: int) -> str:
     return (anchor + timedelta(days=days)).isoformat()
 
 
+def _seed_projects(conn: sqlite3.Connection, task: Callable[..., int], d: Callable[[int], str], people: dict[str, int]) -> None:
+    """The four projects and the loose tasks — ids 1…n in this order."""
+    sam, alex, jordan = (people[p[0]] for p in PEOPLE)
+
+    # ---- project 1: Home renovation (depth 3) -----------------------
+    home = task("home", "Home renovation", status="todo", priority="high",
+                description="Everything about the house works, room by room.",
+                folder_ref="{onedrive}/house")
+    kitchen = task("kitchen", "Kitchen", parent_id=home, status="todo", priority="high",
+                   folder_ref="{onedrive}/house/kitchen")
+    task("quotes", "Get three quotes", parent_id=kitchen, status="todo", due=d(3), person_id=sam)
+    task("worktop", "Choose worktop material", parent_id=kitchen, status="todo", due=d(10))
+    task("installer", "Book installer", parent_id=kitchen, status="todo", due=d(21), person_id=alex)
+    bathroom = task("bathroom", "Bathroom", parent_id=home, status="todo")
+    task("tap", "Fix leaking tap", parent_id=bathroom, status="todo", due=d(-4), priority="medium")
+    task("ceiling", "Repaint ceiling", parent_id=bathroom, status="todo", due=d(14))
+    garden = task("garden", "Garden", parent_id=home, status="standby")
+    task("tomatoes", "Plant tomatoes", parent_id=garden, status="standby", due=d(30))
+    task("fence", "Repair fence", parent_id=garden, status="todo", due=d(-10), priority="low")
+
+    # ---- project 2: Family admin (depth 3, recurring) --------------
+    family = task("family", "Family admin", status="todo", priority="medium",
+                  description="Renewals, bills, forms.")
+    passports = task("passports", "Renew passports", parent_id=family, status="todo", due=d(4), priority="high")
+    task("appointment", "Book appointment", parent_id=passports, status="todo", due=d(1))
+    task("photos", "Collect photos", parent_id=passports, status="done", due=d(-2))
+    task("school", "School enrolment forms", parent_id=family, status="todo", due=d(0), priority="high", person_id=jordan)
+    task("car", "Car insurance renewal", parent_id=family, status="todo", due=d(45), recurrence="yearly")
+    task("water", "Pay water bill", parent_id=family, status="todo", due=d(7),
+         recurrence="monthly", recurrence_anchor="day-15")
+    task("dentist", "Dentist check-up", parent_id=family, status="todo", due=d(0), recurrence="quarterly")
+
+    # ---- project 3: Side project garden-bot (coding) ---------------
+    bot = task("bot", "Side project: garden-bot", status="todo", priority="medium",
+               description="A tiny watering controller for the balcony.",
+               folder_ref="{user}/code/garden-bot")
+    watering = task("watering", "Fix watering schedule drift", parent_id=bot, status="todo", due=d(2), priority="high")
+    sensor = task("sensor", "Add moisture sensor", parent_id=bot, status="todo", due=d(20))
+    task("order", "Order sensor", parent_id=sensor, status="done", due=d(-5))
+    task("driver", "Write sensor driver", parent_id=sensor, status="todo", due=d(18))
+    task("readme", "Write README", parent_id=bot, status="todo", due=d(25), priority="low")
+    task("release", "Release v0.2", parent_id=bot, status="standby", due=d(40))
+    repo.set_issue_ref(conn, watering, provider="github", repo="example/garden-bot", number=12,
+                       url="https://github.com/example/garden-bot/issues/12", state="open", actor="seed")
+
+    # ---- project 4: Learning (recurring daily/weekly) --------------
+    learning = task("learning", "Learning", status="todo", priority="low")
+    spanish = task("spanish", "Spanish", parent_id=learning, status="todo")
+    task("lesson", "Lesson 12: past tense", parent_id=spanish, status="todo", due=d(2))
+    task("vocab", "Vocabulary review", parent_id=spanish, status="todo", due=d(0), recurrence="weekly")
+    piano = task("piano", "Piano", parent_id=learning, status="todo")
+    task("scales", "Practice scales", parent_id=piano, status="todo", due=d(0), recurrence="daily")
+    task("piece", "Learn a new piece", parent_id=piano, status="todo", due=d(28))
+    task("book", "Read a book on focus", parent_id=learning, status="todo", due=d(35))
+
+    # ---- loose tasks --------------------------------------------------
+    task("callback", "Call the plumber back", status="todo", due=d(0), priority="high", person_id=sam)
+    task("library", "Return library books", status="todo", due=d(-3), priority="medium")
+    task("review", "Weekly review", status="todo", due=d(5), recurrence="weekly",
+         recurrence_anchor="fri")
+    task("gift", "Buy a birthday gift", status="done", due=d(-7))
+    task("bikes", "Sell the old bikes", status="cancelled")
+    task("inbox1", "Look into a standing desk", status="inbox")
+    task("inbox2", "Try the new bakery", status="inbox")
+    task("inbox3", "Compare phone plans", status="inbox", due=d(12))
+    # Explicitly Inbox, not inherited: it belongs with the three above, and
+    # since #148 the create default is To Do. A fixture must state what it
+    # means rather than move whenever a default does.
+    task("reading", "Reading list", type="note", status="inbox",
+         description="- a book on focus\n- a book on gardening\n- the garden-bot docs")
+
+
+def _seed_late_tasks(task: Callable[..., int], ids: dict[str, int], anchor: date, d: Callable[[int], str]) -> None:
+    """The tasks on their own clocks, appended after every other id."""
+    # ---- deferred (#87) -----------------------------------------------
+    # Nothing to do before it starts, so the working views leave it out
+    # while the Tree, search and the Deferred filter still show it — the
+    # sleeping state, on screen, without anyone having to create it.
+    # Created LAST on purpose: every seeded id is a position in this
+    # sequence, and inserting mid-list would renumber everything after it
+    # (tests and validation records name ids).
+    task("boiler", "Book boiler service", parent_id=ids["family"],
+         status="todo", due=d(40), starts=d(20))
+
+    # ---- dormant (#101) -----------------------------------------------
+    # The seed clock runs from anchor−30, so nothing above is ever
+    # "untouched > 30 days". This one is written on its own clock 45 days
+    # back — the one task the stale-30 window lists (and stale-60 does
+    # not), so the honesty filter has something deterministic to show.
+    # Appended last for the same id-position reason as the deferred task.
+    with repo.use_clock(_Clock(datetime.combine(anchor - timedelta(days=45), datetime.min.time()).astimezone())):
+        task("dormant", "Sort the garage shelves", parent_id=ids["home"],
+             status="todo", priority="low")
+
+    # ---- closed on known days (#102) ---------------------------------
+    # Every other closed task above closed on day one of the seed clock
+    # (anchor−30) — a journal with one page. These close on their own
+    # clocks: two yesterday, two the day before (one done, one cancelled),
+    # one nine days back (the week before) — so the journal has days to
+    # group, a cancelled row to mute and an older week to load. Appended
+    # last for the same id-position reason as the two tasks above.
+    def closed_on(days_ago: int, hour: int, minute: int) -> Any:
+        at = datetime.combine(anchor - timedelta(days=days_ago), datetime.min.time()).astimezone()
+        return repo.use_clock(_Clock(at + timedelta(hours=hour, minutes=minute)))
+
+    with closed_on(1, 18, 40):
+        task("kettle", "Descale the kettle", parent_id=ids["home"], status="done")
+    with closed_on(1, 9, 15):
+        task("lease", "Send the lease renewal", parent_id=ids["family"], status="done", priority="medium")
+    with closed_on(2, 16, 5):
+        task("timezone", "Fix the watering timezone bug", parent_id=ids["bot"], status="done")
+    with closed_on(2, 11, 30):
+        task("streaming", "Cancel the unused streaming plan", parent_id=ids["family"], status="cancelled")
+    with closed_on(9, 11, 0):
+        task("drill", "Return the borrowed drill", status="done")
+
+
+def _seed_notes(conn: sqlite3.Connection, ids: dict[str, int], d: Callable[[int], str]) -> None:
+    """Comments, links, real edits and the one blocker over the tasks above."""
+    # ---- comments (some with links) ---------------------------------
+    repo.add_comment(conn, ids["quotes"], "First quote in: https://example.com/quotes/1 — a bit high.", author="Sam Rivera", origin="ui")
+    repo.add_comment(conn, ids["quotes"], "Second quote asked, waiting until Friday.", author="Sam Rivera", origin="cli")
+    repo.add_comment(conn, ids["quotes"], "Plans are in {onedrive}/house/kitchen/plans", author="Alex Chen", origin="ui")
+    repo.add_comment(conn, ids["appointment"], "Called the office — earliest slot is next week.", author="Jordan Lee", origin="cli")
+    repo.add_comment(conn, ids["watering"], "Drift traced to the RTC; see example/garden-bot#12", author="Alex Chen", origin="ui")
+    repo.add_comment(conn, ids["tap"], "Needs a new washer, size 15mm.", author="Sam Rivera", origin="ui")
+    repo.add_comment(conn, ids["car"], "Renewed until next year; keep the letter in {onedrive}/admin/car", author="Jordan Lee", origin="md")
+    repo.add_comment(conn, ids["lesson"], "Homework: exercises 3-5", author="Sam Rivera", origin="ui")
+    repo.add_comment(conn, ids["release"], "Blocked on the sensor driver.", author="Alex Chen", origin="ui")
+
+    # ---- links --------------------------------------------------------
+    repo.add_link(conn, ids["kitchen"], "https://example.com/kitchen-ideas", label="Ideas board", kind="web")
+    repo.add_link(conn, ids["kitchen"], "{onedrive}/house/kitchen", label="Kitchen folder", kind="folder")
+    repo.add_link(conn, ids["passports"], "mail://renewal-instructions", label="Renewal instructions", kind="email")
+    repo.add_link(conn, ids["watering"], "https://github.com/example/garden-bot/issues/12", label="garden-bot#12", kind="issue")
+    # the AI-conversation link (#77) — a synthetic Claude Code session id
+    repo.add_link(conn, ids["watering"], "https://claude.ai/code/session_01SeedExampleDriftFix000",
+                  label="drift-fix session", kind="ai")
+    repo.add_link(conn, ids["book"], "https://example.com/reading", label="Where to buy", kind="web")
+
+    # ---- activity beyond creation: real edits ------------------------
+    repo.set_priority(conn, ids["tap"], "high", actor="Sam Rivera")
+    repo.set_due(conn, ids["installer"], d(24), actor="Alex Chen")
+    repo.set_status(conn, ids["fence"], "standby", actor="seed")
+    repo.set_status(conn, ids["fence"], "todo", actor="seed")
+    repo.move(conn, ids["review"], ids["family"], actor="seed")
+    repo.move(conn, ids["review"], None, actor="seed")
+    repo.done(conn, ids["scales"], actor="seed")   # daily → rolls to d(1)
+    repo.set_due(conn, ids["scales"], d(0), actor="seed")  # …and back, so "today" stays populated
+
+    # ---- blocked-by dependency (#100) ---------------------------------
+    # "Release v0.2" already has a comment saying "Blocked on the sensor
+    # driver" — make that literal: it cannot ship before the driver task
+    # is written, so the working views hide it (lock glyph everywhere else).
+    repo.add_blocker(conn, ids["release"], ids["driver"], actor="seed")
+
+
+def _seed_time(conn: sqlite3.Connection, anchor: date, d: Callable[[int], str]) -> None:
+    """The Time tab's entries and guesses."""
+    # ---- tracked time (#457) --------------------------------------------
+    # Through time_repo, the one writer of those tables, on a fixed clock at
+    # 08:30 on the anchor day (each create stamps "now"; a fixed instant
+    # keeps every created_at identical run to run).
+    at = datetime.combine(anchor, datetime.min.time()).astimezone().replace(hour=8, minute=30)
+    with repo.use_clock(lambda: at):
+        for person, area, slug, days_ago, start, minutes, note in TIME_ENTRIES:
+            category = time_repo.category_by_slug(conn, area, slug)
+            assert category is not None, (area, slug)
+            time_repo.create_entry(conn, person=person, category_id=category, day=d(-days_ago),
+                                   minutes=minutes, start=start, note=note, people=TIME_PEOPLE)
+        for person, pct in TIME_GUESSES:
+            time_repo.set_guess(conn, person, pct, people=TIME_PEOPLE)
+
+
 def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]:
     """Populate an already-migrated database; returns ``{"ids": {...}, "counts": {...}}``.
 
@@ -115,172 +290,19 @@ def seed(conn: sqlite3.Connection, anchor: date | None = None) -> dict[str, Any]
 
     with repo.use_clock(_Clock(start)):
         people = {name: repo.create_person(conn, name, email=email)["id"] for name, email in PEOPLE}
-        sam, alex, jordan = (people[p[0]] for p in PEOPLE)
 
         def task(key: str, title: str, **fields: Any) -> int:
             t = repo.create_task(conn, title, actor="seed", **fields)
             ids[key] = t["id"]
             return t["id"]
 
-        # ---- project 1: Home renovation (depth 3) -----------------------
-        home = task("home", "Home renovation", status="todo", priority="high",
-                    description="Everything about the house works, room by room.",
-                    folder_ref="{onedrive}/house")
-        kitchen = task("kitchen", "Kitchen", parent_id=home, status="todo", priority="high",
-                       folder_ref="{onedrive}/house/kitchen")
-        task("quotes", "Get three quotes", parent_id=kitchen, status="todo", due=d(3), person_id=sam)
-        task("worktop", "Choose worktop material", parent_id=kitchen, status="todo", due=d(10))
-        task("installer", "Book installer", parent_id=kitchen, status="todo", due=d(21), person_id=alex)
-        bathroom = task("bathroom", "Bathroom", parent_id=home, status="todo")
-        task("tap", "Fix leaking tap", parent_id=bathroom, status="todo", due=d(-4), priority="medium")
-        task("ceiling", "Repaint ceiling", parent_id=bathroom, status="todo", due=d(14))
-        garden = task("garden", "Garden", parent_id=home, status="standby")
-        task("tomatoes", "Plant tomatoes", parent_id=garden, status="standby", due=d(30))
-        task("fence", "Repair fence", parent_id=garden, status="todo", due=d(-10), priority="low")
+        _seed_projects(conn, task, d, people)
 
-        # ---- project 2: Family admin (depth 3, recurring) --------------
-        family = task("family", "Family admin", status="todo", priority="medium",
-                      description="Renewals, bills, forms.")
-        passports = task("passports", "Renew passports", parent_id=family, status="todo", due=d(4), priority="high")
-        task("appointment", "Book appointment", parent_id=passports, status="todo", due=d(1))
-        task("photos", "Collect photos", parent_id=passports, status="done", due=d(-2))
-        task("school", "School enrolment forms", parent_id=family, status="todo", due=d(0), priority="high", person_id=jordan)
-        task("car", "Car insurance renewal", parent_id=family, status="todo", due=d(45), recurrence="yearly")
-        task("water", "Pay water bill", parent_id=family, status="todo", due=d(7),
-             recurrence="monthly", recurrence_anchor="day-15")
-        task("dentist", "Dentist check-up", parent_id=family, status="todo", due=d(0), recurrence="quarterly")
+        _seed_late_tasks(task, ids, anchor, d)
 
-        # ---- project 3: Side project garden-bot (coding) ---------------
-        bot = task("bot", "Side project: garden-bot", status="todo", priority="medium",
-                   description="A tiny watering controller for the balcony.",
-                   folder_ref="{user}/code/garden-bot")
-        watering = task("watering", "Fix watering schedule drift", parent_id=bot, status="todo", due=d(2), priority="high")
-        sensor = task("sensor", "Add moisture sensor", parent_id=bot, status="todo", due=d(20))
-        task("order", "Order sensor", parent_id=sensor, status="done", due=d(-5))
-        task("driver", "Write sensor driver", parent_id=sensor, status="todo", due=d(18))
-        task("readme", "Write README", parent_id=bot, status="todo", due=d(25), priority="low")
-        task("release", "Release v0.2", parent_id=bot, status="standby", due=d(40))
-        repo.set_issue_ref(conn, watering, provider="github", repo="example/garden-bot", number=12,
-                           url="https://github.com/example/garden-bot/issues/12", state="open", actor="seed")
+        _seed_notes(conn, ids, d)
 
-        # ---- project 4: Learning (recurring daily/weekly) --------------
-        learning = task("learning", "Learning", status="todo", priority="low")
-        spanish = task("spanish", "Spanish", parent_id=learning, status="todo")
-        task("lesson", "Lesson 12: past tense", parent_id=spanish, status="todo", due=d(2))
-        task("vocab", "Vocabulary review", parent_id=spanish, status="todo", due=d(0), recurrence="weekly")
-        piano = task("piano", "Piano", parent_id=learning, status="todo")
-        task("scales", "Practice scales", parent_id=piano, status="todo", due=d(0), recurrence="daily")
-        task("piece", "Learn a new piece", parent_id=piano, status="todo", due=d(28))
-        task("book", "Read a book on focus", parent_id=learning, status="todo", due=d(35))
-
-        # ---- loose tasks --------------------------------------------------
-        task("callback", "Call the plumber back", status="todo", due=d(0), priority="high", person_id=sam)
-        task("library", "Return library books", status="todo", due=d(-3), priority="medium")
-        task("review", "Weekly review", status="todo", due=d(5), recurrence="weekly",
-             recurrence_anchor="fri")
-        task("gift", "Buy a birthday gift", status="done", due=d(-7))
-        task("bikes", "Sell the old bikes", status="cancelled")
-        task("inbox1", "Look into a standing desk", status="inbox")
-        task("inbox2", "Try the new bakery", status="inbox")
-        task("inbox3", "Compare phone plans", status="inbox", due=d(12))
-        # Explicitly Inbox, not inherited: it belongs with the three above, and
-        # since #148 the create default is To Do. A fixture must state what it
-        # means rather than move whenever a default does.
-        task("reading", "Reading list", type="note", status="inbox",
-             description="- a book on focus\n- a book on gardening\n- the garden-bot docs")
-
-        # ---- deferred (#87) -----------------------------------------------
-        # Nothing to do before it starts, so the working views leave it out
-        # while the Tree, search and the Deferred filter still show it — the
-        # sleeping state, on screen, without anyone having to create it.
-        # Created LAST on purpose: every seeded id is a position in this
-        # sequence, and inserting mid-list would renumber everything after it
-        # (tests and validation records name ids).
-        task("boiler", "Book boiler service", parent_id=ids["family"],
-             status="todo", due=d(40), starts=d(20))
-
-        # ---- dormant (#101) -----------------------------------------------
-        # The seed clock runs from anchor−30, so nothing above is ever
-        # "untouched > 30 days". This one is written on its own clock 45 days
-        # back — the one task the stale-30 window lists (and stale-60 does
-        # not), so the honesty filter has something deterministic to show.
-        # Appended last for the same id-position reason as the deferred task.
-        with repo.use_clock(_Clock(datetime.combine(anchor - timedelta(days=45), datetime.min.time()).astimezone())):
-            task("dormant", "Sort the garage shelves", parent_id=ids["home"],
-                 status="todo", priority="low")
-
-        # ---- closed on known days (#102) ---------------------------------
-        # Every other closed task above closed on day one of the seed clock
-        # (anchor−30) — a journal with one page. These close on their own
-        # clocks: two yesterday, two the day before (one done, one cancelled),
-        # one nine days back (the week before) — so the journal has days to
-        # group, a cancelled row to mute and an older week to load. Appended
-        # last for the same id-position reason as the two tasks above.
-        def closed_on(days_ago: int, hour: int, minute: int) -> Any:
-            at = datetime.combine(anchor - timedelta(days=days_ago), datetime.min.time()).astimezone()
-            return repo.use_clock(_Clock(at + timedelta(hours=hour, minutes=minute)))
-
-        with closed_on(1, 18, 40):
-            task("kettle", "Descale the kettle", parent_id=ids["home"], status="done")
-        with closed_on(1, 9, 15):
-            task("lease", "Send the lease renewal", parent_id=ids["family"], status="done", priority="medium")
-        with closed_on(2, 16, 5):
-            task("timezone", "Fix the watering timezone bug", parent_id=ids["bot"], status="done")
-        with closed_on(2, 11, 30):
-            task("streaming", "Cancel the unused streaming plan", parent_id=ids["family"], status="cancelled")
-        with closed_on(9, 11, 0):
-            task("drill", "Return the borrowed drill", status="done")
-
-        # ---- comments (some with links) ---------------------------------
-        repo.add_comment(conn, ids["quotes"], "First quote in: https://example.com/quotes/1 — a bit high.", author="Sam Rivera", origin="ui")
-        repo.add_comment(conn, ids["quotes"], "Second quote asked, waiting until Friday.", author="Sam Rivera", origin="cli")
-        repo.add_comment(conn, ids["quotes"], "Plans are in {onedrive}/house/kitchen/plans", author="Alex Chen", origin="ui")
-        repo.add_comment(conn, ids["appointment"], "Called the office — earliest slot is next week.", author="Jordan Lee", origin="cli")
-        repo.add_comment(conn, ids["watering"], "Drift traced to the RTC; see example/garden-bot#12", author="Alex Chen", origin="ui")
-        repo.add_comment(conn, ids["tap"], "Needs a new washer, size 15mm.", author="Sam Rivera", origin="ui")
-        repo.add_comment(conn, ids["car"], "Renewed until next year; keep the letter in {onedrive}/admin/car", author="Jordan Lee", origin="md")
-        repo.add_comment(conn, ids["lesson"], "Homework: exercises 3-5", author="Sam Rivera", origin="ui")
-        repo.add_comment(conn, ids["release"], "Blocked on the sensor driver.", author="Alex Chen", origin="ui")
-
-        # ---- links --------------------------------------------------------
-        repo.add_link(conn, ids["kitchen"], "https://example.com/kitchen-ideas", label="Ideas board", kind="web")
-        repo.add_link(conn, ids["kitchen"], "{onedrive}/house/kitchen", label="Kitchen folder", kind="folder")
-        repo.add_link(conn, ids["passports"], "mail://renewal-instructions", label="Renewal instructions", kind="email")
-        repo.add_link(conn, ids["watering"], "https://github.com/example/garden-bot/issues/12", label="garden-bot#12", kind="issue")
-        # the AI-conversation link (#77) — a synthetic Claude Code session id
-        repo.add_link(conn, ids["watering"], "https://claude.ai/code/session_01SeedExampleDriftFix000",
-                      label="drift-fix session", kind="ai")
-        repo.add_link(conn, ids["book"], "https://example.com/reading", label="Where to buy", kind="web")
-
-        # ---- activity beyond creation: real edits ------------------------
-        repo.set_priority(conn, ids["tap"], "high", actor="Sam Rivera")
-        repo.set_due(conn, ids["installer"], d(24), actor="Alex Chen")
-        repo.set_status(conn, ids["fence"], "standby", actor="seed")
-        repo.set_status(conn, ids["fence"], "todo", actor="seed")
-        repo.move(conn, ids["review"], ids["family"], actor="seed")
-        repo.move(conn, ids["review"], None, actor="seed")
-        repo.done(conn, ids["scales"], actor="seed")   # daily → rolls to d(1)
-        repo.set_due(conn, ids["scales"], d(0), actor="seed")  # …and back, so "today" stays populated
-
-        # ---- blocked-by dependency (#100) ---------------------------------
-        # "Release v0.2" already has a comment saying "Blocked on the sensor
-        # driver" — make that literal: it cannot ship before the driver task
-        # is written, so the working views hide it (lock glyph everywhere else).
-        repo.add_blocker(conn, ids["release"], ids["driver"], actor="seed")
-
-    # ---- tracked time (#457) --------------------------------------------
-    # Through time_repo, the one writer of those tables, on a fixed clock at
-    # 08:30 on the anchor day (each create stamps "now"; a fixed instant
-    # keeps every created_at identical run to run).
-    at = datetime.combine(anchor, datetime.min.time()).astimezone().replace(hour=8, minute=30)
-    with repo.use_clock(lambda: at):
-        for person, area, slug, days_ago, start, minutes, note in TIME_ENTRIES:
-            category = time_repo.category_by_slug(conn, area, slug)
-            assert category is not None, (area, slug)
-            time_repo.create_entry(conn, person=person, category_id=category, day=d(-days_ago),
-                                   minutes=minutes, start=start, note=note, people=TIME_PEOPLE)
-        for person, pct in TIME_GUESSES:
-            time_repo.set_guess(conn, person, pct, people=TIME_PEOPLE)
+    _seed_time(conn, anchor, d)
 
     return {"ids": ids, "counts": repo.counts(conn)}
 

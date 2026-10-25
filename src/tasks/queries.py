@@ -141,6 +141,190 @@ def _due_window(due: str | None) -> tuple[str | None, str | None, bool]:
     return d, d, False
 
 
+def _is_closed_view(status_values: list[str] | None, include_closed: bool, done_window: bool) -> bool:
+    """A closed-only view (an explicit closed-status filter, or a done-window
+    journal query) is a working-view escape hatch just like include_closed:
+    deferred/blocked default to "all" so a done task with a future `starts`
+    or an unresolved blocker still surfaces in the done journal / Done column."""
+    return (
+        include_closed
+        or done_window
+        or (
+            status_values is not None
+            and status_values != ["open"]
+            and all(v in CLOSED_STATUSES for v in status_values)
+        )
+    )
+
+
+def _select_sql(where: list[str], done_window: bool, limit: int | None) -> str:
+    """The filtered SELECT: due → priority → id, or newest closing first for a done window."""
+    sql = "SELECT t.* FROM tasks t"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    if done_window:
+        sql += " ORDER BY t.done_at DESC, t.id DESC"
+    else:
+        sql += (
+            " ORDER BY t.due IS NULL, t.due, "
+            "CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END, t.id"
+        )
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    return sql
+
+
+def _starts_and_blocker_gate(
+    conn: sqlite3.Connection, closed_view: bool, deferred: str | None, blocked: str | None,
+    where: list[str], args: list[Any],
+) -> bool:
+    """:func:`list_tasks`' deferral and blocker rules as WHERE clauses; ``False``
+    when ``blocked="only"`` and nothing is blocked (the result is empty).
+
+    - ``deferred``: what to do with a task whose ``starts`` has not arrived
+      (#87) — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
+      the filter card's *Deferred*, ``tasks ls --deferred``) or ``"all"``.
+      Unset follows the working-view/closed-view split below: a closed view
+      means "hide nothing", so it lifts this gate too — otherwise a count
+      taken with it (the app's "any tasks at all?", the mirror's file total)
+      would quietly omit the sleeping ones and report a number nobody could
+      reconcile.
+      This is the ONE place the working views' deferral rule lives: Board,
+      Today and the CLI are all projections of :func:`list_tasks`, so they
+      inherit it. :func:`tree` and :func:`search` do not go through here on
+      purpose — a deferred task stays findable.
+    - ``blocked``: what to do with a task that has an open blocker (#100) —
+      ``"hide"`` (only unblocked tasks — the default working-view rule),
+      ``"only"`` (only blocked ones — the status multi-select's ``blocked``
+      pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows the
+      same closed-view rule as ``deferred``. This is the ONE place the
+      rule lives; :func:`tree` and :func:`search` keep showing a blocked task
+      (with its lock) on purpose.
+    - Unset ``deferred``/``blocked`` default to ``"hide"`` in a *working*
+      view and ``"all"`` in a *closed* view — ``include_closed=True``, a
+      ``status`` filter naming only closed statuses (``done``/``cancelled``,
+      not the ``"open"`` shorthand), or a ``done_on``/``done_from``/``done_to``
+      window. Those are all read as the done journal / closed history, where
+      a still-blocked or not-yet-started task that already finished must not
+      vanish (#263). Pass ``deferred``/``blocked`` explicitly to override
+      either default in either kind of view.
+    """
+    if deferred is None:
+        deferred = "all" if closed_view else "hide"
+    if deferred not in ("hide", "only", "all"):
+        raise ValidationError(f"deferred must be hide, only or all (got {deferred!r})")
+    if deferred != "all":
+        where.append(
+            "(t.starts IS NULL OR t.starts <= ?)" if deferred == "hide" else "t.starts > ?"
+        )
+        args.append(today().isoformat())
+
+    if blocked is None:
+        blocked = "all" if closed_view else "hide"
+    if blocked not in ("hide", "only", "all"):
+        raise ValidationError(f"blocked must be hide, only or all (got {blocked!r})")
+    if blocked != "all":
+        blocked_ids = _currently_blocked_ids(conn)
+        if blocked == "hide":
+            if blocked_ids:
+                where.append(f"t.id NOT IN ({', '.join('?' * len(blocked_ids))})")
+                args.extend(blocked_ids)
+        else:  # only
+            if not blocked_ids:
+                return False
+            where.append(f"t.id IN ({', '.join('?' * len(blocked_ids))})")
+            args.extend(blocked_ids)
+    return True
+
+
+def _status_and_parent_clauses(
+    status_values: list[str] | None, include_closed: bool, parent_id: int | str | None,
+    where: list[str], args: list[Any],
+) -> None:
+    if status_values is not None:
+        if status_values == ["open"]:
+            where.append(f"t.status NOT IN ({CLOSED_SQL})")
+        else:
+            for v in status_values:
+                _validate_enum("status", v)
+            where.append(f"t.status IN ({', '.join('?' * len(status_values))})")
+            args.extend(status_values)
+    elif not include_closed:
+        where.append(f"t.status NOT IN ({CLOSED_SQL})")
+
+    if parent_id is not None:
+        if parent_id == "root":
+            where.append("t.parent_id IS NULL")
+        else:
+            where.append("t.parent_id = ?")
+            args.append(int(parent_id))
+
+
+def _due_and_who_clauses(
+    due: str | None, due_from: str | None, due_to: str | None, type: str | None,
+    person_id: int | list[int] | None, owner: str | list[str] | None,
+    where: list[str], args: list[Any],
+) -> None:
+    d_from, d_to, overdue = _due_window(due)
+    d_from = _validate_date(due_from) or d_from
+    d_to = _validate_date(due_to) or d_to
+    if d_from:
+        where.append("t.due >= ?")
+        args.append(d_from)
+    if d_to:
+        where.append("t.due <= ?")
+        args.append(d_to)
+    if overdue:
+        where.append("t.due IS NOT NULL")
+
+    if type:
+        _validate_enum("type", type)
+        where.append("t.type = ?")
+        args.append(type)
+
+    if person_id is not None:
+        people = [int(p) for p in (person_id if isinstance(person_id, (list, tuple)) else [person_id])]
+        if people:
+            where.append(f"t.person_id IN ({', '.join('?' * len(people))})")
+            args.extend(people)
+
+    if owner is not None:
+        owners = [str(o) for o in (owner if isinstance(owner, (list, tuple)) else [owner])]
+        if owners:
+            clause = f"t.owner IN ({', '.join('?' * len(owners))})"
+            if install_owner() in owners:
+                clause = f"({clause} OR t.owner IS NULL)"
+            where.append(clause)
+            args.extend(owners)
+
+
+def _stamp_window_clauses(
+    done_on: str | None, done_from: str | None, done_to: str | None,
+    updated_since: str | None, updated_before: str | None,
+    where: list[str], args: list[Any],
+) -> None:
+    """The local-calendar-day windows over ``done_at`` and ``updated_at``."""
+    if done_on:
+        where.append("substr(t.done_at, 1, 10) = ?")
+        args.append(_validate_date(done_on, "done_on"))
+
+    if done_from:
+        where.append("substr(t.done_at, 1, 10) >= ?")
+        args.append(_validate_date(done_from, "done_from"))
+
+    if done_to:
+        where.append("substr(t.done_at, 1, 10) <= ?")
+        args.append(_validate_date(done_to, "done_to"))
+
+    if updated_since:
+        where.append("substr(t.updated_at, 1, 10) >= ?")
+        args.append(_validate_date(updated_since, "updated_since"))
+
+    if updated_before:
+        where.append("substr(t.updated_at, 1, 10) < ?")
+        args.append(_validate_date(updated_before, "updated_before"))
+
+
 def list_tasks(
     conn: sqlite3.Connection,
     *,
@@ -193,33 +377,8 @@ def list_tasks(
       included — so a GitHub-synced task never looks stale.
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
-    - ``deferred``: what to do with a task whose ``starts`` has not arrived
-      (#87) — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
-      the filter card's *Deferred*, ``tasks ls --deferred``) or ``"all"``.
-      Unset follows the working-view/closed-view split below: a closed view
-      means "hide nothing", so it lifts this gate too — otherwise a count
-      taken with it (the app's "any tasks at all?", the mirror's file total)
-      would quietly omit the sleeping ones and report a number nobody could
-      reconcile.
-      This is the ONE place the working views' deferral rule lives: Board,
-      Today and the CLI are all projections of this function, so they
-      inherit it. :func:`tree` and :func:`search` do not go through here on
-      purpose — a deferred task stays findable.
-    - ``blocked``: what to do with a task that has an open blocker (#100) —
-      ``"hide"`` (only unblocked tasks — the default working-view rule),
-      ``"only"`` (only blocked ones — the status multi-select's ``blocked``
-      pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows the
-      same closed-view rule as ``deferred``. This is the ONE place the
-      rule lives; :func:`tree` and :func:`search` keep showing a blocked task
-      (with its lock) on purpose.
-    - Unset ``deferred``/``blocked`` default to ``"hide"`` in a *working*
-      view and ``"all"`` in a *closed* view — ``include_closed=True``, a
-      ``status`` filter naming only closed statuses (``done``/``cancelled``,
-      not the ``"open"`` shorthand), or a ``done_on``/``done_from``/``done_to``
-      window. Those are all read as the done journal / closed history, where
-      a still-blocked or not-yet-started task that already finished must not
-      vanish (#263). Pass ``deferred``/``blocked`` explicitly to override
-      either default in either kind of view.
+    - ``deferred`` / ``blocked``: the working views' deferral and blocker
+      rules — see :func:`_starts_and_blocker_gate`, where they live.
 
     Each item is a summary plus ``breadcrumb`` (root → parent), ``root`` (the
     top ancestor — the project the Board, Today and Search rows and the filter card name) and ``last_comment``.
@@ -232,63 +391,11 @@ def list_tasks(
     args: list[Any] = []
 
     status_values = [status] if isinstance(status, str) else (list(status) if status else None)
-    # A closed-only view (an explicit closed-status filter, or a done-window
-    # journal query) is a working-view escape hatch just like include_closed:
-    # deferred/blocked default to "all" so a done task with a future `starts`
-    # or an unresolved blocker still surfaces in the done journal / Done column.
-    closed_view = (
-        include_closed
-        or bool(done_on or done_from or done_to)
-        or (
-            status_values is not None
-            and status_values != ["open"]
-            and all(v in CLOSED_STATUSES for v in status_values)
-        )
-    )
+    closed_view = _is_closed_view(status_values, include_closed, bool(done_on or done_from or done_to))
+    if not _starts_and_blocker_gate(conn, closed_view, deferred, blocked, where, args):
+        return []
 
-    if deferred is None:
-        deferred = "all" if closed_view else "hide"
-    if deferred not in ("hide", "only", "all"):
-        raise ValidationError(f"deferred must be hide, only or all (got {deferred!r})")
-    if deferred != "all":
-        where.append(
-            "(t.starts IS NULL OR t.starts <= ?)" if deferred == "hide" else "t.starts > ?"
-        )
-        args.append(today().isoformat())
-
-    if blocked is None:
-        blocked = "all" if closed_view else "hide"
-    if blocked not in ("hide", "only", "all"):
-        raise ValidationError(f"blocked must be hide, only or all (got {blocked!r})")
-    if blocked != "all":
-        blocked_ids = _currently_blocked_ids(conn)
-        if blocked == "hide":
-            if blocked_ids:
-                where.append(f"t.id NOT IN ({', '.join('?' * len(blocked_ids))})")
-                args.extend(blocked_ids)
-        else:  # only
-            if not blocked_ids:
-                return []
-            where.append(f"t.id IN ({', '.join('?' * len(blocked_ids))})")
-            args.extend(blocked_ids)
-
-    if status_values is not None:
-        if status_values == ["open"]:
-            where.append(f"t.status NOT IN ({CLOSED_SQL})")
-        else:
-            for v in status_values:
-                _validate_enum("status", v)
-            where.append(f"t.status IN ({', '.join('?' * len(status_values))})")
-            args.extend(status_values)
-    elif not include_closed:
-        where.append(f"t.status NOT IN ({CLOSED_SQL})")
-
-    if parent_id is not None:
-        if parent_id == "root":
-            where.append("t.parent_id IS NULL")
-        else:
-            where.append("t.parent_id = ?")
-            args.append(int(parent_id))
+    _status_and_parent_clauses(status_values, include_closed, parent_id, where, args)
 
     if project is not None:
         ids = _descendant_ids(conn, int(project))
@@ -297,57 +404,9 @@ def list_tasks(
         where.append(f"t.id IN ({', '.join('?' * len(ids))})")
         args.extend(ids)
 
-    d_from, d_to, overdue = _due_window(due)
-    d_from = _validate_date(due_from) or d_from
-    d_to = _validate_date(due_to) or d_to
-    if d_from:
-        where.append("t.due >= ?")
-        args.append(d_from)
-    if d_to:
-        where.append("t.due <= ?")
-        args.append(d_to)
-    if overdue:
-        where.append("t.due IS NOT NULL")
+    _due_and_who_clauses(due, due_from, due_to, type, person_id, owner, where, args)
 
-    if type:
-        _validate_enum("type", type)
-        where.append("t.type = ?")
-        args.append(type)
-
-    if person_id is not None:
-        people = [int(p) for p in (person_id if isinstance(person_id, (list, tuple)) else [person_id])]
-        if people:
-            where.append(f"t.person_id IN ({', '.join('?' * len(people))})")
-            args.extend(people)
-
-    if owner is not None:
-        owners = [str(o) for o in (owner if isinstance(owner, (list, tuple)) else [owner])]
-        if owners:
-            clause = f"t.owner IN ({', '.join('?' * len(owners))})"
-            if install_owner() in owners:
-                clause = f"({clause} OR t.owner IS NULL)"
-            where.append(clause)
-            args.extend(owners)
-
-    if done_on:
-        where.append("substr(t.done_at, 1, 10) = ?")
-        args.append(_validate_date(done_on, "done_on"))
-
-    if done_from:
-        where.append("substr(t.done_at, 1, 10) >= ?")
-        args.append(_validate_date(done_from, "done_from"))
-
-    if done_to:
-        where.append("substr(t.done_at, 1, 10) <= ?")
-        args.append(_validate_date(done_to, "done_to"))
-
-    if updated_since:
-        where.append("substr(t.updated_at, 1, 10) >= ?")
-        args.append(_validate_date(updated_since, "updated_since"))
-
-    if updated_before:
-        where.append("substr(t.updated_at, 1, 10) < ?")
-        args.append(_validate_date(updated_before, "updated_before"))
+    _stamp_window_clauses(done_on, done_from, done_to, updated_since, updated_before, where, args)
 
     if q:
         hit_ids = [h["id"] for h in search(conn, q, limit=500)]
@@ -356,18 +415,7 @@ def list_tasks(
         where.append(f"t.id IN ({', '.join('?' * len(hit_ids))})")
         args.extend(hit_ids)
 
-    sql = "SELECT t.* FROM tasks t"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    if done_from or done_to:
-        sql += " ORDER BY t.done_at DESC, t.id DESC"
-    else:
-        sql += (
-            " ORDER BY t.due IS NULL, t.due, "
-            "CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END, t.id"
-        )
-    if limit:
-        sql += f" LIMIT {int(limit)}"
+    sql = _select_sql(where, bool(done_from or done_to), limit)
     items = _summaries(conn, [dict(r) for r in conn.execute(sql, args).fetchall()])
     _enrich_list(conn, items)
     if not descriptions:

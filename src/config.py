@@ -472,6 +472,102 @@ def _flatten_placeholders(raw: dict[str, Any]) -> dict[str, str]:
     return flat
 
 
+def _read_raw(src: Path) -> dict[str, Any]:
+    """The file's top-level object; ``{}`` (with a warning) when it is missing or unparseable."""
+    try:
+        return _as_dict(json.loads(src.read_text(encoding="utf-8")))
+    except FileNotFoundError:
+        logger.warning("⚠️ config: %s not found — using built-in defaults", src)
+    except (OSError, ValueError) as exc:
+        logger.warning("⚠️ config: could not parse %s (%s) — using built-in defaults", src, exc)
+    return {}
+
+
+def _port(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.warning("⚠️ config: invalid port %r — falling back to %d", value, DEFAULT_PORT)
+        return DEFAULT_PORT
+
+
+def _voice_config(voice: dict[str, Any]) -> VoiceConfig:
+    return VoiceConfig(
+        transcribe_url=str(voice.get("transcribe_url", VoiceConfig.transcribe_url) or "").strip(),
+        fallback_url=str(voice.get("fallback_url", VoiceConfig.fallback_url) or "").strip(),
+        partial_interval_seconds=_as_float(
+            voice.get("partial_interval_seconds"), VoiceConfig.partial_interval_seconds,
+            "voice.partial_interval_seconds",
+        ),
+    )
+
+
+def _enrich_config(enrich: dict[str, Any]) -> EnrichConfig:
+    return EnrichConfig(
+        url=str(enrich.get("url", EnrichConfig.url) or "").strip(),
+        model=str(enrich.get("model", EnrichConfig.model) or "").strip(),
+        timeout_seconds=_as_float(
+            enrich.get("timeout_seconds"), EnrichConfig.timeout_seconds,
+            "enrich.timeout_seconds",
+        ),
+    )
+
+
+def _ai_config(ai: dict[str, Any]) -> AIConfig:
+    return AIConfig(
+        enabled=bool(ai.get("enabled", AIConfig.enabled)),
+        base_url=str(ai.get("base_url", AIConfig.base_url) or "").strip(),
+        model=str(ai.get("model", AIConfig.model) or "").strip(),
+        timeout_seconds=_as_float(
+            ai.get("timeout_seconds"), AIConfig.timeout_seconds,
+            "ai.timeout_seconds",
+        ),
+    )
+
+
+def _archive_config(archive: dict[str, Any]) -> ArchiveConfig:
+    return ArchiveConfig(
+        enabled=bool(archive.get("enabled", ArchiveConfig.enabled)),
+        repo=str(archive.get("repo", "") or "").strip(),
+        python=str(archive.get("python", "") or "").strip(),
+        candidates=_as_int(
+            archive.get("candidates"), ArchiveConfig.candidates, "archive.candidates",
+        ),
+        confidence_threshold=_as_float(
+            archive.get("confidence_threshold"), ArchiveConfig.confidence_threshold,
+            "archive.confidence_threshold",
+        ),
+        timeout_seconds=_as_float(
+            archive.get("timeout_seconds"), ArchiveConfig.timeout_seconds,
+            "archive.timeout_seconds",
+        ),
+        model=str(archive.get("model", ArchiveConfig.model) or "").strip(),
+        batch_size=_as_int(
+            archive.get("batch_size"), ArchiveConfig.batch_size, "archive.batch_size",
+        ),
+        examples=_as_int(
+            archive.get("examples"), ArchiveConfig.examples, "archive.examples",
+        ),
+        ai_timeout_seconds=_as_float(
+            archive.get("ai_timeout_seconds"), ArchiveConfig.ai_timeout_seconds,
+            "archive.ai_timeout_seconds",
+        ),
+        renumber=bool(archive.get("renumber", ArchiveConfig.renumber)),
+    )
+
+
+def _calendar_config(calendar: dict[str, Any]) -> CalendarConfig:
+    return CalendarConfig(
+        ics_url=str(calendar.get("ics_url", "") or "").strip(),
+        refresh_minutes=_as_int(
+            calendar.get("refresh_minutes"), CalendarConfig.refresh_minutes, "calendar.refresh_minutes",
+        ),
+        timeout_seconds=_as_float(
+            calendar.get("timeout_seconds"), CalendarConfig.timeout_seconds, "calendar.timeout_seconds",
+        ),
+    )
+
+
 def load_config(path: Path | None = None) -> AppConfig:
     """Parse ``path`` (default: :func:`config_path`) into an :class:`AppConfig`.
 
@@ -480,13 +576,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     than as a dead port.
     """
     src = path or config_path()
-    raw: dict[str, Any] = {}
-    try:
-        raw = _as_dict(json.loads(src.read_text(encoding="utf-8")))
-    except FileNotFoundError:
-        logger.warning("⚠️ config: %s not found — using built-in defaults", src)
-    except (OSError, ValueError) as exc:
-        logger.warning("⚠️ config: could not parse %s (%s) — using built-in defaults", src, exc)
+    raw = _read_raw(src)
 
     issues = _as_dict(raw.get("issues"))
     mirror = _as_dict(raw.get("mirror"))
@@ -516,12 +606,6 @@ def load_config(path: Path | None = None) -> AppConfig:
     # same nested-map flattening as placeholders: web_roots.sharepoint.docs → "sharepoint:docs"
     web_roots = _flatten_placeholders(_as_dict(raw.get("web_roots")))
 
-    try:
-        port = int(raw.get("port", DEFAULT_PORT))
-    except (TypeError, ValueError):
-        logger.warning("⚠️ config: invalid port %r — falling back to %d", raw.get("port"), DEFAULT_PORT)
-        port = DEFAULT_PORT
-
     # One members list: the top-level ``people`` block; until there is
     # one, ``time.people`` (the deprecated spelling — same ids, so no time row
     # is ever rewritten); else the implicit owner. Each falls back on the other.
@@ -532,7 +616,7 @@ def load_config(path: Path | None = None) -> AppConfig:
 
     return AppConfig(
         site=str(raw.get("site", "home")),
-        port=port,
+        port=_port(raw.get("port", DEFAULT_PORT)),
         issues=IssuesConfig(
             provider=str(issues.get("provider", "github")),
             owner=str(issues.get("owner", "")),
@@ -556,68 +640,11 @@ def load_config(path: Path | None = None) -> AppConfig:
                 "capture.email_poll_minutes",
             ),
         ),
-        voice=VoiceConfig(
-            transcribe_url=str(voice.get("transcribe_url", VoiceConfig.transcribe_url) or "").strip(),
-            fallback_url=str(voice.get("fallback_url", VoiceConfig.fallback_url) or "").strip(),
-            partial_interval_seconds=_as_float(
-                voice.get("partial_interval_seconds"), VoiceConfig.partial_interval_seconds,
-                "voice.partial_interval_seconds",
-            ),
-        ),
-        enrich=EnrichConfig(
-            url=str(enrich.get("url", EnrichConfig.url) or "").strip(),
-            model=str(enrich.get("model", EnrichConfig.model) or "").strip(),
-            timeout_seconds=_as_float(
-                enrich.get("timeout_seconds"), EnrichConfig.timeout_seconds,
-                "enrich.timeout_seconds",
-            ),
-        ),
-        ai=AIConfig(
-            enabled=bool(ai.get("enabled", AIConfig.enabled)),
-            base_url=str(ai.get("base_url", AIConfig.base_url) or "").strip(),
-            model=str(ai.get("model", AIConfig.model) or "").strip(),
-            timeout_seconds=_as_float(
-                ai.get("timeout_seconds"), AIConfig.timeout_seconds,
-                "ai.timeout_seconds",
-            ),
-        ),
-        archive=ArchiveConfig(
-            enabled=bool(archive.get("enabled", ArchiveConfig.enabled)),
-            repo=str(archive.get("repo", "") or "").strip(),
-            python=str(archive.get("python", "") or "").strip(),
-            candidates=_as_int(
-                archive.get("candidates"), ArchiveConfig.candidates, "archive.candidates",
-            ),
-            confidence_threshold=_as_float(
-                archive.get("confidence_threshold"), ArchiveConfig.confidence_threshold,
-                "archive.confidence_threshold",
-            ),
-            timeout_seconds=_as_float(
-                archive.get("timeout_seconds"), ArchiveConfig.timeout_seconds,
-                "archive.timeout_seconds",
-            ),
-            model=str(archive.get("model", ArchiveConfig.model) or "").strip(),
-            batch_size=_as_int(
-                archive.get("batch_size"), ArchiveConfig.batch_size, "archive.batch_size",
-            ),
-            examples=_as_int(
-                archive.get("examples"), ArchiveConfig.examples, "archive.examples",
-            ),
-            ai_timeout_seconds=_as_float(
-                archive.get("ai_timeout_seconds"), ArchiveConfig.ai_timeout_seconds,
-                "archive.ai_timeout_seconds",
-            ),
-            renumber=bool(archive.get("renumber", ArchiveConfig.renumber)),
-        ),
-        calendar=CalendarConfig(
-            ics_url=str(calendar.get("ics_url", "") or "").strip(),
-            refresh_minutes=_as_int(
-                calendar.get("refresh_minutes"), CalendarConfig.refresh_minutes, "calendar.refresh_minutes",
-            ),
-            timeout_seconds=_as_float(
-                calendar.get("timeout_seconds"), CalendarConfig.timeout_seconds, "calendar.timeout_seconds",
-            ),
-        ),
+        voice=_voice_config(voice),
+        enrich=_enrich_config(enrich),
+        ai=_ai_config(ai),
+        archive=_archive_config(archive),
+        calendar=_calendar_config(calendar),
         team=TeamConfig(
             enabled=bool(team.get("enabled", False)),
             people=team_people,

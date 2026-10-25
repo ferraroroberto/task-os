@@ -3,7 +3,7 @@
 ``src/archive_rank.py`` touches no database, no Outlook and no hub of its own:
 it takes mails, corrections and a client, and returns picks. So everything the
 model is allowed to do — and everything it is refused — is provable here with a
-canned client, and the service tests (``tests/test_archive.py``) only have to
+canned client, and the service tests (``tests/archive/``) only have to
 prove the wiring.
 
 Synthetic throughout, as everything in this repo's fixtures is: the subjects,

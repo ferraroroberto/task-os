@@ -92,7 +92,7 @@ def fts_query(q: str, *, min_prefix: int = 1) -> str:
     ``src.tasks_repo._fts_query`` is the one copy this does not replace: the
     domain layer importing this package would load its ``__init__`` — the
     federated layer and every adapter, which import ``tasks_repo`` back — on
-    every import of ``tasks_repo``. ``tests/test_search_adapters.py`` pins the
+    every import of ``tasks_repo``. ``tests/search/test_search_adapters.py`` pins the
     two to the same answer instead.
     """
     out = []
