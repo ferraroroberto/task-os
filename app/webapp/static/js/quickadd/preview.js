@@ -33,7 +33,7 @@ export function renderChips(ctx) {
 
 /** The phrase the parser understood, next to the date it produced. Both date
  *  fields fill this way, so `due oct 15 starts oct 1` previews as two
- *  correctable dates rather than one date and a mystery (#87). */
+ *  correctable dates rather than one date and a mystery. */
 export function showDate(el, iso, phrase) {
   el.value = iso || '';
   const rel = iso ? relDue(iso) : { text: '' };

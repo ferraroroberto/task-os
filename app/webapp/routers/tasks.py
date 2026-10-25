@@ -88,7 +88,7 @@ router = APIRouter(prefix="/api", tags=["tasks"])
 class TaskCreate(BaseModel):
     title: str
     #: A capture source's own stable id for the thing this task came from
-    #: (#98) — ``email:{onedrive}/…/mail.msg``, a WhatsApp message id. Present
+    #: ``email:{onedrive}/…/mail.msg``, a WhatsApp message id. Present
     #: → the create is idempotent: the first POST makes the task (201), every
     #: replay gets that same task back untouched (200). Absent → a plain create.
     external_id: str | None = None
@@ -106,7 +106,7 @@ class TaskCreate(BaseModel):
     folder_ref: str | None = None
     next_action: str | None = None
     person_id: int | None = None
-    #: a member id (#476); omitted → the viewer
+    #: a member id; omitted → the viewer
     owner: str | None = None
     actor: str | None = None
 
@@ -187,7 +187,7 @@ class CommentEditBody(BaseModel):
 class LinkBody(BaseModel):
     url: str
     label: str | None = None
-    #: omitted → inferred from the URL by ``repo.infer_link_kind`` (#257)
+    #: omitted → inferred from the URL by ``repo.infer_link_kind``
     kind: str | None = None
 
 
@@ -201,8 +201,8 @@ class ParseBody(BaseModel):
 
 
 #: The pseudo-values the status multi-select adds — see the module docstring.
-DEFERRED = "deferred"   # #87
-BLOCKED = "blocked"     # #100
+DEFERRED = "deferred"
+BLOCKED = "blocked"
 
 
 def _resolve_dates(fields: dict[str, Any]) -> dict[str, Any]:

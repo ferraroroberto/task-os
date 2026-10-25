@@ -1,4 +1,4 @@
-/* task-os — the parent picker: where the drawer's "Change parent" lands a task (#468).
+/* task-os — the parent picker: where the drawer's "Change parent" lands a task.
  *
  * `openParentPicker(t, targets, onPick)` builds one modal sheet per ask into
  * the `<dialog id="parentDialog">` shell in index.html — the same vendored

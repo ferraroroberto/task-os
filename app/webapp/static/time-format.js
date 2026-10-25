@@ -1,4 +1,4 @@
-/* task-os — how the Time tab writes durations, clock times and days (#457).
+/* task-os — how the Time tab writes durations, clock times and days.
  *
  * Shared by time.js, time-dialogs.js and time-settings.js. Every day here is
  * the server's (`/api/time/meta` → `today`): a phone in another zone never

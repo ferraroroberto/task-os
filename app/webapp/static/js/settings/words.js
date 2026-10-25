@@ -30,7 +30,7 @@ export function setWord(ctx, el, word) {
   ctx.words[el.id] = word;
 }
 
-/** The Settings header's line (design.md `page-header`, #397): the services
+/** The Settings header's line (design.md `page-header`): the services
  *  in an exception tone, broken first, at most two; else the plain count of
  *  the services that are on. Empty until a status has been read. */
 export function headParts(ctx) {

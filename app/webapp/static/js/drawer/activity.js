@@ -17,7 +17,7 @@ function activityRow(ctx, a) {
   const change = document.createElement('span');
   change.className = 'activity-change';
   // One weight for the whole line — the field name is set apart by color
-  // only (uniform-weight feedback, issue #27).
+  // only (uniform-weight feedback).
   const f = document.createElement('span');
   f.className = 'activity-field';
   f.textContent = a.field;
@@ -25,7 +25,7 @@ function activityRow(ctx, a) {
   change.appendChild(document.createTextNode(' '));
   const oldV = document.createElement('span');
   oldV.className = 'activity-old';
-  // an owner is stored as a member id; the log reads it as the name (#476)
+  // an owner is stored as a member id; the log reads it as the name
   const shown = a.field === 'owner' ? function (id) { return memberName(ctx, id); } : function (v) { return v; };
   oldV.textContent = a.old_value == null ? '∅' : shown(a.old_value);
   const arrow = document.createElement('span');
@@ -44,8 +44,8 @@ function activityRow(ctx, a) {
 }
 
 /** The log, newest first. The issue sync writes most of it on a synced task
- *  (#390: 85% of all activity), so its rows fold behind one toggle and the
- *  owner's own changes lead (#394, decision 7). */
+ *  (85% of all activity), so its rows fold behind one toggle and the
+ *  owner's own changes lead. */
 export function activitySection(ctx, t) {
   const activity = section('activity', 'Activity', 'activity');
   const alist = document.createElement('div');

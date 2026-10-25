@@ -100,7 +100,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
 
 #: Shots whose *content* legitimately cannot be pinned, with the reason. Empty
-#: since #459: story 06's instance now starts its clock at the suite's instant
+#: Story 06's instance now starts its clock at the suite's instant
 #: (`TASKOS_CLOCK_TICK`) and story 09's install-command shot is framed on the
 #: app's own port, so no shot is exempt from the byte-identical gallery.
 ALLOWED_TO_DIFFER: dict[str, str] = {}
@@ -110,7 +110,7 @@ ALLOWED_TO_DIFFER: dict[str, str] = {}
 #: 200 pixels at delta 1; the smallest genuine content change measured (one
 #: digit of a timestamp) was 35 pixels at delta 210.
 #:
-#: Decision (#170): raised from 1 to 2. On this host, twelve back-to-back
+#: Decision: raised from 1 to 2. On this host, twelve back-to-back
 #: invocations turned up small antialiased-edge movers — story 22/23/24 shots,
 #: none of them a real content change — measuring *exactly* delta 2 on a
 #: handful of pixels, and the same shots pass as delta-1 raster noise on the
@@ -127,15 +127,15 @@ RASTER_MAX_PIXELS = 500
 #: pixels. Same escape, different shape — a handful of pixels off by a lot,
 #: rather than many off by a little.
 #:
-#: Decision (#225). Measured twice on 2026-09-12, in two unrelated
+#: Decision. Measured twice on 2026-09-12, in two unrelated
 #: invocations, at *identical* numbers: `story-22-voice-5-phone.png`, 28 px,
 #: worst channel delta 14, bbox (1000, 1690, 1014, 1703) — a 14x13 px box
-#: around the phone nav's search icon at device scale factor 3. #170 recorded
+#: around the phone nav's search icon at device scale factor 3. An earlier run recorded
 #: the same magnitude and the same subject ("28 px at delta 14 on the phone
 #: nav's search icon") three days earlier, under artificial CPU load. Repeating
 #: to the pixel is not noise: that glyph rasterises into one of exactly two
-#: stable states and which one is a coin toss. #170 spent a session failing to pin down why and
-#: stays open for it; leaving the gate to flip red on it about one run in three
+#: stable states and which one is a coin toss. Pinning down why has so far failed and
+#: stays an open investigation; leaving the gate to flip red on it about one run in three
 #: would teach every future reader to re-run a red gallery gate, which is the
 #: one habit that makes this whole gate worthless.
 #:

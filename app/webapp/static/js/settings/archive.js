@@ -6,13 +6,13 @@
 import { codeEl, pct } from '../../format.js';
 import { setWord } from './words.js';
 
-/** The batch archiver's half of `GET /api/status` (#157–#159, #167): where
+/** The batch archiver's half of `GET /api/status`: where
  *  the archiver lives and its threshold — the two rows of the Email
  *  archiving sheet that archive.js does not draw (its head names the state,
  *  the model and the runs) — and the row's word. Not configured carries its
  *  reason in archive.js's Archiver row; `null` = the status call itself
  *  failed, which is "unknown" and not the same as "off". This module never
- *  follows a live run itself (#262): archive.js does, and publishes each
+ *  follows a live run itself: archive.js does, and publishes each
  *  status it reads back here through `renderArchive` — so "running"
  *  resolves into the run's own counts when its poll finishes. */
 export function renderArchive(ctx, st) {

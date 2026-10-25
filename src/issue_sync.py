@@ -58,7 +58,7 @@ INITIAL_DELAY_S = 10.0
 #: real `threading.Event.wait()`, so on the e2e issues instance (story 08) it
 #: fired ~10 s after boot — inside a story that takes ~9 s unloaded — and
 #: under load landed after the story's own ↻ passes, rewriting the Settings
-#: card's last-sync counts under the assertion (#205). Nothing in production
+#: card's last-sync counts under the assertion. Nothing in production
 #: sets this; the e2e suite's `_boot()` pins it past any story's real runtime,
 #: the same way unit tests pass `initial_delay` directly.
 DELAY_ENV = "TASKOS_ISSUE_SYNC_DELAY_S"

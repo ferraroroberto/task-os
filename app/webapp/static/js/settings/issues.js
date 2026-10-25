@@ -52,7 +52,7 @@ function drawIssues(ctx, st) {
 
 export function wireIssueSyncNow(ctx) {
   ctx.els.issuesSyncNow.addEventListener('click', function () {
-    // the button is the app's one sync control now (#301): it spins while the pass runs
+    // the button is the app's one sync control now: it spins while the pass runs
     ctx.els.issuesSyncNow.classList.add('is-busy');
     ctx.opts.onSyncIssues().catch(function () {}).finally(function () { ctx.els.issuesSyncNow.classList.remove('is-busy'); });
   });

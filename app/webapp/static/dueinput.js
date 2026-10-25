@@ -1,8 +1,8 @@
 /* task-os — the due-date picker, in one place.
  *
  * `duePicker()` is the calendar button + the hidden `<input type="date">` it
- * opens. Four callers wear it: the bulk-action bar's strip square (#81), the
- * snooze menu's "Pick a date…" (#87), the task row's due chip (#107) —
+ * opens. Four callers wear it: the bulk-action bar's strip square, the
+ * snooze menu's "Pick a date…", the task row's due chip —
  * because clicking a date should open a calendar, not a text box you then
  * type into — and the drawer's Due and
  * Starts fields, beside their text box. Typing a phrase (`tomorrow`, `fri`,
@@ -10,7 +10,7 @@
  * `src/dates.py` owns that vocabulary server-side either way.
  *
  * The reason the picker is a shared function is the coarse-pointer branch
- * (#50): touch/WebKit reports `showPicker()` as a callable function and
+ * touch/WebKit reports `showPicker()` as a callable function and
  * calling it throws nothing — it just opens nothing — so the exception-based
  * fallback never runs there. Coarse pointers therefore skip straight to the
  * fallback (reveal the native date input and click it), which does open the
@@ -32,7 +32,7 @@ export function duePicker(opts) {
   const button = document.createElement('button');
   button.type = 'button';
   // `className` is the WHOLE class list, not a modifier stacked on a default:
-  // the default is the one icon button (#357), the snooze menu's is a
+  // the default is the one icon button, the snooze menu's is a
   // labelled menu option, and letting both stacks land on one element just
   // makes their rules fight.
   button.className = o.className || 'icon-button';

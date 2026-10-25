@@ -1,4 +1,4 @@
-/* task-os — the one destructive-action confirmation (#121).
+/* task-os — the one destructive-action confirmation.
  *
  * `confirmDialog({title, lines, warn, action})` → Promise<boolean>. Built per
  * ask into the `<dialog id="confirmDialog">` shell in index.html — the same
@@ -54,7 +54,7 @@ export function confirmDialog(o) {
     const go = document.createElement('button');
     go.type = 'button';
     // The modal's one full-width footer action, outlined on danger (the
-    // vendored button-tint danger, #412) — never a solid red or a tint (#281).
+    // vendored button-tint danger) — never a solid red or a tint.
     go.className = 'button-tint danger detail-save-btn';
     go.textContent = o.action || 'Delete';
     go.addEventListener('click', function () { answer = true; dialog.close(); });

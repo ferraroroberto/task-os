@@ -77,7 +77,7 @@ export function mountDictation(ctx) {
       else parseNow(ctx);
       input.focus();
       // …and then, only for a spoken line, ask the hub's light model to make
-      // a title and a description of the sentence (#147). Deliberately a
+      // a title and a description of the sentence. Deliberately a
       // second round trip rather than folded into /api/transcribe: the
       // transcript and its parse are on screen *now*, and the tidy-up is
       // worth ~1.5 s of waiting only because nothing is waiting on it.

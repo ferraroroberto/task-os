@@ -33,7 +33,7 @@ export function movePanel(ctx, item, hooks) {
   toggle.addEventListener('click', function () {
     const open = body.hidden;
     body.hidden = !open;
-    // The engaged look is the shared `[aria-expanded="true"]` tint (#168) —
+    // The engaged look is the shared `[aria-expanded="true"]` tint —
     // no second state class to keep in step with the attribute.
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (hooks && hooks.onToggle) hooks.onToggle(open);

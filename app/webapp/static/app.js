@@ -3,8 +3,8 @@
  * Nav + theme (Step 1); the views — Today and Board — are
  * renderings of ONE shared list (`state.items`, /api/tasks under the shared
  * filter state) drawn with the ONE task row (rows.js) and edited through the
- * ONE filter state (filters.js) that every tab mounts (issue #46) — the
- * strip's text field and filter button, the sheet it opens (#395): status ·
+ * ONE filter state (filters.js) that every tab mounts — the
+ * strip's text field and filter button, the sheet it opens: status ·
  * project · person · due · modified · text · sort, all in the URL query so a
  * view is shareable and the same on every tab. The task drawer (↔ #task/<id>)
  * and the quick-add bars; the issue sync (the Settings card's "Sync now",
@@ -17,11 +17,10 @@
  * the views never drift.
  *
  * Every tab is its own module and this file is the wiring: board.js ·
- * today.js · time.js (the time tracker, #457 — loads nothing until its tab
- * is first shown) · search.js · settings.js (issue #37 — the Settings cards used to
- * live here; inset groups and their sheets since #397) · archive.js (the
- * batch-archiving run and its report, #159 — a tab until #397, now the
- * Settings → Email archiving sheet) · journal.js (the done journal, #102 —
+ * today.js · time.js (the time tracker — loads nothing until its tab
+ * is first shown) · search.js · settings.js (the Settings cards: inset
+ * groups and their sheets) · archive.js (the batch-archiving run and its
+ * report, shown in the Settings → Email archiving sheet) · journal.js (the done journal —
  * `#journal`, a pane without a tab: reached from the palette and the Board's
  * Done column, left by pressing any tab). What stays is what more than one
  * tab needs: routing (nav, the URL, #task/<id>, #journal, #settings and its
@@ -69,15 +68,15 @@ import { headLine, renderToday } from './today.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
-// What the Table tab (grid and Tree) remembered before #350 removed it. A
+// What the Table tab (grid and Tree) remembered once. A
 // stored `table` / `tree` tab needs nothing: the nav falls back to Today.
 const RETIRED_KEYS = ['task-os.tableView', 'task-os.tree.collapsed'];
-// Settings is a pane with no tab (#281): the header gear opens it, `#settings`
+// Settings is a pane with no tab: the header gear opens it, `#settings`
 // keeps it across a reload, and `#settings/<sheet>` has one row's sheet open
-// over it (#397) — a row press pushes it, so Back closes the sheet.
+// over it — a row press pushes it, so Back closes the sheet.
 const SETTINGS_HASH = '#settings';
 const SETTINGS_SHEET_HASH = /^#settings\/([a-z]+)$/;
-// The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it (#102).
+// The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it.
 const JOURNAL_HASH = /^#journal(\/|$)/;
 const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];
 
@@ -116,32 +115,32 @@ const els = {
 const state = {
   filters: filtersFromSearch(location.search, storedWhose(safeStorage())),
   people: [],
-  members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first (#476)
-  viewer: null,     // /api/me's id — who this request is; null = not established (#477)
+  members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first
+  viewer: null,     // /api/me's id — who this request is; null = not established
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
-  taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (#100 blocker picker; a closed blocker gates nothing)
-  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker (#309)
+  taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (the blocker picker; a closed blocker gates nothing)
+  tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker
   items: [],        // /api/tasks under the shared filters (+ done today when no status is picked)
-  calendar: null,   // /api/today's calendar group (#96) — the lane beside Today; null = not loaded
+  calendar: null,   // /api/today's calendar group — the lane beside Today; null = not loaded
   total: null,      // null = unknown (not yet read), 0 = truly empty
   tab: 'today',
-  todayCounts: null,  // Today's horizon counts as last drawn (today.js): the header's exceptions line (#393)
-  boardCounts: null,  // …and the Board's (board.js, #396): Inbox arrivals, overdue, due today
+  todayCounts: null,  // Today's horizon counts as last drawn (today.js): the header's exceptions line
+  boardCounts: null,  // …and the Board's (board.js): Inbox arrivals, overdue, due today
   headNote: null,     // a state that overrides every view's header line: 'No tasks yet' / 'Server unreachable'
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
-  // /api/status's `archive` block (#159) — the Email archiving sheet renders it
+  // /api/status's `archive` block — the Email archiving sheet renders it
   // in full; the Settings header and the palette read the last run's "needs
   // you" count off it.
   // `null` = not established yet (or the status call failed), never "off".
   archive: null,
-  aiSuggestions: {},  // task id → one pending staged suggestion (#95)
+  aiSuggestions: {},  // task id → one pending staged suggestion
   triaging: false,
-  // The done journal (#102): its own list (closed tasks in a window of whole
+  // The done journal: its own list (closed tasks in a window of whole
   // weeks ending today, newest closing first), never merged into `items`.
   // `older` is null until the probe answered — unknown, not "no".
   journal: { open: false, weeks: 1, items: [], older: null, cancelled: true },
-  settingsOpen: false,  // the Settings pane is up over the nav's tab (#281)
+  settingsOpen: false,  // the Settings pane is up over the nav's tab
 };
 
 let nav = null;
@@ -149,27 +148,27 @@ let drawer = null;
 // The drawer's own desktop breakpoint (styles/drawer.css): at and above it the drawer
 // is a panel beside the list (Today's right half), below it a full-screen sheet.
 const drawerBeside = window.matchMedia('(min-width: 1024px)');
-// The task desktop Today opened by itself (#393), until the user picks one.
+// The task desktop Today opened by itself, until the user picks one.
 let preselectedId = null;
 let board = null;
 let search = null;
-let time = null;          // the Time tab (#457): show() on its first press, hide() off it
+let time = null;          // the Time tab: show() on its first press, hide() off it
 let settings = null;
-let archive = null;       // the Email archiving sheet (#159, #397) — the batch run + its report
+let archive = null;       // the Email archiving sheet — the batch run + its report
 let palette = null;
-let keys = null;          // the row keymap + undo (#99); also feeds the palette
-let actions = null;       // the one row-action runner + its undo (actions.js, #311)
-let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js, #311)
+let keys = null;          // the row keymap + undo; also feeds the palette
+let actions = null;       // the one row-action runner + its undo (actions.js)
+let menus = null;         // one ⋯ row menu per rendered list (rowmenu.js)
 let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
-// The local usage log (#412, vendored usage-log): which views and [data-track]
+// The local usage log (vendored usage-log): which views and [data-track]
 // controls are used, on which device class — posted to this app's own
 // /api/usage/events, never anywhere else. Views: the three tabs, `settings`,
 // `settings.<sheet>` and `journal`.
 const usage = initUsageLog();
-const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js, #391; Search since #395)
-const whoses = {};        // tab → its Mine · Everyone switch (Today · Board only, two or more members, #477)
+const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js)
+const whoses = {};        // tab → its Mine · Everyone switch (Today · Board only, two or more members)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
-const bulkBars = [];      // one per pane strip (Board · Today), all over one selection (#81)
+const bulkBars = [];      // one per pane strip (Board · Today), all over one selection
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -206,7 +205,7 @@ async function loadPeople() {
   try { state.people = (await api('/api/people')).items || []; } catch (_) { state.people = []; }
 }
 
-/** Who a task can belong to (#476) and who is asking (#477). Unknown (the call
+/** Who a task can belong to and who is asking. Unknown (the call
  *  failed) reads as one member and no viewer, so no owner control offers a
  *  choice it cannot make and no list is narrowed to someone it cannot name. */
 async function loadMembers() {
@@ -234,7 +233,7 @@ function indexSuggestions(items) {
 }
 
 /** The one `GET /api/status` the Board needs at boot: the local AI's state
- *  (the Triage button) and the archiver's (the "needs you" count, #159). The
+ *  (the Triage button) and the archiver's (the "needs you" count). The
  *  Email archiving sheet re-reads the same block for itself and publishes it
  *  back here, so both paths tell one story. */
 async function loadStatus() {
@@ -250,8 +249,8 @@ async function loadStatus() {
   }
 }
 
-/** Every open task, not just projects — the blocker picker (#100) offers any
- *  open task (a closed blocker gates nothing, #309). A closed project kept in
+/** Every open task, not just projects — the blocker picker offers any
+ *  open task (a closed blocker gates nothing). A closed project kept in
  *  the forest for its open descendants is context there, not an option. */
 function flattenOpen(forest) {
   const out = [];
@@ -264,7 +263,7 @@ function flattenOpen(forest) {
   return out;
 }
 
-/** Latest-wins guard for the reads that replace shared state (#321).
+/** Latest-wins guard for the reads that replace shared state.
  *
  *  Two loads can be in flight at once — every edit's `refreshAll()` follows the
  *  last one's, and a filter change reloads the list on its own. The network
@@ -292,13 +291,13 @@ async function loadTree(seq) {
 /** The shared list: the filters as sent to /api/tasks; when no status is
  *  picked, today's done tasks ride along (the Board's Done-today column).
  *
- *  Deferred (#87) and blocked (#100) tasks are in it only while their pill is
+ *  Deferred and blocked tasks are in it only while their pill is
  *  pressed — the server leaves them out otherwise, so a sleeping or locked
  *  task never lands back on the Board by itself. */
 async function loadItems(seq) {
   const f = state.filters;
   const params = listParams(f, whoseOwner());
-  // No view reads a description off the list (the drawer fetches its own task), #309.
+  // No view reads a description off the list (the drawer fetches its own task).
   const slim = { descriptions: false };
   const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
   if (!f.status.length) {
@@ -316,7 +315,7 @@ async function loadItems(seq) {
 }
 
 /** Drop ticked ids the list no longer holds — deleted elsewhere, or filtered
- *  out — so a bulk POST never carries an id the user cannot see (#81). */
+ *  out — so a bulk POST never carries an id the user cannot see. */
 function pruneSelection() {
   if (!selection.isActive()) return;
   selection.keepOnly(new Set(state.items.map(function (t) { return t.id; })));
@@ -345,7 +344,7 @@ async function refreshAll() {
     }
     state.headNote = null;
     renderAll();
-    // The date sheet's dates for today (#391) — a no-op once read today, so
+    // The date sheet's dates for today — a no-op once read today, so
     // the sheet opens already filled in, and a refresh past midnight re-reads.
     loadPhraseDates();
     // Search rows are drawn from the answer it cached, not from `state.items`:
@@ -421,11 +420,11 @@ async function patchTask(id, changes) {
 }
 
 /** The row's status select (and the drawer's). Completing goes through the
- *  one action runner (#311) — the same write, toast and Undo as the `e` key:
+ *  one action runner — the same write, toast and Undo as the `e` key:
  *  "complete" (recurring tasks only — see rows.js::statusOptions) rolls the
  *  due one cadence forward instead of closing, and "done" on a task that does
  *  not recur is the same close. "done" on a recurring task stays a plain
- *  PATCH — closed for good, off the series (issue #54) — as does every other
+ *  PATCH — closed for good, off the series — as does every other
  *  status. */
 async function setStatus(id, status) {
   const task = status === 'complete' || status === 'done' ? await resolveTask(id) : null;
@@ -440,7 +439,7 @@ async function setStatus(id, status) {
   if (!(await actions.run(actionById('complete'), [task]))) throw new Error('busy');
 }
 
-/** A row dropped on a Board week lane (#396): re-dated to the lane's first
+/** A row dropped on a Board week lane: re-dated to the lane's first
  *  day through the one action runner — the date sheet's own Move, so the same
  *  write, toast and Undo, and nothing but `due` (`null` stays the sheet's
  *  "No date", which no lane drops). */
@@ -453,7 +452,7 @@ async function setDue(id, due) {
   if (!(await actions.run(actionById('change-date'), [task], due))) throw new Error('busy');
 }
 
-/** Delete every ticked task (#121) — POST /api/tasks/bulk/delete, after the
+/** Delete every ticked task — POST /api/tasks/bulk/delete, after the
  *  one confirmation names the count, the projects whose children go too and
  *  the synced coding tasks the next sync would bring back. Per-id results as
  *  the bulk change: what failed is named and stays ticked; a clean batch
@@ -499,7 +498,7 @@ async function bulkDelete() {
   await refreshAll();
 }
 
-/** Apply one change to every ticked task (#81) — POST /api/tasks/bulk.
+/** Apply one change to every ticked task — POST /api/tasks/bulk.
  *
  *  The response is per id, because a batch is not all-or-nothing: an id
  *  deleted in another tab 404s while the rest apply. What failed is named in
@@ -508,7 +507,7 @@ async function bulkDelete() {
  *  retry). A clean batch clears the selection but stays in Select mode, ready
  *  for the next pick.
  *  `status: 'complete'` carries the recurring-task roll, exactly as the row
- *  select's option does (issue #54) — the server owns what it means per task. */
+ *  select's option does — the server owns what it means per task. */
 async function bulkApply(changes) {
   const ids = selection.selectedIds();
   if (!ids.length) return;
@@ -532,7 +531,7 @@ async function bulkApply(changes) {
   return res;
 }
 
-/** The task behind a row, for the keymap (#99): the summary already on screen
+/** The task behind a row, for the keymap: the summary already on screen
  *  when there is one, else a fetch — a Search hit can be a task outside the
  *  filtered list, and undo needs that task's real prior values, not a guess. */
 async function resolveTask(id) {
@@ -551,13 +550,13 @@ function viewItems() {
   return state.items.filter(function (t) { return !CLOSED[t.status]; });
 }
 
-/** Today's list: the view's items in the scope switch's scope (#391). */
+/** Today's list: the view's items in the scope switch's scope. */
 function todayItems() {
   return viewItems().filter(function (t) { return matchesScope(t, state.filters.scope); });
 }
 
 /** The Board's list: the shared list (today's done tasks included, for the
- *  Status mode's Done column) in the same scope (#396). */
+ *  Status mode's Done column) in the same scope. */
 function boardItems() {
   return state.items.filter(function (t) { return matchesScope(t, state.filters.scope); });
 }
@@ -585,7 +584,7 @@ function renderScope(tab, host) {
 
 function renderSearchScope() { renderScope('search', els.searchScope); }
 
-/** Whose switch moved (#477): the choice is kept per device and mirrored in
+/** Whose switch moved: the choice is kept per device and mirrored in
  *  the URL, and — unlike the scope — it narrows the server's list, so the
  *  lists and the journal are read again under it. Search never follows. */
 function onWhoseChange(whose) {
@@ -635,8 +634,8 @@ function renderFilters() {
   const boardOptions = Object.assign({}, options, {
     count: boardItems().filter(function (t) { return state.filters.status.length || !CLOSED[t.status]; }).length,
   });
-  // [tab, the top strip that holds the text input (#80) and the filter button
-  // (#395) — Search has no text strip: its own box owns the text and holds
+  // [tab, the top strip that holds the text input and the filter button
+  // Search has no text strip: its own box owns the text and holds
   // the button]
   [['board', els.boardFilterText], ['today', els.todayFilterText],
     ['search', null], ['journal', els.journalFilterText]]
@@ -647,7 +646,7 @@ function renderFilters() {
         filterCards[pair[0]] = mountFilters(pair[0] === 'journal'
           // the journal's status is implicit (done + cancelled), its order the
           // closing time, and a due / modified window says nothing about a
-          // closed task — only project · person · text apply (#102)
+          // closed task — only project · person · text apply
           ? { onChange: onFilterChange, textHost: pair[1], hide: JOURNAL_HIDES, countLabel: 'closed' }
           : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox }
             : { onChange: onFilterChange, textHost: pair[1] });
@@ -669,7 +668,7 @@ function renderAll() {
 }
 
 // ------------------------------------------------------------- selection
-/** Select mode's chrome (#81): the toggles' pressed state, the bulk bars, and
+/** Select mode's chrome: the toggles' pressed state, the bulk bars, and
  *  which half of the top strip is showing — the strip's filter text and `+`
  *  step aside for the bar rather than stacking a third row above the board. */
 function renderSelectMode() {
@@ -752,7 +751,7 @@ function renderTodayPane() {
 }
 
 // ---------------------------------------------------------------- journal
-/** The done journal (#102) — journal.js draws it; this owns its window and
+/** The done journal — journal.js draws it; this owns its window and
  *  its two reads: the page (closed tasks in the window, the API's done window
  *  orders them newest closing first) and the older-probe (one row before the
  *  window, if any). `older` stays null while the probe is unanswered — an
@@ -838,7 +837,7 @@ function hideJournal() {
 }
 
 // ------------------------------------------------------------ the header
-/** The header names the view on screen (#339): the vendored home-head's
+/** The header names the view on screen: the vendored home-head's
  *  title is each pane's heading, so every tab opens with one. */
 function setHeadTitle(text, iconId) {
   els.homeTitleText.textContent = text;
@@ -846,28 +845,28 @@ function setHeadTitle(text, iconId) {
 }
 
 /** The line beside the title names an exception or states a plain fact
- *  (#393, design.md `page-header`). On Today: `headLine` over the counts of
+ *  (design.md `page-header`). On Today: `headLine` over the counts of
  *  the horizons Today just drew, so the header and the list never disagree —
  *  one text node in one tone (`.status.is-attention`), never per-part spans:
  *  Today's line is always a single sentence, and splitting it across spans
- *  (as tried for #439) measurably shifts the browser's text shaping at the
+ *  measurably shifts the browser's text shaping at the
  *  word boundary — a sub-pixel kerning drift the screenshot gallery caught
  *  that no eye would. On the Board: `boardHeadParts` over the counts its
  *  lanes were drawn from — Inbox arrivals in the accent, *ahead of* overdue /
- *  due today (#396). On Settings: the mails the last archiving run left for
- *  you, ahead of a failing service even in the danger tone (#397) — "needs
+ *  due today. On Settings: the mails the last archiving run left for
+ *  you, ahead of a failing service even in the danger tone — "needs
  *  you" matters more than severity. Both orderings put importance ahead of
  *  severity, which the vendored renderer's `TONE_RANK` (danger, then
  *  attention — nothing else ranked) cannot reproduce: handing it these two
  *  arrays would have it silently re-sort them by severity and lose that
  *  ordering. So Board and Settings paint their own two parts locally
  *  (`paintParts` below) — sharing the vendored `.head-exception` markup/CSS
- *  and its `HEAD_MAX_PARTS` cap (#439), short of the one piece that needs
+ *  and its `HEAD_MAX_PARTS` cap, short of the one piece that needs
  *  project-scaffolding's say: ranking by the caller's own importance, not
  *  just severity (and an 'accent' entry in `TONE_RANK` for the Board's own
  *  case). The open count is not repeated here: it is the filter field's
  *  placeholder. The other views name their own exceptions in their redesign
- *  steps (#390); until then their line is empty rather than a count. */
+ *  steps; until then their line is empty rather than a count. */
 function renderHeadStatus() {
   const el = els.homeHeadStatus;
   let text = '';
@@ -908,7 +907,7 @@ function paintParts(el, parts) {
   });
 }
 
-/** The Settings line's parts (#397): the archive's "needs you" first — the
+/** The Settings line's parts: the archive's "needs you" first — the
  *  one exception that asks for a hand rather than a fix — then settings.js's
  *  own (failing services, or the plain count), at most `HEAD_MAX_PARTS`. */
 function settingsHeadParts() {
@@ -928,14 +927,14 @@ function setHeadTitleFromTab(tab) {
 }
 
 // ------------------------------------------------------------- settings
-/** Show the Settings pane over whichever pane the nav has up (#281). Settings
+/** Show the Settings pane over whichever pane the nav has up. Settings
  *  is no tab — five destinations is the pill's ceiling (design.md) — but the
  *  header gear, in the journal's shape: the pill's lit tab comes off, any tab
  *  press leaves (the nav re-shows its own pane, onChange hides this one), and
  *  `#settings` keeps it across a reload. */
 function openSettings() {
   hideJournal();
-  // One detail beside the list at a time (#397): Settings has its own.
+  // One detail beside the list at a time: Settings has its own.
   if (drawer.currentId() != null) closeTask();
   if (!state.settingsOpen) {
     state.settingsOpen = true;
@@ -947,7 +946,7 @@ function openSettings() {
     setHeadTitle('Settings', 'i-settings');
     usage.trackView('settings');
     dropPreselected();
-    // Its poll stops under Settings, and its two Settings rows read its meta (#457).
+    // Its poll stops under Settings, and its two Settings rows read its meta.
     if (time) { time.hide(); time.settingsShown(); }
     renderHeadStatus();
     const scroller = document.querySelector('.app');
@@ -963,7 +962,7 @@ function openSettings() {
 }
 
 /** A `#settings` (or Settings card) / `#journal` hash with its pane not open
- *  yet: boot opens it at its end, unless a tab press came first (#328). */
+ *  yet: boot opens it at its end, unless a tab press came first. */
 function dropPendingPaneHash() {
   const h = location.hash;
   if (h === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(h) || JOURNAL_HASH.test(h)) {
@@ -983,8 +982,7 @@ function hideSettings() {
 }
 
 /** A Settings row was pressed (or the palette asked): Settings with that
- *  row's sheet up, as `#settings/<key>` — pushed, so Back closes the sheet
- *  (#397). */
+ *  row's sheet up, as `#settings/<key>` — pushed, so Back closes the sheet. */
 function openSettingsSheet(key) {
   const hash = '#settings/' + key;
   if (location.hash !== hash) history.pushState(null, '', location.pathname + location.search + hash);
@@ -1024,7 +1022,7 @@ function hashTaskId() {
 }
 
 function openTask(id) {
-  // The task panel takes the sheet's place beside the Settings list (#397).
+  // The task panel takes the sheet's place beside the Settings list.
   if (settings.currentSheet()) closeSettingsSheet();
   if (hashTaskId() !== id) {
     // inside the journal the hash keeps saying so, or a reload would land on a tab
@@ -1035,8 +1033,8 @@ function openTask(id) {
   drawer.open(id);
 }
 
-/** Desktop Today never opens on an empty detail half while a task is due
- *  (#393, decision 8 of #390): on entering the tab with nothing open, the
+/** Desktop Today never opens on an empty detail half while a task is due:
+ *  on entering the tab with nothing open, the
  *  first due row (the first row on screen) fills the right half. No hash is
  *  written: it is the view's default, not a navigation, so a reload picks
  *  the first due task again and Back does not step through it. The phone's
@@ -1082,7 +1080,7 @@ function onHashChange() {
     return;
   }
   const id = hashTaskId();
-  // #journal (#102): open it, or — Back to a hashless URL — leave it and let
+  // #journal: open it, or — Back to a hashless URL — leave it and let
   // the nav re-show the tab it still holds.
   const wantsJournal = JOURNAL_HASH.test(location.hash);
   if (wantsJournal && !state.journal.open) openJournal();
@@ -1097,7 +1095,7 @@ function focusRow(task) {
   // the eye lands on the row, not a panel.
   const tab = nav.getTab();
   const hosts = { board: els.boardHost, today: els.todayHost };
-  // Settings covers the nav's tab (#281): land on the Board, as a non-list tab
+  // Settings covers the nav's tab: land on the Board, as a non-list tab
   // does — a new task opens in Inbox, which is a Board column.
   let host = state.settingsOpen ? null : hosts[tab];
   if (!host) { nav.setTab('board'); host = els.boardHost; }
@@ -1144,7 +1142,7 @@ function wireQuickAdd() {
   });
 }
 
-/** An empty list's way forward (#339): the quick-add, preset to the list. */
+/** An empty list's way forward: the quick-add, preset to the list. */
 function addTask(preset) {
   quickAdd.open(preset);
 }
@@ -1157,7 +1155,7 @@ async function fetchVersion() {
     const body = await res.json();
     els.buildReadout.textContent = buildReadoutText(body.git_sha || 'unknown', body.built_at || '');
     if (els.settingsSite && body.schema_version != null) {
-      els.settingsSite.textContent = 'version ' + body.schema_version;   // the Database row's value: plain words (#339, #397)
+      els.settingsSite.textContent = 'version ' + body.schema_version;   // the Database row's value: plain words
     }
   } catch (err) {
     // An unreachable version endpoint is its own visible state, never blank.
@@ -1228,7 +1226,7 @@ function openFolderOfCurrentTask() {
   chip.click();
 }
 
-/** How many mails the last archiving run left for a human (#159), or why the
+/** How many mails the last archiving run left for a human, or why the
  *  tab has nothing to show. `null` state = not established, never "off". */
 function archiveNeedsYou() {
   const last = state.archive && state.archive.last_run;
@@ -1250,7 +1248,7 @@ function paletteCommands() {
     { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
       if (quickAdd) quickAdd.open();
     } },
-    // The row keys, each showing its key (#99) — the palette is where a
+    // The row keys, each showing its key — the palette is where a
     // shortcut is discovered. Top of the list while a row is focused or
     // ticked, because acting on it is then the likeliest intent; otherwise
     // they are still listed (that is the discovery), just under the places
@@ -1259,7 +1257,7 @@ function paletteCommands() {
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-time', label: 'Go to Time', icon: 'timer', run: go('time') },
-    // The Archive tab until #397: Settings → Email archiving now, one command away still.
+    // The Archive tab: Settings → Email archiving now, one command away still.
     { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: function () { openSettingsSheet('archive'); } },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
     { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
@@ -1292,7 +1290,7 @@ function paletteCommands() {
   return cmds;
 }
 
-/** The one row-action runner (#311): the keymap, the status select and the
+/** The one row-action runner: the keymap, the status select and the
  *  row's own controls all commit through it. Every write is one POST
  *  /api/tasks/bulk — one id or the whole ticked set — so an action means the
  *  same thing either way and each task still goes through the repo layer's
@@ -1316,14 +1314,14 @@ function wireActions() {
   });
 }
 
-/** The row keymap (#99), reading the same actions. */
+/** The row keymap, reading the same actions. */
 function wireKeys() {
   keys = mountKeys(els.keysHelp, {
     actions: actions,
     resolveTask: resolveTask,
-    // A task you opened owns the keys (#99). The one desktop Today opened by
+    // A task you opened owns the keys. The one desktop Today opened by
     // itself does not, unless the focus is in it: else the keymap would be off
-    // on the landing tab from the first paint (#393).
+    // on the landing tab from the first paint.
     isBlocked: function () {
       const id = drawer.currentId();
       return id != null && (id !== preselectedId || els.drawer.contains(document.activeElement));
@@ -1362,9 +1360,9 @@ async function boot() {
   // because restoring the stored tab can fire onChange straight into it.
   settings = mountSettings({
     onSyncIssues: syncIssues,
-    // The phone's way into the palette (#316): Ctrl+K needs a hardware keyboard.
+    // The phone's way into the palette: Ctrl+K needs a hardware keyboard.
     onOpenPalette: function () { palette.open(''); },
-    // Row actions (#311): a row's menu reads its list when the row is drawn,
+    // Row actions: a row's menu reads its list when the row is drawn,
     // so a new choice redraws the lists that are up.
     onRowActions: function () {
       if (state.total) renderAll();
@@ -1374,21 +1372,21 @@ async function boot() {
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.
     onCaptured: function () { refreshAll(); },
-    // Refresh now on the Calendar card answers the fresh lane (#96): Today
+    // Refresh now on the Calendar card answers the fresh lane: Today
     // shows it without a second round trip.
     onCalendar: function (group) { state.calendar = group; renderTodayPane(); },
     // A run this page did not start (another device): hand it to the Email
     // archiving sheet, which re-reads the service, picks the live run up and
     // resumes polling it.
     onArchiveRun: function () { if (archive) archive.refresh(); },
-    // A row's word changed: the Settings header line is read off them (#397).
+    // A row's word changed: the Settings header line is read off them.
     onHead: renderHeadStatus,
     onOpenSheet: openSettingsSheet,
     onCloseSheet: closeSettingsSheet,
   });
-  // The Email archiving sheet's run and report (#159, #397).
+  // The Email archiving sheet's run and report.
   archive = mountArchive({
-    // Settings' rows render the same block rather than polling it (#262).
+    // Settings' rows render the same block rather than polling it.
     // (the palette's Go to Archive hint and the Settings header read
     // `state.archive`)
     onStatus: function (st) {
@@ -1396,11 +1394,11 @@ async function boot() {
       settings.renderArchive(st);
     },
     // A run files mail and a review action re-files one — neither touches a
-    // task, and since #396 nothing outside the pane shows the run's count.
+    // task, and nothing outside the pane shows the run's count.
     onChanged: function () {},
   });
   // The filters are shared by every tab, so a shared URL never moves the tab
-  // by itself. First visit: Today, on every pointer (#319) — the first tab in the nav.
+  // by itself. First visit: Today, on every pointer — the first tab in the nav.
   const f = state.filters;
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   // ?q= belongs to the Search tab when the page lands there (#search deep
@@ -1422,9 +1420,9 @@ async function boot() {
       state.tab = tab;
       usage.trackView(tab);
       setHeadTitleFromTab(tab);
-      hideJournal();   // a tab press is how the journal is left (#102); the nav re-showed its pane
-      hideSettings();  // …and Settings, the same way (#281)
-      // …even before they have opened (#328): boot only opens them at its end,
+      hideJournal();   // a tab press is how the journal is left; the nav re-showed its pane
+      hideSettings();  // …and Settings, the same way
+      // …even before they have opened: boot only opens them at its end,
       // so a tab pressed while it loads would otherwise be covered again by the
       // `#settings` / `#journal` hash it left behind. `nav` is still null for
       // the init call that restores the stored tab, which must keep the hash.
@@ -1441,10 +1439,10 @@ async function boot() {
     },
   });
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
-  // A PWA last left on the Settings tab (before #281) reopens on Settings once;
+  // A PWA last left on the retired Settings tab reopens on Settings once;
   // the nav has already stored its default tab in that key's place.
   if (storedTab === 'settings' && !location.hash) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
-  // …and one last left on the Archive tab (before #397) on its sheet.
+  // …and one last left on the retired Archive tab on its sheet.
   if (storedTab === 'archive' && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#settings/archive');
   // Pressed while Settings is up, it re-reads the cards — what tapping the
   // Settings tab used to do.
@@ -1468,10 +1466,10 @@ async function boot() {
     if (ev.key !== 'Escape') return;
     // A field where you are typing owns Escape (revert / clear its own value).
     // A checkbox does not: after ticking a row the focus sits on one, and
-    // Escape there has to leave Select mode or the key looks broken (#81).
+    // Escape there has to leave Select mode or the key looks broken.
     if (ev.target.closest('textarea, select, input:not([type="checkbox"])')) return;
     // an open dialog (palette, quick-add, the keys card, a confirmation) owns
-    // Escape natively — it must not also close the drawer underneath (#121)
+    // Escape natively — it must not also close the drawer underneath
     if (document.querySelector('dialog[open]')) return;
     // a Settings sheet or the drawer first (the thing on top), then Select mode
     if (settings.currentSheet()) closeSettingsSheet();

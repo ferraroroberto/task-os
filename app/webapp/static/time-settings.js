@@ -1,15 +1,15 @@
-/* task-os — the Time tab's Settings row and its sheet (#457).
+/* task-os — the Time tab's Settings row and its sheet.
  *
  *   Tools → Time categories   areas and their categories: add, rename (a
- *                             category's subtitle too, #463), reorder, move
+ *                             category's subtitle too), reorder, move
  *                             a category to another area, archive /
  *                             unarchive; delete only a category nothing
- *                             points at (`in_use` false, #463), so every
+ *                             points at (`in_use` false), so every
  *                             past entry keeps its category and its totals
  *
- * Who the tab logs as is not set here any more (#475): it is whoever is
+ * Who the tab logs as is not set here any more: it is whoever is
  * signed in. The row and sheet body are markup in index.html (the Settings
- * pattern, #397); this fills them. Every write goes to `/api/time/{areas,categories}`
+ * pattern); this fills them. Every write goes to `/api/time/{areas,categories}`
  * and then `onMetaChanged()` re-reads the meta the Time tab draws from.
  */
 

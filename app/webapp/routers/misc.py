@@ -61,7 +61,7 @@ async def index(request: Request) -> Response:
     html = BUILD_INFO.stamp_html(index_path.read_text(encoding="utf-8"))
     # The shell must always revalidate: a cached shell pointing at an old
     # ?v= entry module would defeat the fleet-hash cache-busting entirely.
-    # The validator makes that revalidation a bodyless 304 on a relaunch (#280).
+    # The validator makes that revalidation a bodyless 304 on a relaunch.
     etag = _etag_of(html)
     headers = {"Cache-Control": _INDEX_CACHE_CONTROL, "ETag": etag}
     if _matches(request.headers.get("if-none-match"), etag):

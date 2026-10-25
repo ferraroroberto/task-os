@@ -34,8 +34,8 @@ function breadcrumbs(ctx, t) {
   return crumbs;
 }
 
-/** Parent tools (#468): the breadcrumb is where the owner looks for the
- *  parent, so they sit on its line (#486) and wrap under it when it is long. */
+/** Parent tools: the breadcrumb is where the owner looks for the
+ *  parent, so they sit on its line and wrap under it when it is long. */
 function parentTools(ctx, t) {
   const opts = ctx.opts;
   const tools = document.createElement('div');
@@ -87,7 +87,7 @@ export function renderTitleRow(ctx, t) {
   code.className = 'drawer-code';
   code.textContent = t.code || ('#' + t.id);
   // A textarea, not an input: a long title wraps to 2–3 lines instead of
-  // clipping off-screen on the phone (#32). Enter still commits (below),
+  // clipping off-screen on the phone. Enter still commits (below),
   // never a newline; the height follows the content.
   const title = document.createElement('textarea');
   title.rows = 1;

@@ -17,15 +17,15 @@ const STATE_TONE = {
   archived: 'ok', moved: 'ok', needs_review: 'warn', failed: 'warn', reverted: 'off',
 };
 //: The desktop table caps a row's file chips so five real files (and their
-//: attachments) cannot force a subject/state row several lines tall (#178).
-//: One since #339's J-10: a row reads in two lines, and one chip + "+N more" +
-//: the ⋮ is exactly the action-row budget (#350). The phone card keeps
+//: attachments) cannot force a subject/state row several lines tall.
+//: Per J-10, a row reads in two lines, and one chip + "+N more" +
+//: the ⋮ is exactly the action-row budget. The phone card keeps
 //: showing every file — its own width already wraps each chip to its own
-//: line (#173) and a card has room to grow.
+//: line and a card has room to grow.
 const FILES_CAP = 1;
 //: The archiver's own naming: `NNN - <name>` or `YYYY-MM-DD - NNN - <name>`
 //: ahead of the readable part. Worth keeping in the desktop table (it sorts
-//: the folder by date), least useful on a 390px chip (#173) — the full name
+//: the folder by date), least useful on a 390px chip — the full name
 //: stays in the chip's `title` either way.
 const FILE_NAME_PREFIX = /^(?:\d{4}-\d{2}-\d{2} - )?\d+ - /;
 
@@ -55,7 +55,7 @@ export function destinationEl(item) {
  *  every folder chip in the app carries, so a `.msg` opens in the mail
  *  client on whichever PC is looking. `opts.cap` (the desktop table only)
  *  shows at most `FILES_CAP` and folds the rest behind a *+N more* chip
- *  that expands them in place, one click, no re-render (#178). */
+ *  that expands them in place, one click, no re-render. */
 export function filesEl(ctx, item, opts) {
   const cap = (opts || {}).cap;
   const el = document.createElement('span');

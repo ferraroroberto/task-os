@@ -29,8 +29,8 @@ function pad2(n) {
 }
 
 /**
- * Draw a run's one-line summary into `el` — the single formatter of it (#262):
- * since #397 the sheet's head is the one place a run's summary is shown (the
+ * Draw a run's one-line summary into `el` — the single formatter of it:
+ * the sheet's head is the one place a run's summary is shown (the
  * Settings card that repeated it is gone). `last` is the API's run row
  * (`status.last_run`); `null` is "never run". `narrow` picks the one-line
  * phone wording.

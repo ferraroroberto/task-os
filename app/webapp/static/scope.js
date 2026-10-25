@@ -1,13 +1,13 @@
 /* task-os — the two view switches under a pane's strip.
  *
- *   scope  Tasks · Issues · All   which kind of task (#391, decision 1 of #390;
- *                                 relabelled in #477 — "Mine" moved to the other axis)
- *   whose  Mine · Everyone        whose tasks (#477, Step 4/4 of #471); only
+ *   scope  Tasks · Issues · All   which kind of task
+ *                                 ("Mine" is the other axis, `whose`)
+ *   whose  Mine · Everyone        whose tasks; only
  *                                 mounted on Today and Board, and only shown
  *                                 with two or more members
  *
- * The vendored segmented control (`_vendored/segmented/`, project-scaffolding
- * #341) over the shared filter state's `scope` and `whose` keys (filters.js
+ * The vendored segmented control (`_vendored/segmented/`, project-scaffolding)
+ * over the shared filter state's `scope` and `whose` keys (filters.js
  * `SCOPES`, `WHOSE`). One builder for every list that shows either — the two
  * are separate axes and never fold into one control. The raised segment is the
  * state, so a switch says what is on and nothing above it repeats that in words.

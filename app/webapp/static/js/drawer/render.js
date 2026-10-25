@@ -21,7 +21,7 @@ function mainFields(ctx, t) {
   fields.appendChild(quickMoves(ctx));
   fields.appendChild(statusField(ctx, t));
   fields.appendChild(selectField(ctx, 'Priority', 'priority', PRIORITIES, t.priority));
-  // Whose task it is (#476) — beside status and priority, never under More
+  // Whose task it is — beside status and priority, never under More
   // fields, so handing a task over is one pick on the phone too. One member
   // has nobody to hand it to, so there is no control.
   const members = ctx.opts.members() || [];

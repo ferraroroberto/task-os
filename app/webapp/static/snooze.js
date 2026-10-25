@@ -1,8 +1,8 @@
-/* task-os — snooze and change-date: the one date picker a row action opens (#87, #311).
+/* task-os — snooze and change-date: the one date picker a row action opens.
  *
  * Snooze is not a field of its own — it is `starts` worn as a row action. The
  * menu offers four options; picking one PATCHes `{starts: <phrase>}` and the
- * task leaves the working views until that day. Re-dating (#311) is the
+ * task leaves the working views until that day. Re-dating is the
  * same menu over `due`, with Today in front and a way to clear the date. The
  * options send the *phrase*, not a date the browser computed: `src/dates.py`
  * owns the date vocabulary for the CLI, quick-add, the drawer and the mirror,
@@ -16,11 +16,11 @@
  *
  * A row action that asks for a date (the `s` and `d` keys, the ⋯ menu's
  * Snooze… and Move…, a swipe, the desktop row's Move button and Select mode's
- * Move, #392) opens the same menu through
+ * Move) opens the same menu through
  * `openDatePicker()`: anchored beside the row on a fine pointer, in the
- * vendored editor modal on a phone (#311's plan, question 5).
+ * vendored editor modal on a phone.
  *
- * The date sheet (#391): every phrase shows the date it resolves to today,
+ * The date sheet: every phrase shows the date it resolves to today,
  * and the push-out phrases come first — most re-dates push a task out. The
  * dates come from the server (`GET /api/dates`, the same `parse_date` the
  * write runs), read once per local day into a cache the app primes at every
@@ -43,7 +43,7 @@ export const SNOOZE_OPTIONS = [
 ];
 
 /** Re-dating offers one step sooner than snoozing — "do it today" is a due
- *  date — after the push-outs, which are most re-dates (#391). */
+ *  date — after the push-outs, which are most re-dates. */
 export const DUE_OPTIONS = SNOOZE_OPTIONS.concat([['today', 'Today']]);
 
 // ------------------------------------------------- what each phrase means
@@ -88,7 +88,7 @@ function fillDates(buttons) {
 /**
  * The phrases as buttons: each one's label, and the date it resolves to today
  * once that is known. The sheet below lists them; the drawer lays the same
- * buttons out as its quick moves under Due (#394), so a phrase means one date
+ * buttons out as its quick moves under Due, so a phrase means one date
  * wherever it is offered.
  * @param {Array<[string,string]>} options   [phrase, label] pairs
  * @param {(phrase:string) => void} onPick
@@ -149,7 +149,7 @@ export function dateMenu(t, field, onPick) {
   menu.className = 'snooze-menu';
   menu.dataset.field = field;
   // The shadcn Popover role (role="dialog"): a non-modal layer over the
-  // rows, never part of them (#281).
+  // rows, never part of them.
   menu.setAttribute('role', 'dialog');
   menu.setAttribute('aria-label', spec.name(t));
 
@@ -167,7 +167,7 @@ export function dateMenu(t, field, onPick) {
   pick.button.appendChild(document.createTextNode('Pick a date…'));
   menu.append(pick.button, pick.picker);
 
-  // `clearable`: a selection (#392) — its tasks' dates are not known here,
+  // `clearable`: a selection — its tasks' dates are not known here,
   // so "No date" is always offered; clearing an undated task changes nothing
   if (field === 'due' && (t.due || t.clearable)) {
     const clear = document.createElement('button');

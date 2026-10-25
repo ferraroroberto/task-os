@@ -139,14 +139,14 @@ logger = logging.getLogger(__name__)
 TASK_TYPES = ("task", "coding", "note")
 TASK_STATUSES = ("inbox", "todo", "standby", "done", "cancelled")
 #: The two statuses a task leaves the working views in — both stamp ``done_at``
-#: (#102). Here beside the enum rather than in ``tasks_repo`` so the CLI's
+#: . Here beside the enum rather than in ``tasks_repo`` so the CLI's
 #: formatters read it without importing the domain module on the HTTP path.
 CLOSED_STATUSES = ("done", "cancelled")
 #: :data:`CLOSED_STATUSES` as the body of a SQL ``IN (…)``, built from the tuple
 #: so no query anywhere restates the pair. Lives beside the tuple rather than in
 #: one consumer, because four modules ask this same question in SQL.
 CLOSED_SQL = ", ".join(f"'{s}'" for s in CLOSED_STATUSES)
-#: Where a task starts when nobody said (#148). **To Do**, not Inbox: Inbox is
+#: Where a task starts when nobody said. **To Do**, not Inbox: Inbox is
 #: the arrivals tray for what came in on its own — a flagged email, a marked
 #: WhatsApp message — and a task you typed or spoke has already been triaged by
 #: the act of writing it. Every hand-driven surface reads this one name
@@ -169,7 +169,7 @@ def _in(values: tuple[str, ...]) -> str:
 
 
 # ``tasks.status`` below still reads ``DEFAULT 'inbox'`` while the application
-# default is ``todo`` (``tasks_repo.DEFAULT_STATUS``, #148). Deliberate, and not
+# default is ``todo`` (``tasks_repo.DEFAULT_STATUS``). Deliberate, and not
 # drift: **no insert path ever omits ``status``** — ``create_task`` is the only
 # writer and it always supplies one — so the column default is unreachable, and
 # changing a column default in SQLite means a whole table-rebuild migration for
@@ -310,7 +310,7 @@ CREATE TABLE mirror_state (
 );
 """
 
-# links.kind gains 'ai' (#77). A CHECK cannot be altered in place: rebuild the
+# links.kind gains 'ai'. A CHECK cannot be altered in place: rebuild the
 # table (dropping a child table trips nothing — only tasks is referenced) and
 # recreate its one index. v2 above keeps the shipped kind list verbatim.
 _V5 = f"""
@@ -342,7 +342,7 @@ CREATE UNIQUE INDEX idx_mirror_events_dedupe ON mirror_events(task_id, field, fi
 CREATE INDEX idx_mirror_events_ts ON mirror_events(ts);
 """
 
-# tasks.starts (#87) — a plain nullable column, so an existing database gains
+# tasks.starts — a plain nullable column, so an existing database gains
 # it with every task awake (NULL = no gate). The index carries the deferral
 # clause every list query now adds.
 _V7 = """
@@ -350,7 +350,7 @@ ALTER TABLE tasks ADD COLUMN starts TEXT;
 CREATE INDEX idx_tasks_starts ON tasks(starts);
 """
 
-# tasks.planned_on + tasks.plan_order (#89) — plain nullable columns, so an
+# tasks.planned_on + tasks.plan_order — plain nullable columns, so an
 # existing database gains them with nothing planned. The index serves the
 # plan-group and candidate queries (planned_on = today / < today).
 _V8 = """
@@ -359,7 +359,7 @@ ALTER TABLE tasks ADD COLUMN plan_order INTEGER;
 CREATE INDEX idx_tasks_planned_on ON tasks(planned_on);
 """
 
-# tasks.recurrence_anchor (#112) — a plain nullable column, so an existing
+# tasks.recurrence_anchor — a plain nullable column, so an existing
 # database gains it with every recurring task unanchored (NULL = the offset
 # roll it has always had). The fixed day lives beside the cadence rather than
 # inside it because widening ``tasks.recurrence``'s CHECK would mean rebuilding
@@ -372,7 +372,7 @@ _V9 = """
 ALTER TABLE tasks ADD COLUMN recurrence_anchor TEXT;
 """
 
-# done_at for cancelled tasks (#102) — a data step, no DDL. Until here only
+# done_at for cancelled tasks — a data step, no DDL. Until here only
 # ``done`` stamped ``done_at``; the journal reads it as "closed at", so a
 # cancelled task needs one too. The activity log knows when the cancellation
 # happened; ``updated_at`` is the honest fallback for a row that never logged
@@ -386,7 +386,7 @@ UPDATE tasks
  WHERE status = 'cancelled' AND done_at IS NULL;
 """
 
-# task_blocks (#100) — a *blocks* edge (blocker_id must close before
+# task_blocks — a *blocks* edge (blocker_id must close before
 # blocked_id counts as unblocked), separate from the parent tree. Both FKs
 # cascade: deleting either end of an edge drops the edge with it. Indexed on
 # both columns — blocked_id for "who blocks me" (the visibility clause),
@@ -401,7 +401,7 @@ CREATE INDEX idx_task_blocks_blocked ON task_blocks(blocked_id);
 CREATE INDEX idx_task_blocks_blocker ON task_blocks(blocker_id);
 """
 
-# Staged AI suggestions (#95). A resolved row is durable history; only one
+# Staged AI suggestions. A resolved row is durable history; only one
 # pending row may exist for a task, and a new triage run replaces that row.
 _V12 = """
 CREATE TABLE ai_suggestions (
@@ -419,7 +419,7 @@ CREATE INDEX idx_ai_suggestions_task ON ai_suggestions(task_id, id DESC);
 """
 
 # Retire the Doing stage. Existing rows are moved into Todo before the
-# application stops accepting the old value (#153). SQLite cannot alter the
+# application stops accepting the old value. SQLite cannot alter the
 # CHECK on an existing table safely because tasks has cascading child tables,
 # so the migration also installs a guard trigger for already-created tables;
 # fresh databases get the narrower CHECK from the current TASK_STATUSES tuple.
@@ -439,7 +439,7 @@ BEGIN
 END;
 """
 
-# Batch archiving of the Outlook Inbox through email-archiver (#157). One
+# Batch archiving of the Outlook Inbox through email-archiver. One
 # ``archive_runs`` row per run of the archiver's batch CLI, one
 # ``archive_items`` row per mail that run decided on.
 #
@@ -451,8 +451,8 @@ END;
 # already filed cannot write a second row even if the archiver's index has not
 # caught up yet.
 #
-# ``candidates_json`` keeps ``plan``'s ranked list verbatim so Step 2 (#158)
-# can re-rank without re-planning and Step 3 (#159) can offer the discarded
+# ``candidates_json`` keeps ``plan``'s ranked list verbatim so Step 2
+# can re-rank without re-planning and Step 3 can offer the discarded
 # folders. ``date_prefix`` is the archiver's own per-folder naming inference,
 # stored so a later move hands the same value back.
 _V14 = """
@@ -496,7 +496,7 @@ CREATE UNIQUE INDEX idx_archive_items_filed
     ON archive_items(message_id) WHERE status IN ('archived', 'moved');
 """
 
-# The local model picks the folder among the archiver's candidates (#158).
+# The local model picks the folder among the archiver's candidates.
 #
 # ``archive_corrections`` is the memory: one row every time a human overrules
 # the system — a ``move`` into another folder, or an ``accept`` that confirms
@@ -526,7 +526,7 @@ CREATE INDEX idx_archive_corrections_item ON archive_corrections(item_id);
 ALTER TABLE archive_runs ADD COLUMN agreement REAL;
 """
 
-# tasks.recurrence_interval (#229) — the "every N" beside the cadence, a plain
+# tasks.recurrence_interval — the "every N" beside the cadence, a plain
 # nullable column for exactly v9's reason: folding it into ``tasks.recurrence``
 # would widen that CHECK, which means rebuilding ``tasks`` and firing its
 # ON DELETE CASCADEs. NULL = every cadence, so no existing row changes meaning
@@ -535,7 +535,7 @@ _V16 = """
 ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER;
 """
 
-# capture_keys (#254) — the capture key outlives the task. ``tasks.external_id``
+# capture_keys — the capture key outlives the task. ``tasks.external_id``
 # alone made "capture lands once" true only while the row existed: a delete
 # took the key with it and the next poll landed the same still-flagged mail
 # again. No FK to ``tasks`` on purpose — surviving the delete is the point.
@@ -554,7 +554,7 @@ INSERT INTO capture_keys(external_id, captured_at)
                         WHERE a.task_id = tasks.id AND a.field = 'imported');
 """
 
-# "My plan" is gone (#369): v8's two columns and its index are dropped. v8
+# "My plan" is gone: v8's two columns and its index are dropped. v8
 # itself stays frozen above — a database that already passed it still runs it
 # on a fresh install, and this step then undoes it. The index goes first
 # because SQLite refuses to drop an indexed column. DROP COLUMN rewrites no
@@ -566,7 +566,7 @@ ALTER TABLE tasks DROP COLUMN planned_on;
 ALTER TABLE tasks DROP COLUMN plan_order;
 """
 
-# The time tracker (#457): its own five tables, written only by
+# The time tracker: its own five tables, written only by
 # ``src/time_repo.py``. Two levels — an area holds categories — and both are
 # archived, never deleted, so every past entry keeps a category and its
 # totals (RESTRICT is the guard). ``person`` is a ``time.people`` id from the
@@ -640,7 +640,7 @@ INSERT INTO time_categories(area_id, slug, name, position)
     SELECT id, 'general', 'General', 0 FROM time_areas WHERE slug <> 'home';
 """
 
-# A task's owner (#476): the member whose task it is — a ``people`` /
+# A task's owner: the member whose task it is — a ``people`` /
 # ``time.people`` id from the config, never a display name, and never the
 # ``person_id`` contact a task is *about*. Purely additive: no existing row is
 # rewritten, so every task already here keeps NULL, which

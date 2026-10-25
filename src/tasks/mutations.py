@@ -179,7 +179,7 @@ def update_task(
         if value != current[field]:
             sets[field] = value
 
-    # Snooze (#486): `starts` pushed past `due` would hide the task until the
+    # Snooze: `starts` pushed past `due` would hide the task until the
     # day after it was due. The start carries the due with it — unless the
     # caller named `due` itself, which is their own pair and stays as sent.
     if sets.get("starts") and "due" not in changes:
@@ -187,7 +187,7 @@ def update_task(
         if due and due < sets["starts"]:
             sets["due"] = sets["starts"]
 
-    # Recurrence anchor (#112) — resolved against the cadence the task *ends*
+    # Recurrence anchor — resolved against the cadence the task *ends*
     # with, so PATCHing both at once validates the pair, and changing only the
     # cadence re-checks the anchor already stored (dropping it when the new
     # cadence cannot carry it) instead of leaving a stale fixed day behind.
@@ -202,7 +202,7 @@ def update_task(
             sets["recurrence_anchor"] = anchor
         else:
             sets.pop("recurrence_anchor", None)
-    # Interval (#229) — the same end-state resolution as the anchor above.
+    # Interval — the same end-state resolution as the anchor above.
     if "recurrence" in sets or "recurrence_interval" in changes:
         cadence = sets.get("recurrence", current["recurrence"])
         interval = (
@@ -231,7 +231,7 @@ def update_task(
     if reparent:
         sets["parent_id"] = new_parent
     if "status" in sets:
-        # closed-at (#102): any move into done / cancelled stamps the moment,
+        # closed-at: any move into done / cancelled stamps the moment,
         # any move back out clears it (a reopened task has no closing day)
         if sets["status"] in CLOSED_STATUSES:
             sets["done_at"] = ts
@@ -578,7 +578,7 @@ def capture_task(
         return None, "dismissed"
 
     # Inbox is named here rather than inherited from `create_task`'s default:
-    # that default is now "todo" (#148, what a *hand-made* task means), and the
+    # that default is now "todo" (what a *hand-made* task means), and the
     # arrivals tray must not follow it. A caller that says otherwise still wins.
     # `not fields.get(...)` rather than `setdefault`: a caller with no opinion
     # can express it as an absent key, a `None` or a blank, and all three mean

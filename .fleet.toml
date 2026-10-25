@@ -158,7 +158,7 @@ rules    = ["no-window", "logging-not-print", "no-drive-path"]
 # issue references inside product-code comments (.py, .js, .css, .ps1; strings and
 # docstrings are not comments) per file and fails when a count rises above
 # .comment-ratchet-baseline.json. Tests and vendored destinations are left out by the script
-# itself. Existing references are baselined at their real size, never excluded. Exit 3 (git
+# itself. The baseline is empty: any `#NNN` reference in a comment fails. Exit 3 (git
 # unusable, a file that cannot be scanned) fails the gate. Mechanism + limits:
 # project-scaffolding docs/comment-ratchet.md.
 [comment_ratchet]

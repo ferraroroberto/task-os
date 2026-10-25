@@ -173,7 +173,7 @@ class Decision:
 # -------------------------------------------------------------- folder paths
 # Comparing what the archiver reports against what this app resolved. Read by
 # the service alone, which is why they stayed behind when the run/item rows
-# moved to ``src/archive_store.py`` (#186).
+# moved to ``src/archive_store.py``.
 
 
 def _same_folder(a: str | None, b: str | None) -> bool:
@@ -637,7 +637,7 @@ class ArchiveBatchService:
         already = mail.get("already_archived")
         if already:
             # A mail whose file is on disk **and** which is still sitting in the
-            # Inbox is the shape a refused move leaves behind (email-archiver#59):
+            # Inbox is the shape a refused move leaves behind:
             # recording it as done would leave it in the Inbox forever. ``apply``
             # finishes it — it writes nothing, moves the mail and tags it — so the
             # decision goes back with the folder the file already lives in.
@@ -779,7 +779,7 @@ class ArchiveBatchService:
                 continue
             files = rename_files([str(f) for f in entry.get("files") or []], renames)
             if not files:
-                # Naming no file is not "the file is gone". A reuse (#174) is
+                # Naming no file is not "the file is gone". A reuse is
                 # answered for a row that was inserted already knowing where its
                 # ``.msg`` is, and overwriting that with an empty list would make
                 # a mail that *is* on disk look unrevertible. What the archiver

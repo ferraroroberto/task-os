@@ -1,4 +1,4 @@
-/* task-os — what the row's swipes do and what its ⋯ menu lists (#311).
+/* task-os — what the row's swipes do and what its ⋯ menu lists.
  *
  * Settings → Row actions lets the owner pick, per device, the action a swipe
  * right and a swipe left run, and which of the row actions the ⋯ menu lists
@@ -23,7 +23,7 @@ import { ACTIONS } from './actions.js';
 
 export const STORAGE_KEY = 'task-os.rowactions';
 
-/** The plan's choices (#311): right completes, left changes the date, and the
+/** The plan's choices: right completes, left changes the date, and the
  *  menu lists these in this order. */
 export const DEFAULTS = Object.freeze({
   right: 'complete',

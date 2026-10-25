@@ -7,7 +7,7 @@
 .detail-dialog.palette-dialog { width: min(640px, 94vw); margin-top: 12vh; }
 .palette-card { padding: var(--space-sm); }
 /* The input row is a field box, drawn like quick-add's line 1: a
-   control-border boundary that turns accent while it holds focus (#339). */
+   control-border boundary that turns accent while it holds focus. */
 .palette-input-row { display: flex; align-items: center; gap: var(--space-sm); padding: 0 var(--space-xs) 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: var(--card); }
 .palette-input-row:focus-within { border-color: var(--accent); }
 .palette-input-row > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); flex: none; }
@@ -41,7 +41,7 @@
 .palette-item-hint { font-size: var(--font-body-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-empty { padding: 14px 10px; font-size: var(--font-body-sm); }
 /* The footer's key hints are the only text an empty palette shows, so they sit
-   on the body-sm step too (TYPE-01, #408); the line wraps on a narrow sheet. */
+   on the body-sm step too (TYPE-01); the line wraps on a narrow sheet. */
 .palette-foot { margin: 6px 6px 0; font-size: var(--font-body-sm); }
 .palette-foot kbd { margin-right: 2px; font-size: var(--font-body-sm); }
 @media (pointer: coarse) and (max-width: 520px) {
@@ -55,7 +55,7 @@
   .palette-list { max-height: 60vh; }
 }
 
-/* ------------------------------------------------- keyboard actions (#99) */
+/* ------------------------------------------------- keyboard actions */
 /* The `s` popover: the row's own snooze menu, mounted beside whatever is
    focused on a tab whose rows carry no snooze button. It is pinned to the
    VIEWPORT (a row can sit in a Board column that scrolls on its own, so page
@@ -81,19 +81,19 @@
   border-radius: var(--radius-sm);
 }
 /* …and a ticked row stays visibly ticked while focused, same as under the
-   cursor (#81) — this block is later in the file, so it has to say so. */
+   cursor — this block is later in the file, so it has to say so. */
 .trow.is-selected:focus-within { background: var(--accent-soft); }
 /* Dark only: fg-muted holds 4.64:1 on the card but 4.08 on the card-2 lift a
    hovered, focused or s-targeted row wears, so the row's secondary text takes
-   a step toward fg there (12%: 4.8:1) — same hierarchy, readable (#281).
+   a step toward fg there (12%: 4.8:1) — same hierarchy, readable.
    Light keeps 4.93:1 on its lift and needs nothing. */
 [data-theme="dark"] .trow:is(:hover, :focus-within, .is-key-target):not(.is-selected) {
   --muted: color-mix(in srgb, var(--fg) 12%, #7d8590);
 }
 
-/* Settings → Row actions (#311): two swipe pickers, then the menu's list —
+/* Settings → Row actions: two swipe pickers, then the menu's list —
    one line per action: tick (listed), name, why it is locked, move up/down.
-   The tick and the arrows are the one icon button (#357). */
+   The tick and the arrows are the one icon button. */
 .row-actions-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-height: var(--row-sm); }
 .row-actions-label { font-size: var(--font-label); color: var(--fg); }
 .row-actions-field .select-native { width: auto; min-width: 12rem; }
@@ -110,7 +110,7 @@
 .row-actions-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); color: var(--fg); }
 /* listed: the checked glyph in accent-text (the icon button's pressed
    state), so ticked reads at a glance and without hue; locked by a swipe:
-   the same glyph, muted and inert. No fill either way (#357). */
+   the same glyph, muted and inert. No fill either way. */
 .row-actions-tick:disabled[aria-pressed="true"] { color: var(--muted); }
 .row-actions-hint { font-size: var(--font-body-sm); white-space: nowrap; }
 /* the two arrows stand side by side: one icon-button gap apart, so their
@@ -121,14 +121,14 @@
 /* The shortcuts sheet — the vendored modal shell, read-only. */
 .detail-dialog.keys-dialog { width: min(560px, 94vw); margin-top: 6vh; }
 
-/* ---- the confirmation dialog (#121): the vendored modal shell; its one action is
-   the vendored outlined destructive button (button-tint danger, #412) */
+/* ---- the confirmation dialog: the vendored modal shell; its one action is
+   the vendored outlined destructive button (button-tint danger) */
 .detail-dialog.confirm-dialog { width: min(480px, 94vw); margin-top: 14vh; }
 .confirm-body { margin: var(--gap) 0 0; font-size: var(--font-label); color: var(--ink); }
 .confirm-body p { margin: 0 0 var(--space-sm); }
 .confirm-warn { color: var(--danger); font-weight: 600; }
 
-/* ---- the parent picker (#468): the vendored modal shell holding a filter and
+/* ---- the parent picker: the vendored modal shell holding a filter and
    a list of every open task in tree order — a centred card on a desktop, the
    whole screen on a phone. The depth indents a row; the path is its muted
    second line. */
@@ -186,7 +186,7 @@
   .parent-list { flex: 1 1 auto; max-height: none; }
 }
 
-/* ---- the drawer's delete foot (#121) */
+/* ---- the drawer's delete foot */
 .drawer-danger { padding: 14px 0 18px; }
 .drawer-delete { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); color: var(--danger); border-color: var(--deficit-border-soft); }
 .drawer-delete:hover { background: var(--deficit-soft); }
@@ -212,7 +212,7 @@
   .detail-dialog.keys-dialog { width: 100vw; max-width: 100vw; margin: env(safe-area-inset-top, 0px) 0 auto; }
 }
 
-/* ---- Done journal (#102) — a Today-shaped reading surface: the same head,
+/* ---- Done journal — a Today-shaped reading surface: the same head,
    group titles and rows; a day is a group, cancelled rows sit muted, the
    window widens by a week from the foot. ---- */
 .journal-toggle { display: inline-flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-label); cursor: pointer; }
@@ -230,7 +230,7 @@
 .board-col-link { margin-left: auto; color: var(--muted); font-size: var(--font-caption); font-weight: 400; text-decoration: none; }
 .board-col-link:hover, .board-col-link:focus-visible { color: var(--accent); text-decoration: underline; }
 /* A caption-sized text link, 17px tall: it expands invisibly to 44px inside
-   the 52px column title it sits in (#281). */
+   the 52px column title it sits in. */
 .board-col-link { position: relative; }
 .board-col-link::before { content: ""; position: absolute; inset: -14px -4px; }
 

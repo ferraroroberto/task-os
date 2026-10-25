@@ -1,7 +1,7 @@
-/* task-os — the task row's ⋯ menu (#311).
+/* task-os — the task row's ⋯ menu.
  *
  * Every action a row offers, behind one trailing kebab: the menu is the
- * vendored data-driven row-menu (project-scaffolding#317), and its items are
+ * vendored data-driven row-menu, and its items are
  * built here from two sources —
  *
  *   the ACTIONS table (actions.js)  complete / reopen, move, snooze,
@@ -135,7 +135,7 @@ export function createTaskMenu(ctx) {
     },
     /** The completion circle: complete an open task, reopen a closed one. */
     toggleDone: function (t, el) { run(actionById(CLOSED[t.status] ? 'reopen' : 'complete'), t, el); },
-    /** The row's Move verb (#392): the menu's Move…, one tap sooner. */
+    /** The row's Move verb: the menu's Move…, one tap sooner. */
     move: function (t, el) { run(actionById('change-date'), t, el); },
     endRender: function () { ctl.endRender(); },
     close: function () { ctl.close(); },

@@ -1,27 +1,27 @@
 /* task-os — the Today tab: every open task, by when it is due.
  *
- * Four horizons, nearest first (#350 — with the Table gone, Today is where
+ * Four horizons, nearest first (with the Table gone, Today is where
  * any open task is found, from the strip's text filter or one tap on a
  * horizon): what is due (≤ today, overdue first), Soon (tomorrow … +7 days),
- * Later (further out) and No date. The tab opens on what is due (#393): those
+ * Later (further out) and No date. The tab opens on what is due: those
  * rows come first with no header of their own, because the page header above
  * already names them ("2 overdue · 1 due today") — one header, one count. The
- * three after it are flat disclosures headed by an `overline` with their count
- * (#391); Soon sits open, Later and No date start closed with their counts
- * (decision 6 of #390) and keep whatever the user toggled across re-renders.
+ * three after it are flat disclosures headed by an `overline` with their count;
+ * Soon sits open, Later and No date start closed with their counts and keep
+ * whatever the user toggled across re-renders.
  * Under a text filter all three open, so a match is never folded away. Inside a horizon
  * the tasks are grouped by root project with the shared due-first sort inside
- * each group (#116 — a task's date always decides its position, recurring or
+ * each group (a task's date always decides its position, recurring or
  * not), and the project sub-headers are drawn only when there are two or more
- * groups to tell apart (#391, decision 6 of #390): a lone "No project" header
- * separated nothing. Rows are the ONE task row (rows.js, issue #46) — the
+ * groups to tell apart: a lone "No project" header
+ * separated nothing. Rows are the ONE task row (rows.js) — the
  * completion circle, the title over its meta line (the project hidden only
  * where a sub-header already names it) and the ⋯ menu, where Snooze… and
- * Change date… live since #311. Flat hairline rows, no card wrapper. The list
+ * Change date… live. Flat hairline rows, no card wrapper. The list
  * arrives already narrowed to the scope switch's Mine · Issues · All (app.js,
  * scope.js). This is the phone's landing tab.
  *
- * The calendar lane (#96, calendar.js) sits beside all of it on the desktop:
+ * The calendar lane (calendar.js) sits beside all of it on the desktop:
  * today's events from the private ICS address (opts.calendar — the
  * /api/today calendar group), so the day is read against real free time. It
  * is read-only and never filtered.
@@ -39,7 +39,7 @@ import { collapsibleCard } from './collapsible.js';
 import { addDays, relDue, todayISO } from './format.js';
 import { compareItems, rowList } from './rows.js';
 
-/** Later and No date's open state as the user left it (#393): closed until
+/** Later and No date's open state as the user left it: closed until
  *  toggled, kept across the re-renders a refresh or a filter change makes,
  *  reset by a reload. Soon is always drawn open. */
 const horizonOpen = { 'today-far': false, 'today-nodate': false };
@@ -75,14 +75,14 @@ export function bucketToday(items, today, sort) {
   };
 }
 
-/** The page header's line on Today (#393): the exceptions, named from the
+/** The page header's line on Today: the exceptions, named from the
  *  counts the horizons were drawn from, so the header and the list never
  *  disagree. Overdue and due today are the attention tone (the row's own due
  *  tone); with neither, the plain fact. One text node, not per-part spans
- *  (#439) — unlike Board's and Settings' own tone-mapped exceptions, this
+ *  unlike Board's and Settings' own tone-mapped exceptions, this
  *  line is always one sentence in one tone, and splitting it across spans
  *  measurably reflows the browser's text shaping at the word boundary
- *  (a sub-pixel kerning drift the gallery catches, #439). Exported for tests.
+ *  (a sub-pixel kerning drift the gallery catches). Exported for tests.
  *  @param {{overdue: number, today: number}} counts  `bucketToday(...).counts`
  *  @returns {{text: string, attention: boolean}} */
 export function headLine(counts) {
@@ -95,7 +95,7 @@ export function headLine(counts) {
 /** [{root, items}] — by top ancestor (null = no project); groups ordered by
  *  earliest due then title; inside a group, the shared sort — same as every
  *  other view, so editing a task's due date always reorders it correctly
- *  relative to its group-mates, recurring or not (#116). */
+ *  relative to its group-mates, recurring or not. */
 function groupByRoot(items, sort) {
   const cmp = compareItems(sort || 'due');
   const groups = new Map();
@@ -126,7 +126,7 @@ function groupByRoot(items, sort) {
  *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
  * @returns {{overdue: number, today: number, week: number, later: number, nodate: number}}
  *          the horizon counts drawn — the page header's exceptions line reads
- *          these, so the header and the list never disagree (#393)
+ *          these, so the header and the list never disagree
  */
 export function renderToday(host, items, handlers, opts) {
   const o = opts || {};
@@ -135,7 +135,7 @@ export function renderToday(host, items, handlers, opts) {
   host.innerHTML = '';
   const counts = data.counts;
   // Tasks on the left, the calendar lane on the right (hidden < 1024 px) — and
-  // no lane at all, the tasks full width, while no calendar is configured (#320).
+  // no lane at all, the tasks full width, while no calendar is configured.
   const layout = document.createElement('div');
   layout.className = 'today-layout';
   const main = document.createElement('div');
@@ -153,13 +153,13 @@ export function renderToday(host, items, handlers, opts) {
   section.setAttribute('aria-label', 'Due');
 
   // Under a text filter an empty section says the filter hid it, never "all
-  // clear": the day may be full (#339). The way forward is the box it names.
+  // clear": the day may be full. The way forward is the box it names.
   const q = (o.query || '').trim();
   const noMatch = function (what) {
     return 'No task ' + what + ' matches “' + q + '” — change the filter text above';
   };
   if (!data.due.length) {
-    // …with its way forward (#339): a task due today
+    // …with its way forward: a task due today
     section.appendChild(q ? emptyStateEl('search', noMatch('due today'))
       : emptyStateEl('circle-check', 'All clear', handlers.onAdd ? {
         actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
@@ -203,7 +203,7 @@ function horizon(cls, title, groups, n, handlers, o, forceOpen, empty) {
 
 /** One horizon's project groups. A sub-header only separates, so it is drawn
  *  only when there are two or more groups; with one, the rows name their own
- *  project on the meta line instead (#391). */
+ *  project on the meta line instead. */
 function appendGroups(host, groups, handlers, o) {
   const headed = groups.length >= 2;
   groups.forEach(function (g) { host.appendChild(buildGroup(g, handlers, o, headed)); });
@@ -223,7 +223,7 @@ function buildGroup(group, handlers, o, headed) {
   // The overdue / due-today tint on the whole row. The date comes off the
   // chip's `data-due` (rows.js) — the ISO value, stated as a value; reading it
   // out of the chip's tooltip is what this used to do, and it broke the moment
-  // the tooltip gained a word (#107).
+  // the tooltip gained a word.
   list.querySelectorAll('.trow').forEach(function (row) {
     const chip = row.querySelector('.trow-due');
     const rel = relDue(chip ? chip.dataset.due : '');

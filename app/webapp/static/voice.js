@@ -1,4 +1,4 @@
-/* task-os — voice quick-add: click the mic, watch the line fill in (#92, #146).
+/* task-os — voice quick-add: click the mic, watch the line fill in.
  *
  * `mountMic(button, hint, opts)` turns one button into a dictation control and
  * owns everything between the click and the transcript:
@@ -25,7 +25,7 @@
  * is tapped through an AudioWorklet (`voice-worklet.js`) for Float32 blocks,
  * which have nothing to truncate — a complete WAV can be written from whatever
  * has arrived at any moment. `MediaRecorder` and `decodeAudioData` are gone
- * from the pipeline entirely; this is one decoding step *fewer* than #92 had.
+ * from the pipeline entirely; this is one decoding step *fewer* than the MediaRecorder path had.
  *
  * **Why the recording is re-encoded here at all.** Both transcription
  * endpoints decode WAV and refuse everything else — a probe against the live
@@ -432,7 +432,7 @@ export function mountMic(btn, hint, opts) {
   }
 
   // One click toggles. Space and Enter reach this natively through the
-  // button, which is why #92's bespoke key handling is gone.
+  // button, which is why no bespoke key handling is needed.
   btn.addEventListener('click', function (ev) {
     ev.preventDefault();
     if (recording) stop(); else start();

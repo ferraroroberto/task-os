@@ -1,5 +1,5 @@
 /* task-os — the ONE folder-index picker, shared by the drawer's Folder section
- * and the quick-add dialog (#80 round 2).
+ * and the quick-add dialog.
  *
  * Two pieces, so a caller only takes what it needs:
  *
@@ -9,7 +9,7 @@
  *                             POST /api/resolve — never resolved client-side;
  *                             a body, not `?ref=`, because URL-cleaning
  *                             extensions strip that parameter name off every
- *                             http(s) URL (#66).
+ *                             http(s) URL.
  *   mountFolderPicker(host, opts)   the search box + hit list + keyboard
  *                             (↑↓ move · Enter takes the active hit · Escape
  *                             closes) over GET /api/folders/search. Mounts

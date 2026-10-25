@@ -1,4 +1,4 @@
-/* task-os — the ONE filter state every tab shares, and its sheet (#46, #48, #395).
+/* task-os — the ONE filter state every tab shares, and its sheet.
  *
  * Board, Today, Search and the journal are renderings of the same list, so
  * they read one filter state — this module owns its shape, its URL encoding
@@ -6,10 +6,10 @@
  * view on every tab) and the controls that edit it:
  *
  *   <input class="filter-q">          the live text filter, always visible in
- *                                     the pane's own top strip (#80); the
- *                                     list's count is its placeholder (#393)
+ *                                     the pane's own top strip; the
+ *                                     list's count is its placeholder
  *   <button class="filter-open">      beside it: the filter glyph and how many
- *                                     settings are on (#395)
+ *                                     settings are on
  *   <dialog id="filterSheet">         what the button opens — the vendored
  *                                     editor modal: sort first, then status ·
  *                                     project · person · due · modified;
@@ -29,9 +29,9 @@ import { CLOSED, SORTS, sortLabel } from './rows.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine' };
 /**
- * Which kind of task a list shows (#391, decision 1 of #390): the ones you
+ * Which kind of task a list shows: the ones you
  * make, the issues the forge sync brings in, or both — labelled Tasks · Issues
- * · All since #477, when "Mine" became the other axis (`WHOSE`). A task is an
+ * · All, when "Mine" became the other axis (`WHOSE`). A task is an
  * issue when it carries an `issue_ref` — the coding task the sync made
  * (`coding` ⇔ issue_ref). One URL key, `scope`, absent for the default (its
  * id stays `mine`, so every saved `?scope=` link keeps working). It is not a
@@ -40,7 +40,7 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  */
 export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
 /**
- * Whose tasks a list shows (#477, Step 4/4 of #471): the viewer's own or every
+ * Whose tasks a list shows: the viewer's own or every
  * member's. A separate axis from `SCOPES`, not folded into it. One URL key,
  * `whose`, written only for Everyone (absent = Mine); the pick is also kept
  * per device under `WHOSE_KEY` and an explicit URL value wins over it. Like
@@ -50,7 +50,7 @@ export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
 export const WHOSE = [['mine', 'Mine'], ['everyone', 'Everyone']];
 export const WHOSE_KEY = 'task-os.whose';
 /**
- * The status multi-select's pseudo-value (#87). Not a status: it flips the
+ * The status multi-select's pseudo-value. Not a status: it flips the
  * list from the awake tasks to the sleeping ones (a `starts` date still in the
  * future), intersected with any real statuses ticked alongside it. The server
  * splits it back out in `app/webapp/routers/tasks.py`; `matchesFilters` below
@@ -58,7 +58,7 @@ export const WHOSE_KEY = 'task-os.whose';
  */
 export const DEFERRED = 'deferred';
 /**
- * The status multi-select's second pseudo-value (#100). Same shape as
+ * The status multi-select's second pseudo-value. Same shape as
  * `DEFERRED`: not a status, narrows the list to tasks with an open blocker,
  * intersected with any real statuses ticked alongside it. The server splits
  * it back out in `app/webapp/routers/tasks.py`; `matchesFilters` below
@@ -66,7 +66,7 @@ export const DEFERRED = 'deferred';
  */
 export const BLOCKED = 'blocked';
 export const DUE_WINDOWS = [['', 'Any due date'], ['today', 'Due today'], ['week', 'Due this week'], ['overdue', 'Overdue']];
-// The `stale*` windows are the inverse (#101): untouched for MORE than N days.
+// The `stale*` windows are the inverse: untouched for MORE than N days.
 // The boundary date is computed client-side — the API only ever sees a plain
 // `updated_before=YYYY-MM-DD`, no relative magic server-side.
 export const UPDATED_WINDOWS = [['', 'Modified any time'], ['today', 'Modified today'], ['week', 'Modified in 7 days'], ['month', 'Modified in 30 days'], ['stale30', 'Untouched > 30 days'], ['stale60', 'Untouched > 60 days'], ['stale90', 'Untouched > 90 days']];
@@ -147,7 +147,7 @@ export function updatedBefore(window, now) {
  * The member a Mine view narrows to, or undefined when nothing narrows: the
  * switch is on Everyone, the install has fewer than two members (no switch,
  * nothing to narrow), or the viewer is not known — an unknown never hides a
- * task. The server counts a NULL owner as the install owner's (#476).
+ * task. The server counts a NULL owner as the install owner's.
  * @param {object} f  the filter state
  * @param {string|null} viewer  `GET /api/me`'s id
  * @param {number} members  how many members the install has
@@ -183,11 +183,11 @@ export function listParams(f, owner) {
 export function matchesFilters(t, f, today) {
   // Deferral is a modifier, not a status, so it is resolved before the status
   // branch and intersects with whatever real statuses are ticked. Note the
-  // asymmetry with the server's default (#87): ticking `deferred` narrows to
+  // asymmetry with the server's default: ticking `deferred` narrows to
   // the sleeping tasks here too, but NOT ticking it hides nothing — the only
   // caller is the Search tab, and a deferred task is meant to stay findable.
   if (f.status.indexOf(DEFERRED) >= 0 && !isDeferred(t, today)) return false;
-  // Same shape as deferred (#100): ticking `blocked` narrows to tasks with an
+  // Same shape as deferred: ticking `blocked` narrows to tasks with an
   // open blocker; not ticking it hides nothing (a blocked task stays findable
   // wherever this predicate runs — the Search tab).
   if (f.status.indexOf(BLOCKED) >= 0 && !isBlocked(t)) return false;
@@ -224,7 +224,7 @@ export function matchesFilters(t, f, today) {
 // ------------------------------------------------------------ summary
 /** What is active, in words — the filter button's accessible name and title,
  * so the line the old card's summary carried is still one hover or one
- * screen-reader stop away (#395). The text is not in it: it is in the field
+ * screen-reader stop away. The text is not in it: it is in the field
  * beside the button. A hidden control's value is not applied, so not described. */
 export function describeFilters(f, options) {
   const o = options || {};
@@ -248,7 +248,7 @@ export function describeFilters(f, options) {
 }
 
 /** How many settings the sheet's Clear would reset — the number on the filter
- *  button (#395). Neither the text (the field beside the button shows it) nor
+ *  button. Neither the text (the field beside the button shows it) nor
  *  the scope or whose (the switches') counts; a non-default sort does, since Clear
  *  resets it too. A hidden control's value is not applied, so not counted. */
 export function activeFilterCount(f, hide) {
@@ -289,7 +289,7 @@ function selectEl(name, label, values, current, onChange) {
 }
 
 /**
- * Several-allowed choices as ticks in place (#395): the sheet has the room the
+ * Several-allowed choices as ticks in place: the sheet has the room the
  * old card's popover checklist lacked, so status and person are a group of
  * checkboxes, one tap each.
  * @param {string} name
@@ -331,9 +331,9 @@ let sheetOwner = null;   // the mountFilters handle whose controls the one sheet
 
 /**
  * Mount one tab's filter controls; call `render(filters, options)` on every
- * state change. One instance per tab, all reading the same state (#46, #48).
+ * state change. One instance per tab, all reading the same state.
  *
- * The strip (#395): the text field and, beside it, the filter button carrying
+ * The strip: the text field and, beside it, the filter button carrying
  * the active-filter count; the button opens the sheet — the vendored editor
  * modal (`#filterSheet`, static in index.html like the date sheet) with sort
  * first, then status · project · person · due · modified, applied as they
@@ -342,15 +342,15 @@ let sheetOwner = null;   // the mountFilters handle whose controls the one sheet
  * @param {{onChange: (f: object) => void, textHost?: HTMLElement, buttonHost?: HTMLElement,
  *          hide?: string[], countLabel?: string}} opts
  *          textHost — where the always-visible text input goes (the pane's top
- *          strip, #80). Omitted on the Search tab: its own box owns the text,
+ *          strip). Omitted on the Search tab: its own box owns the text,
  *          so there is no second text field and Clear leaves the query alone.
  *          buttonHost — where the filter button goes; defaults to `textHost`
  *          (Search passes its own box).
  *          countLabel — the word before "tasks" in the text field's
  *          placeholder, which carries the list's count ("Filter 12 closed
- *          tasks…", #393)
+ *          tasks…")
  *          hide — control names this tab leaves out (`status` · `due` ·
- *          `updated` · `sort` · `project` · `person`); the journal (#102)
+ *          `updated` · `sort` · `project` · `person`); the journal
  *          drops the four that say nothing about a closed task. A hidden
  *          control's value is neither drawn, counted nor described.
  * @returns {{render: (filters: object, options: {projects: Array, people: Array, count?: number}) => void,
@@ -368,7 +368,7 @@ export function mountFilters(opts) {
   let sheetClear = null;     // the open sheet's Clear button
   const handle = { render: render, openSheet: openSheet };
 
-  /** The live text filter, in the pane's top strip (#80). */
+  /** The live text filter, in the pane's top strip. */
   function renderText(filters) {
     if (!opts.textHost) return;
     if (!textEl) {
@@ -387,7 +387,7 @@ export function mountFilters(opts) {
     // Never yank the value out from under the typist: their keystrokes are
     // already in the box and the debounce means `filters.q` trails them.
     if (document.activeElement !== textEl && textEl.value !== filters.q) textEl.value = filters.q;
-    // The count's one home is the text field's placeholder (#393).
+    // The count's one home is the text field's placeholder.
     textEl.placeholder = options.count == null ? 'Filter text…'
       : 'Filter ' + options.count + ' ' + (opts.countLabel ? opts.countLabel + ' ' : '') + (options.count === 1 ? 'task' : 'tasks') + '…';
   }
@@ -469,12 +469,12 @@ export function mountFilters(opts) {
       closeLabel: 'Close filters', onClose: function () { dialog.close(); },
     }).card;
     function set(name) { return function (value) { const p = {}; p[name] = value; commit(p); }; }
-    // 1. sort first (#395): it orders every list, filtered or not
+    // 1. sort first: it orders every list, filtered or not
     if (!hidden.has('sort')) {
       card.appendChild(row('sort', 'Sort', selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], cap(s[1])]; }), f.sort, set('sort'))));
     }
     // 2. status — `deferred` and `blocked` ride the end: the one visible way
-    //    to see the sleeping (#87) and the locked (#100) tasks the working views
+    //    to see the sleeping and the locked tasks the working views
     //    leave out. None ticked = the open tasks.
     if (!hidden.has('status')) {
       const statusValues = STATUSES.concat([DEFERRED, BLOCKED]).map(function (s) { return [s, cap(s)]; });

@@ -1,6 +1,6 @@
 /* Time. Linked after the file before it in index.html: rule order is the cascade. */
 
-/* ================================================================ Time (#457) */
+/* ================================================================ Time */
 /* The Time tab (time.js): one-dimensional, so it keeps the measure (above).
    Every surface is a vendored component — segmented, action-row, card, modal,
    row-menu, empty-state; what follows is only what none of them covers: the

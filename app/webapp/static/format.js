@@ -36,7 +36,7 @@ export function todayISO(d) {
 /** A local-date ``YYYY-MM-DD`` as a local midnight ``Date`` — never
  *  ``new Date(iso)``, which `format.js`'s own callers and every other file
  *  doing date arithmetic on an ISO day used to construct by hand
- *  (`new Date(iso + 'T00:00:00')`, nine sites across five files, #439): the
+ *  (`new Date(iso + 'T00:00:00')`, nine sites across five files): the
  *  one place that turns an ISO day into a ``Date`` object. */
 export function parseISO(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
@@ -77,7 +77,7 @@ export function relDue(iso, now) {
 
 /**
  * Is this task still asleep? — a `starts` date the current local day has not
- * reached yet (#87). The ONE place the browser answers that question, so the
+ * reached yet. The ONE place the browser answers that question, so the
  * row marker, the drawer label and the client-side filter agree.
  * @param {object} t     a task summary or detail
  * @param {string} [now] ISO date (tests)
@@ -86,8 +86,8 @@ export function isDeferred(t, now) {
   return !!(t && t.starts) && t.starts > todayISO(now ? parseISO(now) : undefined);
 }
 
-/** Is this task blocked right now? — it has at least one still-open blocker
- *  (#100). The ONE place the browser answers that question, so the row
+/** Is this task blocked right now? — it has at least one still-open blocker.
+ *  The ONE place the browser answers that question, so the row
  *  marker, the drawer and the client-side filter agree — mirrors `isDeferred`.
  * @param {object} t   a task summary or detail (carries `blocked` server-side)
  */
@@ -95,19 +95,19 @@ export function isBlocked(t) {
   return !!(t && t.blocked);
 }
 
-/** "blocked by 2" — the meta-line marker a locked task wears (#100). */
+/** "blocked by 2" — the meta-line marker a locked task wears. */
 export function blockedLabel(t) {
   const n = (t && t.blocker_count) || 0;
   return 'blocked by ' + n;
 }
 
-/** "starts 5 Sep" — the quiet marker a sleeping task wears (#87). */
+/** "starts 5 Sep" — the quiet marker a sleeping task wears. */
 export function startsLabel(iso) {
   const d = parseISO(iso);
   return d ? 'starts ' + d.getDate() + ' ' + MONTHS[d.getMonth()] : '';
 }
 
-/** "Sat 5 Sep" — a date named the way a confirmation should name it (#87):
+/** "Sat 5 Sep" — a date named the way a confirmation should name it:
  *  the weekday is what makes "this weekend" checkable at a glance. */
 export function fmtDay(iso) {
   const d = parseISO(iso);
@@ -185,7 +185,7 @@ function shortFolderLabel(ref) {
 // placeholders) and is only ever shown — as the tooltip, in the copy popover.
 // Coarse pointer (phone): no Explorer to open, so the tap opens the chip's
 // web twin directly — the carried `url`, else one resolved on demand from
-// POST /api/resolve (web_roots, #28/#72); only a ref with no web twin at all
+// POST /api/resolve (web_roots); only a ref with no web twin at all
 // falls back to the path-to-copy popover. Fine pointer: the link goes to the
 // opener, and once — the first click ever on this browser — a hint appears
 // under the chip: "Nothing opened? Install the opener".
@@ -197,9 +197,9 @@ export function openerHref(ref) {
 }
 
 /** The chip's web twin, established once per chip: the `url` it carries, else
- *  what POST /api/resolve derives from config.web_roots (#28) — null when
+ *  what POST /api/resolve derives from config.web_roots — null when
  *  neither. Link chips (a .msg email ref, an attached file) never carry a
- *  url, so the on-demand resolve is what gives them a one-tap open (#72). */
+ *  url, so the on-demand resolve is what gives them a one-tap open. */
 async function chipWebUrl(info) {
   if (info.url) return info.url;
   if (info.webChecked) return null;
@@ -224,7 +224,7 @@ function popEl() {
   document.addEventListener('click', function (ev) {
     if (!pop.hidden && !pop.contains(ev.target) && !ev.target.closest('.chip-folder, .chip-ai')) hideFolderPopover();
   });
-  // Escape closes the popover and stops there (#339): the capture phase runs
+  // Escape closes the popover and stops there: the capture phase runs
   // before app.js's document-level Escape, which would also close the drawer
   // the popover sits on. A hidden popover lets the key through untouched.
   document.addEventListener('keydown', function (ev) {
@@ -353,7 +353,7 @@ export function followLink(href) {
 
 /** What a tap on a folder does. `ev` is the chip's own click, whose default
  *  IS the `taskos://` navigation on a PC; without one (the row menu's Open
- *  folder, #311, has no chip to tap) the navigation is made here. Popovers
+ *  folder, has no chip to tap) the navigation is made here. Popovers
  *  sit beside `anchor`. */
 function openFolderInfo(info, anchor, ev) {
   if (window.matchMedia('(pointer: coarse)').matches) {
@@ -385,7 +385,7 @@ export function openTaskFolder(t, anchor) {
 }
 
 // --------------------------------------------------------- AI conversation chips
-// One kind for every provider (#77) — a Claude Code / claude.ai / ChatGPT /
+// One kind for every provider — a Claude Code / claude.ai / ChatGPT /
 // Gemini / Copilot conversation URL gets the same bot chip, no per-provider
 // split. Coarse pointer: the tap opens the conversation (new tab) — on a phone
 // there is no CLI to resume into. Fine pointer: a popover offers "Open
@@ -399,7 +399,7 @@ const CLAUDE_SESSION_RE = /claude\.ai\/code\/(session_[A-Za-z0-9]+)/;
 export const RESUME_SCHEME = 'taskos://resume?session=';
 
 // The `kind` a pasted link is stored under is the server's call
-// (`tasks_repo.infer_link_kind`, #257) — the drawer and quick-add POST no
+// (`tasks_repo.infer_link_kind`) — the drawer and quick-add POST no
 // kind, so the UI, the CLI and any script share one rule.
 
 function showAiPopover(anchor, url) {
@@ -576,7 +576,7 @@ export function renderMarkdown(md) {
 }
 
 // ------------------------------------------------------------------ misc
-/** The status chip's tones (design.md "status chip", #391). */
+/** The status chip's tones (design.md "status chip"). */
 export const TONES = ['neutral', 'accent', 'attention', 'danger'];
 
 /**
@@ -630,7 +630,7 @@ export function codeEl(text) {
   return c;
 }
 
-/** A model id in words, for a reading outside Settings (#339): `claude_haiku`
+/** A model id in words, for a reading outside Settings: `claude_haiku`
  *  reads "Claude Haiku". Settings keeps the exact id (codeEl): there it is the
  *  config value you would look for. */
 export function modelName(id) {

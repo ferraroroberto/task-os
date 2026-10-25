@@ -60,7 +60,7 @@
      13. gallery baseline  — whatever shots stage 12 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
-                             leaves rewritten PNGs behind (#225). Re-baselining
+                             leaves rewritten PNGs behind. Re-baselining
                              is deliberate: run `pytest tests/e2e` yourself,
                              review what moved, `git add docs/screenshots`.
 
@@ -157,7 +157,7 @@ if ($tier -eq "skip") {
     Write-Host ">> e2e routing: $tier" -ForegroundColor Cyan
     Write-Host "   reason: $routeReason" -ForegroundColor DarkGray
     # The classifier space-joins several targets (a diff touching two e2e modules);
-    # one pytest argument holding a space is "file or directory not found" (#277).
+    # one pytest argument holding a space is "file or directory not found".
     $e2eArgs = @($e2eTarget -split '\s+' | Where-Object { $_ })
     foreach ($b in ($e2eBrowsers -split ',' | Where-Object { $_ })) {
         $e2eArgs += @("--browser", $b)
@@ -165,7 +165,7 @@ if ($tier -eq "skip") {
     # Per-test seconds for /e2e-audit (`.fleet.toml [e2e] junit_xml`); data/ is gitignored.
     $e2eArgs += @("--junitxml", "data/e2e-junit.xml")
     $label = if ($e2eBrowsers) { $e2eBrowsers } else { "suite-default" }
-    # The full tier runs on pytest-xdist workers (#288): --dist loadfile keeps a
+    # The full tier runs on pytest-xdist workers: --dist loadfile keeps a
     # story module (and its module-scoped instance) on one worker, the
     # controller alone holds the work-root lock, and instance boots are
     # serialised. Four, because the evidence run (CLAUDE.md "Runtime contract")
@@ -181,7 +181,7 @@ if ($tier -eq "skip") {
     Invoke-Stage "pytest e2e (${tier}: $e2eTarget, $label)" { & $py -m pytest @e2eArgs }
 }
 
-# ------------------------------------------------- gallery baseline (#225)
+# ------------------------------------------------- gallery baseline
 # Runs on every tier, including `skip`: with no shot rewritten it is a no-op
 # that costs a `git diff`. It is what makes docs/screenshots/ a baseline rather
 # than a folder of pictures — two fresh runs agreeing proves only that the

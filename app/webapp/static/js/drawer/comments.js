@@ -45,7 +45,7 @@ function commentComposer(ctx, t) {
   return composer;
 }
 
-/** The pencil's inline editor (#155).
+/** The pencil's inline editor.
  *
  *  It IS the composer, re-pointed at an existing body: same `.comment-composer`
  *  row, same `.comment-input` textarea, same `.comment-send` buttons on the
@@ -108,7 +108,7 @@ function commentEditor(ctx, t, c) {
   return wrap;
 }
 
-/** The trash: asks first, as Delete task does — there is no undo (#155). */
+/** The trash: asks first, as Delete task does — there is no undo. */
 async function deleteComment(ctx, t, c) {
   const preview = c.body.length > 80 ? c.body.slice(0, 80).trim() + '…' : c.body;
   const ok = await confirmDialog({
@@ -142,11 +142,11 @@ function commentRow(ctx, t, c) {
   when.dateTime = c.ts;
   when.textContent = fmtTs(c.ts);
   const origin = document.createElement('span');
-  origin.className = 'chip comment-origin';   // the one pill (#357)
+  origin.className = 'chip comment-origin';   // the one pill
   origin.textContent = c.origin;
   meta.append(who, when, origin);
-  // Two icons and no more (#155) — the Links row's pair, the one icon
-  // button (#357). An edit rewrites the text only: author, time and
+  // Two icons and no more — the Links row's pair, the one icon
+  // button. An edit rewrites the text only: author, time and
   // origin stay, so the meta line above never changes under it.
   const actions = document.createElement('div');
   actions.className = 'comment-actions';

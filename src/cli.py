@@ -180,12 +180,12 @@ class HttpBackend:
         params = {k: v for k, v in filters.items() if v is not None}
         if params.pop("deferred", False):
             # `deferred` rides the `status` list on the wire — the same URL
-            # vocabulary the web app's filter card shares (#87), so there is
+            # vocabulary the web app's filter card shares, so there is
             # one spelling of "show me the sleeping ones", not two.
             picked = [s for s in str(params.get("status") or "").split(",") if s]
             params["status"] = ",".join([*picked, "deferred"])
         if params.pop("blocked", False):
-            # same trick as `deferred`, its own pseudo-value (#100)
+            # same trick as `deferred`, its own pseudo-value
             picked = [s for s in str(params.get("status") or "").split(",") if s]
             params["status"] = ",".join([*picked, "blocked"])
         query = urllib.parse.urlencode(params)
@@ -289,7 +289,7 @@ class LocalBackend:
 
         self.actor = actor
         self._repo = tasks_repo
-        # who an `owner` may name, and who a NULL one is (#476) — as the app's lifespan does
+        # who an `owner` may name, and who a NULL one is — as the app's lifespan does
         tasks_repo.set_members([p.id for p in load_config().people])
         init_db()
         self.conn: sqlite3.Connection = connect()
@@ -501,18 +501,18 @@ class LocalBackend:
             # have a flag-carrying index?) is what the caller actually asked.
             "capture": EmailCaptureService(config).status(),
             # Reachability of the whisper endpoint *from this PC* is a fact
-            # this process can establish with or without the app (#92) — the
+            # this process can establish with or without the app — the
             # same TCP probe the webapp answers with.
             "voice": VoiceClient(config).status(),
-            # Same fact, same shape, for the text model (#147): a TCP probe
+            # Same fact, same shape, for the text model: a TCP probe
             # this process can run whether or not the app is up.
             "enrich": EnrichClient(config).status(),
             "ai": AIClient(config).status(),
             # Whether this install can drive the archiver, and what the last run
             # did — both read off the config and this database, so the answer is
-            # the same with the app up or down (#157). Nothing is spawned here.
+            # the same with the app up or down. Nothing is spawned here.
             "archive": ArchiveBatchService(config).status(self.conn),
-            # The calendar is an install fact too (#96): the address is in the
+            # The calendar is an install fact too: the address is in the
             # config and the fetch runs from this PC, bounded by its timeout.
             "calendar": CalendarService(config).status(),
             "opener": opener.status(placeholders),
@@ -875,7 +875,7 @@ def fmt_voice_status(v: dict[str, Any]) -> str:
     if not v.get("enabled"):
         return f"voice    off — {v.get('reason') or 'unknown'}"
     serving = {"hub": "hub", "fallback": "local whisper (fallback)"}.get(v.get("serving"), "unknown")
-    # The live-transcript cadence (#146): a number is "every N s", 0 is the
+    # The live-transcript cadence: a number is "every N s", 0 is the
     # single pass on stop. A missing key is neither, and says so.
     interval = v.get("partial_interval_seconds")
     if interval is None:
@@ -979,7 +979,7 @@ def _resolve_person(backend: HttpBackend | LocalBackend, text: str | None) -> in
 
 def _rm_dialogue(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
     """``tasks rm`` / ``delete`` — the [y/N] confirmation (skipped by ``--yes``), then the delete."""
-    # Delete with a confirmation that names what goes (#121). The
+    # Delete with a confirmation that names what goes. The
     # dialogue is on stderr — stdout stays clean for --json — and a
     # refusal is an error, so a script that forgot --yes fails loud
     # instead of half-working.

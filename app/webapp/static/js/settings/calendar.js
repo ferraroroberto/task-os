@@ -1,4 +1,4 @@
-/* task-os — the Today lane's private ICS feed (#96): its status rows and
+/* task-os — the Today lane's private ICS feed: its status rows and
  * "Refresh now". */
 
 'use strict';
@@ -14,7 +14,7 @@ const CALENDAR_WORDS = {
   timeout: 'timed out', parse_error: 'not a calendar',
 };
 
-/** The Today lane's half of `GET /api/status` (#96). Off always carries its
+/** The Today lane's half of `GET /api/status`. Off always carries its
  *  reason; every failure keeps its own word; `null` = the status call itself
  *  failed, which is "unknown", not "off". The source is the host only — the
  *  address is a secret and the API never sends it. */

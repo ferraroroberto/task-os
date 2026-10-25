@@ -127,7 +127,7 @@ class TrayApp:
     def _on_wedge(self, count: int) -> None:
         if self.manager.is_port_in_use():
             # Wedged: listening but not answering. Alert only — auto-killing a
-            # stuck process can mask what is actually wrong (app-launcher#386).
+            # stuck process can mask what is actually wrong.
             msg = f"webapp on :{self.config.port} listening but not answering /healthz ({count} probes)"
             self.wd_log(f"WEDGE {msg} -- use tray.bat --restart")
             logger.error("❌ %s", msg)
@@ -221,7 +221,7 @@ def run_tray(config: AppConfig) -> int:
         logger.error("❌ pystray not installed (%s); pip install -r requirements.txt", exc)
         return 1
 
-    # In-process single-instance guard (project-scaffolding#39): tray.bat's
+    # In-process single-instance guard: tray.bat's
     # CIM pre-check can let two near-simultaneous launches through; the
     # guarantee lives in this named mutex, held for the tray's lifetime.
     instance = SingleInstance(MUTEX_NAME)

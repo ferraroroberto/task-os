@@ -41,7 +41,7 @@ _CORRECTION_COLUMNS = (
     "id", "item_id", "message_id", "subject", "sender", "suggested_folder",
     "chosen_folder", "hint", "created_at",
 )
-#: Bound on a hint a human types on the report screen (#159) before it becomes
+#: Bound on a hint a human types on the report screen before it becomes
 #: a few-shot line in every later prompt.
 MAX_HINT_CHARS = 500
 

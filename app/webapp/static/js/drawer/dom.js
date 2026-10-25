@@ -22,7 +22,7 @@ export function section(name, title, iconName) {
  *  (`button-surface` / `button-ghost`), never the view's primary action, so
  *  none is a submit button — the design measure reads every
  *  `button[type=submit]` as the primary and holds it to button-primary's
- *  48px (#394). The click and Enter in any of the form's inputs both submit
+ *  48px. The click and Enter in any of the form's inputs both submit
  *  the form, so its one submit handler stays the one write path; a disabled
  *  button stops Enter as it stopped the native submit. */
 export function formButton(form, className, html) {

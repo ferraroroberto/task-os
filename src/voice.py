@@ -186,7 +186,7 @@ class VoiceClient:
     def __init__(self, config: AppConfig) -> None:
         self.primary = (config.voice.transcribe_url or "").strip()
         self.fallback = (config.voice.fallback_url or "").strip()
-        #: How often the page re-posts its growing take (#146). Read by the
+        #: How often the page re-posts its growing take. Read by the
         #: browser off ``/api/status`` rather than hardcoded there, so the
         #: cadence is one install-level number and not two.
         self.partial_interval = float(config.voice.partial_interval_seconds or 0.0)

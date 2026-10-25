@@ -35,7 +35,7 @@ function linkedIssue(ctx, t, ib) {
   head.className = 'issue-head';
   head.appendChild(issueChip(ref));
   // Open and closed are the issue's normal states, a quiet word; a state
-  // the sync never established is the exception, a neutral chip (#391).
+  // the sync never established is the exception, a neutral chip.
   let stMark;
   if (ref.state === 'open' || ref.state === 'closed') {
     stMark = document.createElement('span');

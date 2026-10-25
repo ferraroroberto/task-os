@@ -37,7 +37,7 @@ export function selectField(ctx, label, name, values, value, format) {
   return wrap;
 }
 
-/** How many cadences a recurrence waits between occurrences (#229) — "Every
+/** How many cadences a recurrence waits between occurrences — "Every
  *  [7] weeks", between Repeat and On so the three read as one sentence.
  *
  *  Empty (or 1) is every cadence and PATCHes null; the unit follows the
@@ -81,7 +81,7 @@ export function intervalField(ctx, t) {
   return wrap;
 }
 
-/** The fixed day a recurrence lands on (#112) — the Repeat field's second half.
+/** The fixed day a recurrence lands on — the Repeat field's second half.
  *
  *  Its own builder rather than `selectField` because the monthly vocabulary
  *  is long enough to need `<optgroup>`s; the PATCH it sends is the same
@@ -116,7 +116,7 @@ export function anchorField(ctx, t, groups) {
 }
 
 /** Status: the shared options (a recurring task also gets `complete`,
- *  the roll-forward action — issue #54) through `opts.onStatus`, same
+ *  the roll-forward action) through `opts.onStatus`, same
  *  handler every other view uses, instead of a plain field PATCH. */
 export function statusField(ctx, t) {
   const wrap = document.createElement('label');
@@ -171,11 +171,11 @@ export function textField(ctx, label, name, value, placeholder) {
 }
 
 /** A date field: a picker by default (the calendar button opens the native
- *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO
- *  (issue #46). Both dates the drawer edits go through this one builder —
- *  **Due** and, beside it, **Starts** (#87) — so they cannot drift into
+ *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO.
+ *  Both dates the drawer edits go through this one builder —
+ *  **Due** and, beside it, **Starts** — so they cannot drift into
  *  behaving differently — and the calendar is `duePicker()`'s, so the
- *  coarse-pointer branch (#50) lives once for the whole app.
+ *  coarse-pointer branch lives once for the whole app.
  * @param {object} ctx
  * @param {object} t
  * @param {string} field   the task field this edits ('due' | 'starts')
@@ -208,7 +208,7 @@ export function dateField(ctx, t, field, label, caption) {
   });
   input.addEventListener('blur', function () { commit(input.value.trim()); });
   const pick = duePicker({
-    className: 'icon-button field-due-btn',     // the one icon button (#357)
+    className: 'icon-button field-due-btn',     // the one icon button
     value: value,
     ariaLabel: 'Pick a ' + label.toLowerCase() + ' date',
     onPick: commit,
@@ -225,7 +225,7 @@ export function memberName(ctx, id) {
   return m ? m.name : (id || '—');
 }
 
-/** The date sheet's phrases as one-tap moves under Due (#394): push-outs
+/** The date sheet's phrases as one-tap moves under Due: push-outs
  *  first, each with the date it resolves to, sent as the phrase so
  *  `src/dates.py` stays the one date vocabulary. */
 export function quickMoves(ctx) {

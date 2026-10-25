@@ -37,7 +37,7 @@ async function deleteCurrent(ctx, t) {
  *  names the task, the subtree that goes with it, and — for a synced coding
  *  task whose issue is still open — that the next sync brings it back
  *  (Roberto's call, never a silent resurrection). The one destructive
- *  control (#121), last and quiet. */
+ *  control, last and quiet. */
 export function deleteFoot(ctx, t) {
   const foot = document.createElement('div');
   foot.className = 'drawer-section drawer-danger';

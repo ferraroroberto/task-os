@@ -83,7 +83,7 @@ INITIAL_DELAY_S = 15.0
 #: e2e instance that enables capture (story 24's archive fixture) could have
 #: its own background tick land mid-story, racing the manual "Check now" step
 #: and rewriting `last_result`/`next_run` under a shot the story never touched
-#: (#170: story-24-archive-9-desktop.png moved between two runs of one commit
+#: (story-24-archive-9-desktop.png moved between two runs of one commit
 #: for exactly this reason). Nothing in production sets this; the e2e suite's
 #: `_boot()` sets it past any story's real runtime, the same way unit tests
 #: already pass `initial_delay=999` directly.
@@ -131,7 +131,7 @@ class CaptureResult:
     listed: int = 0
     created: int = 0
     unchanged: int = 0
-    #: still flagged, but the task it once landed was deleted (#254)
+    #: still flagged, but the task it once landed was deleted
     dismissed: int = 0
     errors: list[str] = field(default_factory=list)
     created_ids: list[int] = field(default_factory=list)
@@ -277,7 +277,7 @@ def capture_once(
     result = CaptureResult()
     # Keys already settled (captured, or captured and since deleted) are stepped
     # over *before* the limit applies and counted from this map, so they cost the
-    # window nothing (#440) while the pass still reports them as before.
+    # window nothing while the pass still reports them as before.
     settled = repo.captured_keys(conn, EXTERNAL_ID_PREFIX)
     entries, skipped = index.flagged(limit, settled)
     for key in skipped:

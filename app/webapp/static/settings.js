@@ -3,7 +3,7 @@
  * One module per view, like Board · Today · Search:
  * `mountSettings(opts)` looks up the pane's rows and sheets once, wires their
  * controls and returns the handle the bootstrap calls when something it owns
- * changes. The pane is five inset groups (#397, design.md `settings group`):
+ * changes. The pane is five inset groups (design.md `settings group`):
  * each row carries its state word — on · synced · indexed · off, in its tone
  * when it is an exception — and a chevron to its sheet (#settingsSheet), which
  * holds the card the row replaced, under the same ids. One sheet is up at a
@@ -12,7 +12,7 @@
  * (`opts.onOpenSheet` / `opts.onCloseSheet`). Text size is changed in place.
  *
  *   Row actions    what each touch swipe on a task row runs and what the
- *                  row's ⋯ menu lists, in order (#311) — per device, from the
+ *                  row's ⋯ menu lists, in order — per device, from the
  *                  one action table; `opts.onRowActions` redraws the rows.
  *   Phone access   https + auth (Step 7) — how this connection came in and
  *                  what the install accepts; "Sign out on this device".
@@ -22,24 +22,24 @@
  *                  drawer and the palette funnel through the same call), so
  *                  it arrives as `opts.onSyncIssues` and the status arrives
  *                  through `renderIssues(status)`.
- *   Capture        the flagged-email poller (#98) + "Check now". Unlike the
+ *   Capture        the flagged-email poller + "Check now". Unlike the
  *                  issue sync this card owns its own call, because nothing
  *                  else in the app triggers a capture pass.
- *   Archive        the batch archiver (#157–#159): where it lives and its
+ *   Archive        the batch archiver: where it lives and its
  *                  threshold. The rest of its sheet — the run, the report and
- *                  every review action — is archive.js's (a tab until #397).
- *   Calendar       the Today lane's private ICS feed (#96): its state (off ·
+ *                  every review action — is archive.js's (a tab).
+ *   Calendar       the Today lane's private ICS feed: its state (off ·
  *                  ok · address refused · unreachable · timed out · not a
  *                  calendar), the host it reads from — never the address —
  *                  and "Refresh now". The refresh answers the fresh group,
  *                  which the bootstrap pushes into Today (`opts.onCalendar`).
  *   Voice          whether a transcription endpoint is answering, and which
- *                  one (#92, #144: the hub — so parakeet — or the local
+ *                  one (the hub — so parakeet — or the local
  *                  whisper fallback). The same status the quick-add mic
  *                  reads. No button: there is nothing to run on demand, only
  *                  somewhere to be up.
  *   AI             whether the local hub used by staged Inbox triage is
- *                  enabled and reachable, plus the configured model (#95).
+ *                  enabled and reachable, plus the configured model.
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
@@ -51,7 +51,7 @@
  * (`refreshSearchStatus()`). An unreachable endpoint is its own visible
  * state — "unknown — <reason>" — never a stale "Loading…".
  *
- * The rows' words are the Settings header's line too (`headParts()`, #397):
+ * The rows' words are the Settings header's line too (`headParts()`):
  * the exceptions among them, else how many services are on.
  *
  * This file is the composer: it builds the `ctx` its parts share (the caller's

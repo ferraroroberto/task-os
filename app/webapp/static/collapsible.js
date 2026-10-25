@@ -19,7 +19,7 @@ import { icon } from './_vendored/icons/icons.js';
  * @param {{className?: string, icon?: string, title: string, count?: string,
  *          countClass?: string, titleClass?: string, bodyClass?: string}} opts
  *        icon — omitted for a section header that only separates (an
- *        `overline` title, #391), which leads with no glyph
+ *        `overline` title), which leads with no glyph
  * @returns {{card: HTMLDetailsElement, count: HTMLSpanElement, body: HTMLDivElement}}
  */
 export function collapsibleCard(opts) {

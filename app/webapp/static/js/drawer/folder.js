@@ -53,7 +53,7 @@ function folderForm(ctx, t) {
 // ---- folder section: two lines — [chip + delete] / [ref + Change + Pick]
 // The resolved path is NOT repeated as a third line: it is already the chip's
 // own `title` (format.js), and the phone reaches it through the chip's copy
-// popover (#74).
+// popover.
 export function folderSection(ctx, t) {
   const sec = section('folder', 'Folder', 'folder');
   const body = document.createElement('div');

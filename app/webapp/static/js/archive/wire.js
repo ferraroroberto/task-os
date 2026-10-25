@@ -50,7 +50,7 @@ export function wireArchive(ctx) {
   els.acceptAll.addEventListener('click', function () { acceptAllPending(ctx); });
   if (ctx.phoneMq.addEventListener) ctx.phoneMq.addEventListener('change', function () { renderReport(ctx); });
   // The head's wording, the reasons and the bulk label are width-dependent too
-  // (#168) — a rotation must re-draw them, not leave the phone reading the
+  // a rotation must re-draw them, not leave the phone reading the
   // desktop's sentences.
   if (ctx.narrowMq.addEventListener) {
     ctx.narrowMq.addEventListener('change', function () {

@@ -11,7 +11,7 @@
  * PC-first and full-width (plan §06/§07) — `.app` has no 772px column cap on
  * desktop; the phone gets the same views as an adaptive second rendering.
  *
- * Issue #46: Board, Today and Search render the ONE task row
+ * Board, Today and Search render the ONE task row
  * (`.trow`, rows.js) on flat hairlines, narrowed through the ONE filter state
  * (the strip's filter button and its sheet, filters.js). Titles are never uppercase.
  */
@@ -31,14 +31,14 @@
   /* colors — accent + status */
   --accent: #0969da;
   --accent-fg: #ffffff;
-  --accent-fill: #0969da;    /* accent FILL for a solid primary (fleet-config#963) */
+  --accent-fill: #0969da;    /* accent FILL for a solid primary */
   --accent-text: #0550ae;    /* accent TEXT on an accent-soft tint (active nav tab) */
   --success: #1a7f37;
   --attention: #9a6700;
   --danger: #cf222e;
-  --danger-text: #a40e26;    /* danger TEXT on a deficit-soft tint (fleet-config#963) */
-  --attention-text: #7d4e00; /* attention TEXT on its own 16% tint (the status chip, #391) */
-  --control-border: #818b98; /* inline control borders / switch off-track, 3:1+ vs card (fleet-config#963) */
+  --danger-text: #a40e26;    /* danger TEXT on a deficit-soft tint */
+  --attention-text: #7d4e00; /* attention TEXT on its own 16% tint (the status chip) */
+  --control-border: #818b98; /* inline control borders / switch off-track, 3:1+ vs card */
   /* accent derivatives — theme-independent color-mix over the per-theme accent */
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-border-soft: color-mix(in srgb, var(--accent) 24%, transparent);
@@ -80,8 +80,8 @@
   /* hit-target.min (design.md) — the 44px effective pointer-target floor. A
      native input/select is a replaced element that can't carry the .hit-target
      ::before expansion, so it gets the real 44px box and paints its 36px
-     control inside a transparent --control-inset band (#281, the
-     home-automation #779 recipe). */
+     control inside a transparent --control-inset band (the
+     home-automation recipe). */
   --hit-min: 44px;
   --control-inset: calc((var(--hit-min) - var(--control-h)) / 2);
   --row-sm: 44px;
@@ -93,12 +93,12 @@
   --icon-feature: 24px;
   /* the vendored icon-button's painted-nothing box: the hover and focus area
      around its glyph; its ::before grows it to --hit-min. Set here so the gap
-     below reads the same value as the buttons (#357, #377) */
+     below reads the same value as the buttons */
   --icon-btn-box: 28px;
   /* two icon buttons side by side: their 44px targets touch, never overlap */
   --icon-btn-gap: calc(var(--hit-min) - var(--icon-btn-box));
   /* vendored component fills. The header toggles and the modal × are icon
-     buttons, unshaded at rest like every other one (#357): --close-bg is left
+     buttons, unshaded at rest like every other one: --close-bg is left
      unset, so the vendored default (transparent) applies. */
   --input-bg: var(--card-off);       /* select-native / modal controls */
   --toggle-track: var(--line);       /* switch.css */
@@ -187,11 +187,11 @@ button, input, select, textarea { font: inherit; }
 .hit-target { position: relative; }
 .hit-target::before { content: ""; position: absolute; inset: -5px; }
 
-/* The header title is the page's h1 (#339): the vendored rule sets its size
+/* The header title is the page's h1: the vendored rule sets its size
    and weight, the UA's heading margin goes. */
 h1.home-title { margin: 0; }
 
-/* Native inputs/selects reach the 44px floor with real geometry (#281): the
+/* Native inputs/selects reach the 44px floor with real geometry: the
    element box is --hit-min tall, the visible 36px control is its padding box
    inside a transparent vertical --control-inset border, and the 1px boundary
    is an inset shadow on that padding box, in control-border (design.md: an
@@ -201,7 +201,7 @@ h1.home-title { margin: 0; }
    copy predates the scaffold's shared `.input-native` rule, so the text
    inputs had no recipe at all. Textareas keep their own height. The task
    row's status select wears the same recipe with a wider band (its own
-   `--control-inset`, so it still paints the compact 30px it always did, #301),
+   `--control-inset`, so it still paints the compact 30px it always did),
    and on touch every native control drops the band and is 44px painted, so
    the strip and the filter sheet keep one height (the coarse block below). */
 input.input-native {
@@ -223,7 +223,7 @@ summary.select-native {
 }
 /* WebKit paints no box-shadow on a native <select> (iOS Safari; Playwright's
    WebKit computes `box-shadow: none`), so the inset edge above left every
-   select on the iPhone with no boundary but its 1.06:1 fill (#339). Wherever
+   select on the iPhone with no boundary but its 1.06:1 fill. Wherever
    the band is zero (the drawer on every pointer, every native control on
    touch, which is 44px painted there), the boundary is the element's own 1px
    border instead, which every engine draws. Only the desktop band keeps the
@@ -304,7 +304,7 @@ html, body {
 .card { margin: 0 0 var(--gap); }
 .pane-body .card { margin: 0; }
 
-/* Width follows the shape of the view (design.md Layout, fleet-config#1113): the
+/* Width follows the shape of the view (design.md Layout): the
    Board and Today tabs are two-dimensional (lanes, a calendar lane) and span
    the window; Search (results as cards) and Settings (inset groups) are
    one-dimensional and keep the centred measure — until a Settings sheet is up
@@ -323,7 +323,7 @@ html, body {
 .card-meta code, .status-row code, .markdown code {
   font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
   font-size: 0.92em;
-  background: var(--neutral-soft);   /* design.md code-inline: the chip fill, never canvas-subtle — true black in a dark card (COMP-17, #426) */
+  background: var(--neutral-soft);   /* design.md code-inline: the chip fill, never canvas-subtle — true black in a dark card (COMP-17) */
   color: var(--fg);
   border-radius: var(--radius-sm);
   padding: 1px 5px;

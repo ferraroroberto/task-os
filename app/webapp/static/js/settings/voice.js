@@ -1,12 +1,12 @@
-/* task-os — the transcription endpoint (#92) and the light model that turns a
- * spoken sentence into a title and a description (#147). */
+/* task-os — the transcription endpoint and the light model that turns a
+ * spoken sentence into a title and a description. */
 
 'use strict';
 
 import { codeEl, fmtTsShort, statusPart } from '../../format.js';
 import { setWord } from './words.js';
 
-/** The whisper endpoint's half of `GET /api/status` (#92). Unreachable
+/** The whisper endpoint's half of `GET /api/status`. Unreachable
  *  always carries its reason — the same sentence the quick-add mic's hint
  *  shows. `null` = the status call itself failed, which is "not
  *  established", not "off". */
@@ -30,7 +30,7 @@ export function renderVoice(ctx, st) {
   // Which endpoint answered matters: the hub means the fleet's transcribe
   // role (parakeet first), the fallback means the local CPU whisper server.
   const serving = { hub: 'hub', fallback: 'local whisper (fallback)' }[st.serving] || 'unknown';
-  // The live-transcript cadence (#146). Absent is not "off": the install
+  // The live-transcript cadence. Absent is not "off": the install
   // did not say, and saying "off" for it would be a claim nobody made.
   const every = st.partial_interval_seconds;
   const live = typeof every !== 'number' ? 'live transcript unknown'
@@ -46,7 +46,7 @@ export function renderVoice(ctx, st) {
 }
 
 /** The light model that turns a spoken sentence into a title and a
- *  description (#147). Off is a state with a reason, not a blank: a
+ *  description. Off is a state with a reason, not a blank: a
  *  spoken line still becomes a task, it just keeps the deterministic
  *  parse — and this row is where you find that out. */
 export function renderEnrich(ctx, st) {

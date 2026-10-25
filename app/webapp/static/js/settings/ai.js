@@ -1,4 +1,4 @@
-/* task-os — the local hub used by staged Inbox triage (#95). */
+/* task-os — the local hub used by staged Inbox triage. */
 
 'use strict';
 
