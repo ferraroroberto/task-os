@@ -161,6 +161,11 @@ def open_settings_sheet(page: Page, key: str, *, tap: bool = False) -> Locator:
     """
     press = (lambda loc: loc.tap()) if tap else (lambda loc: loc.click())
     if not page.locator("#paneSettings").is_visible():
+        # The shell's markup ships a lit tab and the gear before app.js has run,
+        # so a press on a page that has only just navigated (a sign-in) lands on
+        # a button with no handler yet. The build line is empty until boot has
+        # bound the gear and fetched /api/version: the first sign of a live app.
+        expect(page.locator("#buildReadout")).to_contain_text("Build:")
         press(page.locator("#settingsBtn"))
         expect(page.locator("#paneSettings")).to_be_visible()
     press(page.locator(f"#paneSettings [data-settings-sheet='{key}']"))
