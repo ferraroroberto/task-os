@@ -101,11 +101,11 @@ function Invoke-Stage {
 
 Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests opener launcher.py }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }
-# The wrapper maps the script's exit 3 to NOT CONFIRMED (tests/test_static_ratchet_gate.py
+# The wrapper maps the script's exit 3 to NOT CONFIRMED (tests/gates/test_static_ratchet_gate.py
 # pins it); call it, never scripts/static_ratchet.py directly.
 Invoke-Stage "static ratchet"          { & $py -m scripts.static_ratchet_gate }
 # Same wrapper shape: it maps the docs script's exit 3 to NOT CONFIRMED
-# (tests/test_docs_ratchet_gate.py pins it). Whole tree, never routed.
+# (tests/gates/test_docs_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "docs ratchet"            { & $py -m scripts.docs_ratchet_gate }
 # Same wrapper shape: it maps the layout script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_structure_ratchet_gate.py pins it). Whole tree, never routed.

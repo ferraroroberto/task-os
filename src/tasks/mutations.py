@@ -124,6 +124,77 @@ def create_task(
     return get_task(conn, task_id)
 
 
+def _changed_fields(conn: sqlite3.Connection, current: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    """Each change validated and normalised; only the ones that differ from ``current``."""
+    sets: dict[str, Any] = {}
+    for field, value in changes.items():
+        if field == "title":
+            value = (value or "").strip()
+            if not value:
+                raise ValidationError("title cannot be empty")
+        elif field in _ENUMS:
+            if field == "recurrence":
+                value = value or None
+            _validate_enum(field, value, nullable=(field == "recurrence"))
+        elif field in DATE_FIELDS:
+            value = _validate_date(value, field)
+        elif field == "description":
+            value = value or ""
+        elif field == "person_id":
+            value = int(value) if value is not None else None
+            if value is not None:
+                _require_person(conn, value)
+        elif field == "owner":
+            value = _validate_owner(value)
+            if value != _owner_of(current):
+                sets[field] = value
+            continue
+        if value != current[field]:
+            sets[field] = value
+    return sets
+
+
+def _resolve_recurrence(current: dict[str, Any], changes: dict[str, Any], sets: dict[str, Any]) -> None:
+    # Recurrence anchor — resolved against the cadence the task *ends*
+    # with, so PATCHing both at once validates the pair, and changing only the
+    # cadence re-checks the anchor already stored (dropping it when the new
+    # cadence cannot carry it) instead of leaving a stale fixed day behind.
+    if "recurrence" in sets or "recurrence_anchor" in changes:
+        cadence = sets.get("recurrence", current["recurrence"])
+        anchor = (
+            _validate_anchor(cadence, changes["recurrence_anchor"])
+            if "recurrence_anchor" in changes
+            else _carry_anchor(cadence, current["recurrence_anchor"])
+        )
+        if anchor != current["recurrence_anchor"]:
+            sets["recurrence_anchor"] = anchor
+        else:
+            sets.pop("recurrence_anchor", None)
+    # Interval — the same end-state resolution as the anchor above.
+    if "recurrence" in sets or "recurrence_interval" in changes:
+        cadence = sets.get("recurrence", current["recurrence"])
+        interval = (
+            _validate_interval(cadence, changes["recurrence_interval"])
+            if "recurrence_interval" in changes
+            else _carry_interval(cadence, current["recurrence_interval"])
+        )
+        if interval != current["recurrence_interval"]:
+            sets["recurrence_interval"] = interval
+        else:
+            sets.pop("recurrence_interval", None)
+
+
+def _check_coding_type(conn: sqlite3.Connection, task_id: int, new_type: str) -> None:
+    """``coding`` ⇔ an issue_ref: neither side may change alone."""
+    has_ref = conn.execute(
+        "SELECT 1 FROM issue_refs WHERE task_id = ?", (task_id,)
+    ).fetchone() is not None
+    if new_type == "coding" and not has_ref:
+        raise ValidationError("type 'coding' requires an issue_ref — attach an issue first")
+    if new_type != "coding" and has_ref:
+        raise ValidationError("a task with an issue_ref is 'coding' — detach the issue first")
+
+
 def update_task(
     conn: sqlite3.Connection,
     task_id: int,
@@ -153,31 +224,7 @@ def update_task(
         new_parent = _check_reparent(conn, task_id, changes.pop("parent_id"))
         reparent = new_parent != current["parent_id"]
 
-    sets: dict[str, Any] = {}
-    for field, value in changes.items():
-        if field == "title":
-            value = (value or "").strip()
-            if not value:
-                raise ValidationError("title cannot be empty")
-        elif field in _ENUMS:
-            if field == "recurrence":
-                value = value or None
-            _validate_enum(field, value, nullable=(field == "recurrence"))
-        elif field in DATE_FIELDS:
-            value = _validate_date(value, field)
-        elif field == "description":
-            value = value or ""
-        elif field == "person_id":
-            value = int(value) if value is not None else None
-            if value is not None:
-                _require_person(conn, value)
-        elif field == "owner":
-            value = _validate_owner(value)
-            if value != _owner_of(current):
-                sets[field] = value
-            continue
-        if value != current[field]:
-            sets[field] = value
+    sets = _changed_fields(conn, current, changes)
 
     # Snooze: `starts` pushed past `due` would hide the task until the
     # day after it was due. The start carries the due with it — unless the
@@ -187,42 +234,10 @@ def update_task(
         if due and due < sets["starts"]:
             sets["due"] = sets["starts"]
 
-    # Recurrence anchor — resolved against the cadence the task *ends*
-    # with, so PATCHing both at once validates the pair, and changing only the
-    # cadence re-checks the anchor already stored (dropping it when the new
-    # cadence cannot carry it) instead of leaving a stale fixed day behind.
-    if "recurrence" in sets or "recurrence_anchor" in changes:
-        cadence = sets.get("recurrence", current["recurrence"])
-        anchor = (
-            _validate_anchor(cadence, changes["recurrence_anchor"])
-            if "recurrence_anchor" in changes
-            else _carry_anchor(cadence, current["recurrence_anchor"])
-        )
-        if anchor != current["recurrence_anchor"]:
-            sets["recurrence_anchor"] = anchor
-        else:
-            sets.pop("recurrence_anchor", None)
-    # Interval — the same end-state resolution as the anchor above.
-    if "recurrence" in sets or "recurrence_interval" in changes:
-        cadence = sets.get("recurrence", current["recurrence"])
-        interval = (
-            _validate_interval(cadence, changes["recurrence_interval"])
-            if "recurrence_interval" in changes
-            else _carry_interval(cadence, current["recurrence_interval"])
-        )
-        if interval != current["recurrence_interval"]:
-            sets["recurrence_interval"] = interval
-        else:
-            sets.pop("recurrence_interval", None)
+    _resolve_recurrence(current, changes, sets)
 
     if "type" in sets:
-        has_ref = conn.execute(
-            "SELECT 1 FROM issue_refs WHERE task_id = ?", (task_id,)
-        ).fetchone() is not None
-        if sets["type"] == "coding" and not has_ref:
-            raise ValidationError("type 'coding' requires an issue_ref — attach an issue first")
-        if sets["type"] != "coding" and has_ref:
-            raise ValidationError("a task with an issue_ref is 'coding' — detach the issue first")
+        _check_coding_type(conn, task_id, sets["type"])
 
     if not sets and not reparent:
         return get_task(conn, task_id)

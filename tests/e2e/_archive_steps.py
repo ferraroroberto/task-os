@@ -830,6 +830,6 @@ def _second_run(page: Page, ctx: BrowserContext, base: str) -> None:
 
     # 12. Both runs are history now, and reading them back needs no archiver at
     #     all — the picker is the whole record. (`limit`, the bound that makes a
-    #     first real run safe, is proven over the API in tests/test_archive.py.)
+    #     first real run safe, is proven over the API in tests/archive/test_archive_api.py.)
     listed = _get(base, "/api/archive/runs")
     assert listed["count"] == 2 and listed["runs"][1]["planned"] == 7

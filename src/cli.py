@@ -55,21 +55,34 @@ import argparse
 import json
 import logging
 import os
-import sqlite3
-import ssl
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import date
 from typing import Any
 
 from src import clock
+from src.cli_support.backends import UNKNOWN, CliError, HttpBackend, LocalBackend, _tls_context
+from src.cli_support.format import (
+    _crumb,
+    _fmt_task_line,
+    _recurrence_text,
+    fmt_folders_search,
+    fmt_folders_status,
+    fmt_issues_status,
+    fmt_journal,
+    fmt_ls,
+    fmt_people,
+    fmt_search,
+    fmt_show,
+    fmt_status,
+    fmt_suggestion,
+    fmt_tree,
+    group_journal,
+)
 from src.config import load_config
-from src.dates import DateParseError, days_ago, describe_recurrence, parse_date, parse_days_ago
+from src.dates import DateParseError, days_ago, parse_date, parse_days_ago
 from src.schema import (
-    CLOSED_STATUSES,
     DEFAULT_STATUS,
     LINK_KINDS,
     RECURRENCES,
@@ -82,504 +95,7 @@ logger = logging.getLogger(__name__)
 SERVER_ENV = "TASKOS_URL"
 PROBE_TIMEOUT_S = 0.8
 
-#: What either backend reports for a status fact it could not establish.
-#: ``GET /api/status`` already ships this literal for ``auth.client`` when the
-#: middleware cannot classify a request, so it is this repo's existing word for
-#: "not confirmed" rather than a new one — see :meth:`LocalBackend.status`.
-UNKNOWN = "unknown"
-
-
-class CliError(Exception):
-    """A user-facing failure: message + optional structured detail."""
-
-    def __init__(self, message: str, code: str = "error", detail: Any = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.detail = detail
-
-
-# ------------------------------------------------------------------ backends
-#
-# Both backends expose the same method set and return the same dict shapes,
-# so every command formats one way regardless of the transport. Where the
-# offline backend genuinely cannot establish a value the key is still present,
-# carrying ``UNKNOWN`` — the shape never varies, only the confidence does.
-
-Transport = Callable[[str, str, dict[str, Any] | None], tuple[int, Any]]
-
-
-_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
-
-
-def _tls_context(base: str) -> ssl.SSLContext | None:
-    """HTTPS to loopback skips certificate verification (hostname included): the served leaf names the
-    tailnet host (``<host>.ts.net``), never ``127.0.0.1``, and loopback is
-    already the owner (``src/auth.py``) — the same exception the tray's own
-    probe makes (``WebappManager.is_reachable``, #259). Any other host is
-    verified as usual (``None`` = urllib's default context)."""
-    parts = urllib.parse.urlsplit(base)
-    if parts.scheme != "https" or (parts.hostname or "") not in _LOOPBACK_HOSTS:
-        return None
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
-
-
-def _urllib_transport(base: str, actor: str | None) -> Transport:
-    tls = _tls_context(base)
-
-    def send(method: str, path: str, body: dict[str, Any] | None) -> tuple[int, Any]:
-        data = json.dumps(body).encode("utf-8") if body is not None else None
-        req = urllib.request.Request(base + path, data=data, method=method)
-        req.add_header("Accept", "application/json")
-        if data is not None:
-            req.add_header("Content-Type", "application/json")
-        if actor:
-            req.add_header("X-Actor", actor)
-        try:
-            with urllib.request.urlopen(req, timeout=15, context=tls) as res:
-                raw = res.read().decode("utf-8")
-                return res.status, (json.loads(raw) if raw else None)
-        except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            try:
-                return exc.code, json.loads(raw)
-            except ValueError:
-                return exc.code, {"error": {"code": "http_error", "message": raw or str(exc)}}
-        except (urllib.error.URLError, OSError) as exc:
-            raise CliError(f"cannot reach {base}: {exc}", code="unreachable") from exc
-
-    return send
-
-
-class HttpBackend:
-    """Talks to the running webapp; ``transport`` is injectable for tests."""
-
-    name = "http"
-
-    def __init__(self, base: str, actor: str | None = None, transport: Transport | None = None):
-        self.base = base.rstrip("/")
-        self.actor = actor
-        self._send = transport or _urllib_transport(self.base, actor)
-
-    def _call(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
-        status, payload = self._send(method, path, body)
-        if status >= 400:
-            err = (payload or {}).get("error", {}) if isinstance(payload, dict) else {}
-            raise CliError(
-                err.get("message") or f"HTTP {status}", code=err.get("code", "http_error"),
-                detail=err.get("detail"),
-            )
-        return payload
-
-    def add(self, **fields: Any) -> dict[str, Any]:
-        return self._call("POST", "/api/tasks", {**fields, "actor": self.actor})
-
-    def ls(self, **filters: Any) -> list[dict[str, Any]]:
-        params = {k: v for k, v in filters.items() if v is not None}
-        if params.pop("deferred", False):
-            # `deferred` rides the `status` list on the wire — the same URL
-            # vocabulary the web app's filter card shares, so there is
-            # one spelling of "show me the sleeping ones", not two.
-            picked = [s for s in str(params.get("status") or "").split(",") if s]
-            params["status"] = ",".join([*picked, "deferred"])
-        if params.pop("blocked", False):
-            # same trick as `deferred`, its own pseudo-value
-            picked = [s for s in str(params.get("status") or "").split(",") if s]
-            params["status"] = ",".join([*picked, "blocked"])
-        query = urllib.parse.urlencode(params)
-        return self._call("GET", "/api/tasks" + (f"?{query}" if query else ""))["items"]
-
-    def show(self, task_id: int) -> dict[str, Any]:
-        return self._call("GET", f"/api/tasks/{task_id}")
-
-    def tree(self, root: int | None) -> list[dict[str, Any]]:
-        q = f"?root={root}" if root is not None else ""
-        return self._call("GET", f"/api/tasks/tree{q}")["items"]
-
-    def comment(self, task_id: int, text: str) -> dict[str, Any]:
-        body = {"body": text, "origin": "cli", "author": self.actor}
-        return self._call("POST", f"/api/tasks/{task_id}/comments", body)
-
-    def due(self, task_id: int, due: str | None) -> dict[str, Any]:
-        return self._call("PATCH", f"/api/tasks/{task_id}", {"due": due, "actor": self.actor})
-
-    def update(self, task_id: int, **fields: Any) -> dict[str, Any]:
-        return self._call("PATCH", f"/api/tasks/{task_id}", {**fields, "actor": self.actor})
-
-    def link(self, task_id: int, url: str, label: str | None, kind: str | None) -> dict[str, Any]:
-        body = {"url": url, "label": label, "kind": kind}
-        return self._call("POST", f"/api/tasks/{task_id}/links", body)
-
-    def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
-        return self._call("PATCH", f"/api/tasks/{task_id}", {"starts": starts, "actor": self.actor})
-
-    def done(self, task_id: int) -> dict[str, Any]:
-        return self._call("POST", f"/api/tasks/{task_id}/done", {"actor": self.actor})
-
-    def delete(self, task_id: int) -> dict[str, Any]:
-        return self._call("DELETE", f"/api/tasks/{task_id}")
-
-    def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
-        body = {"parent_id": parent_id, "actor": self.actor}
-        return self._call("POST", f"/api/tasks/{task_id}/move", body)
-
-    def block(self, task_id: int, blocker_id: int) -> dict[str, Any]:
-        body = {"blocker_id": blocker_id, "actor": self.actor}
-        return self._call("POST", f"/api/tasks/{task_id}/blockers", body)
-
-    def unblock(self, task_id: int, blocker_id: int) -> dict[str, Any]:
-        return self._call("DELETE", f"/api/tasks/{task_id}/blockers/{blocker_id}")
-
-    def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
-        params: dict[str, Any] = {"q": q}
-        if kinds:
-            params["kinds"] = ",".join(kinds)
-        return self._call("GET", "/api/search?" + urllib.parse.urlencode(params))
-
-    def people(self) -> list[dict[str, Any]]:
-        return self._call("GET", "/api/people")["items"]
-
-    def mirror_export(self) -> dict[str, Any]:
-        return self._call("POST", "/api/mirror/export")
-
-    def mirror_import(self) -> dict[str, Any]:
-        return self._call("POST", "/api/mirror/import")
-
-    def status(self) -> dict[str, Any]:
-        return self._call("GET", "/api/status")
-
-    def backup(self) -> dict[str, Any]:
-        return self._call("POST", "/api/backup")
-
-    def issues_status(self) -> dict[str, Any]:
-        return self._call("GET", "/api/issues/status")
-
-    def issues_sync(self) -> dict[str, Any]:
-        return self._call("POST", "/api/issues/sync")
-
-    def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
-        return self._call("POST", f"/api/tasks/{task_id}/issue", {"repo": repo, "actor": self.actor})
-
-    def folders_reindex(self) -> dict[str, Any]:
-        return self._call("POST", "/api/folders/reindex")
-
-    def folders_search(self, q: str) -> dict[str, Any]:
-        return self._call("GET", "/api/folders/search?" + urllib.parse.urlencode({"q": q}))
-
-    def triage(self) -> list[dict[str, Any]]:
-        return self._call("POST", "/api/ai/triage", {})["items"]
-
-    def accept_suggestion(self, suggestion_id: int) -> dict[str, Any]:
-        return self._call("POST", f"/api/ai/suggestions/{suggestion_id}/accept")
-
-    def reject_suggestion(self, suggestion_id: int) -> dict[str, Any]:
-        return self._call("POST", f"/api/ai/suggestions/{suggestion_id}/reject")
-
-
-class LocalBackend:
-    """Opens the database directly — the app-down path."""
-
-    name = "local"
-
-    def __init__(self, actor: str | None = None):
-        from src import tasks_repo
-        from src.db import connect, init_db
-
-        self.actor = actor
-        self._repo = tasks_repo
-        # who an `owner` may name, and who a NULL one is — as the app's lifespan does
-        tasks_repo.set_members([p.id for p in load_config().people])
-        init_db()
-        self.conn: sqlite3.Connection = connect()
-        # Writes made here bypass the app's debounced exporter, so collect the
-        # touched ids and mirror them synchronously in finish().
-        self._touched: set[int] = set()
-        self._repo.add_write_listener(self._on_write)
-        self._mirror: Any = None
-        self._ai: Any = None
-
-    def _on_write(self, ids: list[int]) -> None:
-        self._touched.update(ids)
-
-    def _mirror_service(self) -> Any:
-        if self._mirror is None:
-            from src.mirror import Mirror
-
-            self._mirror = Mirror(load_config())
-        return self._mirror
-
-    def finish(self) -> int:
-        """Export the tasks this command touched (when the mirror is configured); returns the count."""
-        self._repo.remove_write_listener(self._on_write)
-        if not self._touched:
-            return 0
-        mirror = self._mirror_service()
-        if not mirror.enabled:
-            return 0
-        try:
-            return mirror.export_ids(self.conn, sorted(self._touched))
-        except Exception as exc:  # noqa: BLE001 — the command already succeeded; the app's next full export catches up
-            logger.warning("⚠️ mirror export after the command failed: %s", exc)
-            return 0
-
-    def _wrap(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        try:
-            return fn(self.conn, *args, **kwargs)
-        except self._repo.RepoError as exc:
-            raise CliError(str(exc), code=exc.code) from exc
-
-    def add(self, **fields: Any) -> dict[str, Any]:
-        title = fields.pop("title")
-        return self._wrap(self._repo.create_task, title, actor=self.actor, **fields)
-
-    def ls(self, **filters: Any) -> list[dict[str, Any]]:
-        status = filters.get("status")
-        return self._wrap(
-            self._repo.list_tasks,
-            status=[s for s in status.split(",")] if status else None,
-            parent_id=filters.get("parent"),
-            project=filters.get("project"),
-            due=filters.get("due"),
-            type=filters.get("type"),
-            person_id=filters.get("person"),
-            owner=[o for o in filters["owner"].split(",") if o] if filters.get("owner") else None,
-            q=filters.get("q"),
-            include_closed=bool(filters.get("include_closed")),
-            updated_before=filters.get("updated_before"),
-            done_from=filters.get("done_from"),
-            done_to=filters.get("done_to"),
-            # None = follow include_closed, so `ls --status all` means all
-            deferred="only" if filters.get("deferred") else None,
-            blocked="only" if filters.get("blocked") else None,
-        )
-
-    def show(self, task_id: int) -> dict[str, Any]:
-        return self._wrap(self._repo.get_task, task_id)
-
-    def tree(self, root: int | None) -> list[dict[str, Any]]:
-        return self._wrap(self._repo.tree, root)
-
-    def comment(self, task_id: int, text: str) -> dict[str, Any]:
-        return self._wrap(self._repo.add_comment, task_id, text, author=self.actor, origin="cli")
-
-    def due(self, task_id: int, due: str | None) -> dict[str, Any]:
-        return self._wrap(self._repo.set_due, task_id, due, actor=self.actor)
-
-    def update(self, task_id: int, **fields: Any) -> dict[str, Any]:
-        return self._wrap(self._repo.update_task, task_id, actor=self.actor, **fields)
-
-    def link(self, task_id: int, url: str, label: str | None, kind: str | None) -> dict[str, Any]:
-        return self._wrap(self._repo.add_link, task_id, url, label=label, kind=kind)
-
-    def starts(self, task_id: int, starts: str | None) -> dict[str, Any]:
-        return self._wrap(self._repo.set_starts, task_id, starts, actor=self.actor)
-
-    def done(self, task_id: int) -> dict[str, Any]:
-        return self._wrap(self._repo.done, task_id, actor=self.actor)
-
-    def delete(self, task_id: int) -> dict[str, Any]:
-        return self._wrap(self._repo.delete_task, task_id)
-
-    def move(self, task_id: int, parent_id: int | None) -> dict[str, Any]:
-        return self._wrap(self._repo.move, task_id, parent_id, actor=self.actor)
-
-    def block(self, task_id: int, blocker_id: int) -> dict[str, Any]:
-        return self._wrap(self._repo.add_blocker, task_id, blocker_id, actor=self.actor)
-
-    def unblock(self, task_id: int, blocker_id: int) -> dict[str, Any]:
-        return self._wrap(self._repo.remove_blocker, task_id, blocker_id, actor=self.actor)
-
-    def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
-        # The same four adapters the webapp runs, built here over this
-        # process's config: the folder index loaded from its file (no scan),
-        # the issue service cold (local refs only — the sync's cache lives in
-        # the app), the email index read-only.
-        from src.folder_index import FolderIndexService
-        from src.issue_sync import IssueSyncService
-        from src.search import build_federated
-
-        config = load_config()
-        folders = FolderIndexService(config)
-        if folders.enabled:
-            try:
-                folders.load()
-            except OSError:
-                pass
-        return build_federated(config, folders=folders, issues=IssueSyncService(config)).search(q, kinds=kinds)
-
-    def people(self) -> list[dict[str, Any]]:
-        return self._wrap(self._repo.list_people)
-
-    def _ai_client(self) -> Any:
-        if self._ai is None:
-            from src.ai import AIClient
-
-            self._ai = AIClient(load_config())
-        return self._ai
-
-    def triage(self) -> list[dict[str, Any]]:
-        from src.ai import AIError, generate_suggestions
-
-        try:
-            return generate_suggestions(self.conn, self._ai_client())
-        except AIError as exc:
-            raise CliError(str(exc), code=exc.code, detail=exc.detail) from exc
-
-    def accept_suggestion(self, suggestion_id: int) -> dict[str, Any]:
-        from src.ai import accept_suggestion
-
-        return self._wrap(accept_suggestion, suggestion_id)
-
-    def reject_suggestion(self, suggestion_id: int) -> dict[str, Any]:
-        from src.ai import reject_suggestion
-
-        return self._wrap(reject_suggestion, suggestion_id)
-
-    def mirror_export(self) -> dict[str, Any]:
-        mirror = self._mirror_service()
-        if not mirror.enabled:
-            raise CliError(mirror.reason, code="mirror_disabled")
-        return mirror.export_all(self.conn)
-
-    def mirror_import(self) -> dict[str, Any]:
-        mirror = self._mirror_service()
-        if not mirror.enabled:
-            raise CliError(mirror.reason, code="mirror_disabled")
-        return mirror.import_tick(self.conn)
-
-    def status(self) -> dict[str, Any]:
-        """The full ``GET /api/status`` key set, assembled offline.
-
-        Two of those keys describe the **request** rather than the install:
-        ``https`` is the scheme the caller's connection arrived on, and
-        ``auth.client`` is how ``AuthMiddleware`` classified that connection.
-        With the app down there is no connection, so both are reported as
-        :data:`UNKNOWN` — never omitted (a missing key reads to a consumer as
-        "plain HTTP", which is an answer this process did not establish) and
-        never inferred from the config (``src/certs.py`` knows what the *next*
-        webapp spawn would bind; that is not what a client actually got).
-
-        Everything else the API returns is a property of the install, not of
-        the request, so it is answered for real here: the auth config, the
-        four services, the voice endpoint's reachability, and — from this
-        PC's filesystem and registry — the opener registration and the
-        placeholder map.
-        """
-        from src import opener
-        from src.ai import AIClient
-        from src.archive_batch import ArchiveBatchService
-        from src.backup import BackupScheduler
-        from src.calendar_lane import CalendarService
-        from src.email_capture import EmailCaptureService
-        from src.enrich import EnrichClient
-        from src.folder_index import FolderIndexService
-        from src.voice import VoiceClient
-
-        config = load_config()
-        folders = FolderIndexService(config)
-        if folders.enabled:
-            try:
-                folders.load()
-            except OSError:
-                pass
-        placeholders = dict(config.placeholders)
-        return {
-            "https": UNKNOWN,
-            "auth": {
-                "enabled": config.auth.enabled,
-                "password": bool(config.auth.password_hash),
-                "client": UNKNOWN,
-            },
-            "mirror": self._mirror_service().status(self.conn),
-            "backup": BackupScheduler(config).status(),
-            "folders": folders.status(),
-            # Built but never started — offline there is no poller thread, so
-            # `running` is False and `next_run` None. Both are facts about this
-            # process, not guesses; the enabled/reason pair (does this install
-            # have a flag-carrying index?) is what the caller actually asked.
-            "capture": EmailCaptureService(config).status(),
-            # Reachability of the whisper endpoint *from this PC* is a fact
-            # this process can establish with or without the app — the
-            # same TCP probe the webapp answers with.
-            "voice": VoiceClient(config).status(),
-            # Same fact, same shape, for the text model: a TCP probe
-            # this process can run whether or not the app is up.
-            "enrich": EnrichClient(config).status(),
-            "ai": AIClient(config).status(),
-            # Whether this install can drive the archiver, and what the last run
-            # did — both read off the config and this database, so the answer is
-            # the same with the app up or down. Nothing is spawned here.
-            "archive": ArchiveBatchService(config).status(self.conn),
-            # The calendar is an install fact too: the address is in the
-            # config and the fetch runs from this PC, bounded by its timeout.
-            "calendar": CalendarService(config).status(),
-            "opener": opener.status(placeholders),
-            "placeholders": placeholders,
-        }
-
-    def backup(self) -> dict[str, Any]:
-        from src.backup import BackupScheduler
-
-        scheduler = BackupScheduler(load_config())
-        if not scheduler.enabled:
-            raise CliError(scheduler.reason, code="backup_disabled")
-        target = scheduler.run_now()
-        if target is None:
-            raise CliError(scheduler.last_error or "backup failed", code="backup_failed")
-        return {"file": target.name, "dir": str(target.parent), "path": str(target)}
-
-    def _issue_service(self) -> Any:
-        from src.issue_sync import IssueSyncService
-
-        return IssueSyncService(load_config())
-
-    def issues_status(self) -> dict[str, Any]:
-        service = self._issue_service()
-        body = service.status()
-        body["repos"] = sorted({r["repo"] for r in self._repo.list_issue_refs(self.conn)})
-        return body
-
-    def issues_sync(self) -> dict[str, Any]:
-        service = self._issue_service()
-        if not service.enabled:
-            raise CliError(service.reason, code="issues_disabled")
-        result = service.run_now(self.conn)
-        if result is None:
-            raise CliError(service.last_error or "sync failed", code="provider_error")
-        return result.to_dict()
-
-    def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
-        """The same workflow the route runs — ``src.issue_sync.issue_from_task``
-        (issue #35). ``_wrap`` turns its repo-family errors (already_linked,
-        issues_disabled, validation, not_found) into the CLI's dialect; the
-        provider error is mapped here, as the route maps it to its 502."""
-        from src.issue_sync import issue_from_task
-        from src.issues import IssueProviderError
-
-        try:
-            return self._wrap(issue_from_task, task_id, repo,
-                              service=self._issue_service(), actor=self.actor)
-        except IssueProviderError as exc:
-            raise CliError(str(exc), code="provider_error") from exc
-
-    def _folders(self) -> Any:
-        from src.folder_index import FolderIndexService
-
-        svc = FolderIndexService(load_config())
-        if not svc.enabled:
-            raise CliError(svc.reason, code="folders_disabled")
-        return svc
-
-    def folders_reindex(self) -> dict[str, Any]:
-        return self._folders().reindex()
-
-    def folders_search(self, q: str) -> dict[str, Any]:
-        svc = self._folders()
-        svc.load()
-        items = svc.search(q)
-        return {"q": q, "items": items, "count": len(items), "indexing": False, "entries": svc.status()["entries"]}
+__all__ = ["UNKNOWN", "CliError", "HttpBackend", "LocalBackend"]
 
 
 def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
@@ -615,317 +131,6 @@ def _default_bases(port: int) -> list[str]:
 
     plain = f"http://127.0.0.1:{port}"
     return [f"https://127.0.0.1:{port}", plain] if certs.cert_paths() else [plain]
-
-
-# ---------------------------------------------------------------- formatting
-
-
-def _recurrence_text(t: dict[str, Any]) -> str:
-    """A task's cadence + anchor + interval in ``src.dates``' one wording."""
-    return describe_recurrence(
-        t["recurrence"], t.get("recurrence_anchor"), t.get("recurrence_interval")
-    )
-
-
-def _fmt_task_line(t: dict[str, Any], indent: int = 0) -> str:
-    bits = [f"#{t['id']}", t["title"]]
-    tail = []
-    if t.get("status") and t["status"] != DEFAULT_STATUS:
-        tail.append(t["status"])
-    if t.get("priority") and t["priority"] != "none":
-        tail.append(f"prio {t['priority']}")
-    if t.get("due"):
-        tail.append(f"due {t['due']}")
-    if t.get("starts"):
-        tail.append(f"starts {t['starts']}")
-    if t.get("recurrence"):
-        tail.append(_recurrence_text(t))
-    if t.get("type") == "coding" and t.get("issue_ref"):
-        tail.append(f"{t['issue_ref']['repo']}#{t['issue_ref']['number']}")
-    if t.get("blocked"):
-        tail.append(f"blocked by {t['blocker_count']}")
-    if t.get("person"):
-        tail.append(f"@{t['person']['name']}")
-    line = "  " * indent + "  ".join(bits)
-    if tail:
-        line += "  (" + ", ".join(tail) + ")"
-    return line
-
-
-def _crumb(t: dict[str, Any]) -> str:
-    return " › ".join(c["title"] for c in t.get("breadcrumb") or [])
-
-
-def fmt_ls(items: list[dict[str, Any]]) -> str:
-    if not items:
-        return "(no tasks)"
-    rows = []
-    for t in items:
-        rows.append((
-            f"#{t['id']}", t["status"], t["priority"] if t["priority"] != "none" else "",
-            t.get("due") or "", t["title"] + (f"  ({t['child_count']})" if t.get("is_project") else ""),
-        ))
-    widths = [max(len(r[i]) for r in rows) for i in range(4)]
-    out = []
-    for r in rows:
-        out.append("  ".join(r[i].ljust(widths[i]) for i in range(4)) + "  " + r[4])
-    return "\n".join(out)
-
-
-def group_journal(items: list[dict[str, Any]], done_from: str, done_to: str) -> dict[str, Any]:
-    """The done journal's shape (#102): closed tasks grouped by the local
-    calendar day of ``done_at``, newest day first, each day with its count.
-
-    The same grouping the web journal draws — ``done_at`` is a local
-    timestamp, so the day is its first ten characters (never UTC
-    arithmetic). Both backends hand the list over already ordered newest
-    closing first, so the groups come out in order without a sort here.
-    """
-    days: list[dict[str, Any]] = []
-    for t in items:
-        day = (t.get("done_at") or "")[:10]
-        if not days or days[-1]["day"] != day:
-            days.append({"day": day, "count": 0, "items": []})
-        days[-1]["items"].append(t)
-        days[-1]["count"] += 1
-    return {"from": done_from, "to": done_to, "count": len(items), "days": days}
-
-
-def fmt_journal(journal: dict[str, Any]) -> str:
-    if not journal["days"]:
-        return f"(nothing closed between {journal['from']} and {journal['to']})"
-    lines = []
-    for d in journal["days"]:
-        when = date.fromisoformat(d["day"]).strftime("%a %d %b") if d["day"] else "(no date)"
-        lines.append(f"{when} · {d['count']} done")
-        for t in d["items"]:
-            mark = "x" if t.get("status") == "done" else "-"
-            crumb = _crumb(t)
-            lines.append(f"  [{mark}] {_fmt_task_line(t)}" + (f"  {crumb}" if crumb else ""))
-    return "\n".join(lines)
-
-
-def fmt_show(t: dict[str, Any]) -> str:
-    lines = [_fmt_task_line(t)]
-    crumb = _crumb(t)
-    if crumb:
-        lines.append(f"  in: {crumb}")
-    lines.append(f"  type {t['type']} · status {t['status']} · priority {t['priority']} · due {t.get('due') or '-'}"
-                 + (f" · starts {t['starts']}" if t.get("starts") else "")
-                 + (f" · {_recurrence_text(t)}" if t.get("recurrence") else ""))
-    if t.get("description"):
-        lines.append(f"  {t['description']}")
-    if t.get("folder_ref"):
-        lines.append(f"  folder: {t['folder_ref']}")
-    if t.get("next_action"):
-        lines.append(f"  next: {t['next_action']}")
-    if t.get("blocked_by"):
-        lines.append("  blocked by: " + ", ".join(
-            f"#{b['id']} {b['title']}" + ("" if b["status"] not in CLOSED_STATUSES else f" ({b['status']})")
-            for b in t["blocked_by"]
-        ))
-    lines.append(f"  created {t['created_at']} by {t.get('created_by') or '-'} · updated {t['updated_at']}"
-                 + (f" · done {t['done_at']}" if t.get("done_at") else ""))
-    if t.get("children"):
-        lines.append("  children:")
-        lines.extend(_fmt_task_line(c, indent=2) for c in t["children"])
-    if t.get("links"):
-        lines.append("  links:")
-        lines.extend(f"    [{lk['kind']}] {lk.get('label') or lk['url']}  {lk['url']}" for lk in t["links"])
-    if t.get("comments"):
-        lines.append("  comments:")
-        lines.extend(f"    {c['ts']}  {c.get('author') or '-'} ({c['origin']}): {c['body']}" for c in t["comments"])
-    if t.get("activity"):
-        lines.append("  activity:")
-        for a in t["activity"]:
-            lines.append(f"    {a['ts']}  {a.get('actor') or '-'}  {a['field']}: {a.get('old_value') if a.get('old_value') is not None else '∅'} → {a.get('new_value') if a.get('new_value') is not None else '∅'}")
-    return "\n".join(lines)
-
-
-def fmt_tree(nodes: list[dict[str, Any]], depth: int = 0) -> list[str]:
-    out: list[str] = []
-    for n in nodes:
-        out.append(_fmt_task_line(n, indent=depth))
-        out.extend(fmt_tree(n.get("children") or [], depth + 1))
-    return out
-
-
-def fmt_search(result: dict[str, Any]) -> str:
-    """The federated result as text — one block per kind; an unconfigured or
-    errored group says so on its header line (never a silent blank)."""
-    out: list[str] = []
-    for g in result.get("groups") or []:
-        kind = g["kind"]
-        if g.get("skipped"):
-            continue
-        if not g.get("configured"):
-            out.append(f"{kind}: not configured — {g.get('reason') or 'unknown'}")
-            continue
-        head = f"{kind} ({g.get('count', 0)} · {g.get('took_ms', 0)} ms)"
-        if g.get("error"):
-            head += f"  error: {g['error']}"
-        if g.get("note"):
-            head += f"  — {g['note']}"
-        out.append(head)
-        for h in g.get("hits") or []:
-            if kind == "tasks":
-                lead = f"#{h['task_id']}  {h['title']}"
-            elif kind == "issues":
-                lead = f"{h['ref']}  {h['title']}"
-            else:
-                lead = h["title"]
-            sub = f"  — {h['subtitle']}" if h.get("subtitle") else ""
-            out.append(f"  {lead}{sub}")
-            snippet = h.get("snippet") or ""
-            if snippet and snippet != h.get("title"):
-                where = f"{h['matched_in']}: " if h.get("matched_in") else ""
-                out.append(f"      {where}{snippet}")
-            if kind in ("folders", "emails"):
-                out.append(f"      {h['ref']}")
-    return "\n".join(out) if out else "(no hits)"
-
-
-def fmt_people(items: list[dict[str, Any]]) -> str:
-    if not items:
-        return "(no people)"
-    return "\n".join(f"#{p['id']}  {p['name']}" + (f"  <{p['email']}>" if p.get("email") else "")
-                     + f"  ({p.get('open_tasks', 0)} open)" for p in items)
-
-
-def fmt_suggestion(item: dict[str, Any]) -> str:
-    """One staged Inbox proposal in the same terse shape as the Board strip."""
-    fields: list[str] = []
-    if item.get("parent"):
-        fields.append("→ " + item["parent"]["title"])
-    if item.get("priority"):
-        fields.append(str(item["priority"]))
-    fields.append("due: " + (item.get("due") or "none"))
-    if item.get("person"):
-        fields.append(str(item["person"]["name"]))
-    return (
-        f"#{item['task_id']} {item.get('task_title') or ''}\n  "
-        + " · ".join(fields)
-        + f"\n  {item['reason']}"
-    )
-
-
-def fmt_issues_status(st: dict[str, Any]) -> str:
-    provider = st.get("provider") or "none"
-    if not st.get("enabled"):
-        return f"issues   {provider}: not configured — {st.get('reason') or 'unknown'}"
-    r = st.get("last_result") or {}
-    lines = [f"issues   {provider} · every {st.get('sync_minutes')} min · last sync {st.get('last_sync') or '-'}"
-             + (f" · next {st.get('next_run')}" if st.get("next_run") else "")]
-    if st.get("last_error"):
-        lines.append(f"         last error ({st.get('last_error_code') or 'error'}): {st['last_error']}")
-    if r:
-        lines.append(f"         last result: {r.get('listed', 0)} open issue(s) · {r.get('created', 0)} new"
-                     f" · {r.get('retitled', 0)} retitled · {r.get('reopened', 0)} reopened · {r.get('closed', 0)} closed"
-                     + (f" · {len(r.get('errors') or [])} error(s)" if r.get("errors") else ""))
-    if st.get("repos"):
-        lines.append(f"         repos: {', '.join(st['repos'])}")
-    return "\n".join(lines)
-
-
-def fmt_status(status: dict[str, Any]) -> str:
-    m = status.get("mirror") or {}
-    b = status.get("backup") or {}
-    lines = []
-    if m.get("enabled"):
-        lines.append(f"mirror   enabled · {m.get('dir')} · {m.get('files')} file(s)"
-                     f" · last export {m.get('last_export') or '-'} · last import {m.get('last_import') or '-'}"
-                     f" · errors {m.get('errors', 0)}"
-                     + (f" ({', '.join(m.get('error_files') or [])})" if m.get("error_files") else "")
-                     + (" · watching" if m.get("watching") else ""))
-    else:
-        lines.append(f"mirror   not configured — {m.get('reason') or 'unknown'}")
-    if b.get("enabled"):
-        lines.append(f"backup   enabled · {b.get('dir')} · last {b.get('last_file') or '-'}"
-                     f" · next {b.get('next_run') or '(app not running)'}"
-                     + (f" · last error {b['last_error']}" if b.get("last_error") else ""))
-    else:
-        lines.append(f"backup   not configured — {b.get('reason') or 'unknown'}")
-    lines.append(fmt_capture_status(status.get("capture") or {}))
-    lines.append(fmt_voice_status(status.get("voice") or {}))
-    lines.append(fmt_enrich_status(status.get("enrich") or {}))
-    lines.append(fmt_ai_status(status.get("ai") or {}))
-    return "\n".join(lines)
-
-
-def fmt_capture_status(c: dict[str, Any]) -> str:
-    """The flagged-email poller's line (#98) — off always says why."""
-    if not c.get("enabled"):
-        return f"capture  not configured — {c.get('reason') or 'unknown'}"
-    r = c.get("last_result") or {}
-    line = (f"capture  enabled · flagged emails every {c.get('poll_minutes')} min"
-            f" · last run {c.get('last_run') or '-'}"
-            f" · next {c.get('next_run') or '(app not running)'}")
-    if c.get("last_run"):
-        line += (f" · {r.get('listed', 0)} flagged · {r.get('created', 0)} new"
-                 + (f" · {r['dismissed']} dismissed" if r.get("dismissed") else "")
-                 + (f" · {len(r.get('errors') or [])} error(s)" if r.get("errors") else ""))
-    if c.get("last_error"):
-        line += f" · last error {c['last_error']}"
-    return line
-
-
-def fmt_voice_status(v: dict[str, Any]) -> str:
-    """The voice endpoints' line (#92, #144) — which one is serving, or why
-    neither is."""
-    if not v.get("enabled"):
-        return f"voice    off — {v.get('reason') or 'unknown'}"
-    serving = {"hub": "hub", "fallback": "local whisper (fallback)"}.get(v.get("serving"), "unknown")
-    # The live-transcript cadence: a number is "every N s", 0 is the
-    # single pass on stop. A missing key is neither, and says so.
-    interval = v.get("partial_interval_seconds")
-    if interval is None:
-        live = "live transcript unknown"
-    elif interval > 0:
-        live = f"live every {interval:g}s"
-    else:
-        live = "live transcript off"
-    return (f"voice    reachable · {serving} · {live} · {v.get('url')}"
-            + (f" · checked {v['checked_at']}" if v.get("checked_at") else ""))
-
-
-def fmt_enrich_status(e: dict[str, Any]) -> str:
-    """The text model's line (#147) — which model, or why there is none.
-
-    Off is never silent: a spoken line still becomes a task, it just keeps
-    the deterministic parse, and this is where you find out that is what you
-    have been getting."""
-    if not e.get("enabled"):
-        return f"enrich   off — {e.get('reason') or 'unknown'}"
-    return (f"enrich   reachable · {e.get('model')} · {e.get('url')}"
-            + (f" · checked {e['checked_at']}" if e.get("checked_at") else ""))
-
-
-def fmt_ai_status(ai: dict[str, Any]) -> str:
-    """The shared local AI client's state — disabled and down stay distinct."""
-    if not ai.get("enabled"):
-        return f"ai       off — {ai.get('reason') or 'unknown'}"
-    return (f"ai       reachable · {ai.get('model') or 'model unknown'}"
-            + (f" · checked {ai['checked_at']}" if ai.get("checked_at") else ""))
-
-
-def fmt_folders_status(f: dict[str, Any]) -> str:
-    if not f.get("enabled"):
-        return f"folders  not configured — {f.get('reason') or 'unknown'}"
-    roots = ", ".join(
-        f"{r.get('ref')} → {r.get('path')}" + ("" if r.get("exists") else f" ({r.get('error') or 'missing'})")
-        for r in f.get("roots") or []
-    )
-    return (f"folders  {f.get('entries', 0)} folder(s) · roots {roots} · last indexed {f.get('last_indexed') or '-'}"
-            + (" · indexing now" if f.get("indexing") else "")
-            + (" · stale (>24 h)" if f.get("stale") and f.get("last_indexed") else "")
-            + (f" · last error {f['last_error']}" if f.get("last_error") else ""))
-
-
-def fmt_folders_search(r: dict[str, Any]) -> str:
-    items = r.get("items") or []
-    if not items:
-        return "(no folders match)" + (" — index still building" if r.get("indexing") else "")
-    return "\n".join(f"{i['ref']}\n    {i['path']}" for i in items)
 
 
 # ------------------------------------------------------------------ commands
@@ -1061,211 +266,269 @@ def _folder_arg(value: str) -> str | None:
     return placeholders.to_ref(value, load_config().placeholders) or None
 
 
+def _cmd_add(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    fields: dict[str, Any] = {"title": args.title}
+    if args.parent is not None:
+        fields["parent_id"] = _parent_arg(args.parent)
+    if args.due is not None:
+        fields["due"] = _parse_date_arg(args.due)
+    if args.starts is not None:
+        fields["starts"] = _parse_date_arg(args.starts)
+    if args.status:
+        fields["status"] = args.status
+    if args.priority:
+        fields["priority"] = args.priority
+    if args.recurrence:
+        fields["recurrence"] = args.recurrence
+    if args.recurrence_anchor:
+        fields["recurrence_anchor"] = args.recurrence_anchor
+    if args.recurrence_interval is not None:
+        fields["recurrence_interval"] = args.recurrence_interval
+    if args.person:
+        fields["person_id"] = _resolve_person(backend, args.person)
+    if args.owner:
+        fields["owner"] = args.owner
+    if args.desc:
+        fields["description"] = args.desc
+    if args.folder:
+        fields["folder_ref"] = _folder_arg(args.folder)
+    if args.link_label and not args.link:
+        raise CliError("--link-label needs --link", code="usage")
+    t = backend.add(**fields)
+    if args.link:
+        # a second call: the task already exists if this one fails, so
+        # the error names it rather than implying nothing was written
+        try:
+            backend.link(t["id"], args.link, args.link_label, None)
+        except CliError as exc:
+            raise CliError(f"added #{t['id']}, but the link failed: {exc}", code=exc.code,
+                           detail=exc.detail) from exc
+        t = backend.show(t["id"])
+    return t, f"added {_fmt_task_line(t)}"
+
+
+def _cmd_ls(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    filters: dict[str, Any] = {}
+    if args.status:
+        if args.status == "all":
+            filters["include_closed"] = True
+        else:
+            filters["status"] = args.status
+    if args.project is not None:
+        filters["project"] = args.project
+    if args.due:
+        filters["due"] = args.due
+    if args.person:
+        filters["person"] = _resolve_person(backend, args.person)
+    if args.owner:
+        filters["owner"] = args.owner
+    if args.deferred:
+        filters["deferred"] = True
+    if args.blocked:
+        filters["blocked"] = True
+    if args.updated_before:
+        filters["updated_before"] = _parse_before_arg(args.updated_before)
+    items = backend.ls(**filters)
+    return items, fmt_ls(items)
+
+
+def _cmd_journal(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    weeks = args.weeks if args.weeks and args.weeks > 0 else 1
+    done_to = clock.today().isoformat()
+    done_from = days_ago(7 * weeks - 1).isoformat()
+    filters = {"status": "done,cancelled", "done_from": done_from, "done_to": done_to}
+    if args.project is not None:
+        filters["project"] = args.project
+    if args.person:
+        filters["person"] = _resolve_person(backend, args.person)
+    journal = group_journal(backend.ls(**filters), done_from, done_to)
+    return journal, fmt_journal(journal)
+
+
+def _cmd_show(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.show(args.id)
+    return t, fmt_show(t)
+
+
+def _cmd_tree(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    nodes = backend.tree(args.id)
+    return nodes, "\n".join(fmt_tree(nodes)) or "(no tasks)"
+
+
+def _cmd_comment(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    c = backend.comment(args.id, args.text)
+    return c, f"commented on #{args.id}: {c['body']}"
+
+
+def _cmd_set(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    changes: dict[str, Any] = {}
+    if args.title is not None:
+        changes["title"] = args.title
+    if args.status:
+        changes["status"] = args.status
+    if args.priority:
+        changes["priority"] = args.priority
+    if args.desc is not None:
+        changes["description"] = args.desc
+    if args.folder is not None:
+        changes["folder_ref"] = _folder_arg(args.folder)
+    if args.owner:
+        changes["owner"] = args.owner
+    if not changes:
+        raise CliError("set needs at least one of --title --status --priority --desc --folder --owner", code="usage")
+    t = backend.update(args.id, **changes)
+    return t, f"updated {_fmt_task_line(t)}"
+
+
+def _cmd_link(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    lk = backend.link(args.id, args.url, args.label, args.kind)
+    return lk, f"#{args.id} linked [{lk['kind']}] {lk.get('label') or lk['url']}"
+
+
+def _cmd_due(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.due(args.id, _parse_date_arg(args.date))
+    return t, f"#{t['id']} due → {t.get('due') or 'none'}"
+
+
+def _cmd_starts(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.starts(args.id, _parse_date_arg(args.date))
+    return t, f"#{t['id']} starts → {t.get('starts') or 'none'}"
+
+
+def _cmd_done(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.done(args.id)
+    if t.get("recurrence"):
+        label = _recurrence_text(t)
+        return t, f"#{t['id']} done — recurring {label}, next due {t['due']}"
+    return t, f"#{t['id']} done"
+
+
+def _cmd_move(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.move(args.id, _parent_arg(args.parent))
+    where = _crumb(t) or "top level"
+    return t, f"#{t['id']} moved → {where}"
+
+
+def _cmd_block(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.block(args.id, args.on)
+    return t, f"#{t['id']} blocked by #{args.on} ({t['blocker_count']} open blocker(s))"
+
+
+def _cmd_unblock(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.unblock(args.id, args.blocker)
+    return t, f"#{t['id']} unblocked from #{args.blocker} ({t['blocker_count']} open blocker(s) left)"
+
+
+def _cmd_search(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    kinds = [args.kind] if getattr(args, "kind", None) else None
+    result = backend.search(args.query, kinds)
+    return result, fmt_search(result)
+
+
+def _cmd_people(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    items = backend.people()
+    return items, fmt_people(items)
+
+
+def _cmd_mirror(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    if args.action == "export":
+        r = backend.mirror_export()
+        return r, f"mirror: {r['tasks']} task(s) → {r['written']} written, {r['removed']} removed"
+    if args.action == "import":
+        r = backend.mirror_import()
+        imported = r.get("imported") or []
+        errors = r.get("errors") or []
+        detail = "".join(
+            f"\n  {i['path']}: applied {list(i['applied']) or '-'} · {i['comments_added']} comment(s)"
+            + (f" · conflicts {i['conflicts']}" if i.get("conflicts") else "")
+            + (f" · rejected {i['rejected']}" if i.get("rejected") else "")
+            for i in imported
+        ) + "".join(f"\n  {e['path']}: skipped — {e['error']}" for e in errors)
+        return r, (f"mirror: checked {r.get('checked', 0)} file(s), imported {len(imported)}, "
+                   f"skipped {len(errors)}" + detail)
+    r = backend.status()
+    return r, fmt_status(r)
+
+
+def _cmd_backup(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    r = backend.backup()
+    return r, f"backup written: {r['path']}"
+
+
+def _cmd_issues(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    if args.action == "sync":
+        r = backend.issues_sync()
+        ids = "".join(f"\n  new: #{i}" for i in r.get("created_ids") or [])
+        ids += "".join(f"\n  done: #{i}" for i in r.get("closed_ids") or [])
+        errs = "".join(f"\n  error: {e}" for e in r.get("errors") or [])
+        return r, (f"issues: {r.get('listed', 0)} open issue(s) · {r.get('created', 0)} new"
+                   f" · {r.get('retitled', 0)} retitled · {r.get('reopened', 0)} reopened"
+                   f" · {r.get('closed', 0)} closed" + ids + errs)
+    r = backend.issues_status()
+    return r, fmt_issues_status(r)
+
+
+def _cmd_issue(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    t = backend.issue_create(args.id, args.repo)
+    ref = t.get("issue_ref") or {}
+    return t, f"#{t['id']} → {ref.get('repo')}#{ref.get('number')} {ref.get('url') or ''}".rstrip()
+
+
+def _cmd_folders(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
+    if args.action == "reindex":
+        r = backend.folders_reindex()
+        return r, f"folders: {r['entries']} folder(s) indexed under {', '.join(r['roots'])} in {r['seconds']}s → {r['index_file']}"
+    if args.action == "search":
+        if not args.query:
+            raise CliError("folders search needs a query", code="usage")
+        r = backend.folders_search(args.query)
+        return r, fmt_folders_search(r)
+    r = backend.status()
+    return r.get("folders", {}), fmt_folders_status(r.get("folders") or {})
+
+
+#: One handler per subcommand → (json payload, human text).
+_COMMANDS: dict[str, Callable[[argparse.Namespace, HttpBackend | LocalBackend], tuple[Any, str]]] = {
+    "add": _cmd_add,
+    "ls": _cmd_ls,
+    "journal": _cmd_journal,
+    "show": _cmd_show,
+    "tree": _cmd_tree,
+    "comment": _cmd_comment,
+    "set": _cmd_set,
+    "link": _cmd_link,
+    "due": _cmd_due,
+    "starts": _cmd_starts,
+    "done": _cmd_done,
+    "rm": _rm_dialogue,
+    "move": _cmd_move,
+    "block": _cmd_block,
+    "unblock": _cmd_unblock,
+    "search": _cmd_search,
+    "people": _cmd_people,
+    "triage": _triage_dialogue,
+    "mirror": _cmd_mirror,
+    "backup": _cmd_backup,
+    "issues": _cmd_issues,
+    "issue": _cmd_issue,
+    "folders": _cmd_folders,
+}
+
+
 def run(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
     """Execute one command → (json payload, human text)."""
     cmd = "rm" if args.command == "delete" else args.command   # `delete` is rm's alias
-    if cmd == "add":
-        fields: dict[str, Any] = {"title": args.title}
-        if args.parent is not None:
-            fields["parent_id"] = _parent_arg(args.parent)
-        if args.due is not None:
-            fields["due"] = _parse_date_arg(args.due)
-        if args.starts is not None:
-            fields["starts"] = _parse_date_arg(args.starts)
-        if args.status:
-            fields["status"] = args.status
-        if args.priority:
-            fields["priority"] = args.priority
-        if args.recurrence:
-            fields["recurrence"] = args.recurrence
-        if args.recurrence_anchor:
-            fields["recurrence_anchor"] = args.recurrence_anchor
-        if args.recurrence_interval is not None:
-            fields["recurrence_interval"] = args.recurrence_interval
-        if args.person:
-            fields["person_id"] = _resolve_person(backend, args.person)
-        if args.owner:
-            fields["owner"] = args.owner
-        if args.desc:
-            fields["description"] = args.desc
-        if args.folder:
-            fields["folder_ref"] = _folder_arg(args.folder)
-        if args.link_label and not args.link:
-            raise CliError("--link-label needs --link", code="usage")
-        t = backend.add(**fields)
-        if args.link:
-            # a second call: the task already exists if this one fails, so
-            # the error names it rather than implying nothing was written
-            try:
-                backend.link(t["id"], args.link, args.link_label, None)
-            except CliError as exc:
-                raise CliError(f"added #{t['id']}, but the link failed: {exc}", code=exc.code,
-                               detail=exc.detail) from exc
-            t = backend.show(t["id"])
-        return t, f"added {_fmt_task_line(t)}"
-    if cmd == "ls":
-        filters: dict[str, Any] = {}
-        if args.status:
-            if args.status == "all":
-                filters["include_closed"] = True
-            else:
-                filters["status"] = args.status
-        if args.project is not None:
-            filters["project"] = args.project
-        if args.due:
-            filters["due"] = args.due
-        if args.person:
-            filters["person"] = _resolve_person(backend, args.person)
-        if args.owner:
-            filters["owner"] = args.owner
-        if args.deferred:
-            filters["deferred"] = True
-        if args.blocked:
-            filters["blocked"] = True
-        if args.updated_before:
-            filters["updated_before"] = _parse_before_arg(args.updated_before)
-        items = backend.ls(**filters)
-        return items, fmt_ls(items)
-    if cmd == "journal":
-        weeks = args.weeks if args.weeks and args.weeks > 0 else 1
-        done_to = clock.today().isoformat()
-        done_from = days_ago(7 * weeks - 1).isoformat()
-        filters = {"status": "done,cancelled", "done_from": done_from, "done_to": done_to}
-        if args.project is not None:
-            filters["project"] = args.project
-        if args.person:
-            filters["person"] = _resolve_person(backend, args.person)
-        journal = group_journal(backend.ls(**filters), done_from, done_to)
-        return journal, fmt_journal(journal)
-    if cmd == "show":
-        t = backend.show(args.id)
-        return t, fmt_show(t)
-    if cmd == "tree":
-        nodes = backend.tree(args.id)
-        return nodes, "\n".join(fmt_tree(nodes)) or "(no tasks)"
-    if cmd == "comment":
-        c = backend.comment(args.id, args.text)
-        return c, f"commented on #{args.id}: {c['body']}"
-    if cmd == "set":
-        changes: dict[str, Any] = {}
-        if args.title is not None:
-            changes["title"] = args.title
-        if args.status:
-            changes["status"] = args.status
-        if args.priority:
-            changes["priority"] = args.priority
-        if args.desc is not None:
-            changes["description"] = args.desc
-        if args.folder is not None:
-            changes["folder_ref"] = _folder_arg(args.folder)
-        if args.owner:
-            changes["owner"] = args.owner
-        if not changes:
-            raise CliError("set needs at least one of --title --status --priority --desc --folder --owner", code="usage")
-        t = backend.update(args.id, **changes)
-        return t, f"updated {_fmt_task_line(t)}"
-    if cmd == "link":
-        lk = backend.link(args.id, args.url, args.label, args.kind)
-        return lk, f"#{args.id} linked [{lk['kind']}] {lk.get('label') or lk['url']}"
-    if cmd == "due":
-        t = backend.due(args.id, _parse_date_arg(args.date))
-        return t, f"#{t['id']} due → {t.get('due') or 'none'}"
-    if cmd == "starts":
-        t = backend.starts(args.id, _parse_date_arg(args.date))
-        return t, f"#{t['id']} starts → {t.get('starts') or 'none'}"
-    if cmd == "done":
-        t = backend.done(args.id)
-        if t.get("recurrence"):
-            label = _recurrence_text(t)
-            return t, f"#{t['id']} done — recurring {label}, next due {t['due']}"
-        return t, f"#{t['id']} done"
-    if cmd == "rm":
-        return _rm_dialogue(args, backend)
-    if cmd == "move":
-        t = backend.move(args.id, _parent_arg(args.parent))
-        where = _crumb(t) or "top level"
-        return t, f"#{t['id']} moved → {where}"
-    if cmd == "block":
-        t = backend.block(args.id, args.on)
-        return t, f"#{t['id']} blocked by #{args.on} ({t['blocker_count']} open blocker(s))"
-    if cmd == "unblock":
-        t = backend.unblock(args.id, args.blocker)
-        return t, f"#{t['id']} unblocked from #{args.blocker} ({t['blocker_count']} open blocker(s) left)"
-    if cmd == "search":
-        kinds = [args.kind] if getattr(args, "kind", None) else None
-        result = backend.search(args.query, kinds)
-        return result, fmt_search(result)
-    if cmd == "people":
-        items = backend.people()
-        return items, fmt_people(items)
-    if cmd == "triage":
-        return _triage_dialogue(args, backend)
-    if cmd == "mirror":
-        if args.action == "export":
-            r = backend.mirror_export()
-            return r, f"mirror: {r['tasks']} task(s) → {r['written']} written, {r['removed']} removed"
-        if args.action == "import":
-            r = backend.mirror_import()
-            imported = r.get("imported") or []
-            errors = r.get("errors") or []
-            detail = "".join(
-                f"\n  {i['path']}: applied {list(i['applied']) or '-'} · {i['comments_added']} comment(s)"
-                + (f" · conflicts {i['conflicts']}" if i.get("conflicts") else "")
-                + (f" · rejected {i['rejected']}" if i.get("rejected") else "")
-                for i in imported
-            ) + "".join(f"\n  {e['path']}: skipped — {e['error']}" for e in errors)
-            return r, (f"mirror: checked {r.get('checked', 0)} file(s), imported {len(imported)}, "
-                       f"skipped {len(errors)}" + detail)
-        r = backend.status()
-        return r, fmt_status(r)
-    if cmd == "backup":
-        r = backend.backup()
-        return r, f"backup written: {r['path']}"
-    if cmd == "issues":
-        if args.action == "sync":
-            r = backend.issues_sync()
-            ids = "".join(f"\n  new: #{i}" for i in r.get("created_ids") or [])
-            ids += "".join(f"\n  done: #{i}" for i in r.get("closed_ids") or [])
-            errs = "".join(f"\n  error: {e}" for e in r.get("errors") or [])
-            return r, (f"issues: {r.get('listed', 0)} open issue(s) · {r.get('created', 0)} new"
-                       f" · {r.get('retitled', 0)} retitled · {r.get('reopened', 0)} reopened"
-                       f" · {r.get('closed', 0)} closed" + ids + errs)
-        r = backend.issues_status()
-        return r, fmt_issues_status(r)
-    if cmd == "issue":
-        t = backend.issue_create(args.id, args.repo)
-        ref = t.get("issue_ref") or {}
-        return t, f"#{t['id']} → {ref.get('repo')}#{ref.get('number')} {ref.get('url') or ''}".rstrip()
-    if cmd == "folders":
-        if args.action == "reindex":
-            r = backend.folders_reindex()
-            return r, f"folders: {r['entries']} folder(s) indexed under {', '.join(r['roots'])} in {r['seconds']}s → {r['index_file']}"
-        if args.action == "search":
-            if not args.query:
-                raise CliError("folders search needs a query", code="usage")
-            r = backend.folders_search(args.query)
-            return r, fmt_folders_search(r)
-        r = backend.status()
-        return r.get("folders", {}), fmt_folders_status(r.get("folders") or {})
-    raise CliError(f"unknown command {cmd!r}", code="usage")
+    handler = _COMMANDS.get(cmd)
+    if handler is None:
+        raise CliError(f"unknown command {cmd!r}", code="usage")
+    return handler(args, backend)
 
 
 # ---------------------------------------------------------------- argparse
 
 
-def build_parser() -> argparse.ArgumentParser:
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
-                        help="machine-readable output (same shapes as the REST API)")
-
-    p = argparse.ArgumentParser(prog="tasks", description="task-os from the terminal")
-    p.add_argument("--json", action="store_true", default=False, help="machine-readable output")
-    p.add_argument("--actor", default=None, help="who is acting (activity / comment author)")
-    p.add_argument("--server", default=None, help=f"webapp base URL (default: config port; env {SERVER_ENV})")
-    p.add_argument("--local", action="store_true", help="talk to the database directly, even if the app is up")
-    p.add_argument("-v", "--verbose", action="store_true", help="say which backend answered (stderr)")
-    sub = p.add_subparsers(dest="command", metavar="command")
-
+def _add_task_commands(sub: argparse._SubParsersAction, common: argparse.ArgumentParser) -> None:
+    """Create and read: add · ls · journal · show · tree · comment · set."""
     a = sub.add_parser("add", parents=[common], help="add a task")
     a.add_argument("title")
     a.add_argument("--parent", help="parent task id (nesting)")
@@ -1333,6 +596,9 @@ def build_parser() -> argparse.ArgumentParser:
     se_.add_argument("--folder", help="folder ref or absolute path; 'none' clears")
     se_.add_argument("--owner", help="hand the task to another member (a people id)")
 
+
+def _add_edit_commands(sub: argparse._SubParsersAction, common: argparse.ArgumentParser) -> None:
+    """One-field edits on a task: link · due · starts · done · move · block · unblock · rm."""
     lk = sub.add_parser("link", parents=[common], help="attach a link to a task")
     lk.add_argument("id", type=int)
     lk.add_argument("url")
@@ -1368,6 +634,9 @@ def build_parser() -> argparse.ArgumentParser:
     rm.add_argument("id", type=int)
     rm.add_argument("--yes", "-y", action="store_true", help="skip the confirmation")
 
+
+def _add_service_commands(sub: argparse._SubParsersAction, common: argparse.ArgumentParser) -> None:
+    """The install's services: search · people · triage · mirror · backup · issues · issue · folders."""
     se = sub.add_parser("search", parents=[common], help="federated search: tasks · folders · emails · issues")
     se.add_argument("query")
     se.add_argument("--kind", choices=("tasks", "folders", "emails", "issues"), default=None,
@@ -1400,6 +669,24 @@ def build_parser() -> argparse.ArgumentParser:
     fo.add_argument("action", choices=("reindex", "status", "search"), nargs="?", default="status",
                     help="reindex = rescan search.folder_roots now · search = substring AND over the index · status (default)")
     fo.add_argument("query", nargs="?", help="search terms (for: search)")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                        help="machine-readable output (same shapes as the REST API)")
+
+    p = argparse.ArgumentParser(prog="tasks", description="task-os from the terminal")
+    p.add_argument("--json", action="store_true", default=False, help="machine-readable output")
+    p.add_argument("--actor", default=None, help="who is acting (activity / comment author)")
+    p.add_argument("--server", default=None, help=f"webapp base URL (default: config port; env {SERVER_ENV})")
+    p.add_argument("--local", action="store_true", help="talk to the database directly, even if the app is up")
+    p.add_argument("-v", "--verbose", action="store_true", help="say which backend answered (stderr)")
+    sub = p.add_subparsers(dest="command", metavar="command")
+
+    _add_task_commands(sub, common)
+    _add_edit_commands(sub, common)
+    _add_service_commands(sub, common)
     return p
 
 

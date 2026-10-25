@@ -16,7 +16,7 @@
 
 - Screenshot: [story-04-triage-11-desktop.png](../screenshots/story-04-triage-11-desktop.png) — the stale-30 view listing exactly the dormant seeded task, summary line spelling the state.
 - E2e: `_walk_stale_window` inside `tests/e2e/test_story_04_triage.py` (rides the existing filter-card story — the suite stays at 14, no new test).
-- Unit: `tests/test_repo.py::test_updated_before_is_a_strict_stale_boundary` (strict boundary — touched on the boundary day or today never appears; any write is a touch; composes with other filters; bad date refused), `tests/test_api.py::test_updated_before_lists_the_dormant_task` (HTTP param + 422), `tests/test_cli.py::test_ls_updated_before_over_both_backends` (parity, `Nd`, natural date, error path).
+- Unit: `tests/tasks/test_repo_dates.py::test_updated_before_is_a_strict_stale_boundary` (strict boundary — touched on the boundary day or today never appears; any write is a touch; composes with other filters; bad date refused), `tests/test_api.py::test_updated_before_lists_the_dormant_task` (HTTP param + 422), `tests/test_cli.py::test_ls_updated_before_over_both_backends` (parity, `Nd`, natural date, error path).
 
 ## Result
 

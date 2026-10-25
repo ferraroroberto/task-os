@@ -22,7 +22,7 @@ drives. Both are **synthetic** — the emails come from
 ``tests/fixtures/archiver_fake.build_fake_archiver``, a real checkout with
 canned JSON answers and no Outlook anywhere near it. ``archive.enabled`` is
 true **only** in this instance's temp config; the committed sample keeps it
-off (``tests/test_archive.py::test_the_sample_config_never_arms_the_real_archiver``).
+off (``tests/archive/test_archive_api.py::test_the_sample_config_never_arms_the_real_archiver``).
 
 This test replaced ``test_story_21_capture.py`` when the Archive tab landed:
 the suite is capped (CLAUDE.md), so the capture walk's on-screen half — the

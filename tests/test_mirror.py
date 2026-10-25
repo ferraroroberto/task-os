@@ -15,7 +15,8 @@ from src import db as dbmod
 from src import mirror as mirror_mod
 from src import tasks_repo as repo
 from src.config import load_config
-from src.mirror import Mirror, MirrorParseError, file_name, parse_file, render, slugify
+from src.mirror import Mirror
+from src.mirror_format import MirrorParseError, file_name, parse_file, render, slugify
 from tests.conftest import write_test_config
 from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 

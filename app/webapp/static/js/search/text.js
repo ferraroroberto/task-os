@@ -1,5 +1,5 @@
 /* task-os — Search: the wording the tab shares. Pure, so the sentences are
- * tested without a browser (tests/test_search_fold.py loads them through
+ * tested without a browser (tests/search/test_search_fold.py loads them through
  * search.js, which re-exports `markHtml` and `foldParts`). */
 
 'use strict';

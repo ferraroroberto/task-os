@@ -18,7 +18,7 @@ import pytest
 
 from src.no_window import NO_WINDOW
 
-MODULE = Path(__file__).resolve().parents[1] / "app" / "webapp" / "static" / "search.js"
+MODULE = Path(__file__).resolve().parents[2] / "app" / "webapp" / "static" / "search.js"
 NODE = shutil.which("node")
 
 _RUNNER = """

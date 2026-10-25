@@ -20,7 +20,7 @@ import pytest
 from scripts import classify_e2e
 from scripts import docs_ratchet_gate as gate
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture

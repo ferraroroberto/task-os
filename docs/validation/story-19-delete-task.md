@@ -18,7 +18,7 @@
 
 - Screenshots: [story-19-delete-task-1-desktop.png](../screenshots/story-19-delete-task-1-desktop.png) (the drawer's confirmation naming the subtree, light) · [2](../screenshots/story-19-delete-task-2-desktop.png) (the Select bar's batch confirmation over the Table).
 - E2e: `_walk_delete_task` inside `tests/e2e/test_story_05_board.py` (§ #121 — rides the Board story, so the suite stays at 14 tests). The walk makes its own tasks over the API so the seed stays whole for the other walks.
-- Unit: `tests/test_repo.py::test_bulk_delete_names_the_gone_and_folds_a_child_into_its_parent` (`descendant_count` on the detail; the per-id report; a ticked child whose parent went first is `ok, deleted: 0`, an unknown id is named, duplicates collapse) · `tests/test_api.py::test_bulk_delete_reports_per_id` (the route's shape and counts, an empty `ids` is 422) · `tests/test_cli.py::test_rm_over_both_backends` (the dialogue on stderr, the refusal as exit 1, the alias, `--yes`, an unknown id) · `tests/test_mirror.py` already proves a repo delete removes the mirror file.
+- Unit: `tests/tasks/test_repo_records.py::test_bulk_delete_names_the_gone_and_folds_a_child_into_its_parent` (`descendant_count` on the detail; the per-id report; a ticked child whose parent went first is `ok, deleted: 0`, an unknown id is named, duplicates collapse) · `tests/test_api.py::test_bulk_delete_reports_per_id` (the route's shape and counts, an empty `ids` is 422) · `tests/test_cli.py::test_rm_over_both_backends` (the dialogue on stderr, the refusal as exit 1, the alias, `--yes`, an unknown id) · `tests/test_mirror.py` already proves a repo delete removes the mirror file.
 
 ## Result
 

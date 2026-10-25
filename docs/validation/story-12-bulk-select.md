@@ -19,7 +19,7 @@ Not a numbered build step — a feature issue validated story-style. The automat
 
 `complete` vs `done` (#54) carries into bulk unchanged: the bar offers `complete` alongside the plain statuses, and the server decides per task — a recurring task rolls its due one cadence forward and stays open, a plain one closes.
 
-Unit legs: `tests/test_repo.py::test_bulk_*` (every id attempted; a bad id in the middle does not stop the batch; `complete` rolls a recurring task and closes a plain one; duplicate ids collapse so a double-click cannot roll a due twice) and `tests/test_api.py::test_bulk_*` (status + due together, `""` clears the date, partial failure is a **200** naming the id, and the four malformed-request refusals — empty `ids`, nothing to change, `complete` with a `due`, an unparseable phrase).
+Unit legs: `tests/tasks/test_repo_records.py::test_bulk_*` (every id attempted; a bad id in the middle does not stop the batch; `complete` rolls a recurring task and closes a plain one; duplicate ids collapse so a double-click cannot roll a due twice) and `tests/test_api.py::test_bulk_*` (status + due together, `""` clears the date, partial failure is a **200** naming the id, and the four malformed-request refusals — empty `ids`, nothing to change, `complete` with a `due`, an unparseable phrase).
 
 ## Real walk (this PC, 2026-08-29)
 

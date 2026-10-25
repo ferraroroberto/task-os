@@ -12,7 +12,7 @@ depend on whether either happens to be running here.
 Tests that need a live mirror build their own config on top (see
 ``tests/test_mirror.py`` / the e2e conftest). It also forces the issue
 provider off (``TASKOS_ISSUE_PROVIDER=none``) so no test spawns ``gh``;
-``tests/test_issues.py`` and the story 08 e2e fixture opt into the fake.
+``tests/issues/test_issues.py`` and the story 08 e2e fixture opt into the fake.
 """
 
 from __future__ import annotations
