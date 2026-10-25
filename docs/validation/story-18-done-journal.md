@@ -21,7 +21,7 @@
 
 - Screenshots: [story-18-done-journal-1-desktop.png](../screenshots/story-18-done-journal-1-desktop.png) (this week, light) · [2](../screenshots/story-18-done-journal-2-desktop.png) (widened to the seed's first closing day, filter card open, dark) · [3](../screenshots/story-18-done-journal-3-phone.png) (phone, `#journal` deep link).
 - E2e: `_walk_done_journal` inside `tests/e2e/test_story_05_board.py` (§ #102 — rides the Board story, so the suite stays at 14 tests) plus step 12 of its phone leg.
-- Unit: `tests/test_repo.py::test_done_window_is_local_midnight_and_newest_first` (the window's local-midnight boundary — the `done_on` rule — the newest-first order, cancelling stamps `done_at`, reopening clears it) · `tests/test_api.py::test_done_window_over_http_orders_newest_first` (the page and the older-probe over HTTP, a bad date is a 422) · `tests/test_schema.py::test_v10_stamps_closed_at_on_cancelled_tasks` (the backfill: activity time when logged, `updated_at` otherwise, done and open rows untouched) · `tests/test_cli.py::test_journal_over_both_backends`.
+- Unit: `tests/tasks/test_repo_records.py::test_done_window_is_local_midnight_and_newest_first` (the window's local-midnight boundary — the `done_on` rule — the newest-first order, cancelling stamps `done_at`, reopening clears it) · `tests/test_api.py::test_done_window_over_http_orders_newest_first` (the page and the older-probe over HTTP, a bad date is a 422) · `tests/test_schema.py::test_v10_stamps_closed_at_on_cancelled_tasks` (the backfill: activity time when logged, `updated_at` otherwise, done and open rows untouched) · `tests/test_cli.py::test_journal_over_both_backends`.
 
 ## Result
 
