@@ -78,7 +78,7 @@ One line each; the full reference for a feature is the page it links to.
 ## Verify, restart, prove
 
 ```powershell
-& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → static ratchet (needs Node) → docs ratchet → structure ratchet → instruction ratchet → doc-refs ratchet → dead-code ratchet → conventions ratchet → pytest → routed e2e (disposable instance) → gallery baseline
+& .\scripts\verify-before-ship.ps1     # byte-compile → ruff → static ratchet (needs Node) → docs ratchet → structure ratchet → instruction ratchet → doc-refs ratchet → dead-code ratchet → conventions ratchet → comment ratchet → pytest → routed e2e (disposable instance) → gallery baseline
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 

@@ -46,13 +46,18 @@
                              tree, never routed (a new rule must see every file); exit 3
                              (a file not parsed) is NOT CONFIRMED and fails, never a
                              pass or a skip.
-     10. pytest (unit)     — hermetic suite, tests/e2e excluded
-     11. pytest (e2e)      — diff-proportionate: the browser slice is routed by
+     10. comment ratchet   — no new `#NNN` issue reference in a product-code comment
+                             (.py, .js, .css, .ps1) beyond .comment-ratchet-baseline.json.
+                             Whole tree, never routed (a count needs every file); exit 3
+                             (a file not scanned) is NOT CONFIRMED and fails, never a
+                             pass or a skip.
+     11. pytest (unit)     — hermetic suite, tests/e2e excluded
+     12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
                              suite boots its own disposable webapp on a free
                              port with a temp DB — never the live :8448.
-     12. gallery baseline  — whatever shots stage 11 rewrote, compared against
+     13. gallery baseline  — whatever shots stage 12 rewrote, compared against
                              the committed ones and then restored, so a
                              verification run neither hides gallery drift nor
                              leaves rewritten PNGs behind (#225). Re-baselining
@@ -117,6 +122,9 @@ Invoke-Stage "dead-code ratchet"       { & $py -m scripts.dead_code_ratchet_gate
 # Same wrapper shape: it maps the conventions script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_conventions_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "conventions ratchet"     { & $py -m scripts.conventions_ratchet_gate }
+# Same wrapper shape: it maps the comment script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_comment_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "comment ratchet"         { & $py -m scripts.comment_ratchet_gate }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing
