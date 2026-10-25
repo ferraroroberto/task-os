@@ -29,7 +29,8 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import _get, close_filter_sheet, open_filter_sheet, open_more_fields, shot
+from tests.e2e._ui import close_filter_sheet, open_filter_sheet, open_more_fields
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -37,6 +38,144 @@ DESKTOP = {"width": 1440, "height": 900}
 def _trow(page, title: str, scope: str = ""):
     """The ONE shared task row (rows.js) by exact title, optionally inside ``scope``."""
     return page.locator(f"{scope} .trow".strip(), has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
+
+
+def _hidden_on_board_found_in_search(page, base: str, shots: Path, release):
+    """Steps 1-2: out of every Board column, still found by search with its lock."""
+    # 1. Board: the blocked task is out of every column — hidden by default,
+    #    exactly like a deferred (#87) one.
+    page.goto(f"{base}/")
+    page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
+    expect(page.locator("#paneBoard")).to_be_visible()
+    # The blocker itself first: "no Release v0.2 row" is only evidence once
+    # the Board has actually rendered its rows. Without this the count-0
+    # assertion passes against an empty pane — which is how a blank board
+    # got committed as this story's proof shot (#134).
+    expect(_trow(page, "Write sensor driver", "#paneBoard")).to_be_visible()
+    release_id = release["id"]
+    # Scoped to the Board: every pane is in the DOM from the first paint and
+    # a Search hit legitimately carries this row (step 2 below). Unscoped,
+    # the assertion only ever passed because nothing had rendered yet.
+    expect(page.locator(f"#paneBoard .trow[data-id='{release_id}']")).to_have_count(0)
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-20-blocked-by-1-desktop.png")
+
+    # 2. Search: still findable — search shows everything — wearing a lock
+    #    and "blocked by 1" instead of any starts marker (blocked wins,
+    #    #100's explicit precedence over #87's deferred clock).
+    page.click("nav.tabs .tab[data-tab='search']")
+    page.fill("#searchInput", "Release v0.2")
+    expect(page.locator(".search-group[data-kind='tasks']")).to_have_attribute("open", "")   # hits → open (#395)
+    locked = _trow(page, "Release v0.2", "#paneSearch")
+    expect(locked).to_be_visible()
+    expect(locked.locator(".trow-blocked")).to_have_text("Blocked")
+    expect(locked.locator(".trow-blocked")).to_have_attribute("title", "blocked by 1")
+    expect(locked.locator(".trow-starts")).to_have_count(0)
+    shot(page, shots / "story-20-blocked-by-2-desktop.png")
+    return locked
+
+
+def _drawer_blocked_by_and_filter(page, base: str, shots: Path, locked):
+    """Steps 3-4: the drawer's Blocked by section and the blocked pseudo-filter."""
+    # 3. Drawer: the Blocked by section lists the blocker, click-to-navigate,
+    #    removable.
+    locked.locator(".trow-main").click()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    # Blocked by is under More fields (#394), whose summary names the
+    # blocker while it is still closed
+    expect(drawer.locator(".drawer-more-hint")).to_have_text("1 blocker")
+    open_more_fields(drawer)
+    blockers = drawer.locator(".drawer-blocked .drawer-blockers .blocker-row")
+    expect(blockers).to_have_count(1)
+    expect(blockers.locator(".blocker-title")).to_have_text("Write sensor driver")
+    # an open blocker's todo is its normal state: a quiet word, no chip —
+    # the status chip is for exceptions only (#391)
+    expect(blockers.locator(".status-mark")).to_have_text("todo")
+    expect(blockers.locator(".status-mark")).not_to_have_class(re.compile(r"\bchip\b"))
+    shot(page, shots / "story-20-blocked-by-3-desktop.png")
+    page.keyboard.press("Escape")
+    expect(drawer).to_be_hidden()
+
+    # 4. The filter sheet's `blocked` pseudo-filter (a status tick, the
+    #    same shape `deferred` uses) narrows the Board to exactly this task.
+    page.click("nav.tabs .tab[data-tab='board']")
+    open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='blocked']").check()
+    expect(page).to_have_url(f"{base}/?status=blocked")
+    close_filter_sheet(page)
+    rows = page.locator("#paneBoard .trow")
+    expect(rows).to_have_count(1)
+    expect(rows.first).to_be_visible()   # not just present — the column it's in must not be hidden
+    expect(rows.locator(".trow-title")).to_have_text("Release v0.2")
+    expect(rows.locator(".trow-blocked")).to_have_text("Blocked")
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-20-blocked-by-4-desktop.png")
+    open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
+    close_filter_sheet(page)
+    expect(page).to_have_url(f"{base}/")
+    return drawer
+
+
+def _cycle_guard_in_the_ui(page, base: str, shots: Path, drawer) -> None:
+    """Step 5: the cycle guard through the real UI."""
+    # 5. Cycle guard through the real UI: two fresh tasks, B blocks A, then
+    #    A blocking B back is refused with a toast — nothing applied — and
+    #    a real add/remove updates the lock live. Dark, for the paired shot
+    #    — through localStorage, not a DOM mutation: the steps below do full
+    #    page navigations (fresh `boot()`, so the blocker picker's
+    #    state.taskIndex sees the two new tasks), which wipe an in-memory
+    #    `dataset.theme` flip but read the persisted key on every load.
+    page.evaluate("localStorage.setItem('task-os.theme', 'dark')")
+    made_a = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle A"}),
+                                headers={"content-type": "application/json"})
+    made_b = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle B"}),
+                                headers={"content-type": "application/json"})
+    assert made_a.ok and made_b.ok, (made_a.text(), made_b.text())
+    a_id, b_id = made_a.json()["id"], made_b.json()["id"]
+    # A forced full navigation (the query bust), not a hash-only goto: the
+    # blocker picker reads state.taskIndex, built from the tree fetch
+    # `boot()` awaits before it opens a #task/<id> deep link — a plain API
+    # POST made outside the page never refreshes it on its own, and a
+    # hash-only goto on an already-loaded page never re-runs boot() at all.
+    page.goto(f"{base}/?_e2e=1#task/{a_id}")
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    expect(drawer).to_be_visible()
+    open_more_fields(drawer)
+    blocked_sec = drawer.locator(".drawer-blocked")
+    expect(blocked_sec.locator(".drawer-none")).to_have_text("Not blocked by anything.")
+    sel_a = blocked_sec.locator(".blocker-form select")
+    # The picker offers open tasks only (#309): a done blocker gates nothing,
+    # so the boot no longer ships the closed tasks to offer.
+    offered = [o.strip() for o in sel_a.locator("option").all_inner_texts()]
+    assert "Cycle B" in offered and "Release v0.2" in offered, offered
+    assert offered[0] == "pick a task…", offered
+    assert not {"Order sensor", "Collect photos", "Buy a birthday gift"} & set(offered), offered
+    sel_a.select_option(label="Cycle B")
+    expect(sel_a).to_have_value(str(b_id))
+    blocked_sec.locator(".blocker-form button").click()
+    expect(blocked_sec.locator(".blocker-row .blocker-title")).to_have_text("Cycle B")
+    assert _get(base, f"/api/tasks/{a_id}")["blocked"] is True
+
+    page.goto(f"{base}/?_e2e=2#task/{b_id}")
+    expect(drawer).to_be_visible()
+    open_more_fields(drawer)
+    blocked_sec = drawer.locator(".drawer-blocked")
+    sel_b = blocked_sec.locator(".blocker-form select")
+    sel_b.select_option(label="Cycle A")
+    expect(sel_b).to_have_value(str(a_id))
+    shot(page, shots / "story-20-blocked-by-5-desktop.png")
+    blocked_sec.locator(".blocker-form button").click()
+    expect(page.locator(".toast-error").last).to_contain_text("cycle")
+    assert _get(base, f"/api/tasks/{b_id}")["blocked"] is False
+    assert _get(base, f"/api/tasks/{b_id}")["blocked_by"] == []
+
+    # remove the real edge: Cycle A unblocks
+    page.goto(f"{base}/#task/{a_id}")
+    expect(drawer).to_be_visible()
+    open_more_fields(drawer)
+    drawer.locator(".drawer-blocked .blocker-row .icon-button").click()
+    expect(drawer.locator(".drawer-blocked .drawer-none")).to_have_text("Not blocked by anything.")
+    assert _get(base, f"/api/tasks/{a_id}")["blocked"] is False
 
 
 def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Path) -> None:
@@ -49,132 +188,8 @@ def test_blocked_by_dependencies(seeded_webapp: str, browser: Browser, shots: Pa
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
-
-        # 1. Board: the blocked task is out of every column — hidden by default,
-        #    exactly like a deferred (#87) one.
-        page.goto(f"{base}/")
-        page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
-        expect(page.locator("#paneBoard")).to_be_visible()
-        # The blocker itself first: "no Release v0.2 row" is only evidence once
-        # the Board has actually rendered its rows. Without this the count-0
-        # assertion passes against an empty pane — which is how a blank board
-        # got committed as this story's proof shot (#134).
-        expect(_trow(page, "Write sensor driver", "#paneBoard")).to_be_visible()
-        release_id = release["id"]
-        # Scoped to the Board: every pane is in the DOM from the first paint and
-        # a Search hit legitimately carries this row (step 2 below). Unscoped,
-        # the assertion only ever passed because nothing had rendered yet.
-        expect(page.locator(f"#paneBoard .trow[data-id='{release_id}']")).to_have_count(0)
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-20-blocked-by-1-desktop.png")
-
-        # 2. Search: still findable — search shows everything — wearing a lock
-        #    and "blocked by 1" instead of any starts marker (blocked wins,
-        #    #100's explicit precedence over #87's deferred clock).
-        page.click("nav.tabs .tab[data-tab='search']")
-        page.fill("#searchInput", "Release v0.2")
-        expect(page.locator(".search-group[data-kind='tasks']")).to_have_attribute("open", "")   # hits → open (#395)
-        locked = _trow(page, "Release v0.2", "#paneSearch")
-        expect(locked).to_be_visible()
-        expect(locked.locator(".trow-blocked")).to_have_text("Blocked")
-        expect(locked.locator(".trow-blocked")).to_have_attribute("title", "blocked by 1")
-        expect(locked.locator(".trow-starts")).to_have_count(0)
-        shot(page, shots / "story-20-blocked-by-2-desktop.png")
-
-        # 3. Drawer: the Blocked by section lists the blocker, click-to-navigate,
-        #    removable.
-        locked.locator(".trow-main").click()
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        # Blocked by is under More fields (#394), whose summary names the
-        # blocker while it is still closed
-        expect(drawer.locator(".drawer-more-hint")).to_have_text("1 blocker")
-        open_more_fields(drawer)
-        blockers = drawer.locator(".drawer-blocked .drawer-blockers .blocker-row")
-        expect(blockers).to_have_count(1)
-        expect(blockers.locator(".blocker-title")).to_have_text("Write sensor driver")
-        # an open blocker's todo is its normal state: a quiet word, no chip —
-        # the status chip is for exceptions only (#391)
-        expect(blockers.locator(".status-mark")).to_have_text("todo")
-        expect(blockers.locator(".status-mark")).not_to_have_class(re.compile(r"\bchip\b"))
-        shot(page, shots / "story-20-blocked-by-3-desktop.png")
-        page.keyboard.press("Escape")
-        expect(drawer).to_be_hidden()
-
-        # 4. The filter sheet's `blocked` pseudo-filter (a status tick, the
-        #    same shape `deferred` uses) narrows the Board to exactly this task.
-        page.click("nav.tabs .tab[data-tab='board']")
-        open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='blocked']").check()
-        expect(page).to_have_url(f"{base}/?status=blocked")
-        close_filter_sheet(page)
-        rows = page.locator("#paneBoard .trow")
-        expect(rows).to_have_count(1)
-        expect(rows.first).to_be_visible()   # not just present — the column it's in must not be hidden
-        expect(rows.locator(".trow-title")).to_have_text("Release v0.2")
-        expect(rows.locator(".trow-blocked")).to_have_text("Blocked")
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-20-blocked-by-4-desktop.png")
-        open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
-        close_filter_sheet(page)
-        expect(page).to_have_url(f"{base}/")
-
-        # 5. Cycle guard through the real UI: two fresh tasks, B blocks A, then
-        #    A blocking B back is refused with a toast — nothing applied — and
-        #    a real add/remove updates the lock live. Dark, for the paired shot
-        #    — through localStorage, not a DOM mutation: the steps below do full
-        #    page navigations (fresh `boot()`, so the blocker picker's
-        #    state.taskIndex sees the two new tasks), which wipe an in-memory
-        #    `dataset.theme` flip but read the persisted key on every load.
-        page.evaluate("localStorage.setItem('task-os.theme', 'dark')")
-        made_a = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle A"}),
-                                    headers={"content-type": "application/json"})
-        made_b = page.request.post(f"{base}/api/tasks", data=json.dumps({"title": "Cycle B"}),
-                                    headers={"content-type": "application/json"})
-        assert made_a.ok and made_b.ok, (made_a.text(), made_b.text())
-        a_id, b_id = made_a.json()["id"], made_b.json()["id"]
-        # A forced full navigation (the query bust), not a hash-only goto: the
-        # blocker picker reads state.taskIndex, built from the tree fetch
-        # `boot()` awaits before it opens a #task/<id> deep link — a plain API
-        # POST made outside the page never refreshes it on its own, and a
-        # hash-only goto on an already-loaded page never re-runs boot() at all.
-        page.goto(f"{base}/?_e2e=1#task/{a_id}")
-        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-        expect(drawer).to_be_visible()
-        open_more_fields(drawer)
-        blocked_sec = drawer.locator(".drawer-blocked")
-        expect(blocked_sec.locator(".drawer-none")).to_have_text("Not blocked by anything.")
-        sel_a = blocked_sec.locator(".blocker-form select")
-        # The picker offers open tasks only (#309): a done blocker gates nothing,
-        # so the boot no longer ships the closed tasks to offer.
-        offered = [o.strip() for o in sel_a.locator("option").all_inner_texts()]
-        assert "Cycle B" in offered and "Release v0.2" in offered, offered
-        assert offered[0] == "pick a task…", offered
-        assert not {"Order sensor", "Collect photos", "Buy a birthday gift"} & set(offered), offered
-        sel_a.select_option(label="Cycle B")
-        expect(sel_a).to_have_value(str(b_id))
-        blocked_sec.locator(".blocker-form button").click()
-        expect(blocked_sec.locator(".blocker-row .blocker-title")).to_have_text("Cycle B")
-        assert _get(base, f"/api/tasks/{a_id}")["blocked"] is True
-
-        page.goto(f"{base}/?_e2e=2#task/{b_id}")
-        expect(drawer).to_be_visible()
-        open_more_fields(drawer)
-        blocked_sec = drawer.locator(".drawer-blocked")
-        sel_b = blocked_sec.locator(".blocker-form select")
-        sel_b.select_option(label="Cycle A")
-        expect(sel_b).to_have_value(str(a_id))
-        shot(page, shots / "story-20-blocked-by-5-desktop.png")
-        blocked_sec.locator(".blocker-form button").click()
-        expect(page.locator(".toast-error").last).to_contain_text("cycle")
-        assert _get(base, f"/api/tasks/{b_id}")["blocked"] is False
-        assert _get(base, f"/api/tasks/{b_id}")["blocked_by"] == []
-
-        # remove the real edge: Cycle A unblocks
-        page.goto(f"{base}/#task/{a_id}")
-        expect(drawer).to_be_visible()
-        open_more_fields(drawer)
-        drawer.locator(".drawer-blocked .blocker-row .icon-button").click()
-        expect(drawer.locator(".drawer-blocked .drawer-none")).to_have_text("Not blocked by anything.")
-        assert _get(base, f"/api/tasks/{a_id}")["blocked"] is False
+        locked = _hidden_on_board_found_in_search(page, base, shots, release)
+        drawer = _drawer_blocked_by_and_filter(page, base, shots, locked)
+        _cycle_guard_in_the_ui(page, base, shots, drawer)
     finally:
         context.close()

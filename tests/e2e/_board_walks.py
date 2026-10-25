@@ -31,15 +31,8 @@ from tests.e2e._geometry import (
     assert_no_overlap,
 )
 from tests.e2e._surface import surface
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    _get,
-    board_mode,
-    close_filter_sheet,
-    filter_button,
-    open_filter_sheet,
-    shot,
-)
+from tests.e2e._ui import board_mode, close_filter_sheet, filter_button, open_filter_sheet
+from tests.e2e.conftest import E2E_ANCHOR, _get, shot
 
 
 def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:

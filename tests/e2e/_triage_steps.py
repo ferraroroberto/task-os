@@ -14,18 +14,16 @@ from pathlib import Path
 from playwright.sync_api import BrowserContext, Page, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    _get,
+from tests.e2e._ui import (
     assert_date_sheet,
     assert_on_crumb_line,
     board_mode,
     close_filter_sheet,
-    dismiss_toasts,
     filter_button,
     open_filter_sheet,
-    shot,
+    open_more_fields,
 )
+from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
 LINK = "https://example.com/passport-office"
 
@@ -331,3 +329,126 @@ def _parent_move_remove_and_cycle(
     expect(page.locator("#taskDrawer .drawer-crumbs .crumb")).to_have_text(["Family admin"])
     dismiss_toasts(page)
     shot(page, shots / "story-04-triage-8-desktop.png")
+
+
+# Where story 25's first shot frames the open drawer: its "More fields" row 784 px
+# below the drawer's top edge, whatever the drawer was scrolled to getting there.
+_FRAME_MORE_FIELDS_JS = """() => {
+  const d = document.querySelector('#taskDrawer');
+  const row = d.querySelector('details.drawer-more > summary');
+  const top = row.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
+  d.scrollTop = Math.round(top) - 784;
+}"""
+
+
+def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
+    """#112 — Repeat is a cadence *and* the fixed day it lands on.
+
+    The seed's "Weekly review" repeats every Friday. The drawer shows both
+    selects; completing it from the status select rolls the due to a Friday
+    rather than one flat week on, and switching the cadence to one that
+    cannot carry a weekday clears the anchor rather than keeping a stale day.
+
+    Screenshot: docs/screenshots/story-17-recurrence-anchor-1-desktop.png
+    """
+    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
+    page.goto(f"{base}/#task/{review['id']}")
+    open_more_fields(page.locator("#taskDrawer"))   # Repeat is a rare field (#394)
+    cadence = page.locator("#taskDrawer select[data-field='recurrence']")
+    anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
+    expect(cadence).to_have_value("weekly")
+    expect(anchor).to_have_value("fri")
+    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    shot(page, shots / "story-17-recurrence-anchor-1-desktop.png")
+
+    # Complete it: the same task stays open and its new due is a Friday,
+    # strictly after both the due it had and today.
+    old_due = date.fromisoformat(review["due"])
+    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
+    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
+    rolled = date.fromisoformat(
+        page.locator("#taskDrawer input[data-field='due']").input_value()
+    )
+    assert rolled.weekday() == 4, f"rolled to {rolled} ({rolled:%A}), expected a Friday"
+    assert rolled > old_due and rolled > E2E_ANCHOR
+
+    # A cadence that takes no fixed day drops the anchor — and the picker with
+    # it. The picker vanishing is the re-render signal: the drawer only redraws
+    # once the PATCH has come back, so the stored value is safe to read here.
+    cadence.select_option("quarterly")
+    expect(anchor).to_have_count(0)
+    assert page.request.get(
+        f"{base}/api/tasks/{review['id']}"
+    ).json()["recurrence_anchor"] is None
+
+    # Restore over the API, not the UI — the rest of this file reads the same
+    # seeded DB; one synchronous call cannot race.
+    page.request.patch(f"{base}/api/tasks/{review['id']}", data={
+        "recurrence": "weekly", "recurrence_anchor": "fri", "due": review["due"],
+    })
+
+
+def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
+    """#229 — Repeat every N: "every 7 weeks on Saturday".
+
+    The seed's "Weekly review" is due on a Saturday. The drawer's Every field
+    takes 7 and the On picker Saturday; the row behind the drawer reads the
+    composed label, and completing the task lands exactly 7 weeks on — a
+    Saturday, never the coming one. Restored over the API afterwards, like
+    the anchor walk before it.
+
+    Screenshot: docs/screenshots/story-25-recurrence-interval-1-desktop.png
+    """
+    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
+    task_url = f"{base}/api/tasks/{review['id']}"
+    page.goto(f"{base}/")
+    page.goto(f"{base}/#task/{review['id']}")
+    drawer = page.locator("#taskDrawer")
+    open_more_fields(drawer)
+    every = drawer.locator("input[data-field='recurrence_interval']")
+    expect(every).to_have_value("")
+    expect(drawer.locator(".field-unit")).to_have_text("weeks")
+
+    def patched(r) -> bool:  # noqa: ANN001 — a Playwright Response
+        return r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{review['id']}")
+
+    every.fill("7")
+    with page.expect_response(patched) as resp:
+        every.press("Enter")
+    assert resp.value.json()["recurrence_interval"] == 7
+    with page.expect_response(patched) as resp:
+        drawer.locator("select[data-field='recurrence_anchor']").select_option("sat")
+    assert resp.value.json()["recurrence_anchor"] == "sat"
+    # the re-rendered list behind the drawer speaks the same words the CLI prints
+    label = "'every 7 weeks on Saturday'"
+    expect(page.locator(f".trow-recur[title={label}], .due-recur[title={label}]").first).to_be_attached()
+    expect(every).to_have_value("7")
+    # The Every field already reads 7 before the drawer's re-render lands, so that
+    # check settles nothing: the new activity rows are what the redraw adds (#459).
+    expect(drawer.locator(".activity-row").nth(0)).to_contain_text("recurrence_anchor")
+    expect(drawer.locator(".activity-row").nth(1)).to_contain_text("recurrence_interval")
+    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    # Frame the drawer rather than inherit its scroll offset (#459). Where it ends
+    # up is whatever Playwright's scroll-into-view and the redraws between them
+    # left, against a layout that was still moving (the drawer's content grows by
+    # tens of pixels as each redraw lands), so one capture sat 46 px off the
+    # baseline with every pixel of content identical. Park the "More fields" row at
+    # the offset the baseline shows it, in the settled layout.
+    page.evaluate(_FRAME_MORE_FIELDS_JS)
+    shot(page, shots / "story-25-recurrence-interval-1-desktop.png")
+
+    old_due = date.fromisoformat(review["due"])
+    assert old_due.weekday() == 5, f"the seed's review is due {old_due:%A}, the walk expects a Saturday"
+    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
+    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
+    rolled = date.fromisoformat(page.locator("#taskDrawer input[data-field='due']").input_value())
+    assert rolled == old_due + timedelta(weeks=7), f"rolled to {rolled}, expected 7 weeks after {old_due}"
+    assert page.request.get(task_url).json()["recurrence_interval"] == 7
+
+    page.request.patch(task_url, data={
+        "recurrence": "weekly", "recurrence_anchor": "fri", "recurrence_interval": None,
+        "due": review["due"],
+    })
+
+
+# ------------------------------------------------- stale window (#101)

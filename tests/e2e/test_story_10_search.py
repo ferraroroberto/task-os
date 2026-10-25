@@ -45,6 +45,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._surface import surface
+from tests.e2e._ui import assert_control_boundaries, close_filter_sheet, open_filter_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     FAKE_ISSUES,
@@ -53,10 +54,7 @@ from tests.e2e.conftest import (
     _get,
     _post,
     _terminate,
-    assert_control_boundaries,
-    close_filter_sheet,
     e2e_workdir,
-    open_filter_sheet,
     shot,
 )
 
@@ -129,20 +127,8 @@ def _task_hit(page: Page, title: str):
                         has=page.locator(".trow-title", has_text=re.compile(rf"^{re.escape(title)}$"))).first
 
 
-def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: Path) -> None:
-    inst = search_webapp
-    base = inst.base
-    st = _get(base, "/api/search/status")["adapters"]
-    assert all(a["configured"] for a in st), st                    # the four indexes are all wired
-
-    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
-    ctx.add_init_script(INTERCEPT)
-    page: Page = ctx.new_page()
-    page.goto(base + "/")
-    page.get_by_role("tab", name="Search").click()
-    box = page.locator("#searchInput")
-    expect(box).to_be_focused()
-    assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
+def _empty_search_tab(page: Page, box) -> None:
+    """Before a query: one box and a hint."""
     # before a query: one box and a hint — no group shells waiting empty, and
     # with every index set up, nothing to fold (J-09, #395)
     expect(page.locator(".search-hint")).to_have_text(re.compile(r"^Searches your tasks, folders, emails and issues"))
@@ -163,6 +149,9 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     close_filter_sheet(page)
     expect(page.locator("#searchScope .segmented-item[aria-pressed='true']")).to_have_text("Tasks")
 
+
+def _four_groups_for_a_word(page: Page, shots: Path, box):
+    """Step 1: a word finds four groups, each headed by its kind and count."""
     # 1. type a word → four groups, open, each headed by its kind and count,
     #    all populated. Mine is the default scope: the synced issue's task is
     #    cut from the task hits (the Issues group still lists it), which the
@@ -217,8 +206,11 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(page.locator(".search-hit mark").first).to_be_visible()
     assert "q=kitchen" in page.url                                # ?q= keeps the query
     shot(page, shots / "story-10-search-1-desktop.png", full_page=True)
-    surface(page, "search.results")
+    return g, kitchen_hit
 
+
+def _open_hits_from_the_results(page: Page, base: str, shots: Path, box, kitchen_hit):
+    """Steps 2-3: a task hit opens the drawer; a folder hit goes to the opener."""
     # 2. open a task (the Kitchen task) from its row → the drawer beside the results
     kitchen_hit.locator(".trow-main").click()
     drawer = page.locator("#taskDrawer")
@@ -244,7 +236,11 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     second_title = _get(base, f"/api/tasks/{second.get_attribute('data-id')}")["title"]
     page.keyboard.press("Enter")
     expect(drawer.locator("#drawerTitle")).to_have_value(second_title)
+    return drawer
 
+
+def _palette_and_commands(page: Page, ctx, browser: Browser, base: str, shots: Path, drawer, g):
+    """Steps 4-7: Ctrl+K jumps to a task; > runs a command."""
     # 4. Ctrl+K → type → Enter opens the task
     page.keyboard.press("Escape")                                   # close the drawer
     expect(drawer).to_be_hidden()
@@ -304,7 +300,11 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Pay water bill")
     shot(p, shots / "story-10-search-7-phone.png")
     p.keyboard.press("Escape")
+    return p, phone
 
+
+def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
+    """Steps 8-9: a long hit never widens the page; search covers everyone."""
     # 8. a long hit never widens the page (#417): invented over-long names (a
     # folder, a project holding the matching task) on a 390px screen. The grid
     # item's auto minimum used to take the nowrap meta row's full width, and
@@ -340,3 +340,25 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Zebra paperwork")
     p.keyboard.press("Escape")
     phone.close()
+
+
+def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: Path) -> None:
+    inst = search_webapp
+    base = inst.base
+    st = _get(base, "/api/search/status")["adapters"]
+    assert all(a["configured"] for a in st), st                    # the four indexes are all wired
+
+    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    ctx.add_init_script(INTERCEPT)
+    page: Page = ctx.new_page()
+    page.goto(base + "/")
+    page.get_by_role("tab", name="Search").click()
+    box = page.locator("#searchInput")
+    expect(box).to_be_focused()
+    assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
+    _empty_search_tab(page, box)
+    g, kitchen_hit = _four_groups_for_a_word(page, shots, box)
+    surface(page, "search.results")
+    drawer = _open_hits_from_the_results(page, base, shots, box, kitchen_hit)
+    p, phone = _palette_and_commands(page, ctx, browser, base, shots, drawer, g)
+    _long_hits_and_everyone(base, inst, p, phone)

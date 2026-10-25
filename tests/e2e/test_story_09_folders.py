@@ -52,6 +52,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
+from tests.e2e._ui import open_more_fields
 from tests.e2e._uniform import (
     assert_code_off_canvas_subtle,
     assert_focus_ring,
@@ -67,7 +68,6 @@ from tests.e2e.conftest import (
     _terminate,
     e2e_workdir,
     hold_toasts,
-    open_more_fields,
     shot,
 )
 
@@ -119,16 +119,8 @@ def _kitchen(base: str) -> dict:
     return next(t for t in items if t["title"] == "Kitchen")
 
 
-def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: Path) -> None:
-    inst = folder_webapp
-    base = inst.base
-    kitchen = _kitchen(base)
-    assert kitchen["folder_ref"] == "{onedrive}/house/kitchen"
-    assert kitchen["folder_resolved"] == inst.od_fwd + "/house/kitchen"     # the server resolves, never the page
-
-    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
-    ctx.add_init_script(INTERCEPT)
-    page: Page = ctx.new_page()
+def _chip_and_first_click(page: Page, base: str, shots: Path, inst, kitchen):
+    """Steps 1-2: the drawer's folder chip, and its first click handed to the opener."""
     # 1. the chip (the drawer's — a row's meta glyph is passive since #311, and
     #    the Table grid that also carried one went in #350): taskos:// href +
     #    resolved-path tooltip. It leads the drawer's row of link pills (#394).
@@ -165,7 +157,11 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     page.wait_for_timeout(600)                                              # past the hint's own 350 ms delay (format.js)
     expect(pop).to_be_hidden()
     assert len(page.evaluate("window.__taskosClicks")) == 3
+    return chip, pop
 
+
+def _opener_card_in_settings(page: Page, base: str, shots: Path, chip, pop) -> None:
+    """Step 3: the hint's link to the Folder opener card in Settings."""
     # 3. the hint's link → Settings → Folder opener card with the command for this address
     page.evaluate("localStorage.removeItem('task-os.opener-hint')")
     chip.click()
@@ -196,6 +192,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
                  [base.removeprefix("http://"), "127.0.0.1:8448"])
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
+
+def _drawer_folder_editor(page: Page, base: str, shots: Path, inst, kitchen):
+    """Step 4: the drawer's Folder editor folds a path onto the placeholder."""
     # 4. drawer: the Folder editor folds an absolute path onto the placeholder.
     #    Leave Settings first: from `/#settings/opener` the goto below is only a
     #    hash change, and the install command (this run's port) would stay
@@ -252,7 +251,11 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(page.locator(".toast")).to_contain_text("Stored as {onedrive}/admin/car")
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/admin/car"
     shot(page, shots / "story-09-folders-4-desktop.png")
+    return drawer, field, folder_pill
 
+
+def _unknown_placeholder_and_picker(page: Page, base: str, shots: Path, drawer, field, inst, kitchen) -> None:
+    """An unknown placeholder warns on the chip; step 5: the folder-index picker."""
     # #74 removed the resolved-path line, so a placeholder this server does not
     # know has to warn ON the chip instead - deficit tint (which has to beat
     # `a.chip`'s accent) plus the reason in the tooltip. Never a silent chip.
@@ -288,6 +291,9 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     activity = _get(base, f"/api/tasks/{kitchen['id']}")["activity"]
     assert activity[0]["field"] == "folder_ref" and activity[0]["new_value"] == "{onedrive}/house/kitchen/plans"
 
+
+def _ai_chip_from_the_board(page: Page, base: str, shots: Path, drawer, pop):
+    """Step 8: the AI-conversation chip, from the Board's row menu to the drawer."""
     # 8. (issue #77) the AI-conversation chip — one kind for every provider,
     #    bot glyph, open-on-web by default, resume through the opener.
     ai_url = "https://claude.ai/code/session_01SeedExampleDriftFix000"
@@ -348,6 +354,11 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     found = assert_icon_buttons_uniform(page, "#taskDrawer", min_count=6)
     trash_glyph = next(b["glyph"] for b in found if b["cls"].startswith("icon-button") and "Remove link" in b["name"])
     assert trash_glyph == 16, found                         # the Links row's glyph is the one size
+    return ai_row, ai_url, drawer, pop, watering
+
+
+def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots: Path, ai_row, ai_url, drawer, folder_pill, inst, kitchen, pop, watering) -> None:
+    """The shared reference pill, then steps 6-7: dark, and the phone's chips."""
     # one reference pill: the folder chip IS the AI pill's look (#357)
     assert pill_style(ai_row.locator("a.chip-ai")) == folder_pill
     # pasting an AI conversation URL infers kind=ai — no manual kind anywhere
@@ -408,3 +419,21 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
     shot(p, shots / "story-11-ai-links-4-phone.png")
     phone.close()
+
+
+def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: Path) -> None:
+    inst = folder_webapp
+    base = inst.base
+    kitchen = _kitchen(base)
+    assert kitchen["folder_ref"] == "{onedrive}/house/kitchen"
+    assert kitchen["folder_resolved"] == inst.od_fwd + "/house/kitchen"     # the server resolves, never the page
+
+    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    ctx.add_init_script(INTERCEPT)
+    page: Page = ctx.new_page()
+    chip, pop = _chip_and_first_click(page, base, shots, inst, kitchen)
+    _opener_card_in_settings(page, base, shots, chip, pop)
+    drawer, field, folder_pill = _drawer_folder_editor(page, base, shots, inst, kitchen)
+    _unknown_placeholder_and_picker(page, base, shots, drawer, field, inst, kitchen)
+    ai_row, ai_url, drawer, pop, watering = _ai_chip_from_the_board(page, base, shots, drawer, pop)
+    _ai_pill_dark_and_phone(page, ctx, browser, base, shots, ai_row, ai_url, drawer, folder_pill, inst, kitchen, pop, watering)

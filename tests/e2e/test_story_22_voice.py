@@ -49,16 +49,8 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    _boot,
-    _get,
-    _terminate,
-    board_mode,
-    e2e_workdir,
-    open_settings_sheet,
-    shot,
-)
+from tests.e2e._ui import board_mode, open_settings_sheet
+from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, shot
 from tests.fixtures.chat_fake import FakeChat
 from tests.fixtures.whisper_fake import FakeWhisper
 
@@ -182,25 +174,8 @@ def _open_add(page: Page):
     return dialog
 
 
-def test_say_the_task(
-    voice_webapp: VoiceInstance, voiceless_webapp: VoiceInstance,
-    browser: Browser, shots: Path,
-) -> None:
-    inst = voice_webapp
-    base = inst.base
-    due = (E2E_ANCHOR + timedelta(days=7)).isoformat()
-
-    # The install can reach a transcription endpoint, and says so before
-    # anything is clicked.
-    st = _get(base, "/api/status")["voice"]
-    assert st["enabled"] is True and st["reason"] is None
-    # The hub is the primary, and the status says so — "parakeet or the local
-    # CPU whisper?" is answerable from this one call (#144). The live-transcript
-    # cadence rides the same call, so the page never hardcodes one (#146).
-    assert st["url"] == inst.whisper.url and st["serving"] == "hub"
-    assert st["partial_interval_seconds"] == PARTIAL_S
-
-    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
+def _mic_live_and_recording(ctx, base: str, shots: Path, inst):
+    """Steps 1-2: the mic is live; one click starts recording."""
     ctx.add_init_script(FAKE_MIC)
     page: Page = ctx.new_page()
     page.goto(base + "/")
@@ -234,7 +209,11 @@ def test_say_the_task(
     partials = [r for r in inst.whisper.requests]
     assert len(partials) >= 1
     assert all(r["file"][:4] == b"RIFF" for r in partials)
+    return dialog, line, mic, page
 
+
+def _transcript_settles(page: Page, shots: Path, dialog, due, inst, line, mic) -> None:
+    """Step 3: a second click settles the line on the full transcript."""
     # 3. click again: the line settles on the full transcript, no longer
     #    provisional, and the parse rides along — the Due field carries next
     #    week's date, correctable, not a chip.
@@ -271,6 +250,9 @@ def test_say_the_task(
     assert int.from_bytes(sent["file"][24:28], "little") == 16000
     assert int.from_bytes(sent["file"][22:24], "little") == 1
 
+
+def _enter_makes_the_task(page: Page, ctx, base: str, shots: Path, dialog, due, inst) -> None:
+    """Step 4: one Enter and it is a real task, in To Do."""
     # 4. one Enter and it is a real task, in **To Do** — a spoken task is a
     #    hand-made one (#148); Inbox is for what arrives on its own.
     dialog.locator(".quick-add-submit").click()
@@ -329,6 +311,9 @@ def test_say_the_task(
     expect(card.locator("#statusVoice")).to_contain_text("live every 0.3s")
     ctx.close()
 
+
+def _phone_same_gesture(browser: Browser, base: str, shots: Path, inst) -> None:
+    """Step 5: the phone, the same gesture through the same endpoint."""
     # 5. the phone: the same gesture, through the same one endpoint — it never
     #    needs to reach the transcription server itself.
     inst.whisper.text = PHONE_HEARD
@@ -358,6 +343,9 @@ def test_say_the_task(
     assert any(t["title"] == PHONE_TITLE for t in _get(base, "/api/tasks?status=todo")["items"])
     phone.close()
 
+
+def _no_endpoint_says_why(browser: Browser, shots: Path, voiceless_webapp) -> None:
+    """Steps 6-7: no transcription endpoint: the button and Settings say why."""
     # 6. the install with no transcription endpoint: the button is visibly off,
     #    with the reason under it — never a mic that looks live and does nothing.
     off = _get(voiceless_webapp.base, "/api/status")["voice"]
@@ -384,3 +372,29 @@ def test_say_the_task(
     expect(card2.locator("#statusVoiceUrl")).to_have_text("not set")
     shot(p2, shots / "story-22-voice-7-desktop.png")
     ctx2.close()
+
+
+def test_say_the_task(
+    voice_webapp: VoiceInstance, voiceless_webapp: VoiceInstance,
+    browser: Browser, shots: Path,
+) -> None:
+    inst = voice_webapp
+    base = inst.base
+    due = (E2E_ANCHOR + timedelta(days=7)).isoformat()
+
+    # The install can reach a transcription endpoint, and says so before
+    # anything is clicked.
+    st = _get(base, "/api/status")["voice"]
+    assert st["enabled"] is True and st["reason"] is None
+    # The hub is the primary, and the status says so — "parakeet or the local
+    # CPU whisper?" is answerable from this one call (#144). The live-transcript
+    # cadence rides the same call, so the page never hardcodes one (#146).
+    assert st["url"] == inst.whisper.url and st["serving"] == "hub"
+    assert st["partial_interval_seconds"] == PARTIAL_S
+
+    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    dialog, line, mic, page = _mic_live_and_recording(ctx, base, shots, inst)
+    _transcript_settles(page, shots, dialog, due, inst, line, mic)
+    _enter_makes_the_task(page, ctx, base, shots, dialog, due, inst)
+    _phone_same_gesture(browser, base, shots, inst)
+    _no_endpoint_says_why(browser, shots, voiceless_webapp)

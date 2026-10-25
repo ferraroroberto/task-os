@@ -77,19 +77,15 @@ from tests.e2e._geometry import (
     assert_no_overlap,
     effective_rects,
 )
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    E2E_P2_TOKEN,
-    E2E_TOKEN,
+from tests.e2e._ui import (
     SWIPE_JS,
     assert_control_boundaries,
     assert_date_sheet,
     assert_on_crumb_line,
     board_mode,
     open_settings_sheet,
-    settle,
-    shot,
 )
+from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, E2E_TOKEN, settle, shot
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -116,6 +112,184 @@ def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
     return pw.new_context(
         viewport=viewport, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme=scheme,
     )
+
+
+def _row_meta_and_menu(page: Page, shots: Path, meta, project, row):
+    """The passive meta line and the row's menu."""
+    expect(meta.locator(".trow-ctx")).to_have_text(project["title"])
+    expect(meta.locator(".trow-count")).to_have_text(["1", "1"])
+    expect(meta.locator(".trow-folder, .trow-ai, .trow-issue, .trow-person")).to_have_count(0)
+    # ... and at 390px nothing but the project name loses a pixel to the
+    # ellipsis: every other part ends inside the line, its text whole.
+    # Measured once the web font is in — the fallback is narrower and hid it.
+    settle(page)
+    cut = meta.evaluate("""m => { const edge = m.getBoundingClientRect().right;
+      // a part is cut when it ends past the line, or when the line gave it
+      // less than its own max-content width (an ellipsized chip label) —
+      // compared in subpixels against an out-of-flow clone: a chip a
+      // fraction of a pixel short already paints "Block…", and
+      // scrollWidth rounds that away
+      const narrow = el => {
+        const twin = el.cloneNode(true);
+        twin.style.cssText = 'position:absolute;visibility:hidden;width:max-content;flex:none';
+        m.appendChild(twin);
+        const want = twin.getBoundingClientRect().width;
+        twin.remove();
+        return el.getBoundingClientRect().width < want - 0.01; };
+      return Array.from(m.children).filter(p => !p.classList.contains('trow-ctx'))
+        .filter(p => p.getBoundingClientRect().right > edge + 0.5 || narrow(p))
+        .map(p => p.className + ' ' + p.textContent); }""")
+    assert cut == [], cut
+    expect(row.locator(".trow-move")).to_be_hidden()       # the verb is a fine pointer's; a phone swipes
+    row.locator(".trow-kebab").tap()
+    expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()
+    expect(page.locator(".row-menu [data-action='ai']")).to_be_visible()
+    expect(page.locator(".row-menu [data-action='change-date']")).to_contain_text("Move…")
+    row.locator(".trow-kebab").tap()
+    expect(page.locator(".row-menu")).to_have_count(0)
+    # the real targets: 44px boxes that share no pixel, inside the card —
+    # the open target and the kebab; a touch screen draws no completion
+    # circle (#350: swipe right, or the drawer's status, closes a task)
+    expect(row.locator(".trow-done")).to_be_hidden()
+    targets = row.locator(".trow-main, .trow-kebab")
+    expect(targets).to_have_count(2)
+    assert_no_overlap(targets)
+    assert_min_target(row.locator(".trow-kebab"))
+    box = row.bounding_box()
+    assert box
+    for t in effective_rects(targets):
+        assert t.effective.height >= 44, t
+        assert t.effective.top >= box["y"] - 0.5, (t, box)
+        assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
+    # one title line + one meta line and a hairline (<= 61px), the kebab at the right edge
+    assert box["height"] <= 61, box
+    # full-bleed on the phone (#311): the row's hairline runs edge to edge
+    vw = page.viewport_size["width"]
+    assert box["x"] <= 0.5 and box["x"] + box["width"] >= vw - 0.5, (box, vw)
+    kebab_box = row.locator(".trow-kebab").bounding_box()
+    assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
+    shot(page, shots / "story-07-phone-9-phone.png")
+
+    # the date is changed through the kebab -> "Move…": on a coarse
+    # pointer that is the dialog sheet, and its "Pick a date..." is the
+    # reveal-and-click fallback (#50), since showPicker() opens nothing on touch
+    row.locator(".trow-kebab").tap()
+    page.locator(".row-menu [data-action='change-date']").tap()
+    sheet = page.locator("dialog#dateDialog")
+    expect(sheet).to_be_visible()
+    expect(sheet.locator("h2")).to_have_text("Move to a date")
+    expect(page.locator(".snooze-pop")).to_have_count(0)
+    assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
+    return box, sheet
+
+
+def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, task):
+    """The date sheet from the row, and its undo."""
+    # the date sheet (#391): push-outs first, each phrase beside its date,
+    # every option a full-width 44px row that holds both on one line
+    assert_date_sheet(sheet.locator(".snooze-menu.date-sheet"), base)
+    assert_min_target(sheet.locator(".snooze-opt"))
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-07-phone-10-phone.png")
+    sheet.locator(".snooze-pick").tap()
+    expect(sheet.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
+    # picking a day commits it - the row re-renders on the new date (today,
+    # so it stays on Today)
+    new_due = E2E_ANCHOR.isoformat()
+    # The sheet closes the moment the pick lands, which is *before* the
+    # write and the refresh: `to_be_hidden` alone passes with the row still
+    # on the old date, and a single 5 s `expect` on the row then reads one
+    # slow write as "no effect". Wait in the order they happen: the bulk
+    # POST (bounded by the context's 15 s, and a pick that never sends one
+    # fails here by name), then the sheet, then the redrawn row.
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/api/tasks/bulk")
+    ) as written:
+        sheet.locator(".due-date").evaluate(
+            "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
+    assert written.value.ok, f"the date pick's write answered {written.value.status}"
+    expect(sheet).to_be_hidden()
+    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
+        "title", new_due)
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
+    page.wait_for_load_state("networkidle")
+
+    # Swipe (#311): a sideways touch on the row runs its two actions. These
+    # are synthetic touch pointers, so they prove the wiring, not the feel
+    # (that is the owner's iPhone walk): left opens the date sheet and
+    # writes nothing, a touch starting in the 20px edge zone is ignored,
+    # right completes with Undo.
+    row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
+    expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
+    row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
+    expect(sheet).to_be_visible()
+    expect(sheet.locator("h2")).to_have_text("Move to a date")
+    sheet.locator(".detail-close").tap()
+    expect(sheet).to_be_hidden()
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
+    row.locator(".trow-main").evaluate(SWIPE_JS, [5, 250])
+    expect(row.locator(".trow-reveal")).to_have_count(0)
+    expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"
+    row.locator(".trow-main").evaluate(SWIPE_JS, [100, 300])
+    toast = page.locator(".toast-success").last
+    expect(toast).to_contain_text("Completed")
+    expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
+    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
+    toast.locator(".toast-action").tap()
+    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"   # Undo puts the status back
+    # Let the re-renders the writes kicked off finish before the row's task is
+    # deleted below: pulling it out from under the in-flight GETs aborts
+    # them, and WebKit reports an aborted request as a page error.
+    page.wait_for_load_state("networkidle")
+    return row
+
+
+def _drawer_parent_tools_on_phone(page: Page, base: str, shots: Path, blocker, box, project, row, task) -> None:
+    """The drawer's parent tools as a full-screen sheet."""
+    # The drawer's parent tools (#468) on the phone: Change parent opens the
+    # picker as a full-screen sheet over the full-screen drawer.
+    row.locator(".trow-main").tap()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer.locator("#drawerTitle")).to_have_value("Wire the moisture sensor")
+    expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text([project["title"]])
+    tools = drawer.locator(".drawer-parent-tools button")
+    expect(tools).to_have_text(["Change parent", "Remove parent"])
+    assert_min_target(tools)
+    assert_on_crumb_line(drawer, may_wrap=True)   # #486: on the crumb's line, or cleanly under it
+    drawer.locator(".drawer-change-parent").tap()
+    picker = page.locator("dialog#parentDialog")
+    expect(picker).to_be_visible()
+    expect(picker.locator("h2")).to_have_text("Change parent")
+    vp = page.viewport_size
+    box = picker.bounding_box()
+    assert box and box["width"] >= vp["width"] - 0.5 and box["height"] >= vp["height"] - 0.5, (box, vp)
+    filt = picker.locator(".parent-filter")
+    assert filt.bounding_box()["height"] >= 44
+    assert_min_target(picker.locator(".parent-opt"))
+    assert_no_horizontal_overflow(page)
+    # the task itself and its child are not offered; the placeholder counts
+    offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
+    assert "Wire the moisture sensor" not in offered and "Solder the header pins" not in offered, offered
+    assert "Order the sensor cable" in offered and project["title"] in offered, offered
+    expect(filt).to_have_attribute("placeholder", f"Filter {len(offered)} open tasks")
+    shot(page, shots / "story-07-phone-11-phone.png")
+    filt.fill("sensor cable")
+    expect(picker.locator(".parent-opt:visible")).to_have_count(1)
+    picker.locator(".parent-opt:visible").tap()
+    expect(picker).to_be_hidden()
+    expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Order the sensor cable"])
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] == blocker["id"]
+    # Remove parent: one tap, no confirmation
+    drawer.locator(".drawer-remove-parent").tap()
+    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
+    expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] is None
+    drawer.locator(".drawer-close").tap()
+    expect(drawer).to_be_hidden()
+    page.wait_for_load_state("networkidle")
 
 
 def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
@@ -179,171 +353,9 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
         flags = meta.locator(".trow-flag")
         expect(flags).to_have_text(["Blocked", "Standby", "High"])
         assert set(flags.evaluate_all("els => els.map(e => e.dataset.tone)")) == {"neutral"}
-        expect(meta.locator(".trow-ctx")).to_have_text(project["title"])
-        expect(meta.locator(".trow-count")).to_have_text(["1", "1"])
-        expect(meta.locator(".trow-folder, .trow-ai, .trow-issue, .trow-person")).to_have_count(0)
-        # ... and at 390px nothing but the project name loses a pixel to the
-        # ellipsis: every other part ends inside the line, its text whole.
-        # Measured once the web font is in — the fallback is narrower and hid it.
-        settle(page)
-        cut = meta.evaluate("""m => { const edge = m.getBoundingClientRect().right;
-          // a part is cut when it ends past the line, or when the line gave it
-          // less than its own max-content width (an ellipsized chip label) —
-          // compared in subpixels against an out-of-flow clone: a chip a
-          // fraction of a pixel short already paints "Block…", and
-          // scrollWidth rounds that away
-          const narrow = el => {
-            const twin = el.cloneNode(true);
-            twin.style.cssText = 'position:absolute;visibility:hidden;width:max-content;flex:none';
-            m.appendChild(twin);
-            const want = twin.getBoundingClientRect().width;
-            twin.remove();
-            return el.getBoundingClientRect().width < want - 0.01; };
-          return Array.from(m.children).filter(p => !p.classList.contains('trow-ctx'))
-            .filter(p => p.getBoundingClientRect().right > edge + 0.5 || narrow(p))
-            .map(p => p.className + ' ' + p.textContent); }""")
-        assert cut == [], cut
-        expect(row.locator(".trow-move")).to_be_hidden()       # the verb is a fine pointer's; a phone swipes
-        row.locator(".trow-kebab").tap()
-        expect(page.locator(".row-menu [data-action='folder']")).to_be_visible()
-        expect(page.locator(".row-menu [data-action='ai']")).to_be_visible()
-        expect(page.locator(".row-menu [data-action='change-date']")).to_contain_text("Move…")
-        row.locator(".trow-kebab").tap()
-        expect(page.locator(".row-menu")).to_have_count(0)
-        # the real targets: 44px boxes that share no pixel, inside the card —
-        # the open target and the kebab; a touch screen draws no completion
-        # circle (#350: swipe right, or the drawer's status, closes a task)
-        expect(row.locator(".trow-done")).to_be_hidden()
-        targets = row.locator(".trow-main, .trow-kebab")
-        expect(targets).to_have_count(2)
-        assert_no_overlap(targets)
-        assert_min_target(row.locator(".trow-kebab"))
-        box = row.bounding_box()
-        assert box
-        for t in effective_rects(targets):
-            assert t.effective.height >= 44, t
-            assert t.effective.top >= box["y"] - 0.5, (t, box)
-            assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
-        # one title line + one meta line and a hairline (<= 61px), the kebab at the right edge
-        assert box["height"] <= 61, box
-        # full-bleed on the phone (#311): the row's hairline runs edge to edge
-        vw = page.viewport_size["width"]
-        assert box["x"] <= 0.5 and box["x"] + box["width"] >= vw - 0.5, (box, vw)
-        kebab_box = row.locator(".trow-kebab").bounding_box()
-        assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
-        shot(page, shots / "story-07-phone-9-phone.png")
-
-        # the date is changed through the kebab -> "Move…": on a coarse
-        # pointer that is the dialog sheet, and its "Pick a date..." is the
-        # reveal-and-click fallback (#50), since showPicker() opens nothing on touch
-        row.locator(".trow-kebab").tap()
-        page.locator(".row-menu [data-action='change-date']").tap()
-        sheet = page.locator("dialog#dateDialog")
-        expect(sheet).to_be_visible()
-        expect(sheet.locator("h2")).to_have_text("Move to a date")
-        expect(page.locator(".snooze-pop")).to_have_count(0)
-        assert not page.locator("#taskDrawer").is_visible(), "the date action opened the drawer"
-        # the date sheet (#391): push-outs first, each phrase beside its date,
-        # every option a full-width 44px row that holds both on one line
-        assert_date_sheet(sheet.locator(".snooze-menu.date-sheet"), base)
-        assert_min_target(sheet.locator(".snooze-opt"))
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-07-phone-10-phone.png")
-        sheet.locator(".snooze-pick").tap()
-        expect(sheet.locator(".due-date")).to_have_class(re.compile(r"\bis-visible\b"))
-        # picking a day commits it - the row re-renders on the new date (today,
-        # so it stays on Today)
-        new_due = E2E_ANCHOR.isoformat()
-        # The sheet closes the moment the pick lands, which is *before* the
-        # write and the refresh: `to_be_hidden` alone passes with the row still
-        # on the old date, and a single 5 s `expect` on the row then reads one
-        # slow write as "no effect". Wait in the order they happen: the bulk
-        # POST (bounded by the context's 15 s, and a pick that never sends one
-        # fails here by name), then the sheet, then the redrawn row.
-        with page.expect_response(
-            lambda r: r.request.method == "POST" and r.url.endswith("/api/tasks/bulk")
-        ) as written:
-            sheet.locator(".due-date").evaluate(
-                "(el, v) => { el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }", new_due)
-        assert written.value.ok, f"the date pick's write answered {written.value.status}"
-        expect(sheet).to_be_hidden()
-        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}'] .trow-due")).to_have_attribute(
-            "title", new_due)
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
-        page.wait_for_load_state("networkidle")
-
-        # Swipe (#311): a sideways touch on the row runs its two actions. These
-        # are synthetic touch pointers, so they prove the wiring, not the feel
-        # (that is the owner's iPhone walk): left opens the date sheet and
-        # writes nothing, a touch starting in the 20px edge zone is ignored,
-        # right completes with Undo.
-        row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
-        expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
-        row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
-        expect(sheet).to_be_visible()
-        expect(sheet.locator("h2")).to_have_text("Move to a date")
-        sheet.locator(".detail-close").tap()
-        expect(sheet).to_be_hidden()
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"] == new_due
-        row.locator(".trow-main").evaluate(SWIPE_JS, [5, 250])
-        expect(row.locator(".trow-reveal")).to_have_count(0)
-        expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"
-        row.locator(".trow-main").evaluate(SWIPE_JS, [100, 300])
-        toast = page.locator(".toast-success").last
-        expect(toast).to_contain_text("Completed")
-        expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
-        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
-        toast.locator(".toast-action").tap()
-        expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"   # Undo puts the status back
-        # Let the re-renders the writes kicked off finish before the row's task is
-        # deleted below: pulling it out from under the in-flight GETs aborts
-        # them, and WebKit reports an aborted request as a page error.
-        page.wait_for_load_state("networkidle")
-
-        # The drawer's parent tools (#468) on the phone: Change parent opens the
-        # picker as a full-screen sheet over the full-screen drawer.
-        row.locator(".trow-main").tap()
-        drawer = page.locator("#taskDrawer")
-        expect(drawer.locator("#drawerTitle")).to_have_value("Wire the moisture sensor")
-        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text([project["title"]])
-        tools = drawer.locator(".drawer-parent-tools button")
-        expect(tools).to_have_text(["Change parent", "Remove parent"])
-        assert_min_target(tools)
-        assert_on_crumb_line(drawer, may_wrap=True)   # #486: on the crumb's line, or cleanly under it
-        drawer.locator(".drawer-change-parent").tap()
-        picker = page.locator("dialog#parentDialog")
-        expect(picker).to_be_visible()
-        expect(picker.locator("h2")).to_have_text("Change parent")
-        vp = page.viewport_size
-        box = picker.bounding_box()
-        assert box and box["width"] >= vp["width"] - 0.5 and box["height"] >= vp["height"] - 0.5, (box, vp)
-        filt = picker.locator(".parent-filter")
-        assert filt.bounding_box()["height"] >= 44
-        assert_min_target(picker.locator(".parent-opt"))
-        assert_no_horizontal_overflow(page)
-        # the task itself and its child are not offered; the placeholder counts
-        offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
-        assert "Wire the moisture sensor" not in offered and "Solder the header pins" not in offered, offered
-        assert "Order the sensor cable" in offered and project["title"] in offered, offered
-        expect(filt).to_have_attribute("placeholder", f"Filter {len(offered)} open tasks")
-        shot(page, shots / "story-07-phone-11-phone.png")
-        filt.fill("sensor cable")
-        expect(picker.locator(".parent-opt:visible")).to_have_count(1)
-        picker.locator(".parent-opt:visible").tap()
-        expect(picker).to_be_hidden()
-        expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Order the sensor cable"])
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] == blocker["id"]
-        # Remove parent: one tap, no confirmation
-        drawer.locator(".drawer-remove-parent").tap()
-        expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
-        expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
-        assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] is None
-        drawer.locator(".drawer-close").tap()
-        expect(drawer).to_be_hidden()
-        page.wait_for_load_state("networkidle")
+        box, sheet = _row_meta_and_menu(page, shots, meta, project, row)
+        row = _row_date_sheet_and_undo(page, base, shots, row, sheet, task)
+        _drawer_parent_tools_on_phone(page, base, shots, blocker, box, project, row, task)
     finally:
         # the project takes the task and its child with it — unless the parent
         # tools' leg took the task out of it, so the task goes on its own too
@@ -364,6 +376,241 @@ def test_phone_install_metadata_and_story(
     _login_page_and_token_sign_in(authed_webapp, playwright, browser, shots)
 
 
+def _home_screen_metadata(page: Page, base: str, shots: Path):
+    """Step 0: the Add to Home Screen metadata."""
+    # 0. "Add to Home Screen" metadata: manifest + icons reachable, iOS tags present.
+    manifest_href = page.locator("link[rel='manifest']").get_attribute("href")
+    assert manifest_href, "no <link rel=manifest>"
+    res = page.request.get(f"{base}{manifest_href}")
+    assert res.status == 200, res.status
+    manifest = res.json()
+    assert manifest["name"] == "task-os" and manifest["display"] == "standalone"
+    assert manifest["start_url"] == "/" and manifest["scope"] == "/"
+    sizes = {(i["sizes"], i.get("purpose", "any")) for i in manifest["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes, sizes
+    for icon in manifest["icons"]:
+        r = page.request.get(f"{base}{icon['src']}")
+        assert r.status == 200 and r.headers.get("content-type", "").startswith("image/png"), icon
+    expect(page.locator("meta[name='apple-mobile-web-app-capable']")).to_have_attribute("content", "yes")
+    expect(page.locator("meta[name='apple-mobile-web-app-title']")).to_have_attribute("content", "task-os")
+    touch = page.locator("link[rel='apple-touch-icon']").get_attribute("href")
+    assert touch and page.request.get(f"{base}{touch}").status == 200
+    viewport = page.locator("meta[name='viewport']").get_attribute("content") or ""
+    assert "viewport-fit=cover" in viewport and "width=device-width" in viewport
+    assert page.locator("meta[name='theme-color']").count() >= 1
+
+    # 1. Fresh phone → Today is the landing tab.
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+    expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-07-phone-1-phone.png")
+    return sizes
+
+
+def _quick_add_from_today(page: Page, base: str, shots: Path) -> None:
+    """Step 2: quick-add from Today on the phone."""
+    # 2. Quick-add from Today: the + opens the one dialog (#80) and a task
+    #    due today lands in the due list.
+    page.locator("#paneToday .quick-add-btn").tap()
+    quick_add = page.locator("#quickAdd")
+    expect(quick_add).to_be_visible()
+    # WebKit paints no box-shadow on a native <select>: every field here
+    # draws a real 3:1 boundary instead (#339, WCAG 1.4.11)
+    assert_control_boundaries(quick_add)
+    qa = quick_add.locator(".quick-add-input")
+    qa.fill("Water the balcony plants today")
+    # the parse lands in the Due field, where it can still be corrected (#80)
+    expect(quick_add.locator(".quick-add-due")).to_have_value(E2E_ANCHOR.isoformat())
+    qa.press("Enter")
+    expect(quick_add).to_be_hidden()
+    expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
+    added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
+    expect(added).to_be_visible()
+    # todo: the hand-made default (#148); the row carries it as data-status.
+    expect(added).to_have_attribute("data-status", "todo")
+    new_id = int(added.get_attribute("data-id"))
+    detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
+    assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
+    shot(page, shots / "story-07-phone-2-phone.png")
+
+
+def _board_status_carousel(page: Page, shots: Path, sizes):
+    """Step 3: the Board's one-column Status carousel."""
+    # 3. Board, Status mode (#396): one-column carousel; a swipe (scroll)
+    #    moves the active column. The empty Done column is collapsed away.
+    page.locator("nav.tabs .tab[data-tab='board']").tap()
+    expect(page.locator("#paneBoard")).to_be_visible()
+    board_mode(page, "status")
+    columns = page.locator("#paneBoard .board-status")
+    assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
+    strip = page.locator("#paneBoard .board-strip-btn:not(.is-empty)")
+    expect(strip).to_have_count(3)
+    assert_min_target(strip)
+    assert_no_overlap(strip)
+    # the Board opens on Todo (the working column); exactly one column in view
+    visible = _in_view(page, PHONE["width"])
+    assert visible == ["todo"], visible
+    # swipe left (a scroll of one column width) → Standby becomes the active column
+    columns.evaluate("el => el.scrollBy({left: el.clientWidth, behavior: 'auto'})")
+    expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
+    visible = _in_view(page, PHONE["width"])
+    assert visible == ["standby"], visible
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-07-phone-3-phone.png")
+
+    # 4. Row → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
+    columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
+    expect(page.locator(".board-strip-btn[data-col='todo']")).to_have_class(re.compile(r"\bactive\b"))
+    kitchen = page.locator("#paneBoard .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Kitchen$"))).first
+    kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
+    page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
+    expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
+    # #392: the row's folder is off the meta line (its budget) — the folder
+    # opens from the row's menu, and the drawer shows it; the row's targets
+    # are the open button and the kebab.
+    expect(kitchen.locator(".trow-meta .trow-folder")).to_have_count(0)
+    expect(kitchen.locator(".trow-meta button, .trow-meta a")).to_have_count(0)
+    # One glyph size on the meta line: a count's glyph reads no heavier than
+    # the repeat arrows (round 2 of #74).
+    sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
+        "els => els.map(e => { const r = e.getBoundingClientRect();"
+        " return [Math.round(r.width), Math.round(r.height)]; })")
+    assert sizes and all(sz == [16, 16] for sz in sizes), sizes
+    # ONE locator, so every rect is measured in a single evaluate_all:
+    # the Board is a scroll-snapping carousel and two separate
+    # measurements can land at different scroll offsets.
+    expect(kitchen.locator(".trow-done")).to_be_hidden()      # no circle on touch (#350)
+    row_targets = kitchen.locator(".trow-main, .trow-kebab")
+    expect(row_targets).to_have_count(2)
+    assert_no_overlap(row_targets)
+    assert_min_target(kitchen.locator(".trow-kebab"))
+    row_box = kitchen.bounding_box()
+    assert row_box
+    for t in effective_rects(row_targets):
+        assert t.effective.top >= row_box["y"] - 0.5, (t, row_box)
+        assert t.effective.bottom <= row_box["y"] + row_box["height"] + 0.5, (t, row_box)
+    main_box = kitchen.locator(".trow-main").bounding_box()
+    kebab_box = kitchen.locator(".trow-kebab").bounding_box()
+    assert main_box and kebab_box
+    assert main_box["height"] >= 44, main_box
+    # one title line + one meta line and a hairline (<= 61px); the kebab at the right edge
+    assert row_box["height"] <= 61, row_box
+    assert abs((row_box["x"] + row_box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, row_box)
+    kitchen.locator(".trow-main").tap()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
+    return drawer, visible
+
+
+def _code_line_and_drawer(page: Page, shots: Path, drawer) -> None:
+    """The code line above the title, and the full-screen drawer."""
+    # UX round 2 (#32): on the phone the code line sits ABOVE the title
+    # (never inline pushing it off-screen) and a long title wraps to more
+    # lines instead of clipping sideways (textarea + fit, no ellipsis).
+    title_el = drawer.locator("#drawerTitle")
+    code_box = drawer.locator(".drawer-code").bounding_box()
+    t_box = title_el.bounding_box()
+    assert code_box and t_box and code_box["y"] + code_box["height"] <= t_box["y"] + 1, (code_box, t_box)
+    one_line_h = title_el.evaluate("el => el.clientHeight")
+    wrapped = title_el.evaluate(
+        "el => { const v = el.value;"
+        " el.value = 'a very long task title that would have clipped off the right edge before round two';"
+        " el.dispatchEvent(new Event('input'));"
+        " const grown = {h: el.clientHeight, fits: el.scrollWidth <= el.clientWidth + 1};"
+        " el.value = v; el.dispatchEvent(new Event('input')); return grown; }")
+    assert wrapped["h"] > one_line_h and wrapped["fits"], (one_line_h, wrapped)
+    box = drawer.bounding_box()
+    assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
+    # Step 9: the chip is a taskos:// link (the per-PC opener); on a phone a
+    # tap shows the path to copy instead of navigating (story 09 walks that).
+    # The folder leads the drawer's row of link pills, the links after it (#394).
+    chip = drawer.locator(".drawer-pill-row .chip-folder").first
+    expect(chip).to_be_visible()
+    expect(chip).to_have_text("kitchen")  # last segment; full ref lives in the title
+    assert chip.evaluate("el => el.tagName") == "A"
+    assert (chip.get_attribute("href") or "").startswith("taskos://open?ref=%7Bonedrive%7D")
+    link_chip = drawer.locator(".drawer-pill-row .chip-folder", has_text="Kitchen folder")
+    expect(link_chip).to_have_text(re.compile("Kitchen folder"))
+    assert "{onedrive}/house/kitchen" in (link_chip.get_attribute("title") or "")   # the unresolved ref, per PC
+    assert_min_target(drawer.locator(".drawer-close"))
+    page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
+    expect(page.locator(".toast")).to_have_count(0)
+    shot(page, shots / "story-07-phone-4-phone.png")
+    drawer.locator(".drawer-close").tap()
+    expect(drawer).to_be_hidden()
+
+
+def _dark_theme_persists(page: Page, context, base: str, shots: Path, errors, visible, wk):
+    """Step 5: dark theme, kept across a reload."""
+    # 5. Theme toggle → dark; a reload keeps it (localStorage) and the tab.
+    page.locator("nav.tabs .tab[data-tab='today']").tap()
+    page.locator("#themeToggle").tap()
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    page.reload()
+    expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+    expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
+    shot(page, shots / "story-07-phone-5-phone.png")
+    assert errors == [], errors
+    context.close()
+
+    # 5b. The slim row's tap targets (#311) and the date changed through
+    # the kebab's sheet (#107) — the meta line itself is passive.
+    context = _phone_context(wk, PHONE)
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _walk_row_tap_targets(page, base, shots)
+    assert errors == [], errors
+    context.close()
+
+    # 6. The 430-wide leg: same carousel, one column at a time.
+    context = _phone_context(wk, PHONE_LG)
+    page = context.new_page()
+    page.goto(f"{base}/")
+    page.locator("nav.tabs .tab[data-tab='board']").tap()
+    board_mode(page, "status")
+    wrap = page.locator("#paneBoard .board-status").bounding_box()
+    first = _col(page, "inbox").bounding_box()
+    assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
+    visible = _in_view(page, PHONE_LG["width"])
+    assert len(visible) == 1, visible
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-07-phone-6-phone.png")
+    context.close()
+    return context, page
+
+
+def _geometry_across_widths(page: Page, context, base: str, wk) -> None:
+    """Step 7: the geometry contract across the phone widths and the tablet edge."""
+    # 7. Geometry contract across the phone widths + the tablet edge.
+    for width in (320, 390, 430, 772):
+        context = _phone_context(wk, {"width": width, "height": 844})
+        page = context.new_page()
+        page.goto(f"{base}/")
+        expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
+        assert_no_horizontal_overflow(page)
+        tabs = page.locator("nav.tabs .tab")
+        # The vendored nav is the floating pill on the phone widths (fixed)
+        # and the desktop segmented control at 772 (its own, smaller
+        # geometry). Four tabs (#350) leave every pill tab past the 44px
+        # floor even at 320 wide.
+        pill = page.locator("nav.tabs").evaluate("el => getComputedStyle(el).position") == "fixed"
+        assert pill == (width < 772), (width, pill)
+        if pill:
+            assert_min_target(tabs)
+        assert_no_overlap(tabs)
+        page.locator("nav.tabs .tab[data-tab='board']").tap()
+        assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
+        assert_no_horizontal_overflow(page)
+        board_mode(page, "status")
+        expect(page.locator(".board-strip-btn").first).to_be_visible()
+        assert_min_target(page.locator(".board-strip-btn:not(.is-empty)"))
+        assert_no_horizontal_overflow(page)
+        context.close()
+
+
 def _phone_story(base: str, playwright: Playwright, shots: Path) -> None:
     try:
         wk = playwright.webkit.launch(headless=HEADLESS)
@@ -375,219 +622,12 @@ def _phone_story(base: str, playwright: Playwright, shots: Path) -> None:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto(f"{base}/")
-
-        # 0. "Add to Home Screen" metadata: manifest + icons reachable, iOS tags present.
-        manifest_href = page.locator("link[rel='manifest']").get_attribute("href")
-        assert manifest_href, "no <link rel=manifest>"
-        res = page.request.get(f"{base}{manifest_href}")
-        assert res.status == 200, res.status
-        manifest = res.json()
-        assert manifest["name"] == "task-os" and manifest["display"] == "standalone"
-        assert manifest["start_url"] == "/" and manifest["scope"] == "/"
-        sizes = {(i["sizes"], i.get("purpose", "any")) for i in manifest["icons"]}
-        assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes, sizes
-        for icon in manifest["icons"]:
-            r = page.request.get(f"{base}{icon['src']}")
-            assert r.status == 200 and r.headers.get("content-type", "").startswith("image/png"), icon
-        expect(page.locator("meta[name='apple-mobile-web-app-capable']")).to_have_attribute("content", "yes")
-        expect(page.locator("meta[name='apple-mobile-web-app-title']")).to_have_attribute("content", "task-os")
-        touch = page.locator("link[rel='apple-touch-icon']").get_attribute("href")
-        assert touch and page.request.get(f"{base}{touch}").status == 200
-        viewport = page.locator("meta[name='viewport']").get_attribute("content") or ""
-        assert "viewport-fit=cover" in viewport and "width=device-width" in viewport
-        assert page.locator("meta[name='theme-color']").count() >= 1
-
-        # 1. Fresh phone → Today is the landing tab.
-        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-07-phone-1-phone.png")
-
-        # 2. Quick-add from Today: the + opens the one dialog (#80) and a task
-        #    due today lands in the due list.
-        page.locator("#paneToday .quick-add-btn").tap()
-        quick_add = page.locator("#quickAdd")
-        expect(quick_add).to_be_visible()
-        # WebKit paints no box-shadow on a native <select>: every field here
-        # draws a real 3:1 boundary instead (#339, WCAG 1.4.11)
-        assert_control_boundaries(quick_add)
-        qa = quick_add.locator(".quick-add-input")
-        qa.fill("Water the balcony plants today")
-        # the parse lands in the Due field, where it can still be corrected (#80)
-        expect(quick_add.locator(".quick-add-due")).to_have_value(E2E_ANCHOR.isoformat())
-        qa.press("Enter")
-        expect(quick_add).to_be_hidden()
-        expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
-        added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
-        expect(added).to_be_visible()
-        # todo: the hand-made default (#148); the row carries it as data-status.
-        expect(added).to_have_attribute("data-status", "todo")
-        new_id = int(added.get_attribute("data-id"))
-        detail = page.request.get(f"{base}/api/tasks/{new_id}").json()
-        assert detail["title"] == "Water the balcony plants" and detail["due"] is not None
-        shot(page, shots / "story-07-phone-2-phone.png")
-
-        # 3. Board, Status mode (#396): one-column carousel; a swipe (scroll)
-        #    moves the active column. The empty Done column is collapsed away.
-        page.locator("nav.tabs .tab[data-tab='board']").tap()
-        expect(page.locator("#paneBoard")).to_be_visible()
-        board_mode(page, "status")
-        columns = page.locator("#paneBoard .board-status")
-        assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
-        strip = page.locator("#paneBoard .board-strip-btn:not(.is-empty)")
-        expect(strip).to_have_count(3)
-        assert_min_target(strip)
-        assert_no_overlap(strip)
-        # the Board opens on Todo (the working column); exactly one column in view
-        visible = _in_view(page, PHONE["width"])
-        assert visible == ["todo"], visible
-        # swipe left (a scroll of one column width) → Standby becomes the active column
-        columns.evaluate("el => el.scrollBy({left: el.clientWidth, behavior: 'auto'})")
-        expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
-        visible = _in_view(page, PHONE["width"])
-        assert visible == ["standby"], visible
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-07-phone-3-phone.png")
-
-        # 4. Row → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).
-        columns.evaluate("el => el.scrollBy({left: -el.clientWidth, behavior: 'auto'})")   # swipe back → todo
-        expect(page.locator(".board-strip-btn[data-col='todo']")).to_have_class(re.compile(r"\bactive\b"))
-        kitchen = page.locator("#paneBoard .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Kitchen$"))).first
-        kitchen_col = kitchen.evaluate("el => el.closest('.board-col').dataset.col")
-        page.locator(f".board-strip-btn[data-col='{kitchen_col}']").tap()          # the strip is the column switcher
-        expect(page.locator(f".board-strip-btn[data-col='{kitchen_col}']")).to_have_class(re.compile(r"\bactive\b"))
-        # #392: the row's folder is off the meta line (its budget) — the folder
-        # opens from the row's menu, and the drawer shows it; the row's targets
-        # are the open button and the kebab.
-        expect(kitchen.locator(".trow-meta .trow-folder")).to_have_count(0)
-        expect(kitchen.locator(".trow-meta button, .trow-meta a")).to_have_count(0)
-        # One glyph size on the meta line: a count's glyph reads no heavier than
-        # the repeat arrows (round 2 of #74).
-        sizes = kitchen.locator(".trow-meta .icon").evaluate_all(
-            "els => els.map(e => { const r = e.getBoundingClientRect();"
-            " return [Math.round(r.width), Math.round(r.height)]; })")
-        assert sizes and all(sz == [16, 16] for sz in sizes), sizes
-        # ONE locator, so every rect is measured in a single evaluate_all:
-        # the Board is a scroll-snapping carousel and two separate
-        # measurements can land at different scroll offsets.
-        expect(kitchen.locator(".trow-done")).to_be_hidden()      # no circle on touch (#350)
-        row_targets = kitchen.locator(".trow-main, .trow-kebab")
-        expect(row_targets).to_have_count(2)
-        assert_no_overlap(row_targets)
-        assert_min_target(kitchen.locator(".trow-kebab"))
-        row_box = kitchen.bounding_box()
-        assert row_box
-        for t in effective_rects(row_targets):
-            assert t.effective.top >= row_box["y"] - 0.5, (t, row_box)
-            assert t.effective.bottom <= row_box["y"] + row_box["height"] + 0.5, (t, row_box)
-        main_box = kitchen.locator(".trow-main").bounding_box()
-        kebab_box = kitchen.locator(".trow-kebab").bounding_box()
-        assert main_box and kebab_box
-        assert main_box["height"] >= 44, main_box
-        # one title line + one meta line and a hairline (<= 61px); the kebab at the right edge
-        assert row_box["height"] <= 61, row_box
-        assert abs((row_box["x"] + row_box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, row_box)
-        kitchen.locator(".trow-main").tap()
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
-        # UX round 2 (#32): on the phone the code line sits ABOVE the title
-        # (never inline pushing it off-screen) and a long title wraps to more
-        # lines instead of clipping sideways (textarea + fit, no ellipsis).
-        title_el = drawer.locator("#drawerTitle")
-        code_box = drawer.locator(".drawer-code").bounding_box()
-        t_box = title_el.bounding_box()
-        assert code_box and t_box and code_box["y"] + code_box["height"] <= t_box["y"] + 1, (code_box, t_box)
-        one_line_h = title_el.evaluate("el => el.clientHeight")
-        wrapped = title_el.evaluate(
-            "el => { const v = el.value;"
-            " el.value = 'a very long task title that would have clipped off the right edge before round two';"
-            " el.dispatchEvent(new Event('input'));"
-            " const grown = {h: el.clientHeight, fits: el.scrollWidth <= el.clientWidth + 1};"
-            " el.value = v; el.dispatchEvent(new Event('input')); return grown; }")
-        assert wrapped["h"] > one_line_h and wrapped["fits"], (one_line_h, wrapped)
-        box = drawer.bounding_box()
-        assert box and box["x"] <= 1 and box["width"] >= PHONE["width"] - 2 and box["height"] >= PHONE["height"] - 2, box
-        # Step 9: the chip is a taskos:// link (the per-PC opener); on a phone a
-        # tap shows the path to copy instead of navigating (story 09 walks that).
-        # The folder leads the drawer's row of link pills, the links after it (#394).
-        chip = drawer.locator(".drawer-pill-row .chip-folder").first
-        expect(chip).to_be_visible()
-        expect(chip).to_have_text("kitchen")  # last segment; full ref lives in the title
-        assert chip.evaluate("el => el.tagName") == "A"
-        assert (chip.get_attribute("href") or "").startswith("taskos://open?ref=%7Bonedrive%7D")
-        link_chip = drawer.locator(".drawer-pill-row .chip-folder", has_text="Kitchen folder")
-        expect(link_chip).to_have_text(re.compile("Kitchen folder"))
-        assert "{onedrive}/house/kitchen" in (link_chip.get_attribute("title") or "")   # the unresolved ref, per PC
-        assert_min_target(drawer.locator(".drawer-close"))
-        page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
-        expect(page.locator(".toast")).to_have_count(0)
-        shot(page, shots / "story-07-phone-4-phone.png")
-        drawer.locator(".drawer-close").tap()
-        expect(drawer).to_be_hidden()
-
-        # 5. Theme toggle → dark; a reload keeps it (localStorage) and the tab.
-        page.locator("nav.tabs .tab[data-tab='today']").tap()
-        page.locator("#themeToggle").tap()
-        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-        page.reload()
-        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
-        shot(page, shots / "story-07-phone-5-phone.png")
-        assert errors == [], errors
-        context.close()
-
-        # 5b. The slim row's tap targets (#311) and the date changed through
-        # the kebab's sheet (#107) — the meta line itself is passive.
-        context = _phone_context(wk, PHONE)
-        page = context.new_page()
-        errors = []
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        _walk_row_tap_targets(page, base, shots)
-        assert errors == [], errors
-        context.close()
-
-        # 6. The 430-wide leg: same carousel, one column at a time.
-        context = _phone_context(wk, PHONE_LG)
-        page = context.new_page()
-        page.goto(f"{base}/")
-        page.locator("nav.tabs .tab[data-tab='board']").tap()
-        board_mode(page, "status")
-        wrap = page.locator("#paneBoard .board-status").bounding_box()
-        first = _col(page, "inbox").bounding_box()
-        assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
-        visible = _in_view(page, PHONE_LG["width"])
-        assert len(visible) == 1, visible
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-07-phone-6-phone.png")
-        context.close()
-
-        # 7. Geometry contract across the phone widths + the tablet edge.
-        for width in (320, 390, 430, 772):
-            context = _phone_context(wk, {"width": width, "height": 844})
-            page = context.new_page()
-            page.goto(f"{base}/")
-            expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
-            assert_no_horizontal_overflow(page)
-            tabs = page.locator("nav.tabs .tab")
-            # The vendored nav is the floating pill on the phone widths (fixed)
-            # and the desktop segmented control at 772 (its own, smaller
-            # geometry). Four tabs (#350) leave every pill tab past the 44px
-            # floor even at 320 wide.
-            pill = page.locator("nav.tabs").evaluate("el => getComputedStyle(el).position") == "fixed"
-            assert pill == (width < 772), (width, pill)
-            if pill:
-                assert_min_target(tabs)
-            assert_no_overlap(tabs)
-            page.locator("nav.tabs .tab[data-tab='board']").tap()
-            assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
-            assert_no_horizontal_overflow(page)
-            board_mode(page, "status")
-            expect(page.locator(".board-strip-btn").first).to_be_visible()
-            assert_min_target(page.locator(".board-strip-btn:not(.is-empty)"))
-            assert_no_horizontal_overflow(page)
-            context.close()
+        sizes = _home_screen_metadata(page, base, shots)
+        _quick_add_from_today(page, base, shots)
+        drawer, visible = _board_status_carousel(page, shots, sizes)
+        _code_line_and_drawer(page, shots, drawer)
+        context, page = _dark_theme_persists(page, context, base, shots, errors, visible, wk)
+        _geometry_across_widths(page, context, base, wk)
     finally:
         wk.close()
 

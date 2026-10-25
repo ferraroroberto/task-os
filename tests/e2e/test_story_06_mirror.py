@@ -34,7 +34,8 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
-from tests.e2e.conftest import _get, open_settings_sheet, shot
+from tests.e2e._ui import open_settings_sheet
+from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 
@@ -64,6 +65,129 @@ def _edit(path: Path, text: str) -> None:
     os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
 
 
+def _settings_then_file_edit_imported(page, base: str, shots: Path, inst, n_tasks, path, task_id):
+    """Steps 1-3: Settings shows both services; a file edit is imported, logged as md."""
+    # 1. Settings → Mirror and backup reports both services on, pointing at the temp folders.
+    page.goto(f"{base}/")
+    card = open_settings_sheet(page, "mirror")
+    expect(card.locator("#statusMirror .status-ok")).to_have_text("enabled")
+    expect(card.locator("#statusMirror")).to_contain_text(str(inst.mirror_dir))
+    expect(card.locator("#statusMirror")).to_contain_text(f"{n_tasks} file(s)")
+    expect(card.locator("#statusBackup .status-ok")).to_have_text("enabled")
+    expect(page.locator("#mirrorCardMeta")).to_have_text("both on")   # the row's value (#397)
+    shot(page, shots / "story-06-mirror-1-desktop.png")
+
+    # 2. "Open the file in an editor": change due: and append a comment line.
+    old_due = _get(base, f"/api/tasks/{task_id}")["due"]
+    text = path.read_text(encoding="utf-8")
+    assert f"\ndue: {old_due}\n" in text and "## Comments" in text
+    text = text.replace(f"\ndue: {old_due}\n", "\ndue: 2026-12-24\n", 1)
+    text = text.replace("\n## Log", "- checked the tiles supplier, they deliver on Fridays\n\n## Log", 1)
+    _edit(path, text)
+
+    # 3. Within seconds the app shows both, log actor md.
+    def _imported() -> bool:
+        t = _get(base, f"/api/tasks/{task_id}")
+        return t["due"] == "2026-12-24" and any(c["origin"] == "md" for c in t["comments"])
+
+    _wait(_imported, what="the watcher to import the file edit")
+    detail = _get(base, f"/api/tasks/{task_id}")
+    act = detail["activity"][0]
+    assert (act["field"], act["actor"], act["old_value"], act["new_value"]) == ("due", "md", old_due, "2026-12-24")
+    md_comment = [c for c in detail["comments"] if c["origin"] == "md"][-1]
+    assert md_comment["body"] == "checked the tiles supplier, they deliver on Fridays"
+    assert md_comment["author"] == "Roberto Ferraro"  # the configured owner (sample config)
+    # …and the file converged to canonical form (re-exported with the new comment line)
+    _wait(lambda: "· Roberto Ferraro · md: checked the tiles supplier" in path.read_text(encoding="utf-8"),
+          what="the re-export")
+    page.goto(f"{base}/#task/{task_id}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    newest = drawer.locator(".comment").first
+    expect(newest.locator(".comment-origin")).to_have_text("md")
+    expect(newest.locator(".comment-body")).to_contain_text("checked the tiles supplier")
+    shot(page, shots / "story-06-mirror-2-desktop.png")
+    due_row = drawer.locator(".activity-row[data-field='due']").first
+    expect(due_row.locator(".activity-old")).to_have_text(old_due)
+    expect(due_row.locator(".activity-new")).to_have_text("2026-12-24")
+    expect(due_row.locator(".activity-meta")).to_contain_text("md ·")
+    due_row.scroll_into_view_if_needed()
+    shot(page, shots / "story-06-mirror-3-desktop.png")
+    return card, detail, drawer, text
+
+
+def _conflicting_edit_round_trip(page, base: str, shots: Path, card, detail, drawer, path, task_id, text) -> None:
+    """Step 4: a conflicting edit keeps the app's value and says so."""
+    # 4. A conflicting edit: the app moves the due (a UI edit) and the file — still
+    #    carrying the older export — is saved with another value right after. The DB
+    #    wins and the rejected file value is recorded as a mirror event (issue #84),
+    #    never as a comment on the task.
+    n_comments_before_conflict = len(detail["comments"])
+    # A distinct second from the last export (the baseline is second-precise, and the
+    # instance's clock counts from its own start, not the wall second): a full second.
+    time.sleep(1.1)
+    _send(base, "PATCH", f"/api/tasks/{task_id}", {"due": "2026-11-11"}, actor="ui")
+    text = path.read_text(encoding="utf-8").replace("\ndue: 2026-12-24\n", "\ndue: 2026-10-10\n", 1)
+    _edit(path, text)
+
+    def _conflict() -> bool:
+        return _get(base, "/api/mirror/events")["events"] != []
+
+    _wait(_conflict, what="the conflict event")
+    detail = _get(base, f"/api/tasks/{task_id}")
+    assert detail["due"] == "2026-11-11"  # the DB won
+    assert len(detail["comments"]) == n_comments_before_conflict  # untouched — no diagnostic comment
+    events = _get(base, "/api/mirror/events")["events"]
+    assert len(events) == 1
+    conflict = events[0]
+    assert conflict["task_id"] == task_id and conflict["kind"] == "conflict" and conflict["field"] == "due"
+    assert conflict["file_value"] == "2026-10-10" and conflict["kept_value"] == "2026-11-11"
+    _wait(lambda: "\ndue: 2026-11-11\n" in path.read_text(encoding="utf-8"), what="the file to converge")
+    page.reload()  # same #task/<id> URL: a reload re-fetches the drawer
+    expect(drawer).to_be_visible()
+    # the drawer's newest comment is still the one typed in step 3 — the conflict added no comment
+    expect(drawer.locator(".comment").first.locator(".comment-body")).to_contain_text("checked the tiles supplier")
+
+    # The diagnostic surfaces on the Settings sheet instead — inspect, then clear it.
+    page.keyboard.press("Escape")  # close the drawer first — it overlays the tab panel
+    expect(drawer).to_be_hidden()
+    open_settings_sheet(page, "mirror")
+    expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
+    expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
+    shot(page, shots / "story-06-mirror-4-desktop.png")
+    clear_btn = card.locator("#mirrorEventsClear")
+    clear_btn.scroll_into_view_if_needed()
+    clear_btn.click()
+
+    def _cleared() -> bool:
+        return _get(base, "/api/mirror/events")["events"] == []
+
+    _wait(_cleared, what="the events to clear")
+    expect(card.locator("#statusMirrorEvents .status-ok")).to_have_text("none since the last review")
+
+
+def _backup_copy_and_events(page, base: str, shots: Path, card, inst) -> None:
+    """Step 5: the backup folder's dated copy, and the events cleared."""
+    # 5. The backup folder holds a dated .db copy (the startup pass) — and a
+    #    malformed file is skipped and reported, never fatal.
+    _wait(lambda: any(inst.backup_dir.glob("tasks-????????.db")), what="the startup backup")
+    backup = sorted(inst.backup_dir.glob("tasks-????????.db"))[-1]
+    assert backup.stat().st_size > 0
+    broken = sorted(inst.mirror_dir.glob("*.md"))[1]
+    _edit(broken, "---\nid: 2\ntitle: [oops\n")
+    _wait(lambda: _get(base, "/api/status")["mirror"]["errors"] == 1, what="the skipped-file counter")
+    st = _get(base, "/api/status")
+    assert st["mirror"]["error_files"] == [broken.name]
+    assert st["backup"]["last_file"] == backup.name
+    assert _get(base, "/healthz")["ok"] is True
+    page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    page.click("#settingsBtn")
+    expect(card.locator("#statusMirror .status-warn")).to_have_text("enabled · 1 file(s) skipped")
+    expect(card.locator("#statusMirror")).to_contain_text(broken.name)
+    expect(card.locator("#statusBackup")).to_contain_text(backup.name)
+    shot(page, shots / "story-06-mirror-5-desktop.png")
+
+
 def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -> None:
     inst = mirrored_webapp
     base = inst.base
@@ -81,118 +205,8 @@ def test_edit_in_a_text_editor(mirrored_webapp, browser: Browser, shots: Path) -
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
-
-        # 1. Settings → Mirror and backup reports both services on, pointing at the temp folders.
-        page.goto(f"{base}/")
-        card = open_settings_sheet(page, "mirror")
-        expect(card.locator("#statusMirror .status-ok")).to_have_text("enabled")
-        expect(card.locator("#statusMirror")).to_contain_text(str(inst.mirror_dir))
-        expect(card.locator("#statusMirror")).to_contain_text(f"{n_tasks} file(s)")
-        expect(card.locator("#statusBackup .status-ok")).to_have_text("enabled")
-        expect(page.locator("#mirrorCardMeta")).to_have_text("both on")   # the row's value (#397)
-        shot(page, shots / "story-06-mirror-1-desktop.png")
-
-        # 2. "Open the file in an editor": change due: and append a comment line.
-        old_due = _get(base, f"/api/tasks/{task_id}")["due"]
-        text = path.read_text(encoding="utf-8")
-        assert f"\ndue: {old_due}\n" in text and "## Comments" in text
-        text = text.replace(f"\ndue: {old_due}\n", "\ndue: 2026-12-24\n", 1)
-        text = text.replace("\n## Log", "- checked the tiles supplier, they deliver on Fridays\n\n## Log", 1)
-        _edit(path, text)
-
-        # 3. Within seconds the app shows both, log actor md.
-        def _imported() -> bool:
-            t = _get(base, f"/api/tasks/{task_id}")
-            return t["due"] == "2026-12-24" and any(c["origin"] == "md" for c in t["comments"])
-
-        _wait(_imported, what="the watcher to import the file edit")
-        detail = _get(base, f"/api/tasks/{task_id}")
-        act = detail["activity"][0]
-        assert (act["field"], act["actor"], act["old_value"], act["new_value"]) == ("due", "md", old_due, "2026-12-24")
-        md_comment = [c for c in detail["comments"] if c["origin"] == "md"][-1]
-        assert md_comment["body"] == "checked the tiles supplier, they deliver on Fridays"
-        assert md_comment["author"] == "Roberto Ferraro"  # the configured owner (sample config)
-        # …and the file converged to canonical form (re-exported with the new comment line)
-        _wait(lambda: "· Roberto Ferraro · md: checked the tiles supplier" in path.read_text(encoding="utf-8"),
-              what="the re-export")
-        page.goto(f"{base}/#task/{task_id}")
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        newest = drawer.locator(".comment").first
-        expect(newest.locator(".comment-origin")).to_have_text("md")
-        expect(newest.locator(".comment-body")).to_contain_text("checked the tiles supplier")
-        shot(page, shots / "story-06-mirror-2-desktop.png")
-        due_row = drawer.locator(".activity-row[data-field='due']").first
-        expect(due_row.locator(".activity-old")).to_have_text(old_due)
-        expect(due_row.locator(".activity-new")).to_have_text("2026-12-24")
-        expect(due_row.locator(".activity-meta")).to_contain_text("md ·")
-        due_row.scroll_into_view_if_needed()
-        shot(page, shots / "story-06-mirror-3-desktop.png")
-
-        # 4. A conflicting edit: the app moves the due (a UI edit) and the file — still
-        #    carrying the older export — is saved with another value right after. The DB
-        #    wins and the rejected file value is recorded as a mirror event (issue #84),
-        #    never as a comment on the task.
-        n_comments_before_conflict = len(detail["comments"])
-        # A distinct second from the last export (the baseline is second-precise, and the
-        # instance's clock counts from its own start, not the wall second): a full second.
-        time.sleep(1.1)
-        _send(base, "PATCH", f"/api/tasks/{task_id}", {"due": "2026-11-11"}, actor="ui")
-        text = path.read_text(encoding="utf-8").replace("\ndue: 2026-12-24\n", "\ndue: 2026-10-10\n", 1)
-        _edit(path, text)
-
-        def _conflict() -> bool:
-            return _get(base, "/api/mirror/events")["events"] != []
-
-        _wait(_conflict, what="the conflict event")
-        detail = _get(base, f"/api/tasks/{task_id}")
-        assert detail["due"] == "2026-11-11"  # the DB won
-        assert len(detail["comments"]) == n_comments_before_conflict  # untouched — no diagnostic comment
-        events = _get(base, "/api/mirror/events")["events"]
-        assert len(events) == 1
-        conflict = events[0]
-        assert conflict["task_id"] == task_id and conflict["kind"] == "conflict" and conflict["field"] == "due"
-        assert conflict["file_value"] == "2026-10-10" and conflict["kept_value"] == "2026-11-11"
-        _wait(lambda: "\ndue: 2026-11-11\n" in path.read_text(encoding="utf-8"), what="the file to converge")
-        page.reload()  # same #task/<id> URL: a reload re-fetches the drawer
-        expect(drawer).to_be_visible()
-        # the drawer's newest comment is still the one typed in step 3 — the conflict added no comment
-        expect(drawer.locator(".comment").first.locator(".comment-body")).to_contain_text("checked the tiles supplier")
-
-        # The diagnostic surfaces on the Settings sheet instead — inspect, then clear it.
-        page.keyboard.press("Escape")  # close the drawer first — it overlays the tab panel
-        expect(drawer).to_be_hidden()
-        open_settings_sheet(page, "mirror")
-        expect(card.locator("#statusMirrorEvents .status-warn")).to_have_text("1 since the last review")
-        expect(card.locator("#statusMirrorEvents")).to_contain_text("due: file said 2026-10-10, kept 2026-11-11")
-        shot(page, shots / "story-06-mirror-4-desktop.png")
-        clear_btn = card.locator("#mirrorEventsClear")
-        clear_btn.scroll_into_view_if_needed()
-        clear_btn.click()
-
-        def _cleared() -> bool:
-            return _get(base, "/api/mirror/events")["events"] == []
-
-        _wait(_cleared, what="the events to clear")
-        expect(card.locator("#statusMirrorEvents .status-ok")).to_have_text("none since the last review")
-
-        # 5. The backup folder holds a dated .db copy (the startup pass) — and a
-        #    malformed file is skipped and reported, never fatal.
-        _wait(lambda: any(inst.backup_dir.glob("tasks-????????.db")), what="the startup backup")
-        backup = sorted(inst.backup_dir.glob("tasks-????????.db"))[-1]
-        assert backup.stat().st_size > 0
-        broken = sorted(inst.mirror_dir.glob("*.md"))[1]
-        _edit(broken, "---\nid: 2\ntitle: [oops\n")
-        _wait(lambda: _get(base, "/api/status")["mirror"]["errors"] == 1, what="the skipped-file counter")
-        st = _get(base, "/api/status")
-        assert st["mirror"]["error_files"] == [broken.name]
-        assert st["backup"]["last_file"] == backup.name
-        assert _get(base, "/healthz")["ok"] is True
-        page.evaluate("document.documentElement.dataset.theme = 'dark'")
-        page.click("#settingsBtn")
-        expect(card.locator("#statusMirror .status-warn")).to_have_text("enabled · 1 file(s) skipped")
-        expect(card.locator("#statusMirror")).to_contain_text(broken.name)
-        expect(card.locator("#statusBackup")).to_contain_text(backup.name)
-        shot(page, shots / "story-06-mirror-5-desktop.png")
+        card, detail, drawer, text = _settings_then_file_edit_imported(page, base, shots, inst, n_tasks, path, task_id)
+        _conflicting_edit_round_trip(page, base, shots, card, detail, drawer, path, task_id, text)
+        _backup_copy_and_events(page, base, shots, card, inst)
     finally:
         context.close()

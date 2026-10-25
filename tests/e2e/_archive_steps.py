@@ -20,16 +20,13 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
-from tests.e2e.conftest import (
-    INTERCEPT,
-    _get,
+from tests.e2e._ui import (
     assert_action_row_budget,
     board_mode,
     close_settings_sheet,
-    dismiss_toasts,
     open_settings_sheet,
-    shot,
 )
+from tests.e2e.conftest import INTERCEPT, _get, dismiss_toasts, shot
 from tests.fixtures.archiver_fake import calls
 
 DESKTOP = {"width": 1440, "height": 900}
