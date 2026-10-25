@@ -321,6 +321,81 @@ def _assert_labels_fit(page: Page, selector: str) -> None:
     assert fits and all(fits), (selector, fits)
 
 
+def _second_member_sees_their_own(context, base: str, shots: Path, owners, title):
+    """Steps 1-3: the second member's phone lists and edits only their own tasks."""
+    try:
+        page = context.new_page()
+        page.goto(f"{base}/")
+        assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
+        # 1. no picker: Today opens on their own tasks, the switch says Mine
+        expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+        whose = page.locator("#todayWhose .segmented.whose-switch")
+        pressed = whose.locator(".segmented-item[aria-pressed='true']")
+        expect(pressed).to_have_text("Mine")
+        expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+        for title in ("Water the ferns", "Order paint samples"):
+            expect(_today_row(page, title)).to_be_visible()
+        assert owners(page) == {"p2"}
+        expect(page).not_to_have_url(re.compile(r"[?&]whose="))
+        assert_min_target(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
+        assert_no_overlap(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
+        _assert_labels_fit(page, "#todayWhose .segmented-item, #todayScope .segmented-item")
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-05-board-17-phone.png")
+        # 2. one tap on Everyone: both members' tasks, the choice in the URL and on the device
+        whose.locator(".segmented-item[data-whose='everyone']").tap()
+        expect(pressed).to_have_text("Everyone")
+        expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
+        page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
+        assert owners(page) == {"p1", "p2"}
+        shot(page, shots / "story-05-board-18-phone.png")
+        # 3. the pick follows to the Board (one filter state) and survives a reload
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("#boardWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
+        assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
+        _assert_labels_fit(page, "#boardBar .segmented-item")
+        assert_no_horizontal_overflow(page)
+        page.goto(f"{base}/")
+        page.click("nav.tabs .tab[data-tab='today']")
+        expect(pressed).to_have_text("Everyone")
+        page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
+        assert owners(page) == {"p1", "p2"}
+    finally:
+        context.close()
+    return page
+
+
+def _owner_phone_is_unaffected(page: Page, base: str, shots: Path, owners, phone) -> None:
+    """Step 4: a second device, the owner's phone, is unaffected."""
+    # 4. a second device is unaffected: the owner's phone (no member token, a
+    #    fresh store) opens on Mine, the owner's tasks, none of theirs
+    other = phone(member=False)
+    try:
+        page = other.new_page()
+        page.goto(f"{base}/")
+        assert page.request.get(f"{base}/api/me").json()["id"] == "p1"
+        expect(page.locator("#todayWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+        expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
+        assert owners(page) == {"p1"}
+        expect(_today_row(page, "Water the ferns")).to_have_count(0)
+    finally:
+        other.close()
+    # 5. dark: the switch beside the scope on the second member's Board
+    dark = phone("dark")
+    try:
+        page = dark.new_page()
+        page.goto(f"{base}/")
+        page.click("nav.tabs .tab[data-tab='board']")
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        expect(page.locator("#boardWhose .whose-switch")).to_be_visible()
+        assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
+        _assert_labels_fit(page, "#boardBar .segmented-item")
+        assert_no_horizontal_overflow(page)
+        shot(page, shots / "story-05-board-19-phone-dark.png")
+    finally:
+        dark.close()
+
+
 def _walk_second_member_phone(base: str, playwright: Playwright, shots: Path) -> None:
     """§ #477 — a phone signed in as the second member: no picker step, their own
     tasks first, Everyone one tap, kept across a reload and per device.
@@ -355,72 +430,8 @@ def _walk_second_member_phone(base: str, playwright: Playwright, shots: Path) ->
             return {_get(base, f"/api/tasks/{i}")["owner"] for i in ids}
 
         context = phone()
-        try:
-            page = context.new_page()
-            page.goto(f"{base}/")
-            assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
-            # 1. no picker: Today opens on their own tasks, the switch says Mine
-            expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-            whose = page.locator("#todayWhose .segmented.whose-switch")
-            pressed = whose.locator(".segmented-item[aria-pressed='true']")
-            expect(pressed).to_have_text("Mine")
-            expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
-            for title in ("Water the ferns", "Order paint samples"):
-                expect(_today_row(page, title)).to_be_visible()
-            assert owners(page) == {"p2"}
-            expect(page).not_to_have_url(re.compile(r"[?&]whose="))
-            assert_min_target(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
-            assert_no_overlap(page.locator("#todayWhose .segmented-item, #todayScope .segmented-item"))
-            _assert_labels_fit(page, "#todayWhose .segmented-item, #todayScope .segmented-item")
-            assert_no_horizontal_overflow(page)
-            shot(page, shots / "story-05-board-17-phone.png")
-            # 2. one tap on Everyone: both members' tasks, the choice in the URL and on the device
-            whose.locator(".segmented-item[data-whose='everyone']").tap()
-            expect(pressed).to_have_text("Everyone")
-            expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
-            page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
-            assert owners(page) == {"p1", "p2"}
-            shot(page, shots / "story-05-board-18-phone.png")
-            # 3. the pick follows to the Board (one filter state) and survives a reload
-            page.click("nav.tabs .tab[data-tab='board']")
-            expect(page.locator("#boardWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
-            assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
-            _assert_labels_fit(page, "#boardBar .segmented-item")
-            assert_no_horizontal_overflow(page)
-            page.goto(f"{base}/")
-            page.click("nav.tabs .tab[data-tab='today']")
-            expect(pressed).to_have_text("Everyone")
-            page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
-            assert owners(page) == {"p1", "p2"}
-        finally:
-            context.close()
-        # 4. a second device is unaffected: the owner's phone (no member token, a
-        #    fresh store) opens on Mine, the owner's tasks, none of theirs
-        other = phone(member=False)
-        try:
-            page = other.new_page()
-            page.goto(f"{base}/")
-            assert page.request.get(f"{base}/api/me").json()["id"] == "p1"
-            expect(page.locator("#todayWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
-            expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
-            assert owners(page) == {"p1"}
-            expect(_today_row(page, "Water the ferns")).to_have_count(0)
-        finally:
-            other.close()
-        # 5. dark: the switch beside the scope on the second member's Board
-        dark = phone("dark")
-        try:
-            page = dark.new_page()
-            page.goto(f"{base}/")
-            page.click("nav.tabs .tab[data-tab='board']")
-            expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-            expect(page.locator("#boardWhose .whose-switch")).to_be_visible()
-            assert_min_target(page.locator("#boardWhose .segmented-item, #boardScope .segmented-item"))
-            _assert_labels_fit(page, "#boardBar .segmented-item")
-            assert_no_horizontal_overflow(page)
-            shot(page, shots / "story-05-board-19-phone-dark.png")
-        finally:
-            dark.close()
+        page = _second_member_sees_their_own(context, base, shots, owners, title)
+        _owner_phone_is_unaffected(page, base, shots, owners, phone)
     finally:
         wk.close()
 
@@ -699,22 +710,8 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
 
 
-def _walk_edit_refresh(page: Page, base: str) -> None:
-    """§ #321 — a late read from an earlier refresh must not undo a newer edit.
-
-    Every edit's ``refreshAll()`` follows the last one's, and the network does
-    not answer in order: the read issued before the second edit landed used to
-    resolve *after* the one issued once it had, and the older snapshot then sat
-    on the rows until a reload. The walk holds the list reads of the first
-    edit's refresh (the server answers them at once — it is the delivery that
-    is late), makes the second edit while they are held, and only checks the
-    rows after the held answers have been delivered, so a stale overwrite has
-    already happened by the time it is looked for.
-    """
-    made = page.evaluate(
-        "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
-        "body: JSON.stringify(b)}).then(r => r.json())",
-        {"title": "Renew the parking permit", "status": "todo", "due": E2E_ANCHOR.isoformat()})
+def _edit_refresh_hold_the_reads(page: Page, base: str, made):
+    """Step 1: a task, and the first edit's refresh reads held back."""
     tid = made["id"]
     page.goto(f"{base}/")
     page.click("nav.tabs .tab[data-tab='today']")   # the last tab left is remembered, not Today
@@ -745,7 +742,11 @@ def _walk_edit_refresh(page: Page, base: str) -> None:
     while seen != counts()["held"]:
         seen = counts()["held"]
         page.wait_for_timeout(250)
+    return counts, drawer, tid
 
+
+def _edit_refresh_second_edit(page: Page, base: str, drawer, tid) -> None:
+    """Step 2: the due date, edited while those reads are still held."""
     # 2. The due date, while those reads are still held: a phrase, the way the
     #    drawer takes one. Its refresh is answered at once.
     page.evaluate("window.__hold.on = false")
@@ -785,6 +786,9 @@ def _walk_edit_refresh(page: Page, base: str) -> None:
         page.unroute(f"**/api/tasks/{tid}", park_patch)
     assert _get(base, f"/api/tasks/{tid}")["due"] == later
 
+
+def _edit_refresh_rows_after_release(page: Page, counts, drawer, tid) -> None:
+    """Step 3: every held answer lands; the rows keep the newer edit."""
     # 3. Let every held answer land, then settle — the stale overwrite, if there
     #    is one, has happened by now.
     for _ in range(200):
@@ -809,3 +813,24 @@ def _walk_edit_refresh(page: Page, base: str) -> None:
     # 6. Leave the instance as found: the phone leg shares it, and one more
     #    task would move its counts and the shots that show them.
     page.evaluate(f"fetch('/api/tasks/{tid}', {{method: 'DELETE'}})")
+
+
+def _walk_edit_refresh(page: Page, base: str) -> None:
+    """§ #321 — a late read from an earlier refresh must not undo a newer edit.
+
+    Every edit's ``refreshAll()`` follows the last one's, and the network does
+    not answer in order: the read issued before the second edit landed used to
+    resolve *after* the one issued once it had, and the older snapshot then sat
+    on the rows until a reload. The walk holds the list reads of the first
+    edit's refresh (the server answers them at once — it is the delivery that
+    is late), makes the second edit while they are held, and only checks the
+    rows after the held answers have been delivered, so a stale overwrite has
+    already happened by the time it is looked for.
+    """
+    made = page.evaluate(
+        "b => fetch('/api/tasks', {method: 'POST', headers: {'Content-Type': 'application/json'}, "
+        "body: JSON.stringify(b)}).then(r => r.json())",
+        {"title": "Renew the parking permit", "status": "todo", "due": E2E_ANCHOR.isoformat()})
+    counts, drawer, tid = _edit_refresh_hold_the_reads(page, base, made)
+    _edit_refresh_second_edit(page, base, drawer, tid)
+    _edit_refresh_rows_after_release(page, counts, drawer, tid)

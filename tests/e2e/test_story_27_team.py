@@ -44,6 +44,7 @@ from src.auth import hash_password
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface
+from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
@@ -51,7 +52,6 @@ from tests.e2e.conftest import (
     _get,
     _terminate,
     e2e_workdir,
-    open_settings_sheet,
     settle,
     shot,
 )

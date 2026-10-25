@@ -14,18 +14,15 @@ from pathlib import Path
 from playwright.sync_api import Page, expect
 
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    _get,
+from tests.e2e._ui import (
     assert_action_row_budget,
     assert_date_sheet,
     board_mode,
     close_filter_sheet,
-    dismiss_toasts,
     filter_button,
     open_filter_sheet,
-    shot,
 )
+from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}

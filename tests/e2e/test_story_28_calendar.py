@@ -45,6 +45,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._surface import surface
+from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _boot,
@@ -52,7 +53,6 @@ from tests.e2e.conftest import (
     _terminate,
     dismiss_toasts,
     e2e_workdir,
-    open_settings_sheet,
     shot,
 )
 from tests.fixtures.calendar_fake import SECRET, FakeCalendar
@@ -111,6 +111,86 @@ def _open_calendar_card(page: Page):
     return open_settings_sheet(page, "calendar")
 
 
+def _refused_address(page: Page, base: str, shots: Path):
+    """Step 2: the address is refused before anything was fetched."""
+    # 2. The address is refused (HTTP 404) before anything was ever fetched:
+    #    a red callout with the reason and since when — not an empty lane.
+    _open_today(page, base)
+    lane = page.locator("#paneToday .cal-lane")
+    expect(lane).to_have_attribute("data-state", "bad_url")
+    expect(lane.locator(".cal-notice-title")).to_have_text("Calendar address refused since 09:00")
+    expect(lane.locator(".cal-notice-detail")).to_contain_text("HTTP 404")
+    expect(lane.locator(".cal-event")).to_have_count(0)
+    expect(lane).not_to_contain_text("No events today")
+    expect(lane.locator(".cal-counts")).to_have_text("unavailable")
+    shot(page, shots / "story-28-calendar-2-desktop.png")
+    return lane
+
+
+def _not_a_calendar_and_hang(page: Page, base: str, card, fake, lane):
+    """Steps 3-4: an answer that is not a calendar, and a server that hangs."""
+    # 3. An answer that is not a calendar (a sign-in page), through the
+    #    Settings sheet's Refresh now.
+    fake.mode = "html"
+    card = _open_calendar_card(page)
+    expect(card.locator("#calendarRefresh")).to_be_enabled()
+    card.locator("#calendarRefresh").click()
+    expect(card.locator("#statusCalendar .status-warn")).to_have_text("not a calendar")
+    expect(page.locator("#calendarCardMeta")).to_have_text("error")
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(lane).to_have_attribute("data-state", "parse_error")
+    expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar feed unreadable")
+
+    # 4. A server that hangs: the refresh answers within the bound, and
+    #    Today itself never waits on it again inside the retry window.
+    fake.mode = "slow"
+    group, took = _refresh(base)
+    assert group["state"] == "timeout", group
+    assert took < TIMEOUT_S + 1.5, f"refresh held the request {took:.2f} s"
+    started = time.perf_counter()
+    today = _get(base, "/api/today")
+    assert time.perf_counter() - started < TIMEOUT_S, "Today waited on a calendar it already knows is down"
+    assert today["calendar"]["state"] == "timeout" and today["calendar"]["events"] == []
+    _open_today(page, base)
+    expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar did not answer in time")
+    return card, group
+
+
+def _dropped_then_real_feed(page: Page, base: str, shots: Path, card, fake, group, lane) -> None:
+    """Steps 5-6: a dropped connection, then the real feed in the lane."""
+    # 5. A dropped connection is its own state again.
+    fake.mode = "drop"
+    group, _ = _refresh(base)
+    assert group["state"] == "unreachable", group
+    _open_today(page, base)
+    expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar unreachable since 09:00")
+
+    # 6. The real feed: Refresh now → the card reads it, the lane shows the day.
+    fake.mode = "ok"
+    card = _open_calendar_card(page)
+    card.locator("#calendarRefresh").click()
+    expect(card.locator("#statusCalendar .status-ok")).to_have_text("reading")
+    expect(card.locator("#statusCalendar")).to_contain_text("6 event(s) today · 1 recurring not checked")
+    expect(card.locator("#statusCalendarSource")).to_contain_text("127.0.0.1")
+    expect(page.locator("#calendarCardMeta")).to_have_text("on")
+    dismiss_toasts(page)
+    shot(page, shots / "story-28-calendar-3-desktop.png")
+
+    page.click("nav.tabs .tab[data-tab='today']")
+    expect(lane).to_have_attribute("data-state", "ok")
+    expect(lane.locator(".cal-chip")).to_have_text(["School holiday", "Team offsite"])
+    expect(lane.locator(".cal-time")).to_have_text(["09:30–09:45", "14:00–14:30", "16:30–17:15", "23:00–06:00"])
+    expect(lane.locator(".cal-summary")).to_have_text(
+        ["Standup", "1:1 with Sam Rivera (moved)", "Dentist, check-up", "Night train"])
+    expect(lane.locator(".cal-span")).to_have_text(["ends tomorrow"])
+    expect(lane.locator(".cal-note.is-attention")).to_have_text(
+        "1 recurring event could not be checked — open the calendar itself to be sure.")
+    expect(lane).not_to_contain_text("Gym")               # EXDATE'd today
+    expect(lane).not_to_contain_text("Lunch with Jordan")  # cancelled
+    expect(lane.locator(".cal-counts")).to_have_text("6 events")
+    shot(page, shots / "story-28-calendar-4-desktop.png")
+
+
 def test_today_calendar_lane(
     seeded_webapp: str, calendar_webapp: CalendarInstance, browser: Browser, shots: Path
 ) -> None:
@@ -147,76 +227,10 @@ def test_today_calendar_lane(
         page = context.new_page()
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-
-        # 2. The address is refused (HTTP 404) before anything was ever fetched:
-        #    a red callout with the reason and since when — not an empty lane.
-        _open_today(page, base)
-        lane = page.locator("#paneToday .cal-lane")
-        expect(lane).to_have_attribute("data-state", "bad_url")
-        expect(lane.locator(".cal-notice-title")).to_have_text("Calendar address refused since 09:00")
-        expect(lane.locator(".cal-notice-detail")).to_contain_text("HTTP 404")
-        expect(lane.locator(".cal-event")).to_have_count(0)
-        expect(lane).not_to_contain_text("No events today")
-        expect(lane.locator(".cal-counts")).to_have_text("unavailable")
-        shot(page, shots / "story-28-calendar-2-desktop.png")
+        lane = _refused_address(page, base, shots)
         surface(page, "today.calendar-unavailable")
-
-        # 3. An answer that is not a calendar (a sign-in page), through the
-        #    Settings sheet's Refresh now.
-        fake.mode = "html"
-        card = _open_calendar_card(page)
-        expect(card.locator("#calendarRefresh")).to_be_enabled()
-        card.locator("#calendarRefresh").click()
-        expect(card.locator("#statusCalendar .status-warn")).to_have_text("not a calendar")
-        expect(page.locator("#calendarCardMeta")).to_have_text("error")
-        page.click("nav.tabs .tab[data-tab='today']")
-        expect(lane).to_have_attribute("data-state", "parse_error")
-        expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar feed unreadable")
-
-        # 4. A server that hangs: the refresh answers within the bound, and
-        #    Today itself never waits on it again inside the retry window.
-        fake.mode = "slow"
-        group, took = _refresh(base)
-        assert group["state"] == "timeout", group
-        assert took < TIMEOUT_S + 1.5, f"refresh held the request {took:.2f} s"
-        started = time.perf_counter()
-        today = _get(base, "/api/today")
-        assert time.perf_counter() - started < TIMEOUT_S, "Today waited on a calendar it already knows is down"
-        assert today["calendar"]["state"] == "timeout" and today["calendar"]["events"] == []
-        _open_today(page, base)
-        expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar did not answer in time")
-
-        # 5. A dropped connection is its own state again.
-        fake.mode = "drop"
-        group, _ = _refresh(base)
-        assert group["state"] == "unreachable", group
-        _open_today(page, base)
-        expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar unreachable since 09:00")
-
-        # 6. The real feed: Refresh now → the card reads it, the lane shows the day.
-        fake.mode = "ok"
-        card = _open_calendar_card(page)
-        card.locator("#calendarRefresh").click()
-        expect(card.locator("#statusCalendar .status-ok")).to_have_text("reading")
-        expect(card.locator("#statusCalendar")).to_contain_text("6 event(s) today · 1 recurring not checked")
-        expect(card.locator("#statusCalendarSource")).to_contain_text("127.0.0.1")
-        expect(page.locator("#calendarCardMeta")).to_have_text("on")
-        dismiss_toasts(page)
-        shot(page, shots / "story-28-calendar-3-desktop.png")
-
-        page.click("nav.tabs .tab[data-tab='today']")
-        expect(lane).to_have_attribute("data-state", "ok")
-        expect(lane.locator(".cal-chip")).to_have_text(["School holiday", "Team offsite"])
-        expect(lane.locator(".cal-time")).to_have_text(["09:30–09:45", "14:00–14:30", "16:30–17:15", "23:00–06:00"])
-        expect(lane.locator(".cal-summary")).to_have_text(
-            ["Standup", "1:1 with Sam Rivera (moved)", "Dentist, check-up", "Night train"])
-        expect(lane.locator(".cal-span")).to_have_text(["ends tomorrow"])
-        expect(lane.locator(".cal-note.is-attention")).to_have_text(
-            "1 recurring event could not be checked — open the calendar itself to be sure.")
-        expect(lane).not_to_contain_text("Gym")               # EXDATE'd today
-        expect(lane).not_to_contain_text("Lunch with Jordan")  # cancelled
-        expect(lane.locator(".cal-counts")).to_have_text("6 events")
-        shot(page, shots / "story-28-calendar-4-desktop.png")
+        card, group = _not_a_calendar_and_hang(page, base, card, fake, lane)
+        _dropped_then_real_feed(page, base, shots, card, fake, group, lane)
         surface(page, "today.calendar-lane")
 
         # The address is a secret: nothing the page or the API holds names it.

@@ -10,17 +10,8 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
-    _boot,
-    _get,
-    _terminate,
-    board_mode,
-    e2e_workdir,
-    hold_toasts,
-    open_settings_sheet,
-    shot,
-)
+from tests.e2e._ui import board_mode, open_settings_sheet
+from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, hold_toasts, shot
 from tests.fixtures.anthropic_fake import FakeAnthropic
 from tests.fixtures.seed import seed_db
 

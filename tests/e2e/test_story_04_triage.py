@@ -64,7 +64,7 @@ action runner. Its shots:
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -87,21 +87,20 @@ from tests.e2e._triage_steps import (
     _quick_add_create,
     _quick_add_fill,
     _trow,
+    _walk_recurrence_anchor,
+    _walk_recurrence_interval,
 )
-from tests.e2e.conftest import (
-    E2E_ANCHOR,
+from tests.e2e._ui import (
     SWIPE_JS,
-    _get,
     board_mode,
     close_filter_sheet,
-    dismiss_toasts,
     filter_button,
     open_filter_sheet,
     open_more_fields,
     open_settings_sheet,
-    shot,
     text_contrast,
 )
+from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -115,16 +114,6 @@ _RECORD_SHOW_PICKER = """
 window.__pickerOpens = [];
 HTMLInputElement.prototype.showPicker = function () { window.__pickerOpens.push(this.className); };
 """
-
-# Where story 25's first shot frames the open drawer: its "More fields" row 784 px
-# below the drawer's top edge, whatever the drawer was scrolled to getting there.
-_FRAME_MORE_FIELDS_JS = """() => {
-  const d = document.querySelector('#taskDrawer');
-  const row = d.querySelector('details.drawer-more > summary');
-  const top = row.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
-  d.scrollTop = Math.round(top) - 784;
-}"""
-
 
 # ----------------------------------------------------------- desktop leg
 def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwright, shots: Path) -> None:
@@ -258,119 +247,6 @@ def _walk_closed_on_demand(page: Page, base: str) -> None:
 # puts the task back the way it found it before returning.
 
 
-def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
-    """#112 — Repeat is a cadence *and* the fixed day it lands on.
-
-    The seed's "Weekly review" repeats every Friday. The drawer shows both
-    selects; completing it from the status select rolls the due to a Friday
-    rather than one flat week on, and switching the cadence to one that
-    cannot carry a weekday clears the anchor rather than keeping a stale day.
-
-    Screenshot: docs/screenshots/story-17-recurrence-anchor-1-desktop.png
-    """
-    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
-    page.goto(f"{base}/#task/{review['id']}")
-    open_more_fields(page.locator("#taskDrawer"))   # Repeat is a rare field (#394)
-    cadence = page.locator("#taskDrawer select[data-field='recurrence']")
-    anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
-    expect(cadence).to_have_value("weekly")
-    expect(anchor).to_have_value("fri")
-    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
-    shot(page, shots / "story-17-recurrence-anchor-1-desktop.png")
-
-    # Complete it: the same task stays open and its new due is a Friday,
-    # strictly after both the due it had and today.
-    old_due = date.fromisoformat(review["due"])
-    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
-    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
-    rolled = date.fromisoformat(
-        page.locator("#taskDrawer input[data-field='due']").input_value()
-    )
-    assert rolled.weekday() == 4, f"rolled to {rolled} ({rolled:%A}), expected a Friday"
-    assert rolled > old_due and rolled > E2E_ANCHOR
-
-    # A cadence that takes no fixed day drops the anchor — and the picker with
-    # it. The picker vanishing is the re-render signal: the drawer only redraws
-    # once the PATCH has come back, so the stored value is safe to read here.
-    cadence.select_option("quarterly")
-    expect(anchor).to_have_count(0)
-    assert page.request.get(
-        f"{base}/api/tasks/{review['id']}"
-    ).json()["recurrence_anchor"] is None
-
-    # Restore over the API, not the UI — the rest of this file reads the same
-    # seeded DB; one synchronous call cannot race.
-    page.request.patch(f"{base}/api/tasks/{review['id']}", data={
-        "recurrence": "weekly", "recurrence_anchor": "fri", "due": review["due"],
-    })
-
-
-def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
-    """#229 — Repeat every N: "every 7 weeks on Saturday".
-
-    The seed's "Weekly review" is due on a Saturday. The drawer's Every field
-    takes 7 and the On picker Saturday; the row behind the drawer reads the
-    composed label, and completing the task lands exactly 7 weeks on — a
-    Saturday, never the coming one. Restored over the API afterwards, like
-    the anchor walk before it.
-
-    Screenshot: docs/screenshots/story-25-recurrence-interval-1-desktop.png
-    """
-    review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
-    task_url = f"{base}/api/tasks/{review['id']}"
-    page.goto(f"{base}/")
-    page.goto(f"{base}/#task/{review['id']}")
-    drawer = page.locator("#taskDrawer")
-    open_more_fields(drawer)
-    every = drawer.locator("input[data-field='recurrence_interval']")
-    expect(every).to_have_value("")
-    expect(drawer.locator(".field-unit")).to_have_text("weeks")
-
-    def patched(r) -> bool:  # noqa: ANN001 — a Playwright Response
-        return r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{review['id']}")
-
-    every.fill("7")
-    with page.expect_response(patched) as resp:
-        every.press("Enter")
-    assert resp.value.json()["recurrence_interval"] == 7
-    with page.expect_response(patched) as resp:
-        drawer.locator("select[data-field='recurrence_anchor']").select_option("sat")
-    assert resp.value.json()["recurrence_anchor"] == "sat"
-    # the re-rendered list behind the drawer speaks the same words the CLI prints
-    label = "'every 7 weeks on Saturday'"
-    expect(page.locator(f".trow-recur[title={label}], .due-recur[title={label}]").first).to_be_attached()
-    expect(every).to_have_value("7")
-    # The Every field already reads 7 before the drawer's re-render lands, so that
-    # check settles nothing: the new activity rows are what the redraw adds (#459).
-    expect(drawer.locator(".activity-row").nth(0)).to_contain_text("recurrence_anchor")
-    expect(drawer.locator(".activity-row").nth(1)).to_contain_text("recurrence_interval")
-    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
-    # Frame the drawer rather than inherit its scroll offset (#459). Where it ends
-    # up is whatever Playwright's scroll-into-view and the redraws between them
-    # left, against a layout that was still moving (the drawer's content grows by
-    # tens of pixels as each redraw lands), so one capture sat 46 px off the
-    # baseline with every pixel of content identical. Park the "More fields" row at
-    # the offset the baseline shows it, in the settled layout.
-    page.evaluate(_FRAME_MORE_FIELDS_JS)
-    shot(page, shots / "story-25-recurrence-interval-1-desktop.png")
-
-    old_due = date.fromisoformat(review["due"])
-    assert old_due.weekday() == 5, f"the seed's review is due {old_due:%A}, the walk expects a Saturday"
-    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
-    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
-    rolled = date.fromisoformat(page.locator("#taskDrawer input[data-field='due']").input_value())
-    assert rolled == old_due + timedelta(weeks=7), f"rolled to {rolled}, expected 7 weeks after {old_due}"
-    assert page.request.get(task_url).json()["recurrence_interval"] == 7
-
-    page.request.patch(task_url, data={
-        "recurrence": "weekly", "recurrence_anchor": "fri", "recurrence_interval": None,
-        "due": review["due"],
-    })
-
-
-# ------------------------------------------------- stale window (#101)
-
-
 def _walk_stale_window(page: Page, base: str, shots: Path) -> None:
     """#101 — the modified select's inverse windows: *untouched > N days*.
     The seed's dormant task (last touched 45 days back) is the one hit at 30
@@ -452,22 +328,8 @@ def _walk_hash_open_loads_once(page: Page, base: str) -> None:
 
 # ------------------------------------------- story 30 — Today split (#336)
 
-def _walk_today_split(page: Page, base: str, shots: Path) -> None:
-    """Today at 1440: the list takes the left half, the detail pane the right.
-
-    The right half is never empty while a task is due (#393, decision 8 of
-    #390): a cold load opens the first due task there by itself, with no hash
-    written, and the row keymap keeps working beside it. Closing it shows the
-    empty state, and the list keeps its half width, so a row's ⋯ stays near its
-    title. Opening a task fills that same right half (no overlay), the
-    ``#task/<id>`` link works on a cold load. Other tabs keep the 440px panel,
-    and the task Today opened by itself does not follow you there.
-
-    Screenshots: docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
-    """
-    page.goto(f"{base}/")
-    pane = page.locator("#paneToday")
-    drawer = page.locator("#taskDrawer")
+def _first_due_task_fills_the_right(page: Page, base: str, shots: Path, drawer, pane):
+    """Step 1: the first due task fills the right half; the URL stays bare."""
     empty = page.locator("#todayDetailEmpty")
     first = pane.locator("section.today .trow[data-id]").first
     expect(first).to_be_visible()
@@ -486,7 +348,11 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     assert kebab and kebab["x"] + kebab["width"] <= drawer_box["x"], "the ⋯ must sit inside the list half"
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-1-desktop.png")
-    surface(page, "today.split-drawer")
+    return drawer_box, empty, first, list_box
+
+
+def _close_and_keymap_beside_it(page: Page, base: str, shots: Path, drawer, drawer_box, empty, first, list_box, pane) -> None:
+    """Step 2: closing shows the empty state; the keymap stays on beside it."""
     # the keymap stays on beside it: a focused row still takes a key
     first.locator(".trow-main").focus()
     page.keyboard.press("?")
@@ -522,8 +388,10 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     assert list_box["x"] + list_box["width"] <= drawer_box["x"] + 1, (list_box, drawer_box)
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-2-desktop.png")
-    surface(page, "today.drawer-empty")
 
+
+def _cold_deep_link_and_other_tabs(page: Page, base: str, shots: Path, drawer, empty, pane) -> None:
+    """Steps 3-5: a cold deep link, the other tabs, and the preselected task."""
     # 3. The cold deep link opens its own task on Today (the landing tab),
     #    not the first due one, without an overlay.
     drawer.locator(".drawer-close").click()
@@ -548,6 +416,29 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     expect(drawer).to_be_visible()
     expect(empty).to_be_hidden()
     expect(page).to_have_url(f"{base}/")
+
+
+def _walk_today_split(page: Page, base: str, shots: Path) -> None:
+    """Today at 1440: the list takes the left half, the detail pane the right.
+
+    The right half is never empty while a task is due (#393, decision 8 of
+    #390): a cold load opens the first due task there by itself, with no hash
+    written, and the row keymap keeps working beside it. Closing it shows the
+    empty state, and the list keeps its half width, so a row's ⋯ stays near its
+    title. Opening a task fills that same right half (no overlay), the
+    ``#task/<id>`` link works on a cold load. Other tabs keep the 440px panel,
+    and the task Today opened by itself does not follow you there.
+
+    Screenshots: docs/screenshots/story-30-today-split-{1,2,3}-desktop.png
+    """
+    page.goto(f"{base}/")
+    pane = page.locator("#paneToday")
+    drawer = page.locator("#taskDrawer")
+    drawer_box, empty, first, list_box = _first_due_task_fills_the_right(page, base, shots, drawer, pane)
+    surface(page, "today.split-drawer")
+    _close_and_keymap_beside_it(page, base, shots, drawer, drawer_box, empty, first, list_box, pane)
+    surface(page, "today.drawer-empty")
+    _cold_deep_link_and_other_tabs(page, base, shots, drawer, empty, pane)
     # 5. …and the task Today opened by itself stays on Today.
     page.click("nav.tabs .tab[data-tab='board']")
     expect(drawer).to_be_hidden()
@@ -562,16 +453,8 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
 # the same triage surface — the filter card, a Today row, the quick-add dialog.
 
 
-def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
-    """A task created asleep stays out of the working views until its day, is
-    findable under *Deferred*, and a Today row can be pushed away and undone.
-
-    Screenshots: docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
-    """
-    today = E2E_ANCHOR
-    starts = (today + timedelta(days=30)).isoformat()
-    due = (today + timedelta(days=60)).isoformat()
-
+def _quick_add_with_both_dates(page: Page, base: str, shots: Path, due, starts) -> None:
+    """Steps 1-2: quick-add with a due and a start date off one line."""
     # 1. Quick-add both dates off one line — the parser fills two correctable
     #    fields, so nothing about the task is a mystery before it exists.
     page.goto(f"{base}/")
@@ -598,6 +481,9 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("#paneBoard")).to_be_visible()
     expect(page.locator("#paneBoard").get_by_text("renew insurance", exact=True)).to_have_count(0)
 
+
+def _deferred_is_visible(page: Page, base: str, shots: Path):
+    """Step 3: Deferred is a visible state, not an absence."""
     # 3. Deferred is a visible state, not an absence: the status ticks'
     #    pseudo-value lists exactly the sleeping tasks, each wearing the marker
     #    that says why the working views are quiet about it, and the state is
@@ -622,7 +508,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
     close_filter_sheet(page)
     expect(page).to_have_url(f"{base}/")
+    return snoozed
 
+
+def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today):
+    """Step 4: snooze from a Today row's menu, and undo."""
     # 4. Snooze from a Today row's menu: pick an option, the task leaves, the
     #    toast names the day it went to — and Undo puts it straight back.
     page.click("nav.tabs .tab[data-tab='today']")
@@ -668,7 +558,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     undone = _get(base, f"/api/tasks/{task_id}")
     assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores both
+    return menu, row, task_id, toast
 
+
+def _row_menu_in_full(page: Page, shots: Path, menu, row):
+    """Step 4b: the row's menu, read in full."""
     # 4b. Story 29 (#311): the row's ⋯ menu, read in full. The kebab lists the
     #     row's actions — the shared table's, offered only where they apply,
     #     then the task's own links — and its Snooze… opens the date picker,
@@ -688,7 +582,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert actions[-1] == "open"
     expect(menu.locator(".row-menu-item").first).to_be_focused()
     shot(page, shots / "story-29-row-actions-1-desktop.png")
-    surface(page, "today.row-menu")
+    return actions, menu, row
+
+
+def _snooze_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
+    """The menu's snooze opens the date picker beside the row."""
     menu.locator("[data-action='snooze']").click()
     expect(menu).to_be_hidden()
     picker = page.locator(".snooze-pop .snooze-menu")
@@ -710,7 +608,11 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     expect(menu).to_be_hidden()
     expect(_trow(page, "School enrolment forms", "#paneToday").locator(".trow-kebab")).to_be_focused()
     dismiss_toasts(page)
+    return picker
 
+
+def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, row, task_id) -> None:
+    """Step 4c: Settings → Row actions sets the swipes and the menu."""
     # 4c. Story 29 (#311): Settings → Row actions sets, on this device, what a
     #     swipe runs and what the menu lists. Swipe left → Snooze…, Cycle
     #     priority out of the menu, Snooze… moved to the top: the row's menu
@@ -761,6 +663,9 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert page.evaluate("localStorage.getItem('task-os.rowactions')") is None
     page.click("nav.tabs .tab[data-tab='today']")
 
+
+def _drawer_edits_starts(page: Page, base: str, task_id, today) -> None:
+    """Step 5: the drawer edits Starts with Due's control."""
     # 5. The drawer edits Starts with Due's control, one behaviour; Starts
     #    sits under More fields since #394.
     page.goto(f"{base}/#task/{task_id}")
@@ -791,7 +696,225 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
 
 
+def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
+    """A task created asleep stays out of the working views until its day, is
+    findable under *Deferred*, and a Today row can be pushed away and undone.
+
+    Screenshots: docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
+    """
+    today = E2E_ANCHOR
+    starts = (today + timedelta(days=30)).isoformat()
+    due = (today + timedelta(days=60)).isoformat()
+    _quick_add_with_both_dates(page, base, shots, due, starts)
+    snoozed = _deferred_is_visible(page, base, shots)
+    menu, row, task_id, toast = _snooze_from_a_today_row(page, base, shots, snoozed, today)
+    actions, menu, row = _row_menu_in_full(page, shots, menu, row)
+    surface(page, "today.row-menu")
+    picker = _snooze_from_the_menu(page, base, menu, task_id, toast, today)
+    _settings_row_actions(page, base, shots, actions, picker, row, task_id)
+    _drawer_edits_starts(page, base, task_id, today)
+
+
 # ------------------------------------------------------------- phone leg
+
+def _phone_board_rows(page: Page, shots: Path, rows, watering) -> None:
+    """The Board's Todo column as the shared rows, with 44px targets."""
+    expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
+    expect(watering.locator(".trow-due")).to_be_visible()
+    expect(watering).to_have_attribute("data-status", "todo")
+    expect(rows.locator(".trow-status")).to_have_count(0)
+    assert_no_horizontal_overflow(page)
+    # the top strip (#80, #395): the text filter, the filter button, the
+    # Select toggle and the + sit side by side on one line, all at the
+    # touch floor, with effective rectangles that never overlap; pressed,
+    # the toggle says its name in accent-text on the accent tint, 4.5:1
+    # (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
+    strip = page.locator("#paneBoard .filter-q, #paneBoard .filter-open, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
+    tops = strip.evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2))")
+    assert max(tops) - min(tops) <= 2, tops                         # one line
+    assert_min_target(strip)
+    assert_no_overlap(strip)
+    page.locator("#paneBoard [data-select-toggle]").tap()
+    pressed = page.locator("#paneBoard [data-select-toggle][aria-pressed='true'] .strip-label")
+    expect(pressed).to_be_visible()
+    assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
+    page.locator("#paneBoard [data-select-toggle]").tap()
+    expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+    page.locator("#paneBoard .quick-add-btn").tap()
+    expect(page.locator("#quickAdd")).to_be_visible()
+    assert_min_target(page.locator("#quickAdd .quick-add-input"))
+    page.keyboard.press("Escape")
+    expect(page.locator("#quickAdd")).to_be_hidden()
+    # rows are >=44px tall; a touch screen draws no completion circle
+    # (#350: a swipe right or the drawer's status closes a task), so the
+    # row's one control is the ⋯ kebab, a real 44x44 box that never
+    # overlaps the open target (#311)
+    assert_min_target(rows)
+    expect(rows.locator(".trow-done").first).to_be_hidden()
+    assert_min_target(rows.locator(".trow-kebab"))
+    assert_no_overlap(rows.locator(".trow-main, .trow-kebab"))
+    sizes = rows.locator(".trow-kebab").evaluate_all(
+        "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
+    assert sizes and all(w == 44 and h == 44 for w, h in sizes), sizes
+    # #74 round 2, #392: nothing on the meta line makes a card taller. An
+    # exception chip sits on the one meta line like every other part, so a
+    # row that wears one is exactly as tall as a plain one; the folder
+    # glyph that used to be the case here left the row for its menu.
+    by_flag = rows.evaluate_all(
+        "els => els.map(e => [!!e.querySelector('.trow-flag'),"
+        " Math.round(e.getBoundingClientRect().height)])")
+    assert any(f for f, _ in by_flag) and any(not f for f, _ in by_flag), by_flag
+    # (the list's first row has no hairline above it, so it is 1px shorter:
+    # the claim is that a chip row is no taller than a plain one)
+    plain_h = {h for f, h in by_flag if not f}
+    assert {h for f, h in by_flag if f} <= plain_h, by_flag
+    # #311: the row is title-over-meta · kebab, level with each other, no
+    # taller than 60px (+ the hairline) with its meta line, the kebab at
+    # the row's right edge
+    main_box = watering.locator(".trow-main").bounding_box()
+    kebab_box = watering.locator(".trow-kebab").bounding_box()
+    row_box = watering.bounding_box()
+    assert main_box and kebab_box and row_box
+    assert row_box["height"] <= 61, row_box
+    row_mid = row_box["y"] + row_box["height"] / 2
+    assert abs((kebab_box["y"] + kebab_box["height"] / 2) - row_mid) <= 8, (kebab_box, row_box)
+    assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
+    assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
+    shot(page, shots / "story-04-triage-9-phone.png")
+
+
+def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
+    """The filter sheet, and the drawer as a full-screen sheet."""
+    # (after the shot: the pill hides while a dialog is up, and a capture
+    # right after one closes can catch the frosted bar mid-repaint)
+    # the filter sheet (#395): every filter and the sort in one place, sort
+    # first; status holds the five statuses + `deferred` (#87) + `blocked`
+    # (#100), the pseudo-values that show the sleeping and the locked tasks
+    # the working views leave out, the URL's one ticked; on the phone the
+    # ticks sit two per line, every one a 44px target, none overlapping
+    sheet = open_filter_sheet(page, "paneBoard")
+    names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
+    assert names == ["sort", "status", "project", "person", "due", "updated"], names
+    status = sheet.locator(".filter-checks[data-name='status']")
+    expect(status.locator("input[name='status']")).to_have_count(7)
+    expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
+    expect(status.locator("input[name='status'][value='blocked']")).to_have_count(1)
+    expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
+    ticks = sheet.locator(".filter-check")
+    assert_min_target(ticks)
+    assert_no_overlap(ticks)
+    lefts = sorted(set(status.locator(".filter-check").evaluate_all(
+        "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
+    assert len(lefts) == 2, lefts                                   # two columns
+    assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
+    # a sheet that outgrows the phone scrolls: its footer ends the sheet
+    # rather than riding pinned over the last rows, where it overlapped a
+    # select's tap area (TOUCH-02, the live walk after #404 — the seed's
+    # sheet fits, so the cause is asserted, not the overlap)
+    assert sheet.locator(".filter-actions").evaluate("el => getComputedStyle(el).position") == "static"
+    assert_no_overlap(sheet.locator(".filter-select, .filter-check, .filter-done"))
+    close_filter_sheet(page)
+
+    # the drawer is a full-screen sheet; the pill is hidden while it is up
+    _trow(page, "Get three quotes", "#paneBoard").locator(".trow-main").tap()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    box = drawer.bounding_box()
+    assert box and box["width"] >= PHONE["width"] - 1 and box["height"] >= PHONE["height"] - 1, box
+    assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "hidden"
+    assert_min_target(drawer.locator(".drawer-close"))
+    assert_min_target(drawer.locator(".field-control:visible"))
+    assert_min_target(drawer.locator(".comment-send"))
+    # the quick moves are two by two on the phone, each a whole target (#394)
+    assert_min_target(drawer.locator(".quick-move"))
+    assert_no_overlap(drawer.locator(".quick-move"))
+    # UX round 2 (#32): the composer keeps the Ctrl+Enter hint; Send stays
+    # on the Description "Edit" tier (ghost, same rendered height).
+    expect(drawer.locator(".comment-input")).to_have_attribute(
+        "placeholder", "Add a comment… (Ctrl+Enter to send)")
+    send_box = drawer.locator(".comment-send").bounding_box()
+    edit_box = drawer.locator(".drawer-tools .button-ghost").first.bounding_box()
+    assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-04-triage-10-phone.png")
+    # …and every field under More fields is a whole target too, once opened
+    open_more_fields(drawer)
+    assert_min_target(drawer.locator(".field-control"))
+    assert_no_horizontal_overflow(page)
+    drawer.locator(".drawer-close").tap()
+    expect(drawer).to_be_hidden()
+    assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
+    return drawer
+
+
+def _phone_snooze_target(page: Page, base: str, shots: Path):
+    """Story 13: the snooze control as a touch target on Today."""
+    # --------------------------------------------- story 13 (#87) ----
+    # The snooze control is a real touch target on the phone — this is the
+    # device where "not today" is most often decided — and its popover
+    # never pushes the page sideways.
+    page.goto(f"{base}/")          # drop the story's ?status=todo first
+    page.locator("nav.tabs .tab[data-tab='today']").tap()
+    expect(page.locator("#paneToday")).to_be_visible()
+    today_row = page.locator("#paneToday .today-group .trow").first
+    expect(today_row).to_be_visible()
+    # the row has no clock any more (#311): snooze lives in the ⋯ menu,
+    # whose kebab is a touch target clear of the open target
+    # (the rows on screen: Later and No date start folded, #393)
+    assert_min_target(page.locator("#paneToday .today-group .trow-kebab:visible"))
+    assert_no_overlap(page.locator("#paneToday .today-group .trow-main:visible, "
+                                   "#paneToday .today-group .trow-kebab:visible"))
+    today_row.locator(".trow-kebab").tap()
+    page.locator(".row-menu [data-action='snooze']").tap()
+    menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
+    expect(menu).to_be_visible()
+    assert_min_target(menu.locator(".snooze-opt"))
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-13-starts-snooze-6-phone.png")
+    return menu
+
+
+def _phone_sleeping_marker(page: Page, context, base: str, shots: Path, drawer, menu) -> None:
+    """The sleeping seed task wears its marker wherever it shows."""
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+
+    # the sleeping seed task wears its marker wherever it still shows
+    page.goto(f"{base}/?status=deferred")
+    page.locator("nav.tabs .tab[data-tab='board']").tap()
+    board_mode(page, "status")
+    page.locator("#paneBoard .board-strip-btn[data-col='todo']").tap()   # it is a todo task
+    sleeping = _trow(page, "Book boiler service", "#paneBoard")
+    expect(sleeping).to_be_visible()
+    expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^\d+ \w{3}$"))
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-13-starts-snooze-7-phone.png")
+
+    # --------------------------------------------- story 25 (#229) ----
+    # "Every [7] weeks" on the phone the PWA lives on: the interval input
+    # is a real touch target with a digit keypad, beside its unit, and the
+    # Repeat composer never pushes the sheet sideways.
+    review = _get(base, "/api/tasks?q=Weekly%20review")["items"][0]
+    task_url = f"{base}/api/tasks/{review['id']}"
+    page.request.patch(task_url, data={"recurrence_anchor": "sat", "recurrence_interval": 7})
+    page.goto(f"{base}/#task/{review['id']}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer).to_be_visible()
+    open_more_fields(drawer)
+    every = drawer.locator("input[data-field='recurrence_interval']")
+    expect(every).to_have_value("7")
+    expect(every).to_have_attribute("inputmode", "numeric")
+    expect(drawer.locator(".field-unit")).to_have_text("weeks")
+    assert_min_target(every)
+    assert_no_overlap(drawer.locator("select[data-field='recurrence'], "
+                                     "input[data-field='recurrence_interval'], "
+                                     "select[data-field='recurrence_anchor']"))
+    every.scroll_into_view_if_needed()
+    assert_no_horizontal_overflow(page)
+    shot(page, shots / "story-25-recurrence-interval-2-phone.png")
+    page.request.patch(task_url, data={"recurrence_anchor": "fri", "recurrence_interval": None})
+    context.close()
+
 
 def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: Path) -> None:
     """390-wide WebKit (iOS-class): the Board's Todo column as the shared rows,
@@ -817,188 +940,10 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         # the ONE shared row (circle + title, the one passive meta line with the
         # project in it, the ⋯ menu — no status select on the row since #311)
         watering = _trow(page, "Fix watering schedule drift", "#paneBoard")
-        expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
-        expect(watering.locator(".trow-due")).to_be_visible()
-        expect(watering).to_have_attribute("data-status", "todo")
-        expect(rows.locator(".trow-status")).to_have_count(0)
-        assert_no_horizontal_overflow(page)
-        # the top strip (#80, #395): the text filter, the filter button, the
-        # Select toggle and the + sit side by side on one line, all at the
-        # touch floor, with effective rectangles that never overlap; pressed,
-        # the toggle says its name in accent-text on the accent tint, 4.5:1
-        # (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
-        strip = page.locator("#paneBoard .filter-q, #paneBoard .filter-open, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
-        tops = strip.evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2))")
-        assert max(tops) - min(tops) <= 2, tops                         # one line
-        assert_min_target(strip)
-        assert_no_overlap(strip)
-        page.locator("#paneBoard [data-select-toggle]").tap()
-        pressed = page.locator("#paneBoard [data-select-toggle][aria-pressed='true'] .strip-label")
-        expect(pressed).to_be_visible()
-        assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
-        page.locator("#paneBoard [data-select-toggle]").tap()
-        expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
-        page.locator("#paneBoard .quick-add-btn").tap()
-        expect(page.locator("#quickAdd")).to_be_visible()
-        assert_min_target(page.locator("#quickAdd .quick-add-input"))
-        page.keyboard.press("Escape")
-        expect(page.locator("#quickAdd")).to_be_hidden()
-        # rows are >=44px tall; a touch screen draws no completion circle
-        # (#350: a swipe right or the drawer's status closes a task), so the
-        # row's one control is the ⋯ kebab, a real 44x44 box that never
-        # overlaps the open target (#311)
-        assert_min_target(rows)
-        expect(rows.locator(".trow-done").first).to_be_hidden()
-        assert_min_target(rows.locator(".trow-kebab"))
-        assert_no_overlap(rows.locator(".trow-main, .trow-kebab"))
-        sizes = rows.locator(".trow-kebab").evaluate_all(
-            "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
-        assert sizes and all(w == 44 and h == 44 for w, h in sizes), sizes
-        # #74 round 2, #392: nothing on the meta line makes a card taller. An
-        # exception chip sits on the one meta line like every other part, so a
-        # row that wears one is exactly as tall as a plain one; the folder
-        # glyph that used to be the case here left the row for its menu.
-        by_flag = rows.evaluate_all(
-            "els => els.map(e => [!!e.querySelector('.trow-flag'),"
-            " Math.round(e.getBoundingClientRect().height)])")
-        assert any(f for f, _ in by_flag) and any(not f for f, _ in by_flag), by_flag
-        # (the list's first row has no hairline above it, so it is 1px shorter:
-        # the claim is that a chip row is no taller than a plain one)
-        plain_h = {h for f, h in by_flag if not f}
-        assert {h for f, h in by_flag if f} <= plain_h, by_flag
-        # #311: the row is title-over-meta · kebab, level with each other, no
-        # taller than 60px (+ the hairline) with its meta line, the kebab at
-        # the row's right edge
-        main_box = watering.locator(".trow-main").bounding_box()
-        kebab_box = watering.locator(".trow-kebab").bounding_box()
-        row_box = watering.bounding_box()
-        assert main_box and kebab_box and row_box
-        assert row_box["height"] <= 61, row_box
-        row_mid = row_box["y"] + row_box["height"] / 2
-        assert abs((kebab_box["y"] + kebab_box["height"] / 2) - row_mid) <= 8, (kebab_box, row_box)
-        assert main_box["x"] + main_box["width"] <= kebab_box["x"] + 1, (main_box, kebab_box)
-        assert abs((kebab_box["x"] + kebab_box["width"]) - (row_box["x"] + row_box["width"])) <= 8, (kebab_box, row_box)
-        shot(page, shots / "story-04-triage-9-phone.png")
-        # (after the shot: the pill hides while a dialog is up, and a capture
-        # right after one closes can catch the frosted bar mid-repaint)
-        # the filter sheet (#395): every filter and the sort in one place, sort
-        # first; status holds the five statuses + `deferred` (#87) + `blocked`
-        # (#100), the pseudo-values that show the sleeping and the locked tasks
-        # the working views leave out, the URL's one ticked; on the phone the
-        # ticks sit two per line, every one a 44px target, none overlapping
-        sheet = open_filter_sheet(page, "paneBoard")
-        names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
-        assert names == ["sort", "status", "project", "person", "due", "updated"], names
-        status = sheet.locator(".filter-checks[data-name='status']")
-        expect(status.locator("input[name='status']")).to_have_count(7)
-        expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
-        expect(status.locator("input[name='status'][value='blocked']")).to_have_count(1)
-        expect(status.locator("input[name='status'][value='todo']")).to_be_checked()
-        ticks = sheet.locator(".filter-check")
-        assert_min_target(ticks)
-        assert_no_overlap(ticks)
-        lefts = sorted(set(status.locator(".filter-check").evaluate_all(
-            "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
-        assert len(lefts) == 2, lefts                                   # two columns
-        assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
-        # a sheet that outgrows the phone scrolls: its footer ends the sheet
-        # rather than riding pinned over the last rows, where it overlapped a
-        # select's tap area (TOUCH-02, the live walk after #404 — the seed's
-        # sheet fits, so the cause is asserted, not the overlap)
-        assert sheet.locator(".filter-actions").evaluate("el => getComputedStyle(el).position") == "static"
-        assert_no_overlap(sheet.locator(".filter-select, .filter-check, .filter-done"))
-        close_filter_sheet(page)
-
-        # the drawer is a full-screen sheet; the pill is hidden while it is up
-        _trow(page, "Get three quotes", "#paneBoard").locator(".trow-main").tap()
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        box = drawer.bounding_box()
-        assert box and box["width"] >= PHONE["width"] - 1 and box["height"] >= PHONE["height"] - 1, box
-        assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "hidden"
-        assert_min_target(drawer.locator(".drawer-close"))
-        assert_min_target(drawer.locator(".field-control:visible"))
-        assert_min_target(drawer.locator(".comment-send"))
-        # the quick moves are two by two on the phone, each a whole target (#394)
-        assert_min_target(drawer.locator(".quick-move"))
-        assert_no_overlap(drawer.locator(".quick-move"))
-        # UX round 2 (#32): the composer keeps the Ctrl+Enter hint; Send stays
-        # on the Description "Edit" tier (ghost, same rendered height).
-        expect(drawer.locator(".comment-input")).to_have_attribute(
-            "placeholder", "Add a comment… (Ctrl+Enter to send)")
-        send_box = drawer.locator(".comment-send").bounding_box()
-        edit_box = drawer.locator(".drawer-tools .button-ghost").first.bounding_box()
-        assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-04-triage-10-phone.png")
-        # …and every field under More fields is a whole target too, once opened
-        open_more_fields(drawer)
-        assert_min_target(drawer.locator(".field-control"))
-        assert_no_horizontal_overflow(page)
-        drawer.locator(".drawer-close").tap()
-        expect(drawer).to_be_hidden()
-        assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
-
-        # --------------------------------------------- story 13 (#87) ----
-        # The snooze control is a real touch target on the phone — this is the
-        # device where "not today" is most often decided — and its popover
-        # never pushes the page sideways.
-        page.goto(f"{base}/")          # drop the story's ?status=todo first
-        page.locator("nav.tabs .tab[data-tab='today']").tap()
-        expect(page.locator("#paneToday")).to_be_visible()
-        today_row = page.locator("#paneToday .today-group .trow").first
-        expect(today_row).to_be_visible()
-        # the row has no clock any more (#311): snooze lives in the ⋯ menu,
-        # whose kebab is a touch target clear of the open target
-        # (the rows on screen: Later and No date start folded, #393)
-        assert_min_target(page.locator("#paneToday .today-group .trow-kebab:visible"))
-        assert_no_overlap(page.locator("#paneToday .today-group .trow-main:visible, "
-                                       "#paneToday .today-group .trow-kebab:visible"))
-        today_row.locator(".trow-kebab").tap()
-        page.locator(".row-menu [data-action='snooze']").tap()
-        menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
-        expect(menu).to_be_visible()
-        assert_min_target(menu.locator(".snooze-opt"))
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-13-starts-snooze-6-phone.png")
+        _phone_board_rows(page, shots, rows, watering)
+        drawer = _phone_filter_sheet_and_drawer(page, shots)
+        menu = _phone_snooze_target(page, base, shots)
         surface(page, "today.date-sheet")
-        page.keyboard.press("Escape")
-        expect(menu).to_be_hidden()
-
-        # the sleeping seed task wears its marker wherever it still shows
-        page.goto(f"{base}/?status=deferred")
-        page.locator("nav.tabs .tab[data-tab='board']").tap()
-        board_mode(page, "status")
-        page.locator("#paneBoard .board-strip-btn[data-col='todo']").tap()   # it is a todo task
-        sleeping = _trow(page, "Book boiler service", "#paneBoard")
-        expect(sleeping).to_be_visible()
-        expect(sleeping.locator(".trow-starts")).to_have_text(re.compile(r"^\d+ \w{3}$"))
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-13-starts-snooze-7-phone.png")
-
-        # --------------------------------------------- story 25 (#229) ----
-        # "Every [7] weeks" on the phone the PWA lives on: the interval input
-        # is a real touch target with a digit keypad, beside its unit, and the
-        # Repeat composer never pushes the sheet sideways.
-        review = _get(base, "/api/tasks?q=Weekly%20review")["items"][0]
-        task_url = f"{base}/api/tasks/{review['id']}"
-        page.request.patch(task_url, data={"recurrence_anchor": "sat", "recurrence_interval": 7})
-        page.goto(f"{base}/#task/{review['id']}")
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        open_more_fields(drawer)
-        every = drawer.locator("input[data-field='recurrence_interval']")
-        expect(every).to_have_value("7")
-        expect(every).to_have_attribute("inputmode", "numeric")
-        expect(drawer.locator(".field-unit")).to_have_text("weeks")
-        assert_min_target(every)
-        assert_no_overlap(drawer.locator("select[data-field='recurrence'], "
-                                         "input[data-field='recurrence_interval'], "
-                                         "select[data-field='recurrence_anchor']"))
-        every.scroll_into_view_if_needed()
-        assert_no_horizontal_overflow(page)
-        shot(page, shots / "story-25-recurrence-interval-2-phone.png")
-        page.request.patch(task_url, data={"recurrence_anchor": "fri", "recurrence_interval": None})
-        context.close()
+        _phone_sleeping_marker(page, context, base, shots, drawer, menu)
     finally:
         wk.close()

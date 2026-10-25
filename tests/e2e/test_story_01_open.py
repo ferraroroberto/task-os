@@ -31,13 +31,9 @@ from tests.e2e._geometry import (
     assert_no_overlap,
 )
 from tests.e2e._surface import surface
+from tests.e2e._ui import assert_control_boundaries, close_settings_sheet, open_settings_sheet
 from tests.e2e._uniform import assert_code_off_canvas_subtle
-from tests.e2e.conftest import (
-    assert_control_boundaries,
-    close_settings_sheet,
-    open_settings_sheet,
-    shot,
-)
+from tests.e2e.conftest import shot
 
 # Four destinations: the Table tab (grid and Tree) went in #350, the Archive
 # tab into Settings → Email archiving in #397, and Time arrived third in #457.
