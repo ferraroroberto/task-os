@@ -12,7 +12,7 @@
  * (search.js — one box over tasks · folders · emails · issues, `?q=` in the
  * URL while that tab is active, the shared filters applied to task hits) and
  * the command palette (palette.js — Ctrl+K / ⌘K anywhere; commands in
- * `paletteCommands()` below). Every write funnels through `patchTask` /
+ * js/app/commands.js). Every write funnels through `patchTask` /
  * `moveTask` / the drawer, then `refreshAll()` re-fetches and re-renders, so
  * the views never drift.
  *
@@ -27,6 +27,12 @@
  * #settings/<sheet> links), `state`, and the shared calls the drawer and the
  * palette also make — `syncIssues()` among them.
  *
+ * This file is the composer: it builds the `app` its parts share (the
+ * state, the elements, the mounted handles) and binds each part's exports
+ * onto it. Each part lives in js/app/<part>.js and takes `app` as its first
+ * argument: writes · journal · head · settings (the pane, not its cards) ·
+ * issues · commands.
+ *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
  */
@@ -35,22 +41,18 @@
 
 import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
-import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
-import { buildReadoutText } from './_vendored/page-foot/page-foot.js';
 import { initUsageLog } from './_vendored/usage-log/usage-log.js';
-import { actionById, createActions, failedOf, failureText } from './actions.js';
+import { createActions } from './actions.js';
 import { api, qs } from './api.js';
 import { mountArchive } from './archive.js';
-import { boardHeadParts, mountBoard } from './board.js';
+import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
-import { confirmDialog } from './confirm.js';
 import { createDrawer } from './drawer.js';
 import {
-  DEFAULT_FILTERS, WHOSE_KEY, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
+  WHOSE_KEY, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
   ownerOf, storedWhose,
 } from './filters.js';
-import { addDays, STATUSES, todayISO } from './format.js';
-import { renderJournal } from './journal.js';
+import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
 import { flattenOpen, parentTargets } from './parentpick.js';
 import { createPalette } from './palette.js';
@@ -64,20 +66,21 @@ import { mountSettings } from './settings.js';
 import { mountTime } from './time.js';
 import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
-import { headLine, renderToday } from './today.js';
+import { renderToday } from './today.js';
+import * as commands from './js/app/commands.js';
+import * as head from './js/app/head.js';
+import * as issues from './js/app/issues.js';
+import * as journal from './js/app/journal.js';
+import { JOURNAL_HASH } from './js/app/journal.js';
+import * as settingsPane from './js/app/settings.js';
+import { SETTINGS_HASH, SETTINGS_SHEET_HASH } from './js/app/settings.js';
+import * as writes from './js/app/writes.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
 // What the Table tab (grid and Tree) remembered once. A
 // stored `table` / `tree` tab needs nothing: the nav falls back to Today.
 const RETIRED_KEYS = ['task-os.tableView', 'task-os.tree.collapsed'];
-// Settings is a pane with no tab: the header gear opens it, `#settings`
-// keeps it across a reload, and `#settings/<sheet>` has one row's sheet open
-// over it — a row press pushes it, so Back closes the sheet.
-const SETTINGS_HASH = '#settings';
-const SETTINGS_SHEET_HASH = /^#settings\/([a-z]+)$/;
-// The journal's hash — `#journal`, or `#journal/task/<id>` with the drawer open on it.
-const JOURNAL_HASH = /^#journal(\/|$)/;
 const JOURNAL_HIDES = ['status', 'due', 'updated', 'sort'];
 
 const els = {
@@ -169,6 +172,40 @@ const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js
 const whoses = {};        // tab → its Mine · Everyone switch (Today · Board only, two or more members)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection
+
+// What the js/app/ parts share: the state, the looked-up elements, the
+// handles boot() mounts (read through getters, so a part sees the live one)
+// and the calls they make back into this file. Every function a part exports
+// is bound onto it below, so `app.openJournal()` is the one way to reach it.
+const app = {
+  state: state,
+  els: els,
+  usage: usage,
+  filterCards: filterCards,
+  get nav() { return nav; },
+  get drawer() { return drawer; },
+  get search() { return search; },
+  get time() { return time; },
+  get settings() { return settings; },
+  get archive() { return archive; },
+  get keys() { return keys; },
+  get actions() { return actions; },
+  get menus() { return menus; },
+  get quickAdd() { return quickAdd; },
+  refreshAll: refreshAll,
+  renderBoardPane: renderBoardPane,
+  indexSuggestions: indexSuggestions,
+  openTask: openTask,
+  closeTask: closeTask,
+  whoseOwner: whoseOwner,
+  dropPreselected: dropPreselected,
+  onFilterChange: onFilterChange,
+};
+[commands, head, issues, journal, settingsPane, writes].forEach(function (part) {
+  Object.keys(part).forEach(function (name) {
+    if (typeof part[name] === 'function') app[name] = part[name].bind(null, app);
+  });
+});
 
 // ------------------------------------------------------------------ theme
 function wireTheme() {
@@ -325,7 +362,7 @@ async function refreshAll() {
       state.projects = [];
       renderNoTasks();
       state.headNote = 'No tasks yet';
-      renderHeadStatus();
+      app.renderHeadStatus();
       return;
     }
     state.headNote = null;
@@ -336,196 +373,12 @@ async function refreshAll() {
     // Search rows are drawn from the answer it cached, not from `state.items`:
     // re-read the query so a completed / re-dated hit does not snap back.
     if (search) search.rerun();
-    if (state.journal.open) refreshJournal();
+    if (state.journal.open) app.refreshJournal();
   } catch (err) {
     state.headNote = 'Server unreachable';
-    renderHeadStatus();
+    app.renderHeadStatus();
     toast(err.message || 'Could not load tasks', 'error');
   }
-}
-
-async function triageInbox() {
-  if (state.triaging) return;
-  state.triaging = true;
-  renderBoardPane();
-  try {
-    const result = await api('/api/ai/triage', { method: 'POST', body: {} });
-    indexSuggestions(result.items);
-    toast('AI triage: ' + result.items.length + ' suggestion(s) staged', 'success');
-  } catch (err) {
-    toast(err.message || 'AI triage failed', 'error');
-    try {
-      const status = await api('/api/status');
-      state.ai = status.ai || state.ai;
-    } catch (_) { /* the triage error is already visible */ }
-    throw err;
-  } finally {
-    state.triaging = false;
-    renderBoardPane();
-  }
-}
-
-async function acceptAISuggestion(suggestionId) {
-  try {
-    const result = await api('/api/ai/suggestions/' + suggestionId + '/accept', {
-      method: 'POST', body: {},
-    });
-    delete state.aiSuggestions[result.suggestion.task_id];
-    await refreshAll();
-    toast('Suggestion accepted — moved to Todo', 'success');
-  } catch (err) {
-    toast(err.message || 'Could not accept the suggestion', 'error');
-    throw err;
-  }
-}
-
-async function rejectAISuggestion(suggestionId) {
-  try {
-    const result = await api('/api/ai/suggestions/' + suggestionId + '/reject', {
-      method: 'POST', body: {},
-    });
-    delete state.aiSuggestions[result.task_id];
-    renderBoardPane();
-    toast('Suggestion rejected', 'success');
-  } catch (err) {
-    toast(err.message || 'Could not reject the suggestion', 'error');
-    throw err;
-  }
-}
-
-// ---------------------------------------------------------------- writes
-async function patchTask(id, changes) {
-  try {
-    await api('/api/tasks/' + id, { method: 'PATCH', body: changes });
-  } catch (err) {
-    toast(err.message || 'Update failed', 'error');
-    throw err;
-  }
-  await refreshAll();
-  if (drawer.currentId() === id) drawer.refresh();
-}
-
-/** The row's status select (and the drawer's). Completing goes through the
- *  one action runner — the same write, toast and Undo as the `e` key:
- *  "complete" (recurring tasks only — see rows.js::statusOptions) rolls the
- *  due one cadence forward instead of closing, and "done" on a task that does
- *  not recur is the same close. "done" on a recurring task stays a plain
- *  PATCH — closed for good, off the series — as does every other
- *  status. */
-async function setStatus(id, status) {
-  const task = status === 'complete' || status === 'done' ? await resolveTask(id) : null;
-  const completes = status === 'complete' || (status === 'done' && task && !task.recurrence);
-  if (!completes) return patchTask(id, { status: status });
-  if (!task) {
-    toast('That task is no longer on the list', 'error');
-    throw new Error('task not found');
-  }
-  // Another row action still writing: refuse rather than queue, so the
-  // select puts its old value back instead of claiming a change.
-  if (!(await actions.run(actionById('complete'), [task]))) throw new Error('busy');
-}
-
-/** A row dropped on a Board week lane: re-dated to the lane's first
- *  day through the one action runner — the date sheet's own Move, so the same
- *  write, toast and Undo, and nothing but `due` (`null` stays the sheet's
- *  "No date", which no lane drops). */
-async function setDue(id, due) {
-  const task = await resolveTask(id);
-  if (!task) {
-    toast('That task is no longer on the list', 'error');
-    throw new Error('task not found');
-  }
-  if (!(await actions.run(actionById('change-date'), [task], due))) throw new Error('busy');
-}
-
-/** Delete every ticked task — POST /api/tasks/bulk/delete, after the
- *  one confirmation names the count, the projects whose children go too and
- *  the synced coding tasks the next sync would bring back. Per-id results as
- *  the bulk change: what failed is named and stays ticked; a clean batch
- *  clears the selection but stays in Select mode. */
-async function bulkDelete() {
-  const ids = selection.selectedIds();
-  if (!ids.length) return;
-  const known = ids.map(function (id) {
-    return state.items.find(function (t) { return t.id === id; });
-  }).filter(Boolean);
-  const projects = known.filter(function (t) { return t.child_count > 0; }).length;
-  const coding = known.filter(function (t) { return t.issue_ref && t.issue_ref.state === 'open'; }).length;
-  const ok = await confirmDialog({
-    title: 'Delete ' + ids.length + ' task' + (ids.length === 1 ? '' : 's') + '?',
-    lines: [
-      projects
-        ? (projects === 1 ? 'One of them is a project — its' : projects + ' of them are projects — their') + ' child tasks go too.'
-        : null,
-      'This cannot be undone: the tasks, their comments, links and history are removed.',
-    ],
-    warn: coding
-      ? (coding === 1 ? 'One is a synced coding task that' : coding + ' are synced coding tasks that') + ' the next issue sync recreates while the issue stays open. Unlink first, or close the issue.'
-      : null,
-    action: 'Delete',
-  });
-  if (!ok) return;
-  let res;
-  try {
-    res = await api('/api/tasks/bulk/delete', { method: 'POST', body: { ids: ids } });
-  } catch (err) {
-    toast(err.message || 'Delete failed', 'error');
-    throw err;
-  }
-  const failed = failedOf(res.results);
-  if (!failed.length) {
-    toast(res.deleted + ' task' + (res.deleted === 1 ? '' : 's') + ' deleted', 'success');
-    selection.clear();
-  } else {
-    toast(failureText(res.deleted, 'deleted', failed), 'error');
-    selection.keepOnly(new Set(failed.map(function (f) { return f.id; })));
-  }
-  if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) closeTask();
-  await refreshAll();
-}
-
-/** Apply one change to every ticked task — POST /api/tasks/bulk.
- *
- *  The response is per id, because a batch is not all-or-nothing: an id
- *  deleted in another tab 404s while the rest apply. What failed is named in
- *  the toast and stays ticked, so a retry is one click — unless the task is
- *  genuinely gone, which the refresh's prune then drops (there is nothing to
- *  retry). A clean batch clears the selection but stays in Select mode, ready
- *  for the next pick.
- *  `status: 'complete'` carries the recurring-task roll, exactly as the row
- *  select's option does — the server owns what it means per task. */
-async function bulkApply(changes) {
-  const ids = selection.selectedIds();
-  if (!ids.length) return;
-  let res;
-  try {
-    res = await api('/api/tasks/bulk', { method: 'POST', body: Object.assign({ ids: ids }, changes) });
-  } catch (err) {
-    toast(err.message || 'Bulk change failed', 'error');
-    throw err;
-  }
-  const failed = failedOf(res.results);
-  if (!failed.length) {
-    toast(res.updated + ' task' + (res.updated === 1 ? '' : 's') + ' updated', 'success');
-    selection.clear();
-  } else {
-    toast(failureText(res.updated, 'updated', failed), 'error');
-    selection.keepOnly(new Set(failed.map(function (f) { return f.id; })));
-  }
-  await refreshAll();
-  if (drawer.currentId() != null && ids.indexOf(drawer.currentId()) >= 0) drawer.refresh();
-  return res;
-}
-
-/** The task behind a row, for the keymap: the summary already on screen
- *  when there is one, else a fetch — a Search hit can be a task outside the
- *  filtered list, and undo needs that task's real prior values, not a guess. */
-async function resolveTask(id) {
-  const n = Number(id);
-  const local = state.items.concat(state.journal.items)
-    .find(function (t) { return t.id === n; });
-  if (local) return local;
-  try { return await api('/api/tasks/' + n); } catch (_) { return null; }
 }
 
 /** What the list views show: the filtered list — minus the closed tasks that
@@ -589,18 +442,6 @@ function renderWhose(tab, host) {
   whoses[tab].render(state.filters.whose);
 }
 
-async function moveTask(id, parentId) {
-  try {
-    const t = await api('/api/tasks/' + id + '/move', { method: 'POST', body: { parent_id: parentId } });
-    toast('Moved "' + t.title + '" ' + (parentId == null ? 'to the top level' : 'under ' + (t.breadcrumb.length ? t.breadcrumb[t.breadcrumb.length - 1].title : '#' + parentId)), 'success');
-  } catch (err) {
-    toast(err.message || 'Move failed', 'error');
-    return;
-  }
-  await refreshAll();
-  if (drawer.currentId() === id) drawer.refresh();
-}
-
 // --------------------------------------------------------------- render
 /** The one filter state changed (any tab's card, the palette, a "Clear"). */
 function onFilterChange(next) {
@@ -609,7 +450,7 @@ function onFilterChange(next) {
   loadItems(beginLoad('items')).then(function (applied) {
     if (!applied) return;   // a newer read owns the list now and will render it
     renderAll();
-    if (state.journal.open) refreshJournal();
+    if (state.journal.open) app.refreshJournal();
   }).catch(function (err) { toast(err.message, 'error'); });
 }
 
@@ -701,14 +542,14 @@ function selectOpts() {
 function renderBoardPane() {
   if (!board) {
     board = mountBoard({
-      onOpen: openTask, onStatus: setStatus, onDue: setDue,
+      onOpen: openTask, onStatus: app.setStatus, onDue: app.setDue,
       onToggleSelect: selectHandlers.onToggleSelect, menu: menus.board,
-      onTriage: triageInbox,
-      onAcceptSuggestion: acceptAISuggestion,
-      onRejectSuggestion: rejectAISuggestion,
+      onTriage: app.triageInbox,
+      onAcceptSuggestion: app.acceptAISuggestion,
+      onRejectSuggestion: app.rejectAISuggestion,
       onAdd: addTask,
       // Week · Status changes what the lanes hold, so the header line follows.
-      onModeChange: function () { menus.board.endRender(); renderHeadStatus(); },
+      onModeChange: function () { menus.board.endRender(); app.renderHeadStatus(); },
     }, els.boardBar);
   }
   els.boardBar.hidden = false;
@@ -719,280 +560,21 @@ function renderBoardPane() {
     ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
   }, selectOpts()));
   menus.board.endRender();
-  renderHeadStatus();
+  app.renderHeadStatus();
 }
 
 function renderTodayPane() {
   renderWhose('today', els.todayWhose);
   renderScope('today', els.todayScope);
   state.todayCounts = renderToday(els.todayHost, todayItems(), {
-    onOpen: openTask, onStatus: setStatus,
+    onOpen: openTask, onStatus: app.setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
     sort: state.filters.sort, query: state.filters.q,
     calendar: state.calendar,
   }, selectOpts()));
   menus.today.endRender();
-  renderHeadStatus();
-}
-
-// ---------------------------------------------------------------- journal
-/** The done journal — journal.js draws it; this owns its window and
- *  its two reads: the page (closed tasks in the window, the API's done window
- *  orders them newest closing first) and the older-probe (one row before the
- *  window, if any). `older` stays null while the probe is unanswered — an
- *  unknown keeps the "week before" button; the end of the journal is only
- *  ever stated when the server said so. */
-function journalWindow() {
-  const to = todayISO();
-  return { from: addDays(to, -(7 * state.journal.weeks - 1)), to: to };
-}
-
-function journalParams() {
-  const f = state.filters;
-  return {
-    status: state.journal.cancelled ? ['done', 'cancelled'] : ['done'],
-    owner: whoseOwner() || undefined,
-    project: f.project || undefined,
-    person: f.person.length ? f.person : undefined,
-    q: f.q || undefined,
-  };
-}
-
-async function loadJournal() {
-  const w = journalWindow();
-  const base = journalParams();
-  const before = addDays(w.from, -1);
-  const [page, probe] = await Promise.all([
-    api('/api/tasks' + qs(Object.assign({}, base, { done_from: w.from, done_to: w.to }))),
-    api('/api/tasks' + qs(Object.assign({}, base, { done_to: before, limit: 1 })))
-      .catch(function () { return null; }),
-  ]);
-  state.journal.items = page.items || [];
-  state.journal.older = probe ? probe.count > 0 : null;
-}
-
-function renderJournalPane() {
-  const w = journalWindow();
-  renderJournal(els.journalHost, state.journal.items,
-    { onOpen: openTask, onStatus: setStatus, menu: menus.journal },
-    {
-      from: w.from, weeks: state.journal.weeks, hasOlder: state.journal.older, cancelled: state.journal.cancelled,
-      onOlder: function () { state.journal.weeks += 1; refreshJournal(); },
-      onCancelled: function (on) { state.journal.cancelled = on; refreshJournal(); },
-    });
-  menus.journal.endRender();
-  if (filterCards.journal) {
-    filterCards.journal.render(state.filters, { projects: state.projects, people: state.people, count: state.journal.items.length });
-  }
-}
-
-function refreshJournal() {
-  return loadJournal().then(renderJournalPane)
-    .catch(function (err) { toast(err.message || 'Could not load the journal', 'error'); });
-}
-
-/** Show the journal over whichever pane the nav has up. The pill itself is
- *  untouched (vendored contract); only its lit state comes off the tab whose
- *  pane is now covered, so no tab claims to be showing. Any tab press leaves
- *  (the nav re-shows its pane on its own — see boot()). */
-function openJournal() {
-  hideSettings();
-  if (time) time.hide();
-  if (!state.journal.open) {
-    state.journal.open = true;
-    const navEl = document.querySelector('nav.tabs');
-    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-    navEl.dataset.activeTab = 'journal';
-    document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneJournal; });
-    window.scrollTo(0, 0);
-    setHeadTitle('Done journal', 'i-book-open');
-    usage.trackView('journal');
-    dropPreselected();
-    renderHeadStatus();
-  }
-  if (!JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#journal');
-  return refreshJournal();
-}
-
-function hideJournal() {
-  if (!state.journal.open) return;
-  state.journal.open = false;
-  els.paneJournal.hidden = true;
-  if (JOURNAL_HASH.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
-}
-
-// ------------------------------------------------------------ the header
-/** The header names the view on screen: the vendored home-head's
- *  title is each pane's heading, so every tab opens with one. */
-function setHeadTitle(text, iconId) {
-  els.homeTitleText.textContent = text;
-  els.homeTitleIcon.setAttribute('href', '#' + iconId);
-}
-
-/** The line beside the title names an exception or states a plain fact
- *  (design.md `page-header`). On Today: `headLine` over the counts of
- *  the horizons Today just drew, so the header and the list never disagree —
- *  one text node in one tone (`.status.is-attention`), never per-part spans:
- *  Today's line is always a single sentence, and splitting it across spans
- *  measurably shifts the browser's text shaping at the
- *  word boundary — a sub-pixel kerning drift the screenshot gallery caught
- *  that no eye would. On the Board: `boardHeadParts` over the counts its
- *  lanes were drawn from — Inbox arrivals in the accent, *ahead of* overdue /
- *  due today. On Settings: the mails the last archiving run left for
- *  you, ahead of a failing service even in the danger tone — "needs
- *  you" matters more than severity. Both orderings put importance ahead of
- *  severity, which the vendored renderer's `TONE_RANK` (danger, then
- *  attention — nothing else ranked) cannot reproduce: handing it these two
- *  arrays would have it silently re-sort them by severity and lose that
- *  ordering. So Board and Settings paint their own two parts locally
- *  (`paintParts` below) — sharing the vendored `.head-exception` markup/CSS
- *  and its `HEAD_MAX_PARTS` cap, short of the one piece that needs
- *  project-scaffolding's say: ranking by the caller's own importance, not
- *  just severity (and an 'accent' entry in `TONE_RANK` for the Board's own
- *  case). The open count is not repeated here: it is the filter field's
- *  placeholder. The other views name their own exceptions in their redesign
- *  steps; until then their line is empty rather than a count. */
-function renderHeadStatus() {
-  const el = els.homeHeadStatus;
-  let text = '';
-  let attention = false;
-  let parts = null;
-  const onPane = !state.settingsOpen && !state.journal.open;
-  if (state.headNote) text = state.headNote;
-  else if (state.tab === 'today' && onPane && state.todayCounts) {
-    const line = headLine(state.todayCounts);
-    text = line.text;
-    attention = line.attention;
-  } else if (state.tab === 'board' && onPane && state.boardCounts) {
-    parts = boardHeadParts(state.boardCounts);
-  } else if (state.tab === 'time' && onPane && time) {
-    text = time.headText();
-  } else if (state.settingsOpen) {
-    parts = settingsHeadParts();
-  }
-  el.classList.toggle('is-attention', attention);
-  if (!parts) { el.textContent = text; return; }
-  paintParts(el, parts);
-}
-
-/** Paint an already-ordered, already-capped `{text, tone}[]` with the
- *  vendored home-head markup (`.head-exception[data-tone]`) but without its
- *  tone-ranked sort — see `renderHeadStatus` above for why Board and Settings
- *  cannot use the vendored sort itself. */
-function paintParts(el, parts) {
-  if (!parts.length) { el.textContent = ''; delete el.dataset.tone; return; }
-  el.replaceChildren();
-  parts.forEach(function (part, i) {
-    if (i) el.append(' · ');
-    const span = document.createElement('span');
-    span.className = 'head-exception';
-    span.dataset.tone = part.tone;
-    span.textContent = part.text;
-    el.appendChild(span);
-  });
-}
-
-/** The Settings line's parts: the archive's "needs you" first — the
- *  one exception that asks for a hand rather than a fix — then settings.js's
- *  own (failing services, or the plain count), at most `HEAD_MAX_PARTS`. */
-function settingsHeadParts() {
-  const own = settings.headParts();
-  const needs = archiveNeedsYou();
-  if (!needs) return own;
-  // An exception line names exceptions only: the plain count yields to it.
-  return [{ text: needs + (needs === 1 ? ' mail needs' : ' mails need') + ' you', tone: 'attention' }]
-    .concat(own.filter(function (p) { return p.tone !== 'muted'; })).slice(0, HEAD_MAX_PARTS);
-}
-
-/** …a tab's name and glyph, read off its own nav button (one source). */
-function setHeadTitleFromTab(tab) {
-  const btn = document.querySelector('nav.tabs .tab[data-tab="' + tab + '"]');
-  if (!btn) return;
-  setHeadTitle(btn.querySelector('.tab-label').textContent, btn.querySelector('use').getAttribute('href').slice(1));
-}
-
-// ------------------------------------------------------------- settings
-/** Show the Settings pane over whichever pane the nav has up. Settings
- *  is no tab — five destinations is the pill's ceiling (design.md) — but the
- *  header gear, in the journal's shape: the pill's lit tab comes off, any tab
- *  press leaves (the nav re-shows its own pane, onChange hides this one), and
- *  `#settings` keeps it across a reload. */
-function openSettings() {
-  hideJournal();
-  // One detail beside the list at a time: Settings has its own.
-  if (drawer.currentId() != null) closeTask();
-  if (!state.settingsOpen) {
-    state.settingsOpen = true;
-    const navEl = document.querySelector('nav.tabs');
-    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-    navEl.dataset.activeTab = 'settings';
-    document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== els.paneSettings; });
-    els.settingsBtn.setAttribute('aria-current', 'page');
-    setHeadTitle('Settings', 'i-settings');
-    usage.trackView('settings');
-    dropPreselected();
-    // Its poll stops under Settings, and its two Settings rows read its meta.
-    if (time) { time.hide(); time.settingsShown(); }
-    renderHeadStatus();
-    const scroller = document.querySelector('.app');
-    if (scroller) scroller.scrollTop = 0;
-    window.scrollTo(0, 0);
-  }
-  if (location.hash !== SETTINGS_HASH && !SETTINGS_SHEET_HASH.test(location.hash)) {
-    history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
-  }
-  settings.refreshStatus();
-  fetchIssuesStatus();
-  settings.refreshSearchStatus();
-}
-
-/** A `#settings` (or Settings card) / `#journal` hash with its pane not open
- *  yet: boot opens it at its end, unless a tab press came first. */
-function dropPendingPaneHash() {
-  const h = location.hash;
-  if (h === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(h) || JOURNAL_HASH.test(h)) {
-    history.replaceState(null, '', location.pathname + location.search);
-  }
-}
-
-function hideSettings() {
-  if (!state.settingsOpen) return;
-  state.settingsOpen = false;
-  settings.hideSheet();
-  els.paneSettings.hidden = true;
-  els.settingsBtn.removeAttribute('aria-current');
-  if (location.hash === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(location.hash)) {
-    history.replaceState(null, '', location.pathname + location.search);
-  }
-}
-
-/** A Settings row was pressed (or the palette asked): Settings with that
- *  row's sheet up, as `#settings/<key>` — pushed, so Back closes the sheet. */
-function openSettingsSheet(key) {
-  const hash = '#settings/' + key;
-  if (location.hash !== hash) history.pushState(null, '', location.pathname + location.search + hash);
-  showSettingsSheet(key);
-}
-
-/** …and what `#settings/<key>` shows, however it arrived. The Email
- *  archiving sheet reads its runs as it opens, as the Archive tab did. */
-function showSettingsSheet(key) {
-  openSettings();
-  const fresh = settings.currentSheet() !== key;
-  if (!settings.showSheet(key)) return;
-  if (fresh) usage.trackView('settings.' + key);
-  if (fresh && key === 'archive') archive.refresh();
-  if (fresh && key === 'timecats') time.openSheet(key);
-}
-
-/** The sheet's × / Done / Escape: back to the Settings list. */
-function closeSettingsSheet() {
-  if (settings.currentSheet()) usage.trackView('settings');
-  settings.hideSheet();
-  if (SETTINGS_SHEET_HASH.test(location.hash)) {
-    history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
-  }
+  app.renderHeadStatus();
 }
 
 // ---------------------------------------------------------- URL / drawer
@@ -1009,7 +591,7 @@ function hashTaskId() {
 
 function openTask(id) {
   // The task panel takes the sheet's place beside the Settings list.
-  if (settings.currentSheet()) closeSettingsSheet();
+  if (settings.currentSheet()) app.closeSettingsSheet();
   if (hashTaskId() !== id) {
     // inside the journal the hash keeps saying so, or a reload would land on a tab
     const prefix = state.journal.open ? '#journal/task/' : '#task/';
@@ -1055,10 +637,10 @@ function onHashChange() {
     // A row press, Forward, or a link from elsewhere (the folder chip's
     // one-time hint, a "not configured" search row, the team sign-in):
     // Settings with that sheet up (settings.js owns the pane's DOM).
-    showSettingsSheet(sheet[1]);
+    app.showSettingsSheet(sheet[1]);
     return;
   }
-  if (location.hash === SETTINGS_HASH) { openSettings(); settings.hideSheet(); return; }
+  if (location.hash === SETTINGS_HASH) { app.openSettings(); settings.hideSheet(); return; }
   if (location.hash === '#search') {
     // Deep link to the Search tab (?q= carries the query — see boot()).
     nav.setTab('search');
@@ -1069,8 +651,8 @@ function onHashChange() {
   // #journal: open it, or — Back to a hashless URL — leave it and let
   // the nav re-show the tab it still holds.
   const wantsJournal = JOURNAL_HASH.test(location.hash);
-  if (wantsJournal && !state.journal.open) openJournal();
-  else if (!wantsJournal && state.journal.open && id == null) { hideJournal(); nav.setTab(nav.getTab()); }
+  if (wantsJournal && !state.journal.open) app.openJournal();
+  else if (!wantsJournal && state.journal.open && id == null) { app.hideJournal(); nav.setTab(nav.getTab()); }
   if (id == null) { if (drawer.currentId() != null) drawer.close(); return; }
   if (drawer.currentId() !== id) drawer.open(id);
 }
@@ -1102,8 +684,8 @@ function wireSelectMode() {
   [els.boardBulk, els.todayBulk].forEach(function (host) {
     if (!host) return;
     bulkBars.push(mountBulkBar(host, {
-      onApply: bulkApply,
-      onDelete: bulkDelete,
+      onApply: app.bulkApply,
+      onDelete: app.bulkDelete,
       onExit: function () { selection.setActive(false); },
       members: function () { return state.members; },
     }));
@@ -1133,64 +715,6 @@ function addTask(preset) {
   quickAdd.open(preset);
 }
 
-// ---------------------------------------------------------- build identity
-async function fetchVersion() {
-  try {
-    const res = await fetch('/api/version', { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const body = await res.json();
-    els.buildReadout.textContent = buildReadoutText(body.git_sha || 'unknown', body.built_at || '');
-    if (els.settingsSite && body.schema_version != null) {
-      els.settingsSite.textContent = 'version ' + body.schema_version;   // the Database row's value: plain words
-    }
-  } catch (err) {
-    // An unreachable version endpoint is its own visible state, never blank.
-    els.buildReadout.textContent = 'Build: unknown';
-    state.headNote = 'Server unreachable';
-    renderHeadStatus();
-  }
-}
-
-// ------------------------------------------------------------ issue sync
-// The provider status is shared state: the Settings card renders it
-// (settings.js), the drawer and the palette read `state.issues`.
-async function fetchIssuesStatus() {
-  try {
-    state.issues = await api('/api/issues/status');
-  } catch (err) {
-    state.issues = null;
-  }
-  settings.renderIssues(state.issues);
-}
-
-let syncing = null;
-/** One sync pass now; every ↻ in the app funnels here (Settings, drawer, palette). */
-async function syncIssues() {
-  if (syncing) return syncing;
-  syncing = (async function () {
-    try {
-      const r = await api('/api/issues/sync', { method: 'POST' });
-      const bits = [];
-      if (r.created) bits.push(r.created + ' new');
-      if (r.retitled) bits.push(r.retitled + ' retitled');
-      if (r.reopened) bits.push(r.reopened + ' reopened');
-      if (r.closed) bits.push(r.closed + ' closed');
-      if (r.errors && r.errors.length) bits.push(r.errors.length + ' error(s)');
-      toast('Issues synced: ' + r.listed + ' open' + (bits.length ? ' · ' + bits.join(' · ') : ' · nothing changed'), r.errors && r.errors.length ? 'error' : 'success');
-      await refreshAll();
-      if (drawer.currentId() != null) drawer.refresh();
-      return r;
-    } catch (err) {
-      toast('Issue sync failed: ' + (err.message || 'unknown'), 'error');
-      throw err;
-    } finally {
-      await fetchIssuesStatus();
-      syncing = null;
-    }
-  })();
-  return syncing;
-}
-
 // ---------------------------------------------------- search + palette
 /** Write the Search tab's query into ?q= (only while that tab is showing — the
  *  strip's text field owns ?q= on the other tabs). */
@@ -1200,80 +724,6 @@ function syncSearchUrl(q) {
   if (q) p.set('q', q); else p.delete('q');
   const s = p.toString();
   history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + location.hash);
-}
-
-/** Emit the taskos:// opener link of the task open in the drawer (a click on
- *  the same chip the drawer carries, so the one-time opener hint applies). */
-function openFolderOfCurrentTask() {
-  const id = drawer.currentId();
-  if (id == null) { toast('Open a task first', 'error'); return; }
-  const chip = els.drawer.querySelector('.drawer-folder a.chip-folder');
-  if (!chip) { toast('The open task has no folder', 'error'); return; }
-  chip.click();
-}
-
-/** How many mails the last archiving run left for a human, or why the
- *  tab has nothing to show. `null` state = not established, never "off". */
-function archiveNeedsYou() {
-  const last = state.archive && state.archive.last_run;
-  return last ? Number(last.needs_review || 0) : 0;
-}
-
-function archiveHint() {
-  if (!state.archive) return 'archiver state unknown';
-  if (!state.archive.configured) return state.archive.reason || 'not configured';
-  if (state.archive.running) return 'a run is in progress';
-  const needs = archiveNeedsYou();
-  return needs ? needs + ' mail(s) from the last run need you' : 'file the Outlook Inbox in one run';
-}
-
-/** The palette's command list — built per open so hints reflect the moment. */
-function paletteCommands() {
-  const go = function (tab) { return function () { nav.setTab(tab); if (tab === 'search' && search) search.focus(); }; };
-  const cmds = [
-    { id: 'new-task', label: 'New task', hint: 'the quick-add dialog', icon: 'plus', run: function () {
-      if (quickAdd) quickAdd.open();
-    } },
-    // The row keys, each showing its key — the palette is where a
-    // shortcut is discovered. Top of the list while a row is focused or
-    // ticked, because acting on it is then the likeliest intent; otherwise
-    // they are still listed (that is the discovery), just under the places
-    // you can actually go right now.
-    ...(keys && keys.hasTarget() ? keys.commands() : []),
-    { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
-    { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
-    { id: 'go-time', label: 'Go to Time', icon: 'timer', run: go('time') },
-    // The Archive tab: Settings → Email archiving now, one command away still.
-    { id: 'go-archive', label: 'Go to Archive', hint: archiveHint(), icon: 'archive', run: function () { openSettingsSheet('archive'); } },
-    { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },
-    { id: 'go-settings', label: 'Go to Settings', icon: 'settings', run: openSettings },
-    { id: 'go-journal', label: 'Journal', hint: 'what got done, by day', icon: 'book-open', run: openJournal },
-    ...(keys && !keys.hasTarget() ? keys.commands() : []),
-  ];
-  STATUSES.forEach(function (st) {
-    cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
-      onFilterChange(Object.assign({}, state.filters, { status: [st] }));
-    } });
-  });
-  cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {
-    onFilterChange(Object.assign({}, DEFAULT_FILTERS, { scope: state.filters.scope, whose: state.filters.whose }));
-  } });
-  cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: state.issues && state.issues.enabled ? 'one pass now (' + state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return syncIssues(); } });
-  cmds.push({ id: 'reindex-folders', label: 'Rescan folders', hint: 'refresh the folder index now', icon: 'folder', run: async function () {
-    try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); settings.refreshStatus(); }
-    catch (err) { toast(err.message || 'Reindex failed', 'error'); }
-  } });
-  cmds.push({ id: 'export-mirror', label: 'Export mirror', hint: 'every task to mirror.dir now', icon: 'copy', run: async function () {
-    try { const r = await api('/api/mirror/export', { method: 'POST', body: {} }); toast('Mirror: ' + r.written + ' written, ' + r.removed + ' removed', 'success'); }
-    catch (err) { toast(err.message || 'Export failed', 'error'); }
-  } });
-  cmds.push({ id: 'open-folder', label: 'Open folder of current task', hint: drawer.currentId() != null ? 'task #' + drawer.currentId() : 'no task open', icon: 'folder', run: openFolderOfCurrentTask });
-  cmds.push({ id: 'toggle-theme', label: 'Toggle theme', hint: document.documentElement.dataset.theme === 'dark' ? 'to light' : 'to dark', icon: 'sun', run: function () { els.themeToggle.click(); } });
-  cmds.push({ id: 'sign-out', label: 'Sign out', hint: 'this device (token cookie)', icon: 'x', run: async function () {
-    try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
-    location.assign('/login');
-  } });
-  return cmds;
 }
 
 /** The one row-action runner: the keymap, the status select and the
@@ -1304,7 +754,7 @@ function wireActions() {
 function wireKeys() {
   keys = mountKeys(els.keysHelp, {
     actions: actions,
-    resolveTask: resolveTask,
+    resolveTask: app.resolveTask,
     // A task you opened owns the keys. The one desktop Today opened by
     // itself does not, unless the focus is in it: else the keymap would be off
     // on the landing tab from the first paint.
@@ -1316,7 +766,7 @@ function wireKeys() {
 }
 
 function wirePalette() {
-  palette = createPalette(els.palette, { commands: paletteCommands, onOpenTask: openTask });
+  palette = createPalette(els.palette, { commands: app.paletteCommands, onOpenTask: openTask });
   document.addEventListener('keydown', function (ev) {
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === 'k' || ev.key === 'K')) {
       ev.preventDefault();
@@ -1335,10 +785,10 @@ function wireDrawer() {
     members: function () { return state.members; },
     parentTargets: function (id) { return parentTargets(state.tree, id); },
     allTasks: function () { return state.taskIndex; },
-    onMove: moveTask,
-    onStatus: setStatus,
+    onMove: app.moveTask,
+    onStatus: app.setStatus,
     issues: function () { return state.issues; },
-    onSyncIssues: syncIssues,
+    onSyncIssues: app.syncIssues,
   });
 }
 
@@ -1346,14 +796,14 @@ function wireDrawer() {
  *  sheet its run and report. */
 function wireSettings() {
   settings = mountSettings({
-    onSyncIssues: syncIssues,
+    onSyncIssues: app.syncIssues,
     // The phone's way into the palette: Ctrl+K needs a hardware keyboard.
     onOpenPalette: function () { palette.open(''); },
     // Row actions: a row's menu reads its list when the row is drawn,
     // so a new choice redraws the lists that are up.
     onRowActions: function () {
       if (state.total) renderAll();
-      if (state.journal.open) renderJournalPane();
+      if (state.journal.open) app.renderJournalPane();
     },
     onSearchStatus: function () { if (search) search.reloadStatus(); },
     // New captured tasks land in Inbox, so the views behind Settings are stale
@@ -1367,9 +817,9 @@ function wireSettings() {
     // resumes polling it.
     onArchiveRun: function () { if (archive) archive.refresh(); },
     // A row's word changed: the Settings header line is read off them.
-    onHead: renderHeadStatus,
-    onOpenSheet: openSettingsSheet,
-    onCloseSheet: closeSettingsSheet,
+    onHead: app.renderHeadStatus,
+    onOpenSheet: app.openSettingsSheet,
+    onCloseSheet: app.closeSettingsSheet,
   });
   // The Email archiving sheet's run and report.
   archive = mountArchive({
@@ -1397,7 +847,7 @@ function wireEscape() {
     // an open dialog (palette, quick-add, the keys card, a confirmation) owns
     // Escape natively — it must not also close the drawer underneath
     if (document.querySelector('dialog[open]')) return;
-    if (settings.currentSheet()) closeSettingsSheet();
+    if (settings.currentSheet()) app.closeSettingsSheet();
     else if (drawer.currentId() != null) closeTask();
     else if (selection.isActive()) selection.setActive(false);
   });
@@ -1424,27 +874,27 @@ async function boot() {
   let searchQ = '';
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
   // Before the nav: its first onChange restores a stored tab, Time among them.
-  time = mountTime({ onHead: renderHeadStatus });
+  time = mountTime({ onHead: app.renderHeadStatus });
   nav = initNavTabs({
     storageKey: TAB_KEY,
     defaultTab: 'today',
     onChange: function (tab) {
       state.tab = tab;
       usage.trackView(tab);
-      setHeadTitleFromTab(tab);
-      hideJournal();   // a tab press is how the journal is left; the nav re-showed its pane
-      hideSettings();  // …and Settings, the same way
+      app.setHeadTitleFromTab(tab);
+      app.hideJournal();   // a tab press is how the journal is left; the nav re-showed its pane
+      app.hideSettings();  // …and Settings, the same way
       // …even before they have opened: boot only opens them at its end,
       // so a tab pressed while it loads would otherwise be covered again by the
       // `#settings` / `#journal` hash it left behind. `nav` is still null for
       // the init call that restores the stored tab, which must keep the hash.
-      if (nav) dropPendingPaneHash();
+      if (nav) app.dropPendingPaneHash();
       if (tab === 'board' && board) board.show();
       if (tab === 'time') time.show();
       else time.hide();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
-      renderHeadStatus();
+      app.renderHeadStatus();
       if (!nav) return;   // the init call restoring the stored tab: boot preselects at its end
       if (tab === 'today') preselectToday();
       else dropPreselected();
@@ -1458,14 +908,14 @@ async function boot() {
   if (storedTab === 'archive' && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#settings/archive');
   // Pressed while Settings is up, it re-reads the cards — what tapping the
   // Settings tab used to do.
-  els.settingsBtn.addEventListener('click', openSettings);
+  els.settingsBtn.addEventListener('click', app.openSettings);
   wireQuickAdd();
   wireSelectMode();
   search = mountSearch(els.searchBox, els.searchHost, {
     onOpenTask: openTask,
     onQuery: syncSearchUrl,
     filters: function () { return state.filters; },
-    onStatus: setStatus,
+    onStatus: app.setStatus,
     menu: menus.search,
   });
   if (searchQ) search.setQuery(searchQ);
@@ -1477,10 +927,10 @@ async function boot() {
   wireEscape();
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
-  fetchVersion();
+  app.fetchVersion();
   settings.refreshStatus();
   await Promise.all([loadPeople(), loadMembers()]);
-  await Promise.all([refreshAll(), fetchIssuesStatus(), loadStatus()]);
+  await Promise.all([refreshAll(), app.fetchIssuesStatus(), loadStatus()]);
   if (state.total) renderBoardPane();
   onHashChange();
   preselectToday();

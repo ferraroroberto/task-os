@@ -72,12 +72,31 @@ function taskItem(h, onOpenTask) {
   };
 }
 
+/** The dialog's card: one input and the list `paint()` fills. The `#palette`
+ *  shell in index.html stays empty, like every other editor-modal dialog there. */
+const CARD_HTML = `
+  <div class="detail-card palette-card">
+    <div class="palette-input-row">
+      <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+      <input id="paletteInput" class="palette-input" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Jump to a task… or type > for commands" aria-label="Command palette"
+             role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
+      <button type="button" class="icon-button detail-close" aria-label="Close">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
+      </button>
+    </div>
+    <ul id="paletteList" class="palette-list" role="listbox"></ul>
+    <p class="palette-foot muted"><kbd aria-label="Up"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up"></use></svg></kbd><kbd aria-label="Down"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"></use></svg></kbd> move · <kbd>Enter</kbd> run · <kbd>&gt;</kbd> commands · <kbd>Esc</kbd> close</p>
+  </div>
+`;
+
 /**
  * @param {HTMLDialogElement} dialog
  * @param {{commands: () => Array<{id:string,label:string,hint?:string,icon?:string,run:() => any}>,
  *          onOpenTask: (id:number) => void}} opts
  */
 export function createPalette(dialog, opts) {
+  dialog.innerHTML = CARD_HTML;
   const input = dialog.querySelector('#paletteInput');
   const list = dialog.querySelector('#paletteList');
   let items = [];        // [{label, hint, icon, run, kind}]
