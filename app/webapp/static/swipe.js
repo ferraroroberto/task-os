@@ -86,6 +86,33 @@ export function releaseSide(dx, rowWidth, velocity) {
 // ------------------------------------------------------------- binding
 let live = null;   // the one row being swiped; a second pointer is ignored
 
+/** The strip behind a swiping row that names the side's action. */
+function revealEl() {
+  const reveal = document.createElement('span');
+  reveal.className = 'trow-reveal';
+  reveal.setAttribute('aria-hidden', 'true');
+  return reveal;
+}
+
+function setSwipeX(li, px) { li.style.setProperty('--swipe-x', px + 'px'); }
+
+/** A swipe must not also be the tap that opens the row — but only this
+ *  gesture's click, if the browser sends one at all: a later tap is a tap. */
+function swallowNextClick(li) {
+  const swallow = function (e) { e.stopPropagation(); e.preventDefault(); };
+  li.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(function () { li.removeEventListener('click', swallow, { capture: true }); }, 400);
+}
+
+/** A right commit: the row slides out, then `commit()` runs, then `settled()`
+ *  once its promise settles. */
+function slideOut(li, commit, settled) {
+  li.classList.remove('is-swiping');
+  li.classList.add('is-leaving');
+  setSwipeX(li, li.offsetWidth);
+  setTimeout(function () { Promise.resolve(commit()).finally(settled); }, SLIDE_MS);
+}
+
 /**
  * Make one row swipeable.
  * @param {HTMLElement} li
@@ -108,17 +135,12 @@ export function bindSwipe(li, opts) {
   let reveal = null;
   let hold = null;
 
-  function setX(px) { li.style.setProperty('--swipe-x', px + 'px'); }
+  function setX(px) { setSwipeX(li, px); }
 
   function paintReveal(dx) {
     const s = dx > 0 ? 'right' : 'left';
     const act = opts.action(s);
-    if (!reveal) {
-      reveal = document.createElement('span');
-      reveal.className = 'trow-reveal';
-      reveal.setAttribute('aria-hidden', 'true');
-      li.appendChild(reveal);
-    }
+    if (!reveal) reveal = li.appendChild(revealEl());
     if (side !== s) {
       side = s;
       reveal.dataset.side = s;
@@ -185,22 +207,13 @@ export function bindSwipe(li, opts) {
     const dx = ev.clientX - start.x;
     const s = releaseSide(dx, li.offsetWidth, last.vx);
     const act = s ? opts.action(s) : null;
-    // A swipe must not also be the tap that opens the row — but only this
-    // gesture's click, if the browser sends one at all: a later tap is a tap.
-    const swallow = function (e) { e.stopPropagation(); e.preventDefault(); };
-    li.addEventListener('click', swallow, { capture: true, once: true });
-    setTimeout(function () { li.removeEventListener('click', swallow, { capture: true }); }, 400);
+    swallowNextClick(li);
     if (!act) { reset(true); return; }
     if (s === 'right') {
-      li.classList.remove('is-swiping');
-      li.classList.add('is-leaving');
-      setX(li.offsetWidth);
-      setTimeout(function () {
-        Promise.resolve(opts.onCommit('right')).finally(function () {
-          if (li.isConnected) { li.classList.remove('is-leaving'); reset(true); }
-          else if (live === li) live = null;
-        });
-      }, SLIDE_MS);
+      slideOut(li, function () { return opts.onCommit('right'); }, function () {
+        if (li.isConnected) { li.classList.remove('is-leaving'); reset(true); }
+        else if (live === li) live = null;
+      });
       return;
     }
     reset(true);

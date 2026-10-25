@@ -1,17 +1,6 @@
 {
   "version": 1,
   "entries": [
-    {"key": "fn:app/webapp/static/app.js:boot", "lines": 146},
-    {"key": "fn:app/webapp/static/board.js:mountBoard", "lines": 138},
-    {"key": "fn:app/webapp/static/board.js:mountLanes", "lines": 156},
-    {"key": "fn:app/webapp/static/bulkbar.js:mountBulkBar", "lines": 163},
-    {"key": "fn:app/webapp/static/filters.js:mountFilters", "lines": 196},
-    {"key": "fn:app/webapp/static/keys.js:mountKeys", "lines": 267},
-    {"key": "fn:app/webapp/static/palette.js:createPalette", "lines": 139},
-    {"key": "fn:app/webapp/static/swipe.js:bindSwipe", "lines": 112},
-    {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor", "lines": 145},
-    {"key": "fn:app/webapp/static/time-dialogs.js:openEntryEditor.<anonymous>", "lines": 140},
-    {"key": "fn:app/webapp/static/time-settings.js:mountTimeSettings", "lines": 174},
     {"key": "fn:app/webapp/static/voice.js:mountMic", "lines": 239},
     {"key": "fn:tests/e2e/test_story_04_triage.py:_walk_phone_rows_and_drawer_sheet", "lines": 209},
     {"key": "fn:tests/e2e/test_story_04_triage.py:_walk_starts_and_snooze", "lines": 227},
@@ -28,7 +17,7 @@
     {"key": "fn:tests/e2e/test_story_22_voice.py:test_say_the_task", "lines": 202},
     {"key": "fn:tests/e2e/test_story_28_calendar.py:test_today_calendar_lane", "lines": 143},
     {"key": "fn:tests/e2e/test_story_32_time.py:test_track_time_and_compare_shares", "lines": 187},
-    {"key": "size:app/webapp/static/app.js", "lines": 1490},
+    {"key": "size:app/webapp/static/app.js", "lines": 1489},
     {"key": "size:app/webapp/static/index.html", "lines": 1083},
     {"key": "size:tests/e2e/conftest.py", "lines": 1079},
     {"key": "size:tests/e2e/test_story_04_triage.py", "lines": 1004}
