@@ -5,7 +5,7 @@ per-app — it is byte-identical across every fleet tray so a fix made once in t
 scaffold re-propagates everywhere. Everything app-specific (the probe, the
 respawn action, the log path, the toast) is passed in by the caller, never
 hardcoded here, which is what keeps the file identical. Full reasoning + the
-worked wiring pattern: scaffold ``docs/windows-tray.md`` (gotcha #5) +
+worked wiring pattern: scaffold ``docs/windows-tray.md`` (gotcha 5) +
 project-scaffolding#201 / app-launcher#386 / photo-ocr#110.
 
 The tray is the only long-lived process watching the webapp, and it starts that
@@ -34,8 +34,7 @@ field, and this module supplies one primitive for each:
 auto-kill anything: ``on_wedge`` receives the failure count and the *app* decides,
 because "not listening at all" (safe to respawn) and "listening but not answering
 ``/healthz``" (auto-killing could mask the real fault) warrant different actions.
-app-launcher#386 shipped alert-only for exactly that reason; photo-ocr#110 split
-the two. :meth:`HealthWatchdog.rearm` exists for the respawn branch: a handler
+:meth:`HealthWatchdog.rearm` exists for the respawn branch: a handler
 that already acted asks to be re-evaluated next tick instead of waiting forever
 for a recovery a genuinely-dead process will never produce on its own.
 """

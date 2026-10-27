@@ -16,29 +16,29 @@ extra_roots = ["opener"]  # the per-PC folder opener helper: a standalone instal
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
 nav            = { src = "app/webapp/static/_vendored/nav",           sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/nav" }
-icons          = { src = "app/webapp/static/_vendored/icons",         sha = "7d9b824bfc2dd4f3ec8a9d7424208bb36d42c556", dest = "app/webapp/static/_vendored/icons" }
-card           = { src = "app/webapp/static/_vendored/card",          sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/card" }
-button         = { src = "app/webapp/static/_vendored/button",        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/button" }
-modal          = { src = "app/webapp/static/_vendored/modal",         sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/modal" }
-disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/disclosure" }
-empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/empty-state" }
-select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/select-native" }
-switch         = { src = "app/webapp/static/_vendored/switch",        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/switch" }
-home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/home-head" }
-text-size      = { src = "app/webapp/static/_vendored/text-size",      sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/text-size" }
-action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "59ae763c4dea588aef07a66c236ee3e57c8459ac", dest = "app/webapp/static/_vendored/action-row" }
-segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "f52eb75625cbfd8dcef8a71731390a47b795508d", dest = "app/webapp/static/_vendored/segmented" }
+icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
+card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
+button         = { src = "app/webapp/static/_vendored/button",        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/button" }
+modal          = { src = "app/webapp/static/_vendored/modal",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/modal" }
+disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/disclosure" }
+empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/empty-state" }
+select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/select-native" }
+switch         = { src = "app/webapp/static/_vendored/switch",        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/switch" }
+home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/home-head" }
+text-size      = { src = "app/webapp/static/_vendored/text-size",      sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/text-size" }
+action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/action-row" }
+segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/segmented" }
 row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "00311a74ed7a858193e5b83ade533bf94468eb81", dest = "app/webapp/static/_vendored/row-menu" }
-page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/webapp/static/_vendored/page-foot" }
-icon-button    = { src = "app/webapp/static/_vendored/icon-button",   sha = "f52eb75625cbfd8dcef8a71731390a47b795508d", dest = "app/webapp/static/_vendored/icon-button" }
+page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/page-foot" }
+icon-button    = { src = "app/webapp/static/_vendored/icon-button",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icon-button" }
 usage-log      = { src = "app/webapp/static/_vendored/usage-log",     sha = "98cdb1b7727d12a5c233580478e6fae40d98e6f3", dest = "app/webapp/static/_vendored/usage-log" }
-single_instance = { src = "app/tray/single_instance.py",              sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/tray/single_instance.py" }
-tray_watchdog  = { src = "app/tray/watchdog.py",                      sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "app/tray/watchdog.py" }
+single_instance = { src = "app/tray/single_instance.py",              sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/tray/single_instance.py" }
+tray_watchdog  = { src = "app/tray/watchdog.py",                      sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/tray/watchdog.py" }
 e2e_live_guard = { src = "tests/e2e/_e2e_live_guard.py",              sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_e2e_live_guard.py" }
 geometry       = { src = "tests/e2e/_geometry.py",                    sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_geometry.py" }
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_browser_sweep.py" }
 surface_capture = { src = "tests/e2e/_surface.py",                   sha = "5c4d3a7947dae8b3b4a028bf636c0f052ea3b1f7", dest = "tests/e2e/_surface.py" }
-classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "scripts/classify_e2e.py" }
+classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "scripts/classify_e2e.py" }
 static_ratchet = { src = "scripts/static_ratchet.py",               sha = "0eb0da42298e391fc614b3fe550bd6cf2d07c693", dest = "scripts/static_ratchet.py" }
 docs_ratchet   = { src = "scripts/docs_ratchet.py",                 sha = "0d41425ff2797c98d1d3eb7ecb7de0cdb7133456", dest = "scripts/docs_ratchet.py" }
 structure_ratchet = { src = "scripts/structure_ratchet.py",     sha = "98cdb1b7727d12a5c233580478e6fae40d98e6f3", dest = "scripts/structure_ratchet.py" }
@@ -50,7 +50,7 @@ conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "0eb0da422
 comment_ratchet = { src = "scripts/comment_ratchet.py", sha = "e56308e1c099712cf5a006557c94e3f9ae4fe8aa", dest = "scripts/comment_ratchet.py" }
 no_window      = { src = "src/no_window.py",                         sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/no_window.py" }
 pooled_http    = { src = "src/pooled_http.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/pooled_http.py" }
-runtime_data   = { src = "src/runtime_data.py",                        sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/runtime_data.py" }
+runtime_data   = { src = "src/runtime_data.py",                        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "src/runtime_data.py" }
 usage_log      = { src = "src/usage_log.py",                           sha = "98cdb1b7727d12a5c233580478e6fae40d98e6f3", dest = "src/usage_log.py" }
 # gen_tailscale_cert.py is copy-to-adapt, not vendor-verbatim (project-scaffolding#232) —
 # it is not in the scaffold's [components] catalog, so no [vendored] entry here either.
