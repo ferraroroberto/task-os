@@ -311,7 +311,9 @@ def test_loopback_owner_is_never_asked_for_a_name_but_can_pick_one(make_app) -> 
         assert c.post(f"/api/tasks/{tid}/comments", json={"body": "a"}).json()["author"] == "Alex Chen"  # people[0]
         c.post("/api/team/name", json={"name": "Jordan Lee"})
         assert c.post(f"/api/tasks/{tid}/comments", json={"body": "b"}).json()["author"] == "Jordan Lee"
-        # a name dropped from the config is ignored, not trusted
+        # a name dropped from the config is ignored, not trusted; the jar is cleared first because a
+        # bare set() beside the server's cookie leaves two same-named cookies whose send order is the client's
+        c.cookies.clear()
         c.cookies.set(NAME_COOKIE, "Former%20Member")
         assert c.post(f"/api/tasks/{tid}/comments", json={"body": "c"}).json()["author"] == "Alex Chen"
 
