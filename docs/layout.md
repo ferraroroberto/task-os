@@ -33,7 +33,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           hub_probe.py (the cached TCP reachability probe the AI, voice and enrich clients share) · voice.py (voice quick-add: the hub transcribes, local whisper only as fallback) · enrich.py (the
                           spoken sentence → title + description through the hub's light model; dates stay src/dates.py's)
                           clock.py (the one process clock, pinned by TASKOS_CLOCK) · runtime_data.py (resolves where the SQLite
-                          file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns)
+                          file lives) · no_window.py (the one CREATE_NO_WINDOW flag for subprocess spawns) · compression.py (the vendored stream-safe gzip middleware, registered last so it is the outermost layer)
                           mirror.py (markdown mirror: export / watcher import) · mirror_format.py (the file format: render / parse, pure text) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract + the one CLI runner · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)

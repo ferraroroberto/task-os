@@ -1,9 +1,11 @@
-"""Response compression (#280): the app gzips what it serves.
+"""Response compression: the app gzips what it serves.
 
 The boot fetches the full task forest on every launch; uncompressed it is
-megabytes over a phone link. ``GZipMiddleware`` sits *inside*
-``AuthMiddleware`` (added first), so a 401 from the gate is never recompressed
-and a bodyless response stays bodyless.
+megabytes over a phone link. The vendored ``StreamSafeGZipMiddleware`` is the
+outermost layer, outside ``AuthMiddleware``: a 401 from the gate and a bodyless
+304 are under its minimum size and pass through unchanged. The app has no
+streaming endpoint (no SSE, MJPEG or websocket), so stream delivery is pinned
+by the component's own tests in the scaffold, not here.
 """
 
 from __future__ import annotations
@@ -65,6 +67,26 @@ def test_a_big_json_body_is_gzipped_and_round_trips(client: TestClient) -> None:
     assert packed.json() == plain.json()
     assert len(packed.content) == len(plain.content)
     assert len(json.dumps(packed.json())) > 1000
+
+
+def test_the_vendored_middleware_is_the_outermost_and_only_gzip_layer() -> None:
+    from starlette.middleware.gzip import GZipMiddleware
+
+    from app.webapp.server import create_app
+    from src.auth import AuthMiddleware
+    from src.compression import StreamSafeGZipMiddleware
+
+    layers = [m.cls for m in create_app().user_middleware]
+    assert layers[0] is StreamSafeGZipMiddleware
+    assert layers.index(AuthMiddleware) > 0
+    assert GZipMiddleware not in layers
+
+
+def test_already_compressed_media_is_not_gzipped_again(client: TestClient) -> None:
+    r = _get(client, "/static/icons/icon-512.png")
+    assert r.status_code == 200
+    assert "content-encoding" not in r.headers
+    assert len(r.content) > 1000
 
 
 def test_identity_clients_get_the_body_untouched(client: TestClient) -> None:
