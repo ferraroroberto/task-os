@@ -96,7 +96,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
@@ -127,6 +126,7 @@ from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
 from src.calendar_lane import CalendarService
 from src.certs import cert_paths
+from src.compression import StreamSafeGZipMiddleware
 from src.config import load_config
 from src.db import db_path, init_db, usage_db_path
 from src.email_capture import EmailCaptureService
@@ -146,8 +146,6 @@ logger = logging.getLogger(__name__)
 # key, so a stale copy can never be served); icons + manifest revalidate
 # daily; the shell itself is served no-cache by the index route.
 _LONG_CACHE = "public, max-age=31536000, immutable"
-# Below this a gzip frame costs more than it saves.
-_GZIP_MIN_BYTES = 1000
 _DAY_CACHE = "public, max-age=86400"
 _IMMUTABLE_SUFFIXES = frozenset({".js", ".css"})
 _DAILY_SUFFIXES = frozenset({".webmanifest", ".png", ".ico", ".svg"})
@@ -303,16 +301,15 @@ def create_app() -> FastAPI:
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
     _install_error_handlers(app)
-    # Added first so it sits *inside* the gate: the last-added middleware is
-    # the outermost, and a 401 or a bodyless response must never be recompressed.
-    # Starlette's gzip skips ``text/event-stream`` and anything under the minimum.
-    app.add_middleware(GZipMiddleware, minimum_size=_GZIP_MIN_BYTES, compresslevel=6)
     app.add_middleware(
         AuthMiddleware,
         get_auth=lambda: app.state.config.auth,
         get_team=lambda: app.state.config.team,
         get_people=lambda: app.state.config.people,
     )
+    # Added last, so it is the outermost layer: a 401 from the gate or a bodyless
+    # 304 is under the minimum size and passes through unchanged.
+    app.add_middleware(StreamSafeGZipMiddleware)
     if STATIC_DIR.exists():
         app.mount("/static", CachingStaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(misc.router)
