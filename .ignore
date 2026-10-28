@@ -28,6 +28,7 @@
 /scripts/instruction_ratchet.py
 /scripts/static_ratchet.py
 /scripts/structure_ratchet.py
+/src/compression.py
 /src/no_window.py
 /src/pooled_http.py
 /src/runtime_data.py
