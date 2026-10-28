@@ -64,6 +64,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tomllib
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -402,6 +403,10 @@ def _home_screen_metadata(page: Page, base: str, shots: Path):
     # 1. Fresh phone → Today is the landing tab.
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
     expect(page.locator("#paneToday section.today .trow").first).to_be_visible()
+    # /perf-review waits on the selector `.fleet.toml` declares as "ready"; it has to match
+    # the landing view, or the load check reports it unmeasured.
+    fleet = tomllib.loads((Path(__file__).resolve().parents[2] / ".fleet.toml").read_text(encoding="utf-8"))
+    expect(page.locator(fleet["perf"]["review"]["ready_selector"]).first).to_be_visible()
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-07-phone-1-phone.png")
     return sizes
