@@ -135,7 +135,8 @@
   <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none">
     <path d="m6 9 6 6 6-6" />
   </symbol>
-  <!-- keycaps and the activity log's old-to-new arrow (replace text glyphs, #377) -->
+  <!-- Keycaps and the activity log's old-to-new arrow use dedicated glyphs
+       instead of text characters, for crisp rendering at any text size. -->
   <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none">
     <path d="M5 12h14" />
     <path d="m12 5 7 7-7 7" />
@@ -326,7 +327,7 @@
     <path d="M12 7v14" />
     <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
   </symbol>
-  <!-- #92 glyph (voice quick-add) -->
+  <!-- Mic glyph for voice quick-add. -->
   <symbol id="i-mic" viewBox="0 0 24 24" fill="none">
     <path d="M12 19v3" />
     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -343,14 +344,14 @@
     <path d="M8 12h.01" />
     <rect width="20" height="16" x="2" y="4" rx="2" />
   </symbol>
-  <!-- #159 glyph (Settings → Email archiving since #397) — pasted verbatim from lucide-static's
-       archive.svg; it is not in the scaffold's sprite. -->
+  <!-- Archive glyph for Settings → Email archiving, pasted verbatim from
+       lucide-static's archive.svg: not in the scaffold's sprite. -->
   <symbol id="i-archive" viewBox="0 0 24 24" fill="none">
     <rect width="20" height="5" x="2" y="3" rx="1" />
     <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
     <path d="M10 12h4" />
   </symbol>
-  <!-- #457 glyphs (the Time tab): pasted verbatim from the scaffold sprite
+  <!-- Time tab glyphs, pasted verbatim from the scaffold sprite
        (_vendored/icons/icons-sprite.html). -->
   <symbol id="i-timer" viewBox="0 0 24 24" fill="none">
     <line x1="10" x2="14" y1="2" y2="2" />
@@ -376,7 +377,7 @@
        (_vendored/nav/README.md "Pinning the bar (iOS)"). Desktop: top
        segmented control; phone: the floating bottom pill. -->
   <nav class="tabs" role="tablist" aria-label="Primary navigation" data-active-tab="today">
-    <!-- Today is the first destination and the one the app opens on (#319) -->
+    <!-- Today is the first destination and the one the app opens on. -->
     <button id="tabToday" type="button" class="tab active" data-tab="today"
             role="tab" aria-selected="true" aria-controls="paneToday">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
@@ -387,20 +388,20 @@
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-square-kanban"></use></svg>
       <span class="tab-label">Board</span>
     </button>
-    <!-- Time (#457): third, before the utility Search tab — used daily. -->
+    <!-- Time: third, before the utility Search tab — used daily. -->
     <button id="tabTime" type="button" class="tab" data-tab="time"
             role="tab" aria-selected="false" aria-controls="paneTime" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
       <span class="tab-label">Time</span>
     </button>
-    <!-- No Archive tab since #397 (decision 3 of #390): the batch-archiving
-         run and its report are Settings → Email archiving, a rarely run job. -->
+    <!-- No Archive tab: the batch-archiving run and its report are
+         Settings → Email archiving, a rarely run job. -->
     <button id="tabSearch" type="button" class="tab" data-tab="search"
             role="tab" aria-selected="false" aria-controls="paneSearch" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
       <span class="tab-label">Search</span>
     </button>
-    <!-- No Settings tab (#281): five destinations is the pill's ceiling
+    <!-- No Settings tab: five destinations is the pill's ceiling
          (design.md nav-bar.maxTabs), and Settings is the rarely-used one —
          it is the gear in the header, one tap from every tab. -->
   </nav>
@@ -410,7 +411,7 @@
          toggle pinned right. Shared across every tab (PC-first: one persistent
          header row, not a per-pane repeat), so its title names the view on
          screen, as the contract asks of every pane's header: it is the page's
-         heading, the first thing read above each pane (#339; app.js
+         heading, the first thing read above each pane (app.js
          setHeadTitle). Both glyphs ship; CSS keyed on html[data-theme] shows
          the ACTION (moon in light, sun in dark). -->
     <div class="card home-head">
@@ -419,7 +420,7 @@
         <span id="homeTitleText">Today</span>
       </h1>
       <span id="homeHeadStatus" class="status"></span>
-      <!-- The header keeps the spec's two trailing icon buttons (#301): the
+      <!-- The header keeps the spec's two trailing icon buttons: the
            theme toggle and the Settings gear. The issue sync lives on its
            Settings card ("Sync now"); the command palette is Ctrl+K / ⌘K. -->
       <button type="button" id="themeToggle" data-track="theme" class="icon-button home-toggle hit-target"
@@ -427,7 +428,7 @@
         <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
         <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
       </button>
-      <!-- Settings (#281): the header gear, not a sixth tab. aria-current
+      <!-- Settings: the header gear, not a sixth tab. aria-current
            while its pane is up; any tab press leaves it, as for the journal. -->
       <button type="button" id="settingsBtn" data-track="settings" class="icon-button home-toggle hit-target"
               title="Settings" aria-label="Settings" aria-controls="paneSettings">
@@ -440,9 +441,9 @@
          a stack container pinned to minmax(0, 1fr) (design.md Layout). -->
     <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board" hidden>
       <div class="pane-body">
-        <!-- Top strip (#80, #395): the live text filter with the filter
+        <!-- Top strip: the live text filter with the filter
              button beside it (the active-filter count; it opens the filter
-             sheet), the Select toggle (#81) and the + that opens the
+             sheet), the Select toggle and the + that opens the
              quick-add dialog. While tasks are ticked the bulk bar takes this
              strip over — see bulkbar.js. -->
         <div class="pane-top">
@@ -458,7 +459,7 @@
           </button>
           <div class="bulk-bar" id="boardBulk" hidden></div>
         </div>
-        <!-- The line under the strip (#396): Mine · Everyone (#477, two or more
+        <!-- The line under the strip: Mine · Everyone (two or more
              members) and Tasks · Issues · All (scope.js), then board.js's
              Week · Status segment and, in Status mode while the Inbox holds
              tasks, Triage. -->
@@ -475,8 +476,8 @@
     </section>
     <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today">
       <div class="pane-body">
-        <!-- Top strip (#80, #395): the text filter with the filter button
-             beside it, the Select toggle (#81) and the +; the scope switch
+        <!-- Top strip: the text filter with the filter button
+             beside it, the Select toggle and the +; the scope switch
              is the line under it. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
@@ -491,8 +492,8 @@
           </button>
           <div class="bulk-bar" id="todayBulk" hidden></div>
         </div>
-        <!-- Mine · Everyone (#477, two or more members) and Tasks · Issues ·
-             All (#391): the vendored segmented control over the shared filter
+        <!-- Mine · Everyone (two or more members) and Tasks · Issues ·
+             All: the vendored segmented control over the shared filter
              state's `whose` and `scope` keys (scope.js). -->
         <div class="view-switches">
           <div class="scope-host whose-host" id="todayWhose" hidden></div>
@@ -504,7 +505,7 @@
         <div id="todayHost" data-empty="tasks"></div>
       </div>
     </section>
-    <!-- Time (#457): the time tracker — Log · Totals · History in one
+    <!-- Time: the time tracker — Log · Totals · History in one
          segmented control (time.js). One-dimensional, so it keeps the 772px
          measure. Nothing loads until the tab is first shown. On a first visit
          with two or more people configured, the person picker stands in for
@@ -529,7 +530,7 @@
              carries the filter button (the sheet applies to the task hits),
              the scope switch is the line under it, and the results render
              below: a group per kind that has hits, the rest folded into one
-             line (search.js, #395); ?q= keeps the query. -->
+             line (search.js); ?q= keeps the query. -->
         <div class="card search-box" id="searchBox">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
           <input id="searchInput" class="search-input" type="search" autocomplete="off" spellcheck="false"
@@ -540,7 +541,7 @@
         <div id="searchHost" class="search-host"></div>
       </div>
     </section>
-    <!-- The done journal (#102): a pane with no tab in the pill (the pill is
+    <!-- The done journal: a pane with no tab in the pill (the pill is
          the vendored nav contract; the journal is read, not lived in). Reached
          as #journal from the palette and the Board's Done column; any tab
          press leaves it (app.js). The shared text strip + filter sheet apply
@@ -553,20 +554,20 @@
         <div id="journalHost" data-empty="tasks"></div>
       </div>
     </section>
-    <!-- Settings (#281): a pane with no tab, like the journal — the header
+    <!-- Settings: a pane with no tab, like the journal — the header
          gear opens it over the current tab, any tab press leaves it.
-         Inset groups (#397, design.md `settings group`): each row is a lead
+         Inset groups (design.md `settings group`): each row is a lead
          glyph, its label, the current value muted and a chevron to its sheet
          (#settingsSheet below). Text size is the one setting changed in place.
-         The value ids are the ones settings.js has always filled. -->
+         The value ids are the ones settings.js fills. -->
     <section id="paneSettings" class="pane" role="region" aria-label="Settings" hidden>
       <div class="pane-body settings-groups">
         <h2 class="overline settings-overline" id="settingsGroupDevice">This device</h2>
         <section class="card action-list settings-group" aria-labelledby="settingsGroupDevice">
           <ul class="action-rows">
-            <!-- Text size (#314): the escape from the viewport zoom lock (WCAG 1.4.4),
+            <!-- Text size: the escape from the viewport zoom lock (WCAG 1.4.4),
                  inline because it is changed in place. The vendored text-size control
-                 as a vendored segmented group (#412); text-size.js persists the step to
+                 as a vendored segmented group; text-size.js persists the step to
                  task-os.textsize and stamps html[data-textsize]. -->
             <li class="action-row settings-text-size" id="textSizeCard">
               <span class="settings-link-label" id="textSizeLabel">
@@ -640,8 +641,8 @@
                 <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
               </button>
             </li>
-            <!-- Email archiving (#159, #397): the run, its report and every review
-                 action — the Archive tab until #397, now this row's sheet. -->
+            <!-- Email archiving: the run, its report and every review
+                 action, as this row's sheet rather than a dedicated tab. -->
             <li class="action-row">
               <button type="button" class="action-row-main settings-link" data-settings-sheet="archive" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
@@ -734,7 +735,7 @@
          on the phone. Deep-linkable as #task/<id>. Body built by drawer.js. -->
     <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
            aria-labelledby="drawerTitle" hidden></aside>
-    <!-- Today's split view (#336): on desktop the right half is always the
+    <!-- Today's split view: on desktop the right half is always the
          detail pane. While no task is open this is what sits there; styles/drawer.css
          shows it only on Today at >= 1024px with the drawer closed. -->
     <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
@@ -743,12 +744,13 @@
         <p class="empty-state-message">Select a task to see its details</p>
       </div>
     </aside>
-    <!-- Settings sheets (#397, design.md `settings group` + the detail sheet):
+    <!-- Settings sheets (design.md `settings group` + the detail sheet):
          one row's sheet at a time, built from the markup below by settings.js.
          The task drawer's own geometry (the .drawer class): a full-screen sheet
          on the phone, the detail pane beside the Settings list from 1024px. Each
-         body is the card it replaced, moved unchanged under the same ids. Instant
-         model: a change applies as it is made; Done and the × close. -->
+         body carries the same ids its row's card held, so settings.js needs no
+         remapping. Instant model: a change applies as it is made; Done and the
+         × close. -->
     <aside id="settingsSheet" class="drawer settings-detail card" role="dialog" aria-modal="false"
            aria-labelledby="settingsSheetTitle" hidden>
       <div class="settings-sheet-head">
@@ -891,7 +893,7 @@
             </div>
             <pre class="opener-cmd" id="openerInstall">Loading…</pre>
             <details class="opener-more">
-              <!-- Labels in plain words (#339); the file's name and place are
+              <!-- Labels in plain words; the file's name and place are
                    the instruction under its heading, not the heading. -->
               <summary>Uninstall · folder paths for each PC · rescan folders</summary>
               <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your folder paths file):</p>
@@ -955,27 +957,27 @@
        with its form and run by quickadd.js (js/quickadd/markup.js). -->
   <dialog class="detail-dialog quickadd-dialog" id="quickAdd" aria-labelledby="quickAddTitle"></dialog>
 
-  <!-- Keyboard shortcuts (#99): the reference card behind `?` and the
+  <!-- Keyboard shortcuts: the reference card behind `?` and the
        palette's "Keyboard shortcuts" command. The same vendored editor-modal
        shell, read-only (no fields, so no footer primary); the rows are built
        from actions.js's one ACTIONS table, never listed twice by hand. -->
   <dialog class="detail-dialog keys-dialog" id="keysHelp" aria-labelledby="keysHelpTitle"></dialog>
 
-  <!-- Confirmation (#121): the one destructive-action dialog, built by
+  <!-- Confirmation: the one destructive-action dialog, built by
        confirm.js per ask (deleting a task from the drawer, a selection from
        the Select bar). Same vendored shell; its single primary restates the
        tint recipe on danger, and every other way out means "no". -->
   <dialog class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
-  <!-- The Time tab's dialogs (#457, time-dialogs.js): the entry editor, the
+  <!-- The Time tab's dialogs (time-dialogs.js): the entry editor, the
        Switch offer, names and moves for Settings → Time categories. -->
   <dialog class="detail-dialog time-dialog" id="timeDialog" aria-labelledby="timeDialogTitle"></dialog>
-  <!-- The date picker a row action opens on a phone (#311): Change date… and
+  <!-- The date picker a row action opens on a phone: Change date… and
        Snooze… from the row menu or a swipe, built per ask by snooze.js. -->
   <dialog class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
-  <!-- The parent picker (#468): what the drawer head's Change parent opens,
+  <!-- The parent picker: what the drawer head's Change parent opens,
        built per ask by parentpick.js — a filter over every open task. -->
   <dialog class="detail-dialog parent-dialog" id="parentDialog" aria-labelledby="parentDialogTitle"></dialog>
-  <!-- The filter sheet (#395): what every strip's filter button opens —
+  <!-- The filter sheet: what every strip's filter button opens —
        sort first, then status · project · person · due · modified, applied
        as they change. Built per open by filters.js for the tab that asked. -->
   <dialog class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>

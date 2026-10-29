@@ -103,9 +103,12 @@ class VoiceConfig:
                         Mac's ANE first, whisper behind it — and the call
                         lands in its observability ring. Blank = voice off,
                         with that as the visible reason everywhere.
-    ``fallback_url``    the local whisper-server, tried **only** when the
-                        primary could not be reached at all (the hub process
-                        is down). Blank = no fallback.
+    ``fallback_url``    an optional direct whisper-server, tried **only**
+                        when the primary could not be reached at all (the hub
+                        process is down). Blank by default — the hub owns
+                        which machine runs whisper, so a direct fallback is
+                        an opt-in per install, never a default path around
+                        the hub.
 
     The app forwards the clip server-side either way, so the phone needs
     nothing but the HTTPS endpoint it already has.
@@ -119,7 +122,7 @@ class VoiceConfig:
     """
 
     transcribe_url: str = "http://127.0.0.1:8000/v1/audio/transcriptions"
-    fallback_url: str = "http://127.0.0.1:8090/v1/audio/transcriptions"
+    fallback_url: str = ""
     partial_interval_seconds: float = 1.5
 
 

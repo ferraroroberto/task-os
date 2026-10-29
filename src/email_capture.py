@@ -79,14 +79,12 @@ EXTERNAL_ID_PREFIX = "email:"
 INITIAL_DELAY_S = 15.0
 #: Real-second override for `INITIAL_DELAY_S`. `TASKOS_CLOCK` pins every
 #: timestamp this service *writes*, but the first automatic pass is scheduled
-#: off a real `threading.Event.wait()`, not the pinned clock — so a disposable
-#: e2e instance that enables capture (story 24's archive fixture) could have
-#: its own background tick land mid-story, racing the manual "Check now" step
-#: and rewriting `last_result`/`next_run` under a shot the story never touched
-#: (story-24-archive-9-desktop.png moved between two runs of one commit
-#: for exactly this reason). Nothing in production sets this; the e2e suite's
-#: `_boot()` sets it past any story's real runtime, the same way unit tests
-#: already pass `initial_delay=999` directly.
+#: off a real `threading.Event.wait()`, not the pinned clock — a background
+#: tick must not land mid-story on a disposable e2e instance, racing a
+#: manual "Check now" step and rewriting `last_result`/`next_run` under a
+#: shot the story never touched. Nothing in production sets this; the e2e
+#: suite's `_boot()` sets it past any story's real runtime, the same way unit
+#: tests already pass `initial_delay=999` directly.
 DELAY_ENV = "TASKOS_CAPTURE_DELAY_S"
 DESCRIPTION_MAX = 10_000
 #: One pass never lands more than this, so a first run against a large archive

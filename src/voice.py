@@ -296,9 +296,7 @@ class VoiceClient:
             if res.status_code >= 400:
                 # It answered. Whatever it said *is* the answer — asking the
                 # next endpoint instead would substitute a different engine's
-                # opinion for a failure the caller needs to see. (`requests`
-                # returns a 4xx rather than raising, so this is a branch where
-                # urllib had an `except`; the rule it encodes is unchanged.)
+                # opinion for a failure the caller needs to see.
                 said = res.content.decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
                 logger.warning(
                     "⚠️ voice: %s refused the clip — HTTP %s %s", url, res.status_code, said

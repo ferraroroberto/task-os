@@ -21,11 +21,11 @@ export function fillQuickAdd(dialog) {
       </span>
       <input class="quick-add-input" type="text" enterkeyhint="done" aria-label="Task title"
              placeholder='e.g. "renew passport next friday",  "order sensor &rsaquo; garden-bot",  "#12" to nest'>
-      <!-- #92, #146: click to dictate the line above, click again to stop —
-           the glyph becomes a stop square while recording and the words
-           appear on the line as they are heard. Never a dead button: when no
-           transcription endpoint answers it stays visible, disabled, and the
-           reason is spelled out in the hint below. -->
+      <!-- Click to dictate the line above, click again to stop — the glyph
+           becomes a stop square while recording and the words appear on the
+           line as they are heard. Never a dead button: when no transcription
+           endpoint answers it stays visible, disabled, and the reason is
+           spelled out in the hint below. -->
       <button type="button" class="icon-button quick-add-mic" data-track="quick-add.voice" aria-label="Dictate (click to start)"
               aria-pressed="false" disabled>
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
@@ -77,7 +77,7 @@ export function fillQuickAdd(dialog) {
 
     <div class="detail-actions">
       <!-- The dialog's one primary (design.md modal.primaryButton): the vendored
-           button-primary — 48px, accent-fill, the AA disabled recipe (#281). -->
+           button-primary — 48px, accent-fill, the AA disabled recipe. -->
       <button type="submit" class="button-primary detail-save-btn quick-add-submit" data-track="quick-add.submit" disabled>Add</button>
     </div>
   </form>

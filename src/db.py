@@ -26,10 +26,8 @@ logger = logging.getLogger(__name__)
 
 # Default DB location: the fleet runtime-data root (``C:\sqlite\task-os\`` on
 # Windows), not this repo's ``data/`` — an always-on service's fsync-backed
-# writes should not land on whichever drive the repo was cloned onto, which here
-# is a spinning HDD. This replaced the module's only
-# use of ``PROJECT_ROOT``/``DATA_DIR``, so both are gone rather than left as
-# dead module state; nothing imported them.
+# writes should not land on whichever drive the repo was cloned onto, which
+# here is a spinning HDD.
 DEFAULT_DB_PATH = runtime_db_path("task-os", "tasks.db")
 DB_PATH_ENV = "TASKOS_DB_PATH"
 #: The usage log's file (vendored ``src/usage_log.py``), its own SQLite
