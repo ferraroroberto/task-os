@@ -98,10 +98,10 @@ Every offender that existed on adoption is recorded in `.structure-ratchet-basel
 
 - A new endpoint: `app/webapp/routers/<concern>.py`, parsing the request and returning the response; the rule lives in `src/` (domain rules in `src/tasks/` — a read in `queries.py`, a task write in `mutations.py`, a comment / link / issue-ref / person write in `related.py`; callers import through the `src/tasks_repo.py` shim — time-tracker rules in `src/time_repo.py`).
 - A new view: its own stylesheet under `app/webapp/static/styles/` linked from both `index.html` and `login.html`, and its own script beside the other views' scripts. Never a new block in `base.css` or another view's sheet.
-- A new logic module: `src/` is flat past the cap, so a new module goes in a domain subpackage (`src/<domain>/`, as `src/search/`, `src/ai/` and `src/issues/` already are), not beside the flat ones.
-- A new test: `tests/` is flat past the cap and takes no new module, so a new file goes in a subfolder named for its subject (`tests/gates/` for the gate wrappers' tests, `tests/e2e/` for stories), with an `__init__.py`.
+- A new logic module: `src/` sits near its flat-directory cap (38 of 40), so a new module goes in a domain subpackage (`src/<domain>/`, as `src/search/`, `src/ai/` and `src/issues/` already are), not beside the flat ones.
+- A new test: `tests/` sits one module under its cap (39 of 40), so a new file goes in a subfolder named for its subject (`tests/gates/` for the gate wrappers' tests, `tests/e2e/` for stories), with an `__init__.py`.
 - A new ops script: `scripts/`; a helper the app imports belongs in `src/`.
 
 ### Baselined offenders and their way out
 
-The baseline holds 9 files over 1,000 lines (the app script, `index.html`, three `src/` modules, two e2e files and two unit test files), 34 functions over 100 lines and the flat `tests/` directory. Splitting each is its own change; the drawer, the Settings pane, the Time tab, the Email archiving sheet, the add dialog and the Search tab are the six already split.
+The baseline is empty — no file is over 1,000 lines, no function over 100, and no flat directory past its cap. A file, function or flat directory that later grows past its cap is recorded here at that size; shrink it with `scripts/structure_ratchet.py --update-baseline`, and a new offender needs `--allow-additions`, which shows in review.

@@ -27,7 +27,7 @@ Read it as two facts. **No `cmd`-based shape is safe** — each of them injects 
 
 Percent-encoded input is inert in every shape, which is what keeps ordinary use safe: browsers percent-encode, and every ref this app builds goes through `quote(ref, safe='')` (`src/placeholders.py::opener_url`). The exposure the launcher closes is a `taskos://` URL that did **not** come from task-os and was handed to `ShellExecute` unencoded — a `.url`/`.lnk` file, or another app relaying it raw.
 
-## Why headless (task-os#130)
+## Why headless
 
 `powershell.exe` is a console-subsystem executable — `ShellExecute` allocates a console for it before a line of the script runs, and on this PC (Windows 11, Windows Terminal as the default terminal) that console is a full WT window. Measured, not assumed, with a throwaway-scheme probe registering each candidate and polling for new top-level windows during a real invocation:
 
@@ -47,20 +47,19 @@ Paste the first command from `install.txt` into PowerShell (replace `<base-url>`
 
 `opener.env` (`%LOCALAPPDATA%\task-os\opener.env`) holds the placeholders this PC needs beyond the two Windows already knows — one `name=path` line each, e.g. `docs=C:\Users\me\Tenant\docs - Documents` for `{sharepoint:docs}`; a line named `onedrive=…` or `user=…` overrides the environment-derived value. Values may use `%VARS%`. Settings → *Folder opener* shows a template with the names this install's config uses.
 
-## What was verified (a locked-down PC, 2026-08-17)
+## Platform facts
+
+Measured on Windows 11 with Windows Terminal as the default terminal. The full dated walk record, including what the second (locked-down) PC does and does not cover, lives in [`docs/validation/story-09-folders.md`](../docs/validation/story-09-folders.md).
 
 - Per-user `HKCU\Software\Classes\<scheme>` registration works through the **registry API** (`New-Item` / `Set-ItemProperty`, Python `winreg`) even where `reg.exe` / regedit are disabled ("Registry editing has been disabled by your administrator").
 - A PowerShell machine policy of `AllSigned` blocks `.ps1` **files** but not an inline command pasted into the console — hence one line, no script file.
 - A `.cmd` in `%LOCALAPPDATA%` runs, and `start explorer` opens a folder from it.
 - Edge hands `scheme://…` to the registered handler after a one-time *open?* prompt.
 - `%OneDriveCommercial%` / `%OneDrive%` resolve to the local sync roots.
-
-## What was verified (this PC, 2026-09-04, task-os#130)
-
-- The window-visibility probe table above (`-WindowStyle Hidden` still flashes on Windows Terminal; `conhost.exe --headless` does not).
+- The window-visibility probe table above holds: `-WindowStyle Hidden` still flashes a Windows Terminal window; `conhost.exe --headless` does not.
 - A `WScript.Shell` popup shown from a script launched through `conhost.exe --headless` is fully visible and dismissible, and the process exits cleanly afterward — no leftover process waiting on stdin.
 - Output piped internally between processes under `conhost.exe --headless` (`$out = & $handler 2>&1`) still captures correctly; only the *caller's* own capture of the headless-wrapped process itself comes back empty, which is why the self-test probe stays unwrapped (see *Why headless* above).
-- The real, installed `taskos://` scheme on this PC, invoked the same way a browser does (`ShellExecute`, via `Start-Process taskos://…`): a valid ref opens Explorer with no console at any point; an unresolvable ref pops the notice and leaves no process behind after dismissal. **Not verified this way: the click-through from an actual browser tab.** CDP-driven automation could not complete the native *"Open task-os opener?"* permission dialog (it froze the tab's own screenshot capture once, consistent with a blocking native dialog it cannot see or click) — a known limit of automating a click that leaves the page. See `docs/validation.md`'s story 09 amendment for the full account.
+- The real, installed `taskos://` scheme, invoked the same way a browser does (`ShellExecute`, via `Start-Process taskos://…`): a valid ref opens Explorer with no console at any point; an unresolvable ref pops the notice and leaves no process behind after dismissal. **Not verified this way: the click-through from an actual browser tab.** CDP-driven automation cannot complete the native *"Open task-os opener?"* permission dialog — a known limit of automating a click that leaves the page.
 
 ## Caveats
 
@@ -71,7 +70,7 @@ Paste the first command from `install.txt` into PowerShell (replace `<base-url>`
 - **Folders and documents on this PC only.** A file opens with its default app only when its type is on the `DOCS` list in `opener.cmd` (PDF, text, Office, images, audio/video, `.msg`/`.eml`, `.zip`). Any other file — a program, a script, a name with no extension — is shown **selected in its folder** instead (dry-run `reveal: <path>`), never started; open it from there if you mean to. A ref that starts at another computer (`\\host\…`) before any placeholder is expanded, names a stream past the file (`a.txt:x`) or carries a wildcard (`*`, `?`), gets a *Nothing was opened* notice (exit 6) before anything touches the path. Folder or file is decided by the path's attributes, so a file under a placeholder that maps to a network share is treated as a file too. A placeholder this PC maps in `opener.env` may still point at a share — that value is this PC's own config.
 - **A quote in the link is refused, never opened.** No ref this app builds contains one, so a link carrying a quote (raw or as `%22`) was crafted or mangled elsewhere; the opener stops and says so rather than acting on half a path.
 - **Fallback mode on a locked-down PC.** Where a machine policy blocks running a script file outright, the installers cannot register the launcher and fall back to registering `opener.cmd` directly — the shape with the re-parse described above. That install is **not** silent: `install_opener.py` prints `mode: FALLBACK`, the pasted one-liner ends in `FALLBACK mode`, and Settings → *Folder opener* shows a `fallback mode` chip. In that mode, treat a `taskos://` link from anywhere but this app as untrusted.
-- **A PC still registered with the pre-#130 shape** (`powershell.exe -File opener.ps1 -Url "%1"`, no `conhost.exe --headless` wrap) still works — it is just as safe against #40's injection — but flashes a console on every open. Settings → *Folder opener* reports it as `launcher mode (old, visible console)` and points at re-running the install command below.
+- **A PC still registered with the earlier launcher shape** (`powershell.exe -File opener.ps1 -Url "%1"`, no `conhost.exe --headless` wrap) still works — it is just as safe against the quote-injection described above — but flashes a console on every open. Settings → *Folder opener* reports it as `launcher mode (old, visible console)` and points at re-running the install command below.
 - Uninstall (second line in `install.txt` / `install_opener.py --uninstall`) removes the scheme, `opener.cmd` and `opener.ps1`; your `opener.env` stays.
 
 ## Tests
