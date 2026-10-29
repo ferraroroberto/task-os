@@ -11,10 +11,10 @@ REM  port (config.json's `port`, NOT a literal here), the HTTPS decision
 REM  (src/certs.py: the Tailscale pair under webapp\certificates\ when it is
 REM  there, plain HTTP said loudly otherwise, --check auto-renew before the
 REM  bind) and the event loop -- the same code path the tray's manager.py
-REM  takes. Two spawn points that share one implementation cannot drift; three
-REM  that each re-derive it did (this file used to hardcode :8448, so a repo
-REM  checkout on another port -- a worktree, a second install -- silently
-REM  fought the running instance for the wrong port).
+REM  takes. Two spawn points that share one implementation cannot drift; a
+REM  port literal here would: a second checkout on another port -- a
+REM  worktree, a second install -- would silently fight the running instance
+REM  for the wrong port.
 REM ============================================================================
 
 setlocal

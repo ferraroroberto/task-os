@@ -247,8 +247,6 @@ class EnrichClient:
                               f"{exc.__class__.__name__}: {exc}") from exc
         if res.status_code >= 400:
             # It answered, so the verdict stands: reachable, and refusing.
-            # (`requests` returns a 4xx rather than raising — the branch moved,
-            # the two distinct messages did not.)
             said = res.content.decode("utf-8", errors="replace").strip()[:_UPSTREAM_BODY_CHARS]
             raise EnrichError(f"the model refused the request (HTTP {res.status_code}): "
                               f"{said or '(no body)'}")

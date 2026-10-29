@@ -44,6 +44,23 @@ Transport = Callable[[str, str, dict[str, Any] | None], tuple[int, Any]]
 
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 
+#: Read bound for an ordinary CLI→HTTP call — ``GET``/``PATCH``/simple
+#: ``POST`` routes are CRUD against a server on this same PC, so this is
+#: already generous.
+_DEFAULT_TIMEOUT_SECONDS = 15.0
+
+#: Bound for a verb whose server-side work routinely outlives
+#: ``_DEFAULT_TIMEOUT_SECONDS``: ``/api/ai/triage`` is itself bounded by
+#: ``ai.timeout_seconds`` (30 s by default); ``/api/folders/reindex`` scans
+#: the whole tree in the foreground; ``/api/issues/sync`` makes several
+#: ``gh`` calls of up to 20 s each. Margin over the slowest of those bounds,
+#: so the server — not this client's socket — is the one that reports a
+#: real timeout.
+_LONG_TIMEOUT_SECONDS = 45.0
+
+#: Paths that get `_LONG_TIMEOUT_SECONDS` instead of the default.
+_LONG_TIMEOUT_PATHS = frozenset({"/api/ai/triage", "/api/folders/reindex", "/api/issues/sync"})
+
 
 def _tls_context(base: str) -> ssl.SSLContext | None:
     """HTTPS to loopback skips certificate verification (hostname included): the served leaf names the
@@ -71,8 +88,9 @@ def _urllib_transport(base: str, actor: str | None) -> Transport:
             req.add_header("Content-Type", "application/json")
         if actor:
             req.add_header("X-Actor", actor)
+        timeout = _LONG_TIMEOUT_SECONDS if path in _LONG_TIMEOUT_PATHS else _DEFAULT_TIMEOUT_SECONDS
         try:
-            with urllib.request.urlopen(req, timeout=15, context=tls) as res:
+            with urllib.request.urlopen(req, timeout=timeout, context=tls) as res:
                 raw = res.read().decode("utf-8")
                 return res.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as exc:
@@ -81,6 +99,17 @@ def _urllib_transport(base: str, actor: str | None) -> Transport:
                 return exc.code, json.loads(raw)
             except ValueError:
                 return exc.code, {"error": {"code": "http_error", "message": raw or str(exc)}}
+        except TimeoutError as exc:
+            # A read/connect timeout surfaces as `TimeoutError`, an `OSError`
+            # subclass — catch it ahead of the `OSError` arm below so it is
+            # reported as "still working", distinct from "unreachable": the
+            # server answered before (or may still finish); nothing said it
+            # was down.
+            raise CliError(
+                f"{base} did not answer within {timeout:.0f}s — it may still be working "
+                f"on {method} {path}; this does not mean it is down",
+                code="timeout",
+            ) from exc
         except (urllib.error.URLError, OSError) as exc:
             raise CliError(f"cannot reach {base}: {exc}", code="unreachable") from exc
 

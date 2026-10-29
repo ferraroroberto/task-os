@@ -151,10 +151,10 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
         # Newest first, and stop at the first owner. The marker sits near the top
         # of a transcript (the line Claude Code writes when the session is
         # bridged), so the owning file is normally the first or second one read.
-        # The old shape filtered *then* sorted, and Sort-Object blocks the
-        # pipeline - so Select-Object -First 1 could not stop the upstream filter
-        # and every one of this PC's 12k transcripts was read on every resume
-        # (~170 s), twice over on a miss.
+        # Sort-Object materializes the whole list before the loop below runs,
+        # so the early `break` on the first owner is what bounds the read:
+        # without it, every one of this PC's 12k transcripts would be read on
+        # every resume (~170 s), twice over on a miss.
         $files = Get-ChildItem -LiteralPath $projects -Recurse -Filter *.jsonl -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending
         # A transcript that merely MENTIONS another session's id (a grep result,
@@ -209,8 +209,9 @@ if ($Url -match '^taskos://resume/?\?session=(session_[A-Za-z0-9]+)/?$') {
             else { @('-NoProfile', '-NoExit', '-EncodedCommand', $encoded) }
     if ($env:TASKOS_OPENER_DRYRUN) {
         "resume: $uuid in $dir"
-        # the argv too: TASKOS_OPENER_DRYRUN used to return before the launch
-        # code, which is why the three-tab shape shipped with green tests
+        # Print the argv too: a dry-run assertion must see the exact launch
+        # command (which exe, wt vs bare powershell, and its full args), not
+        # just the resume target, or a wrong launch shape can ship green.
         $exe = if ($useWt) { 'wt' } else { "powershell -WorkingDirectory $dir" }
         "resume-exec: $exe $($argv -join ' ')"
         exit 0

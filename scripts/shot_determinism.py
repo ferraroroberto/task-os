@@ -59,22 +59,17 @@ screen is still unpinned. Everything the app paints from a clock, a path or a
 build identity is pinned for exactly this reason — see
 `tests/e2e/conftest.py`'s "deterministic capture" section.
 
-Known open flake (#170, status: unreproduced this session): under the
-heaviest load observed on 2026-09-09, all four of story 22's desktop shots
-moved together at once — 5380-8981 px, worst channel delta 247, common bbox
-the Board behind the add dialog (present even in the one shot with no dialog
-open). That is real content movement, not the rasteriser, and it has not
-recurred since. #170 tried to reproduce it with a harness scoped to
-`test_story_22_voice.py` alone, run back to back under 12-15 concurrent
-CPU-bound busy-loops on a 16-core host (`--keep` equivalent): ten attempts,
-zero repeats of the board-wide mover. One attempt did turn up a much smaller,
-unrelated raster excursion — 28 px at delta 14 on the phone nav's search icon
-— under 13 concurrent burners; at 15 burners the disposable webapp itself
-missed its 20 s healthz boot deadline, so raw CPU starvation this severe
-produces a different failure (a boot timeout), not a silent content shift.
-That rules out plain CPU contention as a match for what was observed and
-leaves the real trigger (disk I/O? memory pressure? a specific concurrent
-process?) still unknown. Reproduce with:
+Known open flake, so far unreproduced on demand: under heavy host load, all
+four of story 22's desktop shots can move together at once — thousands of
+pixels, well past the raster bands above, common bbox the Board behind the
+add dialog. That is real content movement, not the rasteriser. A dedicated
+CPU-load harness scoped to `test_story_22_voice.py` has not reproduced the
+board-wide mover; a smaller, unrelated raster excursion on the phone nav's
+search icon reproduces instead at moderate load, and load pushed far enough
+instead starves the disposable webapp's own boot (a timeout, not a silent
+content shift) rather than reproducing it. That rules out plain CPU
+contention as the trigger; what does trigger it (disk I/O? memory pressure?
+a specific concurrent process?) is still unknown. Reproduce with:
 `& .\.venv\Scripts\python.exe -m scripts.shot_determinism --keep <dir>` in a
 loop under whatever load actually shows up next, then diff `run-1` vs `run-2`
 of the four `story-22-voice-*-desktop.png` files.
@@ -106,45 +101,30 @@ SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
 ALLOWED_TO_DIFFER: dict[str, str] = {}
 
 #: The raster-noise escape: at most this many pixels, each off by at most this
-#: much on any channel. Measured on this suite — a real run lands well under
-#: 200 pixels at delta 1; the smallest genuine content change measured (one
-#: digit of a timestamp) was 35 pixels at delta 210.
-#:
-#: Decision: raised from 1 to 2. On this host, twelve back-to-back
-#: invocations turned up small antialiased-edge movers — story 22/23/24 shots,
-#: none of them a real content change — measuring *exactly* delta 2 on a
-#: handful of pixels, and the same shots pass as delta-1 raster noise on the
-#: very next invocation. That means delta 1 sat one level below this
-#: rasteriser's actual noise floor, so the gate reported a green tree as red
-#: several times out of twelve. Delta 2 still leaves ~100x headroom below the
-#: smallest genuine change ever measured here (35 px at delta 210) and two
-#: orders of magnitude below a real regression (delta 224-225), so it costs
-#: essentially no discriminating power.
+#: much on any channel. This rasteriser's actual noise floor sits at delta 2:
+#: a handful of antialiased-edge pixels on story 22/23/24 shots land there and
+#: clear again on the very next invocation of the same shot, none of them a
+#: real content change — so delta 1 would report a clean tree as red. Delta 2
+#: still leaves ~100x headroom below the smallest genuine content change
+#: measured on this suite (35 px at delta 210, one digit of a timestamp) and
+#: two orders of magnitude below a real regression (delta 224-225), so it
+#: costs essentially no discriminating power.
 RASTER_MAX_DELTA = 2
 RASTER_MAX_PIXELS = 500
 
 #: The second raster band: one antialiased **glyph edge**, not a scatter of
 #: pixels. Same escape, different shape — a handful of pixels off by a lot,
-#: rather than many off by a little.
-#:
-#: Decision. Measured twice on 2026-09-12, in two unrelated
-#: invocations, at *identical* numbers: `story-22-voice-5-phone.png`, 28 px,
-#: worst channel delta 14, bbox (1000, 1690, 1014, 1703) — a 14x13 px box
-#: around the phone nav's search icon at device scale factor 3. An earlier run recorded
-#: the same magnitude and the same subject ("28 px at delta 14 on the phone
-#: nav's search icon") three days earlier, under artificial CPU load. Repeating
-#: to the pixel is not noise: that glyph rasterises into one of exactly two
-#: stable states and which one is a coin toss. Pinning down why has so far failed and
-#: stays an open investigation; leaving the gate to flip red on it about one run in three
-#: would teach every future reader to re-run a red gallery gate, which is the
-#: one habit that makes this whole gate worthless.
-#:
-#: Bounded hard on both axes: 64 px is at most one glyph edge at DSF 3, and
-#: delta 24 is 8.75x below the smallest *genuine* change ever measured on this
-#: suite (35 px at delta 210, one digit of a timestamp) and roughly ten times
-#: below a real regression (224-225). A difference that fits inside this is a
-#: sub-pixel shift of something the size of an icon stroke; a reader cannot see
-#: it, and neither can any story that asserts on the page rather than the file.
+#: rather than many off by a little. One glyph (the phone nav's search icon
+#: at device scale factor 3, a 14x13 px box) rasterises into one of exactly
+#: two stable states and which one renders is a coin toss — repeatable to the
+#: pixel (28 px, worst channel delta 14) rather than noisy, so it needs its
+#: own band rather than widening the raster-noise one above. Bounded hard on
+#: both axes: 64 px is at most one glyph edge at DSF 3, and delta 24 is 8.75x
+#: below the smallest *genuine* change ever measured on this suite (35 px at
+#: delta 210, one digit of a timestamp) and roughly ten times below a real
+#: regression (224-225). A difference that fits inside this is a sub-pixel
+#: shift of something the size of an icon stroke; a reader cannot see it, and
+#: neither can any story that asserts on the page rather than the file.
 GLYPH_MAX_DELTA = 24
 GLYPH_MAX_PIXELS = 64
 
