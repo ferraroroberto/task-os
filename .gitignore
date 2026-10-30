@@ -28,3 +28,4 @@ test-results/
 !/.claude/skills/
 /.claude/skills/*
 !/.claude/skills/verify-task-os/
+.proof/
