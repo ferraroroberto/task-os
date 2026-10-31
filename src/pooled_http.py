@@ -50,6 +50,10 @@ def build_session(pool_size: int = _DEFAULT_POOL_SIZE) -> requests.Session:
 SESSION = build_session()
 
 
+#: Methods a repeated request cannot make worse (RFC 9110 "idempotent"). POST and PATCH are not.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
+
+
 def pooled_request(
     method: str,
     url: str,
@@ -59,18 +63,25 @@ def pooled_request(
     **kwargs: Any,
 ) -> requests.Response:
     """One call over `session`'s keep-alive pool, retried once on a dropped
-    connection.
+    connection when the method is idempotent.
 
     A pooled connection can go stale between calls — most commonly the peer
     process restarting and closing sockets it still held open. urllib3
     usually detects and silently reopens a dead pooled socket before sending,
     but the rarer race where the peer closes mid-send still surfaces as
-    `requests.exceptions.ConnectionError` before any bytes reach the server.
-    Retrying that case is safe even for non-idempotent methods — the failed
-    attempt never left the client — so a sibling process's restart surfaces
-    as a clean reconnect rather than a spurious error on the next poll.
+    `requests.exceptions.ConnectionError`. That error cannot tell "closed
+    before the request arrived" from "processed it, then dropped the reply"
+    (`RemoteDisconnected` is wrapped into the same class), so only an
+    idempotent method (GET, HEAD, OPTIONS, PUT, DELETE, TRACE) is resent; a
+    POST or PATCH surfaces the error to the caller, who knows whether a
+    duplicate is harmless. A `ConnectTimeout` is never retried: the peer is
+    unreachable, and a second attempt only doubles the wait.
     """
     try:
         return session.request(method, url, timeout=timeout, **kwargs)
+    except requests.exceptions.ConnectTimeout:
+        raise
     except requests.exceptions.ConnectionError:
+        if method.upper() not in _IDEMPOTENT_METHODS:
+            raise
         return session.request(method, url, timeout=timeout, **kwargs)
