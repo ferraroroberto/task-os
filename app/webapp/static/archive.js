@@ -91,7 +91,11 @@ export function mountArchive(opts) {
       status: null,    // GET /api/status → archive; null = the call itself failed
       runs: [],        // the picker's list, latest first
       run: null,       // the selected run WITH its items
-      runId: null,
+      runId: null,     // the run the picker shows — the user's to change at any time
+      // The run `tick` follows while one is in flight. Its own field because the
+      // picker overwrites `runId`: polling that would read a finished older run,
+      // toast a false "done" and stop following the real one.
+      liveRunId: null,
       poll: 0,         // setTimeout handle between two polls of a live run
       // Whether this pane is following a run *at all* — true across the gap where
       // `poll` is 0 because a tick is in flight. Re-opening the sheet mid-run must

@@ -22,10 +22,12 @@ if str(HERE) not in sys.path:
 
 def main(argv: list[str]) -> int:
     from src.config import load_config
-    from src.logger import configure_logging
+    from src.logger import TRAY_LOG_FILE, configure_logging
 
-    configure_logging()
     command = argv[1] if len(argv) > 1 else "tray"
+    # the tray spawns the webapp, which logs to the default file: sharing it would
+    # make every rollover rename fail on Windows
+    configure_logging(log_file=TRAY_LOG_FILE if command == "tray" else None)
     config = load_config()
 
     if command == "tray":

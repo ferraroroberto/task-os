@@ -162,7 +162,9 @@ def team_session_matches(presented: str | None, auth: AuthConfig, team: TeamConf
     expected = team_session(auth, team)
     if not presented or not expected:
         return False
-    return hmac.compare_digest(presented, expected)
+    # Bytes, not str: compare_digest refuses a non-ASCII str, and a stray cookie
+    # must be no one, never a 500 (the same reason token_person compares bytes).
+    return hmac.compare_digest(presented.encode("utf-8", "surrogatepass"), expected.encode("utf-8"))
 
 
 @dataclass(frozen=True)

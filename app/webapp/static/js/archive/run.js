@@ -33,24 +33,28 @@ export function startPolling(ctx) {
 async function tick(ctx) {
   const st = ctx.st;
   st.poll = 0;
+  let live;
   try {
-    if (st.runId == null) { const list = await api('/api/archive/runs?limit=1'); st.runId = (list.runs[0] || {}).id; }
-    st.run = await api('/api/archive/runs/' + st.runId);
+    if (st.liveRunId == null) { const list = await api('/api/archive/runs?limit=1'); st.liveRunId = (list.runs[0] || {}).id; }
+    live = await api('/api/archive/runs/' + st.liveRunId);
   } catch (err) {
     st.polling = false;
     ctx.els.progress.textContent = 'lost contact with the run — ' + (err.message || 'unknown');
     await refreshStatus(ctx);
     return;
   }
-  ctx.els.progress.textContent = progressText(st.run);
-  renderReport(ctx);
-  if (st.run.status === 'running') { startPolling(ctx); return; }
+  // The picker may be on an older run for comparison: the report is redrawn
+  // from the live run only while it is the one on show.
+  if (st.runId === st.liveRunId) { st.run = live; renderReport(ctx); }
+  ctx.els.progress.textContent = progressText(live);
+  if (live.status === 'running') { startPolling(ctx); return; }
   st.polling = false;
-  toast(st.run.status === 'failed'
-    ? 'Archive run failed — ' + (st.run.error || 'see the report')
-    : 'Archive run done · ' + counts(st.run), st.run.status === 'failed' ? 'error' : 'success');
+  toast(live.status === 'failed'
+    ? 'Archive run failed — ' + (live.error || 'see the report')
+    : 'Archive run done · ' + counts(live), live.status === 'failed' ? 'error' : 'success');
   await Promise.all([refreshStatus(ctx), loadRuns(ctx)]);
-  renderPicker(ctx);
+  renderPicker(ctx);   // may settle `runId` on the latest run when none was picked yet
+  if (st.runId === st.liveRunId) st.run = live;
   renderReport(ctx);
   ctx.opts.onChanged();
 }
@@ -71,6 +75,7 @@ export async function startRun(ctx) {
   try {
     const started = await api('/api/archive/run', { method: 'POST', body: limit === null ? {} : { limit: limit } });
     st.runId = started.id;
+    st.liveRunId = started.id;
     st.run = Object.assign({}, started, { items: [] });
     await loadRuns(ctx);
     els.pick.value = String(st.runId);

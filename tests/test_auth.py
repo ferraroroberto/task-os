@@ -6,6 +6,7 @@ file per test, never the real one; every secret here is synthetic."""
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -322,6 +323,49 @@ def test_loopback_owner_is_never_asked_for_a_name_but_can_pick_one(make_app) -> 
         c.cookies.clear()
         c.cookies.set(NAME_COOKIE, "Former%20Member")
         assert c.post(f"/api/tasks/{tid}/comments", json={"body": "c"}).json()["author"] == "Alex Chen"
+
+
+_BYTES_SOURCES = {"encode", "pbkdf2_hmac", "b64decode", "digest"}
+
+
+def _bytes_valued(arg: ast.expr, scope: ast.AST) -> bool:
+    """A call that returns bytes, or a name this scope binds from one."""
+    if isinstance(arg, ast.Call):
+        return isinstance(arg.func, ast.Attribute) and arg.func.attr in _BYTES_SOURCES
+    if isinstance(arg, ast.Name):
+        return any(
+            isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == arg.id for t in n.targets)
+            and _bytes_valued(n.value, scope)
+            for n in ast.walk(scope)
+        )
+    return False
+
+
+def test_compare_digest_is_only_ever_handed_bytes() -> None:
+    """Structural: ``hmac.compare_digest`` raises ``TypeError`` for a non-ASCII ``str``, so a
+    cookie or header value compared as text turns a stray byte into a 500 on every path.
+    Every call in ``src/`` and ``app/`` must pass bytes it built (``.encode``, a digest)."""
+    root = Path(__file__).resolve().parent.parent
+    offenders: list[str] = []
+    for path in [*(root / "src").rglob("*.py"), *(root / "app").rglob("*.py")]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for scope in ast.walk(tree):
+            if not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for call in ast.walk(scope):
+                if (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                        and call.func.attr == "compare_digest"
+                        and not all(_bytes_valued(arg, scope) for arg in call.args)):
+                    offenders.append(f"{path.relative_to(root).as_posix()}:{call.lineno}")
+    assert not offenders, f"compare_digest on a value not provably bytes: {offenders}"
+
+
+def test_a_non_ascii_team_cookie_is_no_one_never_a_server_error(make_app) -> None:
+    """``compare_digest`` refuses a non-ASCII ``str``; a stray cookie must be refused, not crash the gate."""
+    with TestClient(make_app(team=_team()), client=PHONE, raise_server_exceptions=False) as c:
+        for path, refused in (("/login", 200), ("/api/tasks", 401)):
+            res = c.get(path, headers={"cookie": (TEAM_COOKIE + "=café").encode("utf-8")}, follow_redirects=False)
+            assert res.status_code == refused, (path, res.status_code)
 
 
 def test_team_cookies_are_secure_over_https(make_app) -> None:

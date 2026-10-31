@@ -61,7 +61,10 @@ export async function refresh(ctx) {
   // is still going.
   if (st.status && st.status.running && st.runs.length && st.runs[0].status === 'running') {
     st.runId = st.runs[0].id;
+    st.liveRunId = st.runs[0].id;
     ctx.els.pick.value = String(st.runId);
+  } else if (st.status && st.status.running && !st.polling) {
+    st.liveRunId = null;   // `tick` looks the latest run up
   }
   await loadRun(ctx);
   if (st.status && st.status.running && !st.polling) ctx.startPolling();
