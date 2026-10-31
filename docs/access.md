@@ -17,7 +17,7 @@ tray.bat --restart
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\gen_token.py                # writes auth.token into config/config.json (created from the sample if missing)
-& .\.venv\Scripts\python.exe scripts\set_password.py <password>  # optional: a memorable secret to type instead (PBKDF2 hash stored, never the password)
+& .\.venv\Scripts\python.exe scripts\set_password.py             # optional: a memorable secret to type instead (prompts twice, no echo; PBKDF2 hash stored, never the password)
 tray.bat --restart                                               # config is read at startup
 ```
 
@@ -27,7 +27,7 @@ tray.bat --restart                                               # config is rea
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\gen_token.py --person <id>                # their token (printed once; --force rotates, --clear signs them out)
-& .\.venv\Scripts\python.exe scripts\set_password.py --person <id> <password>  # optional: their own password
+& .\.venv\Scripts\python.exe scripts\set_password.py --person <id>             # optional: their own password (prompts twice, no echo)
 tray.bat --restart
 ```
 

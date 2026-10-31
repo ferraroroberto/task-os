@@ -170,6 +170,12 @@ def test_password_hash_roundtrip() -> None:
     assert hash_password("x") != hash_password("x")  # salted
 
 
+def answers(*values: str):
+    """A ``read_secret`` that hands back the given entries in order (the prompt text is ignored)."""
+    it = iter(values)
+    return lambda prompt: next(it)
+
+
 def test_gen_token_and_set_password_scripts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     from scripts import gen_token, set_password
 
@@ -177,7 +183,7 @@ def test_gen_token_and_set_password_scripts(tmp_path: Path, monkeypatch: pytest.
     monkeypatch.setattr(cfgmod, "CONFIG_PATH", target)
     monkeypatch.setattr(gen_token, "CONFIG_PATH", target)
     monkeypatch.setattr(set_password, "CONFIG_PATH", target)
-    assert set_password.main(["longenough"]) == 1        # no token yet
+    assert set_password.main([], read_secret=answers("longenough", "longenough")) == 1   # no token yet
     assert gen_token.main([]) == 0
     first = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
     assert len(first) >= 32
@@ -186,8 +192,9 @@ def test_gen_token_and_set_password_scripts(tmp_path: Path, monkeypatch: pytest.
     assert gen_token.main(["--force"]) == 0
     second = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
     assert second != first
-    assert set_password.main(["short"]) == 1
-    assert set_password.main(["longenough"]) == 0
+    assert set_password.main([], read_secret=answers("short", "short")) == 1
+    assert set_password.main([], read_secret=answers("longenough", "different1")) == 1
+    assert set_password.main([], read_secret=answers("longenough", "longenough")) == 0
     stored = json.loads(target.read_text(encoding="utf-8"))["auth"]["password_hash"]
     assert verify_password("longenough", stored)
     assert set_password.main(["--clear"]) == 0
@@ -355,10 +362,6 @@ def test_set_team_password_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(cfgmod, "CONFIG_PATH", target)
     monkeypatch.setattr(gen_token, "CONFIG_PATH", target)
     monkeypatch.setattr(set_team_password, "CONFIG_PATH", target)
-
-    def answers(*values: str):
-        it = iter(values)
-        return lambda prompt: next(it)
 
     assert set_team_password.main([], read_secret=answers("longenough", "longenough")) == 1   # no token yet
     assert gen_token.main([]) == 0
@@ -565,8 +568,9 @@ def test_gen_token_and_set_password_for_a_person(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(set_password, "CONFIG_PATH", target)
     assert gen_token.main(["--person", "nobody"]) == 1                    # not a member
     assert gen_token.main(["--person", "p1"]) == 1                        # the owner: no --person
-    assert set_password.main(["--person", "nobody", "longenough"]) == 1
-    assert set_password.main(["--person", "p2", "longenough"]) == 1       # no token of theirs yet
+    both = answers("longenough", "longenough")
+    assert set_password.main(["--person", "nobody"], read_secret=both) == 1
+    assert set_password.main(["--person", "p2"], read_secret=both) == 1       # no token of theirs yet
     assert gen_token.main([]) == 0
     owner = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
     assert gen_token.main(["--person", "p2"]) == 0
@@ -579,7 +583,7 @@ def test_gen_token_and_set_password_for_a_person(tmp_path: Path, monkeypatch: py
     out = capsys.readouterr().out
     assert p2 not in out and owner not in out
     assert json.loads(target.read_text(encoding="utf-8"))["auth"]["people"]["p2"]["token"] == p2
-    assert set_password.main(["--person", "p2", "longenough"]) == 0
+    assert set_password.main(["--person", "p2"], read_secret=answers("longenough", "longenough")) == 0
     auth = json.loads(target.read_text(encoding="utf-8"))["auth"]
     assert verify_password("longenough", auth["people"]["p2"]["password_hash"]) and auth["password_hash"] == ""
     assert "longenough" not in capsys.readouterr().out
