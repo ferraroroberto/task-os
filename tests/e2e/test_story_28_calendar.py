@@ -48,9 +48,8 @@ from tests.e2e._surface import surface
 from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
-    _boot,
     _get,
-    _terminate,
+    booted,
     dismiss_toasts,
     e2e_workdir,
     shot,
@@ -78,12 +77,8 @@ def calendar_webapp() -> Iterator[CalendarInstance]:
     with FakeCalendar(mode="404", delay_s=4.0) as fake:
         cfg = write_test_config(work / "config.json",
                                 calendar={"ics_url": fake.url, "timeout_seconds": TIMEOUT_S})
-        proc, base, log = _boot(work, work / "tasks.db", cfg)
-        try:
+        with booted(work, work / "tasks.db", cfg) as base:
             yield CalendarInstance(base, fake)
-        finally:
-            _terminate(proc)
-            log.close()
 
 
 def _refresh(base: str) -> tuple[dict, float]:

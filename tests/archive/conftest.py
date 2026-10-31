@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src import db as dbmod
 from tests.archive._support import (
     ARCHIVED_FILE,
     client_for,
@@ -26,15 +24,6 @@ from tests.fixtures.archiver_fake import (
     revert_doc,
     revert_result,
 )
-
-
-@pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sqlite3.Connection]:
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
-    dbmod.init_db()
-    c = dbmod.connect()
-    yield c
-    c.close()
 
 
 @pytest.fixture

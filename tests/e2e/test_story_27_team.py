@@ -48,9 +48,8 @@ from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
-    _boot,
     _get,
-    _terminate,
+    booted,
     e2e_workdir,
     settle,
     shot,
@@ -77,12 +76,8 @@ def team_webapp() -> Iterator[str]:
     raw["auth"] = {"token": E2E_TOKEN, "password_hash": ""}
     raw["team"] = {"enabled": True, "people": PEOPLE, "password_hash": hash_password(TEAM_PASSWORD)}
     cfg.write_text(json.dumps(raw), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
+    with booted(work, work / "tasks.db", cfg) as base:
         yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _task_id(base: str, title: str) -> int:

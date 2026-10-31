@@ -109,9 +109,8 @@ from tests.e2e._archive_steps import (
 from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     INTERCEPT,
-    _boot,
     _get,
-    _terminate,
+    booted,
     e2e_workdir,
 )
 from tests.fixtures.archiver_fake import (
@@ -200,12 +199,8 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
             "timeout_seconds": 60, "confidence_threshold": 0.7,
         },
     )
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
+    with booted(work, work / "tasks.db", cfg) as base:
         yield ArchiveInstance(base, od, repo, work / "tasks.db")
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, shots: Path) -> None:

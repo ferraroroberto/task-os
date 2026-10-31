@@ -99,11 +99,12 @@ from typing import Any
 
 from src import archive_rank
 from src.ai.client import AIClient
-from src.archive_actions import ArchiveError, ItemActions, _folder_key
+from src.archive_actions import ArchiveError, ItemActions
 from src.archive_rank import Pick, Ranking
 from src.archive_renumber import (
     apply_renumber_map,
     last_component,
+    path_key,
     rename_files,
     rename_index,
     renumbered_folders,
@@ -555,7 +556,7 @@ class ArchiveBatchService(ItemActions):
             for decision in decisions:
                 item_id = item_by_message.get(str(decision["message_id"]))
                 if item_id is not None:
-                    triggers.setdefault(_folder_key(str(decision["folder_path"])), item_id)
+                    triggers.setdefault(path_key(str(decision["folder_path"])), item_id)
             self._heal_renumber(conn, result, triggers)
         scan_error = self._rescan_index() if decisions else None
         if scan_error:
@@ -793,7 +794,7 @@ class ArchiveBatchService(ItemActions):
             counts = apply_renumber_map(
                 conn, folder, entries, placeholders_map=self.placeholders,
             )
-            item_id = (triggers or {}).get(_folder_key(folder))
+            item_id = (triggers or {}).get(path_key(folder))
             if counts["renames"] and item_id is not None:
                 self._note_renumber(conn, item_id, folder, counts["renames"])
 

@@ -62,10 +62,9 @@ from tests.e2e._uniform import (
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
-    _boot,
     _get,
     _post,
-    _terminate,
+    booted,
     e2e_workdir,
     hold_toasts,
     shot,
@@ -97,13 +96,9 @@ def folder_webapp() -> Iterator[FolderInstance]:
         folder_roots=["{onedrive}"],
         placeholders={"onedrive": str(od).replace("\\", "/"), "user": "sam"},
     )
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
+    with booted(work, work / "tasks.db", cfg) as base:
         _post(base, "/api/folders/reindex")            # deterministic: don't race the startup thread
         yield FolderInstance(base, od)
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _centers_align(*locators, tol: float = 2.0) -> None:

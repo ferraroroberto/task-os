@@ -18,7 +18,6 @@ from typing import Any
 
 import pytest
 
-from src import db as dbmod
 from src import tasks_repo as repo
 from src.config import AppConfig, IssuesConfig, load_config
 from src.issue_sync import SYNC_ACTOR, sync_once
@@ -60,16 +59,6 @@ def glab(monkeypatch: pytest.MonkeyPatch):
 
     Handle.calls = calls  # type: ignore[attr-defined]
     return Handle
-
-
-@pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "tasks.db"
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    dbmod.init_db(path)
-    c = dbmod.connect(path)
-    yield c
-    c.close()
 
 
 def _issue(project: str, iid: int, title: str, *, state: str = "opened", labels: list[Any] | None = None,

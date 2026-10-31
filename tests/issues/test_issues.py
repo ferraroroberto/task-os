@@ -43,16 +43,6 @@ ISSUE_B = {"repo": "example/home-dashboard", "number": 3, "title": "Dark theme c
 
 
 @pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "tasks.db"
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    dbmod.init_db(path)
-    c = dbmod.connect(path)
-    yield c
-    c.close()
-
-
-@pytest.fixture
 def fake(tmp_path: Path) -> FakeProvider:
     return FakeProvider.from_issues(tmp_path / "forge.json", [dict(ISSUE_A), dict(ISSUE_B)])
 

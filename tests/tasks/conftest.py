@@ -4,26 +4,14 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
-from src import db as dbmod
 from src import tasks_repo as repo
 from tests.fixtures.seed import seed
 from tests.tasks._support import (
     ANCHOR,
 )
-
-
-@pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "tasks.db"
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    dbmod.init_db()
-    c = dbmod.connect()
-    yield c
-    c.close()
 
 
 @pytest.fixture

@@ -16,9 +16,8 @@ from fastapi.testclient import TestClient
 
 from src import config as cfgmod
 from src import db as dbmod
-from tests.conftest import write_test_config
+from tests.conftest import LOOPBACK, write_test_config
 
-LOOPBACK = ("127.0.0.1", 50000)
 PHONE = ("100.101.102.103", 50000)  # a tailnet client
 TOKEN = "t0ken-for-tests-only"
 BATCH = {

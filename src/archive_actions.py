@@ -13,7 +13,7 @@ import sqlite3
 from typing import Any
 
 from src import clock, placeholders
-from src.archive_renumber import rename_files, rename_index
+from src.archive_renumber import path_key, rename_files, rename_index
 from src.archive_store import (
     FILED_STATUSES,
     REVIEWABLE_STATUSES,
@@ -46,17 +46,7 @@ def _same_folder(a: str | None, b: str | None) -> bool:
     """
     if not a or not b:
         return False
-    return placeholders.normalize_path(a).casefold() == placeholders.normalize_path(b).casefold()
-
-
-
-def _folder_key(folder: str) -> str:
-    """One folder path in the form two spellings of it can be compared by.
-
-    The archiver reports backslashes and this app resolves refs to forward
-    slashes, so a raw comparison would call one folder two.
-    """
-    return placeholders.normalize_path(folder).casefold()
+    return path_key(a) == path_key(b)
 
 
 class ItemActions:
@@ -153,7 +143,7 @@ class ItemActions:
         # The undo left a hole in the folder's numbering and the archiver closed
         # it, which renamed files belonging to the *other* mails in there —
         # never this one, whose files are now gone.
-        self._heal_renumber(conn, result["doc"], {_folder_key(item["chosen_folder"] or ""): item_id})
+        self._heal_renumber(conn, result["doc"], {path_key(item["chosen_folder"] or ""): item_id})
         return get_item(conn, item_id) or reverted
 
     def _revert_once(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -346,9 +336,9 @@ class ItemActions:
             # the reason the note is appended to is the final one.
             if undo is not None:
                 self._heal_renumber(
-                    conn, undo["doc"], {_folder_key(item["chosen_folder"] or ""): item_id},
+                    conn, undo["doc"], {path_key(item["chosen_folder"] or ""): item_id},
                 )
-            self._heal_renumber(conn, applied, {_folder_key(destination): item_id})
+            self._heal_renumber(conn, applied, {path_key(destination): item_id})
             return get_item(conn, item_id) or moved
         message = self._apply_error_message(entry.get("error"), files)
         update_item(conn, item_id, status="failed", error=message, **common)
@@ -439,7 +429,7 @@ class ItemActions:
                 error=None, decided_at=clock.now_iso(),
             )
             self._heal_renumber(
-                conn, applied, {_folder_key(str(item["chosen_folder"] or "")): item_id},
+                conn, applied, {path_key(str(item["chosen_folder"] or "")): item_id},
             )
             return get_item(conn, item_id) or finished
         message = self._apply_error_message(entry.get("error"), files)

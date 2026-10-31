@@ -1,11 +1,12 @@
-/* task-os — the two pieces every editor modal repeats.
+/* task-os — the pieces every editor modal repeats.
  *
  * `modalCard` builds the card shell the vendored editor modal draws — a
  * `detail-card`, its `detail-header` with the title and the × — for the dialogs
  * that build their card per ask (confirm.js, snooze.js, keys.js). The ones whose
  * markup is static in index.html (quick-add, the palette) only need
- * `closeOnBackdrop`, which all four dialogs share: a click on the `<dialog>`
- * itself (the backdrop, outside the card) means "close".
+ * `closeOnBackdrop`, which all of them share: a click on the `<dialog>`
+ * itself (the backdrop, outside the card) means "close". `onceClosed` is the
+ * per-ask close lifecycle built on it.
  */
 
 'use strict';
@@ -50,4 +51,21 @@ export function closeOnBackdrop(dialog, onClose) {
   };
   dialog.addEventListener('click', handler);
   return function () { dialog.removeEventListener('click', handler); };
+}
+
+/**
+ * Arm the backdrop close, and on the dialog's next close empty it and run `then`.
+ * The per-ask dialogs rebuild their content each time, so the close listener
+ * removes itself and the backdrop listener is dropped with it.
+ * @param {HTMLDialogElement} dialog
+ * @param {() => void} then
+ */
+export function onceClosed(dialog, then) {
+  const offBackdrop = closeOnBackdrop(dialog);
+  dialog.addEventListener('close', function onClose() {
+    dialog.removeEventListener('close', onClose);
+    offBackdrop();
+    dialog.replaceChildren();
+    then();
+  });
 }

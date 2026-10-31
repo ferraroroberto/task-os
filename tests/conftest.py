@@ -19,13 +19,19 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from src import db as dbmod
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_CONFIG = REPO_ROOT / "config" / "config.sample.json"
+
+#: The address a test client presents as the install owner (the auth gate treats loopback as the owner).
+LOOPBACK = ("127.0.0.1", 50000)
 
 
 def write_test_config(
@@ -112,3 +118,19 @@ def _isolated_config(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]
         yield
     finally:
         os.environ.pop("TASKOS_CONFIG_PATH", None)
+
+
+@pytest.fixture
+def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sqlite3.Connection]:
+    """A fresh, migrated ``tasks.db`` under ``tmp_path``, with ``TASKOS_DB_PATH`` pointing at it.
+
+    A module that needs a pinned clock, a member list or a fake provider around
+    its connection defines its own ``conn`` on top of this.
+    """
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
+    dbmod.init_db()
+    c = dbmod.connect()
+    try:
+        yield c
+    finally:
+        c.close()

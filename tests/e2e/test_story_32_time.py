@@ -31,44 +31,19 @@ Shots:
 
 from __future__ import annotations
 
-import json
-from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
 from playwright.sync_api import Browser, expect
 
-from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface
 from tests.e2e._ui import close_settings_sheet, open_settings_sheet
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _terminate, dismiss_toasts, e2e_workdir, shot
+from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, dismiss_toasts, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 TODAY = E2E_ANCHOR.isoformat()
-OWNER_TOKEN = "e2e-story-32-owner-token"
-P2_TOKEN = "e2e-story-32-second-member-token"   # the sample's second member, p2 (#474)
 STALE_PERSON_KEY = "task-os.time.person"        # what #457 stored per device; ignored since #475
-
-
-@pytest.fixture(scope="module")
-def member_webapp() -> Iterator[str]:
-    """A seeded disposable instance whose config carries a token per member (the owner's and p2's)."""
-    from tests.fixtures.seed import seed_db
-
-    work = e2e_workdir("seeded-test_story_32_time")
-    seed_db(work / "tasks.db", E2E_ANCHOR)
-    cfg = write_test_config(work / "config.json")           # sample, mirror / backup dirs blanked
-    raw = json.loads(cfg.read_text(encoding="utf-8"))
-    raw["auth"] = {"token": OWNER_TOKEN, "password_hash": "", "people": {"p2": {"token": P2_TOKEN}}}
-    cfg.write_text(json.dumps(raw), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
-        yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _start_row(page, name: str):
@@ -236,8 +211,8 @@ def _delete_unused_category(page, base: str, cats, menu_items) -> None:
     close_settings_sheet(page)
 
 
-def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, shots: Path) -> None:
-    base = member_webapp
+def test_track_time_and_compare_shares(authed_webapp: str, browser: Browser, shots: Path) -> None:
+    base = authed_webapp
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
         page = context.new_page()
@@ -272,7 +247,7 @@ def test_track_time_and_compare_shares(member_webapp: str, browser: Browser, sho
     try:
         page = phone.new_page()
         page.goto(f"{base}/login")
-        page.fill("#loginSecret", P2_TOKEN)
+        page.fill("#loginSecret", E2E_P2_TOKEN)
         page.locator("#loginSubmit").tap()
         expect(page.locator("nav.tabs .tab.active")).to_be_visible()      # the shell, signed in
         page.wait_for_load_state("networkidle")

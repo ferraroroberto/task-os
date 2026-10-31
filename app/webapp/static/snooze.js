@@ -33,7 +33,7 @@ import { icon } from './_vendored/icons/icons.js';
 import { api, qs } from './api.js';
 import { duePicker } from './dueinput.js';
 import { fmtDay, todayISO } from './format.js';
-import { closeOnBackdrop, modalCard } from './modal.js';
+import { modalCard, onceClosed } from './modal.js';
 
 /** [phrase sent to the API, what the button says]. */
 export const SNOOZE_OPTIONS = [
@@ -247,11 +247,7 @@ function openDialog(t, field, onPick) {
   menu.classList.add('date-sheet');
   card.append(name, menu);
   const handle = { close: function () { dialog.close(); } };
-  const offBackdrop = closeOnBackdrop(dialog);
-  dialog.addEventListener('close', function onClose() {
-    dialog.removeEventListener('close', onClose);
-    offBackdrop();
-    dialog.replaceChildren();
+  onceClosed(dialog, function () {
     if (open === handle) open = null;
     if (picked !== undefined) onPick(picked);
   });

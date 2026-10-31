@@ -19,16 +19,6 @@ ANCHOR = PINNED_ANCHOR  # 2026-08-17
 
 
 @pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    path = tmp_path / "tasks.db"
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(path))
-    dbmod.init_db()
-    c = dbmod.connect()
-    yield c
-    c.close()
-
-
-@pytest.fixture
 def seeded(conn: sqlite3.Connection) -> dict:
     return seed(conn, ANCHOR)["ids"]
 

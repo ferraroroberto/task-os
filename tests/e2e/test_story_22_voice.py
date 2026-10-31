@@ -50,7 +50,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._ui import board_mode, open_settings_sheet
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, shot
 from tests.fixtures.chat_fake import FakeChat
 from tests.fixtures.whisper_fake import FakeWhisper
 
@@ -135,12 +135,8 @@ def _instance(name: str, *, transcribe_url: str, enrich_url: str = "") -> Iterat
         work / "config.json", transcribe_url=transcribe_url,
         partial_interval_seconds=PARTIAL_S, enrich_url=enrich_url,
     )
-    proc, base, log = _boot(work, db, cfg)
-    try:
+    with booted(work, db, cfg) as base:
         yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 @pytest.fixture(scope="module")

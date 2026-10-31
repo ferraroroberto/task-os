@@ -17,9 +17,8 @@ from src import db as dbmod
 from src import team as teammod
 from src.auth import COOKIE_NAME, TEAM_COOKIE, hash_password, team_session, verify_password
 from src.team import NAME_COOKIE
-from tests.conftest import write_test_config
+from tests.conftest import LOOPBACK, write_test_config
 
-LOOPBACK = ("127.0.0.1", 50000)
 PHONE = ("100.101.102.103", 50000)  # a tailnet client
 TOKEN = "t0ken-for-tests-only"
 
