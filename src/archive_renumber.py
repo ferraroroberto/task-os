@@ -22,6 +22,15 @@ from src import archive_rank, email_capture, placeholders
 logger = logging.getLogger(__name__)
 
 
+def path_key(path: str) -> str:
+    """One path in the form two spellings of it compare equal by.
+
+    The archiver reports Windows paths with backslashes and this app resolves
+    refs to forward slashes, so a raw comparison would call one folder two.
+    """
+    return placeholders.normalize_path(path).casefold()
+
+
 def last_component(folder: str) -> str:
     """The folder's own name — what the reason line names it by."""
     return archive_rank.short_folder(folder, 1)
@@ -116,7 +125,7 @@ def rename_index(doc: Any) -> dict[str, str]:
     index: dict[str, str] = {}
     for entries in renumbered_folders(doc).values():
         for old, new in renumber_pairs(entries):
-            index[placeholders.normalize_path(old).casefold()] = new
+            index[path_key(old)] = new
     return index
 
 
@@ -129,7 +138,7 @@ def rename_files(files: list[str], index: dict[str, str]) -> list[str]:
     before they are stored, or ``files_json`` records a name that no longer
     exists and a later ``revert`` is handed it.
     """
-    return [index.get(placeholders.normalize_path(f).casefold(), f) for f in files]
+    return [index.get(path_key(f), f) for f in files]
 
 
 #: Parks a chained rename's row between its two hops; never a real ref.
@@ -163,7 +172,7 @@ def apply_renumber_map(
     counts = {"renames": len(pairs), "items": 0, "links": 0, "tasks": 0}
     if not pairs:
         return counts
-    renames = {placeholders.normalize_path(old).casefold(): new for old, new in pairs}
+    renames = {path_key(old): new for old, new in pairs}
 
     for row in conn.execute(
         "SELECT id, files_json FROM archive_items WHERE files_json IS NOT NULL"

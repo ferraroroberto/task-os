@@ -7,6 +7,8 @@
 
 'use strict';
 
+import { addDays, fmtDay } from './format.js';
+
 /** 90 → "1h 30m", 120 → "2h", 45 → "45m", 0 → "0m". */
 export function fmtMinutes(min) {
   const m = Math.max(0, Math.round(min || 0));
@@ -28,19 +30,11 @@ export function entrySpan(e) {
   return e.started_at ? clockOf(e.started_at) + ' to ' + clockOf(e.ended_at) + ' · ' + dur : dur;
 }
 
-/** `day` ± `n` days, both YYYY-MM-DD, computed in UTC so no zone moves it. */
-export function addDaysISO(day, n) {
-  const d = new Date(day + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
 /** "Today", "Yesterday", else "Mon 7 Sep" — relative to the server's `today`. */
 export function dayLabel(day, today) {
   if (day === today) return 'Today';
-  if (day === addDaysISO(today, -1)) return 'Yesterday';
-  return new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB',
-    { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  if (day === addDays(today, -1)) return 'Yesterday';
+  return fmtDay(day);
 }
 
 /** A running timer's clock: "4:05" under an hour, "1:04:05" past it. */

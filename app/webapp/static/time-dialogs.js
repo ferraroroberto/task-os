@@ -17,8 +17,9 @@
 'use strict';
 
 import { api } from './api.js';
-import { closeOnBackdrop, modalCard } from './modal.js';
-import { addDaysISO, clockOf, hhmmToMinutes, minutesToHHMM } from './time-format.js';
+import { modalCard, onceClosed } from './modal.js';
+import { addDays } from './format.js';
+import { clockOf, hhmmToMinutes, minutesToHHMM } from './time-format.js';
 
 const MINUTE_CHIPS = [15, 30, 45, 60, 90, 120];
 
@@ -36,11 +37,7 @@ function openDialog(title, build) {
     });
     const finish = function (value) { answer = value; dialog.close(); };
     const focus = build(shell.card, finish);
-    const offBackdrop = closeOnBackdrop(dialog);
-    dialog.addEventListener('close', function onClose() {
-      dialog.removeEventListener('close', onClose);
-      offBackdrop();
-      dialog.replaceChildren();
+    onceClosed(dialog, function () {
       resolve(answer);
     });
     dialog.replaceChildren(shell.card);
@@ -252,7 +249,7 @@ export function openEntryEditor(o) {
     const day = input('date', 'Day', editing ? e.day : o.today);
     day.max = o.today;
     const dayPicks = picks([
-      { value: o.today, label: 'Today' }, { value: addDaysISO(o.today, -1), label: 'Yesterday' },
+      { value: o.today, label: 'Today' }, { value: addDays(o.today, -1), label: 'Yesterday' },
     ], 'Day', function (v) { day.value = v; sync(); });
     const minutes = input('number', 'Minutes', editing ? String(e.minutes) : '');
     minutes.inputMode = 'numeric';

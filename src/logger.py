@@ -5,6 +5,11 @@ handler (when a console exists) plus a rotating file under ``data/logs/``;
 later callers are no-ops. Under ``pythonw`` (the tray) ``sys.stderr`` is
 ``None`` — the file handler is then the *only* durable trail, which is why it
 is always installed. Emoji markers are the fleet convention: ℹ️ ⚠️ ❌ ✅.
+
+One process, one log file: the tray and the webapp it spawns are two processes,
+and on Windows a rotating file rolls over by renaming it, which fails while the
+other process holds it open. The webapp (and every script) writes
+``task-os.log``; the tray writes ``task-os-tray.log``.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = PROJECT_ROOT / "data" / "logs"
 LOG_FILE = LOG_DIR / "task-os.log"
+TRAY_LOG_FILE = LOG_DIR / "task-os-tray.log"
 
 _FMT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"

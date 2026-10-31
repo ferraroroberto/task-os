@@ -21,12 +21,11 @@ from src import calendar_lane, clock, ics
 from src import db as dbmod
 from src.calendar_lane import CalendarFetchError, CalendarService
 from src.config import AppConfig, CalendarConfig
-from tests.conftest import write_test_config
+from tests.conftest import LOOPBACK, write_test_config
 from tests.fixtures.calendar_fake import FIXTURES, SECRET, FakeCalendar, closed_port_url
 
 DAY = date(2026, 9, 7)
 PLUS_TWO = timezone(timedelta(hours=2))
-LOOPBACK = ("127.0.0.1", 50000)
 
 
 def agenda(name: str, day: date = DAY, tz: timezone = PLUS_TWO) -> ics.Agenda:

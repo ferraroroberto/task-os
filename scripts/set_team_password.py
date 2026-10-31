@@ -26,13 +26,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts._password_prompt import prompt_new_password  # noqa: E402
 from src.auth import hash_password  # noqa: E402
 from src.config import CONFIG_PATH, load_config, save_team_password_hash  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-MIN_LENGTH = 8
 
 
 def main(argv: list[str] | None = None, read_secret: Callable[[str], str] = getpass.getpass) -> int:
@@ -50,12 +49,8 @@ def main(argv: list[str] | None = None, read_secret: Callable[[str], str] = getp
     if not config.auth.token:
         print("❌ no auth.token yet — team sign-in is derived from it; run scripts/gen_token.py first", file=sys.stderr)
         return 1
-    password = read_secret("Team password: ")
-    if len(password) < MIN_LENGTH:
-        print(f"❌ password too short — at least {MIN_LENGTH} characters", file=sys.stderr)
-        return 1
-    if read_secret("Again: ") != password:
-        print("❌ the two entries differ — nothing changed", file=sys.stderr)
+    password = prompt_new_password("Team password", read_secret)
+    if password is None:
         return 1
 
     save_team_password_hash(hash_password(password))

@@ -162,9 +162,8 @@ from tests.e2e._surface import surface
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     E2E_P2_TOKEN,
-    _boot,
     _get,
-    _terminate,
+    booted,
     e2e_workdir,
     scroll_to_bottom,
     settle,
@@ -449,8 +448,7 @@ def _walk_one_member(playwright: Playwright) -> None:
     raw = json.loads(cfg.read_text(encoding="utf-8"))
     raw["time"]["people"] = raw["time"]["people"][:1]
     cfg.write_text(json.dumps(raw), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
+    with booted(work, work / "tasks.db", cfg) as base:
         assert len(_get(base, "/api/me")["people"]) == 1
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -466,9 +464,6 @@ def _walk_one_member(playwright: Playwright) -> None:
             expect(page.locator("#paneBoard .trow[data-id]").first).to_be_visible()
         finally:
             browser.close()
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _status(page: Page, base: str, path: str) -> int:

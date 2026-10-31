@@ -15,22 +15,12 @@ from typing import Any
 
 import pytest
 
-from src import db as dbmod
 from src import email_capture
 from src import tasks_repo as repo
 from src.config import AppConfig, CaptureConfig, SearchConfig
 from src.email_capture import EmailCaptureService, FlaggedEmailIndex, capture_once
 from src.search.emails_adapter import email_db_uri
 from tests.fixtures.emails_fixture import FLAGGED, build_emails_db
-
-
-@pytest.fixture
-def conn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
-    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
-    dbmod.init_db()
-    c = dbmod.connect()
-    yield c
-    c.close()
 
 
 @pytest.fixture

@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     who = f"{args.person}'s phone" if args.person else "the phone"
     print(f"Next: tray.bat --restart, then on {who} open https://<your-host>.ts.net:8448,")
     print("paste the token at /login (or set a password: scripts/set_password.py"
-          + (f" --person {args.person}" if args.person else "") + " <password>).")
+          + (f" --person {args.person}" if args.person else "") + ", which prompts for it).")
     if args.force:
         print("Rotated: " + (f"{args.person}'s devices are" if args.person else "every device signed in with it is")
               + " signed out until they sign in again.")

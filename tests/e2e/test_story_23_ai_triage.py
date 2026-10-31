@@ -11,7 +11,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._ui import board_mode, open_settings_sheet
-from tests.e2e.conftest import E2E_ANCHOR, _boot, _get, _terminate, e2e_workdir, hold_toasts, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, hold_toasts, shot
 from tests.fixtures.anthropic_fake import FakeAnthropic
 from tests.fixtures.seed import seed_db
 
@@ -48,12 +48,8 @@ def ai_webapp() -> Iterator[AIInstance]:
         config = write_test_config(
             work / "config.json", ai_enabled=True, ai_base_url=hub.url, ai_model="fake",
         )
-        proc, base, log = _boot(work, db, config)
-        try:
+        with booted(work, db, config) as base:
             yield AIInstance(base)
-        finally:
-            _terminate(proc)
-            log.close()
 
 
 def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -> None:

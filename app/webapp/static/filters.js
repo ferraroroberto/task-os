@@ -24,7 +24,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import { addDays, isBlocked, isDeferred, STATUSES, todayISO } from './format.js';
-import { closeOnBackdrop, modalCard } from './modal.js';
+import { modalCard, onceClosed } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
 export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine' };
@@ -449,17 +449,6 @@ function clearedFilters(base, keepQuery) {
 function textPlaceholder(count, countLabel) {
   return count == null ? 'Filter text…'
     : 'Filter ' + count + ' ' + (countLabel ? countLabel + ' ' : '') + (count === 1 ? 'task' : 'tasks') + '…';
-}
-
-/** Arm the backdrop close, and on the dialog's next close empty it and run `then`. */
-function onceClosed(dialog, then) {
-  const offBackdrop = closeOnBackdrop(dialog);
-  dialog.addEventListener('close', function onClose() {
-    dialog.removeEventListener('close', onClose);
-    offBackdrop();
-    dialog.replaceChildren();
-    then();
-  });
 }
 
 /** The sheet's editor-modal card; its × closes the dialog. */

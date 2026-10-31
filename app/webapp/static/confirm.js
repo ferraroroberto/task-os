@@ -13,7 +13,7 @@
 
 'use strict';
 
-import { closeOnBackdrop, modalCard } from './modal.js';
+import { modalCard, onceClosed } from './modal.js';
 
 /**
  * @param {{title: string, lines?: Array<string|null|undefined>, warn?: string|null,
@@ -61,11 +61,7 @@ export function confirmDialog(o) {
     actions.appendChild(go);
     card.appendChild(actions);
 
-    const offBackdrop = closeOnBackdrop(dialog);
-    dialog.addEventListener('close', function onClose() {
-      dialog.removeEventListener('close', onClose);
-      offBackdrop();
-      dialog.replaceChildren();
+    onceClosed(dialog, function () {
       resolve(answer);
     });
     dialog.replaceChildren(card);

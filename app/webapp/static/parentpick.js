@@ -15,7 +15,7 @@
 
 'use strict';
 
-import { closeOnBackdrop, modalCard } from './modal.js';
+import { modalCard, onceClosed } from './modal.js';
 import { CLOSED } from './rows.js';
 
 /**
@@ -132,11 +132,7 @@ export function openParentPicker(t, targets, onPick) {
 
   card.append(name, filter, list, empty);
 
-  const offBackdrop = closeOnBackdrop(dialog);
-  dialog.addEventListener('close', function onClose() {
-    dialog.removeEventListener('close', onClose);
-    offBackdrop();
-    dialog.replaceChildren();
+  onceClosed(dialog, function () {
     if (picked !== null && picked !== t.parent_id) onPick(picked);
   });
   dialog.replaceChildren(card);

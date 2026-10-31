@@ -50,10 +50,9 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     FAKE_ISSUES,
     INTERCEPT,
-    _boot,
     _get,
     _post,
-    _terminate,
+    booted,
     e2e_workdir,
     shot,
 )
@@ -95,15 +94,11 @@ def search_webapp() -> Iterator[SearchInstance]:
     )
     forge = work / "forge.json"
     forge.write_text(json.dumps({"issues": [*FAKE_ISSUES, KITCHEN_ISSUE], "error": None}, indent=1), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg,
-                            extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)})
-    try:
+    with booted(work, work / "tasks.db", cfg,
+                extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)}) as base:
         _post(base, "/api/folders/reindex")            # deterministic: don't race the startup thread
         _post(base, "/api/issues/sync")                # warm the issue cache (and make the fake's tasks)
         yield SearchInstance(base, od, work / "tasks.db")
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 def _task_post(base: str, body: dict) -> dict:

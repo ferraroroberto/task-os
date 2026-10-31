@@ -36,9 +36,9 @@ from src.enrich import (
     enrich_line,
     resolve_phrase,
 )
+from tests.conftest import LOOPBACK
 from tests.fixtures.chat_fake import FakeChat
 
-LOOPBACK = ("127.0.0.1", 12345)
 #: A Monday. The live probe used this date, and "before friday" from here is
 #: 2026-09-11 — the model answered 2026-09-13, a Sunday.
 TODAY = date(2026, 9, 7)

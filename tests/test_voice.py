@@ -23,9 +23,8 @@ from src import db as dbmod
 from src import voice as voicemod
 from src.config import AppConfig, VoiceConfig
 from src.voice import VoiceClient, VoiceError, build_multipart, clean_transcript, endpoint_of
+from tests.conftest import LOOPBACK
 from tests.fixtures.whisper_fake import FakeWhisper, parse_multipart
-
-LOOPBACK = ("127.0.0.1", 12345)
 
 
 def wav_bytes(samples: int = 8000, rate: int = 16000) -> bytes:

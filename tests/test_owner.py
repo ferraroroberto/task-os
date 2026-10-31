@@ -20,9 +20,8 @@ from src import config as cfgmod
 from src import db as dbmod
 from src import schema
 from src import tasks_repo as repo
-from tests.conftest import write_test_config
+from tests.conftest import LOOPBACK, write_test_config
 
-LOOPBACK = ("127.0.0.1", 50000)
 PHONE = ("100.101.102.103", 50000)  # a tailnet client
 TOKEN = "owner-token-for-tests-only"
 P2_TOKEN = "p2-owner-token-for-tests-only"

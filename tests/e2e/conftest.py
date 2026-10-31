@@ -59,6 +59,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import IO
@@ -321,6 +322,21 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     return proc, base, log
 
 
+@contextmanager
+def booted(work: Path, db_path: Path, config_path: Path | None = None,
+           extra_env: dict[str, str] | None = None) -> Iterator[str]:
+    """`_boot` as a context manager: yields the base URL, stops the instance and closes its log.
+
+    Every booted-instance fixture is then only its own seed, config and env delta.
+    """
+    proc, base, log = _boot(work, db_path, config_path, extra_env)
+    try:
+        yield base
+    finally:
+        _terminate(proc)
+        log.close()
+
+
 # ------------------------------------------------------- HTTP from a story
 # Every story reads the instance's own API to set up or confirm what the
 # browser then shows. One `_get` / `_post` here, not one per story file: six
@@ -373,12 +389,8 @@ def webapp() -> Iterator[str]:
         return
 
     work = e2e_workdir("empty" + worker_suffix())    # one per worker under -n (#288)
-    proc, base, log = _boot(work, work / "tasks.db")
-    try:
+    with booted(work, work / "tasks.db") as base:
         yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 @pytest.fixture(scope="module")
@@ -404,12 +416,8 @@ def seeded_webapp(request: pytest.FixtureRequest) -> Iterator[str]:
     work = e2e_workdir(f"seeded-{request.module.__name__.rsplit('.', 1)[-1]}")
     db = work / "tasks.db"
     seed_db(db, E2E_ANCHOR)
-    proc, base, log = _boot(work, db)
-    try:
+    with booted(work, db) as base:
         yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 E2E_TOKEN = "e2e-story-07-token"                        # the install owner's, p1 (#474)
@@ -434,12 +442,8 @@ def authed_webapp(request: pytest.FixtureRequest) -> Iterator[str]:
     raw = json.loads(cfg.read_text(encoding="utf-8"))
     raw["auth"] = {"token": E2E_TOKEN, "password_hash": "", "people": {"p2": {"token": E2E_P2_TOKEN}}}
     cfg.write_text(json.dumps(raw), encoding="utf-8")
-    proc, base, log = _boot(work, work / "tasks.db", cfg)
-    try:
+    with booted(work, work / "tasks.db", cfg) as base:
         yield base
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 class MirroredInstance:
@@ -477,12 +481,8 @@ def mirrored_webapp() -> Iterator[MirroredInstance]:
     backup_dir = work / "backup"
     mirror_dir.mkdir()
     config = write_test_config(work / "config.json", dir=str(mirror_dir), backup_dir=str(backup_dir))
-    proc, base, log = _boot(work, db, config, extra_env={"TASKOS_CLOCK_TICK": "1"})
-    try:
+    with booted(work, db, config, extra_env={"TASKOS_CLOCK_TICK": "1"}) as base:
         yield MirroredInstance(base, mirror_dir, backup_dir, db)
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 FAKE_ISSUES = [
@@ -535,12 +535,8 @@ def issues_webapp() -> Iterator[IssuesInstance]:
     seed_db(db, E2E_ANCHOR)
     forge = work / "forge.json"
     forge.write_text(json.dumps({"issues": FAKE_ISSUES, "error": None}, indent=1), encoding="utf-8")
-    proc, base, log = _boot(work, db, extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)})
-    try:
+    with booted(work, db, extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)}) as base:
         yield IssuesInstance(base, forge, db)
-    finally:
-        _terminate(proc)
-        log.close()
 
 
 @pytest.fixture(scope="session")

@@ -79,10 +79,11 @@ LONG_ATT_3 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - club-timetable.pd
 LONG_ATT_4 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - medical-form.pdf"
 
 #: Long enough that the running state is observable from the page and from a
-#: second POST, short enough that the story stays a few seconds. Only the run's
-#: own `plan` pays it: the single-mail apply / revert the story presses by hand
-#: are one-shot calls nothing observes mid-flight.
-CHILD_SLEEP_S = 1.1
+#: second POST, and that a run outlasts the sheet's 1.5 s poll (the second run
+#: is compared against the first mid-flight), short enough that the story stays
+#: a few seconds. Only the run's own `plan` pays it: the single-mail apply /
+#: revert the story presses by hand are one-shot calls nothing observes mid-flight.
+CHILD_SLEEP_S = 2.6
 
 class ArchiveInstance:
     def __init__(self, base: str, od: Path, repo: Path, db: Path) -> None:
@@ -818,9 +819,16 @@ def _second_run(page: Page, ctx: BrowserContext, base: str) -> None:
     acard = open_settings_sheet(page, "archive")
     run_now = acard.locator("#archiveRun")
     expect(run_now).to_be_enabled()
+    first_run = _get(base, "/api/archive/runs")["runs"][0]["id"]
     run_now.click()
     expect(page.locator("#archiveCardMeta")).to_have_text("running")
     expect(run_now).to_be_disabled()
+    # The Run picker is a comparison view: looking at the first run while the
+    # second is in flight must not change which run the poll follows, or the
+    # finished first run would be reported as the second one's end.
+    acard.locator("#archiveRunPick").select_option(str(first_run))
+    expect(acard.locator("#archiveProgress")).to_contain_text("done", timeout=30000)
+    assert _get(base, "/api/status")["archive"]["running"] is False
     expect(run_now).to_be_enabled(timeout=30000)
     expect(page.locator("#archiveCardMeta")).not_to_have_text("running")
     ctx.close()
