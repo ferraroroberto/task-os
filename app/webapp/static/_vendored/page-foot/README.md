@@ -6,7 +6,7 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 
 | File | Role |
 | --- | --- |
-| `page-foot.css` | Visual contract — centered layout, muted/caption text. Self-contained (doesn't depend on external `.muted`/`.small` utility classes). References design tokens only. |
+| `page-foot.css` | Visual contract — centered layout, muted text, and its own pinned type: the design.md `caption` style (system-ui, 12px, 600, line-height 1.1) with tabular numerals. Inherits nothing from the app's body or container font, and doesn't depend on external `.muted`/`.small` utility classes. |
 | `page-foot.js` | ESM — `fmtBuildTime(iso)` + `buildReadoutText(sha, builtAtIso)`, the one shared text formatter so the footer string can't drift between apps. |
 | `page-foot.html` | Markup skeleton to copy and adapt. |
 
@@ -44,6 +44,9 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 ```
 
 - Lives **outside every card**, as the last element of `<main>` — it's app-wide identity, not a section's content.
+- **Mount contract.** One `<footer class="page-foot">` per page, holding one `<p>` that `buildReadoutText()` fills from your own `GET /api/version` fetch (`git_sha`, `built_at`). It is the last child of the content wrapper (`.app`), so it ends each tab's content. Mount it once, outside the tab panels, not per tab.
+- **Position contract.** The component adds block margin only (`--space-md` above and below, `--space-xs` at the sides). It adds no bottom padding for the nav: the space that scrolls it clear of the bottom fade and the pill is the nav's `--nav-bottom-reserve` on `.app` (see `nav/README.md` "Bottom reserve and hit area"). Scrolled to the end, the footer ends a `--gap` above the fade, fully undimmed. Don't add your own bottom padding for it.
+- **Type contract.** Family, weight, line-height, letter-spacing, style, case and numeral style are set by the component, so the line is the same under any app's body font. `tests/e2e/test_vendored_page_foot.py` mounts it under two different body typefaces and asserts equal computed style and equal pixels. Don't set `font-*`, `letter-spacing` or `text-transform` on `.page-foot` or its `<p>`.
 - The `<p>`'s text is set entirely by `buildReadoutText()`; no additional class is needed (the styling is self-contained in `page-foot.css`, not borrowed from generic `.muted`/`.small` utilities).
 - Any reload-on-stale-asset logic (e.g. home-automation's asset-hash comparison that triggers one automatic reload after a deploy) is orthogonal to the footer text and stays app-specific — out of scope here.
 
@@ -52,9 +55,11 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 | Token | Light value | Used for |
 | --- | --- | --- |
 | `--muted` | `#656d76` | readout text color |
-| `--font-caption` | `0.75rem` | readout text size |
-| `--space-md` | `16px` | outer vertical margin |
-| `--space-xs` | `4px` | outer horizontal margin |
+| `--font-caption` | `0.75rem` | readout text size (falls back to `0.75rem`) |
+| `--space-md` | `16px` | outer vertical margin (falls back to `16px`) |
+| `--space-xs` | `4px` | outer horizontal margin (falls back to `4px`) |
+
+The font family has no token: design.md names it per type style (`system-ui, -apple-system, "Segoe UI", sans-serif`), so the CSS carries it literally. An app's own `--font` is deliberately not read.
 
 ## Don't diverge
 
