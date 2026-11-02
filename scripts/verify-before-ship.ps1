@@ -51,7 +51,13 @@
                              Whole tree, never routed (a count needs every file); exit 3
                              (a file not scanned) is NOT CONFIRMED and fails, never a
                              pass or a skip.
-     11. pytest (unit)     — hermetic suite, tests/e2e excluded
+     10b. runtime write ratchet — no new write target resolving under a code folder
+                             beyond .runtime-write-ratchet-baseline.json, through
+                             scripts/runtime_write_ratchet_gate.py. Whole tree, never
+                             routed; exit 3 (a new target it cannot resolve) is NOT
+                             CONFIRMED and fails, never a pass or a skip.
+     11. pytest (unit)     — hermetic suite, tests/e2e excluded; a runtime write
+                             --snapshot is taken first
      12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
                              (skip / static / full), fail-safe to full. The
@@ -63,6 +69,9 @@
                              leaves rewritten PNGs behind. Re-baselining
                              is deliberate: run `pytest tests/e2e` yourself,
                              review what moved, `git add docs/screenshots`.
+     14. runtime write probe — scripts/runtime_write_ratchet.py --probe against the
+                             stage-11 snapshot: fails on any untracked or ignored
+                             file stages 11-13 left under a code folder.
 
     Anchors to the repo root, so run it from anywhere:
         & .\scripts\verify-before-ship.ps1
@@ -127,6 +136,13 @@ Invoke-Stage "conventions ratchet"     { & $py -m scripts.conventions_ratchet_ga
 # Same wrapper shape: it maps the comment script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_comment_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "comment ratchet"         { & $py -m scripts.comment_ratchet_gate }
+# Same wrapper shape: it maps the runtime write script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_runtime_write_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "runtime write ratchet"   { & $py -m scripts.runtime_write_ratchet_gate }
+# Runtime write probe, first half: what already sits untracked or ignored under
+# the code folders, so the probe after the tests names only what they wrote.
+$runtimeSnapshot = Join-Path ([IO.Path]::GetTempPath()) "runtime-write-snapshot-$PID.json"
+Invoke-Stage "runtime write probe (snapshot)" { & $py "scripts/runtime_write_ratchet.py" --snapshot $runtimeSnapshot }
 Invoke-Stage "pytest (unit, non-e2e)"  { & $py -m pytest --ignore=tests/e2e }
 
 # ---------------------------------------------------------------- e2e routing
@@ -189,6 +205,10 @@ if ($tier -eq "skip") {
 # than a folder of pictures — two fresh runs agreeing proves only that the
 # capture is stable, never that the gallery still matches the code.
 Invoke-Stage "gallery baseline (committed vs regenerated)" { & $py -m scripts.shot_determinism --check-tree }
+
+# Runtime write probe, second half: any file the unit and e2e runs left under a
+# code folder (the snapshot was taken before stage 11).
+Invoke-Stage "runtime write probe" { & $py "scripts/runtime_write_ratchet.py" --probe $runtimeSnapshot }
 
 Write-Host ""
 Write-Host "[PASS] all checks green - safe to ship." -ForegroundColor Green
