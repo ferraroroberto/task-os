@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "entries": [
+    {"key": "app/webapp/manager.py", "counts": {"unresolved": 2}},
+    {"key": "opener/install_opener.py", "counts": {"unresolved": 3}},
+    {"key": "scripts/assign_owner.py", "counts": {"unresolved": 1}},
+    {"key": "scripts/import_notion.py", "counts": {"unresolved": 3}},
+    {"key": "scripts/migrate_dry_run.py", "counts": {"unresolved": 1}},
+    {"key": "scripts/shot_determinism.py", "counts": {"unresolved": 3}},
+    {"key": "src/backup.py", "counts": {"unresolved": 3}},
+    {"key": "src/config.py", "counts": {"unresolved": 2}},
+    {"key": "src/db.py", "counts": {"unresolved": 2}},
+    {"key": "src/folder_index.py", "counts": {"unresolved": 1}},
+    {"key": "src/issues/fake.py", "counts": {"unresolved": 2}},
+    {"key": "src/logger.py", "counts": {"unresolved": 2}},
+    {"key": "src/mirror.py", "counts": {"unresolved": 2}},
+    {"key": "src/search/emails_adapter.py", "counts": {"unresolved": 1}}
+  ]
+}
