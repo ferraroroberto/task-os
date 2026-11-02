@@ -13,7 +13,7 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 ## How to vendor
 
 1. Copy this `page-foot/` folder **verbatim** into your app's static dir (`app/webapp/static/_vendored/page-foot/`). Do **not** edit `page-foot.css` / `page-foot.js` per-app.
-2. Link the CSS and paste the skeleton as the last child of `<main>`:
+2. Link the CSS and paste the skeleton as the last child of the content wrapper `<main class="app">`, outside the tab panels:
    ```html
    <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
    ...
@@ -35,6 +35,18 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
    }
    ```
 
+## First-time adopter checklist
+
+An app that has never shown a build line, or has its own, does these in order:
+
+1. Vendor the folder verbatim (How to vendor, step 1) and add it to the app's `[vendored]` table in `.fleet.toml`.
+2. Serve `GET /api/version` → `{git_sha, built_at}` (`docs/webapp-pwa-conventions.md` "Webapp PWA required surfaces"), auth-gated with loopback bypass.
+3. Link `page-foot.css`; paste the skeleton as the last child of `.app`, once, outside the tab panels.
+4. Fetch `/api/version` and set the `<p>` with `buildReadoutText()`; on failure leave it empty.
+5. Delete the app's own build line, footer markup and CSS. A Settings "Build" row may stay.
+6. Define the tokens in the table below, and keep the nav's `--nav-bottom-reserve` on `.app`; add no bottom padding for the footer.
+7. Open the app on a phone-size viewport, scroll each tab to the end and confirm the footer sits fully above the bottom fade.
+
 ## Markup contract
 
 ```html
@@ -43,7 +55,7 @@ The fleet's canonical **page-foot**: a centered, quiet footer line — `Build: <
 </footer>
 ```
 
-- Lives **outside every card**, as the last element of `<main>` — it's app-wide identity, not a section's content.
+- Lives **outside every card**, as the last child of `.app` — it's app-wide identity, not a section's content.
 - **Mount contract.** One `<footer class="page-foot">` per page, holding one `<p>` that `buildReadoutText()` fills from your own `GET /api/version` fetch (`git_sha`, `built_at`). It is the last child of the content wrapper (`.app`), so it ends each tab's content. Mount it once, outside the tab panels, not per tab.
 - **Position contract.** The component adds block margin only (`--space-md` above and below, `--space-xs` at the sides). It adds no bottom padding for the nav: the space that scrolls it clear of the bottom fade and the pill is the nav's `--nav-bottom-reserve` on `.app` (see `nav/README.md` "Bottom reserve and hit area"). Scrolled to the end, the footer ends a `--gap` above the fade, fully undimmed. Don't add your own bottom padding for it.
 - **Type contract.** Family, weight, line-height, letter-spacing, style, case and numeral style are set by the component, so the line is the same under any app's body font. `tests/e2e/test_vendored_page_foot.py` mounts it under two different body typefaces and asserts equal computed style and equal pixels. Don't set `font-*`, `letter-spacing` or `text-transform` on `.page-foot` or its `<p>`.
