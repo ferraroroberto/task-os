@@ -59,6 +59,7 @@ export function activitySection(ctx, t) {
   activity.appendChild(alist);
   if (synced) {
     const toggle = document.createElement('button');
+    toggle.dataset.track = 'drawer.activity-sync-toggle';
     toggle.type = 'button';
     toggle.className = 'button-ghost activity-sync-toggle';
     toggle.setAttribute('aria-expanded', String(ctx.syncShown));

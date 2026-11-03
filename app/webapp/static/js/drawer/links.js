@@ -110,6 +110,7 @@ function linkRow(ctx, t, l) {
   const actions = document.createElement('div');
   actions.className = 'link-actions';
   const edit = document.createElement('button');
+  edit.dataset.track = 'drawer.link-edit';
   edit.type = 'button';
   edit.className = 'icon-button';   // the one icon button: unshaded, 44px via ::before
   edit.setAttribute('aria-label', 'Edit label for ' + (l.label || l.url));
@@ -117,6 +118,7 @@ function linkRow(ctx, t, l) {
   edit.addEventListener('click', function () { ctx.editingLinkId = l.id; ctx.render(); });
   actions.appendChild(edit);
   const rm = document.createElement('button');
+  rm.dataset.track = 'drawer.link-remove';
   rm.type = 'button';
   rm.className = 'icon-button danger';
   rm.setAttribute('aria-label', 'Remove link ' + (l.label || l.url));
@@ -145,7 +147,7 @@ function linkAddForm(ctx, t) {
   label.className = 'input-native';
   label.placeholder = 'label (optional)';
   label.setAttribute('aria-label', 'Link label');
-  linkForm.append(url, label, formButton(linkForm, 'button-surface', 'Add link'));
+  linkForm.append(url, label, formButton(linkForm, 'button-surface', 'Add link', { track: 'drawer.link-add' }));
   linkForm.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const u = url.value.trim();

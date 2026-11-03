@@ -53,6 +53,7 @@ function hitLink(ctx, h, snippetIsTitle) {
     // an issue already on the list: the title opens its task (the issue
     // chip inside the task is the forge link)
     link = document.createElement('a');
+    link.dataset.track = 'search.hit-open';
     link.className = 'search-hit-link';
     link.href = '#task/' + h.task_id;
     link.dataset.act = 'open';
@@ -95,6 +96,7 @@ export function hitRow(ctx, h, idx) {
   li.dataset.idx = String(idx);
   ctx.hitByIdx.set(idx, h);
   const main = document.createElement('div');
+  main.dataset.track = 'search.hit';
   main.className = 'trow-main';
   main.setAttribute('role', 'button');
   main.tabIndex = 0;

@@ -24,13 +24,14 @@ import { icon } from './_vendored/icons/icons.js';
 /**
  * The calendar button + the hidden date input it opens.
  * @param {{value?: string, ariaLabel?: string, title?: string, className?: string,
- *          onPick: (iso: string) => void}} opts
+ *          track: string, onPick: (iso: string) => void}} opts
  * @returns {{button: HTMLButtonElement, picker: HTMLInputElement, nodes: Array<HTMLElement>}}
  */
 export function duePicker(opts) {
   const o = opts || {};
   const button = document.createElement('button');
   button.type = 'button';
+  button.dataset.track = o.track;
   // `className` is the WHOLE class list, not a modifier stacked on a default:
   // the default is the one icon button, the snooze menu's is a
   // labelled menu option, and letting both stacks land on one element just

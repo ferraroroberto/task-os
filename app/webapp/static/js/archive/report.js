@@ -183,7 +183,7 @@ function cardMenu(ctx, item, dest, why) {
   // COMP-09), so the word is shown beside it; the <label> makes the
   // word a second place to press, the toggle itself unchanged.
   const verb = actions.controls ? 'Review' : 'Details';
-  const toggle = verbButton(actions.controls ? 'eye' : 'file-text', verb);
+  const toggle = verbButton(actions.controls ? 'eye' : 'file-text', verb, { track: 'archive.report-toggle' });
   toggle.classList.add('archive-menu-toggle');
   toggle.setAttribute('aria-expanded', 'false');
   const toggleHead = document.createElement('label');

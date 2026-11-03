@@ -36,9 +36,10 @@ import { openDatePicker } from './snooze.js';
 const STATUS_PLACEHOLDER = '';
 
 /** A square `.icon-button` with its glyph, tooltip and accessible name. */
-function iconButton(cls, title, label, glyph) {
+function iconButton(cls, title, label, glyph, opts) {
   const b = document.createElement('button');
   b.type = 'button';
+  b.dataset.track = opts.track;
   b.className = 'icon-button ' + cls;
   b.title = title;
   b.setAttribute('aria-label', label);
@@ -67,6 +68,7 @@ function countEl() {
 /** Set status…: the placeholder, then every status, `complete` included. */
 function statusSelect() {
   const status = document.createElement('select');
+  status.dataset.track = 'bulk.status';
   status.className = 'select-native bulk-status';
   status.setAttribute('aria-label', 'Set status of the selected tasks');
   const placeholder = document.createElement('option');
@@ -96,6 +98,7 @@ function ownerControl() {
   owner.title = 'Set owner of the selected tasks…';
   owner.innerHTML = icon('user');
   const ownerSel = document.createElement('select');
+  ownerSel.dataset.track = 'bulk.owner';
   ownerSel.className = 'bulk-owner-select';
   ownerSel.setAttribute('aria-label', 'Set owner of the selected tasks');
   owner.appendChild(ownerSel);
@@ -141,7 +144,7 @@ export function mountBulkBar(host, handlers) {
   // Move is the bar's first action, as it is the row's: the one date
   // sheet every re-date opens (snooze.js) — the push-out phrases, Pick a date…
   // and No date — so a selection moves the way a single row does.
-  const move = iconButton('bulk-move', 'Move the selected tasks…', 'Move the selected tasks to another date', 'calendar-days');
+  const move = iconButton('bulk-move', 'Move the selected tasks…', 'Move the selected tasks to another date', 'calendar-days', { track: 'bulk.move' });
   move.setAttribute('aria-haspopup', 'dialog');
   move.addEventListener('click', function () {
     if (busy) return;
@@ -167,12 +170,12 @@ export function mountBulkBar(host, handlers) {
 
   // Delete: the caller confirms and posts; this square only locks the
   // bar while that runs, exactly like an apply.
-  const del = iconButton('danger bulk-delete', 'Delete the selected tasks', 'Delete the selected tasks', 'trash-2');
+  const del = iconButton('danger bulk-delete', 'Delete the selected tasks', 'Delete the selected tasks', 'trash-2', { track: 'bulk.delete' });
   del.addEventListener('click', function () { locked(function () { return handlers.onDelete(); }, function () {}); });
 
   // the one icon button the strip's + wears too, so the bar's three
   // glyphs are one control by construction, not by three rules agreeing
-  const exit = iconButton('bulk-exit', 'Leave select mode', 'Leave select mode', 'x');
+  const exit = iconButton('bulk-exit', 'Leave select mode', 'Leave select mode', 'x', { track: 'bulk.exit' });
   exit.addEventListener('click', function () { handlers.onExit(); });
 
   applyOnPick(status, 'status');

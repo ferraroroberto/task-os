@@ -18,6 +18,7 @@ export function selectField(ctx, label, name, values, value, format) {
   l.className = 'field-label';
   l.textContent = label;
   const sel = document.createElement('select');
+  sel.dataset.track = 'drawer.field';
   sel.className = 'select-native field-control';
   sel.dataset.field = name;
   values.forEach(function (v) {
@@ -94,6 +95,7 @@ export function anchorField(ctx, t, groups) {
   l.className = 'field-label';
   l.textContent = 'On';
   const sel = document.createElement('select');
+  sel.dataset.track = 'drawer.recurrence-anchor';
   sel.className = 'select-native field-control';
   sel.dataset.field = 'recurrence_anchor';
   groups.forEach(function (group) {
@@ -125,6 +127,7 @@ export function statusField(ctx, t) {
   l.className = 'field-label';
   l.textContent = 'Status';
   const sel = document.createElement('select');
+  sel.dataset.track = 'drawer.status';
   sel.className = 'select-native field-control';
   sel.dataset.field = 'status';
   statusOptions(t).forEach(function (v) {
@@ -209,6 +212,7 @@ export function dateField(ctx, t, field, label, caption) {
   input.addEventListener('blur', function () { commit(input.value.trim()); });
   const pick = duePicker({
     className: 'icon-button field-due-btn',     // the one icon button
+    track: 'drawer.date-pick',
     value: value,
     ariaLabel: 'Pick a ' + label.toLowerCase() + ' date',
     onPick: commit,

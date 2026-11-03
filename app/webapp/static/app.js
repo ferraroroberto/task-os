@@ -880,6 +880,7 @@ async function boot() {
     defaultTab: 'today',
     onChange: function (tab) {
       state.tab = tab;
+      // dynamic-id-exempt: the id is the nav's own tab name, a fixed set
       usage.trackView(tab);
       app.setHeadTitleFromTab(tab);
       app.hideJournal();   // a tab press is how the journal is left; the nav re-showed its pane

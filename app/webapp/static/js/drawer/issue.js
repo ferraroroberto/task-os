@@ -14,6 +14,7 @@ function syncTools(ctx, st, configured) {
   const tools = document.createElement('div');
   tools.className = 'drawer-tools';
   const sync = document.createElement('button');
+  sync.dataset.track = 'drawer.issue-sync';
   sync.type = 'button';
   sync.className = 'button-ghost issue-sync';
   sync.innerHTML = icon('refresh-cw') + ' Sync now';
@@ -57,6 +58,7 @@ function linkedIssue(ctx, t, ib) {
   const actions = document.createElement('div');
   actions.className = 'issue-actions';
   const unlink = document.createElement('button');
+  unlink.dataset.track = 'drawer.issue-unlink';
   unlink.type = 'button';
   unlink.className = 'button-ghost issue-unlink';
   unlink.innerHTML = icon('unlink') + ' Unlink';
@@ -100,7 +102,7 @@ function createIssueForm(ctx, t, st, configured) {
   dl.replaceChildren();
   repos.forEach(function (r) { const o = document.createElement('option'); o.value = r; dl.appendChild(o); });
   if (repos.length === 1) repoInput.value = repos[0];
-  const createBtn = formButton(createForm, 'button-surface', icon('plus') + ' Create issue');
+  const createBtn = formButton(createForm, 'button-surface', icon('plus') + ' Create issue', { track: 'drawer.issue-create' });
   createBtn.disabled = !configured;
   createBtn.title = configured ? "Open an issue with this task's title and description, then link it" : 'Issue provider not configured';
   createForm.append(repoInput, createBtn);
@@ -132,7 +134,7 @@ function linkIssueForm(ctx, t, st, configured) {
   refInput.className = 'input-native';
   refInput.placeholder = 'link existing: owner/repo#12 or its URL';
   refInput.setAttribute('aria-label', 'Existing issue reference');
-  linkForm.append(refInput, formButton(linkForm, 'button-surface', icon('link') + ' Link'));
+  linkForm.append(refInput, formButton(linkForm, 'button-surface', icon('link') + ' Link', { track: 'drawer.issue-link' }));
   linkForm.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const v = refInput.value.trim();

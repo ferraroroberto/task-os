@@ -27,8 +27,9 @@ function folderForm(ctx, t) {
   input.value = t.folder_ref || '';
   input.placeholder = '{onedrive}/folder  — or paste an absolute path';
   input.setAttribute('aria-label', 'Folder ref');
-  const save = formButton(form, 'button-surface', t.folder_ref ? 'Change' : 'Set folder');
+  const save = formButton(form, 'button-surface', t.folder_ref ? 'Change' : 'Set folder', { track: 'drawer.folder-set' });
   const pick = document.createElement('button');
+  pick.dataset.track = 'drawer.folder-pick';
   pick.type = 'button';
   pick.className = 'button-ghost folder-pick';
   // label span, not a bare text node: the phone drops it to keep line 2 on
@@ -63,6 +64,7 @@ export function folderSection(ctx, t) {
     cur.className = 'folder-current';
     cur.appendChild(folderChip(t));
     const remove = document.createElement('button');
+    remove.dataset.track = 'drawer.folder-remove';
     remove.type = 'button';
     remove.className = 'icon-button danger';
     remove.setAttribute('aria-label', 'Remove folder link');

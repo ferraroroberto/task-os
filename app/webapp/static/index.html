@@ -583,7 +583,7 @@
               <p class="settings-text-size-hint muted">On this device. Rows, buttons and icons keep their size.</p>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="rows" aria-haspopup="dialog">
+              <button data-track="settings-link.rows" type="button" class="action-row-main settings-link" data-settings-sheet="rows" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
                 <span class="action-row-title">Row actions</span>
                 <span class="settings-link-value" id="rowActionsMeta"></span>
@@ -591,7 +591,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="palette" aria-haspopup="dialog">
+              <button data-track="settings-link.palette" type="button" class="action-row-main settings-link" data-settings-sheet="palette" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
                 <span class="action-row-title">Command palette</span>
                 <span class="settings-link-value">Ctrl+K</span>
@@ -599,7 +599,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="access" aria-haspopup="dialog">
+              <button data-track="settings-link.access" type="button" class="action-row-main settings-link" data-settings-sheet="access" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
                 <span class="action-row-title">Phone access</span>
                 <span class="settings-link-value" id="accessClient"></span>
@@ -613,7 +613,7 @@
         <section class="card action-list settings-group" aria-labelledby="settingsGroupSync">
           <ul class="action-rows">
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="issues" aria-haspopup="dialog">
+              <button data-track="settings-link.issues" type="button" class="action-row-main settings-link" data-settings-sheet="issues" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg>
                 <span class="action-row-title">Issues as tasks</span>
                 <span class="settings-link-value" id="issuesCardMeta"></span>
@@ -621,7 +621,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="calendar" aria-haspopup="dialog">
+              <button data-track="settings-link.calendar" type="button" class="action-row-main settings-link" data-settings-sheet="calendar" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
                 <span class="action-row-title">Calendar</span>
                 <span class="settings-link-value" id="calendarCardMeta"></span>
@@ -635,7 +635,7 @@
         <section class="card action-list settings-group" aria-labelledby="settingsGroupEmail">
           <ul class="action-rows">
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="capture" aria-haspopup="dialog">
+              <button data-track="settings-link.capture" type="button" class="action-row-main settings-link" data-settings-sheet="capture" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg>
                 <span class="action-row-title">Capture into Inbox</span>
                 <span class="settings-link-value" id="captureCardMeta"></span>
@@ -645,7 +645,7 @@
             <!-- Email archiving: the run, its report and every review
                  action, as this row's sheet rather than a dedicated tab. -->
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="archive" aria-haspopup="dialog">
+              <button data-track="settings-link.archive" type="button" class="action-row-main settings-link" data-settings-sheet="archive" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
                 <span class="action-row-title">Email archiving</span>
                 <span class="settings-link-value" id="archiveCardMeta"></span>
@@ -659,7 +659,7 @@
         <section class="card action-list settings-group" aria-labelledby="settingsGroupTools">
           <ul class="action-rows">
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="timecats" aria-haspopup="dialog">
+              <button data-track="settings-link.timecats" type="button" class="action-row-main settings-link" data-settings-sheet="timecats" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
                 <span class="action-row-title">Time categories</span>
                 <span class="settings-link-value" id="timeCatsValue"></span>
@@ -667,7 +667,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="search" aria-haspopup="dialog">
+              <button data-track="settings-link.search" type="button" class="action-row-main settings-link" data-settings-sheet="search" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
                 <span class="action-row-title">Search</span>
                 <span class="settings-link-value" id="searchCardMeta"></span>
@@ -675,7 +675,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="opener" aria-haspopup="dialog">
+              <button data-track="settings-link.opener" type="button" class="action-row-main settings-link" data-settings-sheet="opener" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
                 <span class="action-row-title">Folder opener</span>
                 <span class="settings-link-value" id="folderCardMeta"></span>
@@ -683,7 +683,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="voice" aria-haspopup="dialog">
+              <button data-track="settings-link.voice" type="button" class="action-row-main settings-link" data-settings-sheet="voice" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
                 <span class="action-row-title">Voice quick-add</span>
                 <span class="settings-link-value" id="voiceCardMeta"></span>
@@ -691,7 +691,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="ai" aria-haspopup="dialog">
+              <button data-track="settings-link.ai" type="button" class="action-row-main settings-link" data-settings-sheet="ai" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg>
                 <span class="action-row-title">AI Inbox triage</span>
                 <span class="settings-link-value" id="aiCardMeta"></span>
@@ -705,7 +705,7 @@
         <section class="card action-list settings-group" aria-labelledby="settingsGroupInstall">
           <ul class="action-rows">
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="install" aria-haspopup="dialog">
+              <button data-track="settings-link.install" type="button" class="action-row-main settings-link" data-settings-sheet="install" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
                 <span class="action-row-title">Database</span>
                 <span class="settings-link-value" id="settingsSite"></span>
@@ -713,7 +713,7 @@
               </button>
             </li>
             <li class="action-row">
-              <button type="button" class="action-row-main settings-link" data-settings-sheet="mirror" aria-haspopup="dialog">
+              <button data-track="settings-link.mirror" type="button" class="action-row-main settings-link" data-settings-sheet="mirror" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
                 <span class="action-row-title">Mirror and backup</span>
                 <span class="settings-link-value" id="mirrorCardMeta"></span>
@@ -756,7 +756,7 @@
            aria-labelledby="settingsSheetTitle" hidden>
       <div class="settings-sheet-head">
         <h2 id="settingsSheetTitle"></h2>
-        <button type="button" class="icon-button settings-sheet-close hit-target" aria-label="Close">
+        <button data-track="settings-sheet.close" type="button" class="icon-button settings-sheet-close hit-target" aria-label="Close">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
         </button>
       </div>
@@ -766,15 +766,15 @@
           <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
           <label class="row-actions-field">
             <span class="row-actions-label">Swipe right</span>
-            <select class="select-native" id="swipeRightSelect"></select>
+            <select data-track="settings.swipe-right" class="select-native" id="swipeRightSelect"></select>
           </label>
           <label class="row-actions-field">
             <span class="row-actions-label">Swipe left</span>
-            <select class="select-native" id="swipeLeftSelect"></select>
+            <select data-track="settings.swipe-left" class="select-native" id="swipeLeftSelect"></select>
           </label>
           <h4 class="row-actions-sub">The ⋯ menu</h4>
           <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
-          <button type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
+          <button data-track="row-actions.reset" type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
         </section>
         <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" hidden>
           <div id="timeCatsHost" class="time-admin"></div>
@@ -792,7 +792,7 @@
           <dl class="access-rows" id="accessRows"></dl>
           <p class="card-meta">Install: in iOS Safari, Share, then Add to Home Screen; in Android Chrome, Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
           <div class="access-actions">
-            <button type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
+            <button data-track="auth.sign-out" type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
           </div>
         </section>
         <section class="settings-sheet" id="issuesCard" data-sheet="issues" hidden>
@@ -865,8 +865,8 @@
           </div>
           <div class="pane-top archive-runbar">
             <label class="archive-runbar-label" for="archiveRunPick">Run</label>
-            <select id="archiveRunPick" class="select-native archive-run-pick"></select>
-            <button type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
+            <select data-track="archive.run-pick" id="archiveRunPick" class="select-native archive-run-pick"></select>
+            <button data-track="archive.accept-all" type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
           </div>
           <div id="archiveHost" class="archive-host"></div>
         </section>
@@ -888,7 +888,7 @@
           <div class="opener-block">
             <div class="opener-block-head">
               <span class="opener-block-title">Install on a PC — paste into PowerShell, no admin (30 s)</span>
-              <button type="button" id="openerCopy" class="button-surface">
+              <button data-track="opener.copy" type="button" id="openerCopy" class="button-surface">
                 <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copy command
               </button>
             </div>
@@ -896,12 +896,12 @@
             <details class="opener-more">
               <!-- Labels in plain words; the file's name and place are
                    the instruction under its heading, not the heading. -->
-              <summary>Uninstall · folder paths for each PC · rescan folders</summary>
+              <summary data-track="opener.advanced">Uninstall · folder paths for each PC · rescan folders</summary>
               <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your folder paths file):</p>
               <pre class="opener-cmd" id="openerUninstall"></pre>
               <div class="opener-block-head">
                 <span class="opener-block-title">Folder paths for each PC</span>
-                <button type="button" id="openerEnvCopy" class="button-ghost">
+                <button data-track="opener.env-copy" type="button" id="openerEnvCopy" class="button-ghost">
                   <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copy
                 </button>
               </div>
@@ -939,11 +939,11 @@
             <div class="status-row"><dt>Import conflicts</dt><dd id="statusMirrorEvents" class="muted">Loading…</dd></div>
           </dl>
           <div class="card-actions">
-            <button type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
+            <button data-track="mirror.clear-conflicts" type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
           </div>
         </section>
         <div class="settings-sheet-actions">
-          <button type="button" class="button-primary settings-sheet-done">Done</button>
+          <button data-track="settings-sheet.done" type="button" class="button-primary settings-sheet-done">Done</button>
         </div>
       </div>
     </aside>
@@ -952,36 +952,36 @@
   <!-- Command palette (Step 10): the vendored editor-modal shell (native
        <dialog>, showModal / close, Esc), one input + a list built by palette.js.
        Full-width sheet on the phone (styles/overlays.css). -->
-  <dialog class="detail-dialog palette-dialog" id="palette" aria-label="Command palette"></dialog>
+  <dialog data-track-view="palette" class="detail-dialog palette-dialog" id="palette" aria-label="Command palette"></dialog>
 
   <!-- Quick-add: the same vendored editor-modal shell as the palette, filled
        with its form and run by quickadd.js (js/quickadd/markup.js). -->
-  <dialog class="detail-dialog quickadd-dialog" id="quickAdd" aria-labelledby="quickAddTitle"></dialog>
+  <dialog data-track-view="quick-add" class="detail-dialog quickadd-dialog" id="quickAdd" aria-labelledby="quickAddTitle"></dialog>
 
   <!-- Keyboard shortcuts: the reference card behind `?` and the
        palette's "Keyboard shortcuts" command. The same vendored editor-modal
        shell, read-only (no fields, so no footer primary); the rows are built
        from actions.js's one ACTIONS table, never listed twice by hand. -->
-  <dialog class="detail-dialog keys-dialog" id="keysHelp" aria-labelledby="keysHelpTitle"></dialog>
+  <dialog data-track-view="keys-help" class="detail-dialog keys-dialog" id="keysHelp" aria-labelledby="keysHelpTitle"></dialog>
 
   <!-- Confirmation: the one destructive-action dialog, built by
        confirm.js per ask (deleting a task from the drawer, a selection from
        the Select bar). Same vendored shell; its single primary restates the
        tint recipe on danger, and every other way out means "no". -->
-  <dialog class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
+  <dialog data-track-view="confirm" class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
   <!-- The Time tab's dialogs (time-dialogs.js): the entry editor, the
        Switch offer, names and moves for Settings → Time categories. -->
-  <dialog class="detail-dialog time-dialog" id="timeDialog" aria-labelledby="timeDialogTitle"></dialog>
+  <dialog data-track-view="time-dialog" class="detail-dialog time-dialog" id="timeDialog" aria-labelledby="timeDialogTitle"></dialog>
   <!-- The date picker a row action opens on a phone: Change date… and
        Snooze… from the row menu or a swipe, built per ask by snooze.js. -->
-  <dialog class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
+  <dialog data-track-view="date-dialog" class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
   <!-- The parent picker: what the drawer head's Change parent opens,
        built per ask by parentpick.js — a filter over every open task. -->
-  <dialog class="detail-dialog parent-dialog" id="parentDialog" aria-labelledby="parentDialogTitle"></dialog>
+  <dialog data-track-view="parent-picker" class="detail-dialog parent-dialog" id="parentDialog" aria-labelledby="parentDialogTitle"></dialog>
   <!-- The filter sheet: what every strip's filter button opens —
        sort first, then status · project · person · due · modified, applied
        as they change. Built per open by filters.js for the tab that asked. -->
-  <dialog class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>
+  <dialog data-track-view="filters" class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>
 
   <!-- Toasts: user-initiated command results / errors (design.md "Async data
        & feedback") — one polite live region, assertive for errors. -->

@@ -19,6 +19,7 @@ function breadcrumbs(ctx, t) {
       crumbs.appendChild(sep);
     }
     const b = document.createElement('button');
+    b.dataset.track = 'drawer.crumb';
     b.type = 'button';
     b.className = 'crumb';
     b.textContent = c.title;
@@ -41,6 +42,7 @@ function parentTools(ctx, t) {
   const tools = document.createElement('div');
   tools.className = 'drawer-parent-tools';
   const change = document.createElement('button');
+  change.dataset.track = 'drawer.parent-change';
   change.type = 'button';
   change.className = 'button-ghost drawer-change-parent';
   change.setAttribute('aria-label', 'Change parent of ' + t.title);
@@ -53,6 +55,7 @@ function parentTools(ctx, t) {
   tools.appendChild(change);
   if (t.parent_id != null) {
     const remove = document.createElement('button');
+    remove.dataset.track = 'drawer.parent-remove';
     remove.type = 'button';
     remove.className = 'button-ghost drawer-remove-parent';
     remove.setAttribute('aria-label', 'Remove parent of ' + t.title);
@@ -68,6 +71,7 @@ export function renderHead(ctx, t) {
   head.className = 'drawer-head';
   const crumbs = breadcrumbs(ctx, t);
   const close = document.createElement('button');
+  close.dataset.track = 'drawer.close';
   close.type = 'button';
   close.className = 'icon-button detail-close drawer-close';
   close.setAttribute('aria-label', 'Close');

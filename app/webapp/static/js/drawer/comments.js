@@ -22,7 +22,7 @@ function commentComposer(ctx, t) {
   ta.title = 'Ctrl+Enter to send; links become chips';
   // Same tier and metrics as the Description "Edit" button — quiet, not a
   // full-height primary block.
-  const send = formButton(composer, 'button-ghost comment-send', icon('send-horizontal') + ' Send');
+  const send = formButton(composer, 'button-ghost comment-send', icon('send-horizontal') + ' Send', { track: 'drawer.comment-send' });
   send.setAttribute('aria-label', 'Send comment');
   composer.append(ta, send);
   composer.addEventListener('submit', async function (ev) {
@@ -87,6 +87,7 @@ function commentEditor(ctx, t, c) {
     if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancel(); }
   });
   const saveBtn = document.createElement('button');
+  saveBtn.dataset.track = 'drawer.comment-save';
   saveBtn.type = 'button';
   saveBtn.className = 'button-ghost comment-send comment-edit-save';
   saveBtn.setAttribute('aria-label', 'Save comment');
@@ -94,6 +95,7 @@ function commentEditor(ctx, t, c) {
   saveBtn.innerHTML = icon('check') + ' Save';
   saveBtn.addEventListener('click', save);
   const cancelBtn = document.createElement('button');
+  cancelBtn.dataset.track = 'drawer.comment-cancel';
   cancelBtn.type = 'button';
   cancelBtn.className = 'button-ghost comment-send';
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
@@ -151,6 +153,7 @@ function commentRow(ctx, t, c) {
   const actions = document.createElement('div');
   actions.className = 'comment-actions';
   const edit = document.createElement('button');
+  edit.dataset.track = 'drawer.comment-edit';
   edit.type = 'button';
   edit.className = 'icon-button';
   edit.setAttribute('aria-label', 'Edit comment by ' + c.author);
@@ -158,6 +161,7 @@ function commentRow(ctx, t, c) {
   edit.innerHTML = icon('pencil');
   edit.addEventListener('click', function () { ctx.editingCommentId = c.id; ctx.render(); });
   const rm = document.createElement('button');
+  rm.dataset.track = 'drawer.comment-delete';
   rm.type = 'button';
   rm.className = 'icon-button danger';
   rm.setAttribute('aria-label', 'Delete comment by ' + c.author);

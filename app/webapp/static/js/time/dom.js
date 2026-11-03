@@ -51,7 +51,8 @@ export function segmented(label, items, current, onPick, cls) {
     const b = el('button', 'segmented-item', it.label);
     b.type = 'button';
     b.dataset.value = it.value;
-    if (it.track) b.dataset.track = it.track;
+    // dynamic-id-exempt: each caller's item list carries a literal id
+    b.dataset.track = it.track;
     b.setAttribute('aria-pressed', String(it.value) === String(current) ? 'true' : 'false');
     b.addEventListener('click', function () { onPick(it.value); });
     seg.appendChild(b);

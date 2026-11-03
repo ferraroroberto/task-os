@@ -77,11 +77,13 @@ export function mountFolderPicker(host, opts) {
     list.innerHTML = '';
     items.forEach(function (it, i) {
       const li = document.createElement('li');
+      li.dataset.track = 'folder-picker.item';
       li.setAttribute('role', 'option');
       li.className = 'folder-picker-item' + (i === active ? ' is-active' : '');
       li.dataset.ref = it.ref;
       li.title = it.path;
       const b = document.createElement('button');
+      b.dataset.track = 'folder-picker.pick';
       b.type = 'button';
       b.className = 'folder-picker-btn';
       b.innerHTML = icon('folder');

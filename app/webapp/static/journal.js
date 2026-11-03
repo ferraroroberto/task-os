@@ -138,6 +138,7 @@ export function renderJournal(host, items, handlers, opts) {
     foot.appendChild(end);
   } else {
     const older = document.createElement('button');
+    older.dataset.track = 'journal.older';
     older.type = 'button';
     older.className = 'button-surface journal-older';
     older.textContent = 'Show the week before';

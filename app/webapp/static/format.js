@@ -285,6 +285,7 @@ export function showFolderPopover(anchor, info, mode) {
     p.className = 'folder-pop-hint';
     p.appendChild(document.createTextNode('Nothing opened? '));
     const a = document.createElement('a');
+    a.dataset.track = 'folder-pop.install';
     a.href = '#settings/opener';
     a.className = 'folder-pop-install';
     a.textContent = 'Install the opener — 30 s';
@@ -305,6 +306,7 @@ export function showFolderPopover(anchor, info, mode) {
   const row = document.createElement('div');
   row.className = 'folder-pop-actions';
   const copy = document.createElement('button');
+  copy.dataset.track = 'folder-pop.copy';
   copy.type = 'button';
   copy.className = 'button-surface folder-pop-copy';
   copy.innerHTML = icon('copy') + ' Copy path';

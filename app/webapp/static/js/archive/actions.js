@@ -13,9 +13,10 @@ import { shortFolder } from './text.js';
 
 /** A visible row verb: the vendored plain icon-button,
  *  glyph only, its word kept as the accessible name and the tooltip. */
-export function verbButton(glyph, label) {
+export function verbButton(glyph, label, opts) {
   const b = document.createElement('button');
   b.type = 'button';
+  b.dataset.track = opts.track;
   b.className = 'icon-button action-row-verb archive-action';
   b.setAttribute('aria-label', label);
   b.title = label;
@@ -23,8 +24,8 @@ export function verbButton(glyph, label) {
   return b;
 }
 
-export function actionButton(ctx, glyph, label, handler) {
-  const b = verbButton(glyph, label);
+export function actionButton(ctx, glyph, label, handler, opts) {
+  const b = verbButton(glyph, label, opts);
   b.addEventListener('click', function () {
     runAction(ctx, b, handler);
   });
