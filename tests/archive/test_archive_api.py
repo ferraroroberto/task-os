@@ -190,3 +190,27 @@ def test_the_sample_config_never_arms_the_real_archiver() -> None:
     assert raw["archive"]["model"] == "claude_haiku"
     assert (raw["archive"]["batch_size"], raw["archive"]["examples"]) == (8, 20)
     assert raw["archive"]["ai_timeout_seconds"] == 180
+
+
+def test_a_finished_run_waits_for_a_worker_that_outlives_stop(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``stop`` is a bounded join that returns silently on timeout, so the helper
+    must wait on the run's own terminal state; a worker slowed past the join
+    stands in for a loaded box.
+    """
+    import time
+
+    from src.archive_batch import ArchiveBatchService
+
+    real_spawn = ArchiveBatchService._spawn_batch
+
+    def slow_spawn(self: ArchiveBatchService, args: list[str], *, verb: str) -> dict:
+        time.sleep(1.5)
+        return real_spawn(self, args, verb=verb)
+
+    monkeypatch.setattr(ArchiveBatchService, "_spawn_batch", slow_spawn)
+    monkeypatch.setattr(ArchiveBatchService, "stop", lambda self, timeout=5.0: None)
+
+    run = _finished_run(api)
+    assert run["status"] == "done" and (run["planned"], run["archived"]) == (2, 1)

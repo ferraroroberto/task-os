@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -171,10 +172,22 @@ def client_for(
         yield c
 
 
-def _finished_run(client: TestClient, **body: object) -> dict:
+def _finished_run(client: TestClient, *, wait_seconds: float = 60.0, **body: object) -> dict:
+    """Start a run and return its detail once the run itself says it is over.
+
+    ``stop`` is a bounded join that returns silently when it times out, so it
+    cannot vouch that the worker persisted anything; the run's own status
+    (written last, after its items) is the only signal that does.
+    """
     started = client.post("/api/archive/run", json=body)
     assert started.status_code == 202 and started.json()["status"] == "running"
-    client.app.state.archive.stop(timeout=30)
-    detail = client.get(f"/api/archive/runs/{started.json()['id']}")
-    assert detail.status_code == 200
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        detail = client.get(f"/api/archive/runs/{started.json()['id']}")
+        assert detail.status_code == 200
+        if detail.json()["status"] != "running":
+            break
+        assert time.monotonic() < deadline, f"run still running after {wait_seconds:.0f} s"
+        time.sleep(0.05)
+    client.app.state.archive.stop(timeout=wait_seconds)
     return detail.json()
