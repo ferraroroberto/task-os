@@ -51,7 +51,7 @@ box_lock_gate = { src = "scripts/box_lock_gate.ps1", sha = "98cdb1b7727d12a5c233
 instruction_ratchet = { src = "scripts/instruction_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/instruction_ratchet.py" }
 doc_refs_ratchet = { src = "scripts/doc_refs_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/doc_refs_ratchet.py" }
 dead_code_ratchet = { src = "scripts/dead_code_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/dead_code_ratchet.py" }
-conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/conventions_ratchet.py" }
+conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "f05859a2bada56296d7f134e471953867c253571", dest = "scripts/conventions_ratchet.py" }
 runtime_write_ratchet = { src = "scripts/runtime_write_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/runtime_write_ratchet.py" }
 runtime_write_resolve = { src = "scripts/runtime_write_resolve.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/runtime_write_resolve.py" }
 comment_ratchet = { src = "scripts/comment_ratchet.py", sha = "baac1ed97388a3545bd1e52544821ec20f1dc77a", dest = "scripts/comment_ratchet.py" }
@@ -156,13 +156,14 @@ baseline = ".dead-code-ratchet-baseline.json"
 # excluded. Exit 3 (git unusable, a file that cannot be read or parsed) fails the gate.
 # no-window: the app spawns subprocesses on Windows. logging-not-print: src/ and app/ are
 # library code (CLI modules are exempt by the rule itself). no-drive-path: no hardcoded
-# drive literal. secret-compare and git-wrapper are off: auth.py calls compare_digest in
+# drive literal. password-input-vendored: a password field outside the vendored sign-in
+# sheet fails; login.html is the one marked exemption. secret-compare and git-wrapper are off: auth.py calls compare_digest in
 # place and there is no run_git helper, so neither names a helper to route through.
 # Mechanism + limits: project-scaffolding docs/conventions-ratchet.md.
 [conventions_ratchet]
 enabled  = true
 baseline = ".conventions-ratchet-baseline.json"
-rules    = ["no-window", "logging-not-print", "no-drive-path"]
+rules    = ["no-window", "logging-not-print", "no-drive-path", "password-input-vendored"]
 
 # [runtime_write_ratchet] -- scripts/runtime_write_ratchet.py fails when a tracked
 # Python file gains a write target (open for writing, Path.write_*, mkdir, a log
