@@ -102,7 +102,7 @@ FAKE_MIC = """
         const seconds = 4;
         const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
         const data = buf.getChannelData(0);
-        for (let i = 0; i < data.length; i++) data[i] = Math.sin(i * 0.06) * 0.4;
+        for (let i = 0; i < data.length; i++) data[i] = (i % 8 < 4 ? 0.4 : -0.4);   // square: every bar slice holds a peak
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.loop = true;                 // outlast any length of walk
@@ -157,6 +157,16 @@ def voiceless_webapp() -> Iterator[VoiceInstance]:
         yield VoiceInstance(base, None)
 
 
+def _bars_settled(mic) -> None:
+    """Wait for every waveform bar to read the tone's full level.
+
+    The strip fills as the tap's window fills; a shot taken mid-fill would
+    differ run to run, so the story captures only once the picture is steady.
+    """
+    expect(mic.locator(".rec-wave-bars i")).to_have_count(12)
+    expect(mic.locator(".rec-wave-bars i:not([style*='scaleY(1)'])")).to_have_count(0)
+
+
 def _open_add(page: Page):
     """The + in the strip opens the add dialog, as a user would.
 
@@ -195,6 +205,14 @@ def _mic_live_and_recording(ctx, base: str, shots: Path, inst):
     expect(mic).to_have_class(re.compile(r"is-recording"))
     expect(mic).to_have_attribute("aria-pressed", "true")
     expect(mic.locator("use")).to_have_attribute("href", "#i-square")
+    # …and the shared waveform stands in for the glyph, reading the tone as
+    # live signal (not silent, not unmeasured) — the instant confirmation that
+    # the mic is capturing.
+    wave = mic.locator(".rec-wave")
+    expect(wave).to_be_visible()
+    expect(wave).to_have_attribute("data-state", "live")
+    expect(mic.locator("svg.icon")).to_be_hidden()
+    _bars_settled(mic)
     expect(line).to_have_value(PARTIAL_SPOKEN)
     expect(line).to_have_class(re.compile(r"is-dictating"))
     expect(dialog.locator(".quick-add-due")).to_have_value("")
@@ -221,6 +239,8 @@ def _transcript_settles(page: Page, shots: Path, dialog, due, inst, line, mic) -
     expect(mic).not_to_have_class(re.compile(r"is-recording|is-working"))
     expect(mic).to_have_attribute("aria-pressed", "false")
     expect(mic.locator("use")).to_have_attribute("href", "#i-mic")
+    expect(mic.locator(".rec-wave")).to_have_count(0)      # the strip let go
+    expect(mic.locator("svg.icon")).to_be_visible()
     # …and the light model then tidies the sentence (#147): a shorter title,
     # the rest in Description. The date it named was a PHRASE out of the
     # transcript, resolved by src/dates — so the Due field does not move.
@@ -328,6 +348,7 @@ def _phone_same_gesture(browser: Browser, base: str, shots: Path, inst) -> None:
     p_mic.click()
     expect(p_mic).to_have_class(re.compile(r"is-recording"))
     expect(p_dialog.locator(".quick-add-input")).to_have_value(PHONE_SPOKEN)
+    _bars_settled(p_mic)
     shot(p, shots / "story-22-voice-5-phone.png")
     p_mic.click()
     # The transcript first, then the model's tidier title over it.

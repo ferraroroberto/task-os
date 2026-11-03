@@ -85,6 +85,14 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
   animation: quick-add-mic-pulse 1.2s ease-in-out infinite;
 }
+/* The vendored waveform replaces the glyph while recording, so the button
+   grows from its square to fit the strip and the timer; the input gives way. */
+.quick-add-mic-glyph { display: inline-flex; align-items: center; }
+.quick-add-mic.is-recording {
+  width: auto;
+  min-width: var(--icon-btn-box);
+  padding-inline: var(--space-sm);
+}
 .quick-add-mic.is-working,
 .quick-add-mic.is-working:not(:disabled) { color: var(--accent); }
 @keyframes quick-add-mic-pulse {

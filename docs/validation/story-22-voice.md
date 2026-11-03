@@ -108,3 +108,14 @@ Twice out of five it offered something that is not a date. Both phrases *were* i
 **In the browser**, headed, real speech through a real `MediaStream`: the transcript landed first (`.is-enriching` visible on the line while the model worked), then the model's title replaced it — including repairing a word the transcription had truncated (`"…the dehumidity"` → `Buy a new filter for the dehumidifier`). Description stayed empty, correctly: that sentence has no detail beyond its title. Settings' **Wording** row read *reachable · agentic_light_nothink*.
 
 **The model refusing is proven in the e2e**, not just in unit tests: story 22 flips the fake chat endpoint to 500 mid-walk, records a take, and asserts the line keeps the raw transcript, the Due still fills from the deterministic parse, Description stays empty and **no error toast appears**. Losing the tidy-up has to be invisible, because the answer under it was already good.
+
+## Live level waveform while recording (2026-11-03)
+
+The vendored `rec-wave` strip replaces the mic glyph while a take is open: twelve bars that follow the input level plus an elapsed `m:ss`, so speech being captured is visible at a glance. It reads the worklet tap's own blocks through the component's `source` seam, so a take still holds one `AudioContext`; the button grows from its square to fit the strip and returns to the mic glyph on stop, cancel or error.
+
+| Check | Result |
+| --- | --- |
+| Recording shows the strip in `data-state="live"` on a synthetic tone; the mic glyph is hidden | passed, `test_say_the_task` (desktop) |
+| After stop the strip is gone and the glyph is back | passed, same test |
+| Phone (390 px) strip fits the line-1 box beside the typed text | passed, `story-22-voice-5-phone.png` |
+| A real microphone | **not verified** (synthetic tone only) |
