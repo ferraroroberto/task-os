@@ -250,6 +250,7 @@ function modesSegment() {
     b.type = 'button';
     b.className = 'segmented-item';
     b.dataset.mode = m[0];
+    // dynamic-id-exempt: m[0] is one of the fixed BOARD_MODES keys
     b.dataset.track = 'board.mode.' + m[0];
     b.textContent = m[1];
     modes.appendChild(b);
@@ -432,6 +433,7 @@ function laneSection(lane) {
   if (lane.key === 'done') {
     // the reading surface behind this column — a link, not a tab
     const link = document.createElement('a');
+    link.dataset.track = 'board.journal-link';
     link.className = 'board-col-link';
     link.href = '#journal';
     link.textContent = 'journal';
@@ -480,6 +482,7 @@ function paintLane(p, lane, sort, handlers, rowOpts) {
 /** Status mode's phone switcher button for one column. */
 function stripButton(lane) {
   const b = document.createElement('button');
+  b.dataset.track = 'board.strip-tab';
   b.type = 'button';
   b.className = 'board-strip-btn';
   b.dataset.col = lane.key;
@@ -523,6 +526,7 @@ function buildRow(t, handlers, opts) {
 
 function triageButton(handlers) {
   const button = document.createElement('button');
+  button.dataset.track = 'board.triage';
   button.type = 'button';
   button.className = 'button-ghost board-triage hit-target';
   button.hidden = true;
@@ -548,9 +552,11 @@ function suggestionStrip(suggestion, handlers) {
   summary.textContent = bits.join(' · ');
   const actions = document.createElement('span');
   actions.className = 'ai-suggestion-actions';
-  [['check', 'Accept suggestion', handlers.onAcceptSuggestion],
-    ['x', 'Reject suggestion', handlers.onRejectSuggestion]].forEach(function (entry) {
+  [['check', 'Accept suggestion', handlers.onAcceptSuggestion, 'board.suggestion-accept'],
+    ['x', 'Reject suggestion', handlers.onRejectSuggestion, 'board.suggestion-reject']].forEach(function (entry) {
     const button = document.createElement('button');
+    // dynamic-id-exempt: picks one of two constant ids from the table above
+    button.dataset.track = entry[3];
     button.type = 'button';
     button.className = 'icon-button ai-suggestion-action';
     button.setAttribute('aria-label', entry[1] + ' for ' + suggestion.task_title);

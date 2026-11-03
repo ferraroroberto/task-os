@@ -11,6 +11,7 @@ export function descriptionSection(ctx, t) {
   const descTools = document.createElement('div');
   descTools.className = 'drawer-tools';
   const toggle = document.createElement('button');
+  toggle.dataset.track = 'drawer.desc-toggle';
   toggle.type = 'button';
   toggle.className = 'button-ghost';
   toggle.innerHTML = icon(ctx.descEditing ? 'eye' : 'pencil') + ' ' + (ctx.descEditing ? 'Preview' : 'Edit');
@@ -27,6 +28,7 @@ export function descriptionSection(ctx, t) {
     ta.setAttribute('aria-label', 'Description');
     body.appendChild(ta);
     const save = document.createElement('button');
+    save.dataset.track = 'drawer.desc-save';
     save.type = 'button';
     save.className = 'button-tint drawer-desc-save';
     save.textContent = 'Save';

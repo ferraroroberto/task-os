@@ -25,9 +25,10 @@ export function section(name, title, iconName) {
  *  48px. The click and Enter in any of the form's inputs both submit
  *  the form, so its one submit handler stays the one write path; a disabled
  *  button stops Enter as it stopped the native submit. */
-export function formButton(form, className, html) {
+export function formButton(form, className, html, opts) {
   const b = document.createElement('button');
   b.type = 'button';
+  b.dataset.track = opts.track;
   b.className = className;
   b.innerHTML = html;
   b.addEventListener('click', function () { form.requestSubmit(); });

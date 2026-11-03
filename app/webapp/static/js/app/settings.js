@@ -82,6 +82,7 @@ export function showSettingsSheet(app, key) {
   app.openSettings();
   const fresh = app.settings.currentSheet() !== key;
   if (!app.settings.showSheet(key)) return;
+  // dynamic-id-exempt: key is one of the settings sheet names, a fixed set
   if (fresh) app.usage.trackView('settings.' + key);
   if (fresh && key === 'archive') app.archive.refresh();
   if (fresh && key === 'timecats') app.time.openSheet(key);

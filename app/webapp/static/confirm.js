@@ -52,6 +52,7 @@ export function confirmDialog(o) {
     const actions = document.createElement('div');
     actions.className = 'detail-actions';
     const go = document.createElement('button');
+    go.dataset.track = 'confirm.action';
     go.type = 'button';
     // The modal's one full-width footer action, outlined on danger (the
     // vendored button-tint danger) — never a solid red or a tint.

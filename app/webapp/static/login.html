@@ -74,7 +74,7 @@
                autocomplete="current-password" autocapitalize="off" spellcheck="false" required
                placeholder="Paste the token or type the password">
       </label>
-      <button id="loginSubmit" type="submit" class="button-primary">Sign in</button>
+      <button data-track="login.submit" id="loginSubmit" type="submit" class="button-primary">Sign in</button>
       <p id="loginError" class="login-error" role="alert" hidden></p>
     </form>
     <!-- Team mode (Step 12): after the team password, or at ?step=name, the
@@ -151,6 +151,7 @@
 
       function personButton(person, you) {
         var b = document.createElement('button');
+        b.dataset.track = 'login.person';
         b.type = 'button';
         b.className = (person.name === you ? 'button-tint' : 'button-surface') + ' team-person';
         b.setAttribute('aria-pressed', person.name === you ? 'true' : 'false');

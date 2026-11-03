@@ -63,7 +63,8 @@ function primary(label, track) {
   btn.type = 'button';
   btn.className = 'button-primary detail-save-btn';
   btn.textContent = label;
-  if (track) btn.dataset.track = track;
+  // dynamic-id-exempt: every caller passes a literal id
+  btn.dataset.track = track;
   actions.appendChild(btn);
   return { actions: actions, button: btn };
 }
@@ -82,6 +83,7 @@ function picks(values, label, onPick) {
   wrap.className = 'time-picks';
   values.forEach(function (v) {
     const b = document.createElement('button');
+    b.dataset.track = 'time-dialog.pick';
     b.type = 'button';
     b.className = 'button-surface time-pick';
     b.dataset.value = String(v.value);
@@ -106,6 +108,7 @@ function picks(values, label, onPick) {
  *  categories left out — except the entry's own, which an edit keeps. */
 function categorySelect(meta, currentId) {
   const sel = document.createElement('select');
+  sel.dataset.track = 'time-dialog.category';
   sel.className = 'select-native';
   sel.setAttribute('aria-label', 'Category');
   const blank = document.createElement('option');
@@ -135,6 +138,7 @@ function personControl(people, current) {
   let value = current;
   if (people.length > 5) {
     const sel = document.createElement('select');
+    sel.dataset.track = 'time-dialog.person';
     sel.className = 'select-native';
     sel.setAttribute('aria-label', 'Person');
     people.forEach(function (p) {
@@ -153,6 +157,7 @@ function personControl(people, current) {
   const listeners = [];
   people.forEach(function (p) {
     const b = document.createElement('button');
+    b.dataset.track = 'time-dialog.person';
     b.type = 'button';
     b.className = 'segmented-item';
     b.dataset.value = p.id;
@@ -356,7 +361,7 @@ export function promptText(o) {
     input.maxLength = 80;
     input.value = o.value || '';
     input.setAttribute('aria-label', o.label);
-    const go = primary(o.action || 'Save');
+    const go = primary(o.action || 'Save', 'time-dialog.save');
     const sync = function () { go.button.disabled = !input.value.trim() || input.value.trim() === (o.value || ''); };
     input.addEventListener('input', sync);
     input.addEventListener('keydown', function (ev) {
@@ -386,7 +391,7 @@ export function promptCategory(o) {
     };
     const name = field('Name', o.name);
     const hint = field('Subtitle', o.hint, 'Optional');
-    const go = primary(o.action || 'Save');
+    const go = primary(o.action || 'Save', 'time-dialog.save');
     const answer = function () { return { name: name.value.trim(), hint: hint.value.trim() }; };
     const sync = function () {
       const a = answer();
@@ -409,6 +414,7 @@ export function promptCategory(o) {
 export function pickOption(o) {
   return openDialog(o.title, function (card, finish) {
     const sel = document.createElement('select');
+    sel.dataset.track = 'time-dialog.option';
     sel.className = 'select-native';
     sel.setAttribute('aria-label', o.label);
     o.options.forEach(function (opt) {
@@ -418,7 +424,7 @@ export function pickOption(o) {
       sel.appendChild(el);
     });
     sel.value = String(o.value);
-    const go = primary(o.action || 'Move');
+    const go = primary(o.action || 'Move', 'time-dialog.move');
     const sync = function () { go.button.disabled = sel.value === String(o.value); };
     sel.addEventListener('change', sync);
     go.button.addEventListener('click', function () { finish(sel.value); });
@@ -437,7 +443,7 @@ export function showInfo(o) {
       p.textContent = line;
       card.appendChild(p);
     });
-    const go = primary('Done');
+    const go = primary('Done', 'time-dialog.done');
     go.button.addEventListener('click', function () { finish(true); });
     card.appendChild(go.actions);
     return null;

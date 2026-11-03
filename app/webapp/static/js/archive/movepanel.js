@@ -23,7 +23,7 @@ const MAX_HINT = 500;
  *  @param {{onToggle?: (open: boolean) => void}} [hooks]
  */
 export function movePanel(ctx, item, hooks) {
-  const toggle = verbButton('folder', isFiled(item) ? 'Move to…' : 'File it…');
+  const toggle = verbButton('folder', isFiled(item) ? 'Move to…' : 'File it…', { track: 'archive.move-toggle' });
   toggle.classList.add('archive-move-toggle');
   toggle.setAttribute('aria-expanded', 'false');
 
@@ -73,6 +73,7 @@ function candidatesEl(ctx, item, hint) {
   candidates.forEach(function (c) {
     const li = document.createElement('li');
     const b = document.createElement('button');
+    b.dataset.track = 'archive.candidate';
     b.type = 'button';
     b.className = 'button-ghost archive-cand';
     b.title = (isFiled(item) ? 'Move into ' : 'Archive here: ') + c.folder_path;
@@ -106,6 +107,7 @@ function otherFolderEls(ctx, item, hint) {
   field.placeholder = '{onedrive}/… — or paste an absolute path';
   field.setAttribute('aria-label', 'Any other folder');
   const pickBtn = document.createElement('button');
+  pickBtn.dataset.track = 'archive.pick-folder';
   pickBtn.type = 'button';
   pickBtn.className = 'button-ghost folder-pick';
   pickBtn.setAttribute('aria-expanded', 'false');
@@ -119,6 +121,7 @@ function otherFolderEls(ctx, item, hint) {
   fieldGroup.className = 'archive-other-field';
   fieldGroup.append(field, pickBtn);
   const go = document.createElement('button');
+  go.dataset.track = 'archive.other-go';
   go.type = 'button';
   go.className = 'button-surface archive-other-go';
   go.textContent = isFiled(item) ? 'Move here' : 'Archive here';

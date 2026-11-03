@@ -42,6 +42,7 @@ export function deleteFoot(ctx, t) {
   const foot = document.createElement('div');
   foot.className = 'drawer-section drawer-danger';
   const del = document.createElement('button');
+  del.dataset.track = 'drawer.delete';
   del.type = 'button';
   del.className = 'button-ghost drawer-delete';
   del.innerHTML = icon('trash-2') + ' Delete task';

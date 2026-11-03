@@ -239,6 +239,7 @@ function groupTitle(group, handlers) {
   title.className = 'today-group-title';
   if (group.root) {
     const btn = document.createElement('button');
+    btn.dataset.track = 'today.group-open';
     btn.type = 'button';
     btn.className = 'today-group-link';
     btn.textContent = group.root.title;

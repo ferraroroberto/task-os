@@ -194,6 +194,7 @@ export function metaLine(t, opts) {
 function doneToggle(t, handlers) {
   const closed = !!CLOSED[t.status];
   const btn = document.createElement('button');
+  btn.dataset.track = 'row.done';
   btn.type = 'button';
   btn.className = 'icon-button trow-done action-row-fav';
   btn.setAttribute('aria-pressed', closed ? 'true' : 'false');
@@ -217,6 +218,7 @@ function doneToggle(t, handlers) {
  */
 function moveVerb(t, menu) {
   const btn = document.createElement('button');
+  btn.dataset.track = 'row.move';
   btn.type = 'button';
   btn.className = 'icon-button action-row-verb trow-move';
   btn.setAttribute('aria-label', 'Move ' + t.title + ' to another date');
@@ -289,6 +291,7 @@ export function taskRow(t, handlers, opts) {
 
   if (o.selectable) {
     const box = document.createElement('input');
+    box.dataset.track = 'row.select';
     box.type = 'checkbox';
     box.className = 'check trow-check';
     box.checked = !!o.selected;
@@ -300,6 +303,7 @@ export function taskRow(t, handlers, opts) {
   if (!o.selectable) li.appendChild(doneToggle(t, handlers));
 
   const main = document.createElement('button');
+  main.dataset.track = 'row.open';
   main.type = 'button';
   main.className = 'trow-main action-row-main';
   main.setAttribute('aria-label', (o.selectable ? 'Select ' : '') + t.title);

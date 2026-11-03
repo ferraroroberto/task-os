@@ -31,6 +31,7 @@ function mountSwitch(host, spec, onChange) {
     b.type = 'button';
     b.className = 'segmented-item';
     b.dataset[spec.key] = o[0];
+    // dynamic-id-exempt: spec.key and o[0] come from the fixed scope specs, so the id set is closed
     b.dataset.track = spec.key + '.' + o[0];
     b.setAttribute('aria-pressed', 'false');
     b.textContent = o[1];

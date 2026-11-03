@@ -39,6 +39,7 @@ export function toast(message, kind, action) {
   el.appendChild(span);
   if (action && action.label) {
     const act = document.createElement('button');
+    act.dataset.track = 'toast.action';
     act.type = 'button';
     act.className = 'button-ghost toast-action';
     act.textContent = action.label;
@@ -49,6 +50,7 @@ export function toast(message, kind, action) {
     el.appendChild(act);
   }
   const close = document.createElement('button');
+  close.dataset.track = 'toast.close';
   close.type = 'button';
   close.className = 'icon-button toast-close';   // the one icon button
   close.setAttribute('aria-label', 'Dismiss');

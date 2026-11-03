@@ -274,6 +274,7 @@ function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 // ---------------------------------------------------------------- controls
 function selectEl(name, label, values, current, onChange) {
   const sel = document.createElement('select');
+  sel.dataset.track = 'filters.select';
   sel.className = 'select-native filter-select';
   sel.name = name;
   sel.setAttribute('aria-label', label);
@@ -309,6 +310,7 @@ function checkGroup(name, labelId, values, selected, onChange) {
     opt.className = 'filter-check';
     opt.dataset.value = String(v[0]);
     const cb = document.createElement('input');
+    cb.dataset.track = 'filters.option';
     cb.type = 'checkbox';
     cb.className = 'check';
     cb.name = name;
@@ -383,6 +385,7 @@ function sheetActions(clearHidden, onClear, onDone) {
   const actions = document.createElement('div');
   actions.className = 'filter-actions';
   const clear = document.createElement('button');
+  clear.dataset.track = 'filters.clear';
   clear.type = 'button';
   clear.className = 'button-ghost filter-clear';
   clear.textContent = 'Clear';
@@ -390,6 +393,7 @@ function sheetActions(clearHidden, onClear, onDone) {
   clear.addEventListener('click', onClear);
   actions.appendChild(clear);
   const done = document.createElement('button');
+  done.dataset.track = 'filters.done';
   done.type = 'button';
   done.className = 'button-primary filter-done';
   done.textContent = 'Done';

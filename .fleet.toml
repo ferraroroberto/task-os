@@ -185,6 +185,15 @@ baseline = ".runtime-write-ratchet-baseline.json"
 enabled  = true
 baseline = ".usage-track-ratchet-baseline.json"
 rules    = ["untracked-control", "untracked-sheet", "dynamic-id", "usage-log-wired"]
+# A shared control factory is declared here; its callers pass `{ track: '<id>' }`, its own
+# body sets the attribute from that option.
+builders = [
+  "app/webapp/static/bulkbar.js:iconButton",
+  "app/webapp/static/dueinput.js:duePicker",
+  "app/webapp/static/js/archive/actions.js:verbButton",
+  "app/webapp/static/js/archive/actions.js:actionButton",
+  "app/webapp/static/js/drawer/dom.js:formButton",
+]
 
 # [comment_ratchet] -- the scaffold's comment-history stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/comment_ratchet.py, which counts `#NNN`

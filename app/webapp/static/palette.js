@@ -27,6 +27,7 @@ const TASK_LIMIT = 8;
 /** One palette row: icon, label (+ status mark), hint, key. */
 function itemEl(it, isActive) {
   const li = document.createElement('li');
+  li.dataset.track = 'palette.item';
   li.className = 'palette-item' + (isActive ? ' is-active' : '');
   li.dataset.kind = it.kind;
   li.setAttribute('role', 'option');
@@ -81,7 +82,7 @@ const CARD_HTML = `
       <input id="paletteInput" class="palette-input" type="text" autocomplete="off" spellcheck="false"
              placeholder="Jump to a task… or type > for commands" aria-label="Command palette"
              role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
-      <button type="button" class="icon-button detail-close" aria-label="Close">
+      <button data-track="palette.close" type="button" class="icon-button detail-close" aria-label="Close">
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
       </button>
     </div>

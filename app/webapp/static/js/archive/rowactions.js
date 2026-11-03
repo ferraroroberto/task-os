@@ -15,7 +15,7 @@ export function actionsFor(ctx, item, hooks) {
   const wrap = document.createElement('div');
   wrap.className = 'archive-row-actions icon-button-group';
   if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
-    wrap.appendChild(actionButton(ctx, 'check', 'Accept', function () { return acceptItem(item, null); }));
+    wrap.appendChild(actionButton(ctx, 'check', 'Accept', function () { return acceptItem(item, null); }, { track: 'archive.accept' }));
   }
   let body = null;
   if (canMove(item)) {
@@ -26,7 +26,7 @@ export function actionsFor(ctx, item, hooks) {
   // Finish it before offering to undo it: on the one row that has both, the
   // mail is still in the Inbox and getting it out is what was meant to happen.
   if (canRetry(item)) {
-    wrap.appendChild(actionButton(ctx, 'refresh-cw', 'Retry', function () { return retryItem(item); }));
+    wrap.appendChild(actionButton(ctx, 'refresh-cw', 'Retry', function () { return retryItem(item); }, { track: 'archive.retry' }));
   }
   // Revert deletes the archived file, so it is never a visible verb: it is
   // the last item of the card's kebab, behind its confirm.
@@ -40,6 +40,7 @@ export function actionsFor(ctx, item, hooks) {
  *  the same confirm the desktop row menu uses. */
 function revertKebab(ctx, item) {
   const kebab = document.createElement('button');
+  kebab.dataset.track = 'archive.revert-menu';
   kebab.type = 'button';
   kebab.className = 'icon-button archive-kebab action-row-kebab';
   kebab.setAttribute('aria-label', 'More actions for ' + (item.subject || '(no subject)'));
@@ -73,6 +74,7 @@ export function rowMenuFor(ctx, item, hooks) {
   const items = [];
   let body = null;
   const kebab = document.createElement('button');
+  kebab.dataset.track = 'archive.row-menu';
   kebab.type = 'button';
   kebab.className = 'icon-button archive-kebab action-row-kebab';
   kebab.setAttribute('aria-label', 'Actions for ' + (item.subject || '(no subject)'));

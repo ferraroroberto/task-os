@@ -40,6 +40,7 @@ function renderRowActions(ctx, focusId, focusDir) {
     // 44px target (34 painted + its expansion), which a 16px checkbox is not.
     const listed = shown || !!swipe;
     const tick = document.createElement('button');
+    tick.dataset.track = 'row-actions.tick';
     tick.type = 'button';
     tick.className = 'icon-button row-actions-tick';
     tick.setAttribute('aria-pressed', listed ? 'true' : 'false');
@@ -59,6 +60,7 @@ function renderRowActions(ctx, focusId, focusDir) {
     }
     [['up', -1, 'chevron-up'], ['down', 1, 'chevron-down']].forEach(function (m) {
       const b = document.createElement('button');
+      b.dataset.track = 'row-actions.move';
       b.type = 'button';
       b.className = 'icon-button row-actions-move';
       b.dataset.move = m[0];

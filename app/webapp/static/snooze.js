@@ -97,6 +97,7 @@ function fillDates(buttons) {
 export function phraseButtons(options, onPick) {
   const buttons = options.map(function (opt) {
     const b = document.createElement('button');
+    b.dataset.track = 'snooze.option';
     b.type = 'button';
     b.className = 'snooze-opt';
     b.dataset.phrase = opt[0];
@@ -158,6 +159,7 @@ export function dateMenu(t, field, onPick) {
   // "Pick a date…" — the same calendar button every other date control opens.
   const pick = duePicker({
     className: 'snooze-opt snooze-pick',
+    track: 'snooze.pick-date',
     title: 'Pick a date',
     ariaLabel: spec.pickName(t),
     value: field === 'due' ? t.due : null,
@@ -171,6 +173,7 @@ export function dateMenu(t, field, onPick) {
   // so "No date" is always offered; clearing an undated task changes nothing
   if (field === 'due' && (t.due || t.clearable)) {
     const clear = document.createElement('button');
+    clear.dataset.track = 'snooze.clear';
     clear.type = 'button';
     clear.className = 'snooze-opt snooze-clear';
     clear.innerHTML = icon('x');

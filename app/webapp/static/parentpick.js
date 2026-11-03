@@ -89,6 +89,7 @@ export function openParentPicker(t, targets, onPick) {
   let picked = null;
   const rows = targets.map(function (p) {
     const b = document.createElement('button');
+    b.dataset.track = 'parent-picker.option';
     b.type = 'button';
     b.className = 'parent-opt';
     b.dataset.id = String(p.id);

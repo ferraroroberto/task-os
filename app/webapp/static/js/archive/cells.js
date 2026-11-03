@@ -75,6 +75,7 @@ export function filesEl(ctx, item, opts) {
   shown.forEach(function (path) { el.appendChild(chipFor(path)); });
   if (rest.length) {
     const more = document.createElement('button');
+    more.dataset.track = 'archive.files-more';
     more.type = 'button';
     more.className = 'chip archive-files-more';
     more.textContent = '+' + rest.length + ' more';

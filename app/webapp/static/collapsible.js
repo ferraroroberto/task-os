@@ -27,6 +27,7 @@ export function collapsibleCard(opts) {
   const card = document.createElement('details');
   card.className = 'card card--collapsible' + (o.className ? ' ' + o.className : '');
   const summary = document.createElement('summary');
+  summary.dataset.track = 'card.collapse';
   summary.className = 'collapse-summary';
   const main = document.createElement('span');
   main.className = 'collapse-main';

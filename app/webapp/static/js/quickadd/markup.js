@@ -11,7 +11,7 @@ export function fillQuickAdd(dialog) {
   <form class="detail-card quickadd-card" autocomplete="off">
     <div class="detail-header">
       <h2 id="quickAddTitle">Add task</h2>
-      <button type="button" class="icon-button detail-close" aria-label="Close">
+      <button data-track="quick-add.close" type="button" class="icon-button detail-close" aria-label="Close">
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
       </button>
     </div>
@@ -49,12 +49,12 @@ export function fillQuickAdd(dialog) {
     </div>
     <div class="row">
       <span><label for="quickAddStatus">Status</label></span>
-      <select id="quickAddStatus" class="select-native quick-add-status"></select>
+      <select data-track="quick-add.status" id="quickAddStatus" class="select-native quick-add-status"></select>
     </div>
     <div class="row row--stack">
       <span>
         <label for="quickAddFolder">Folder</label>
-        <button type="button" class="button-ghost folder-pick quick-add-pick"
+        <button data-track="quick-add.folder-pick" type="button" class="button-ghost folder-pick quick-add-pick"
                 aria-label="Find in folder index" title="Find in folder index"
                 aria-expanded="false" aria-controls="quickAddPicker">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>

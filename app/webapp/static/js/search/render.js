@@ -36,6 +36,7 @@ function foldLine(fold) {
   if (fold.off && fold.off.length) {
     p.appendChild(document.createTextNode(' · '));
     const a = document.createElement('a');
+    a.dataset.track = 'search.settings-link';
     a.href = '#settings/search';
     a.textContent = 'Settings';
     p.appendChild(a);
