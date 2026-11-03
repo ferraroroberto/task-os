@@ -56,6 +56,12 @@
                              scripts/runtime_write_ratchet_gate.py. Whole tree, never
                              routed; exit 3 (a new target it cannot resolve) is NOT
                              CONFIRMED and fails, never a pass or a skip.
+     10c. usage track ratchet — no file's count of untracked controls, untracked
+                             sheets or built ids above .usage-track-ratchet-baseline.json,
+                             and the usage log wired, through
+                             scripts/usage_track_ratchet_gate.py. Whole tree, never routed;
+                             exit 3 (a file that cannot be read or closed) is NOT CONFIRMED
+                             and fails, never a pass or a skip.
      11. pytest (unit)     — hermetic suite, tests/e2e excluded; a runtime write
                              --snapshot is taken first
      12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
@@ -139,6 +145,9 @@ Invoke-Stage "comment ratchet"         { & $py -m scripts.comment_ratchet_gate }
 # Same wrapper shape: it maps the runtime write script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_runtime_write_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "runtime write ratchet"   { & $py -m scripts.runtime_write_ratchet_gate }
+# Same wrapper shape: it maps the usage track script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_usage_track_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "usage track ratchet"     { & $py -m scripts.usage_track_ratchet_gate }
 # Runtime write probe, first half: what already sits untracked or ignored under
 # the code folders, so the probe after the tests names only what they wrote.
 $runtimeSnapshot = Join-Path ([IO.Path]::GetTempPath()) "runtime-write-snapshot-$PID.json"
