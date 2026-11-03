@@ -33,6 +33,7 @@ segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "5d4
 row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "00311a74ed7a858193e5b83ade533bf94468eb81", dest = "app/webapp/static/_vendored/row-menu" }
 page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "35c1f11348e100fa6b5da487411424c6d6ced43c", dest = "app/webapp/static/_vendored/page-foot" }
 icon-button    = { src = "app/webapp/static/_vendored/icon-button",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icon-button" }
+rec-wave       = { src = "app/webapp/static/_vendored/rec-wave",      sha = "35c1f11348e100fa6b5da487411424c6d6ced43c", dest = "app/webapp/static/_vendored/rec-wave" }
 usage-log      = { src = "app/webapp/static/_vendored/usage-log",     sha = "98cdb1b7727d12a5c233580478e6fae40d98e6f3", dest = "app/webapp/static/_vendored/usage-log" }
 single_instance = { src = "app/tray/single_instance.py",              sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/tray/single_instance.py" }
 tray_watchdog  = { src = "app/tray/watchdog.py",                      sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/tray/watchdog.py" }

@@ -28,7 +28,7 @@ export function fillQuickAdd(dialog) {
            spelled out in the hint below. -->
       <button type="button" class="icon-button quick-add-mic" data-track="quick-add.voice" aria-label="Dictate (click to start)"
               aria-pressed="false" disabled>
-        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
+        <span class="quick-add-mic-glyph"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg></span>
       </button>
     </div>
     <p class="quick-add-voice-hint" aria-live="polite" hidden></p>

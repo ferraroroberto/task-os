@@ -47,6 +47,7 @@
 'use strict';
 
 import { api } from './api.js';
+import { attachRecWave } from './_vendored/rec-wave/rec-wave.js';
 
 /** What the models want, and what a phrase needs: mono speech, 16 kHz. */
 const TARGET_RATE = 16000;
@@ -201,7 +202,46 @@ export function encodeSnapshot(blocks, rate) {
  *  two runs of one commit (docs/validation.md), and a live clock cannot be.
  *  The red pulsing stop square is what says "recording"; this says how to end
  *  it. */
-const LISTENING = 'Listening… click the square to stop.';
+const LISTENING = 'Listening… click the button to stop.';
+
+// The waveform reads the worklet tap's own blocks rather than a second
+// AnalyserNode: a take then holds exactly one AudioContext, and the strip shows
+// the very samples that will be transcribed.
+const WAVE_WINDOW = 512;
+const WAVE_BARS = 12;
+const WAVE_GAIN = 2.5;       // speech peaks sit well under full scale
+
+/** The `source` seam `attachRecWave` accepts, backed by `m.blocks`. */
+function tapLevelSource(m) {
+  return {
+    get running() { return !!m.ctx && m.ctx.state === 'running' && m.captured > 0; },
+    connect: function () { /* the tap already owns the stream */ },
+    close: function () { /* the recorder owns the context */ },
+    read: function (bars) {
+      if (!this.running) return null;
+      const tail = new Float32Array(Math.min(WAVE_WINDOW, m.captured));
+      let at = tail.length;
+      for (let i = m.blocks.length - 1; i >= 0 && at > 0; i -= 1) {
+        const block = m.blocks[i];
+        const take = Math.min(block.length, at);
+        at -= take;
+        tail.set(block.subarray(block.length - take), at);
+      }
+      const slice = Math.max(1, Math.floor(tail.length / bars));
+      let sumSquares = 0;
+      const levels = [];
+      for (let b = 0; b < bars; b += 1) {
+        let peak = 0;
+        for (let j = b * slice; j < (b + 1) * slice && j < tail.length; j += 1) {
+          peak = Math.max(peak, Math.abs(tail[j]));
+        }
+        levels.push(Math.min(1, peak * WAVE_GAIN));
+      }
+      for (let i = 0; i < tail.length; i += 1) sumSquares += tail[i] * tail[i];
+      return { rms: Math.sqrt(sumSquares / tail.length), levels: levels };
+    },
+  };
+}
 
 /**
  * Wire one click-to-toggle mic button.
@@ -227,6 +267,7 @@ export function mountMic(btn, hint, opts) {
     ctx: null,              // AudioContext, alive only while recording
     stream: null,           // the granted MediaStream
     node: null,             // the worklet tap
+    stopWave: null,         // detaches the rec-wave strip
     blocks: [],             // every Float32Array the tap has handed over
     captured: 0,            // samples in `blocks`, the snapshot's version
     recording: false,
@@ -312,6 +353,7 @@ function setState(m, cls) {
 /** Tear the audio graph down and release the microphone. Idempotent. */
 function release(m) {
   window.clearInterval(m.poller); m.poller = 0;
+  if (m.stopWave) { m.stopWave(); m.stopWave = null; }
   if (m.node) { try { m.node.port.onmessage = null; m.node.disconnect(); } catch (_) { /* already gone */ } }
   if (m.stream) m.stream.getTracks().forEach(function (t) { t.stop(); });
   if (m.ctx && m.ctx.close) { try { m.ctx.close(); } catch (_) { /* already closed */ } }
@@ -430,6 +472,15 @@ async function start(m) {
   m.recording = true;
   setState(m, 'recording');
   setHint(m, LISTENING);
+  // The strip is a courtesy: a take that cannot draw one still records.
+  const host = m.btn.querySelector('.quick-add-mic-glyph');
+  if (host) {
+    try {
+      m.stopWave = attachRecWave(host, m.stream, { source: tapLevelSource(m), bars: WAVE_BARS, height: 20 });
+    } catch (err) {
+      console.info('[voice] waveform not shown', err);
+    }
+  }
   if (m.partialMs > 0) m.poller = window.setInterval(function () { partial(m); }, m.partialMs);
   m.onStart();
 }
