@@ -14,5 +14,6 @@
   "calendar": { "ics_url": "", "refresh_minutes": 10, "timeout_seconds": 2 },
   "team":    { "enabled": false, "people": ["Roberto Ferraro"], "password_hash": "" },
   "time":    { "people": [{ "id": "p1", "name": "Person 1" }, { "id": "p2", "name": "Person 2" }], "compare_area": "home", "long_timer_minutes": 180 },
-  "auth":    { "token": "", "password_hash": "" }
+  "auth":    { "token": "", "password_hash": "" },
+  "alerts":  { "notifier": "none", "telegram_bot_token": "", "telegram_chat_id": "" }
 }

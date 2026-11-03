@@ -134,6 +134,7 @@ from src.enrich import EnrichClient
 from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
+from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
 from src.search import build_federated
 from src.tasks_repo import RepoError
@@ -292,7 +293,7 @@ def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> Response:
         code = "not_found" if exc.status_code == 404 else "http_error"
-        return error_response(exc.status_code, code, str(exc.detail))
+        return error_response(exc.status_code, code, str(exc.detail), headers=exc.headers)
 
 
 def create_app() -> FastAPI:
@@ -300,6 +301,9 @@ def create_app() -> FastAPI:
     app = FastAPI(title="task-os", version="0.2.0", lifespan=_lifespan)
     app.state.config = load_config()
     app.state.build_info = BUILD_INFO
+    # In memory only: a restart forgets every streak. Built here, not in the
+    # lifespan, so a client that is not run as a context manager still has one.
+    app.state.login_lockout = build_lockout(notifier_for(app.state.config.alerts))
     _install_error_handlers(app)
     app.add_middleware(
         AuthMiddleware,

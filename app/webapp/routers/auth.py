@@ -4,11 +4,13 @@ and the access status.
     GET  /login        → the sign-in page (one field: token or password), and
                          in team mode the pick-your-name step (``?step=name``);
                          public — it is where a denied page request lands
-    POST /api/login    → {secret} → verifies a member's bearer token or optional
-                         password (src.auth) and sets the ``taskos_token``
-                         cookie for 90 days to that member's own token (the
-                         owner's, or a member's ``auth.people`` one, #474);
-                         in team mode the team password
+    POST /api/login    → {secret} → a client that has typed too many wrong
+                         ones gets 429 + ``Retry-After`` first (``src.login_lockout``;
+                         this PC, loopback, is exempt); else verifies a member's
+                         bearer token or optional password (src.auth) and sets
+                         the ``taskos_token`` cookie for 90 days to that member's
+                         own token (the owner's, or a member's ``auth.people``
+                         one); in team mode the team password
                          sets the ``taskos_team`` cookie instead (``via:
                          "team"``); 401 on refusal, 503 when no token is
                          configured (nothing to hand back)
@@ -46,10 +48,12 @@ from src.auth import (
     COOKIE_NAME,
     TEAM_COOKIE,
     check_secret,
+    is_loopback,
     team_session,
     token_person,
 )
 from src.config import AuthConfig, TeamConfig
+from src.login_lockout import retry_after_header
 from src.team import NAME_COOKIE, avatar_file, encode_name, member_from_cookie
 
 logger = logging.getLogger(__name__)
@@ -102,13 +106,24 @@ async def login(body: LoginBody, request: Request) -> JSONResponse:
     auth = _auth(request)
     team = _team(request)
     host = _client(request)
+    lockout = request.app.state.login_lockout
+    # The PC itself is the owner (the same loopback test the access gate uses):
+    # it is never counted and never locked out.
+    exempt = is_loopback(host)
+    wait = 0.0 if exempt else lockout.retry_after(host)
+    if wait > 0:
+        logger.warning("🚨 sign-in from %s refused: too many wrong passwords", host)
+        raise HTTPException(status_code=429, detail="too many attempts", headers=retry_after_header(wait))
     if not auth.enabled:
         logger.warning("⚠️ login attempt from %s but no auth token is configured (scripts/gen_token.py)", host)
         raise HTTPException(status_code=503, detail="no auth token configured — run scripts/gen_token.py on the host")
     signed = check_secret(body.secret.strip(), auth, team)
     if signed is None:
         logger.warning("🚨 failed sign-in from %s (%d chars presented)", host, len(body.secret))
+        if not exempt:
+            lockout.record_failure(host)
         raise HTTPException(status_code=401, detail="wrong token or password")
+    lockout.reset(host)
     how = signed.via
     if how == "team":
         logger.info("🔓 sign-in from %s via team", host)

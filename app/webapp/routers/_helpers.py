@@ -3,6 +3,7 @@ the actor resolver and the JSON error shape."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -48,12 +49,15 @@ def resolve_actor(request: Request, explicit: str | None = None) -> str:
     return str(people[0]) if people else DEFAULT_ACTOR
 
 
-def error_response(status: int, code: str, message: str, detail: Any = None) -> JSONResponse:
-    """The one JSON error envelope every route family emits."""
+def error_response(
+    status: int, code: str, message: str, detail: Any = None, headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    """The one JSON error envelope every route family emits. ``headers`` carries
+    what the status needs to be useful (a 429's ``Retry-After``)."""
     body: dict[str, Any] = {"error": {"code": code, "message": message}}
     if detail is not None:
         body["error"]["detail"] = detail
-    return JSONResponse(body, status_code=status)
+    return JSONResponse(body, status_code=status, headers=dict(headers) if headers else None)
 
 
 def service_unavailable(service: Any, code: str, name: str) -> JSONResponse:
