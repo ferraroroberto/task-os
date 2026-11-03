@@ -352,6 +352,18 @@ class AuthConfig:
 
 
 @dataclass(frozen=True)
+class AlertsConfig:
+    """Where a guessing alert goes (the fleet's ``coding alerts`` Telegram chat).
+    ``notifier`` is ``"none"`` (the default: the lock-out still works, nobody is
+    told) or ``"telegram"``, which needs both the bot token and the chat id. Both
+    are secrets that live only in the ignored real config."""
+
+    notifier: str = "none"
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
+
+@dataclass(frozen=True)
 class AppConfig:
     site: str = "home"
     port: int = DEFAULT_PORT
@@ -369,6 +381,7 @@ class AppConfig:
     team: TeamConfig = field(default_factory=TeamConfig)
     time: TimeConfig = field(default_factory=TimeConfig)
     auth: AuthConfig = field(default_factory=AuthConfig)
+    alerts: AlertsConfig = field(default_factory=AlertsConfig)
     people: tuple[Person, ...] = (IMPLICIT_PERSON,)
     source_path: Path | None = None
 
@@ -605,6 +618,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     team = _as_dict(raw.get("team"))
     time_block = _as_dict(raw.get("time"))
     auth = _as_dict(raw.get("auth"))
+    alerts = _as_dict(raw.get("alerts"))
     placeholders = _flatten_placeholders(_as_dict(raw.get("placeholders")))
     # same nested-map flattening as placeholders: web_roots.sharepoint.docs → "sharepoint:docs"
     web_roots = _flatten_placeholders(_as_dict(raw.get("web_roots")))
@@ -666,9 +680,25 @@ def load_config(path: Path | None = None) -> AppConfig:
             owner=people[0].id,
             people=_person_secrets(auth.get("people"), people),
         ),
+        alerts=_alerts_config(alerts),
         people=people,
         source_path=src,
     )
+
+
+def _alerts_config(alerts: dict[str, Any]) -> AlertsConfig:
+    """``alerts``: a ``telegram`` notifier missing its token or chat id falls back
+    to ``none`` (with a warning), so a half-filled block never breaks startup."""
+    notifier = str(alerts.get("notifier", AlertsConfig.notifier) or "none").strip().lower()
+    token = str(alerts.get("telegram_bot_token", "") or "").strip()
+    chat = str(alerts.get("telegram_chat_id", "") or "").strip()
+    if notifier not in ("none", "telegram"):
+        logger.warning("⚠️ config: alerts.notifier %r is not none|telegram — alerts off", notifier)
+        notifier = "none"
+    if notifier == "telegram" and not (token and chat):
+        logger.warning("⚠️ config: alerts.notifier is telegram but the bot token or chat id is blank — alerts off")
+        notifier = "none"
+    return AlertsConfig(notifier=notifier, telegram_bot_token=token, telegram_chat_id=chat)
 
 
 def _person_secrets(value: Any, people: tuple[Person, ...]) -> tuple[PersonSecret, ...]:

@@ -46,6 +46,8 @@ Settings → **Phone access** shows what this connection is (`this PC` · `signe
 
 **What stays public** on any client: the static assets under `/static/` (the manifest and icons a phone needs before it can sign in), `/healthz`, `/api/version` (the build-identity contract), the `/login` page and `/api/login` itself. Everything else under `/api/` is gated; a page request from a signed-out phone redirects to `/login?next=…` and comes back where it started.
 
+**Wrong passwords lock the client out.** `POST /api/login` counts wrong secrets per client address (the vendored `src/login_lockout.py`, in memory only): five are free, then each further one makes that client wait 2 s, doubling to a 300 s cap, and a locked client gets `429` with a `Retry-After` header before its secret is even read. A correct sign-in clears the count; an hour with no failure ends the streak; a restart forgets everything. This PC (loopback, the same test the access gate uses) is never counted and never locked, and one client's lock never affects another. The key is the socket address; the app is reached directly over Tailscale, so no proxy header is trusted. Three wrong secrets in a row from one client send one message — the app name, the client address and the count, never the secret — to the fleet's `coding alerts` Telegram chat, from a thread so the sign-in never waits on Telegram; at most one message per five minutes across all clients. The alert is off until `alerts` in the real config names a Telegram bot token and chat id; the lock-out works either way.
+
 ## Team mode
 
 A shared install for a small team on the same private network (Step 12). Off by default, and off means exactly the model above.
