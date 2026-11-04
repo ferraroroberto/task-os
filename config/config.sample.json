@@ -1,6 +1,7 @@
 {
   "site": "home",
   "port": 8448,
+  "server": "hypercorn",
   "issues":  { "provider": "github", "owner": "ferraroroberto", "assignee": "@me", "sync_minutes": 10, "host": "" },
   "placeholders": { "onedrive": "E:/onedrive", "user": "sam", "sharepoint": {} },
   "web_roots": {},

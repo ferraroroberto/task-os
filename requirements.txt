@@ -6,6 +6,7 @@
 # --- runtime ---------------------------------------------------------------
 fastapi>=0.115
 uvicorn[standard]>=0.30
+hypercorn>=0.18
 pystray>=0.19
 Pillow>=10.0
 # scripts/gen_tailscale_cert.py --check (auto-renew) reads the leaf's expiry

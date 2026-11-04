@@ -5,7 +5,7 @@ launcher.py               entrypoint: `tray` (default) | `webapp`
 tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground dev server
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
-                          event_loop.py, manager.py (adopt-or-spawn uvicorn; cert --check → --ssl-* when a cert exists)
+                          event_loop.py, manager.py (adopt-or-spawn the serve.py launch; cert --check → --ssl-* when a cert exists)
 app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout, /api/team…) · tasks
                           (/api/tasks…, /api/activity) · people · views (/api/board, /api/today)
                           · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,

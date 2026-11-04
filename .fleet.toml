@@ -69,6 +69,7 @@ compression    = { src = "src/compression.py", sha = "d930466848d17d47261261c490
 # automation (ferraroroberto/automation, system/foldersearcher — the GUI-free half
 # of the fleet's folder searcher), verbatim; sha = that repo's commit.
 foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sha = "799d746dad501595ae5a6c2fd5b521413e032c5c", dest = "src/vendor/foldersearcher_core.py" }
+webapp_serve = { src = "app/webapp/serve.py", sha = "41ca8abd5a2755a06bd8a620a72967211161d58e", dest = "app/webapp/serve.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
 # app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop; code
