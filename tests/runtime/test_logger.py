@@ -34,9 +34,7 @@ def test_the_tray_logs_to_its_own_file(monkeypatch: pytest.MonkeyPatch, logged: 
 
 
 def test_the_webapp_keeps_the_default_file(monkeypatch: pytest.MonkeyPatch, logged: list[object]) -> None:
-    uvicorn = types.ModuleType("uvicorn")
-    uvicorn.run = lambda *args, **kwargs: None  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "uvicorn", uvicorn)
+    monkeypatch.setattr("app.webapp.serve.run", lambda *args, **kwargs: None)
     monkeypatch.setattr("src.certs.ensure_cert_fresh", lambda: None)
     monkeypatch.setattr("src.certs.uvicorn_ssl_kwargs", lambda: {})
     assert launcher.main(["launcher.py", "webapp"]) == 0

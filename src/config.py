@@ -33,6 +33,7 @@ CONFIG_SAMPLE_PATH = CONFIG_DIR / "config.sample.json"
 CONFIG_PATH_ENV = "TASKOS_CONFIG_PATH"
 
 DEFAULT_PORT = 8448
+SERVERS = ("hypercorn", "uvicorn")
 
 _PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
 
@@ -367,6 +368,8 @@ class AlertsConfig:
 class AppConfig:
     site: str = "home"
     port: int = DEFAULT_PORT
+    # hypercorn serves HTTP/2 over the certificate; uvicorn is the HTTP/1.1 fallback.
+    server: str = "hypercorn"
     issues: IssuesConfig = field(default_factory=IssuesConfig)
     placeholders: dict[str, str] = field(default_factory=dict)
     web_roots: dict[str, str] = field(default_factory=dict)
@@ -507,6 +510,14 @@ def _port(value: Any) -> int:
         return DEFAULT_PORT
 
 
+def _server(value: Any) -> str:
+    if value in SERVERS:
+        return str(value)
+    if value is not None:
+        logger.warning("⚠️ config: invalid server %r — falling back to hypercorn", value)
+    return SERVERS[0]
+
+
 def _voice_config(voice: dict[str, Any]) -> VoiceConfig:
     return VoiceConfig(
         transcribe_url=str(voice.get("transcribe_url", VoiceConfig.transcribe_url) or "").strip(),
@@ -584,6 +595,25 @@ def _calendar_config(calendar: dict[str, Any]) -> CalendarConfig:
     )
 
 
+def _mirror_block(src: Path, mirror: dict[str, Any]) -> dict[str, Any]:
+    """The ``mirror`` block to use: the sample's is emptied.
+
+    The sample documents the shape; its placeholders resolve to a real
+    synced folder on the developer's machine. A checkout without its own
+    config/config.json (a fresh clone, a git worktree) must therefore
+    never mirror or back up into it: two databases rendering into one
+    folder is how the live one lost data. Everything read-only
+    (search roots, the issue provider) keeps working from the sample.
+    """
+    if not _is_sample(src):
+        return mirror
+    logger.warning(
+        "⚠️ config: no config/config.json — using the committed sample; the markdown mirror and "
+        "the backup stay off until you create it (the sample is documentation, never a folder to write into)"
+    )
+    return {"dir": "", "backup_dir": ""}
+
+
 def load_config(path: Path | None = None) -> AppConfig:
     """Parse ``path`` (default: :func:`config_path`) into an :class:`AppConfig`.
 
@@ -595,19 +625,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     raw = _read_raw(src)
 
     issues = _as_dict(raw.get("issues"))
-    mirror = _as_dict(raw.get("mirror"))
-    if _is_sample(src):
-        # The sample documents the shape; its placeholders resolve to a real
-        # synced folder on the developer's machine. A checkout without its own
-        # config/config.json (a fresh clone, a git worktree) must therefore
-        # never mirror or back up into it: two databases rendering into one
-        # folder is how the live one lost data. Everything read-only
-        # (search roots, the issue provider) keeps working from the sample.
-        mirror = {"dir": "", "backup_dir": ""}
-        logger.warning(
-            "⚠️ config: no config/config.json — using the committed sample; the markdown mirror and "
-            "the backup stay off until you create it (the sample is documentation, never a folder to write into)"
-        )
+    mirror = _mirror_block(src, _as_dict(raw.get("mirror")))
     search = _as_dict(raw.get("search"))
     capture = _as_dict(raw.get("capture"))
     voice = _as_dict(raw.get("voice"))
@@ -634,6 +652,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     return AppConfig(
         site=str(raw.get("site", "home")),
         port=_port(raw.get("port", DEFAULT_PORT)),
+        server=_server(raw.get("server")),
         issues=IssuesConfig(
             provider=str(issues.get("provider", "github")),
             owner=str(issues.get("owner", "")),

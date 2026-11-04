@@ -307,7 +307,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
         log: IO[str] = log_path.open("w", encoding="utf-8")
         cmd = [
-            sys.executable, "-m", "uvicorn", "app.webapp.server:app",
+            sys.executable, "-m", "app.webapp.serve",
             "--host", "127.0.0.1", "--port", str(port),
             "--log-level", "warning", "--loop", LOOP_FACTORY,
         ]
