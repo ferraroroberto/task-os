@@ -137,6 +137,7 @@ from src.logger import configure_logging
 from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
 from src.search import build_federated
+from src.static_versioning import IMMUTABLE_CACHE_CONTROL, SHEET_BUNDLE_NAME
 from src.tasks_repo import RepoError
 from src.usage_log import usage_router
 from src.voice import VoiceClient
@@ -146,7 +147,7 @@ logger = logging.getLogger(__name__)
 # Hash-stamped assets cache for a year (the fleet hash in the URL is the cache
 # key, so a stale copy can never be served); icons + manifest revalidate
 # daily; the shell itself is served no-cache by the index route.
-_LONG_CACHE = "public, max-age=31536000, immutable"
+_LONG_CACHE = IMMUTABLE_CACHE_CONTROL
 _DAY_CACHE = "public, max-age=86400"
 _IMMUTABLE_SUFFIXES = frozenset({".js", ".css"})
 _DAILY_SUFFIXES = frozenset({".webmanifest", ".png", ".ico", ".svg"})
@@ -161,6 +162,16 @@ class CachingStaticFiles(StaticFiles):
     ``.js`` module's relative ``import`` URLs with the build's fleet hash so an
     edit to any module busts the whole graph (project-scaffolding#78).
     """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        """Serve the virtual index-stylesheet bundle; everything else is on disk."""
+        if path == SHEET_BUNDLE_NAME and BUILD_INFO.sheet_bundle:
+            return Response(
+                content=BUILD_INFO.sheet_bundle,
+                media_type="text/css",
+                headers={"Cache-Control": _LONG_CACHE},
+            )
+        return await super().get_response(path, scope)
 
     def file_response(
         self,

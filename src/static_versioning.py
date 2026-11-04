@@ -73,6 +73,20 @@ _INDEX_ASSET_RE = re.compile(
 )
 
 
+# The stylesheets index.html links, in cascade order. Matches only the exact
+# tag shape index.html writes; the stamp (if any) is ignored.
+_INDEX_SHEET_RE = re.compile(
+    r"""^[ \t]*<link rel="stylesheet" href="/static/([\w\-./]+\.css)(?:\?v=[^"]*)?">[ \t]*\n""",
+    re.MULTILINE,
+)
+
+#: The served path (under ``/static/``) of the concatenated index stylesheets.
+SHEET_BUNDLE_NAME = "bundle.css"
+
+#: ``Cache-Control`` of anything whose URL carries the fleet hash.
+IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
 def _short_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:_HASH_LEN]
 
@@ -148,6 +162,29 @@ def rewrite_index_html(body: str, hashes: Dict[str, str]) -> str:
         return f"{attr}={quote_open}/static/{relpath}?v={stamp}{quote_close}"
 
     return _INDEX_ASSET_RE.sub(_sub, body)
+
+
+def index_sheets(index_html: str) -> list[str]:
+    """The static-relative stylesheet paths ``index.html`` links, in cascade order."""
+    return _INDEX_SHEET_RE.findall(index_html)
+
+
+def bundle_sheets(static_dir: Path, sheets: Iterable[str]) -> str:
+    """The ``sheets`` concatenated in order, each under a ``/* path */`` header.
+
+    One response instead of one request per sheet: on a phone the sheets queue
+    behind the browser's six connections to the host and block first paint.
+    Order is the cascade, so the result renders as the separate links did. A
+    sheet that cannot be read is skipped with a warning, the same degrade as an
+    unhashable asset.
+    """
+    parts = []
+    for rel in sheets:
+        try:
+            parts.append(f"/* {rel} */\n" + (static_dir / rel).read_text(encoding="utf-8"))
+        except OSError as exc:
+            logger.warning(f"⚠️  Could not bundle {rel} ({exc})")
+    return "\n".join(parts)
 
 
 def _resolve_specifier(from_dir: str, spec: str) -> str:
@@ -244,6 +281,10 @@ class BuildInfo:
         self._static_dir = static_dir
         self.asset_hashes: Dict[str, str] = compute_asset_hashes(static_dir)
         self.fleet_hash: str = fleet_hash_of(self.asset_hashes)
+        self.bundled_sheets: list[str] = self._bundleable_sheets(static_dir)
+        self.sheet_bundle: str = (
+            bundle_sheets(static_dir, self.bundled_sheets) if self.bundled_sheets else ""
+        )
         self.git_sha: str = _git_short_sha(repo_root)
         # Through `src.clock`, not `datetime.now`, so a pinned process (the
         # e2e instances) does not stamp the run's own minute onto the
@@ -252,9 +293,36 @@ class BuildInfo:
             timespec="seconds"
         )
 
+    def _bundleable_sheets(self, static_dir: Path) -> list[str]:
+        """The stylesheets index.html links, or ``[]`` when they cannot be bundled.
+
+        Every one must be a hashed asset: a sheet outside the hash map would be
+        served stale behind the bundle's immutable cache.
+        """
+        try:
+            sheets = index_sheets((static_dir / "index.html").read_text(encoding="utf-8"))
+        except OSError:
+            return []
+        if not all(rel in self.asset_hashes for rel in sheets):
+            return []
+        return sheets
+
     def stamp_html(self, html: str) -> str:
-        """Stamp the asset URLs in index.html with the fleet hash."""
-        return rewrite_index_html(html, self.asset_hashes)
+        """Stamp the asset URLs in an HTML page with the fleet hash.
+
+        A page whose stylesheet links are exactly index.html's collapses them
+        into one link to the bundle, placed where the first of them stood so the
+        cascade position is unchanged. Any other page (the sign-in card links a
+        different set) keeps its own links.
+        """
+        stamped = rewrite_index_html(html, self.asset_hashes)
+        if not self.sheet_bundle or index_sheets(stamped) != self.bundled_sheets:
+            return stamped
+        link = (f'  <link rel="stylesheet" '
+                f'href="/static/{SHEET_BUNDLE_NAME}?v={self.fleet_hash}">\n')
+        first = _INDEX_SHEET_RE.search(stamped)
+        rest = _INDEX_SHEET_RE.sub("", stamped[first.end():])
+        return stamped[:first.start()] + link + rest
 
     def stamp_js(self, body: str, source_path: Path) -> str:
         """Stamp the relative ``import`` URLs in a served JS module.
