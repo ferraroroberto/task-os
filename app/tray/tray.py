@@ -47,6 +47,9 @@ FALLBACK_ICON = PROJECT_ROOT / "app" / "webapp" / "static" / "icons" / "icon-512
 # Gitignored (*.log). Best-effort writes, rotates past ~1 MB.
 WATCHDOG_LOG = PROJECT_ROOT / "webapp" / "watchdog.log"
 MUTEX_NAME = r"Global\task-os-tray"
+# `clip` copies a short URL and answers in well under a second, so a child still
+# alive after 10 s is wedged and must not stall the tray menu thread.
+CLIP_TIMEOUT_S = 10
 
 
 def _build_icon():
@@ -67,8 +70,12 @@ def _clipboard_copy(text: str) -> bool:
         p = subprocess.run(
             ["clip"], input=text, text=True, check=False,
             encoding="utf-8", creationflags=NO_WINDOW,
+            timeout=CLIP_TIMEOUT_S,
         )
         return p.returncode == 0
+    except subprocess.TimeoutExpired:
+        logger.warning("clip did not finish within %ss; clipboard not set", CLIP_TIMEOUT_S)
+        return False
     except OSError as exc:
         logger.debug("clip failed: %s", exc)
         return False
