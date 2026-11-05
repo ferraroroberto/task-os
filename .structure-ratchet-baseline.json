@@ -2,5 +2,10 @@
   "version": 1,
   "band": {"files": 3, "functions": 12},
   "root_extras": ["opener"],
+  "shape_contract": {
+    "root_files": ["tasks.bat"],
+    "redundant": [],
+    "folder_types": {}
+  },
   "entries": []
 }
