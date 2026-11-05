@@ -190,6 +190,17 @@ def test_emails_adapter_is_read_only(emails_db: Path, od: Path) -> None:
     check.close()
 
 
+def test_the_emails_group_links_to_folder_explorer_deep_search(emails_db: Path) -> None:
+    """Set, the group carries folder-explorer's email search for the same words; blank, no link."""
+    deep = EmailsAdapter(str(emails_db), {}, "https://explorer.example.invalid:8453/#explore")
+    fed = FederatedSearch([deep])
+    group = {g["kind"]: g for g in fed.search("boiler service & co")["groups"]}["emails"]
+    assert group["deep_link"] == "https://explorer.example.invalid:8453/#search?mode=emails&q=boiler%20service%20%26%20co"
+    assert {g["kind"]: g for g in fed.search("")["groups"]}["emails"]["deep_link"] is None
+    plain = {g["kind"]: g for g in FederatedSearch([EmailsAdapter(str(emails_db), {})]).search("boiler")["groups"]}
+    assert plain["emails"]["deep_link"] is None and plain["tasks"]["deep_link"] is None
+
+
 def test_emails_adapter_like_fallback_without_fts(tmp_path: Path, od: Path) -> None:
     legacy = tmp_path / "legacy.db"
     build_emails_db(legacy, root=od, fts=False, touch_files=False)

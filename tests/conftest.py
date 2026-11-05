@@ -57,7 +57,7 @@ def write_test_config(
     ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
     folder index stays off — the sample points at a real synced folder),
     ``search.email_db`` (blank = the emails adapter reports not configured —
-    the sample points at the real email-archiver index; Step 10 tests pass the
+    the sample points at the real folder-explorer index; Step 10 tests pass the
     synthetic fixture), ``voice.transcribe_url`` / ``voice.fallback_url``
     (both blank = voice reports not reachable — the sample points at the
     fleet's real hub and whisper server, and a suite whose result depends on
@@ -66,7 +66,7 @@ def write_test_config(
     (``None`` leaves the sample's cadence; #146's tests pin it) and ``enrich.url``
     (blank = enrichment reports not reachable; #147's tests pass a fake chat
     endpoint), ``archive`` (the whole block; ``None`` forces ``enabled: false``
-    — the sample names a real email-archiver checkout, and a test that spawned
+    — the sample names a real folder-explorer checkout, and a test that spawned
     it would drive this machine's Outlook, so #157's tests pass a block pointing
     at ``tests/fixtures/archiver_fake``), ``calendar`` (merged over a blank
     ``ics_url`` — no test ever fetches a real calendar; #96's tests pass
@@ -91,7 +91,7 @@ def write_test_config(
     # ``archive.enabled`` is false in the sample and stays false unless a test
     # passes its own block pointing at the **fake** archiver
     # (``tests/fixtures/archiver_fake``): no test process may ever spawn the real
-    # email-archiver, which would drive this machine's Outlook (#157).
+    # folder-explorer archive verbs, which would drive this machine's Outlook (#157).
     raw["archive"] = {**raw.get("archive", {}), **(archive or {})}
     if archive is None:
         raw["archive"]["enabled"] = False

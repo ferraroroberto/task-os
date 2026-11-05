@@ -96,6 +96,7 @@ class FederatedSearch:
                 group: dict[str, Any] = {
                     "kind": kind, "configured": False, "reason": None, "note": None,
                     "hits": [], "count": 0, "took_ms": 0, "error": None, "skipped": kind not in wanted,
+                    "deep_link": None,
                 }
                 groups[kind] = group
                 if a is None:
@@ -104,6 +105,9 @@ class FederatedSearch:
                 ok, reason = a.is_configured()
                 group["configured"] = bool(ok)
                 group["reason"] = None if ok else reason
+                deep_link = getattr(a, "deep_link", None)
+                if ok and q and callable(deep_link):
+                    group["deep_link"] = deep_link(q)
                 if not ok or kind not in wanted or not q:
                     continue
                 jobs[kind] = (a, pool.submit(self._run, a, q, limit))
@@ -157,7 +161,7 @@ def build_federated(
         [
             TasksAdapter(conn_factory),
             FoldersAdapter(folders),
-            EmailsAdapter(config.search.email_db, config.placeholders),
+            EmailsAdapter(config.search.email_db, config.placeholders, config.search.email_deep_url),
             IssuesAdapter(issues, conn_factory),
         ],
         timeout_s=timeout_s,

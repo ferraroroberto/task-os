@@ -139,8 +139,9 @@ baseline = ".instruction-ratchet-baseline.json"
 enabled    = true
 baseline   = ".doc-refs-ratchet-baseline.json"
 # The docs name the ports of the services this app talks to on purpose: the local LLM hub
-# and the whisper server. The app's own :8448 resolves from `port` above.
-allow_refs = [":8000", ":8090"]
+# and the whisper server. The app's own :8448 resolves from `port` above. The archive and
+# email-search docs name folder-explorer's CLI module and batch file, which live in that repo.
+allow_refs = [":8000", ":8090", "-m app.cli", "app/cli/email_batch.py"]
 
 # [dead_code_ratchet] -- the scaffold's dead-definition stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/dead_code_ratchet.py, which fails when a

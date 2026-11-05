@@ -1,16 +1,18 @@
-"""A fake email-archiver checkout — the subprocess boundary, without Outlook.
+"""A fake folder-explorer checkout — the subprocess boundary, without Outlook.
 
 ``src/archive_batch.py`` never imports the archiver: it spawns
-``<archive.python> main_batch.py <verb>`` and reads one JSON document back. So
-the honest fake is not a monkeypatched ``subprocess.run`` but a **real
-checkout**: :func:`build_fake_archiver` writes a ``main_batch.py`` and a
-``main_scan.py`` into a temp folder, and the tests point ``archive.python`` at
-``sys.executable``. Everything the service actually has to get right then runs
+``<archive.python> -m app.cli email batch <verb>`` in the checkout and reads
+one JSON document back, then ``-m app.cli email index --root <folder>`` for
+each folder it filed into. So the honest fake is not a monkeypatched
+``subprocess.run`` but a **real checkout**: :func:`build_fake_archiver` writes
+an ``app/cli`` package into a temp folder, and the tests point
+``archive.python`` at ``sys.executable``. Everything the service actually has to get right then runs
 for real — the argv it builds, the temp decisions file it writes, the UTF-8
 decode of the child's stdout, the exit codes, the timeout.
 
-The fake reads its answers from ``_responses.json`` beside it and records every
-invocation into ``_calls.jsonl`` (``{verb, argv, payload}``), which is what lets
+The fake reads its answers from ``_responses.json`` at its root and records every
+batch invocation into ``_calls.jsonl`` (``{verb, argv, payload}``) and every
+re-index into ``_index_calls.jsonl`` (its argv), which is what lets
 a test assert the one thing the archiver's author asked for: that a candidate's
 ``date_prefix`` is handed back **unchanged** on the ``apply`` decision.
 
@@ -236,11 +238,11 @@ def error_doc(verb: str, code: str, message: str) -> dict[str, Any]:
     }
 
 
-_MAIN_BATCH = '''\
-"""A stand-in for email-archiver's main_batch.py — canned answers, no Outlook."""
+_EMAIL_BATCH = '''\
+"""A stand-in for folder-explorer's email batch verbs — canned answers, no Outlook."""
 import argparse, json, os, sys, time
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _load(name):
@@ -248,7 +250,7 @@ def _load(name):
         return json.load(fh)
 
 
-def main():
+def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-timeout", type=float, default=60.0)
     sub = parser.add_subparsers(dest="verb", required=True)
@@ -257,7 +259,7 @@ def main():
     a.add_argument("--renumber", action="store_true")
     r = sub.add_parser("revert"); r.add_argument("--items", required=True)
     r.add_argument("--renumber", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     responses = _load("_responses.json")
     payload = None
@@ -266,7 +268,7 @@ def main():
         with open(source, encoding="utf-8") as fh:
             payload = json.load(fh)
     with open(os.path.join(HERE, "_calls.jsonl"), "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"verb": args.verb, "argv": sys.argv[1:], "payload": payload}) + "\\n")
+        fh.write(json.dumps({"verb": args.verb, "argv": argv, "payload": payload}) + "\\n")
 
     if args.verb in responses.get("sleep_verbs", ["plan", "apply", "revert"]):
         time.sleep(float(responses.get("sleep", 0)))
@@ -281,21 +283,24 @@ def main():
     json.dump(document, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\\n")
     return int(responses.get("exit_code", 0))
-
-
-if __name__ == "__main__":
-    sys.exit(main())
 '''
 
-_MAIN_SCAN = '''\
-"""A stand-in for email-archiver's main_scan.py — prints, never indexes."""
+_CLI_MAIN = '''\
+"""A stand-in for folder-explorer's ``python -m app.cli``: the batch verbs and the scoped re-index."""
 import json, os, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(HERE, "_responses.json"), encoding="utf-8") as fh:
-    responses = json.load(fh)
-print("scanned (fake)")
-sys.exit(int(responses.get("scan_exit_code", 0)))
+HERE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+argv = sys.argv[1:]
+if argv[:2] == ["email", "batch"]:
+    from app.cli import email_batch
+    sys.exit(email_batch.main(argv[2:]))
+if argv[:2] == ["email", "index"]:
+    with open(os.path.join(HERE, "_index_calls.jsonl"), "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(argv[2:]) + "\\n")
+    with open(os.path.join(HERE, "_responses.json"), encoding="utf-8") as fh:
+        responses = json.load(fh)
+    sys.exit(int(responses.get("scan_exit_code", 0)))
+sys.exit("the fake knows email batch and email index only")
 '''
 
 
@@ -310,7 +315,6 @@ def build_fake_archiver(
     sleep: float = 0.0,
     sleep_verbs: tuple[str, ...] = ("plan", "apply", "revert"),
     with_batch: bool = True,
-    with_scan: bool = True,
 ) -> Path:
     """Write a fake archiver checkout at ``root``; returns it.
 
@@ -321,11 +325,13 @@ def build_fake_archiver(
     next one answers ``ok`` with ``reused: true``, which is exactly the pair the
     archiver produces when the same decision is sent a second time.
     """
-    root.mkdir(parents=True, exist_ok=True)
+    cli = root / "app" / "cli"
+    cli.mkdir(parents=True, exist_ok=True)
+    (root / "app" / "__init__.py").write_text("", encoding="utf-8")
+    (cli / "__init__.py").write_text("", encoding="utf-8")
+    (cli / "__main__.py").write_text(_CLI_MAIN, encoding="utf-8")
     if with_batch:
-        (root / "main_batch.py").write_text(_MAIN_BATCH, encoding="utf-8")
-    if with_scan:
-        (root / "main_scan.py").write_text(_MAIN_SCAN, encoding="utf-8")
+        (cli / "email_batch.py").write_text(_EMAIL_BATCH, encoding="utf-8")
     (root / "_responses.json").write_text(
         json.dumps({
             "plan": list(plan or []), "apply": list(apply or []), "revert": list(revert or []),
@@ -335,17 +341,24 @@ def build_fake_archiver(
         encoding="utf-8",
     )
     (root / "_calls.jsonl").write_text("", encoding="utf-8")
+    (root / "_index_calls.jsonl").write_text("", encoding="utf-8")
     return root
 
 
 def calls(root: Path) -> list[dict[str, Any]]:
-    """Every invocation the fake recorded, in order."""
+    """Every batch invocation the fake recorded, in order."""
     raw = (root / "_calls.jsonl").read_text(encoding="utf-8").strip()
+    return [json.loads(line) for line in raw.splitlines() if line.strip()]
+
+
+def index_calls(root: Path) -> list[list[str]]:
+    """Every ``email index`` argv the fake recorded, in order."""
+    raw = (root / "_index_calls.jsonl").read_text(encoding="utf-8").strip()
     return [json.loads(line) for line in raw.splitlines() if line.strip()]
 
 
 __all__ = [
     "FOLDER_BILLS", "FOLDER_HOUSE", "apply_doc", "apply_result", "build_fake_archiver",
-    "calls", "candidate", "error_doc", "mail", "plan_doc", "renumbered", "revert_doc",
+    "calls", "candidate", "error_doc", "index_calls", "mail", "plan_doc", "renumbered", "revert_doc",
     "revert_result",
 ]
