@@ -93,6 +93,12 @@ from src.no_window import NO_WINDOW
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
+# The full e2e suite runs about a minute on four workers and about 2.5 minutes
+# serial; 20 minutes is far past a slow, loaded box and still ends a hung browser.
+E2E_TIMEOUT_S = 1200
+# One `git diff` / `git show` / `git checkout` against this repo's gallery; a
+# healthy call returns in milliseconds, so a minute means git itself is stuck.
+GIT_TIMEOUT_S = 60
 
 #: Shots whose *content* legitimately cannot be pinned, with the reason. Empty
 #: Story 06's instance now starts its clock at the suite's instant
@@ -162,12 +168,16 @@ def _run_suite(label: str) -> None:
     """
     env = {**os.environ, "PYTHONUTF8": "1"}
     print(f"\n=== {label}: running tests/e2e ===", flush=True)
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/e2e", "-q"],
-        cwd=str(REPO_ROOT), env=env, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        creationflags=NO_WINDOW,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "tests/e2e", "-q"],
+            cwd=str(REPO_ROOT), env=env, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            creationflags=NO_WINDOW,
+            timeout=E2E_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        sys.exit(f"❌ {label}: tests/e2e did not finish within {E2E_TIMEOUT_S}s — the suite is hung, not failing")
     report = ((result.stdout or "") + (result.stderr or "")).rstrip()
     if result.returncode != 0:
         print(report, flush=True)
@@ -183,11 +193,15 @@ SHOTS_REL = "docs/screenshots"
 
 def _git(*args: str) -> subprocess.CompletedProcess:
     """One `git` call against this repo, bytes out (a PNG is not text)."""
-    return subprocess.run(
-        ["git", "-C", str(REPO_ROOT), *args],
-        capture_output=True, stdin=subprocess.DEVNULL,
-        check=False, creationflags=NO_WINDOW,
-    )
+    try:
+        return subprocess.run(
+            ["git", "-C", str(REPO_ROOT), *args],
+            capture_output=True, stdin=subprocess.DEVNULL,
+            check=False, creationflags=NO_WINDOW,
+            timeout=GIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        sys.exit(f"❌ git {' '.join(args)} did not finish within {GIT_TIMEOUT_S}s")
 
 
 def _git_lines(*args: str) -> list[str]:
