@@ -75,15 +75,25 @@ class MirrorConfig:
 
 @dataclass(frozen=True)
 class SearchConfig:
+    """The Search tab's indexes.
+
+    ``email_db``        folder-explorer's email index, opened read-only.
+    ``email_deep_url``  folder-explorer's page (``https://<your-host>.ts.net:8453/``).
+                        Set, the Emails group links to its own email search with
+                        the same words, where operators, facets and Show all live;
+                        blank, no link.
+    """
+
     folder_roots: list[str] = field(default_factory=list)
     email_db: str = ""
+    email_deep_url: str = ""
 
 
 @dataclass(frozen=True)
 class CaptureConfig:
     """Inbound capture (#98) — things flagged elsewhere become Inbox tasks.
 
-    The email poller reads the archiver's index through ``search.email_db``,
+    The email poller reads folder-explorer's email index through ``search.email_db``,
     the same path the emails adapter searches — one key, one file, read-only
     from here either way. ``email_poll_minutes`` ≤ 0 turns the poller off
     with that as its visible reason.
@@ -165,18 +175,19 @@ class AIConfig:
 
 @dataclass(frozen=True)
 class ArchiveConfig:
-    """Batch archiving of the Outlook Inbox through email-archiver (#157).
+    """Batch archiving of the Outlook Inbox through folder-explorer's archive verbs (#157).
 
-    task-os never imports the archiver: it spawns that repo's ``main_batch.py``
-    in the archiver's own venv and reads one JSON document back, so a hung
-    Outlook COM call is a timed-out child rather than a blocked webapp.
+    task-os never imports the archiver: it spawns ``python -m app.cli email
+    batch <verb>`` in folder-explorer's checkout under its own venv and reads
+    one JSON document back, so a hung Outlook COM call is a timed-out child
+    rather than a blocked webapp.
 
-    ``repo``     the email-archiver checkout. Blank = the feature is off, with
+    ``repo``     the folder-explorer checkout. Blank = the feature is off, with
                  that as the visible reason. Deliberately **not** derived from
                  ``search.email_db``: the index may legitimately live elsewhere.
     ``python``   the interpreter to spawn it with. Blank = ``<repo>/.venv/
                  Scripts/python.exe`` on Windows, ``<repo>/.venv/bin/python``
-                 elsewhere — the archiver's own venv, never task-os's.
+                 elsewhere — folder-explorer's own venv, never task-os's.
     ``candidates``            ranked folders ``plan`` reports per mail.
     ``confidence_threshold``  a mail whose best candidate scores below this
                  stays in the Inbox as *needs you* (the archiver blends its
@@ -669,6 +680,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         search=SearchConfig(
             folder_roots=_as_str_list(search.get("folder_roots")),
             email_db=str(search.get("email_db", "")),
+            email_deep_url=str(search.get("email_deep_url", "") or "").strip(),
         ),
         capture=CaptureConfig(
             email_poll_minutes=_as_int(

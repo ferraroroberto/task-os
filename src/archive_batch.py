@@ -1,4 +1,4 @@
-"""Batch archiving of the Outlook Inbox through email-archiver (#157, Step 1/3).
+"""Batch archiving of the Outlook Inbox through folder-explorer's archive verbs (#157, Step 1/3).
 
 One gesture files the whole Inbox: every mail is written into the archive
 folder the archiver ranks best, moved to Outlook's *Archive* folder and tagged,
@@ -17,15 +17,17 @@ still completes, because a mail nobody could rank is a filing decision, not a
 broken feature.
 
 **task-os never imports the archiver.** Everything crosses a subprocess
-boundary as JSON: ``<archive.python> main_batch.py {plan|apply|revert}`` run in
-the archiver's own checkout, bounded by ``archive.timeout_seconds`` and spawned
+boundary as JSON: ``<archive.python> -m app.cli email batch {plan|apply|revert}``
+run in folder-explorer's checkout (``archive.repo``), the one app that talks to
+Outlook and owns the email index, bounded by ``archive.timeout_seconds`` and spawned
 with ``CREATE_NO_WINDOW``. That is not fastidiousness — every verb drives
 Outlook over COM, and a COM modal (the address-book prompt, a profile chooser)
 blocks whatever thread it is raised on. A hung Outlook is therefore a child
 this process kills, never a wedged webapp. The archiver keeps sole ownership of
 Outlook, of the filenames and of its index; task-os only decides *which folder*.
 
-The child's contract (email-archiver#53, ``email_archiver/batch.py``):
+The child's contract (folder-explorer's ``app/cli/email_batch.py``, held there by a
+contract test that replays every argv shape this module sends):
 
 - exit **0** — the run completed and stdout carries one JSON document.
   Individual mails may still have failed, each with its own ``error.code``
@@ -40,8 +42,8 @@ The child's contract (email-archiver#53, ``email_archiver/batch.py``):
 Four failures that a caller has to be able to tell apart, so four distinct
 messages and codes: the archiver is **not configured** here (409), Outlook is
 **unreachable** (502), the child **timed out** (504), and a run is **already in
-flight** (409). A fifth — the index rescan afterwards — is deliberately *not*
-fatal: the mails are filed either way, so the run finishes ``done`` and carries
+flight** (409). A fifth — the re-index afterwards, one scoped ``email index
+--root <folder>`` per folder the run filed into — is deliberately *not* fatal: the mails are filed either way, so the run finishes ``done`` and carries
 the rescan's failure in its ``error`` column. "Filed, but the index has not
 confirmed it" is its own state, never folded into a clean run.
 
@@ -125,8 +127,8 @@ from src.no_window import NO_WINDOW
 
 logger = logging.getLogger(__name__)
 
-#: The only batch-document schema this build understands (email-archiver's
-#: ``batch.SCHEMA_VERSION``). A newer archiver is refused by name — reading a
+#: The only batch-document schema this build understands (folder-explorer's
+#: ``email batch`` ``SCHEMA_VERSION``). A newer archiver is refused by name — reading a
 #: field that silently moved is how a mail gets filed into the wrong folder.
 SUPPORTED_SCHEMA_VERSION = 1
 
@@ -135,9 +137,27 @@ SUPPORTED_SCHEMA_VERSION = 1
 #: closed Outlook fails as *unreachable* rather than as *timed out*.
 OUTLOOK_START_TIMEOUT_S = 60.0
 
-#: Bound on the index rescan that follows a run. Its own budget: a rescan walks
-#: the archive tree, and it must never eat the run's timeout.
+#: Bound on the re-index of one filed folder after a run. Its own budget, so it
+#: never eats the run's timeout; a scoped re-index lists one folder and reads
+#: only its new mail, so this is generous.
 SCAN_TIMEOUT_S = 900.0
+
+#: Seconds a re-index waits for another email run (a nightly scan's email stage)
+#: to release the email lock before it reports busy.
+SCAN_WAIT_S = 60.0
+
+#: The argv prefix of folder-explorer's batch verbs and of its scoped re-index,
+#: run as modules from its checkout so its own package resolves.
+BATCH_MODULE = ["-m", "app.cli", "email", "batch"]
+INDEX_MODULE = ["-m", "app.cli", "email", "index"]
+
+#: ``email index`` exit codes worth their own words (0 is indexed).
+_INDEX_EXITS = {
+    1: "the re-index failed",
+    2: "another email run held the index past the wait",
+    3: "the folder is not inside folder-explorer's email folders",
+    4: "folder-explorer's email index is not set up on this machine",
+}
 
 
 @dataclass(frozen=True)
@@ -215,42 +235,39 @@ class ArchiveBatchService(ItemActions):
     # ----------------------------------------------------------- readiness
     @staticmethod
     def _default_python(repo: Path | None) -> Path | None:
-        """The archiver's own venv interpreter — never task-os's."""
+        """folder-explorer's own venv interpreter (it has the email and Outlook extras), never task-os's."""
         if repo is None:
             return None
         return repo / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")
 
     @property
     def script(self) -> Path | None:
-        return self.repo / "main_batch.py" if self.repo else None
-
-    @property
-    def scan_script(self) -> Path | None:
-        return self.repo / "main_scan.py" if self.repo else None
+        """The module the batch verbs live in: present means this checkout has them."""
+        return self.repo / "app" / "cli" / "email_batch.py" if self.repo else None
 
     def _configured(self) -> tuple[bool, str | None]:
         """``(True, None)``, or ``False`` + the one reason that actually applies.
 
         Five distinct failures, five distinct messages: "you turned it off",
-        "you never said where the archiver is", "that folder is not there",
-        "its venv is not built" and "that checkout has no batch mode" each need
+        "you never said where folder-explorer is", "that folder is not there",
+        "its venv is not built" and "that checkout has no archive verbs" each need
         a different fix, and a single "not configured" would hide which.
         """
         if not self.configured_enabled:
             return False, "disabled in config (archive.enabled)"
         if self.repo is None:
-            return False, "archive.repo not configured — point it at the email-archiver checkout"
+            return False, "archive.repo not configured — point it at the folder-explorer checkout"
         if not self.repo.is_dir():
-            return False, f"email-archiver checkout not found at {self.repo}"
+            return False, f"folder-explorer checkout not found at {self.repo}"
         if self.python is None or not self.python.is_file():
             return False, (
-                f"the archiver's Python is not at {self.python} — build its venv, or set "
+                f"folder-explorer's Python is not at {self.python} — build its venv, or set "
                 "archive.python"
             )
         if self.script is None or not self.script.is_file():
             return False, (
-                f"no main_batch.py in {self.repo} — this needs an email-archiver build with "
-                "batch mode"
+                f"no app/cli/email_batch.py in {self.repo} — this needs a folder-explorer "
+                "checkout with the email batch verbs"
             )
         return True, None
 
@@ -296,13 +313,13 @@ class ArchiveBatchService(ItemActions):
 
     # ------------------------------------------------------------ children
     def _spawn_batch(self, args: list[str], *, verb: str) -> dict[str, Any]:
-        """One ``main_batch.py`` call → its one JSON document, or ``ArchiveError``."""
-        assert self.python is not None and self.script is not None and self.repo is not None
+        """One ``email batch`` call → its one JSON document, or ``ArchiveError``."""
+        assert self.python is not None and self.repo is not None
         cmd = [
-            str(self.python), str(self.script),
+            str(self.python), *BATCH_MODULE,
             "--start-timeout", str(OUTLOOK_START_TIMEOUT_S), *args,
         ]
-        logger.info("ℹ️ archive: %s — spawning the archiver's %s", verb, self.script.name)
+        logger.info("ℹ️ archive: %s — spawning folder-explorer's email batch", verb)
         try:
             proc = subprocess.run(  # noqa: S603 — a configured local interpreter and script
                 cmd, cwd=str(self.repo), capture_output=True, timeout=self.timeout,
@@ -318,7 +335,7 @@ class ArchiveBatchService(ItemActions):
         except OSError as exc:
             raise ArchiveError(
                 "archive_spawn_failed",
-                f"could not run the archiver's {self.script.name}: {type(exc).__name__}: {exc}",
+                f"could not run folder-explorer's email batch: {type(exc).__name__}: {exc}",
                 http_status=502,
             ) from exc
 
@@ -406,24 +423,36 @@ class ArchiveBatchService(ItemActions):
             except OSError as exc:  # pragma: no cover - defensive
                 logger.warning("⚠️ archive: could not remove %s — %s", path, exc)
 
-    def _rescan_index(self) -> str | None:
-        """Let the archiver re-index what this run wrote; the reason it did not, or ``None``."""
-        if self.scan_script is None or not self.scan_script.is_file():
-            return f"no main_scan.py in {self.repo} — the archiver's index was not refreshed"
+    def _rescan_index(self, folders: list[str]) -> str | None:
+        """Re-index each folder this run filed into; the reasons any did not, or ``None``.
+
+        One scoped ``email index --root <folder>`` per folder: it lists only that
+        folder and takes only the email lock, so it never waits behind a disk scan.
+        """
+        problems: list[str] = []
+        for folder in folders:
+            problem = self._index_folder(folder)
+            if problem:
+                problems.append(f"{last_component(folder) or folder}: {problem}")
+        if problems:
+            return "the email index has not confirmed what was filed — " + " · ".join(problems)
+        logger.info("ℹ️ archive: folder-explorer re-indexed the %d folder(s) this run filed", len(folders))
+        return None
+
+    def _index_folder(self, folder: str) -> str | None:
+        """One scoped re-index; the reason it did not finish, or ``None``."""
         assert self.python is not None and self.repo is not None
         try:
             proc = subprocess.run(  # noqa: S603 — same configured interpreter
-                [str(self.python), str(self.scan_script), "--no-ui"], cwd=str(self.repo),
-                capture_output=True, timeout=SCAN_TIMEOUT_S, creationflags=NO_WINDOW,
+                [str(self.python), *INDEX_MODULE, "--root", folder, "--wait", str(SCAN_WAIT_S)],
+                cwd=str(self.repo), capture_output=True, timeout=SCAN_TIMEOUT_S, creationflags=NO_WINDOW,
             )
         except subprocess.TimeoutExpired:
-            return f"the archiver's index rescan did not finish within {SCAN_TIMEOUT_S:.0f} s"
+            return f"the re-index did not finish within {SCAN_TIMEOUT_S:.0f} s"
         except OSError as exc:
-            return f"the archiver's index rescan could not start: {type(exc).__name__}: {exc}"
+            return f"the re-index could not start: {type(exc).__name__}: {exc}"
         if proc.returncode != 0:
-            tail = proc.stderr.decode("utf-8", errors="replace").strip()[-300:]
-            return f"the archiver's index rescan exited with code {proc.returncode}: {tail}"
-        logger.info("ℹ️ archive: the archiver re-indexed what this run filed")
+            return f"{_INDEX_EXITS.get(proc.returncode, 'the re-index failed')} (exit {proc.returncode})"
         return None
 
     # ---------------------------------------------------------------- runs
@@ -558,7 +587,8 @@ class ArchiveBatchService(ItemActions):
                 if item_id is not None:
                     triggers.setdefault(path_key(str(decision["folder_path"])), item_id)
             self._heal_renumber(conn, result, triggers)
-        scan_error = self._rescan_index() if decisions else None
+        filed = sorted({str(d["folder_path"]) for d in decisions}, key=str.casefold)
+        scan_error = self._rescan_index(filed) if decisions else None
         if scan_error:
             logger.warning("⚠️ archive: %s", scan_error)
         # Two different partial failures, both recorded rather than folded into

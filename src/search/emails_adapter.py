@@ -32,6 +32,7 @@ import sqlite3
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, urlencode
 
 from src.placeholders import normalize_path, opener_url, to_ref
 from src.search.base import Hit, fts_query, mark_terms, terms
@@ -95,9 +96,16 @@ class EmailsAdapter:
     name = "emails"
     kind = "emails"
 
-    def __init__(self, db_path: str, placeholders: Mapping[str, str] | None = None) -> None:
+    def __init__(self, db_path: str, placeholders: Mapping[str, str] | None = None, deep_url: str = "") -> None:
         self.db_path = (db_path or "").strip()
         self.placeholders = dict(placeholders or {})
+        self.deep_url = (deep_url or "").strip()
+
+    def deep_link(self, q: str) -> str | None:
+        """folder-explorer's email search for the same words, or ``None`` when no page is set."""
+        if not self.deep_url or not q.strip():
+            return None
+        return self.deep_url.split("#", 1)[0] + "#search?" + urlencode({"mode": "emails", "q": q.strip()}, quote_via=quote)
 
     # ------------------------------------------------------------- state
     def is_configured(self) -> tuple[bool, str | None]:

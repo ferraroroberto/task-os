@@ -15,8 +15,8 @@
     Settings stays the one complete picture of what this install can do (#167,
     #397).
 
-One instance, because one index feeds both halves: the archiver's ``emails.db``
-is what capture reads, and the archiver's ``main_batch.py`` is what the run
+One instance, because one index feeds both halves: folder-explorer's email index
+is what capture reads, and its ``email batch`` verbs are what the run
 drives. Both are **synthetic** — the emails come from
 ``tests/fixtures/emails_fixture.py`` and the archiver is
 ``tests/fixtures/archiver_fake.build_fake_archiver``, a real checkout with

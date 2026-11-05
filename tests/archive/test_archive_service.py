@@ -41,6 +41,7 @@ from tests.fixtures.archiver_fake import (
     calls,
     candidate,
     error_doc,
+    index_calls,
     mail,
     plan_doc,
     renumbered,
@@ -63,11 +64,11 @@ def test_not_configured_names_the_reason_that_actually_applies(tmp_path: Path) -
     assert "not found at" in reason(enabled=True, repo=str(tmp_path / "nope"))
 
     repo = build_fake_archiver(tmp_path / "archiver")
-    assert "archiver's Python is not at" in reason(enabled=True, repo=str(repo))
+    assert "folder-explorer's Python is not at" in reason(enabled=True, repo=str(repo))
 
     empty = tmp_path / "no-batch-mode"
     build_fake_archiver(empty, with_batch=False)
-    assert "no main_batch.py" in reason(
+    assert "no app/cli/email_batch.py" in reason(
         enabled=True, repo=str(empty), python=sys.executable,
     )
 
@@ -652,4 +653,24 @@ def test_a_failed_rescan_leaves_the_run_done_and_says_so(
     )
     run = service_for(repo).run_now()
     assert run["status"] == "done" and run["archived"] == 1
-    assert "index rescan exited with code 3" in run["error"]
+    assert "not inside folder-explorer's email folders (exit 3)" in run["error"]
+
+
+def test_each_filed_folder_is_reindexed_once_by_its_own_scoped_run(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Two mails into one folder and one into another: two scoped re-indexes, no full scan."""
+    mails = [
+        mail("a@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        mail("b@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
+        mail("c@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.9)]),
+    ]
+    repo = build_fake_archiver(
+        tmp_path / "archiver", plan=[plan_doc(mails)],
+        apply=[apply_doc([apply_result(m["message_id"], m["candidates"][0]["folder_path"], files=[ARCHIVED_FILE])
+                          for m in mails])],
+    )
+    run = service_for(repo).run_now()
+    assert run["status"] == "done" and "has not confirmed" not in (run["error"] or "")
+    assert index_calls(repo) == [["--root", FOLDER_BILLS, "--wait", "60.0"], ["--root", FOLDER_HOUSE, "--wait", "60.0"]]
+    assert [c["argv"][:3] for c in calls(repo)] == [["--start-timeout", "60.0", "plan"], ["--start-timeout", "60.0", "apply"]]
