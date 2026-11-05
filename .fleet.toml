@@ -6,8 +6,8 @@ layer       = "working-web"
 icon        = "✅"
 port        = ":8448"
 tag         = ["→", "GitHub"]
-# Sample config reads the email archiver's db and the hub URLs; the :8090 whisper fallback is voice-transcriber's port.
-depends_on  = ["email-archiver", "local-llm-hub", "voice-transcriber"]
+# Sample config reads folder-explorer's email index and runs its archive verbs, plus the hub URLs; the :8090 whisper fallback is voice-transcriber's port.
+depends_on  = ["folder-explorer", "local-llm-hub", "voice-transcriber"]
 description = "One task list: projects, Inbox capture, calendar, voice add, mail archiving, time tracking."
 # The repo layout the structure ratchet holds the root folders to (docs/layout.md).
 shape       = "webapp-tray"
