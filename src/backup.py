@@ -66,8 +66,10 @@ def run_backup(source: Path, dest_dir: Path, *, keep: int = KEEP, day: date | No
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / backup_name(day)
     tmp = dest_dir / (target.name + ".tmp")
+    # must-use-exempt: backup-API source handle; the snapshot needs a plain connection, not the app's pragmas
     src = sqlite3.connect(source, timeout=30)
     try:
+        # must-use-exempt: backup-API destination temp file, not the app database
         dst = sqlite3.connect(tmp)
         try:
             src.backup(dst)
