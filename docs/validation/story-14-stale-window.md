@@ -24,4 +24,4 @@ verified — e2e walk + screenshots on the seeded instance, unit suite green, li
 
 **Honesty caveat (by design):** `updated_at` moves on *any* write — GitHub issue sync and mirror imports included — so a synced task never looks stale even if you personally ignore it. Stated in the README where the filter is described.
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Walked on the Board.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. Walked on the Board.

@@ -47,4 +47,4 @@ Three defects found on the walk, all invisible to the tests, all fixed:
 
 Result: **verified** (e2e desktop + phone legs · unit across repo, API, CLI, mirror, parser · headed desktop walk in both themes, including undo, the CLI on both backends and a hand-edited mirror round-trip) · real phone = owner's checklist. Date: 2026-08-30.
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The Tree that kept sleeping tasks on screen is gone; the Board under the `deferred` pill is where they show, with their marker. Shot 3 (the Table under that pill) is retired with the Table.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. The Tree that kept sleeping tasks on screen is gone; the Board under the `deferred` pill is where they show, with their marker. Shot 3 (the Table under that pill) is retired with the Table.

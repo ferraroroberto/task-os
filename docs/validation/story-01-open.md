@@ -23,4 +23,4 @@
 - [x] On screen: walked headed on the live tray build at `:8448` (desktop 1440 wide, then phone 390 wide) — the four shots above are the proof; the same run showed the tray icon, `/api/version` `git_sha == HEAD`.
 - Not verified in this step: PWA install on a real iPhone and HTTPS (Step 7); anything beyond the empty shell (no tasks exist yet — Step 2 brings the schema, Step 4 the first task).
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The nav holds four destinations; the walk now also loads a browser that stored the old `table` tab, with `?view=table#table`, and lands on Today with no page error and the Table-only `localStorage` keys gone.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. The nav holds four destinations; the walk now also loads a browser that stored the old `table` tab, with `?view=table#table`, and lands on Today with no page error and the Table-only `localStorage` keys gone.
