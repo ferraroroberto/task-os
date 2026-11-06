@@ -1,6 +1,6 @@
 # UX round 8 — the Tree folds into the Table, and the pill drops to five (issue #161)
 
-Eighth on-screen review, and a structural one rather than a polish pass: the **Tree stops being a nav destination** and becomes the **Table tab's second view**, flipped by a two-state segmented control in the pane's own top strip. The nav pill goes from six entries to five — a slot the coming **Archive** tab ([#159](https://github.com/ferraroroberto/task-os/issues/159)) takes without crowding it.
+Eighth on-screen review, and a structural one rather than a polish pass: the **Tree stops being a nav destination** and becomes the **Table view's second view**, flipped by a two-state segmented control in the pane's own top strip. The nav pill goes from six entries to five — a slot the coming **Archive** tab ([#159](https://github.com/ferraroroberto/task-os/issues/159)) takes without crowding it.
 
 The reasoning is the app's own: Board, Table, Tree, Today and the Search tab's task hits are already *renderings of one filtered list* (#46), and the Table and the Tree had reached the point of being byte-for-byte the same pane — the same top strip (text filter · select toggle · quick-add · bulk bar), the same filter card, the same rows — differing only in the host they drew into. Two drawings of one list are a **view switch**, not two destinations; the pill is for places you go.
 
@@ -21,7 +21,7 @@ Desktop: [the grid view, toggle on the left half](../screenshots/story-04-triage
 ## What deliberately did not change
 
 - **`tree.js` and `table.js` are untouched.** How the tree and the grid draw a row was never the point of this round; where the tree lives was.
-- **The Table tab keeps the id `table`.** Stored tabs, `#task/<id>` deep links and every story test that opens the Table keep working with no migration.
+- **The Table view keeps the id `table`.** Stored tabs, `#task/<id>` deep links and every story test that opens the Table keep working with no migration.
 - **The tree keeps everything it had** inside the pane: drag re-parent, the persisted collapse state, the ↑↓→← outline walk (and its exemption from the row action keys — `keys.js`'s `NOT_A_TARGET` moved from `#paneTree` to `#treeHost`, the same rule keyed on the host rather than a pane that no longer exists), Select mode + the bulk bar, the quick-add `+` focusing the new row in whichever host is up, and its role as the one working view that still shows a **deferred** or **blocked** task.
 - **The e2e suite gained no test.** Five inline `data-tab='tree'` clicks became one `tree_view(page)` helper in `tests/e2e/conftest.py` (plus its twin `table_view(page)` for the walks that come back to the grid); the suite stays at 16 collected across 13 files, exactly as before.
 

@@ -43,4 +43,4 @@ The probe terminal was closed afterwards. The worst case — no owner anywhere i
 
 Result: **verified** (one-tab spawn + repo cwd + both echoes + timing, all observed). Date: 2026-09-12.
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. Step 1 reads the Board row and its ⋯ menu; the open / resume popover is opened from the drawer's link-row chip, the grid's chip cell having gone with the Table.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. Step 1 reads the Board row and its ⋯ menu; the open / resume popover is opened from the drawer's link-row chip, the grid's chip cell having gone with the Table.

@@ -26,4 +26,4 @@ verified — e2e walk + screenshots on the seeded instance (desktop light), unit
 
 **Deliberate limits:** no trash, no restore, no activity record of the deletion (nothing is left to hang it on); no delete key in the keymap (a destructive action stays a click plus a confirmation); the open-issue case warns rather than refuses — the delete is the owner's call, the warning is what keeps a resurrection from looking like a failed delete; the confirmation keeps no state — every ask is built fresh into the one dialog shell.
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The batch delete runs from the Board's Select bar.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. The batch delete runs from the Board's Select bar.

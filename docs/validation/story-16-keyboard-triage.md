@@ -28,4 +28,4 @@ verified — e2e walk + screenshots on the seeded instance (light and dark), uni
 
 **Deliberate limits:** the Tree takes no action keys (its keyboard model is navigation-first — ↑↓→← Enter — and the issue keeps it that way); no new arrow navigation on the other tabs (Tab moves, the Table grid keeps the ↑↓ it already had); undo is single-level with no redo, and expires with its toast rather than on a timer of its own; the keys are a desktop affordance — a phone has no keyboard row to reach them from, and the touch surfaces (row select, snooze button, plan targets) are unchanged.
 
-**2026-10-05 (#350):** the Table tab (grid and Tree) was removed. The Table grid row is gone, and with it the one row that was not the shared `.trow`.
+**2026-10-05 (#350):** the Table view (grid and Tree) was removed. The Table grid row is gone, and with it the one row that was not the shared `.trow`.
