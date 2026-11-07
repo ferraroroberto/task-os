@@ -42,20 +42,20 @@ geometry       = { src = "tests/e2e/_geometry.py",                    sha = "4c6
 browser_sweep  = { src = "tests/e2e/_browser_sweep.py",               sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "tests/e2e/_browser_sweep.py" }
 surface_capture = { src = "tests/e2e/_surface.py",                   sha = "5c4d3a7947dae8b3b4a028bf636c0f052ea3b1f7", dest = "tests/e2e/_surface.py" }
 classify_e2e   = { src = "scripts/classify_e2e.py",                   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "scripts/classify_e2e.py" }
-static_ratchet = { src = "scripts/static_ratchet.py",               sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/static_ratchet.py" }
+static_ratchet = { src = "scripts/static_ratchet.py",               sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/static_ratchet.py" }
 docs_ratchet   = { src = "scripts/docs_ratchet.py",                 sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/docs_ratchet.py" }
 structure_ratchet = { src = "scripts/structure_ratchet.py",     sha = "bf11a867c5678c6a4869a6265bf6cecf1d12d1a2", dest = "scripts/structure_ratchet.py" }
 structure_layout = { src = "scripts/structure_layout.py", sha = "bf11a867c5678c6a4869a6265bf6cecf1d12d1a2", dest = "scripts/structure_layout.py" }
 structure_band = { src = "scripts/structure_band.py", sha = "3b708fd3c54ab7b93b08d489406c405762c83c41", dest = "scripts/structure_band.py" }
 box_lock_gate = { src = "scripts/box_lock_gate.ps1", sha = "98cdb1b7727d12a5c233580478e6fae40d98e6f3", dest = "scripts/box_lock_gate.ps1" }
-instruction_ratchet = { src = "scripts/instruction_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/instruction_ratchet.py" }
+instruction_ratchet = { src = "scripts/instruction_ratchet.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_ratchet.py" }
 doc_refs_ratchet = { src = "scripts/doc_refs_ratchet.py", sha = "dedb86e0f212d66f247f4aacb6c15d13b1154651", dest = "scripts/doc_refs_ratchet.py" }
 dead_code_ratchet = { src = "scripts/dead_code_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/dead_code_ratchet.py" }
 conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "39ae7582b35fe8ef05441bb5cba65c38b0dfad3f", dest = "scripts/conventions_ratchet.py" }
 conventions_readers = { src = "scripts/conventions_readers.py", sha = "39ae7582b35fe8ef05441bb5cba65c38b0dfad3f", dest = "scripts/conventions_readers.py" }
 runtime_write_ratchet = { src = "scripts/runtime_write_ratchet.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/runtime_write_ratchet.py" }
 runtime_write_resolve = { src = "scripts/runtime_write_resolve.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/runtime_write_resolve.py" }
-comment_ratchet = { src = "scripts/comment_ratchet.py", sha = "41ca8abd5a2755a06bd8a620a72967211161d58e", dest = "scripts/comment_ratchet.py" }
+comment_ratchet = { src = "scripts/comment_ratchet.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/comment_ratchet.py" }
 no_window      = { src = "src/no_window.py",                         sha = "4c699636afecd5cae5e966bc2bcb17fa49744390", dest = "src/no_window.py" }
 pooled_http    = { src = "src/pooled_http.py",                        sha = "9d0fd2777fbae78aaffa7a0e53f62a201db5af79", dest = "src/pooled_http.py" }
 runtime_data   = { src = "src/runtime_data.py",                        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "src/runtime_data.py" }
@@ -71,6 +71,8 @@ compression    = { src = "src/compression.py", sha = "d930466848d17d47261261c490
 # of the fleet's folder searcher), verbatim; sha = that repo's commit.
 foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sha = "799d746dad501595ae5a6c2fd5b521413e032c5c", dest = "src/vendor/foldersearcher_core.py" }
 webapp_serve = { src = "app/webapp/serve.py", sha = "41ca8abd5a2755a06bd8a620a72967211161d58e", dest = "app/webapp/serve.py" }
+instruction_frontmatter = { src = "scripts/instruction_frontmatter.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_frontmatter.py" }
+instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_repeats.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
 # app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop; code
