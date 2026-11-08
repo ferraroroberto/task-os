@@ -90,6 +90,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 from src.no_window import NO_WINDOW
+from src.runtime import files as runtime_files
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
@@ -232,7 +233,8 @@ def _check_against_gallery() -> int:
                  if rel.endswith(".png")]
 
     raster, allowed, moved = [], [], []
-    with tempfile.TemporaryDirectory(prefix="taskos-gallery-baseline-") as tmp:
+    tmp = tempfile.mkdtemp(prefix="taskos-gallery-baseline-")
+    try:
         for rel in changed:
             name = Path(rel).name
             if name in ALLOWED_TO_DIFFER:
@@ -246,10 +248,11 @@ def _check_against_gallery() -> int:
                 moved.append((name, "git holds it, this run deleted it"))
                 continue
             reference = Path(tmp) / name
-            # runtime-write-exempt: writes into a temporary directory the run creates and removes
             reference.write_bytes(committed)
             why = _visible_difference(reference, SHOTS_DIR / name)
             (moved if why else raster).append((name, why) if why else name)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
     print(f"\n{total} shots · {total - len(changed)} byte-identical to the committed gallery · "
           f"{len(raster)} raster-noise only · {len(allowed)} on the stated allowlist · "
@@ -281,11 +284,9 @@ def _check_against_gallery() -> int:
 
 
 def _snapshot(into: Path) -> None:
-    # runtime-write-exempt: the snapshot folder is a temporary directory the caller passes
-    into.mkdir(parents=True, exist_ok=True)
+    runtime_files.make_dir(into)
     for png in SHOTS_DIR.glob("*.png"):
-        # runtime-write-exempt: copies into the temporary snapshot folder
-        shutil.copy2(png, into / png.name)
+        runtime_files.copy_file(png, into / png.name)
 
 
 def _digest(path: Path) -> str:

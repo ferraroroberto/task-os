@@ -19,13 +19,14 @@ from fastapi.testclient import TestClient
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.config import load_config
+from src.db import read_only_uri
 from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.issues.base import IssueInfo
 from src.issues.fake import FakeProvider
 from src.search import KINDS, FederatedSearch, Hit, build_federated, parse_kinds
 from src.search.base import fts_query, mark_terms
-from src.search.emails_adapter import EmailsAdapter, email_db_uri
+from src.search.emails_adapter import EmailsAdapter
 from src.search.folders_adapter import FoldersAdapter
 from src.search.issues_adapter import IssuesAdapter
 from src.search.tasks_adapter import TasksAdapter
@@ -152,7 +153,7 @@ def test_folders_adapter_configured_and_not(cfg: Path, tmp_path: Path) -> None:
 def test_emails_adapter_fts_bm25_and_refs(emails_db: Path, od: Path) -> None:
     a = EmailsAdapter(str(emails_db), {"onedrive": od.as_posix()})
     assert a.is_configured() == (True, None)
-    assert email_db_uri(emails_db).endswith("?mode=ro") and email_db_uri(emails_db).startswith("file:")
+    assert read_only_uri(emails_db).endswith("?mode=ro") and read_only_uri(emails_db).startswith("file:")
     hits = a.search("kitchen", 10)
     # subject × 10 beats body × 1: the "Kitchen quotes" mail ranks above the forms mail whose body says kitchen-table
     assert [h.title for h in hits] == ["Kitchen quotes from the installer", "School enrolment forms — deadline Friday"]

@@ -108,6 +108,7 @@ from src.config import AppConfig, resolve_placeholders, unresolved_placeholders
 from src.dates import DateParseError, IntervalError, parse_date, parse_interval
 from src.db import DB_PATH_ENV, connect
 from src.mirror_format import FILE_RE, MirrorParseError, ParsedFile, file_name, parse_file, render
+from src.runtime import files as runtime_files
 
 logger = logging.getLogger(__name__)
 
@@ -167,8 +168,7 @@ def resolve_dir(raw: str, placeholders: dict[str, str], *, label: str) -> tuple[
         return path, ""
     if path.parent.is_dir():
         try:
-            # runtime-write-exempt: the mirror folder is configuration (a synced folder), never a code folder
-            path.mkdir()
+            runtime_files.make_dir(path, parents=False, exist_ok=False)
         except OSError as exc:
             return None, f"{label}: cannot create {path} ({exc})"
         return path, ""
@@ -337,8 +337,7 @@ class Mirror:
             exported_at = repo.now_iso()
             text = render(task, exported_at=exported_at)
             tmp = target.with_suffix(".md.tmp")
-            # runtime-write-exempt: writes beside the configured mirror target
-            tmp.write_text(text, encoding="utf-8", newline="\n")
+            runtime_files.save_text(tmp, text, newline="\n")
             os.replace(tmp, target)
             if state is not None and state["path"] != target.name:
                 old = self.dir / state["path"]

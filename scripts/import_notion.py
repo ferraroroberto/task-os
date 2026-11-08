@@ -53,8 +53,9 @@ from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
-from src.db import connect, db_path, init_db
+from src.db import connect, connect_read_only, db_path, init_db
 from src.logger import configure_logging
+from src.runtime import files as runtime_files
 from src.schema import SCHEMA_VERSION, current_version
 
 logger = logging.getLogger("import_notion")
@@ -646,10 +647,8 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("ℹ️ notion: %d pages, %d API calls", len(export["pages"]), client.calls)
 
     if args.json_dump:
-        # runtime-write-exempt: --json-dump is an operator-supplied output path
-        args.json_dump.parent.mkdir(parents=True, exist_ok=True)
-        # runtime-write-exempt: --json-dump is an operator-supplied output path
-        args.json_dump.write_text(json.dumps(export, ensure_ascii=False, indent=1), encoding="utf-8")
+        runtime_files.make_dir(args.json_dump.parent)
+        runtime_files.save_text(args.json_dump, json.dumps(export, ensure_ascii=False, indent=1))
         logger.info("ℹ️ raw export saved → %s", args.json_dump)
 
     mapped = map_export(export)
@@ -663,8 +662,7 @@ def main(argv: list[str] | None = None) -> int:
         # write would create / update / leave alone.
         conn: sqlite3.Connection | None = None
         if target_db.exists():
-            # runtime-write-exempt: the import target database is an operator-supplied path
-            conn = sqlite3.connect(target_db)
+            conn = connect_read_only(target_db)
             conn.row_factory = sqlite3.Row
             if current_version(conn) < SCHEMA_VERSION:
                 logger.info("ℹ️ dry run: %s is at schema v%d (< %d) — plan assumes nothing imported yet", target_db, current_version(conn), SCHEMA_VERSION)

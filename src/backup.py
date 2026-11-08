@@ -23,7 +23,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import sqlite3
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -31,8 +30,9 @@ from typing import Any
 
 from src import clock
 from src.config import AppConfig
-from src.db import db_path
+from src.db import connect, db_path
 from src.mirror import resolve_dir
+from src.runtime import files as runtime_files
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +63,12 @@ def run_backup(source: Path, dest_dir: Path, *, keep: int = KEEP, day: date | No
     """Copy ``source`` to ``dest_dir/tasks-YYYYMMDD.db`` (consistent snapshot); prune to ``keep``."""
     if not source.exists():
         raise FileNotFoundError(f"database not found: {source}")
-    # runtime-write-exempt: the backup folder is configuration (a synced folder), never a code folder
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    runtime_files.make_dir(dest_dir)
     target = dest_dir / backup_name(day)
     tmp = dest_dir / (target.name + ".tmp")
-    # must-use-exempt: backup-API source handle; the snapshot needs a plain connection, not the app's pragmas
-    # runtime-write-exempt: reads the live database through the backup API
-    src = sqlite3.connect(source, timeout=30)
+    src = connect(source, pragmas=False)
     try:
-        # must-use-exempt: backup-API destination temp file, not the app database
-        # runtime-write-exempt: writes a temp file beside the configured backup target
-        dst = sqlite3.connect(tmp)
+        dst = connect(tmp, pragmas=False)
         try:
             src.backup(dst)
         finally:

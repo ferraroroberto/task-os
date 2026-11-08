@@ -182,12 +182,19 @@ enabled  = true
 baseline = ".conventions-ratchet-baseline.json"
 rules    = ["no-window", "logging-not-print", "no-drive-path", "password-input-vendored", "login-lockout", "subprocess-timeout"]
 
+# Outbound HTTP goes through the pooled session, not a bare requests call.
+[[conventions_ratchet.must_use]]
+call   = ["requests.get", "requests.post", "requests.put", "requests.patch", "requests.delete", "requests.head", "requests.request"]
+helper = ["src/pooled_http.py"]
+why    = "CLAUDE.md: outbound-connection discipline, one pooled session"
+paths  = ["app/", "src/"]
+
 # A raw connect skips the WAL, foreign-key and synchronous pragmas. src/db.py opens the
-# app database; src/search/emails_adapter.py is the one read-only opener of the
-# archiver's emails.db. scripts/ are one-shot CLIs and stay out of scope.
+# app database (and, read-only, the archiver's emails.db and the other files a reader
+# only looks at). scripts/ are one-shot CLIs and stay out of scope.
 [[conventions_ratchet.must_use]]
 call   = "sqlite3.connect"
-helper = ["src/db.py", "src/search/emails_adapter.py"]
+helper = ["src/db.py"]
 why    = "CLAUDE.md: one get_db, zero per-handler sqlite3.connect; src/db.py applies the fleet pragmas"
 paths  = ["app/", "src/"]
 
@@ -233,6 +240,9 @@ builders = [
 [comment_ratchet]
 enabled  = true
 baseline = ".comment-ratchet-baseline.json"
+# Decision-history phrases in comments and docstrings fail at zero. The docstring `#NNN` rule
+# stays off: it finds 256 references in 60 files, too many to burn in one pass.
+history_phrases = true
 
 # /perf-review (fleet-config skills/perf-review): "ready" is Today's due list drawn, not
 # first contentful paint, which goes green on a painted shell before any task has loaded.

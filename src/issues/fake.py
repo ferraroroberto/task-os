@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from src.issues.base import IssueInfo, IssueProviderError
+from src.runtime import files as runtime_files
 
 _lock = threading.Lock()
 
@@ -43,8 +44,7 @@ class FakeProvider:
     @classmethod
     def from_issues(cls, path: Path | str, issues: list[dict[str, Any]], error: dict[str, str] | None = None) -> FakeProvider:
         p = Path(path)
-        # runtime-write-exempt: a test double: the path is the test's temporary file
-        p.write_text(json.dumps({"issues": issues, "error": error}, indent=1), encoding="utf-8")
+        runtime_files.save_text(p, json.dumps({"issues": issues, "error": error}, indent=1))
         return cls(p)
 
     # ------------------------------------------------------------- file io
@@ -61,8 +61,7 @@ class FakeProvider:
         return data
 
     def _write(self, data: dict[str, Any]) -> None:
-        # runtime-write-exempt: a test double: the path is the test's temporary file
-        self.path.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        runtime_files.save_text(self.path, json.dumps(data, indent=1))
 
     def _info(self, row: dict[str, Any]) -> IssueInfo:
         return IssueInfo(

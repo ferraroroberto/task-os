@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+from src.runtime import files as runtime_files
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = PROJECT_ROOT / "data" / "logs"
@@ -49,12 +50,8 @@ def configure_logging(level: int = logging.INFO, log_file: Path | None = None) -
 
     target = log_file or LOG_FILE
     try:
-        # runtime-write-exempt: the log file is data/logs or the caller's argument
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # runtime-write-exempt: the log file is data/logs or the caller's argument
-        file_handler = RotatingFileHandler(
-            target, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
-        )
+        runtime_files.make_dir(target.parent)
+        file_handler = runtime_files.rotating_file_handler(target, max_bytes=1_000_000, backups=3)
         file_handler.setFormatter(formatter)
         root.addHandler(file_handler)
     except OSError as exc:  # a read-only checkout must not kill startup

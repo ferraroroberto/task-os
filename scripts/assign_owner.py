@@ -35,7 +35,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src import tasks_repo as repo  # noqa: E402
 from src.config import load_config  # noqa: E402
-from src.db import connect, db_path  # noqa: E402
+from src.db import connect, connect_read_only, db_path  # noqa: E402
 from src.logger import configure_logging  # noqa: E402
 
 logger = logging.getLogger("assign_owner")
@@ -70,8 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("❌ %r is not a member (people: %s)", args.to, ", ".join(members))
         return 2
 
-    # runtime-write-exempt: the --apply branch goes through connect() on the configured database; the other opens it read-only
-    conn = connect(path) if args.apply else sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    conn = connect(path) if args.apply else connect_read_only(path)
     try:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
         if "owner" not in cols:
