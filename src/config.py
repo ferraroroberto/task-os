@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.runtime import files as runtime_files
+
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -806,8 +808,5 @@ def _read_for_secret_write(path: Path | None) -> tuple[Path, dict[str, Any]]:
 
 
 def _write_secret_config(target: Path, raw: dict[str, Any]) -> Path:
-    # runtime-write-exempt: the config path is the caller's argument (config/ or TASKOS_CONFIG_PATH)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # runtime-write-exempt: the config path is the caller's argument (config/ or TASKOS_CONFIG_PATH)
-    target.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return target
+    runtime_files.make_dir(target.parent)
+    return runtime_files.save_text(target, json.dumps(raw, indent=2, ensure_ascii=False) + "\n")

@@ -36,6 +36,7 @@ from src import clock
 from src.config import AppConfig
 from src.db import db_path
 from src.placeholders import normalize_path, resolve, to_ref
+from src.runtime import files as runtime_files
 from src.vendor import foldersearcher_core as core
 
 logger = logging.getLogger(__name__)
@@ -151,8 +152,7 @@ class FolderIndexService:
         try:
             fresh = core.FolderIndex()
             n = fresh.scan(self.scan_roots)
-            # runtime-write-exempt: the index file sits beside the database (data/ or TASKOS_DB_PATH) unless the caller passes one
-            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime_files.make_dir(self.index_path.parent)
             fresh.save(str(self.index_path))
             with self._lock:
                 self._index = fresh

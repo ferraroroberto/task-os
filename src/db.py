@@ -19,6 +19,7 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+from src.runtime import files as runtime_files
 from src.runtime_data import runtime_db_path
 from src.schema import SCHEMA_VERSION, migrate
 
@@ -34,7 +35,10 @@ DB_PATH_ENV = "TASKOS_DB_PATH"
 #: beside the task database — never a table in it, so losing it loses history only.
 USAGE_DB_NAME = "usage.sqlite3"
 
-__all__ = ["SCHEMA_VERSION", "connect", "db_path", "get_db", "init_db", "schema_version", "usage_db_path"]
+__all__ = [
+    "SCHEMA_VERSION", "connect", "connect_read_only", "db_path", "get_db", "init_db",
+    "read_only_uri", "schema_version", "usage_db_path",
+]
 
 
 def db_path() -> Path:
@@ -49,18 +53,33 @@ def usage_db_path() -> Path:
     return db_path().with_name(USAGE_DB_NAME)
 
 
-def connect(path: Path | None = None) -> sqlite3.Connection:
-    """Open ``path`` (default :func:`db_path`) with the fleet pragmas applied."""
-    target = path or db_path()
-    # runtime-write-exempt: the database path is data/ or TASKOS_DB_PATH, passed in by the caller
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # runtime-write-exempt: the database path is data/ or TASKOS_DB_PATH, passed in by the caller
-    conn = sqlite3.connect(target, timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA synchronous=NORMAL")
+def connect(path: Path | None = None, *, pragmas: bool = True, timeout: float = 30.0) -> sqlite3.Connection:
+    """Open ``path`` (default :func:`db_path`) with the fleet pragmas applied.
+
+    ``pragmas=False`` is the plain connection a SQLite backup needs on both ends: no WAL
+    switch on a copy, no row factory. A path inside a code folder is refused.
+    """
+    target = runtime_files.checked(path or db_path())
+    runtime_files.make_dir(target.parent)
+    # runtime-write-exempt: checked() above refuses any path under a code folder
+    conn = sqlite3.connect(target, timeout=timeout, check_same_thread=False)
+    if pragmas:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA synchronous=NORMAL")
     return conn
+
+
+def read_only_uri(path: Path | str) -> str:
+    """``file:///E:/…/x.db?mode=ro`` — the read-only URI :func:`sqlite3.connect` takes with ``uri=True``."""
+    return Path(path).resolve().as_uri() + "?mode=ro"
+
+
+def connect_read_only(path: Path | str, *, timeout: float = 5.0, check_same_thread: bool = True) -> sqlite3.Connection:
+    """Open the existing database ``path`` so nothing this process does can write it."""
+    # runtime-write-exempt: read-only URI (mode=ro): nothing is written
+    return sqlite3.connect(read_only_uri(path), uri=True, timeout=timeout, check_same_thread=check_same_thread)
 
 
 def init_db(path: Path | None = None) -> int:

@@ -34,12 +34,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
+from src.db import connect_read_only
 from src.placeholders import normalize_path, opener_url, to_ref
 from src.search.base import Hit, fts_query, mark_terms, terms
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["EmailsAdapter", "email_db_uri", "is_archiver_index", "open_readonly"]
+__all__ = ["EmailsAdapter", "is_archiver_index", "open_readonly"]
 
 FTS_TABLE = "emails_fts"
 BM25_WEIGHTS = "10.0, 3.0, 3.0, 1.0"        # subject, sender, recipients, body_preview
@@ -50,15 +51,9 @@ _LIKE_COLUMNS = ("subject", "sender", "recipients", "body_preview")
 MIN_PREFIX = 2
 
 
-def email_db_uri(path: str | Path) -> str:
-    """``file:///E:/…/emails.db?mode=ro`` — the read-only URI :func:`sqlite3.connect` takes with ``uri=True``."""
-    return Path(path).resolve().as_uri() + "?mode=ro"
-
-
 def open_readonly(db_path: str) -> sqlite3.Connection:
     """The archiver's ``emails.db``, opened read-only — the one connect every reader of this file shares."""
-    # runtime-write-exempt: read-only URI (mode=ro): nothing is written
-    conn = sqlite3.connect(email_db_uri(db_path), uri=True, timeout=5, check_same_thread=False)
+    conn = connect_read_only(db_path, timeout=5, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 

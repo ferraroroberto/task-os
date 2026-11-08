@@ -43,6 +43,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.db import connect_read_only  # noqa: E402
 from src.logger import configure_logging  # noqa: E402
 from src.schema import current_version, migrate  # noqa: E402
 
@@ -51,12 +52,6 @@ logger = logging.getLogger("migrate_dry_run")
 #: Rows a migration writes by design, left out of the content fingerprint: the
 #: version stamp every step bumps (``src.schema.migrate``).
 OWN_WRITES = {"settings": "key <> 'schema_version'"}
-
-
-def open_read_only(path: Path) -> sqlite3.Connection:
-    """The source, opened so nothing this process does can write it."""
-    # runtime-write-exempt: read-only URI (mode=ro): nothing is written
-    return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
 
 
 def snapshot(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
@@ -104,7 +99,7 @@ def dry_run(source: Path, keep: bool = False) -> dict[str, Any]:
     work = Path(tempfile.mkdtemp(prefix="taskos-dry-run-"))
     copy = work / "tasks.db"
     try:
-        src = open_read_only(source)
+        src = connect_read_only(source)
         try:
             dst = sqlite3.connect(copy)
             try:

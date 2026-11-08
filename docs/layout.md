@@ -49,7 +49,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           archive_rank.py (the local model picks the folder among the candidates + the correction memory)
                           calendar_lane.py (the Today calendar lane: bounded ICS fetch, last good copy kept) · ics.py (just enough iCalendar
                           to say what is on today) · pooled_http.py (keep-alive outbound HTTP client, vendored verbatim)
-                          logger.py · static_versioning.py
+                          runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_time_prototype.py (#457),

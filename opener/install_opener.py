@@ -149,14 +149,14 @@ def install(dest: Path, scheme: str = SCHEME) -> bool:
     for name in (HANDLER_NAME, LAUNCHER_NAME):
         if not (HERE / name).exists():
             raise SystemExit(f"error: {HERE / name} not found (run from the repo's opener/ folder)")
-    # runtime-write-exempt: the install destination is the user's chosen per-user folder, never a code folder
+    # runtime-write-exempt: the install folder is the user's own per-user choice outside the checkout; this installer is stdlib-only and cannot import the repo's guarded writer
     dest.mkdir(parents=True, exist_ok=True)
     for name in (HANDLER_NAME, LAUNCHER_NAME):
-        # runtime-write-exempt: copies into the user-chosen install folder
+        # runtime-write-exempt: copies into the same user-chosen install folder (stdlib-only installer)
         shutil.copyfile(HERE / name, dest / name)
     env_file = dest / ENV_NAME
     if not env_file.exists():
-        # runtime-write-exempt: seeds the env file inside the user-chosen install folder
+        # runtime-write-exempt: seeds the env file in the same user-chosen install folder (stdlib-only installer)
         env_file.write_text(ENV_TEMPLATE, encoding="utf-8")
     launcher = launcher_runs(dest / LAUNCHER_NAME)
     key = key_path(scheme)
