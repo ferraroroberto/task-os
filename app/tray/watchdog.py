@@ -194,9 +194,11 @@ class BreadcrumbLog:
         """Append ``msg`` with an ISO-second timestamp. Never raises."""
         logger.debug("watchdog: %s", msg)
         try:
+            # runtime-write-exempt: the breadcrumb log path is handed in by the tray, under its runtime folder
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._rotate_if_needed()
             stamp = datetime.datetime.now().isoformat(timespec="seconds")
+            # runtime-write-exempt: the breadcrumb log path is handed in by the tray, under its runtime folder
             with self.path.open("a", encoding="utf-8") as fh:
                 fh.write(f"{stamp} {msg}\n")
         except OSError as exc:
