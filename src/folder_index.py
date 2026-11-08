@@ -151,6 +151,7 @@ class FolderIndexService:
         try:
             fresh = core.FolderIndex()
             n = fresh.scan(self.scan_roots)
+            # runtime-write-exempt: the index file sits beside the database (data/ or TASKOS_DB_PATH) unless the caller passes one
             self.index_path.parent.mkdir(parents=True, exist_ok=True)
             fresh.save(str(self.index_path))
             with self._lock:

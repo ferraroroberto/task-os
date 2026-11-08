@@ -49,7 +49,9 @@ def configure_logging(level: int = logging.INFO, log_file: Path | None = None) -
 
     target = log_file or LOG_FILE
     try:
+        # runtime-write-exempt: the log file is data/logs or the caller's argument
         target.parent.mkdir(parents=True, exist_ok=True)
+        # runtime-write-exempt: the log file is data/logs or the caller's argument
         file_handler = RotatingFileHandler(
             target, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
         )

@@ -57,6 +57,7 @@ def email_db_uri(path: str | Path) -> str:
 
 def open_readonly(db_path: str) -> sqlite3.Connection:
     """The archiver's ``emails.db``, opened read-only — the one connect every reader of this file shares."""
+    # runtime-write-exempt: read-only URI (mode=ro): nothing is written
     conn = sqlite3.connect(email_db_uri(db_path), uri=True, timeout=5, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn

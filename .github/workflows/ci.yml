@@ -1,6 +1,6 @@
 # Canonical web-app CI gate: install, unit suite, Playwright e2e (desktop + phone).
 #
-# COPY-TO-ADAPT TEMPLATE (project-scaffolding#351). Copy this file to
+# COPY-TO-ADAPT TEMPLATE (from project-scaffolding). Copy this file to
 # `.github/workflows/ci.yml` in the adopting repo and change only the lines
 # marked `# ADAPT:`. The `.template` suffix keeps it inert here: GitHub Actions
 # only loads `.yml`/`.yaml` under `.github/workflows/`. Adoption steps and how

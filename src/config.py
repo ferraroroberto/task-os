@@ -806,6 +806,8 @@ def _read_for_secret_write(path: Path | None) -> tuple[Path, dict[str, Any]]:
 
 
 def _write_secret_config(target: Path, raw: dict[str, Any]) -> Path:
+    # runtime-write-exempt: the config path is the caller's argument (config/ or TASKOS_CONFIG_PATH)
     target.parent.mkdir(parents=True, exist_ok=True)
+    # runtime-write-exempt: the config path is the caller's argument (config/ or TASKOS_CONFIG_PATH)
     target.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return target

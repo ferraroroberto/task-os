@@ -52,7 +52,9 @@ def usage_db_path() -> Path:
 def connect(path: Path | None = None) -> sqlite3.Connection:
     """Open ``path`` (default :func:`db_path`) with the fleet pragmas applied."""
     target = path or db_path()
+    # runtime-write-exempt: the database path is data/ or TASKOS_DB_PATH, passed in by the caller
     target.parent.mkdir(parents=True, exist_ok=True)
+    # runtime-write-exempt: the database path is data/ or TASKOS_DB_PATH, passed in by the caller
     conn = sqlite3.connect(target, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")

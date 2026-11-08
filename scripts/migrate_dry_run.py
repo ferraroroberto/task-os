@@ -55,6 +55,7 @@ OWN_WRITES = {"settings": "key <> 'schema_version'"}
 
 def open_read_only(path: Path) -> sqlite3.Connection:
     """The source, opened so nothing this process does can write it."""
+    # runtime-write-exempt: read-only URI (mode=ro): nothing is written
     return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
 
 

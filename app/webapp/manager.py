@@ -91,9 +91,11 @@ def _open_child_log(path: Path, max_bytes: int = WEBAPP_LOG_MAX_BYTES) -> IO[byt
     discarding the output, as before.
     """
     try:
+        # runtime-write-exempt: the log path is the caller's argument, by default the gitignored webapp/ folder at the repo root
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and path.stat().st_size > max_bytes:
             os.replace(path, path.with_name(path.name + ".1"))
+        # runtime-write-exempt: the same caller-supplied log path as above
         handle = path.open("ab")
         handle.write(f"\n--- webapp start {datetime.now().isoformat(timespec='seconds')} ---\n".encode())
         handle.flush()

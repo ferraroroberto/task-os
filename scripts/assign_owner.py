@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("❌ %r is not a member (people: %s)", args.to, ", ".join(members))
         return 2
 
+    # runtime-write-exempt: the --apply branch goes through connect() on the configured database; the other opens it read-only
     conn = connect(path) if args.apply else sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     try:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
