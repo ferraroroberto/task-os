@@ -60,9 +60,13 @@ def test_owner_events_land_beside_the_task_db(app, tmp_path: Path) -> None:
     try:
         cols = [row[1] for row in conn.execute("PRAGMA table_info(events)")]
         rows = conn.execute("SELECT kind, view_id, control_id, device_class, os_class FROM events ORDER BY id").fetchall()
+        public_site = conn.execute("SELECT country, visitor, ip FROM events").fetchall()
     finally:
         conn.close()
-    assert cols == ["id", "ts", "session_id", "kind", "view_id", "control_id", "device_class", "os_class"]
+    assert cols == ["id", "ts", "session_id", "kind", "view_id", "control_id", "device_class", "os_class",
+                    "country", "visitor", "ip"]
+    # The vendored table carries the public-site columns; a fleet app never fills them.
+    assert public_site and all(row == (None, None, None) for row in public_site)
     assert rows == [
         ("session_start", None, None, "phone", "android"),
         ("view", "today", None, "phone", "android"),
