@@ -167,6 +167,7 @@ def resolve_dir(raw: str, placeholders: dict[str, str], *, label: str) -> tuple[
         return path, ""
     if path.parent.is_dir():
         try:
+            # runtime-write-exempt: the mirror folder is configuration (a synced folder), never a code folder
             path.mkdir()
         except OSError as exc:
             return None, f"{label}: cannot create {path} ({exc})"
@@ -336,6 +337,7 @@ class Mirror:
             exported_at = repo.now_iso()
             text = render(task, exported_at=exported_at)
             tmp = target.with_suffix(".md.tmp")
+            # runtime-write-exempt: writes beside the configured mirror target
             tmp.write_text(text, encoding="utf-8", newline="\n")
             os.replace(tmp, target)
             if state is not None and state["path"] != target.name:

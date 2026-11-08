@@ -43,6 +43,7 @@ class FakeProvider:
     @classmethod
     def from_issues(cls, path: Path | str, issues: list[dict[str, Any]], error: dict[str, str] | None = None) -> FakeProvider:
         p = Path(path)
+        # runtime-write-exempt: a test double: the path is the test's temporary file
         p.write_text(json.dumps({"issues": issues, "error": error}, indent=1), encoding="utf-8")
         return cls(p)
 
@@ -60,6 +61,7 @@ class FakeProvider:
         return data
 
     def _write(self, data: dict[str, Any]) -> None:
+        # runtime-write-exempt: a test double: the path is the test's temporary file
         self.path.write_text(json.dumps(data, indent=1), encoding="utf-8")
 
     def _info(self, row: dict[str, Any]) -> IssueInfo:

@@ -646,7 +646,9 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("ℹ️ notion: %d pages, %d API calls", len(export["pages"]), client.calls)
 
     if args.json_dump:
+        # runtime-write-exempt: --json-dump is an operator-supplied output path
         args.json_dump.parent.mkdir(parents=True, exist_ok=True)
+        # runtime-write-exempt: --json-dump is an operator-supplied output path
         args.json_dump.write_text(json.dumps(export, ensure_ascii=False, indent=1), encoding="utf-8")
         logger.info("ℹ️ raw export saved → %s", args.json_dump)
 
@@ -661,6 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         # write would create / update / leave alone.
         conn: sqlite3.Connection | None = None
         if target_db.exists():
+            # runtime-write-exempt: the import target database is an operator-supplied path
             conn = sqlite3.connect(target_db)
             conn.row_factory = sqlite3.Row
             if current_version(conn) < SCHEMA_VERSION:

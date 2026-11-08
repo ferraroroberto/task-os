@@ -1,6 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": ".github/workflows/ci.yml", "count": 1}
-  ]
+  "entries": []
 }

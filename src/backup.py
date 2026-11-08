@@ -63,13 +63,16 @@ def run_backup(source: Path, dest_dir: Path, *, keep: int = KEEP, day: date | No
     """Copy ``source`` to ``dest_dir/tasks-YYYYMMDD.db`` (consistent snapshot); prune to ``keep``."""
     if not source.exists():
         raise FileNotFoundError(f"database not found: {source}")
+    # runtime-write-exempt: the backup folder is configuration (a synced folder), never a code folder
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / backup_name(day)
     tmp = dest_dir / (target.name + ".tmp")
     # must-use-exempt: backup-API source handle; the snapshot needs a plain connection, not the app's pragmas
+    # runtime-write-exempt: reads the live database through the backup API
     src = sqlite3.connect(source, timeout=30)
     try:
         # must-use-exempt: backup-API destination temp file, not the app database
+        # runtime-write-exempt: writes a temp file beside the configured backup target
         dst = sqlite3.connect(tmp)
         try:
             src.backup(dst)

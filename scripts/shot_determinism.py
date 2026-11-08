@@ -246,6 +246,7 @@ def _check_against_gallery() -> int:
                 moved.append((name, "git holds it, this run deleted it"))
                 continue
             reference = Path(tmp) / name
+            # runtime-write-exempt: writes into a temporary directory the run creates and removes
             reference.write_bytes(committed)
             why = _visible_difference(reference, SHOTS_DIR / name)
             (moved if why else raster).append((name, why) if why else name)
@@ -280,8 +281,10 @@ def _check_against_gallery() -> int:
 
 
 def _snapshot(into: Path) -> None:
+    # runtime-write-exempt: the snapshot folder is a temporary directory the caller passes
     into.mkdir(parents=True, exist_ok=True)
     for png in SHOTS_DIR.glob("*.png"):
+        # runtime-write-exempt: copies into the temporary snapshot folder
         shutil.copy2(png, into / png.name)
 
 
