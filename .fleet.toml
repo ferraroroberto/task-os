@@ -17,7 +17,7 @@ extra_roots = ["opener"]  # the per-PC folder opener helper: a standalone instal
 # apps for the modules the scaffold does not ship yet). sha = the source repo
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
-nav            = { src = "app/webapp/static/_vendored/nav",           sha = "ea993a7aa7a8814749236621a5eac939e862bf4d", dest = "app/webapp/static/_vendored/nav" }
+nav            = { src = "app/webapp/static/_vendored/nav",           sha = "d07e9236d6a5eb31c812f9d15780b2a007b3de4e", dest = "app/webapp/static/_vendored/nav" }
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
 button         = { src = "app/webapp/static/_vendored/button",        sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/button" }
