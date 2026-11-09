@@ -1,14 +1,19 @@
-"""Structural pins for the header raster bisect at an installed iOS app's cold start.
+"""Structural check for the header raster at an installed iOS app's cold start.
 
-On an iPhone home-screen app the header card renders soft, with faint smeared
-ghost copies of its text, after a cold launch, while the rows below it are
-sharp. Desktop Chromium and WebKit cannot show it, so only the device decides.
+On an iPhone home-screen app the header card can stay soft after a cold
+launch while the rows below it are sharp. The working explanation (not
+reproducible in desktop Chromium or WebKit): WebKit keeps the page's root
+tiles rastered from a frame taken while the launch viewport was still
+growing, and only content that repaints later (rows filled in by data) is
+re-rastered. The static header never repaints.
 
-This build is a regression bisect: every vendored front-end component is held
-at the content it had before the re-vendor wave that preceded the symptom, the
-rest of the app at HEAD. These checks pin that state, so a stray re-vendor
-cannot silently end the experiment before the device answers, and that the
-header itself carries no layer-promoting property at rest.
+The fix rides the nav's settle watcher, which already fires once the
+viewport stops resizing (visualViewport) and on every return to the
+foreground (visibilitychange, pageshow): on the same one-frame rebuild it
+sets a paint-only change on the page content, so WebKit repaints the content
+tiles at their settled scale. These checks pin that wiring, and that the
+header itself carries no layer-promoting property at rest. A desktop engine
+cannot show the blur, so only the device proves the fix.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ NAV_JS = VENDORED / "nav" / "nav-tabs.js"
 HEADER_CSS = (VENDORED / "home-head" / "home-head.css", VENDORED / "card" / "card.css")
 
 # A property that promotes an element to its own compositing layer, or makes
-# WebKit composite it differently.
+# WebKit composite it differently; the content repaint must never use one.
 LAYER_PROPERTIES = ("transform", "will-change", "filter", "backdrop-filter", "opacity", "contain")
 
 
@@ -30,22 +35,34 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"/\*.*?\*/", "", text, flags=re.S)
 
 
-def test_bisect_nav_has_none_of_the_later_settle_machinery() -> None:
+def _function_body(js: str, name: str) -> str:
+    start = js.index(f"function {name}(")
+    depth, i = 0, js.index("{", start)
+    for j in range(i, len(js)):
+        depth += {"{": 1, "}": -1}.get(js[j], 0)
+        if depth == 0:
+            return js[i : j + 1]
+    raise AssertionError(f"unbalanced braces in {name}")
+
+
+def test_settle_rebuild_also_repaints_the_page_content() -> None:
     js = NAV_JS.read_text(encoding="utf-8")
+    body = _function_body(js, "recompositeGlass")
+    assert "document.documentElement" in body
+    assert "classList.add('content-repaint')" in body
+    assert "classList.remove('content-repaint')" in body
+    # The settle triggers: a quiet viewport and a return to the foreground.
+    watch = _function_body(js, "watchGlassSettle")
+    for trigger in ("visualViewport.addEventListener('resize'", "'visibilitychange'", "'pageshow'"):
+        assert trigger in watch, trigger
+
+
+def test_content_repaint_rule_is_paint_only() -> None:
     css = _strip_comments(NAV_CSS.read_text(encoding="utf-8"))
-    for marker in ("watchGlassSettle", "recompositeGlass", "ResizeObserver", "content-repaint"):
-        assert marker not in js, marker
-    for marker in ("glass-rebuild", "content-repaint", "translateZ(0); will-change: auto"):
-        assert marker not in css, marker
-    # The launch-time viewport expansion and the standalone lvh anchoring
-    # predate the bisect window, so they stay.
-    assert "function expandStandaloneViewport()" in js
-
-
-def test_bisect_buttons_carry_no_hit_area_pseudo_element() -> None:
-    css = _strip_comments((VENDORED / "button" / "button.css").read_text(encoding="utf-8"))
-    assert ".button-ghost::before" not in css
-    assert ".button-surface::before" not in css
+    rules = re.findall(r"html\.content-repaint\s+\.app\s*\{([^}]*)\}", css)
+    assert rules, "nav-tabs.css has no html.content-repaint .app rule"
+    props = [d.split(":", 1)[0].strip() for rule in rules for d in rule.split(";") if d.strip()]
+    assert props and all(p.startswith("outline") for p in props), props
 
 
 def test_header_card_has_no_layer_property_at_rest() -> None:
@@ -53,3 +70,24 @@ def test_header_card_has_no_layer_property_at_rest() -> None:
         css = _strip_comments(path.read_text(encoding="utf-8"))
         for prop in LAYER_PROPERTIES:
             assert not re.search(rf"(?<![-\w]){re.escape(prop)}\s*:", css), f"{path.name}: {prop}"
+
+
+def test_standalone_diagnostic_takes_the_nav_compositing_out() -> None:
+    # Diagnostic step: in the installed app the bar carries no glass and no
+    # promoted layer, and the fade bands are hidden, so the device can tell
+    # whether the nav's compositing is what smears the header.
+    css = _strip_comments(NAV_CSS.read_text(encoding="utf-8"))
+    blocks = re.findall(r"@media \(display-mode: standalone\) \{(.*?)\n  \}\n\}", css, flags=re.S)
+    assert blocks, "no standalone diagnostic block closing the phone media query"
+    block = blocks[-1]
+    for decl in (
+        "background: var(--card)",
+        "backdrop-filter: none",
+        "-webkit-backdrop-filter: none",
+        "transform: none",
+        "will-change: auto",
+        "backface-visibility: visible",
+        "display: none",
+    ):
+        assert decl in block, decl
+    assert "body::before" in block and "body::after" in block
