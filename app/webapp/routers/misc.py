@@ -3,8 +3,6 @@
     GET /              → the PWA shell (index.html, asset URLs hash-stamped,
                          served no-cache so a deploy is picked up on reload;
                          ETag + If-None-Match → a bodyless 304 on a repeat)
-    GET /lab/header    → the temporary header variant lab (lab/header.html, stamped
-                         and revalidated like the shell; gated like any page)
     GET /healthz       → liveness probe (200 while the process answers)
     GET /api/version   → {git_sha, built_at, asset_hash, schema_version} —
                          the build-identity contract the restart recipe
@@ -55,34 +53,20 @@ def _matches(if_none_match: str | None, etag: str) -> bool:
     return False
 
 
-def _stamped_page(request: Request, rel_path: str) -> Response:
-    """Serve a static HTML page with its asset URLs stamped, always revalidated.
-
-    A cached page pointing at an old ?v= entry module would defeat the
-    fleet-hash cache-busting entirely; the validator makes that revalidation a
-    bodyless 304 on a relaunch.
-    """
-    page_path = STATIC_DIR / rel_path
-    if not page_path.exists():
-        raise HTTPException(status_code=500, detail=f"{rel_path} missing")
-    html = BUILD_INFO.stamp_html(page_path.read_text(encoding="utf-8"))
+@router.get("/", include_in_schema=False)
+async def index(request: Request) -> Response:
+    index_path = STATIC_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=500, detail="index.html missing")
+    html = BUILD_INFO.stamp_html(index_path.read_text(encoding="utf-8"))
+    # The shell must always revalidate: a cached shell pointing at an old
+    # ?v= entry module would defeat the fleet-hash cache-busting entirely.
+    # The validator makes that revalidation a bodyless 304 on a relaunch.
     etag = _etag_of(html)
     headers = {"Cache-Control": _INDEX_CACHE_CONTROL, "ETag": etag}
     if _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers=headers)
     return HTMLResponse(html, headers=headers)
-
-
-@router.get("/", include_in_schema=False)
-async def index(request: Request) -> Response:
-    return _stamped_page(request, "index.html")
-
-
-@router.get("/lab/header", include_in_schema=False)
-async def header_lab(request: Request) -> Response:
-    """Same origin and scope as the shell, so the installed app opens it in
-    standalone mode, where the header softness shows."""
-    return _stamped_page(request, "lab/header.html")
 
 
 @router.get("/healthz")
