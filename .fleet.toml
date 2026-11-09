@@ -17,7 +17,6 @@ extra_roots = ["opener"]  # the per-PC folder opener helper: a standalone instal
 # apps for the modules the scaffold does not ship yet). sha = the source repo
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
-nav            = { src = "app/webapp/static/_vendored/nav",           sha = "d07e9236d6a5eb31c812f9d15780b2a007b3de4e", dest = "app/webapp/static/_vendored/nav" }
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
 button         = { src = "app/webapp/static/_vendored/button",        sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/button" }
@@ -79,6 +78,13 @@ instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac32
 #   verbatim, only the docstring's issue/port/path references re-pointed at this repo)
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
 #   BuildInfo/stamp_html/stamp_js; only the no_window import path adapted)
+
+
+# Deliberate forks of a scaffold component (project-scaffolding docs/components.md,
+# "Declaring a deliberate fork"): never also listed in [vendored]; each leaves this
+# table when the upstream change is re-vendored.
+[vendored_forks]
+nav = { src = "app/webapp/static/_vendored/nav", base_sha = "c2dcd8c", reason = "scaffold nav at c2dcd8c plus a one-frame paint-only repaint of the page content on the glass settle rebuild, so the static header card re-rasters after an installed iOS app's cold-start viewport settles", upstream = "ferraroroberto/project-scaffolding#698" }
 
 # [static_ratchet] -- the scaffold's baseline-and-ratchet static analysis. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/static_ratchet.py, which fails on a

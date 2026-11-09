@@ -1,5 +1,6 @@
 /* Floating bottom-tab navigation — visual contract for the fleet's canonical
  * primary nav. VENDORED VERBATIM from project-scaffolding; do NOT edit per-app.
+ * Forked in task-os: see .fleet.toml [vendored_forks] for what differs.
  *
  * Every colour, radius, and spacing value is a design-system CSS custom property
  * (see ~/.claude/design.md + design.dark.md). The consuming app MUST define
@@ -225,6 +226,16 @@
    carries it. */
 .tabs .tab-pill { display: none; }
 
+/* One-frame content repaint that nav-tabs.js sets beside the glass rebuild,
+   each time the installed app's viewport settles. An invisible outline is a
+   paint-only change, so WebKit repaints the tiles under .app (the header card
+   among them) at the settled viewport without promoting anything to a layer.
+   Outside the phone block so a landscape phone wider than 520px gets it too. */
+html.content-repaint .app {
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+}
+
 /* ------------------------------------------- floating bottom tab bar (mobile) */
 /* Gated on touch + narrow width so desktop keeps the top segmented control
    byte-for-byte unchanged. This block is the fleet navigation contract —
@@ -298,11 +309,22 @@
     transform: translateZ(0);
     will-change: transform;
   }
-  /* One-frame filter drop that nav-tabs.js sets once the standalone viewport
-     has settled, so iOS rebuilds the glass layer at its final bounds. */
+  /* One-frame rebuild that nav-tabs.js sets each time the installed app's
+     viewport settles (launch, return to the foreground). The filter drop makes
+     iOS rebuild the glass layer at its final bounds. The promotion drop (bar,
+     labels, badges) makes WebKit paint those layers' contents again: a
+     promoted layer keeps its bitmap across a filter toggle, so a raster taken
+     while the viewport was still growing would otherwise stay soft. Both
+     return on the next frame, so the modal-repaint reason above still holds. */
   .tabs.glass-rebuild {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    transform: none;
+    will-change: auto;
+  }
+  .tabs.glass-rebuild .tab-label,
+  .tabs.glass-rebuild .tab-badge {
+    transform: none;
   }
   /* Hit area only, never painted: the rounded corners would otherwise let a
      row scrolled under the bar take taps in the outer tabs' corner slivers. */
