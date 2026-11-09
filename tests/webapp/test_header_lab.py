@@ -82,3 +82,24 @@ def test_no_app_page_loads_the_lab_sheet() -> None:
     for page in ("index.html", "login.html"):
         text = (STATIC / page).read_text(encoding="utf-8")
         assert "header-lab." not in text, page
+
+
+def test_app_applies_the_picked_offset_in_the_installed_phone_app_only() -> None:
+    """Variant 8 (20px) carried into the app: one token, standalone phone only.
+
+    Desktop engines cannot show the iOS softness, so this pins the structure:
+    the offset has one home, it is plain padding on top of the safe area, it
+    is scoped to standalone on a phone, and the rule adds no layer.
+    """
+    css = (STATIC / "styles" / "base.css").read_text(encoding="utf-8")
+    assert css.count("--standalone-head-offset: 20px;") == 1
+    block = re.search(
+        r"@media \(display-mode: standalone\) and \(pointer: coarse\) and \(max-width: 520px\) \{(.*?)\n\}",
+        css,
+        flags=re.S,
+    )
+    assert block, "the offset rule must be scoped to the installed phone app"
+    body = block.group(1)
+    assert "padding-top: calc(env(safe-area-inset-top, 0px) + var(--standalone-head-offset));" in body
+    for prop in ("transform", "will-change", "filter"):
+        assert prop not in body, prop
