@@ -44,20 +44,6 @@ function foldLine(fold) {
   return p;
 }
 
-/** The Emails group's way out to folder-explorer's own email search, with the same words. */
-function deepLink(href) {
-  const p = document.createElement('p');
-  p.className = 'search-deep';
-  const a = document.createElement('a');
-  a.dataset.track = 'search.emails-deep-link';
-  a.href = href;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  a.textContent = 'Search all mail in folder-explorer';
-  p.appendChild(a);
-  return p;
-}
-
 /** One kind's hits: a flat section under an overline header with its count. */
 function group(k, countText, countLabel) {
   const parts = collapsibleCard({
@@ -124,7 +110,6 @@ export function render(ctx, res) {
     ul.setAttribute('role', 'list');
     rows.forEach(function (h) { ul.appendChild(k.kind === 'tasks' ? taskHitRow(ctx, h, idx++) : hitRow(ctx, h, idx++)); });
     parts.body.appendChild(ul);
-    if (g.deep_link) parts.body.appendChild(deepLink(g.deep_link));
     groups.push(parts.card);
   });
   ctx.meta.textContent = hitWord(total);

@@ -6,6 +6,8 @@ The PWA is plain files under `app/webapp/static/`, served by `CachingStaticFiles
 
 `index.html` keeps one `<link rel="stylesheet">` per sheet in the source, in cascade order, because each sheet is its own file (the vendored components stay byte-for-byte and `static/styles/` stays split by concern). The served page does not ask for them one by one: `BuildInfo.stamp_html` replaces the run with a single link to `/static/bundle.css?v=<fleet hash>`, where the first link stood, and `CachingStaticFiles.get_response` answers that path with the sheets concatenated in link order, each under a `/* path */` header.
 
+Right now the served app is a temporary regression-bisect build: `app/webapp/routers/_helpers.py` passes `collapse_sheets=False`, so the bundle is still built and served but the shell links its sheets one by one, and a config without a `server` key serves HTTP/1.1 (`src/config.py` `DEFAULT_SERVER`). Both go back once an installed iOS app has answered whether either one softens the header at cold start.
+
 The reason is the phone's cold load, not bytes. A relaunch is served from the HTTP cache either way, but a first launch over a 4G-class link fetches around 160 files through the browser's six connections to the host; thirty of them were stylesheets that also block first paint. One request for the sheets cut the measured cold ready time by about 14% and first contentful paint by more than half, with the same cascade.
 
 Rules that keep it honest:
