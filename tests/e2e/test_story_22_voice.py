@@ -210,7 +210,7 @@ def _mic_live_and_recording(ctx, base: str, shots: Path, inst):
     # the mic is capturing.
     wave = mic.locator(".rec-wave")
     expect(wave).to_be_visible()
-    expect(wave).to_have_attribute("data-signal", "live")
+    expect(wave).to_have_attribute("data-state", "live")
     expect(mic.locator("svg.icon")).to_be_hidden()
     _bars_settled(mic)
     expect(line).to_have_value(PARTIAL_SPOKEN)

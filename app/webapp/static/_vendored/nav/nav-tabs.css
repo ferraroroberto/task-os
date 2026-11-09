@@ -1,6 +1,5 @@
 /* Floating bottom-tab navigation — visual contract for the fleet's canonical
  * primary nav. VENDORED VERBATIM from project-scaffolding; do NOT edit per-app.
- * Forked in task-os: see .fleet.toml [vendored_forks] for what differs.
  *
  * Every colour, radius, and spacing value is a design-system CSS custom property
  * (see ~/.claude/design.md + design.dark.md). The consuming app MUST define
@@ -158,14 +157,6 @@
     text-overflow: ellipsis;
   }
 }
-/* A touch device wider than the phone pill (a tablet, a large phone in
-   landscape) keeps the inline segmented control, whose padding alone is 37px
-   tall. The 44px floor is a min-height, so the tab grows by 7px and the icon
-   and label stay centred; the pill (max-width 520px) and the rail's own
-   --row-lg are untouched. */
-@media (pointer: coarse) and (min-width: 521px) {
-  .tab { min-height: var(--row-sm); }
-}
 
 /* ------------------------------------------------- wide layout: left rail */
 /* design.md Layout, "Wide layout": on a wide, fine-pointer
@@ -225,16 +216,6 @@
    per-tab accent-soft tint above. nav-tabs.js inserts it, so markup never
    carries it. */
 .tabs .tab-pill { display: none; }
-
-/* One-frame content repaint that nav-tabs.js sets beside the glass rebuild,
-   each time the installed app's viewport settles. An invisible outline is a
-   paint-only change, so WebKit repaints the tiles under .app (the header card
-   among them) at the settled viewport without promoting anything to a layer.
-   Outside the phone block so a landscape phone wider than 520px gets it too. */
-html.content-repaint .app {
-  outline: 1px solid transparent;
-  outline-offset: -1px;
-}
 
 /* ------------------------------------------- floating bottom tab bar (mobile) */
 /* Gated on touch + narrow width so desktop keeps the top segmented control
@@ -308,23 +289,6 @@ html.content-repaint .app {
        load-time animation or a measured offset. */
     transform: translateZ(0);
     will-change: transform;
-  }
-  /* One-frame rebuild that nav-tabs.js sets each time the installed app's
-     viewport settles (launch, return to the foreground). The filter drop makes
-     iOS rebuild the glass layer at its final bounds. The promotion drop (bar,
-     labels, badges) makes WebKit paint those layers' contents again: a
-     promoted layer keeps its bitmap across a filter toggle, so a raster taken
-     while the viewport was still growing would otherwise stay soft. Both
-     return on the next frame, so the modal-repaint reason above still holds. */
-  .tabs.glass-rebuild {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    transform: none;
-    will-change: auto;
-  }
-  .tabs.glass-rebuild .tab-label,
-  .tabs.glass-rebuild .tab-badge {
-    transform: none;
   }
   /* Hit area only, never painted: the rounded corners would otherwise let a
      row scrolled under the bar take taps in the outer tabs' corner slivers. */
@@ -517,32 +481,5 @@ html.content-repaint .app {
   body.nav-hidden .tabs {
     visibility: hidden;
     pointer-events: none;
-  }
-
-  /* DIAGNOSTIC STEP for the soft header at an installed iOS app's cold start,
-     not the contract: one variable, the nav's compositing, taken out of play.
-     The device shows faint smeared ghost copies of the header over the top of
-     the page, which reads as a stale blurred texture rather than low-res text.
-     In the installed app only, the bar loses its glass and every layer it
-     promotes (no backdrop-filter, no translateZ, no will-change, here or on
-     its labels and badges), paints an opaque card surface, and both fade bands
-     are hidden. A sharp header on the device then names the nav's compositing
-     as the cause; a soft one rules it out. Removed once the device answers. */
-  @media (display-mode: standalone) {
-    .tabs,
-    .tabs.glass-rebuild {
-      background: var(--card);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-      transform: none;
-      will-change: auto;
-    }
-    .tabs .tab-label,
-    .tabs .tab-badge {
-      transform: none;
-      backface-visibility: visible;
-    }
-    body::before,
-    body::after { display: none; }
   }
 }
