@@ -1,4 +1,9 @@
 {
   "version": 1,
-  "entries": []
+  "entries": [
+    {"key": "app/webapp/static/_vendored/action-row/action-row.html", "counts": {"untracked-control": 8}},
+    {"key": "app/webapp/static/_vendored/button/button.html", "counts": {"untracked-control": 6}},
+    {"key": "app/webapp/static/_vendored/home-head/home-head.html", "counts": {"untracked-control": 2}},
+    {"key": "app/webapp/static/_vendored/select-native/select-native.html", "counts": {"untracked-control": 1}}
+  ]
 }

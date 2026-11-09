@@ -136,8 +136,7 @@ function prefersReducedMotion() {
   }
 }
 
-/** Milliseconds as `m:ss` (65000 -> `1:05`); minutes do not roll into hours (`60:05`). */
-export function formatElapsed(ms) {
+function formatElapsed(ms) {
   const total = Math.floor(ms / 1000);
   const seconds = String(total % 60).padStart(2, '0');
   return `${Math.floor(total / 60)}:${seconds}`;
@@ -227,9 +226,7 @@ export function attachRecWave(host, stream, opts) {
   function setState(next) {
     if (next === state) return;
     state = next;
-    // `data-signal`, not `data-state`: design.md reserves `data-state` for the
-    // five async lifecycle states, and live/silent/unmeasured are not those.
-    root.dataset.signal = next;
+    root.dataset.state = next;
     host.dataset.recWaveState = next;
   }
 
