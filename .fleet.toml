@@ -84,7 +84,7 @@ instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac32
 # "Declaring a deliberate fork"): never also listed in [vendored]; each leaves this
 # table when the upstream change is re-vendored.
 [vendored_forks]
-nav = { src = "app/webapp/static/_vendored/nav", base_sha = "c2dcd8c", reason = "scaffold nav at c2dcd8c plus a one-frame paint-only repaint of the page content on the glass settle rebuild, so the static header card re-rasters after an installed iOS app's cold-start viewport settles", upstream = "ferraroroberto/project-scaffolding#698" }
+nav = { src = "app/webapp/static/_vendored/nav", base_sha = "c2dcd8c", reason = "scaffold nav at c2dcd8c plus a one-frame paint-only repaint of the page content on the glass settle rebuild, so the static header card re-rasters after an installed iOS app's cold-start viewport settles; plus a temporary diagnostic that, in the installed app only, drops the bar's glass and layer promotion and hides the fade bands, to test whether the nav's compositing leaves the smeared header (task-os#616)", upstream = "ferraroroberto/project-scaffolding#698" }
 
 # [static_ratchet] -- the scaffold's baseline-and-ratchet static analysis. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/static_ratchet.py, which fails on a
