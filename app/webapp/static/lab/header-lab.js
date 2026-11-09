@@ -1,4 +1,4 @@
-// Header variant lab — temporary. Wires the lab page: the shell's own nav
+// Header offset lab — temporary. Wires the lab page: the shell's own nav
 // (vendored, so the bar behaves as in the app), the variant buttons, the
 // facts line the owner's screenshot carries, and the filler rows that scroll
 // under the glass. The variant itself is already on <html data-v> from the
@@ -6,20 +6,24 @@
 
 import { initNavTabs } from '../_vendored/nav/nav-tabs.js';
 
+// [button caption, description]; the offset rides on top of the safe-area
+// inset the app already reserves, and the CSS owns the numbers.
 const VARIANTS = [
-  'Control: the app\'s styles unchanged',
-  'Nav: no backdrop-filter, opaque card surface',
-  'Nav: -webkit-backdrop-filter only',
-  'Nav: unprefixed backdrop-filter only',
-  'Nav: blur 8px instead of 24px',
-  'Nav: glass on a pseudo-element behind the bar',
-  'No translateZ / will-change / backface in header or nav',
-  'Header card position: sticky (nav stays fixed)',
-  'Text: font-smoothing antialiased + geometricPrecision',
-  'No scroll-edge fade bands (top and bottom)',
-  'Header card on its own layer (translateZ)',
-  'No 1px viewport-expanding scroll at launch',
+  ['0px', 'Control: the app\'s styles unchanged (+0px)'],
+  ['2px', 'Content starts 2px lower'],
+  ['4px', 'Content starts 4px lower'],
+  ['6px', 'Content starts 6px lower'],
+  ['8px', 'Content starts 8px lower'],
+  ['12px', 'Content starts 12px lower'],
+  ['16px', 'Content starts 16px lower'],
+  ['20px', 'Content starts 20px lower'],
+  ['24px', 'Content starts 24px lower'],
+  ['32px', 'Content starts 32px lower'],
+  ['44px', 'Content starts 44px lower'],
+  ['bar y0', 'Status-bar spacer above the header, first frame at y = 0 (header lower)'],
+  ['bar ↓', 'Status-bar spacer above the header, first frame scrolled past it (header where the control is)'],
 ];
+const FIRST_FRAME_PAST_SPACER = 13;
 
 const root = document.documentElement;
 const variant = Number(root.dataset.v) || 1;
@@ -42,38 +46,41 @@ function osFacts() {
   return parts.join(' · ');
 }
 
-function navFilters() {
-  const style = getComputedStyle(document.querySelector('.tabs'));
-  const webkit = style.getPropertyValue('-webkit-backdrop-filter') || 'unset';
-  const plain = style.getPropertyValue('backdrop-filter') || 'unset';
-  return 'nav bf ' + plain + ' / -webkit- ' + webkit;
+function px(value) {
+  return Math.round(value * 100) / 100 + 'px';
 }
 
 function renderFacts() {
   const vv = window.visualViewport;
   const viewport = window.innerWidth + '×' + window.innerHeight
     + (vv ? ' (visual ' + Math.round(vv.width) + '×' + Math.round(vv.height) + ')' : '');
+  const safeTop = document.getElementById('labSafeProbe').getBoundingClientRect().height;
+  const padTop = parseFloat(getComputedStyle(document.querySelector('main.app')).paddingTop) || 0;
   document.getElementById('labFacts').textContent = [
     'v' + variant,
     osFacts(),
     'display-mode ' + displayMode(),
     'DPR ' + window.devicePixelRatio,
     'viewport ' + viewport,
+    'safe-area-top ' + px(safeTop),
+    'content padding-top ' + px(padTop),
     'theme ' + root.dataset.theme,
-    navFilters(),
   ].join(' · ');
 }
 
 function renderVariants() {
-  document.getElementById('labLabel').textContent = variant + '. ' + VARIANTS[variant - 1];
+  document.getElementById('labLabel').textContent = variant + '. ' + VARIANTS[variant - 1][1];
   const host = document.getElementById('labVariants');
-  VARIANTS.forEach(function (label, i) {
+  VARIANTS.forEach(function (entry, i) {
     const link = document.createElement('a');
     link.className = 'lab-variant';
     link.href = '?v=' + (i + 1);
     link.textContent = String(i + 1);
-    link.title = label;
-    link.setAttribute('aria-label', (i + 1) + '. ' + label);
+    const caption = document.createElement('small');
+    caption.textContent = entry[0];
+    link.appendChild(caption);
+    link.title = entry[1];
+    link.setAttribute('aria-label', (i + 1) + '. ' + entry[1]);
     link.dataset.track = 'lab.variant';
     if (i + 1 === variant) link.setAttribute('aria-current', 'true');
     host.appendChild(link);
@@ -105,26 +112,18 @@ function wireTheme() {
   });
 }
 
-// Variant 12 runs the nav's start-up without its 1px viewport-expanding
-// scroll: window.scrollTo is a no-op only while initNavTabs runs.
-function initNav() {
-  if (variant !== 12) {
-    initNavTabs({ storageKey: null });
-    return;
-  }
-  const scrollTo = window.scrollTo;
-  window.scrollTo = function () {};
-  try {
-    initNavTabs({ storageKey: null });
-  } finally {
-    window.scrollTo = scrollTo;
-  }
+// Runs right after the nav's start-up, whose 1px viewport-claiming scroll
+// goes back to the top on the next frame only while scrollY is still 1, so
+// this scroll past the spacer stands and the claim is still made.
+function startPastSpacer() {
+  window.scrollTo(0, document.getElementById('labSpacer').offsetHeight);
 }
 
 renderVariants();
 renderRows();
 wireTheme();
-initNav();
+initNavTabs({ storageKey: null });
+if (variant === FIRST_FRAME_PAST_SPACER) startPastSpacer();
 renderFacts();
 window.addEventListener('resize', renderFacts, { passive: true });
 if (window.visualViewport) window.visualViewport.addEventListener('resize', renderFacts, { passive: true });

@@ -1,10 +1,10 @@
-/* Header variant lab — temporary, loaded only by lab/header.html, never by
+/* Header offset lab — temporary, loaded only by lab/header.html, never by
  * the app. The page's own chrome (facts line, variant buttons, filler rows)
- * comes first; then one block per variant, each keyed on html[data-v="N"],
- * which the head script stamps from ?v=N before any sheet loads. Variant 1
- * has no block: it is the app's styles unchanged, the control. Every
- * selector carries the html[data-v] prefix, so it outranks the shipped rule
- * it replaces whatever media block that rule sits in.
+ * comes first; then the variant rules, keyed on html[data-v="N"], which the
+ * head script stamps from ?v=N before any sheet loads. Variant 1 has no
+ * rule: it is the app's styles unchanged, the control. Every selector
+ * carries the html[data-v] prefix, so it outranks the shipped rule it
+ * replaces whatever media block that rule sits in.
  */
 
 .lab-facts {
@@ -21,28 +21,37 @@
 }
 .lab-variants {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-sm);
   margin: 0 0 var(--space-sm);
 }
 .lab-variant {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
+  min-height: 60px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--card);
   color: var(--ink);
   font-size: var(--font-heading-lg);
   font-weight: 700;
+  line-height: 1.1;
   text-decoration: none;
+}
+.lab-variant small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--font-caption);
+  font-weight: 600;
 }
 .lab-variant[aria-current="true"] {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent-text);
 }
+.lab-variant[aria-current="true"] small { color: inherit; }
 .lab-reload { width: 100%; margin: 0 0 var(--gap); }
 .lab-rows { display: grid; gap: var(--space-sm); }
 .lab-row { margin: 0; }
@@ -50,89 +59,46 @@
 .lab-row .lab-row-meta { margin: 4px 0 0; color: var(--muted); font-size: var(--font-body-sm); }
 .lab-row .lab-row-meta b { color: var(--accent-text); }
 
-/* 2 — the nav paints the opaque card surface, no backdrop-filter. */
-html[data-v="2"] .tabs {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: var(--card);
+/* 2–11 — the whole page content, header card included, starts lower by a
+   fixed offset on top of the safe-area inset the app already reserves on a
+   phone. Plain padding on the page container: no transform, no filter, no
+   layer, so the real header moves with the flow. The nav pill is a
+   body-level sibling and stays where it is. */
+html[data-v="2"] { --lab-offset: 2px; }
+html[data-v="3"] { --lab-offset: 4px; }
+html[data-v="4"] { --lab-offset: 6px; }
+html[data-v="5"] { --lab-offset: 8px; }
+html[data-v="6"] { --lab-offset: 12px; }
+html[data-v="7"] { --lab-offset: 16px; }
+html[data-v="8"] { --lab-offset: 20px; }
+html[data-v="9"] { --lab-offset: 24px; }
+html[data-v="10"] { --lab-offset: 32px; }
+html[data-v="11"] { --lab-offset: 44px; }
+@media (pointer: coarse) and (max-width: 520px) {
+  html[data-v] main.app {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--lab-offset, 0px));
+  }
 }
 
-/* 3 — only the -webkit- prefixed backdrop-filter. The unprefixed one is
-   cleared first, so where WebKit treats the two as one property the prefixed
-   value still wins; the facts line shows what was computed. */
-html[data-v="3"] .tabs {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+/* 12 and 13 — a plain spacer as tall as the status bar area above the
+   header card; the padding stays the app's own. 12 starts at y = 0, so the
+   first frame shows the header one status bar lower. 13 starts scrolled past
+   the spacer (header-lab.js), so its first frame sits where the control's
+   does: lower content versus lower first frame. */
+.lab-spacer { display: none; }
+html[data-v="12"] .lab-spacer,
+html[data-v="13"] .lab-spacer {
+  display: block;
+  height: env(safe-area-inset-top, 0px);
 }
 
-/* 4 — only the unprefixed backdrop-filter, the mirror image of 3. */
-html[data-v="4"] .tabs {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: blur(24px) saturate(180%);
+/* Measures env(safe-area-inset-top) in px for the facts line. */
+.lab-safe-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: env(safe-area-inset-top, 0px);
+  visibility: hidden;
+  pointer-events: none;
 }
-
-/* 5 — the same glass at a third of the blur radius. */
-html[data-v="5"] .tabs {
-  -webkit-backdrop-filter: blur(8px) saturate(180%);
-  backdrop-filter: blur(8px) saturate(180%);
-}
-
-/* 6 — the glass moves to a pseudo-element behind the bar's content: the bar
-   itself is transparent and filter-free. The bar's z-index makes it a
-   stacking context, so z-index -1 still paints inside it. */
-html[data-v="6"] .tabs {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: transparent;
-}
-html[data-v="6"] .tabs::before {
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--tabbar-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-}
-
-/* 7 — no layer hints anywhere in the header or the nav: the header carries
-   none already; the bar, its labels and its badges lose translateZ,
-   will-change and backface-visibility. The capsule keeps its translate,
-   which places it. */
-html[data-v="7"] .tabs,
-html[data-v="7"] .tabs .tab-label,
-html[data-v="7"] .tabs .tab-badge {
-  transform: none;
-  will-change: auto;
-  backface-visibility: visible;
-}
-
-/* 8 — the header card is position: sticky under the status bar instead of
-   scrolling away in the flow (the nav stays fixed). */
-html[data-v="8"] .home-head {
-  position: sticky;
-  top: env(safe-area-inset-top, 0px);
-  z-index: 5;
-}
-
-/* 9 — text rendering hints on the whole page. */
-html[data-v="9"] {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: geometricPrecision;
-}
-
-/* 10 — no scroll-edge fade bands: the top band's fixed layer over the header
-   strip and the bottom band behind the bar are both gone. */
-html[data-v="10"] body::before,
-html[data-v="10"] body::after {
-  display: none;
-}
-
-/* 11 — the opposite lever: the header card gets its own compositing layer,
-   rastered on its own instead of in the page's tiles. */
-html[data-v="11"] .home-head {
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-/* 12 has no CSS: header-lab.js skips the nav's 1px viewport-expanding scroll
-   at launch. */
