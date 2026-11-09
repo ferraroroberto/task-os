@@ -82,6 +82,8 @@ One line each; the full reference for a feature is the page it links to.
 tray.bat --restart                     # orphan-proof reclaim-then-start; verifies /api/version git_sha == HEAD
 ```
 
+The gate's last stdout line is `GATE-RESULT: PASS` or `GATE-RESULT: FAIL` on every path that can still run code, and the exit code is 0 or 1 (`tests/gates/test_gate_result.py`); never pipe the gate when its exit code matters, since a pipeline reports its last command's status, and a caller that cannot avoid a pipe asserts on that line (a run without it is not a pass).
+
 The e2e suite boots its own disposable webapp on a free port with a temp DB; it never touches the live `:8448`. `TASKOS_E2E_LIVE=1` runs it read-only against the live instance instead. Screenshots the story tests save under `docs/screenshots/` are the on-screen proof linked from `docs/validation.md` — captured through the conftest's `shot()`, on a frozen clock, so two runs of one commit produce the same files and a run months from now still produces the ones in the repo. `python -m scripts.shot_determinism` runs the suite twice and proves the capture is stable; `--check-tree` compares what a run rewrote against the committed gallery and restores it (the gate's last stage). `docs/validation.md` states the five capture rules a new story inherits.
 
 ### Project skill: `verify-task-os`
