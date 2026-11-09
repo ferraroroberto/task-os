@@ -19,15 +19,20 @@ extra_roots = ["opener"]  # the per-PC folder opener helper: a standalone instal
 [vendored]
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
+button         = { src = "app/webapp/static/_vendored/button",        sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/button" }
 modal          = { src = "app/webapp/static/_vendored/modal",         sha = "713b1d1e36989440679ec4e415ff149b14d96c81", dest = "app/webapp/static/_vendored/modal" }
 disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/disclosure" }
 empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/empty-state" }
+select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/select-native" }
 switch         = { src = "app/webapp/static/_vendored/switch",        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/switch" }
+home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/home-head" }
 text-size      = { src = "app/webapp/static/_vendored/text-size",      sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/text-size" }
+action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/action-row" }
 segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/segmented" }
 row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "00311a74ed7a858193e5b83ade533bf94468eb81", dest = "app/webapp/static/_vendored/row-menu" }
 page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "35c1f11348e100fa6b5da487411424c6d6ced43c", dest = "app/webapp/static/_vendored/page-foot" }
 icon-button    = { src = "app/webapp/static/_vendored/icon-button",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icon-button" }
+rec-wave       = { src = "app/webapp/static/_vendored/rec-wave",      sha = "e5ed13790dd2c5a9997e67582a9f22e7272b1e10", dest = "app/webapp/static/_vendored/rec-wave" }
 usage-log      = { src = "app/webapp/static/_vendored/usage-log",     sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/usage-log" }
 single_instance = { src = "app/tray/single_instance.py",              sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/tray/single_instance.py" }
 tray_watchdog  = { src = "app/tray/watchdog.py",                      sha = "4a06ca84fc9c5005d4be7fa505c9d0e7c0472dba", dest = "app/tray/watchdog.py" }
@@ -78,19 +83,8 @@ instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac32
 # Deliberate forks of a scaffold component (project-scaffolding docs/components.md,
 # "Declaring a deliberate fork"): never also listed in [vendored]; each leaves this
 # table when the upstream change is re-vendored.
-# TEMPORARY regression bisect, attempt 4 (task-os#616): the whole browser-loaded front end is
-# held at its task-os f190372 (11-03) content. The six forks below already equal it (their
-# be1f41b content matches f190372); the app-owned js/search/render.js, styles/search.css and
-# styles/drawer.css are restored to f190372 too, and the serving side drops the stylesheet
-# bundle (collapse_sheets=False) and defaults to HTTP/1.1 (src/config.py DEFAULT_SERVER).
-# Only _vendored/usage-log/README.md, never loaded by the browser, stays at HEAD.
 [vendored_forks]
-nav           = { src = "app/webapp/static/_vendored/nav", base_sha = "3b708fd", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
-button        = { src = "app/webapp/static/_vendored/button", base_sha = "5d460bd", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
-select-native = { src = "app/webapp/static/_vendored/select-native", base_sha = "5d460bd", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
-home-head     = { src = "app/webapp/static/_vendored/home-head", base_sha = "5d460bd", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
-action-row    = { src = "app/webapp/static/_vendored/action-row", base_sha = "5d460bd", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
-rec-wave      = { src = "app/webapp/static/_vendored/rec-wave", base_sha = "35c1f11", reason = "TEMPORARY regression-bisect fork (task-os#616): content restored byte-for-byte to task-os be1f41b, before the 11-06 re-vendor wave, to test whether that wave softened the header on an installed iOS app's cold start; the rest of the app stays at HEAD. Re-vendored from the scaffold once the device answers.", upstream = "ferraroroberto/task-os#616" }
+nav = { src = "app/webapp/static/_vendored/nav", base_sha = "c2dcd8c", reason = "scaffold nav at c2dcd8c plus a one-frame paint-only repaint of the page content on the glass settle rebuild, so the static header card re-rasters after an installed iOS app's cold-start viewport settles", upstream = "ferraroroberto/project-scaffolding#698" }
 
 # [static_ratchet] -- the scaffold's baseline-and-ratchet static analysis. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/static_ratchet.py, which fails on a

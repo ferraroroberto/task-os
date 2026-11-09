@@ -1,7 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": "app/webapp/static/_vendored/button/button.css::history", "count": 1},
-    {"key": "app/webapp/static/_vendored/home-head/home-head.js::history", "count": 1}
-  ]
+  "entries": []
 }

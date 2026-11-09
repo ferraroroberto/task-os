@@ -36,10 +36,6 @@ CONFIG_PATH_ENV = "TASKOS_CONFIG_PATH"
 
 DEFAULT_PORT = 8448
 SERVERS = ("hypercorn", "uvicorn")
-# TEMPORARY regression bisect: a config without a `server` key serves HTTP/1.1
-# (uvicorn), as before HTTP/2, to test whether HTTP/2 softens the header on an
-# installed iOS app's cold start. Back to hypercorn once the device answers.
-DEFAULT_SERVER = "uvicorn"
 
 _PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
 
@@ -385,8 +381,8 @@ class AlertsConfig:
 class AppConfig:
     site: str = "home"
     port: int = DEFAULT_PORT
-    # hypercorn serves HTTP/2 over the certificate; uvicorn serves HTTP/1.1.
-    server: str = DEFAULT_SERVER
+    # hypercorn serves HTTP/2 over the certificate; uvicorn is the HTTP/1.1 fallback.
+    server: str = "hypercorn"
     issues: IssuesConfig = field(default_factory=IssuesConfig)
     placeholders: dict[str, str] = field(default_factory=dict)
     web_roots: dict[str, str] = field(default_factory=dict)
@@ -531,8 +527,8 @@ def _server(value: Any) -> str:
     if value in SERVERS:
         return str(value)
     if value is not None:
-        logger.warning("⚠️ config: invalid server %r — falling back to %s", value, DEFAULT_SERVER)
-    return DEFAULT_SERVER
+        logger.warning("⚠️ config: invalid server %r — falling back to hypercorn", value)
+    return SERVERS[0]
 
 
 def _voice_config(voice: dict[str, Any]) -> VoiceConfig:
