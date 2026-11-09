@@ -277,8 +277,11 @@ def _git_short_sha(repo_root: Path) -> str:
 class BuildInfo:
     """Immutable build identity, computed once at webapp startup."""
 
-    def __init__(self, static_dir: Path, repo_root: Path) -> None:
+    def __init__(self, static_dir: Path, repo_root: Path, collapse_sheets: bool = True) -> None:
         self._static_dir = static_dir
+        # False keeps index.html's own stylesheet links: the bundle is still
+        # built and served, the shell just does not ask for it.
+        self._collapse_sheets = collapse_sheets
         self.asset_hashes: Dict[str, str] = compute_asset_hashes(static_dir)
         self.fleet_hash: str = fleet_hash_of(self.asset_hashes)
         self.bundled_sheets: list[str] = self._bundleable_sheets(static_dir)
@@ -316,7 +319,8 @@ class BuildInfo:
         different set) keeps its own links.
         """
         stamped = rewrite_index_html(html, self.asset_hashes)
-        if not self.sheet_bundle or index_sheets(stamped) != self.bundled_sheets:
+        if (not self._collapse_sheets or not self.sheet_bundle
+                or index_sheets(stamped) != self.bundled_sheets):
             return stamped
         link = (f'  <link rel="stylesheet" '
                 f'href="/static/{SHEET_BUNDLE_NAME}?v={self.fleet_hash}">\n')

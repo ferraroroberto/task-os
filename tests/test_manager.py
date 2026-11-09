@@ -60,7 +60,7 @@ def test_command_launches_the_serve_module_with_the_configured_server() -> None:
     assert fallback[fallback.index("--server") + 1] == "uvicorn"
 
 
-def test_config_server_defaults_to_hypercorn_and_rejects_unknown_values(tmp_path: Path) -> None:
+def test_config_server_defaults_to_uvicorn_and_rejects_unknown_values(tmp_path: Path) -> None:
     from src.config import load_config
 
     def load(body: str):
@@ -68,6 +68,7 @@ def test_config_server_defaults_to_hypercorn_and_rejects_unknown_values(tmp_path
         path.write_text(body, encoding="utf-8")
         return load_config(path)
 
-    assert load("{}").server == "hypercorn"
-    assert load('{"server": "uvicorn"}').server == "uvicorn"
-    assert load('{"server": "gunicorn"}').server == "hypercorn"
+    # uvicorn while the #616 bisect build holds HTTP/1.1 as the default.
+    assert load("{}").server == "uvicorn"
+    assert load('{"server": "hypercorn"}').server == "hypercorn"
+    assert load('{"server": "gunicorn"}').server == "uvicorn"

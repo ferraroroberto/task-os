@@ -20,7 +20,10 @@ STATIC_DIR = PROJECT_ROOT / "app" / "webapp" / "static"
 # Computed once at import: git SHA + fleet asset hash + build time. The tray
 # restarts the webapp on every code change (restart recipe in CLAUDE.md), so
 # there is no watcher and no per-request work.
-BUILD_INFO = BuildInfo(STATIC_DIR, PROJECT_ROOT)
+# TEMPORARY regression bisect: the shell links its stylesheets one by one, as
+# it did before the bundle, to test whether the bundle softens the header on an
+# installed iOS app's cold start. Back to the default once the device answers.
+BUILD_INFO = BuildInfo(STATIC_DIR, PROJECT_ROOT, collapse_sheets=False)
 
 ACTOR_HEADER = "X-Actor"
 

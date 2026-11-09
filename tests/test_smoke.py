@@ -141,7 +141,9 @@ def test_index_is_stamped_and_no_cache(client: TestClient) -> None:
     assert "no-cache" in r.headers["cache-control"]
     html = r.text
     assert "Add your first task" not in html  # rendered by JS, not baked in
-    assert 'href="/static/bundle.css?v=' in html  # the sheets, concatenated (test_sheet_bundle)
+    # The #616 bisect build links the sheets one by one (test_sheet_bundle).
+    assert 'href="/static/bundle.css?v=' not in html
+    assert 'href="/static/_vendored/card/card.css?v=' in html
     assert 'src="/static/app.js?v=' in html
 
 

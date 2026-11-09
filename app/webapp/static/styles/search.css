@@ -63,10 +63,6 @@
    reads: the 14px body-sm role, never the caption (TYPE-01). */
 .search-hint, .search-fold, .search-err { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-body-sm); }
 .search-fold a { color: var(--accent); }
-/* Under the Emails rows: the way out to folder-explorer's own email search. */
-.search-deep { margin: 0; padding: 10px var(--space-xs); font-size: var(--font-body-sm); }
-.search-deep a { color: var(--accent); position: relative; }
-.search-deep a::before { content: ""; position: absolute; inset: -12px -4px; }
 /* The inline Settings link is one word: 14px of padding around its line is
    the room its 44px target takes, invisibly. */
 .search-fold { padding-top: 14px; padding-bottom: 14px; }
