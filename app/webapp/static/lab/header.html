@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
-  <!-- Temporary header variant lab: the shell's own header and nav over
+  <!-- Temporary header offset lab: the shell's own header and nav over
        scrollable rows, with one variant applied from the first frame. The
        variant comes from ?v=N (1 = the app's styles unchanged) and is stamped
        on <html data-v> before any stylesheet, beside the shell's theme and
@@ -30,7 +30,7 @@
       root.dataset.theme = dark ? 'dark' : 'light';
       root.dataset.textsize = size === 'small' || size === 'large' ? size : 'default';
       var v = parseInt(new URLSearchParams(location.search).get('v'), 10);
-      root.dataset.v = String(v >= 1 && v <= 12 ? v : 1);
+      root.dataset.v = String(v >= 1 && v <= 13 ? v : 1);
     })();
   </script>
   <!-- The shell's stylesheets in the shell's order, so the header and the nav
@@ -143,7 +143,10 @@
     </button>
   </nav>
 
+  <div class="lab-safe-probe" id="labSafeProbe" aria-hidden="true"></div>
+
   <main class="app">
+    <div class="lab-spacer" id="labSpacer" aria-hidden="true"></div>
     <!-- The shell's home-head, unchanged markup: title glyph + title +
          status, the theme toggle and the gear (here: back to the app). -->
     <div class="card home-head">
