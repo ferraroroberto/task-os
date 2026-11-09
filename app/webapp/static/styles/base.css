@@ -69,6 +69,11 @@
   --space-xl: 32px;
   --gap: 12px;
   --layout-measure: 772px; /* design.md layout.measure: one-dimensional views keep it */
+  /* Extra top space under the safe area in the installed phone app: iOS
+     renders the header card soft when the page content starts right at the
+     safe-area edge, and 20px lower is the offset picked as sharp on the
+     device. */
+  --standalone-head-offset: 20px;
   /* typography roles */
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-heading-xl: 2rem;
@@ -285,6 +290,15 @@ html, body {
   padding-top: env(safe-area-inset-top, 0);
   padding-left: var(--gap);
   padding-right: var(--gap);
+}
+/* Installed phone app only, the one place the soft header shows: content
+   starts --standalone-head-offset below the safe area. Plain padding, so no
+   layer is created and the nav pill (a body-level sibling) does not move; a
+   browser tab and the desktop keep the safe area alone. */
+@media (display-mode: standalone) and (pointer: coarse) and (max-width: 520px) {
+  .app {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--standalone-head-offset));
+  }
 }
 @media (pointer: fine), (min-width: 521px) {
   .app {
