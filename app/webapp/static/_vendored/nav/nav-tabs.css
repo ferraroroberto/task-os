@@ -518,31 +518,4 @@ html.content-repaint .app {
     visibility: hidden;
     pointer-events: none;
   }
-
-  /* DIAGNOSTIC STEP for the soft header at an installed iOS app's cold start,
-     not the contract: one variable, the nav's compositing, taken out of play.
-     The device shows faint smeared ghost copies of the header over the top of
-     the page, which reads as a stale blurred texture rather than low-res text.
-     In the installed app only, the bar loses its glass and every layer it
-     promotes (no backdrop-filter, no translateZ, no will-change, here or on
-     its labels and badges), paints an opaque card surface, and both fade bands
-     are hidden. A sharp header on the device then names the nav's compositing
-     as the cause; a soft one rules it out. Removed once the device answers. */
-  @media (display-mode: standalone) {
-    .tabs,
-    .tabs.glass-rebuild {
-      background: var(--card);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-      transform: none;
-      will-change: auto;
-    }
-    .tabs .tab-label,
-    .tabs .tab-badge {
-      transform: none;
-      backface-visibility: visible;
-    }
-    body::before,
-    body::after { display: none; }
-  }
 }

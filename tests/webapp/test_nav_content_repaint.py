@@ -70,24 +70,3 @@ def test_header_card_has_no_layer_property_at_rest() -> None:
         css = _strip_comments(path.read_text(encoding="utf-8"))
         for prop in LAYER_PROPERTIES:
             assert not re.search(rf"(?<![-\w]){re.escape(prop)}\s*:", css), f"{path.name}: {prop}"
-
-
-def test_standalone_diagnostic_takes_the_nav_compositing_out() -> None:
-    # Diagnostic step: in the installed app the bar carries no glass and no
-    # promoted layer, and the fade bands are hidden, so the device can tell
-    # whether the nav's compositing is what smears the header.
-    css = _strip_comments(NAV_CSS.read_text(encoding="utf-8"))
-    blocks = re.findall(r"@media \(display-mode: standalone\) \{(.*?)\n  \}\n\}", css, flags=re.S)
-    assert blocks, "no standalone diagnostic block closing the phone media query"
-    block = blocks[-1]
-    for decl in (
-        "background: var(--card)",
-        "backdrop-filter: none",
-        "-webkit-backdrop-filter: none",
-        "transform: none",
-        "will-change: auto",
-        "backface-visibility: visible",
-        "display: none",
-    ):
-        assert decl in block, decl
-    assert "body::before" in block and "body::after" in block
