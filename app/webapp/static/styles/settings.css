@@ -31,8 +31,9 @@
 .settings-link-value[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
 .settings-link-value[data-tone="danger"] { color: var(--danger-text); font-weight: 600; }
 .settings-link-chevron { flex: none; width: var(--icon-inline); height: var(--icon-inline); color: var(--muted); }
-/* The temporary header lab row exists only in the installed app: outside
-   standalone display mode it is not rendered at all. */
+/* The temporary header variant lab row (index.html, /lab/header) exists
+   only in the installed app, the one place the header softness shows:
+   outside standalone display mode it is not rendered at all. */
 @media not all and (display-mode: standalone) {
   .settings-lab-row { display: none; }
 }
