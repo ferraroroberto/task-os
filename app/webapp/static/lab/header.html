@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="task-os">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+  <!-- Temporary header variant lab: the shell's own header and nav over
+       scrollable rows, with one variant applied from the first frame. The
+       variant comes from ?v=N (1 = the app's styles unchanged) and is stamped
+       on <html data-v> before any stylesheet, beside the shell's theme and
+       text-size stamp, so a reload keeps it and nothing repaints after load. -->
+  <script>
+    (function () {
+      var app = 'task-os';
+      var root = document.documentElement;
+      var theme = null;
+      var size = null;
+      try {
+        theme = localStorage.getItem(app + '.theme');
+        size = localStorage.getItem(app + '.textsize');
+      } catch (e) {}
+      var dark = theme ? theme === 'dark'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.dataset.theme = dark ? 'dark' : 'light';
+      root.dataset.textsize = size === 'small' || size === 'large' ? size : 'default';
+      var v = parseInt(new URLSearchParams(location.search).get('v'), 10);
+      root.dataset.v = String(v >= 1 && v <= 12 ? v : 1);
+    })();
+  </script>
+  <!-- The shell's stylesheets in the shell's order, so the header and the nav
+       are the real ones; header-lab.css comes last and only acts under
+       html[data-v]. -->
+  <link rel="stylesheet" href="/static/_vendored/card/card.css">
+  <link rel="stylesheet" href="/static/_vendored/home-head/home-head.css">
+  <link rel="stylesheet" href="/static/_vendored/disclosure/disclosure.css">
+  <link rel="stylesheet" href="/static/_vendored/nav/nav-tabs.css">
+  <link rel="stylesheet" href="/static/_vendored/button/button.css">
+  <link rel="stylesheet" href="/static/_vendored/icon-button/icon-button.css">
+  <link rel="stylesheet" href="/static/_vendored/modal/modal.css">
+  <link rel="stylesheet" href="/static/_vendored/empty-state/empty-state.css">
+  <link rel="stylesheet" href="/static/_vendored/select-native/select-native.css">
+  <link rel="stylesheet" href="/static/_vendored/switch/switch.css">
+  <link rel="stylesheet" href="/static/_vendored/text-size/text-size.css">
+  <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
+  <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
+  <link rel="stylesheet" href="/static/_vendored/row-menu/row-menu.css">
+  <link rel="stylesheet" href="/static/_vendored/segmented/segmented.css">
+  <link rel="stylesheet" href="/static/_vendored/rec-wave/rec-wave.css">
+  <link rel="stylesheet" href="/static/styles/base.css">
+  <link rel="stylesheet" href="/static/styles/settings.css">
+  <link rel="stylesheet" href="/static/styles/components.css">
+  <link rel="stylesheet" href="/static/styles/sheets.css">
+  <link rel="stylesheet" href="/static/styles/rows.css">
+  <link rel="stylesheet" href="/static/styles/drawer.css">
+  <link rel="stylesheet" href="/static/styles/board.css">
+  <link rel="stylesheet" href="/static/styles/today.css">
+  <link rel="stylesheet" href="/static/styles/login.css">
+  <link rel="stylesheet" href="/static/styles/search.css">
+  <link rel="stylesheet" href="/static/styles/overlays.css">
+  <link rel="stylesheet" href="/static/styles/archive.css">
+  <link rel="stylesheet" href="/static/styles/time.css">
+  <link rel="stylesheet" href="/static/lab/header-lab.css">
+  <title>task-os header lab</title>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none">
+  <symbol id="i-square-kanban" viewBox="0 0 24 24" fill="none">
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M8 7v7" />
+    <path d="M12 7v4" />
+    <path d="M16 7v9" />
+  </symbol>
+  <symbol id="i-calendar-days" viewBox="0 0 24 24" fill="none">
+    <path d="M8 2v4" />
+    <path d="M16 2v4" />
+    <rect width="18" height="18" x="3" y="4" rx="2" />
+    <path d="M3 10h18" />
+    <path d="M8 14h.01" />
+    <path d="M12 14h.01" />
+    <path d="M16 14h.01" />
+    <path d="M8 18h.01" />
+    <path d="M12 18h.01" />
+    <path d="M16 18h.01" />
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none">
+    <path d="m21 21-4.34-4.34" />
+    <circle cx="11" cy="11" r="8" />
+  </symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none">
+    <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+    <circle cx="12" cy="12" r="3" />
+  </symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="m4.93 4.93 1.41 1.41" />
+    <path d="m17.66 17.66 1.41 1.41" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="m6.34 17.66-1.41 1.41" />
+    <path d="m19.07 4.93-1.41 1.41" />
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none">
+    <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" />
+  </symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24" fill="none">
+    <line x1="10" x2="14" y1="2" y2="2" />
+    <line x1="12" x2="15" y1="14" y2="11" />
+    <circle cx="12" cy="14" r="8" />
+  </symbol>
+</svg>
+
+  <!-- The shell's nav, body-level as in index.html. No persistence key: a tab
+       picked here never changes the tab the app reopens on. -->
+  <nav class="tabs" role="tablist" aria-label="Primary navigation" data-active-tab="today">
+    <button id="tabToday" type="button" class="tab active" data-tab="today"
+            role="tab" aria-selected="true" aria-controls="paneToday">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
+      <span class="tab-label">Today</span>
+    </button>
+    <button id="tabBoard" type="button" class="tab" data-tab="board"
+            role="tab" aria-selected="false" aria-controls="paneBoard" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-square-kanban"></use></svg>
+      <span class="tab-label">Board</span>
+    </button>
+    <button id="tabTime" type="button" class="tab" data-tab="time"
+            role="tab" aria-selected="false" aria-controls="paneTime" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
+      <span class="tab-label">Time</span>
+    </button>
+    <button id="tabSearch" type="button" class="tab" data-tab="search"
+            role="tab" aria-selected="false" aria-controls="paneSearch" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+      <span class="tab-label">Search</span>
+    </button>
+  </nav>
+
+  <main class="app">
+    <!-- The shell's home-head, unchanged markup: title glyph + title +
+         status, the theme toggle and the gear (here: back to the app). -->
+    <div class="card home-head">
+      <h1 class="home-title">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
+        <span>Today</span>
+      </h1>
+      <span class="status">3 due · 1 overdue</span>
+      <button type="button" id="themeToggle" data-track="lab.theme" class="icon-button home-toggle hit-target"
+              title="Toggle theme" aria-label="Toggle dark mode">
+        <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
+        <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
+      </button>
+      <a id="labExit" data-track="lab.exit" class="icon-button home-toggle hit-target" href="/"
+         title="Back to the app" aria-label="Back to the app">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
+      </a>
+    </div>
+
+    <p class="lab-facts" id="labFacts" aria-live="polite"></p>
+    <p class="lab-label" id="labLabel"></p>
+    <div class="lab-variants" id="labVariants" role="group" aria-label="Header variants"></div>
+    <button type="button" class="button-surface lab-reload" id="labReload" data-track="lab.reload">Reload this variant</button>
+
+    <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday"></section>
+    <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" hidden></section>
+    <section id="paneTime" class="pane" role="tabpanel" aria-labelledby="tabTime" hidden></section>
+    <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" hidden></section>
+
+    <div class="lab-rows" id="labRows"></div>
+  </main>
+
+  <script type="module" src="/static/lab/header-lab.js"></script>
+</body>
+</html>

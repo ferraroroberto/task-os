@@ -26,7 +26,8 @@ app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens
                           calendar.js (the calendar lane beside Today),
                           recurrence.js (the recurrence vocabulary — the picker's mirror of src/dates.py),
                           palette.js (Ctrl+K), format.js, api.js, toast.js, collapsible.js (the runtime disclosure cards),
-                          manifest, icons/, _vendored/
+                          manifest, icons/, _vendored/, lab/ (the temporary header variant lab served at /lab/header: the shell's header and nav with one
+                          numbered variant applied from ?v=N, linked from Settings only in the installed app)
 app/tray/                 tray.py + vendored single_instance.py / watchdog.py
 src/                      schema.py (versioned migrations) · db.py (get_db, WAL) · tasks/ (domain rules + write hooks: schema · queries · mutations · related) · tasks_repo.py (re-export shim over it)
                           dates.py (natural dates, recurrence) · quick_add.py (one-line parser) · cli.py (the `tasks` parser + one handler per command) · cli_support/ (its HTTP / local backends · its text formatters) · config.py
