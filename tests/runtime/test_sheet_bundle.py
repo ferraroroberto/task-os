@@ -47,13 +47,11 @@ def _site(root: Path, sheets: dict[str, str]) -> Path:
     return static
 
 
-def test_the_shell_links_its_sheets_one_by_one_during_the_bisect(client: TestClient) -> None:
-    """The #616 bisect build serves the bundle but the shell does not ask for it."""
+def test_the_shell_asks_for_one_stylesheet(client: TestClient) -> None:
     r = client.get("/")
     links = SHEET_LINK.findall(r.text)
-    sheets = index_sheets((STATIC / "index.html").read_text(encoding="utf-8"))
-    hashes = client.app.state.build_info.asset_hashes
-    assert links == [f"/static/{rel}?v={hashes[rel]}" for rel in sheets]
+    assert len(links) == 1
+    assert links[0] == f"/static/{SHEET_BUNDLE_NAME}?v={client.app.state.build_info.fleet_hash}"
 
 
 def test_the_bundle_is_the_index_sheets_in_cascade_order(client: TestClient) -> None:
