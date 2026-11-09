@@ -1,4 +1,11 @@
 {
   "version": 1,
-  "entries": []
+  "entries": [
+    {"key": "scripts/import_notion.py", "counts": {"state-literal": 1}},
+    {"key": "src/ai/triage.py", "counts": {"state-literal": 1}},
+    {"key": "src/archive_actions.py", "counts": {"state-literal": 4}},
+    {"key": "src/archive_batch.py", "counts": {"state-literal": 5}},
+    {"key": "src/cli_support/format.py", "counts": {"state-literal": 1}},
+    {"key": "src/issue_sync.py", "counts": {"state-literal": 1}}
+  ]
 }
