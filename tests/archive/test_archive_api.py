@@ -62,8 +62,7 @@ def test_the_retry_route_finishes_a_stuck_mail_and_refuses_the_rest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`POST /api/archive/items/{id}/retry` — the whole route, over the app (#174)."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("api-stuck@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("api-unsure@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.1)]),
@@ -79,7 +78,7 @@ def test_the_retry_route_finishes_a_stuck_mail_and_refuses_the_rest(
             )]),
         ],
     )
-    with client_for(tmp_path, monkeypatch, repo) as client:
+    with client_for(tmp_path, monkeypatch, fake) as client:
         run = _finished_run(client)
         stuck = next(i for i in run["items"] if i["status"] == "failed")
         unsure = next(i for i in run["items"] if i["status"] == "needs_review")
@@ -108,12 +107,12 @@ def test_a_bounded_first_run_rides_the_body_or_the_query(
         mail(f"cap{n}@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.95)])
         for n in range(3)
     ])
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[three],
+    fake = build_fake_archiver(
+        plan=[three],
         apply=[apply_doc([apply_result("cap0@example.invalid", FOLDER_HOUSE,
                                        files=[ARCHIVED_FILE])])],
     )
-    with client_for(tmp_path, monkeypatch, repo) as client:
+    with client_for(tmp_path, monkeypatch, fake) as client:
         if spell == "body":
             started = client.post("/api/archive/run", json={"limit": 1})
         else:
@@ -178,7 +177,7 @@ def test_the_sample_config_never_arms_the_real_archiver() -> None:
     )
     assert raw["archive"]["enabled"] is False
     assert set(raw["archive"]) == {
-        "enabled", "repo", "python", "candidates", "confidence_threshold", "timeout_seconds",
+        "enabled", "candidates", "confidence_threshold", "timeout_seconds",
         "model", "batch_size", "examples", "ai_timeout_seconds", "renumber",
     }
     # On by default: the renaming is the archiver's repair of a folder this
@@ -203,13 +202,13 @@ def test_a_finished_run_waits_for_a_worker_that_outlives_stop(
 
     from src.archive_batch import ArchiveBatchService
 
-    real_spawn = ArchiveBatchService._spawn_batch
+    real_call = ArchiveBatchService._call
 
-    def slow_spawn(self: ArchiveBatchService, args: list[str], *, verb: str) -> dict:
+    def slow_call(self: ArchiveBatchService, verb: str, body: dict) -> dict:
         time.sleep(1.5)
-        return real_spawn(self, args, verb=verb)
+        return real_call(self, verb, body)
 
-    monkeypatch.setattr(ArchiveBatchService, "_spawn_batch", slow_spawn)
+    monkeypatch.setattr(ArchiveBatchService, "_call", slow_call)
     monkeypatch.setattr(ArchiveBatchService, "stop", lambda self, timeout=5.0: None)
 
     run = _finished_run(api)

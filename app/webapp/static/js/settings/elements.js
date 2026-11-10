@@ -40,7 +40,7 @@ export function lookupEls() {
     statusCaptureRun: document.getElementById('statusCaptureRun'),
     captureRunNow: document.getElementById('captureRunNow'),
     archiveCardMeta: document.getElementById('archiveCardMeta'),
-    statusArchiveRepo: document.getElementById('statusArchiveRepo'),
+    statusArchiveUrl: document.getElementById('statusArchiveUrl'),
     statusArchiveThreshold: document.getElementById('statusArchiveThreshold'),
     calendarCardMeta: document.getElementById('calendarCardMeta'),
     statusCalendar: document.getElementById('statusCalendar'),

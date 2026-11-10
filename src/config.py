@@ -181,29 +181,28 @@ class AIConfig:
 
 @dataclass(frozen=True)
 class ArchiveConfig:
-    """Batch archiving of the Outlook Inbox through folder-explorer's archive verbs (#157).
+    """Batch archiving of the Outlook Inbox through folder-explorer's v1 archive API.
 
-    task-os never imports the archiver: it spawns ``python -m app.cli email
-    batch <verb>`` in folder-explorer's checkout under its own venv and reads
-    one JSON document back, so a hung Outlook COM call is a timed-out child
-    rather than a blocked webapp.
+    task-os never imports the archiver and never spawns it: it calls
+    ``POST /api/v1/archive/<verb>`` at ``search.folder_explorer_url`` (the one
+    folder-explorer address this install names) and reads back one JSON
+    document, so a hung Outlook COM call is a typed ``timeout`` answer from
+    folder-explorer rather than a blocked webapp.
 
-    ``repo``     the folder-explorer checkout. Blank = the feature is off, with
-                 that as the visible reason. Deliberately **not** derived from
-                 ``search.email_db``: the index may legitimately live elsewhere.
-    ``python``   the interpreter to spawn it with. Blank = ``<repo>/.venv/
-                 Scripts/python.exe`` on Windows, ``<repo>/.venv/bin/python``
-                 elsewhere — folder-explorer's own venv, never task-os's.
     ``candidates``            ranked folders ``plan`` reports per mail.
     ``confidence_threshold``  a mail whose best candidate scores below this
                  stays in the Inbox as *needs you* (the archiver blends its
                  score into [0, 1]).
-    ``timeout_seconds``       bound on one child; a full-Inbox ``plan`` walks
-                 every mail over COM, so this is minutes, not seconds.
+    ``timeout_seconds``       how long one archive call is waited for; a full-Inbox
+                 ``plan`` walks every mail over COM, so this is minutes, not
+                 seconds. It stays above folder-explorer's own 600 s budget
+                 per verb so a stuck Outlook returns as its typed ``timeout``
+                 answer instead of this side giving up first.
     ``enabled``  the explicit off switch, and **false in the committed
                  sample**: no checkout without its own config — a fresh clone,
                  a worktree, the disposable e2e instance — may drive the real
-                 Outlook.
+                 Outlook. On with no ``search.folder_explorer_url`` reads as off,
+                 with that as the visible reason.
     ``renumber`` ask the archiver to re-sequence every folder an ``apply`` or a
                  ``revert`` disturbed, so its ``NNN`` prefixes stay contiguous
                  and in sent-date order (email-archiver#61). On by default: the
@@ -232,11 +231,9 @@ class ArchiveConfig:
     """
 
     enabled: bool = False
-    repo: str = ""
-    python: str = ""
     candidates: int = 10
     confidence_threshold: float = 0.7
-    timeout_seconds: float = 600.0
+    timeout_seconds: float = 660.0
     model: str = "claude_haiku"
     batch_size: int = 8
     examples: int = 20
@@ -572,8 +569,6 @@ def _ai_config(ai: dict[str, Any]) -> AIConfig:
 def _archive_config(archive: dict[str, Any]) -> ArchiveConfig:
     return ArchiveConfig(
         enabled=bool(archive.get("enabled", ArchiveConfig.enabled)),
-        repo=str(archive.get("repo", "") or "").strip(),
-        python=str(archive.get("python", "") or "").strip(),
         candidates=_as_int(
             archive.get("candidates"), ArchiveConfig.candidates, "archive.candidates",
         ),

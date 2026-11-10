@@ -1,18 +1,17 @@
-"""Batch archiving (#157) â€” the state machine, the subprocess boundary, the ranking.
+"""Batch archiving — the state machine, the HTTP boundary, the ranking.
 
-Nothing here reaches Outlook or the real email-archiver checkout: every test
-runs against ``tests/fixtures/archiver_fake``, a **real** stand-in checkout
-spawned as a **real** subprocess with ``sys.executable``. That is the point â€”
-the service's whole contract is what it puts on a command line, what it writes
-into the decisions file and how it reads the child's exit code and stdout back,
-and a monkeypatched ``subprocess.run`` would prove none of it.
+Nothing here reaches Outlook or the real folder-explorer: every test runs
+against ``tests/fixtures/archiver_fake``, a **real** server on a loopback port
+answering folder-explorer's v1 archive API. That is the point — the service's
+whole contract is what it puts in a request body and how it reads the envelope
+(and a server that is gone, slow or garbled) back, and a monkeypatched client
+would prove none of it.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
-import sys
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,7 @@ import pytest
 from src import archive_store
 from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService, ArchiveError
-from src.config import AIConfig, AppConfig, ArchiveConfig
+from src.config import AIConfig, AppConfig, ArchiveConfig, SearchConfig
 from tests.archive._support import (
     ARCHIVED_FILE,
     OLDER_FILE,
@@ -38,10 +37,8 @@ from tests.fixtures.archiver_fake import (
     apply_doc,
     apply_result,
     build_fake_archiver,
-    calls,
     candidate,
     error_doc,
-    index_calls,
     mail,
     plan_doc,
     renumbered,
@@ -52,34 +49,28 @@ from tests.fixtures.archiver_fake import (
 # ------------------------------------------------------------------- state
 
 
-def test_not_configured_names_the_reason_that_actually_applies(tmp_path: Path) -> None:
-    """Five failures, five fixes — one flat "not configured" would hide which."""
-    def reason(**kw: object) -> str:
-        svc = ArchiveBatchService(AppConfig(archive=ArchiveConfig(**kw)))  # type: ignore[arg-type]
+def test_not_configured_names_the_reason_that_actually_applies() -> None:
+    """Two failures, two fixes — one flat "not configured" would hide which."""
+    def reason(url: str, **kw: object) -> str:
+        config = AppConfig(
+            archive=ArchiveConfig(**kw),  # type: ignore[arg-type]
+            search=SearchConfig(folder_explorer_url=url),
+        )
+        svc = ArchiveBatchService(config)
         assert svc.enabled is False
         return svc.reason or ""
 
-    assert "disabled in config" in reason(enabled=False, repo=str(tmp_path))
-    assert "archive.repo not configured" in reason(enabled=True, repo="")
-    assert "not found at" in reason(enabled=True, repo=str(tmp_path / "nope"))
+    assert "disabled in config" in reason("http://127.0.0.1:9", enabled=False)
+    assert "search.folder_explorer_url not configured" in reason("", enabled=True)
 
-    repo = build_fake_archiver(tmp_path / "archiver")
-    assert "folder-explorer's Python is not at" in reason(enabled=True, repo=str(repo))
-
-    empty = tmp_path / "no-batch-mode"
-    build_fake_archiver(empty, with_batch=False)
-    assert "no app/cli/email_batch.py" in reason(
-        enabled=True, repo=str(empty), python=sys.executable,
-    )
-
-    assert service_for(repo).enabled is True
+    assert service_for(build_fake_archiver()).enabled is True
 
 
 def test_status_carries_the_configured_state_and_the_last_run(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(tmp_path / "archiver", plan=[plan_doc([])])
-    svc = service_for(repo, confidence_threshold=0.55)
+    fake = build_fake_archiver(plan=[plan_doc([])])
+    svc = service_for(fake, confidence_threshold=0.55)
     status = svc.status(conn)
     assert status["configured"] is True and status["reason"] is None
     assert status["running"] is False and status["last_run"] is None
@@ -88,10 +79,10 @@ def test_status_carries_the_configured_state_and_the_last_run(
     # Every key the Settings card reads (#167) — the card renders "unknown"
     # for a key it cannot find, so a rename here has to be seen here.
     assert set(status) >= {
-        "configured", "reason", "running", "repo", "candidates", "confidence_threshold",
+        "configured", "reason", "running", "url", "candidates", "confidence_threshold",
         "model", "batch_size", "examples", "last_run", "last_error",
     }
-    assert status["repo"] == str(repo) and status["last_error"] is None
+    assert status["url"] == fake.url and status["last_error"] is None
     assert status["candidates"] > 0 and isinstance(status["model"], str)
 
     svc.run_now()
@@ -107,15 +98,14 @@ def test_status_carries_the_configured_state_and_the_last_run(
 def test_a_run_files_reviews_and_records_every_mail(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[_three_mail_plan()],
         apply=[apply_doc([
             apply_result("confident@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
             _reused_result(),
         ])],
     )
-    run = service_for(repo).run_now()
+    run = service_for(fake).run_now()
 
     # With no model reachable the archiver's own ranking stands — and the run
     # says so rather than presenting a fallback as a considered decision (#158).
@@ -151,29 +141,28 @@ def test_a_run_files_reviews_and_records_every_mail(
     # Both went to ``apply``, each with the naming form the archiver itself
     # inferred — the confident mail's candidate, and nothing at all for a folder
     # the plan never ranked.
-    applied = [c for c in calls(repo) if c["verb"] == "apply"]
+    applied = [c for c in fake.calls if c["verb"] == "apply"]
     assert applied[0]["payload"] == [
         {"message_id": "confident@example.invalid", "folder_path": FOLDER_HOUSE,
          "date_prefix": True},
         {"message_id": "filed@example.invalid", "folder_path": OLDER_FOLDER,
          "date_prefix": False},
     ]
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply"]
 
 
 def test_a_second_run_over_the_same_message_id_writes_nothing(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """Idempotency is the Message-ID: a filed mail is never offered twice."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[_three_mail_plan(), _three_mail_plan()],
         apply=[apply_doc([
             apply_result("confident@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE]),
             _reused_result(),
         ])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     svc.run_now()
     second = svc.run_now()
 
@@ -185,7 +174,7 @@ def test_a_second_run_over_the_same_message_id_writes_nothing(
         "unsure@example.invalid"
     ]
     # And nothing was filed a second time: one ``apply``, from the first run.
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply", "plan"]
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply", "plan"]
 
 
 def test_the_unique_index_refuses_a_second_filed_row(conn: sqlite3.Connection) -> None:
@@ -205,11 +194,11 @@ def test_limit_bounds_what_one_run_touches(conn: sqlite3.Connection, tmp_path: P
         mail(f"m{n}@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.95)])
         for n in range(4)
     ])
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[plan],
+    fake = build_fake_archiver(
+        plan=[plan],
         apply=[apply_doc([apply_result("m0@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
-    run = service_for(repo).run_now(limit=1)
+    run = service_for(fake).run_now(limit=1)
     assert run["planned"] == 1 and run["archived"] == 1
     assert [i["message_id"] for i in archive_store.list_items(conn, run["id"])] == ["m0@example.invalid"]
 
@@ -218,8 +207,7 @@ def test_an_apply_failure_is_recorded_and_stays_revertible(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """``files`` is filled before the move, so a move_failed mail is still undoable."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("stuck@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result(
             "stuck@example.invalid", FOLDER_HOUSE, ok=False, files=[ARCHIVED_FILE],
@@ -227,7 +215,7 @@ def test_an_apply_failure_is_recorded_and_stays_revertible(
         )])],
         revert=[revert_doc([revert_result("stuck@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     run = svc.run_now()
     assert (run["archived"], run["failed"]) == (0, 1)
 
@@ -249,8 +237,7 @@ def test_a_whole_apply_failure_leaves_no_mail_claimed_as_filed(
     ``archived`` with no files — and ``filed_message_ids`` then skipped those
     mails on every later run while they sat in the Inbox.
     """
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[_three_mail_plan(), _three_mail_plan()],
         apply=[
             error_doc("apply", "outlook_unavailable", "Outlook went away"),
@@ -260,7 +247,7 @@ def test_a_whole_apply_failure_leaves_no_mail_claimed_as_filed(
             ]),
         ],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     failed_run = svc.run_now()
     assert failed_run["status"] == "failed" and "Outlook went away" in failed_run["error"]
 
@@ -289,15 +276,14 @@ def test_a_whole_apply_failure_leaves_no_mail_claimed_as_filed(
 def test_an_apply_failure_with_nothing_written_is_not_revertible(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("gone@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result(
             "gone@example.invalid", FOLDER_HOUSE, ok=False,
             error={"code": "not_in_inbox", "message": "no mail with this Message-ID is in the Inbox"},
         )])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, item["id"])
@@ -315,8 +301,7 @@ def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
     the row kept still goes through the renumber map (#176): it sits in the
     folder that was just re-sequenced, so it may be one of the files that moved.
     """
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("terse@example.invalid", already_archived=OLDER_FILE, in_inbox=True),
         ])],
@@ -330,7 +315,7 @@ def test_an_apply_that_names_no_file_leaves_the_one_the_row_knows(
             ),
         )],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     assert item["status"] == "archived" and item["files"] == [OLDER_RENUMBERED]
     # …and it is still undoable, which is the thing blanking it would have cost.
@@ -347,18 +332,17 @@ def test_a_mail_on_disk_not_stated_in_the_inbox_stays_a_no_op(
     properly filed and gone. Finishing either would send a decision for a mail
     that is not in the Inbox — which is how a mail gets filed a second time.
     """
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("gone@example.invalid", already_archived=OLDER_FILE, in_inbox=in_inbox),
         ])],
     )
-    item = archive_store.list_items(conn, service_for(repo).run_now()["id"])[0]
+    item = archive_store.list_items(conn, service_for(fake).run_now()["id"])[0]
     assert item["status"] == "archived" and item["files"] == [OLDER_FILE]
     assert item["chosen_folder"] is None
     assert "already has this mail filed" in item["reason"]
     # Nothing beyond the plan reached Outlook: nothing written, nothing moved.
-    assert [c["verb"] for c in calls(repo)] == ["plan"]
+    assert [c["verb"] for c in fake.calls] == ["plan"]
 
 
 # --------------------------------------------------- the ranking (#158)
@@ -373,13 +357,13 @@ def test_the_ranking_gets_its_own_client_model_and_request_bound(
     features may want different models — so the archive service builds a second
     client of its own rather than sharing the app's.
     """
-    repo = build_fake_archiver(tmp_path / "archiver")
+    fake = build_fake_archiver()
     config = AppConfig(
         ai=AIConfig(enabled=True, model="the_triage_model", timeout_seconds=30.0),
         archive=ArchiveConfig(
-            enabled=True, repo=str(repo), python=sys.executable,
-            model="the_archive_model", ai_timeout_seconds=175.0,
+            enabled=True, model="the_archive_model", ai_timeout_seconds=175.0,
         ),
+        search=SearchConfig(folder_explorer_url=fake.url),
     )
     svc = ArchiveBatchService(config)
     triage_client = AIClient(config)
@@ -400,8 +384,7 @@ def test_the_model_picks_among_the_candidates_and_the_run_records_it(
 ) -> None:
     """The pick is an index; the folder, the naming form and the state follow from it."""
     moved_file = "E:\\archive\\admin\\bills\\0007 - boiler service.msg"
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             _two_candidate_mail("override@example.invalid"),
             _two_candidate_mail("agreed@example.invalid", subject="Radiator"),
@@ -417,7 +400,7 @@ def test_the_model_picks_among_the_candidates_and_the_run_records_it(
          "reason": "this is a bill, not a repair thread"},
         pick_for("agreed@example.invalid", 0, 0.95),
     ))
-    run = service_for(repo, ai=hub).run_now()
+    run = service_for(fake, ai=hub).run_now()
 
     assert run["status"] == "done" and run["error"] is None
     # One of the two went where the archiver would have put it.
@@ -432,7 +415,7 @@ def test_the_model_picks_among_the_candidates_and_the_run_records_it(
     # And the destination candidate's own naming form went back to the archiver.
     assert overridden["date_prefix"] is True
 
-    applied = [c for c in calls(repo) if c["verb"] == "apply"][0]["payload"]
+    applied = [c for c in fake.calls if c["verb"] == "apply"][0]["payload"]
     assert {d["message_id"]: d["folder_path"] for d in applied} == {
         "override@example.invalid": FOLDER_BILLS, "agreed@example.invalid": FOLDER_HOUSE,
     }
@@ -458,31 +441,31 @@ def test_an_unsure_pick_leaves_the_mail_in_the_inbox(
     expected_folder: str | None, expected_reason: str,
 ) -> None:
     """Below the threshold, or nothing fits: the mail is *needs you*, never guessed at."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("unsure@example.invalid")])],
+    fake = build_fake_archiver(
+        plan=[plan_doc([_two_candidate_mail("unsure@example.invalid")])],
     )
-    run = service_for(repo, ai=FakeHub(picks_doc(pick))).run_now()
+    run = service_for(fake, ai=FakeHub(picks_doc(pick))).run_now()
 
     item = archive_store.list_items(conn, run["id"])[0]
     assert item["status"] == "needs_review" and item["files"] == []
     assert item["chosen_folder"] == expected_folder
     assert expected_reason in item["reason"]
     # Nothing was filed, so the archiver was never asked to apply anything.
-    assert [c["verb"] for c in calls(repo)] == ["plan"]
+    assert [c["verb"] for c in fake.calls] == ["plan"]
 
 
 def test_an_unusable_answer_files_by_the_archiver_and_names_the_failure(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """A model that answers junk must not stop the run — nor pass for a decision."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("junk@example.invalid")])],
+    fake = build_fake_archiver(
+        plan=[plan_doc([_two_candidate_mail("junk@example.invalid")])],
         apply=[apply_doc([apply_result("junk@example.invalid", FOLDER_HOUSE,
                                        files=[ARCHIVED_FILE])])],
     )
     hub = FakeHub(picks_doc({"message_id": "junk@example.invalid", "candidate": 9,
                              "confidence": 0.9, "reason": "out of range"}))
-    run = service_for(repo, ai=hub).run_now()
+    run = service_for(fake, ai=hub).run_now()
 
     assert run["status"] == "done" and run["archived"] == 1
     assert "ai_invalid_response" in run["error"] and "outside its 2 candidates" in run["error"]
@@ -498,8 +481,7 @@ def test_a_move_teaches_the_next_run_and_the_prompt_carries_it(
 ) -> None:
     """The whole point of the memory: correct it once, see it in the next prompt."""
     moved_file = "E:\\archive\\admin\\bills\\0007 - boiler service.msg"
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[
             plan_doc([_two_candidate_mail("first@example.invalid")]),
             plan_doc([_two_candidate_mail("second@example.invalid", subject="Another bill")]),
@@ -517,7 +499,7 @@ def test_a_move_teaches_the_next_run_and_the_prompt_carries_it(
         picks_doc(pick_for("first@example.invalid", 0, 0.9)),
         picks_doc(pick_for("second@example.invalid", 1, 0.9)),
     )
-    svc = service_for(repo, ai=hub)
+    svc = service_for(fake, ai=hub)
     item = archive_store.list_items(conn, svc.run_now()["id"])[0]
 
     svc.move(conn, item["id"], "{archive}/admin/bills", hint="bills from this sender go to admin")
@@ -543,8 +525,7 @@ def test_accepting_a_below_threshold_mail_is_a_correction_too(
 
     A ``failed`` row is not: the archiver broke, the ranking did not.
     """
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             _two_candidate_mail("shy@example.invalid"),
             mail("broken@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
@@ -559,7 +540,7 @@ def test_accepting_a_below_threshold_mail_is_a_correction_too(
          "reason": "probably the heating thread"},
         pick_for("broken@example.invalid", 0, 0.95),
     ))
-    svc = service_for(repo, ai=hub)
+    svc = service_for(fake, ai=hub)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     svc.accept(conn, items["shy@example.invalid"]["id"], hint="always the heating folder")
@@ -575,8 +556,8 @@ def test_the_prompt_carries_only_the_last_configured_number_of_examples(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """A growing memory must never grow the prompt without bound."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[plan_doc([_two_candidate_mail("m@example.invalid")])],
+    fake = build_fake_archiver(
+        plan=[plan_doc([_two_candidate_mail("m@example.invalid")])],
         apply=[apply_doc([apply_result("m@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
     for n in range(5):
@@ -587,7 +568,7 @@ def test_the_prompt_carries_only_the_last_configured_number_of_examples(
             chosen_folder=FOLDER_BILLS,
         )
     hub = FakeHub(picks_doc(pick_for("m@example.invalid", 0)))
-    service_for(repo, ai=hub, examples=2).run_now()
+    service_for(fake, ai=hub, examples=2).run_now()
 
     carried = json.loads(hub.prompts[0])["corrections"]
     assert len(carried) == 2
@@ -598,38 +579,78 @@ def test_the_prompt_carries_only_the_last_configured_number_of_examples(
 # ------------------------------------------------------------ the failures
 
 
-def test_outlook_unreachable_is_its_own_error(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    """Exit 2 with the child's own code — not "the Inbox was empty"."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver", exit_code=2,
+def test_outlook_unreachable_is_its_own_error(conn: sqlite3.Connection) -> None:
+    """A refused outcome with the archiver's own code — not "the Inbox was empty"."""
+    fake = build_fake_archiver(
         plan=[error_doc("plan", "outlook_unavailable", "Outlook did not answer within 60 s")],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     run = svc.run_now()
     assert run["status"] == "failed"
     assert "Outlook could not be reached" in run["error"]
     assert svc.last_error.startswith("archive_outlook_unavailable")
 
 
-def test_a_timed_out_child_is_its_own_error(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    repo = build_fake_archiver(tmp_path / "archiver", plan=[plan_doc([])], sleep=3.0)
-    run = service_for(repo, timeout_seconds=0.5).run_now()
-    assert run["status"] == "failed" and "did not finish plan within" in run["error"]
+def test_a_slow_archiver_is_its_own_error(conn: sqlite3.Connection) -> None:
+    fake = build_fake_archiver(plan=[plan_doc([])], sleep=3.0)
+    run = service_for(fake, timeout_seconds=0.5).run_now()
+    assert run["status"] == "failed" and "did not answer plan within 0.5 s" in run["error"]
 
 
-def test_an_unknown_document_schema_is_refused_by_name(
-    conn: sqlite3.Connection, tmp_path: Path
+def test_folder_explorer_down_is_not_an_empty_inbox(conn: sqlite3.Connection) -> None:
+    """The run fails by name; it never finishes ``done`` over nothing."""
+    fake = build_fake_archiver(plan=[plan_doc([])])
+    svc = service_for(fake)
+    fake.stop()
+    run = svc.run_now()
+    assert run["status"] == "failed" and run["planned"] == 0
+    assert "folder-explorer at http://127.0.0.1" in run["error"] and "did not answer" in run["error"]
+    assert svc.last_error.startswith("archive_unreachable")
+
+
+@pytest.mark.parametrize(("mode", "code"), [
+    ("garbled", "archive_bad_output"),
+    ("bare422", "archive_bad_output"),
+    ("v2", "archive_schema_mismatch"),
+    ("busy", "archive_busy"),
+    ("not_this_pc", "archive_not_this_pc"),
+])
+def test_each_way_the_service_can_answer_wrongly_has_its_own_code(
+    conn: sqlite3.Connection, mode: str, code: str
 ) -> None:
+    fake = build_fake_archiver(plan=[plan_doc([])])
+    fake.mode = mode
+    svc = service_for(fake)
+    run = svc.run_now()
+    assert run["status"] == "failed"
+    assert svc.last_error.startswith(code)
+
+
+def test_an_unanswered_apply_says_nothing_is_confirmed(conn: sqlite3.Connection) -> None:
+    """A write whose answer never came may have run: the message says to plan again, and no row reads filed."""
+    fake = build_fake_archiver(
+        plan=[plan_doc([mail("lost@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
+        apply=[apply_doc([apply_result("lost@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
+        sleep=2.0, sleep_verbs=("apply",),
+    )
+    svc = service_for(fake, timeout_seconds=0.5)
+    run = svc.run_now()
+    assert run["status"] == "failed" and "nothing is confirmed" in run["error"]
+    items = archive_store.list_items(conn, run["id"])
+    assert [i["status"] for i in items] == ["failed"]
+
+
+def test_an_unknown_document_schema_is_refused_by_name(conn: sqlite3.Connection) -> None:
     """A field that silently moved is how a mail lands in the wrong folder."""
     future = {**plan_doc([]), "schema_version": 99}
-    repo = build_fake_archiver(tmp_path / "archiver", plan=[future])
-    run = service_for(repo).run_now()
+    fake = build_fake_archiver(plan=[future])
+    run = service_for(fake).run_now()
     assert run["status"] == "failed" and "schema_version 99" in run["error"]
 
 
 def test_a_run_in_flight_refuses_the_next_one(tmp_path: Path) -> None:
-    repo = build_fake_archiver(tmp_path / "archiver", plan=[plan_doc([])])
-    svc = service_for(repo)
+    fake = build_fake_archiver(plan=[plan_doc([])])
+    svc = service_for(fake)
     # Standing in for a run already walking the Inbox over COM: one Outlook,
     # one child at a time — the next caller is refused, never queued.
     assert svc._lock.acquire(blocking=False)
@@ -646,14 +667,14 @@ def test_a_failed_rescan_leaves_the_run_done_and_says_so(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """The mails are filed either way — "not confirmed" is its own state."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver", scan_exit_code=3,
+    fake = build_fake_archiver(
+        scan_exit_code=3,
         plan=[plan_doc([mail("ok@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("ok@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
-    run = service_for(repo).run_now()
+    run = service_for(fake).run_now()
     assert run["status"] == "done" and run["archived"] == 1
-    assert "not inside folder-explorer's email folders (exit 3)" in run["error"]
+    assert "not inside the email folders" in run["error"] and "not_in_email_folder" in run["error"]
 
 
 def test_each_filed_folder_is_reindexed_once_by_its_own_scoped_run(
@@ -665,12 +686,12 @@ def test_each_filed_folder_is_reindexed_once_by_its_own_scoped_run(
         mail("b@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
         mail("c@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.9)]),
     ]
-    repo = build_fake_archiver(
-        tmp_path / "archiver", plan=[plan_doc(mails)],
+    fake = build_fake_archiver(
+        plan=[plan_doc(mails)],
         apply=[apply_doc([apply_result(m["message_id"], m["candidates"][0]["folder_path"], files=[ARCHIVED_FILE])
                           for m in mails])],
     )
-    run = service_for(repo).run_now()
+    run = service_for(fake).run_now()
     assert run["status"] == "done" and "has not confirmed" not in (run["error"] or "")
-    assert index_calls(repo) == [["--root", FOLDER_BILLS, "--wait", "60.0"], ["--root", FOLDER_HOUSE, "--wait", "60.0"]]
-    assert [c["argv"][:3] for c in calls(repo)] == [["--start-timeout", "60.0", "plan"], ["--start-timeout", "60.0", "apply"]]
+    assert fake.index_calls == [{"root": FOLDER_BILLS, "wait": 60.0}, {"root": FOLDER_HOUSE, "wait": 60.0}]
+    assert [(c["verb"], c["body"].get("renumber")) for c in fake.calls] == [("plan", None), ("apply", True)]

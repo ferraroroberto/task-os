@@ -16,7 +16,7 @@ import { setWord } from './words.js';
  *  status it reads back here through `renderArchive` — so "running"
  *  resolves into the run's own counts when its poll finishes. */
 export function renderArchive(ctx, st) {
-  const rows = [ctx.els.statusArchiveRepo, ctx.els.statusArchiveThreshold];
+  const rows = [ctx.els.statusArchiveUrl, ctx.els.statusArchiveThreshold];
   rows.forEach(function (el) { el.replaceChildren(); el.classList.remove('muted'); });
   if (!st) {
     rows.forEach(function (el) { el.textContent = 'unknown'; });
@@ -25,7 +25,7 @@ export function renderArchive(ctx, st) {
     rows.forEach(function (el) { el.textContent = '–'; });
     setWord(ctx, ctx.els.archiveCardMeta, 'off');
   } else {
-    ctx.els.statusArchiveRepo.append(codeEl(st.repo || 'unknown'));
+    ctx.els.statusArchiveUrl.append(codeEl(st.url || 'unknown'));
     ctx.els.statusArchiveThreshold.append(
       pct(st.confidence_threshold),
       ' · ' + (st.candidates == null ? '?' : st.candidates) + ' folder(s) ranked per mail'

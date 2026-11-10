@@ -35,7 +35,6 @@ from tests.fixtures.archiver_fake import (
     apply_doc,
     apply_result,
     build_fake_archiver,
-    calls,
     candidate,
     error_doc,
     mail,
@@ -49,19 +48,18 @@ from tests.fixtures.archiver_fake import (
 def test_revert_deletes_the_files_and_puts_the_mail_back(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("undo@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("undo@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
         revert=[revert_doc([revert_result("undo@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     reverted = svc.revert(conn, item["id"])
 
     assert reverted["status"] == "reverted" and reverted["files"] == []
     assert reverted["error"] is None and reverted["decided_at"]
-    sent = [c for c in calls(repo) if c["verb"] == "revert"][0]["payload"]
+    sent = [c for c in fake.calls if c["verb"] == "revert"][0]["payload"]
     assert sent == [{"message_id": "undo@example.invalid", "files": [ARCHIVED_FILE]}]
 
 
@@ -69,8 +67,7 @@ def test_a_partial_revert_keeps_the_row_and_names_what_happened(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """A half-undo is not a revert; the row stays undoable and says why."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("half@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("half@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
         revert=[revert_doc([revert_result(
@@ -78,7 +75,7 @@ def test_a_partial_revert_keeps_the_row_and_names_what_happened(
             error={"code": "not_in_archive_folder", "message": "no mail with this Message-ID is in 'Archive'"},
         )])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, item["id"])
@@ -91,11 +88,10 @@ def test_a_partial_revert_keeps_the_row_and_names_what_happened(
 def test_revert_refuses_a_mail_that_was_never_filed(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("shy@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.1)])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     assert item["status"] == "needs_review"
     with pytest.raises(ArchiveError) as caught:
@@ -108,8 +104,7 @@ def test_move_reverts_then_applies_into_the_folder_you_named(
 ) -> None:
     """And the ref resolves through the same placeholders every folder field uses."""
     moved_file = "E:\\archive\\admin\\bills\\0007 - boiler service.msg"
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("shift@example.invalid", candidates=[
             candidate(FOLDER_HOUSE, 0.9), candidate(FOLDER_BILLS, 0.5, date_prefix=True),
         ])])],
@@ -120,7 +115,7 @@ def test_move_reverts_then_applies_into_the_folder_you_named(
         ],
         revert=[revert_doc([revert_result("shift@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
 
     moved = svc.move(conn, item["id"], "{archive}/admin/bills")
@@ -130,9 +125,9 @@ def test_move_reverts_then_applies_into_the_folder_you_named(
     # naming form is what went back to the archiver.
     assert moved["date_prefix"] is True
 
-    verbs = [c["verb"] for c in calls(repo)]
+    verbs = [c["verb"] for c in fake.calls]
     assert verbs == ["plan", "apply", "revert", "apply"]
-    assert calls(repo)[-1]["payload"] == [{
+    assert fake.calls[-1]["payload"] == [{
         "message_id": "shift@example.invalid", "folder_path": "E:/archive/admin/bills",
         "date_prefix": True,
     }]
@@ -143,8 +138,7 @@ def test_a_move_whose_refile_fails_records_the_undo_it_already_did(
 ) -> None:
     """The undo leg has deleted the files and returned the mail to the Inbox;
     a row still claiming ``archived`` would keep every later run from filing it."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("lost@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[
             apply_doc([apply_result("lost@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])]),
@@ -152,7 +146,7 @@ def test_a_move_whose_refile_fails_records_the_undo_it_already_did(
         ],
         revert=[revert_doc([revert_result("lost@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     assert "lost@example.invalid" in archive_store.filed_message_ids(conn)
 
@@ -173,15 +167,14 @@ def test_move_files_a_needs_review_mail_that_was_never_archived(
     """The commonest gesture on the report screen (#159): the ranking would not
     decide, so a human names the folder — and there is nothing to undo first."""
     filed_file = "E:\\archive\\admin\\bills\\0003 - something ambiguous.msg"
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         # one candidate, ranked too low to file on its own
         plan=[plan_doc([mail("shy@example.invalid", subject="Something ambiguous",
                              candidates=[candidate(FOLDER_BILLS, 0.2, date_prefix=True)])])],
         apply=[apply_doc([apply_result("shy@example.invalid", FOLDER_BILLS,
                                        files=[filed_file], sequence="0003")])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     assert item["status"] == "needs_review" and item["files"] == []
 
@@ -192,7 +185,7 @@ def test_move_files_a_needs_review_mail_that_was_never_archived(
     # No revert leg at all: there was nothing on disk to undo, and inventing one
     # would have asked the archiver to un-file a mail it never filed. The run
     # itself filed nothing, so the move's own `apply` is the first there is.
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply"]
     # …and the correction it teaches carries the hint (#158).
     stored = archive_store.recent_corrections(conn)
     assert len(stored) == 1 and stored[0]["hint"] == "bills go to the flat"
@@ -204,13 +197,12 @@ def test_move_refuses_a_reverted_mail_and_names_why(
 ) -> None:
     """A reverted mail is back in the Inbox and belongs to the next run, not to
     a second filing from a stale report row."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("undone@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("undone@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
         revert=[revert_doc([revert_result("undone@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     assert svc.revert(conn, item["id"])["status"] == "reverted"
 
@@ -223,31 +215,29 @@ def test_move_refuses_a_reverted_mail_and_names_why(
 def test_move_refuses_a_folder_this_install_cannot_resolve(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("nowhere@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("nowhere@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
     with pytest.raises(ArchiveError) as caught:
         svc.move(conn, item["id"], "{nosuchtoken}/somewhere")
     assert caught.value.http_status == 422 and caught.value.code == "archive_bad_folder"
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply"]
 
 
 def test_accept_marks_a_reviewable_row_and_refuses_a_finished_one(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("seen@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.2)]),
             mail("done@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
         ])],
         apply=[apply_doc([apply_result("done@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     accepted = svc.accept(conn, items["seen@example.invalid"]["id"])
@@ -268,11 +258,11 @@ def test_retry_finishes_a_move_outlook_refused_and_keeps_what_is_on_disk(
     the row keeps the sequence number the first attempt allocated (a reuse
     allocates none).
     """
-    repo = _stuck_then_finished(tmp_path, second=apply_result(
+    fake = _stuck_then_finished(tmp_path, second=apply_result(
         "stuck@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE], sequence="",
         reused=True, move_via="saved_retry",
     ))
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = archive_store.list_items(conn, svc.run_now()["id"])[0]
     assert item["status"] == "failed" and item["files"] == [ARCHIVED_FILE]
     assert item["sequence"] == "0042" and item["decided_at"] is None
@@ -285,8 +275,8 @@ def test_retry_finishes_a_move_outlook_refused_and_keeps_what_is_on_disk(
 
     # The same message, the same folder, the same naming form — a retry is a
     # re-send, never a second decision.
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply", "apply"]
-    assert calls(repo)[-1]["payload"] == [{
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply", "apply"]
+    assert fake.calls[-1]["payload"] == [{
         "message_id": "stuck@example.invalid", "folder_path": FOLDER_HOUSE, "date_prefix": True,
     }]
 
@@ -295,13 +285,13 @@ def test_a_retry_refused_again_keeps_the_row_failed_with_the_newer_reason(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     """The second message is the useful one — it names the remedy that is left."""
-    repo = _stuck_then_finished(tmp_path, second=apply_result(
+    fake = _stuck_then_finished(tmp_path, second=apply_result(
         "stuck@example.invalid", FOLDER_HOUSE, ok=False, files=[ARCHIVED_FILE], sequence="0042",
         error={"code": "move_failed",
                "message": "Outlook itself is holding this item — restart Outlook, then apply "
                           "the same decision again"},
     ))
-    svc = service_for(repo)
+    svc = service_for(fake)
     item = archive_store.list_items(conn, svc.run_now()["id"])[0]
 
     with pytest.raises(ArchiveError) as caught:
@@ -324,8 +314,7 @@ def test_retry_refuses_every_row_with_nothing_half_done(
     file a mail twice or re-send a decision no file backs, so it is refused by
     the service before a child is spawned at all.
     """
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("done@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("shy@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.2)]),
@@ -338,7 +327,7 @@ def test_retry_refuses_every_row_with_nothing_half_done(
             }),
         ])],
     )
-    svc = service_for(repo)
+    svc = service_for(fake)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     assert items["done@example.invalid"]["status"] == "archived"
     assert items["shy@example.invalid"]["status"] == "needs_review"
@@ -350,7 +339,7 @@ def test_retry_refuses_every_row_with_nothing_half_done(
             svc.retry(conn, items[message_id]["id"])
         assert caught.value.http_status == 409 and caught.value.code == "archive_bad_state"
         assert "already on disk" in str(caught.value)
-    assert [c["verb"] for c in calls(repo)] == ["plan", "apply"]
+    assert [c["verb"] for c in fake.calls] == ["plan", "apply"]
 
 
 def test_an_apply_that_renumbers_heals_every_path_this_database_stores(
@@ -364,8 +353,7 @@ def test_an_apply_that_renumbers_heals_every_path_this_database_stores(
     capture poll must recognise the mail rather than land it a second time.
     """
     captured = _capture_the_email(conn, ARCHIVED_FILE)
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("boiler@example.invalid", subject="Boiler service",
                              candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc(
@@ -379,11 +367,11 @@ def test_an_apply_that_renumbers_heals_every_path_this_database_stores(
             ),
         )],
     )
-    svc = service_for(repo_dir)
+    svc = service_for(fake)
     item = _one_archived_item(conn, svc)
 
     # The flag actually went out on the command line…
-    assert "--renumber" in [c for c in calls(repo_dir) if c["verb"] == "apply"][0]["argv"]
+    assert [c for c in fake.calls if c["verb"] == "apply"][0]["body"]["renumber"] is True
     # …the row carries the names on disk now, not the ones apply reported…
     assert item["files"] == [RENUMBERED_FILE, RENUMBERED_ATTACHMENT]
     assert item["reason"].endswith(" · renumbered 2 file(s) in heating")
@@ -410,8 +398,7 @@ def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
     the archiver a path that no longer exists — the failure this whole issue is
     about.
     """
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("first@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("second@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
@@ -431,7 +418,7 @@ def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
             revert_doc([revert_result("second@example.invalid", deleted=[OLDER_RENUMBERED])]),
         ],
     )
-    svc = service_for(repo_dir)
+    svc = service_for(fake)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
 
     undone = svc.revert(conn, items["first@example.invalid"]["id"])
@@ -442,7 +429,7 @@ def test_a_revert_renumbers_the_folder_and_the_next_undo_gets_the_right_files(
     assert stayed["files"] == [OLDER_RENUMBERED]
 
     svc.revert(conn, stayed["id"])
-    sent = [c for c in calls(repo_dir) if c["verb"] == "revert"][-1]["payload"]
+    sent = [c for c in fake.calls if c["verb"] == "revert"][-1]["payload"]
     assert sent == [{"message_id": "second@example.invalid", "files": [OLDER_RENUMBERED]}]
 
 
@@ -456,8 +443,7 @@ def test_a_map_is_healed_even_when_the_mail_itself_failed(
     on the error path is exactly how a stale path survives the one code that
     was written to prevent it.
     """
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("stuck@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("neighbour@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
@@ -476,7 +462,7 @@ def test_a_map_is_healed_even_when_the_mail_itself_failed(
             ),
         )],
     )
-    svc = service_for(repo_dir)
+    svc = service_for(fake)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     with pytest.raises(ArchiveError) as caught:
         svc.revert(conn, items["stuck@example.invalid"]["id"])
@@ -497,8 +483,7 @@ def test_a_move_that_gets_no_result_still_heals_both_legs_maps(
     """
     bills_file = "E:\\archive\\admin\\bills\\0009 - a bystander.msg"
     bills_renumbered = "E:\\archive\\admin\\bills\\0008 - a bystander.msg"
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("moving@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("neighbour@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
@@ -523,7 +508,7 @@ def test_a_move_that_gets_no_result_still_heals_both_legs_maps(
             ),
         )],
     )
-    svc = service_for(repo_dir)
+    svc = service_for(fake)
     items = {i["message_id"]: i for i in archive_store.list_items(conn, svc.run_now()["id"])}
     with pytest.raises(ArchiveError) as caught:
         svc.move(conn, items["moving@example.invalid"]["id"], "{archive}/admin/bills")
@@ -545,15 +530,14 @@ def test_renumbering_off_asks_for_nothing_and_a_document_without_a_map_changes_n
     key is what every build before email-archiver#61 prints, so absence has to
     read as "nothing moved", never as a reason to guess.
     """
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("quiet@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc([apply_result("quiet@example.invalid", FOLDER_HOUSE,
                                        files=[ARCHIVED_FILE])])],
     )
-    svc = service_for(repo_dir, renumber=False)
+    svc = service_for(fake, renumber=False)
     item = _one_archived_item(conn, svc)
-    assert "--renumber" not in [c for c in calls(repo_dir) if c["verb"] == "apply"][0]["argv"]
+    assert "renumber" not in [c for c in fake.calls if c["verb"] == "apply"][0]["body"]
     assert item["files"] == [ARCHIVED_FILE]
     assert "renumbered" not in (item["reason"] or "")
 
@@ -567,8 +551,7 @@ def test_a_folder_the_archiver_refused_to_renumber_is_said_out_loud(
     than folded into the quiet path — and neither of them writes a note onto a
     row that had nothing renamed.
     """
-    repo_dir = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([mail("tidy@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)])])],
         apply=[apply_doc(
             [apply_result("tidy@example.invalid", FOLDER_HOUSE, files=[ARCHIVED_FILE])],
@@ -576,7 +559,7 @@ def test_a_folder_the_archiver_refused_to_renumber_is_said_out_loud(
             refused=[{"folder_path": FOLDER_BILLS, "reason": "outside the archive roots"}],
         )],
     )
-    svc = service_for(repo_dir)
+    svc = service_for(fake)
     with caplog.at_level("WARNING"):
         item = _one_archived_item(conn, svc)
     assert item["files"] == [ARCHIVED_FILE] and "renumbered" not in (item["reason"] or "")

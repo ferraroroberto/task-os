@@ -24,7 +24,7 @@ Inbox can be one mail — trust is built on a run you can undo, not on a promise
 and it rides either the JSON body or ``?limit=``, because the first thing anyone
 does with this route is `curl` it.
 
-Everything the archiver does happens in a subprocess (``src/archive_batch.py``),
+Everything the archiver does happens in folder-explorer, over HTTP (``src/archive_batch.py``),
 so every route here is thin: it hands ``ArchiveError`` to the one JSON envelope
 and lets the service own the state machine. The run's own progress is not
 polled: ``GET /api/archive/runs/{id}`` is the whole story, and the screen (#159)

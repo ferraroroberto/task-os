@@ -96,7 +96,7 @@ flowchart LR
     icsfeed["a private ICS address (Google / Outlook)<br/>read-only · config.calendar.ics_url (gitignored)"]
     whisper["local-llm-hub · whisper-server<br/>127.0.0.1:8090 /v1/audio/transcriptions<br/>the fallback, transport failures only<br/>config.voice.fallback_url"]
     emaildb["email-archiver · emails.db<br/>emails · emails_fts (FTS5)<br/>flag_status · flag_request (the archiver writes, we only read)<br/>config.search.email_db"]
-    batchcli["email-archiver · main_batch.py (#53) + main_scan.py<br/>plan | apply | revert | renumber — one JSON document each<br/>--renumber on apply/revert → a renumbered map per folder (from → to + attachments)<br/>the consumer heals its own stored paths (#61)<br/>exit 0 = ran (per-mail errors inside) · exit 2 = could not start<br/>owns Outlook COM, the filenames and the index<br/>config.archive.repo + config.archive.python"]
+    batchcli["folder-explorer · v1 archive API (/api/v1/archive/…)<br/>plan | apply | revert | renumber — one JSON document each<br/>--renumber on apply/revert → a renumbered map per folder (from → to + attachments)<br/>the consumer heals its own stored paths (#61)<br/>outcome done | not-found | refused | error · acknowledged vs confirmed<br/>owns Outlook COM, the filenames and the index<br/>search.folder_explorer_url"]
   end
 
   subgraph ops["Process / proof"]
@@ -196,7 +196,7 @@ flowchart LR
   archiver --> archive
   archiver -->|"get_run · list_runs · list_items (read-only)"| astore
   archive --> db
-  archive -->|"subprocess (NO_WINDOW, timeout, JSON on stdout)"| batchcli
+  archive -->|"HTTP POST (timeout, JSON envelope)"| batchcli
   archive -->|"every run / item / correction row"| astore
   astore --> ar
   archive -->|"folder ref → absolute path (move)"| placeholders
@@ -207,7 +207,7 @@ flowchart LR
   archive -->|"each verb's renumbered map → apply_renumber_map (#176)"| arenum
   arenum -->|"rename_link_url + rename_external_id"| repo
   arank -->|"one request per batch; exact JSON contract<br/>config.archive.model + archive.ai_timeout_seconds"| hub
-  batchcli -.->|"main_scan --no-ui re-indexes what the run filed"| emaildb
+  batchcli -.->|"the index call re-indexes what the run filed"| emaildb
   mirrorr -->|"status()"| archive
   lifespan --> archive
   cli -->|"archive status (app down)"| archive
