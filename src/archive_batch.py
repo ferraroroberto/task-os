@@ -98,6 +98,7 @@ import json
 import logging
 import sqlite3
 import threading
+import time
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -122,6 +123,7 @@ from src.archive_store import (
     insert_item,
     list_runs,
     recent_corrections,
+    sync_run_counts,
     update_item,
 )
 from src.config import AppConfig
@@ -130,14 +132,17 @@ from src.search.folder_explorer import FolderExplorerClient
 
 logger = logging.getLogger(__name__)
 
-#: Bound on the re-index of one filed folder after a run. folder-explorer
-#: gives the re-index 900 s plus the wait for the email lock, so this call
-#: waits a little longer and the typed answer arrives instead of a client timeout.
-SCAN_TIMEOUT_S = 900.0 + 60.0 + 60.0
-
 #: Seconds a re-index waits for another email run (a nightly scan's email stage)
 #: to release the email lock before it reports busy.
 SCAN_WAIT_S = 60.0
+
+#: Seconds the whole post-apply re-index phase may take, across every folder.
+#: The mails are already filed by then and the run's lock is held until it
+#: ends, so a slow or wedged index costs this one bounded wait, not a timeout
+#: per folder. A call still in flight at the deadline is given up on (the
+#: service finishes it by itself); whatever was not confirmed is reported on
+#: the run.
+SCAN_BUDGET_S = 300.0
 
 
 @dataclass(frozen=True)
@@ -289,8 +294,19 @@ class ArchiveBatchService(ItemActions):
         the email lock, so it never waits behind a disk scan.
         """
         problems: list[str] = []
-        for folder in folders:
-            problem = self.client.index(folder, SCAN_WAIT_S, timeout=SCAN_TIMEOUT_S)
+        deadline = time.monotonic() + SCAN_BUDGET_S
+        for position, folder in enumerate(folders):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                skipped = [last_component(f) or f for f in folders[position:]]
+                problems.append(
+                    f"{len(skipped)} folder(s) not asked ({', '.join(skipped)}): "
+                    f"the {SCAN_BUDGET_S:g} s re-index budget was spent"
+                )
+                break
+            # The wait for the email lock is kept under the call's bound so a
+            # busy lock arrives as the service's typed answer, not a client timeout.
+            problem = self.client.index(folder, min(SCAN_WAIT_S, remaining / 2), timeout=remaining)
             if problem:
                 problems.append(f"{last_component(folder) or folder}: {problem}")
         if problems:
@@ -410,6 +426,7 @@ class ArchiveBatchService(ItemActions):
             "ℹ️ archive: run %d — %d mail(s) in the Inbox, %d decided, %d to file, %d skipped",
             run_id, len(mails), len(item_by_message), len(decisions), skipped,
         )
+        sync_run_counts(conn, run_id)
         if decisions:
             try:
                 result = self._call("apply", {"decisions": decisions})
@@ -430,10 +447,14 @@ class ArchiveBatchService(ItemActions):
                 if item_id is not None:
                     triggers.setdefault(path_key(str(decision["folder_path"])), item_id)
             self._heal_renumber(conn, result, triggers)
+            sync_run_counts(conn, run_id)
         filed = sorted({str(d["folder_path"]) for d in decisions}, key=str.casefold)
+        if filed:
+            logger.info("ℹ️ archive: run %d — applied, re-indexing %d folder(s)", run_id, len(filed))
         scan_error = self._rescan_index(filed) if decisions else None
         if scan_error:
             logger.warning("⚠️ archive: %s", scan_error)
+        logger.info("ℹ️ archive: run %d — closing", run_id)
         # Two different partial failures, both recorded rather than folded into
         # a clean run: the model did not rank part of this Inbox, and the
         # archiver's index has not confirmed what was filed.

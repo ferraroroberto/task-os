@@ -69,11 +69,8 @@ def create_run(conn: sqlite3.Connection) -> dict[str, Any]:
     return get_run(conn, int(cur.lastrowid))  # type: ignore[return-value]
 
 
-def finish_run(
-    conn: sqlite3.Connection, run_id: int, *, status: str, error: str | None = None,
-    agreement: float | None = None,
-) -> dict[str, Any]:
-    """Close a run, recomputing its counters from the rows it actually wrote.
+def _item_counts(conn: sqlite3.Connection, run_id: int) -> tuple[int, int, int, int]:
+    """``(planned, archived, needs_review, failed)`` read from the run's item rows.
 
     Derived rather than accumulated on purpose: the counters can then never
     disagree with the items, which are what the screen renders.
@@ -84,15 +81,37 @@ def finish_run(
         (run_id,),
     ).fetchall():
         counts[str(row["status"])] = int(row["n"])
-    planned = sum(counts.values())
+    return (
+        sum(counts.values()), counts["archived"] + counts["moved"],
+        counts["needs_review"], counts["failed"],
+    )
+
+
+def sync_run_counts(conn: sqlite3.Connection, run_id: int) -> None:
+    """Bring a still-running run's counters in step with its rows.
+
+    A run spends minutes after its apply waiting on the re-index, and the screen
+    reads these counters for that whole stretch: left at zero they say nothing
+    was filed while the rows beside them say otherwise.
+    """
+    planned, archived, needs_review, failed = _item_counts(conn, run_id)
+    conn.execute(
+        "UPDATE archive_runs SET planned = ?, archived = ?, needs_review = ?, failed = ? WHERE id = ?",
+        (planned, archived, needs_review, failed, run_id),
+    )
+    conn.commit()
+
+
+def finish_run(
+    conn: sqlite3.Connection, run_id: int, *, status: str, error: str | None = None,
+    agreement: float | None = None,
+) -> dict[str, Any]:
+    """Close a run, recomputing its counters from the rows it actually wrote."""
+    planned, archived, needs_review, failed = _item_counts(conn, run_id)
     conn.execute(
         "UPDATE archive_runs SET finished_at = ?, status = ?, planned = ?, archived = ?, "
         "needs_review = ?, failed = ?, error = ?, agreement = ? WHERE id = ?",
-        (
-            clock.now_iso(), status, planned,
-            counts["archived"] + counts["moved"], counts["needs_review"],
-            counts["failed"], error, agreement, run_id,
-        ),
+        (clock.now_iso(), status, planned, archived, needs_review, failed, error, agreement, run_id),
     )
     conn.commit()
     return get_run(conn, run_id)  # type: ignore[return-value]
