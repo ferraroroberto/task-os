@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import db as dbmod
-from src.config import AppConfig, load_config
+from src.config import DEFAULT_FOLDER_EXPLORER_URL, AppConfig, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,6 +68,26 @@ def test_bad_sync_minutes_falls_back_instead_of_crashing_startup(tmp_path: Path)
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"issues": {"sync_minutes": "10m"}}), encoding="utf-8")
     assert load_config(p).issues.sync_minutes == 10
+
+
+def _search_url(tmp_path: Path, search: dict | None) -> str:
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({} if search is None else {"search": search}), encoding="utf-8")
+    return load_config(p).search.folder_explorer_url
+
+
+def test_folder_explorer_address_defaults_to_this_pc_when_unset(tmp_path: Path) -> None:
+    """No hand edit: an absent key (no search block, or a block without it) is the local https address."""
+    assert DEFAULT_FOLDER_EXPLORER_URL == "https://127.0.0.1:8453"
+    assert _search_url(tmp_path, None) == DEFAULT_FOLDER_EXPLORER_URL
+    assert _search_url(tmp_path, {"email_deep_url": ""}) == DEFAULT_FOLDER_EXPLORER_URL
+    assert load_config(REPO_ROOT / "config" / "config.sample.json").search.folder_explorer_url == DEFAULT_FOLDER_EXPLORER_URL
+    assert load_config(tmp_path / "nope.json").search.folder_explorer_url == DEFAULT_FOLDER_EXPLORER_URL
+
+
+def test_folder_explorer_address_set_wins_and_blank_turns_it_off(tmp_path: Path) -> None:
+    assert _search_url(tmp_path, {"folder_explorer_url": " http://127.0.0.1:9999/ "}) == "http://127.0.0.1:9999/"
+    assert _search_url(tmp_path, {"folder_explorer_url": ""}) == ""
 
 
 # ---------------------------------------------------------------------- db

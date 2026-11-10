@@ -35,6 +35,9 @@ CONFIG_SAMPLE_PATH = CONFIG_DIR / "config.sample.json"
 CONFIG_PATH_ENV = "TASKOS_CONFIG_PATH"
 
 DEFAULT_PORT = 8448
+#: folder-explorer's own address on this PC (https, its fleet port). Applies only
+#: when ``search.folder_explorer_url`` is absent; an explicit blank turns search off.
+DEFAULT_FOLDER_EXPLORER_URL = "https://127.0.0.1:8453"
 SERVERS = ("hypercorn", "uvicorn")
 
 _PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
@@ -79,9 +82,12 @@ class MirrorConfig:
 class SearchConfig:
     """The Search tab's indexes.
 
-    ``folder_explorer_url``  folder-explorer's address (``http://127.0.0.1:8453``): the
-                        Folders and Emails groups ask its v1 search API, task-os
-                        keeps no index of its own. Blank = both groups say so.
+    ``folder_explorer_url``  folder-explorer's address: the Folders and Emails
+                        groups ask its v1 search API, task-os keeps no index of
+                        its own. Absent from the file = folder-explorer on this
+                        PC (``https://127.0.0.1:8453``); set = that address;
+                        set blank = off, both groups say so. (The dataclass
+                        default is blank so a hand-built config never reaches out.)
     ``email_db``        folder-explorer's email index, opened read-only by the
                         flagged-mail poller only (``capture.email_poll_minutes``);
                         search never opens it.
@@ -626,6 +632,14 @@ def _mirror_block(src: Path, mirror: dict[str, Any]) -> dict[str, Any]:
     return {"dir": "", "backup_dir": ""}
 
 
+def _folder_explorer_url(search: dict[str, Any]) -> str:
+    """The configured address; the local default when the key is absent, blank when set blank."""
+    value = search.get("folder_explorer_url")
+    if value is None:
+        return DEFAULT_FOLDER_EXPLORER_URL
+    return str(value).strip()
+
+
 def load_config(path: Path | None = None) -> AppConfig:
     """Parse ``path`` (default: :func:`config_path`) into an :class:`AppConfig`.
 
@@ -679,7 +693,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             backup_dir=str(mirror.get("backup_dir", MirrorConfig.backup_dir)),
         ),
         search=SearchConfig(
-            folder_explorer_url=str(search.get("folder_explorer_url", "") or "").strip(),
+            folder_explorer_url=_folder_explorer_url(search),
             email_db=str(search.get("email_db", "")),
             email_deep_url=str(search.get("email_deep_url", "") or "").strip(),
         ),
