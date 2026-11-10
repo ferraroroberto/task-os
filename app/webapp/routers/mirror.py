@@ -3,7 +3,7 @@
     GET  /api/status          {https, auth: {enabled, password, client},
                                mirror: {enabled, dir, files, last_export, last_import,
                                errors, events, …}, backup: {enabled, dir, last_file, next_run, …},
-                               folders: {enabled, roots, entries, last_indexed, indexing, …},
+                               folders: {enabled, reason, url} (folder-explorer's address; its live state is GET /api/search/status),
                                capture: {enabled, reason, source, poll_minutes, last_run,
                                last_result, last_error, next_run, running} (#98),
                                voice: {enabled, reason, url, serving, checked_at} (#92),
@@ -56,7 +56,7 @@ def _services(request: Request) -> tuple[Any, Any]:
 @router.get("/status")
 def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[str, Any]:
     mirror, backup = _services(request)
-    folders = getattr(request.app.state, "folders", None)
+    folder_explorer = getattr(request.app.state, "folder_explorer", None)
     capture = getattr(request.app.state, "capture", None)
     voice = getattr(request.app.state, "voice", None)
     enrich = getattr(request.app.state, "enrich", None)
@@ -68,7 +68,8 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
         **access_status(request),
         "mirror": mirror.status(db) if mirror else {"enabled": False, "reason": "mirror service not started"},
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
-        "folders": folders.status() if folders else {"enabled": False, "reason": "folder index service not started"},
+        "folders": folder_explorer.summary() if folder_explorer
+        else {"enabled": False, "reason": "folder search client not started"},
         "capture": capture.status() if capture else {"enabled": False, "reason": "capture service not started"},
         "voice": voice.status() if voice else {"enabled": False, "reason": "voice service not started"},
         "enrich": enrich.status() if enrich

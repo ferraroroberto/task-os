@@ -39,7 +39,7 @@ def write_test_config(
     *,
     dir: str = "",
     backup_dir: str = "",
-    folder_roots: list[str] | None = None,
+    folder_explorer_url: str = "",
     placeholders: dict[str, str] | None = None,
     web_roots: dict[str, str] | None = None,
     email_db: str = "",
@@ -54,10 +54,11 @@ def write_test_config(
     calendar: dict | None = None,
 ) -> Path:
     """The sample config with the machine-bound bits replaced: ``mirror.dir`` /
-    ``backup_dir`` (blank = disabled), ``search.folder_roots`` (empty = the
-    folder index stays off — the sample points at a real synced folder),
-    ``search.email_db`` (blank = the emails adapter reports not configured —
-    the sample points at the real folder-explorer index; Step 10 tests pass the
+    ``backup_dir`` (blank = disabled), ``search.folder_explorer_url`` (blank =
+    the Folders and Emails groups report not configured — the sample names the
+    real folder-explorer; tests that search pass a fake's loopback address),
+    ``search.email_db`` (blank = the flagged-mail poller reports not configured —
+    the sample points at the real folder-explorer index; capture tests pass the
     synthetic fixture), ``voice.transcribe_url`` / ``voice.fallback_url``
     (both blank = voice reports not reachable — the sample points at the
     fleet's real hub and whisper server, and a suite whose result depends on
@@ -75,7 +76,7 @@ def write_test_config(
     tests point ``{onedrive}`` at a temp tree / a fake cloud root)."""
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
     raw["mirror"] = {"dir": dir, "backup_dir": backup_dir}
-    raw.setdefault("search", {})["folder_roots"] = list(folder_roots or [])
+    raw.setdefault("search", {})["folder_explorer_url"] = folder_explorer_url
     raw["search"]["email_db"] = email_db
     raw["voice"] = {"transcribe_url": transcribe_url, "fallback_url": fallback_url}
     if partial_interval_seconds is not None:

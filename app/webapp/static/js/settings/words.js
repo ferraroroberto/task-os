@@ -15,11 +15,11 @@ export const WORD_TONES = { error: 'danger', stale: 'attention', unknown: 'atten
 //: gives each when it is the exception ("Issue sync failing").
 export const SERVICE_NAMES = {
   issuesCardMeta: 'Issue sync', calendarCardMeta: 'Calendar', captureCardMeta: 'Capture',
-  archiveCardMeta: 'Archiving', searchCardMeta: 'Search', folderCardMeta: 'Folder index',
+  archiveCardMeta: 'Archiving', searchCardMeta: 'Search', folderCardMeta: 'Folder search',
   voiceCardMeta: 'Voice', aiCardMeta: 'AI triage', mirrorCardMeta: 'Backup',
 };
 //: The words that say a service is not on (the rest of the header's plain count).
-export const OFF_WORDS = ['off', 'index off', 'unknown'];
+export const OFF_WORDS = ['off', 'unknown'];
 
 /** A row's state word, in its tone when it is an exception. */
 export function setWord(ctx, el, word) {

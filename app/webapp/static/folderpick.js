@@ -67,7 +67,7 @@ export function mountFolderPicker(host, opts) {
   list.setAttribute('role', 'listbox');
   const note = document.createElement('p');
   note.className = 'muted folder-picker-note';
-  note.textContent = 'Type to search the folder index.';
+  note.textContent = 'Type to search folders.';
   host.append(q, list, note);
   let timer = null;
   let items = [];
@@ -102,19 +102,18 @@ export function mountFolderPicker(host, opts) {
 
   async function search() {
     const text = q.value.trim();
-    if (!text) { items = []; active = -1; paint(); note.textContent = 'Type to search the folder index.'; return; }
+    if (!text) { items = []; active = -1; paint(); note.textContent = 'Type to search folders.'; return; }
     try {
       const r = await api('/api/folders/search?q=' + encodeURIComponent(text) + '&limit=15');
       items = r.items || [];
       active = items.length ? 0 : -1;
       paint();
-      note.textContent = items.length
-        ? r.count + ' hit(s)' + (r.indexing ? ' · index still building' : '')
-        : (r.indexing ? 'No hits yet — the index is still building.' : 'No folder matches.');
+      note.textContent = items.length ? r.count + ' hit(s)' : 'No folder matches.';
     } catch (err) {
       items = []; active = -1; paint();
-      note.textContent = err.code === 'folders_disabled'
-        ? 'Folder index not configured — set search.folder_roots in config.json (' + err.message + ').'
+      // folder-explorer's own state (down, still indexing, not set up) is the answer, not "No folder matches".
+      note.textContent = err.code === 'folders_unavailable'
+        ? 'Folder search unavailable — ' + err.message
         : ('Search failed: ' + err.message);
     }
   }

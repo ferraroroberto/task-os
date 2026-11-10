@@ -24,7 +24,6 @@ export function lookupEls() {
     openerUninstall: document.getElementById('openerUninstall'),
     openerEnv: document.getElementById('openerEnv'),
     openerEnvCopy: document.getElementById('openerEnvCopy'),
-    reindexBtn: document.getElementById('reindexBtn'),
     issuesCardMeta: document.getElementById('issuesCardMeta'),
     statusIssues: document.getElementById('statusIssues'),
     statusIssuesSync: document.getElementById('statusIssuesSync'),

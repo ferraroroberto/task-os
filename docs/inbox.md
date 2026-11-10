@@ -18,7 +18,7 @@ The response is an all-or-nothing contract. It must be JSON with exactly one res
 
 Search is *pull* — you go looking. Capture is *push*: something you already marked elsewhere lands in Inbox on its own, so nothing depends on remembering it. Two channels, both idempotent, both **one-way**.
 
-**Flagged emails.** `src/email_capture.py` polls the archiver's index — the same `search.email_db` file the emails adapter searches, opened the same way (`file:…?mode=ro`, a fresh connection per query, never a write, never a migration: the archiver owns that file). Every message carrying an Outlook **follow-up flag** becomes an Inbox task: title = the subject, description = `From email: sender · date` + the flag's own text + the preview, plus a `links(kind=email)` row holding the `.msg` ref — so the existing [opener chip](folders.md#folders-that-open-on-any-pc) opens the mail with no new UI. `created_by` is `email-archiver`, so the activity row says which channel brought it in.
+**Flagged emails.** `src/email_capture.py` polls the archiver's index — the `search.email_db` file, opened `file:…?mode=ro` with a fresh connection per query (never a write, never a migration: the archiver owns that file). Every message carrying an Outlook **follow-up flag** becomes an Inbox task: title = the subject, description = `From email: sender · date` + the flag's own text + the preview, plus a `links(kind=email)` row holding the `.msg` ref — so the existing [opener chip](folders.md#folders-that-open-on-any-pc) opens the mail with no new UI. `created_by` is `email-archiver`, so the activity row says which channel brought it in.
 
 The flag is something the **archiver** records while scanning, in two columns this repo only ever reads:
 

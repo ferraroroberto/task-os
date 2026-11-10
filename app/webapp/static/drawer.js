@@ -19,7 +19,7 @@
  * and then kept open for the page's life: starts, recurrence + its every-N
  * interval + its fixed-day anchor when the cadence takes one, person, code,
  * folder (the ref as an opener chip, an editor that folds a pasted absolute path onto the
- * placeholders, a picker over the folder index — Step 9) → link editor
+ * placeholders, a picker over folder-explorer's folder search — Step 9) → link editor
  * (label edit, remove, add) → blocked by → children (click to
  * navigate, add child) → issue panel: the linked issue (provider glyph,
  * repo#N link, state, labels from the last sync, last synced, unlink) or —

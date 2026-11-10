@@ -526,8 +526,8 @@
     </section>
     <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
-        <!-- One box, four indexes (Step 10): tasks_fts · the folder index · the
-             email archiver's index (read-only) · the issue cache. The box
+        <!-- One box, four indexes (Step 10): tasks_fts · folder-explorer's
+             folders · its emails · the issue cache. The box
              carries the filter button (the sheet applies to the task hits),
              the scope switch is the line under it, and the results render
              below: a group per kind that has hits, the rest folded into one
@@ -871,7 +871,7 @@
           <div id="archiveHost" class="archive-host"></div>
         </section>
         <section class="settings-sheet" id="searchCard" data-sheet="search" hidden>
-          <p class="card-meta">One box over four indexes: tasks (always), the folder index (<code>search.folder_roots</code>), the email archiver's <code>emails.db</code> (<code>search.email_db</code>, read-only) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
+          <p class="card-meta">One box over four indexes: tasks (always), folders and emails through folder-explorer (<code>search.folder_explorer_url</code>) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
           <dl class="status-rows" id="searchStatus" aria-live="polite">
             <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
             <div class="status-row"><dt>Folders</dt><dd id="statusSearchFolders" class="muted">Loading…</dd></div>
@@ -883,7 +883,7 @@
           <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
-            <div class="status-row"><dt>Index</dt><dd id="statusIndex" class="muted">Loading…</dd></div>
+            <div class="status-row"><dt>Folder search</dt><dd id="statusIndex" class="muted">Loading…</dd></div>
           </dl>
           <div class="opener-block">
             <div class="opener-block-head">
@@ -896,7 +896,7 @@
             <details class="opener-more">
               <!-- Labels in plain words; the file's name and place are
                    the instruction under its heading, not the heading. -->
-              <summary data-track="opener.advanced">Uninstall · folder paths for each PC · rescan folders</summary>
+              <summary data-track="opener.advanced">Uninstall · folder paths for each PC</summary>
               <p class="card-meta">Uninstall (removes the URL scheme and the handler, keeps your folder paths file):</p>
               <pre class="opener-cmd" id="openerUninstall"></pre>
               <div class="opener-block-head">
@@ -907,9 +907,6 @@
               </div>
               <p class="card-meta">This install's folder placeholders: save them as <code>%LOCALAPPDATA%\task-os\opener.env</code> on that PC and edit the paths there.</p>
               <pre class="opener-cmd" id="openerEnv"></pre>
-              <div class="access-actions">
-                <button type="button" id="reindexBtn" data-track="folders.reindex" class="button-ghost" hidden>Rescan folders now</button>
-              </div>
             </details>
           </div>
         </section>

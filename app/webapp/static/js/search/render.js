@@ -77,9 +77,14 @@ export function renderIdle(ctx) {
     const k = KINDS.find(function (x) { return x.kind === a.kind; });
     return k ? k.label : a.kind;
   });
+  const down = (ctx.status || []).filter(function (a) { return a.configured && a.state && a.state !== 'ok'; }).map(function (a) {
+    const k = KINDS.find(function (x) { return x.kind === a.kind; });
+    return note('search-err', (k ? k.label : a.kind) + ' unavailable (' + a.state + ')' + (a.reason ? ' — ' + a.reason : ''));
+  });
   const nodes = [note('search-hint muted', HINT)];
   const fold = foldLine({ off: off });
   if (fold) nodes.push(fold);
+  down.forEach(function (n) { nodes.push(n); });
   ctx.host.replaceChildren.apply(ctx.host, nodes);
 }
 
@@ -106,6 +111,8 @@ export function render(ctx, res) {
   KINDS.forEach(function (k) {
     const g = res.groups.find(function (x) { return x.kind === k.kind; }) || { kind: k.kind, configured: false, reason: 'no answer', hits: [] };
     if (!g.configured) { fold.off.push(k.label); return; }
+    // folder-explorer down, still on its first index or unable to read it: its own line, never "No matches".
+    if (g.unavailable) { errors.push(note('search-err', k.label + ' unavailable (' + g.unavailable.state + ') — ' + g.unavailable.reason)); return; }
     if (g.error) { errors.push(note('search-err', k.label + ' failed — ' + g.error)); return; }
     const all = g.hits || [];
     const rows = k.kind === 'tasks' ? taskHits(ctx, g) : all;

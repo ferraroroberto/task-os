@@ -9,8 +9,7 @@ does the deduping.
 
 **The index is read-only from here, always.** :class:`FlaggedEmailIndex` opens
 the archiver's ``emails.db`` with the ``file:…?mode=ro`` URI, a fresh
-connection per query, exactly as ``src.search.emails_adapter`` does — the
-archiver owns that file and this module never writes, migrates or copies it.
+connection per query — the archiver owns that file and this module never writes, migrates or copies it.
 The flag is therefore something the *archiver* records while scanning: two
 columns on ``emails``,
 
@@ -57,13 +56,14 @@ import logging
 import sqlite3
 from collections.abc import Container, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
 from src.config import AppConfig
+from src.db import connect_read_only
 from src.placeholders import normalize_path, to_ref
 from src.poller import Poller
-from src.search.emails_adapter import is_archiver_index, open_readonly
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,40 @@ DESCRIPTION_MAX = 10_000
 #: One pass never lands more than this, so a first run against a large archive
 #: cannot flood Inbox in one go; the rest arrive on the following passes.
 BATCH_LIMIT = 200
+
+
+def open_readonly(db_path: str) -> sqlite3.Connection:
+    """The archiver's ``emails.db``, opened read-only."""
+    conn = connect_read_only(db_path, timeout=5, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def is_archiver_index(db_path: str) -> tuple[bool, str | None]:
+    """``(True, None)``, or ``False`` + why *db_path* is not a usable archiver index.
+
+    Blank path, missing file, cannot open, no ``emails`` table: each its own
+    reason, so the Settings card says which fix applies.
+    """
+    if not db_path:
+        return False, "search.email_db not configured"
+    if not Path(db_path).is_file():
+        return False, f"email index not found at {db_path}"
+    try:
+        conn = open_readonly(db_path)
+    except sqlite3.Error as exc:
+        return False, f"cannot open {db_path}: {exc}"
+    try:
+        has_emails = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'emails'"
+        ).fetchone() is not None
+    except sqlite3.Error as exc:
+        return False, f"cannot read {db_path}: {exc}"
+    finally:
+        conn.close()
+    if not has_emails:
+        return False, f"no emails table in {db_path} — not an email-archiver index"
+    return True, None
 
 
 def external_id_for(ref: str) -> str:
@@ -167,9 +201,8 @@ class FlaggedEmailIndex:
         "you never pointed me at an index" from "your archiver is too old to
         record flags", because the fix is different for each. The blank path /
         missing file / cannot open / no ``emails`` table preamble is
-        ``src.search.emails_adapter``'s shared check — read "exactly as the
-        search adapter does" (CLAUDE.md); this adds only the flag-column check
-        a capture index also needs.
+        :func:`is_archiver_index`; this adds only the flag-column check a
+        capture index also needs.
         """
         ok, reason = is_archiver_index(self.db_path)
         if not ok:

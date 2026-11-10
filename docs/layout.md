@@ -9,7 +9,7 @@ app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles
 app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout, /api/team…) · tasks
                           (/api/tasks…, /api/activity) · people · views (/api/board, /api/today)
                           · mirror (/api/status — install status incl. https + auth + folders + opener, /api/mirror/export|import,
-                          GET/DELETE /api/mirror/events, /api/backup) · folders (/api/resolve, /api/folders/search, /api/folders/reindex)
+                          GET/DELETE /api/mirror/events, /api/backup) · folders (/api/resolve, /api/folders/search)
                           · issues (/api/issues/status|sync, GET/POST /api/tasks/{id}/issue)
                           · capture (/api/capture/email/run — one flagged-email pass now; 409 + the reason when the poller is off)
                           · voice (/api/transcribe — audio → a quick-add line, /api/enrich — the transcript → title + description)
@@ -37,8 +37,8 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           mirror.py (markdown mirror: export / watcher import) · mirror_format.py (the file format: render / parse, pure text) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract + the one CLI runner · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)
-                          placeholders.py (folder ref ↔ path) · folder_index.py (roots, index file, search) · opener.py
-                          (install command / env template for Settings) · vendor/foldersearcher_core.py (verbatim)
+                          placeholders.py (folder ref ↔ path) · opener.py
+                          (install command / env template for Settings)
                           search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·
                           federated.py — concurrent, grouped, unconfigured = visible) · ai/ (Anthropic-compatible hub client +
                           staged Inbox triage validation/application · json_payload.py, the one reply-unwrapping helper) · email_capture.py (flagged mail → Inbox, read-only)
@@ -64,7 +64,7 @@ docs/                     validation.md (the story index + phase gates) + valida
                           write-up) + screenshots/ + architecture.mmd
 config/                   config.sample.json (committed) → config.json (yours, gitignored)
 brand/ assets/            Lucide list-checks master → favicon / touch icons / tray .ico
-data/                     tasks.db, folder_index.txt, logs (task-os.log from the webapp and scripts, task-os-tray.log from the tray: one file per process), avatars, backups — gitignored, never committed
+data/                     tasks.db, logs (task-os.log from the webapp and scripts, task-os-tray.log from the tray: one file per process), avatars, backups — gitignored, never committed
 webapp/                   certificates/{cert,key}.pem (the Tailscale leaf), watchdog.log, webapp.log (the tray-spawned webapp's stdout/stderr — a boot traceback lands here) — gitignored
 ```
 

@@ -2,8 +2,9 @@
 
     base.py             the SearchAdapter protocol + Hit shape, FTS/mark helpers
     tasks_adapter.py    tasks_fts + comments_fts (src.tasks_repo.search)
-    folders_adapter.py  the folder index (src.folder_index)
-    emails_adapter.py   the email archiver's emails.db, read-only (FTS5 bm25, LIKE fallback)
+    folder_explorer.py  the client for folder-explorer's v1 search API (five states, one exception)
+    folders_adapter.py  folder search through that client
+    emails_adapter.py   email search through that client
     issues_adapter.py   issue_refs + the sync's cached open list (no forge call per keystroke)
     federated.py        run them concurrently (2 s each), always four groups, unconfigured = visible
 

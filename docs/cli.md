@@ -36,7 +36,7 @@ tasks mirror [export|import|status]   markdown mirror: full export · one watche
 tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
 tasks issues [sync|status] issue provider: one sync pass now (new / retitled / reopened / closed, ids) · status (default)
 tasks issue create N --repo owner/name   open an issue from task N (title + description) and link it → coding
-tasks folders [reindex|status|search "q"]   folder index: rescan search.folder_roots · status (default) · substring search → refs
+tasks folders [status|search "q"]   folder search through folder-explorer (search.folder_explorer_url) · status (default) · search → refs
 ```
 
 Dates (`--due`, `--starts` — and the API's `due` / `starts` fields, and quick-add) accept natural phrases via `src/dates.py`: `today`, `tomorrow`, `fri` (the coming Friday — today if it is Friday), `next friday` (+7), `this weekend` (the coming Saturday), `next week|month|year`, `in 3 days`, `in 2 weeks`, `2w`, `+10d`, `oct 15` / `15 oct` (the coming one — next year once it has passed; add a year to pin it), and ISO `YYYY-MM-DD`. Anything else is an error, never a silently unset date. Exit codes: 0 ok · 1 error (stderr, or the JSON error envelope with `--json`) · 2 usage.

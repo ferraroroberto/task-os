@@ -68,9 +68,6 @@ notify         = { src = "src/notify", sha = "93208ab08bdc8591c678a08f55a0f46b3f
 compression    = { src = "src/compression.py", sha = "d930466848d17d47261261c490c4e9c1cce9399e", dest = "src/compression.py" }
 # gen_tailscale_cert.py is copy-to-adapt, not vendor-verbatim (project-scaffolding#232) —
 # it is not in the scaffold's [components] catalog, so no [vendored] entry here either.
-# automation (ferraroroberto/automation, system/foldersearcher — the GUI-free half
-# of the fleet's folder searcher), verbatim; sha = that repo's commit.
-foldersearcher_core = { src = "system/foldersearcher/foldersearcher_core.py", sha = "799d746dad501595ae5a6c2fd5b521413e032c5c", dest = "src/vendor/foldersearcher_core.py" }
 webapp_serve = { src = "app/webapp/serve.py", sha = "41ca8abd5a2755a06bd8a620a72967211161d58e", dest = "app/webapp/serve.py" }
 instruction_frontmatter = { src = "scripts/instruction_frontmatter.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_frontmatter.py" }
 instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_repeats.py" }
@@ -146,9 +143,9 @@ claude_md_max_lines = 120
 enabled    = true
 baseline   = ".doc-refs-ratchet-baseline.json"
 # The docs name the ports of the services this app talks to on purpose: the local LLM hub
-# and the whisper server. The app's own :8448 resolves from `port` above. The archive and
+# the whisper server and folder-explorer (search). The app's own :8448 resolves from `port` above. The archive and
 # email-search docs name folder-explorer's CLI module and batch file, which live in that repo.
-allow_refs = [":8000", ":8090", "-m app.cli", "app/cli/email_batch.py"]
+allow_refs = [":8000", ":8090", ":8453", "-m app.cli", "app/cli/email_batch.py"]
 # Names of removed features: a doc that names one sends the next reader to something that is gone.
 retired = [
   { term = "Table tab", why = "the Table tab was removed; use the Board or Today view" },

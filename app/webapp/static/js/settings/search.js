@@ -19,7 +19,10 @@ export async function refreshSearchStatus(ctx) {
     dd.classList.remove('muted');
     const a = adapters && adapters.find(function (x) { return x.kind === kind; });
     if (!adapters) { dd.append(statusPart('warn', 'unknown')); return; }
-    if (a && a.configured) {
+    if (a && a.configured && a.state && a.state !== 'ok') {
+      // folder-explorer answered, or did not: its state is the row, not a guess.
+      dd.append(statusPart('warn', a.state), ' — ' + (a.reason || 'unknown'));
+    } else if (a && a.configured) {
       on += 1;
       dd.append(statusPart('ok', 'indexed'));
       if (a.note) dd.append(' · ' + a.note);
@@ -27,7 +30,8 @@ export async function refreshSearchStatus(ctx) {
       dd.append(statusPart('off', 'not configured'), ' — ' + ((a && a.reason) || 'unknown'));
     }
   });
-  setWord(ctx, ctx.els.searchCardMeta, adapters ? (on ? 'indexed' : 'off') : 'unknown');
+  const broken = adapters && adapters.some(function (a) { return a.configured && a.state && a.state !== 'ok' && a.state !== 'indexing'; });
+  setWord(ctx, ctx.els.searchCardMeta, !adapters ? 'unknown' : broken ? 'unavailable' : (on ? 'indexed' : 'off'));
   ctx.opts.onHead();
   ctx.opts.onSearchStatus();
 }

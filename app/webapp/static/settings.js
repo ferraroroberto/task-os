@@ -43,8 +43,8 @@
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
- *   Folder opener  the per-PC opener install command + the folder index
- *                  (Step 9), with "Reindex folders now".
+ *   Folder opener  the per-PC opener install command + where folder
+ *                  search is answered (Step 9).
  *
  * ONE `GET /api/status` feeds the access, mirror/backup, opener, capture, archive, calendar, voice and AI cards
  * (`refreshStatus()`); the search card has its own `GET /api/search/status`
@@ -67,7 +67,6 @@ import { wireCalendarRefresh } from './js/settings/calendar.js';
 import { wireCaptureRunNow } from './js/settings/capture.js';
 import { wirePaletteOpen, wireTextSize } from './js/settings/device.js';
 import { lookupEls } from './js/settings/elements.js';
-import { wireReindex } from './js/settings/folders.js';
 import { renderIssues, wireIssueSyncNow } from './js/settings/issues.js';
 import { wireMirrorEventsClear } from './js/settings/mirror.js';
 import { wireRowActions } from './js/settings/rowactions.js';
@@ -100,7 +99,6 @@ export function mountSettings(opts) {
   };
 
   wireSignOut(ctx);
-  wireReindex(ctx);
   wireMirrorEventsClear(ctx);
   wireIssueSyncNow(ctx);
   wirePaletteOpen(ctx);

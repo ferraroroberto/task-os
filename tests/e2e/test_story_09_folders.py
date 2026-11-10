@@ -8,12 +8,13 @@
     leads to Settings → Folder opener, the one-line install command with this
     address filled in → in the drawer the Folder field takes an absolute path
     and stores it as {onedrive}/… → "Find in folder index…" attaches a
-    folder from the index → on the phone the chip shows the resolved path to
+    folder folder-explorer found → on the phone the chip shows the resolved path to
     copy instead of navigating.
 
 Walks the story against a **disposable seeded instance whose {onedrive} points
-at a temp tree** (so the seed's refs resolve to folders that exist and the
-folder index has something to index — never a real synced folder), 1440×900
+at a temp tree** (so the seed's refs resolve to folders that exist, and a fake
+folder-explorer serves that tree's folders — never a real synced folder or the
+real folder-explorer), 1440×900
 Chromium then a 390-wide touch context, saving the proof shots the validation
 record links to:
 
@@ -63,12 +64,12 @@ from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
     _get,
-    _post,
     booted,
     e2e_workdir,
     hold_toasts,
     shot,
 )
+from tests.fixtures.folder_explorer_fake import FakeFolderExplorer, folders_under
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -91,14 +92,17 @@ def folder_webapp() -> Iterator[FolderInstance]:
     for rel in ("house/kitchen/plans", "house/garden", "house/bathroom", "admin/car", "admin/school", "task-os"):
         (od / rel).mkdir(parents=True)
     seed_db(work / "tasks.db", E2E_ANCHOR)
+    fe = FakeFolderExplorer(folders=folders_under(od))
     cfg = write_test_config(
         work / "config.json",
-        folder_roots=["{onedrive}"],
+        folder_explorer_url=fe.url,
         placeholders={"onedrive": str(od).replace("\\", "/"), "user": "sam"},
     )
-    with booted(work, work / "tasks.db", cfg) as base:
-        _post(base, "/api/folders/reindex")            # deterministic: don't race the startup thread
-        yield FolderInstance(base, od)
+    try:
+        with booted(work, work / "tasks.db", cfg) as base:
+            yield FolderInstance(base, od)
+    finally:
+        fe.stop()
 
 
 def _centers_align(*locators, tol: float = 2.0) -> None:
@@ -169,9 +173,9 @@ def _opener_card_in_settings(page: Page, base: str, shots: Path, chip, pop) -> N
     expect(cmd).to_contain_text("$d=")
     expect(cmd).to_contain_text(base + "/opener/opener.cmd")
     expect(cmd).to_contain_text("HKCU:\\Software\\Classes\\taskos")
-    expect(card.locator("#statusIndex")).to_contain_text("folder(s)")
+    expect(card.locator("#statusIndex")).to_contain_text("answered by folder-explorer")
     # the disclosure says what it holds in words, no file name (#339)
-    expect(card.locator("details.opener-more summary")).to_have_text("Uninstall · folder paths for each PC · rescan folders")
+    expect(card.locator("details.opener-more summary")).to_have_text("Uninstall · folder paths for each PC")
     card.locator("details.opener-more summary").click()
     expect(card.locator("#openerEnv")).to_contain_text("onedrive=")
     # the install, uninstall and env blocks are listings on the card frame in both
@@ -185,6 +189,8 @@ def _opener_card_in_settings(page: Page, base: str, shots: Path, chip, pop) -> N
     # `base`); the gallery frames it on the app's own port so two runs write the same bytes (#459).
     cmd.evaluate("(el, [real, shown]) => { el.textContent = el.textContent.replaceAll(real, shown); }",
                  [base.removeprefix("http://"), "127.0.0.1:8448"])
+    # The Folder search row names the fake folder-explorer's ephemeral port; frame it on the real one's.
+    card.locator("#statusIndex code").evaluate("el => { el.textContent = el.textContent.replace(/:\\d+$/, ':8453'); }")
     shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
 
 

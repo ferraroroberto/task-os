@@ -1,11 +1,9 @@
-/* task-os — the folder opener + folder index card (Step 9): the per-PC install
- * command and "Reindex folders now". */
+/* task-os — the folder opener + folder search card (Step 9): the per-PC install
+ * command, and where folder search is answered (folder-explorer). */
 
 'use strict';
 
-import { api } from '../../api.js';
-import { codeEl, copyText, fmtTsShort, statusPart } from '../../format.js';
-import { toast } from '../../toast.js';
+import { codeEl, copyText, statusPart } from '../../format.js';
 
 export function renderOpener(ctx, op) {
   const dd = ctx.els.statusOpener;
@@ -34,27 +32,8 @@ export function renderIndexRow(ctx, dd, f) {
   dd.classList.remove('muted');
   if (!f || !f.enabled) {
     dd.append(statusPart('off', 'not configured'), ' — ' + ((f && f.reason) || 'unknown'));
-    ctx.els.reindexBtn.hidden = true;
     return;
   }
-  ctx.els.reindexBtn.hidden = false;
-  const roots = (f.roots || []).map(function (r) { return r.ref + (r.exists ? '' : ' (missing)'); }).join(', ');
-  dd.append(
-    statusPart(f.indexing ? 'warn' : (f.last_error ? 'warn' : 'ok'), f.indexing ? 'indexing…' : (f.last_error ? 'error' : 'indexed')),
-    ' · ', codeEl(roots), ' · ' + (f.entries == null ? '?' : f.entries) + ' folder(s)',
-    ' · last indexed ' + (f.last_indexed ? fmtTsShort(f.last_indexed) : '–') + (f.stale && f.last_indexed ? ' (stale, >24 h)' : '')
-  );
-  if (f.last_error) dd.append(' · ' + f.last_error);
-}
-
-export function wireReindex(ctx) {
-  ctx.els.reindexBtn.addEventListener('click', async function () {
-    ctx.els.reindexBtn.disabled = true;
-    try {
-      const r = await api('/api/folders/reindex', { method: 'POST', body: {} });
-      toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success');
-    } catch (err) { toast(err.message || 'Reindex failed', 'error'); }
-    ctx.els.reindexBtn.disabled = false;
-    ctx.refreshStatus();
-  });
+  // The address only: whether it answers is the Search sheet's row, so this status never waits on it.
+  dd.append(statusPart('ok', 'on'), ' · answered by folder-explorer at ', codeEl(f.url || ''));
 }

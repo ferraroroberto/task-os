@@ -5,13 +5,17 @@ order: tasks · folders · emails · issues) and answers :meth:`search` with::
 
     {"q": "...", "took_ms": 12,
      "groups": [{"kind": "tasks", "configured": true, "reason": null, "note": null,
-                 "hits": [...], "count": 3, "took_ms": 4, "error": null}, ...]}
+                 "hits": [...], "count": 3, "took_ms": 4, "error": null,
+                 "unavailable": null}, ...]}
 
 Rules the UI and the CLI rely on:
 
 - every kind is **always** a group, in that order — an unconfigured adapter is
   ``configured: false`` + its ``reason`` (never silently absent), a failing
   one is ``configured: true`` + ``error`` (a broken index is not "no hits"),
+  and a folder-explorer-backed one that cannot answer (down, still on its first
+  index, nothing set up there, unreadable) is ``configured: true`` +
+  ``unavailable: {state, reason}`` — never an empty ``hits`` that reads as "no match",
   and ``kinds=`` narrows which adapters *run* but the skipped ones still
   appear with ``skipped: true`` so a client can tell "not asked" from "empty";
 - the configured adapters run **concurrently** in a thread pool, each bounded
@@ -20,7 +24,7 @@ Rules the UI and the CLI rely on:
 - ``limit`` is per group.
 
 :func:`build_federated` wires the adapters from an :class:`~src.config.AppConfig`
-plus the running services (the webapp lifespan passes ``app.state.folders`` /
+plus the running services (the webapp lifespan passes ``app.state.folder_explorer`` /
 ``app.state.issues``; the CLI's local backend builds its own).
 """
 
@@ -36,6 +40,7 @@ from typing import Any
 from src.config import AppConfig
 from src.search.base import KINDS, SearchAdapter
 from src.search.emails_adapter import EmailsAdapter
+from src.search.folder_explorer import OK, FolderExplorerClient, Unavailable
 from src.search.folders_adapter import FoldersAdapter
 from src.search.issues_adapter import IssuesAdapter
 from src.search.tasks_adapter import TasksAdapter
@@ -44,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["ADAPTER_TIMEOUT_S", "DEFAULT_LIMIT", "FederatedSearch", "build_federated", "parse_kinds"]
 
+NOT_CONFIGURED = "not-configured"
 ADAPTER_TIMEOUT_S = 2.0
 DEFAULT_LIMIT = 20
 
@@ -67,20 +73,32 @@ class FederatedSearch:
 
     # ------------------------------------------------------------- status
     def status(self) -> list[dict[str, Any]]:
-        """Per kind: ``{kind, name, configured, reason, note}`` — the Settings card."""
-        out = []
-        for kind in KINDS:
-            a = self.adapters.get(kind)
-            if a is None:
-                out.append({"kind": kind, "name": None, "configured": False, "reason": "no adapter", "note": None})
-                continue
-            ok, reason = a.is_configured()
-            note = getattr(a, "note", None)
-            out.append({
-                "kind": kind, "name": a.name, "configured": ok, "reason": None if ok else reason,
-                "note": note() if callable(note) and ok else None,
-            })
-        return out
+        """Per kind: ``{kind, name, configured, state, reason, note}`` — the Settings card.
+
+        ``state`` is ``ok`` for a local index that is configured, ``not-configured``
+        for one that is not, and for a folder-explorer-backed kind the state
+        folder-explorer reports (or ``unreachable``) — asked in parallel, because
+        each is a network call.
+        """
+        with ThreadPoolExecutor(max_workers=len(KINDS), thread_name_prefix="task-os-search-status") as pool:
+            return list(pool.map(self._status_row, KINDS))
+
+    def _status_row(self, kind: str) -> dict[str, Any]:
+        a = self.adapters.get(kind)
+        if a is None:
+            return {"kind": kind, "name": None, "configured": False, "state": NOT_CONFIGURED,
+                    "reason": "no adapter", "note": None}
+        ok, reason = a.is_configured()
+        if not ok:
+            return {"kind": kind, "name": a.name, "configured": False, "state": NOT_CONFIGURED,
+                    "reason": reason, "note": None}
+        availability = getattr(a, "availability", None)
+        if callable(availability):
+            state, why, note = availability()
+            return {"kind": kind, "name": a.name, "configured": True, "state": state, "reason": why, "note": note}
+        note = getattr(a, "note", None)
+        return {"kind": kind, "name": a.name, "configured": True, "state": OK, "reason": None,
+                "note": note() if callable(note) else None}
 
     # ------------------------------------------------------------- search
     def search(self, q: str, *, kinds: Iterable[str] | None = None, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
@@ -95,8 +113,8 @@ class FederatedSearch:
                 a = self.adapters.get(kind)
                 group: dict[str, Any] = {
                     "kind": kind, "configured": False, "reason": None, "note": None,
-                    "hits": [], "count": 0, "took_ms": 0, "error": None, "skipped": kind not in wanted,
-                    "deep_link": None,
+                    "hits": [], "count": 0, "took_ms": 0, "error": None, "unavailable": None,
+                    "skipped": kind not in wanted, "deep_link": None,
                 }
                 groups[kind] = group
                 if a is None:
@@ -124,6 +142,9 @@ class FederatedSearch:
                     group["error"] = f"timed out after {self.timeout_s:.0f} s"
                     group["took_ms"] = int(self.timeout_s * 1000)
                     logger.warning("⚠️ search: %s adapter timed out after %.0fs for %r", a.name, self.timeout_s, q)
+                except Unavailable as exc:
+                    group["unavailable"] = {"state": exc.state, "reason": exc.reason}
+                    logger.info("ℹ️ search: %s unavailable (%s): %s", a.name, exc.state, exc.reason)
                 except Exception as exc:  # noqa: BLE001 — one broken index is a visible state, not a 500
                     group["error"] = f"{type(exc).__name__}: {exc}"
                     logger.exception("❌ search: %s adapter failed for %r", a.name, q)
@@ -151,7 +172,7 @@ class FederatedSearch:
 def build_federated(
     config: AppConfig,
     *,
-    folders: Any | None = None,
+    folder_explorer: FolderExplorerClient | None = None,
     issues: Any | None = None,
     conn_factory: Callable[[], Any] | None = None,
     timeout_s: float = ADAPTER_TIMEOUT_S,
@@ -160,8 +181,8 @@ def build_federated(
     return FederatedSearch(
         [
             TasksAdapter(conn_factory),
-            FoldersAdapter(folders),
-            EmailsAdapter(config.search.email_db, config.placeholders, config.search.email_deep_url),
+            FoldersAdapter(folder_explorer, config.placeholders),
+            EmailsAdapter(folder_explorer, config.placeholders, config.search.email_deep_url),
             IssuesAdapter(issues, conn_factory),
         ],
         timeout_s=timeout_s,

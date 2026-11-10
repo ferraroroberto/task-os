@@ -12,10 +12,10 @@
     same box and the palette as a full-width sheet.
 
 Walks the story against a **disposable seeded instance** whose four indexes
-are all fixtures: ``{onedrive}`` → a temp tree (the folder index scans it),
-``search.email_db`` → the synthetic archiver index built by
-``tests/fixtures/emails_fixture.py`` under that same tree (never the real
-mailbox), the issue provider → the file-backed fake (never ``gh``). 1440×900
+are all fixtures: ``{onedrive}`` → a temp tree, ``search.folder_explorer_url`` →
+a fake folder-explorer (``tests/fixtures/folder_explorer_fake.py``) serving that
+tree's folders and the synthetic mails of ``tests/fixtures/emails_fixture.py``
+(never the real mailbox or the real folder-explorer), the issue provider → the file-backed fake (never ``gh``). 1440×900
 Chromium then a 390-wide touch context, saving the proof shots the
 validation record links to:
 
@@ -56,6 +56,7 @@ from tests.e2e.conftest import (
     e2e_workdir,
     shot,
 )
+from tests.fixtures.folder_explorer_fake import FakeFolderExplorer, fixture_mails, folders_under
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -67,7 +68,8 @@ KITCHEN_ISSUE = {
 
 
 class SearchInstance:
-    def __init__(self, base: str, od: Path, db: Path) -> None:
+    def __init__(self, base: str, od: Path, db: Path, fe: FakeFolderExplorer) -> None:
+        self.fe = fe
         self.base = base
         self.od = od
         self.od_fwd = od.as_posix()
@@ -77,28 +79,28 @@ class SearchInstance:
 @pytest.fixture(scope="module")
 def search_webapp() -> Iterator[SearchInstance]:
     """Seeded instance; every index a fixture under one temp tree."""
-    from tests.fixtures.emails_fixture import build_emails_db
     from tests.fixtures.seed import seed_db
 
     work = e2e_workdir("search")
     od = work / "od"
     for rel in ("house/kitchen/plans", "house/garden", "house/bathroom", "admin/car", "admin/school", "task-os"):
         (od / rel).mkdir(parents=True)
-    build_emails_db(work / "emails.db", root=od)
     seed_db(work / "tasks.db", E2E_ANCHOR)
+    fe = FakeFolderExplorer(folders=folders_under(od), emails=fixture_mails(od))
     cfg = write_test_config(
         work / "config.json",
-        folder_roots=["{onedrive}"],
+        folder_explorer_url=fe.url,
         placeholders={"onedrive": od.as_posix(), "user": "sam"},
-        email_db=str(work / "emails.db"),
     )
     forge = work / "forge.json"
     forge.write_text(json.dumps({"issues": [*FAKE_ISSUES, KITCHEN_ISSUE], "error": None}, indent=1), encoding="utf-8")
-    with booted(work, work / "tasks.db", cfg,
-                extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)}) as base:
-        _post(base, "/api/folders/reindex")            # deterministic: don't race the startup thread
-        _post(base, "/api/issues/sync")                # warm the issue cache (and make the fake's tasks)
-        yield SearchInstance(base, od, work / "tasks.db")
+    try:
+        with booted(work, work / "tasks.db", cfg,
+                    extra_env={"TASKOS_ISSUE_PROVIDER": "fake", "TASKOS_ISSUE_FAKE_PATH": str(forge)}) as base:
+            _post(base, "/api/issues/sync")            # warm the issue cache (and make the fake's tasks)
+            yield SearchInstance(base, od, work / "tasks.db", fe)
+    finally:
+        fe.stop()
 
 
 def _task_post(base: str, body: dict) -> dict:
@@ -304,8 +306,17 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
     # folder, a project holding the matching task) on a 390px screen. The grid
     # item's auto minimum used to take the nowrap meta row's full width, and
     # the whole Search pane scrolled sideways.
-    (inst.od / "house" / ("longprobe-" + "x" * 90)).mkdir()
-    _post(base, "/api/folders/reindex")
+    longdir = inst.od / "house" / ("longprobe-" + "x" * 90)
+    longdir.mkdir()
+    inst.fe.folders.append(str(longdir))
+    # folder-explorer still on its first email build: its own line on the Search tab, never "No matches"
+    inst.fe.set_state("emails", "indexing", "the email index is being built")
+    p.goto(base + "/?q=kitchen#search")
+    p.reload()                                  # the page is already on this address: a reload re-runs the query
+    expect(p.locator(".search-err", has_text="Emails unavailable (indexing)")).to_be_visible()
+    expect(p.locator(".search-group[data-kind='emails']")).to_have_count(0)
+    assert "Emails" not in " ".join(p.locator(".search-fold").all_inner_texts())      # not folded into "No matches"
+    inst.fe.set_state("emails", "ok")
     project = _task_post(base, {"title": "Quarterly-programme-" + "y" * 80})
     _task_post(base, {"title": "Longprobe task", "parent_id": project["id"]})
     p.goto(base + "/?q=longprobe#search")
