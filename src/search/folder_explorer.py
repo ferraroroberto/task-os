@@ -101,6 +101,13 @@ class FolderExplorerClient:
         """``GET /api/v1/search/emails``; the body when ``ok``, else :class:`Unavailable`."""
         return self._get("/api/v1/search/emails", {"q": q, "limit": limit})
 
+    def post(self, path: str, body: dict[str, Any], timeout_s: float) -> requests.Response:
+        """One JSON POST over the shared pool, never resent: a write whose reply was lost may have run.
+
+        The archive client interprets the answer; transport errors propagate as ``requests`` ones.
+        """
+        return pooled_request("POST", self.base_url + path, timeout=timeout_s, json=body, verify=self._verify)
+
     def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         if not self.configured:
             raise Unavailable(NOT_CONFIGURED, "search.folder_explorer_url is not set")

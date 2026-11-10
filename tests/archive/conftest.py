@@ -23,14 +23,21 @@ from tests.fixtures.archiver_fake import (
     plan_doc,
     revert_doc,
     revert_result,
+    stop_all,
 )
+
+
+@pytest.fixture(autouse=True)
+def _stop_fake_archivers() -> Iterator[None]:
+    """A fake archive service lives for one test: its port and thread go with it."""
+    yield
+    stop_all()
 
 
 @pytest.fixture
 def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """One confident mail and one below the threshold, through the whole app."""
-    repo = build_fake_archiver(
-        tmp_path / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             mail("api-filed@example.invalid", candidates=[candidate(FOLDER_HOUSE, 0.9)]),
             mail("api-unsure@example.invalid", candidates=[candidate(FOLDER_BILLS, 0.1)]),
@@ -39,5 +46,5 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]
                                        files=[ARCHIVED_FILE])])],
         revert=[revert_doc([revert_result("api-filed@example.invalid", deleted=[ARCHIVED_FILE])])],
     )
-    with client_for(tmp_path, monkeypatch, repo) as c:
+    with client_for(tmp_path, monkeypatch, fake) as c:
         yield c

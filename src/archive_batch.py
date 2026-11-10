@@ -16,36 +16,42 @@ top candidate, with the reason on every mail in it and on the run — the run
 still completes, because a mail nobody could rank is a filing decision, not a
 broken feature.
 
-**task-os never imports the archiver.** Everything crosses a subprocess
-boundary as JSON: ``<archive.python> -m app.cli email batch {plan|apply|revert}``
-run in folder-explorer's checkout (``archive.repo``), the one app that talks to
-Outlook and owns the email index, bounded by ``archive.timeout_seconds`` and spawned
-with ``CREATE_NO_WINDOW``. That is not fastidiousness — every verb drives
+**task-os never imports the archiver.** Everything crosses an HTTP boundary as
+JSON: folder-explorer's v1 archive API (``POST /api/v1/archive/{plan,apply,
+revert,index}`` at ``search.folder_explorer_url``, :mod:`src.archive_client`),
+the one app that talks to Outlook and owns the email index, bounded by
+``archive.timeout_seconds``. That is not fastidiousness — every verb drives
 Outlook over COM, and a COM modal (the address-book prompt, a profile chooser)
-blocks whatever thread it is raised on. A hung Outlook is therefore a child
-this process kills, never a wedged webapp. The archiver keeps sole ownership of
-Outlook, of the filenames and of its index; task-os only decides *which folder*.
+blocks whatever thread it is raised on. folder-explorer runs each verb in a
+child it kills on its own budget, so a hung Outlook is a typed ``timeout``
+answer, never a wedged webapp on either side. The archiver keeps sole ownership
+of Outlook, of the filenames and of its index; task-os only decides *which
+folder*.
 
-The child's contract (folder-explorer's ``app/cli/email_batch.py``, held there by a
-contract test that replays every argv shape this module sends):
+The answer's contract (folder-explorer's ``docs/service-api.md``, pinned there
+by contract tests):
 
-- exit **0** — the run completed and stdout carries one JSON document.
-  Individual mails may still have failed, each with its own ``error.code``
-  (``bad_decision`` · ``not_in_inbox`` · ``not_in_archive_folder`` ·
+- ``acknowledged`` says the verb ran to its end; a mail is filed only when its
+  own result is ``ok``. Individual mails may fail, each with its own
+  ``error.code`` (``bad_decision`` · ``not_in_inbox`` · ``not_in_archive_folder`` ·
   ``archive_failed`` · ``move_failed`` · ``category_failed``).
-- exit **2** — the run could not start; stdout is ``{"error": {code, message}}``
-  with ``config_missing`` · ``bad_input`` · ``outlook_unavailable`` ·
-  ``com_unavailable``.
-- every document carries ``schema_version`` (1 today). A version this build
+- ``refused`` / ``not-found`` outcomes mean nothing was touched
+  (``outlook_unavailable``, ``config_missing``, ``busy`` …).
+- ``acknowledged: false`` (a timeout, a crash, an unreadable answer) means nobody
+  can say what was written, so the call fails by name and the rows it covered
+  are not left reading as filed.
+- every envelope carries ``schema_version`` (1 today). A version this build
   does not understand is refused by name rather than read field by field.
 
-Four failures that a caller has to be able to tell apart, so four distinct
-messages and codes: the archiver is **not configured** here (409), Outlook is
-**unreachable** (502), the child **timed out** (504), and a run is **already in
-flight** (409). A fifth — the re-index afterwards, one scoped ``email index
---root <folder>`` per folder the run filed into — is deliberately *not* fatal: the mails are filed either way, so the run finishes ``done`` and carries
-the rescan's failure in its ``error`` column. "Filed, but the index has not
-confirmed it" is its own state, never folded into a clean run.
+Failures a caller has to be able to tell apart get distinct codes and messages:
+folder-explorer is **not configured** here (409), **unreachable** (502),
+**timed out** (504), **busy** with another archive call (409), Outlook
+**unreachable** (502), and a run already in flight in *this* app (409). A last
+one — the re-index afterwards, one ``index`` call per folder the run filed
+into — is deliberately *not* fatal: the mails are filed either way, so the run
+finishes ``done`` and carries the rescan's failure in its ``error`` column.
+"Filed, but the index has not confirmed it" is its own state, never folded into
+a clean run.
 
 State machine, one ``archive_items`` row per mail:
 
@@ -74,7 +80,7 @@ whatever the archiver's index believes, and a reverted mail is free to be
 archived again.
 
 Both verbs that disturb a folder's numbering also ask the archiver to repair it
-(``--renumber``, ``archive.renumber``, email-archiver#61) — and the archiver
+(``renumber``, ``archive.renumber``, email-archiver#61) — and the archiver
 heals only its own index, so every path it renames is healed from the map it
 returns — by :func:`~src.archive_renumber.apply_renumber_map`, which rewrites
 ``archive_items.files_json``, the email link's ref and the captured task's
@@ -83,25 +89,22 @@ than not asking.
 
 Idempotency is the Internet Message-ID throughout (never an Outlook EntryID,
 which the ``apply`` move itself rewrites). A second run over a mail this
-database has already filed writes **nothing**: no row, no child call for it.
+database has already filed writes **nothing**: no row, no archive call for it.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
-import subprocess
-import tempfile
 import threading
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import Any
 
 from src import archive_rank
 from src.ai.client import AIClient
 from src.archive_actions import ArchiveError, ItemActions
+from src.archive_client import ArchiveApiClient
 from src.archive_rank import Pick, Ranking
 from src.archive_renumber import (
     apply_renumber_map,
@@ -123,41 +126,18 @@ from src.archive_store import (
 )
 from src.config import AppConfig
 from src.db import connect
-from src.no_window import NO_WINDOW
+from src.search.folder_explorer import FolderExplorerClient
 
 logger = logging.getLogger(__name__)
 
-#: The only batch-document schema this build understands (folder-explorer's
-#: ``email batch`` ``SCHEMA_VERSION``). A newer archiver is refused by name — reading a
-#: field that silently moved is how a mail gets filed into the wrong folder.
-SUPPORTED_SCHEMA_VERSION = 1
-
-#: Seconds the child waits for a freshly started Outlook to answer over COM
-#: (its own ``--start-timeout``). Well inside ``archive.timeout_seconds``, so a
-#: closed Outlook fails as *unreachable* rather than as *timed out*.
-OUTLOOK_START_TIMEOUT_S = 60.0
-
-#: Bound on the re-index of one filed folder after a run. Its own budget, so it
-#: never eats the run's timeout; a scoped re-index lists one folder and reads
-#: only its new mail, so this is generous.
-SCAN_TIMEOUT_S = 900.0
+#: Bound on the re-index of one filed folder after a run. folder-explorer
+#: gives the re-index 900 s plus the wait for the email lock, so this call
+#: waits a little longer and the typed answer arrives instead of a client timeout.
+SCAN_TIMEOUT_S = 900.0 + 60.0 + 60.0
 
 #: Seconds a re-index waits for another email run (a nightly scan's email stage)
 #: to release the email lock before it reports busy.
 SCAN_WAIT_S = 60.0
-
-#: The argv prefix of folder-explorer's batch verbs and of its scoped re-index,
-#: run as modules from its checkout so its own package resolves.
-BATCH_MODULE = ["-m", "app.cli", "email", "batch"]
-INDEX_MODULE = ["-m", "app.cli", "email", "index"]
-
-#: ``email index`` exit codes worth their own words (0 is indexed).
-_INDEX_EXITS = {
-    1: "the re-index failed",
-    2: "another email run held the index past the wait",
-    3: "the folder is not inside folder-explorer's email folders",
-    4: "folder-explorer's email index is not set up on this machine",
-}
 
 
 @dataclass(frozen=True)
@@ -197,9 +177,9 @@ def _folder_of(path: str) -> str:
 
 
 class ArchiveBatchService(ItemActions):
-    """Drives the archiver's batch CLI and records what it did (``app.state.archive``).
+    """Drives folder-explorer's archive API and records what it did (``app.state.archive``).
 
-    One run at a time, and one archiver child at a time: ``revert`` and ``move``
+    One run at a time, and one archive call at a time: ``revert`` and ``move``
     take the same lock a run does, because they all reach the same single-
     threaded Outlook COM apartment. A second caller gets 409 with that as the
     reason, never a queue that quietly reorders someone's Inbox.
@@ -208,8 +188,7 @@ class ArchiveBatchService(ItemActions):
     def __init__(self, config: AppConfig, *, ai_client: Any | None = None) -> None:
         cfg = config.archive
         self.configured_enabled = bool(cfg.enabled)
-        self.repo = Path(cfg.repo.strip()) if cfg.repo.strip() else None
-        self.python = Path(cfg.python.strip()) if cfg.python.strip() else self._default_python(self.repo)
+        self.client = ArchiveApiClient(FolderExplorerClient(config.search.folder_explorer_url))
         self.candidates = max(1, int(cfg.candidates))
         self.threshold = float(cfg.confidence_threshold)
         self.timeout = float(cfg.timeout_seconds)
@@ -233,41 +212,19 @@ class ArchiveBatchService(ItemActions):
             logger.warning("⚠️ archive: batch archiving off — %s", self.reason)
 
     # ----------------------------------------------------------- readiness
-    @staticmethod
-    def _default_python(repo: Path | None) -> Path | None:
-        """folder-explorer's own venv interpreter (it has the email and Outlook extras), never task-os's."""
-        if repo is None:
-            return None
-        return repo / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")
-
-    @property
-    def script(self) -> Path | None:
-        """The module the batch verbs live in: present means this checkout has them."""
-        return self.repo / "app" / "cli" / "email_batch.py" if self.repo else None
-
     def _configured(self) -> tuple[bool, str | None]:
         """``(True, None)``, or ``False`` + the one reason that actually applies.
 
-        Five distinct failures, five distinct messages: "you turned it off",
-        "you never said where folder-explorer is", "that folder is not there",
-        "its venv is not built" and "that checkout has no archive verbs" each need
-        a different fix, and a single "not configured" would hide which.
+        Two distinct failures, two distinct messages: "you turned it off" and
+        "you never said where folder-explorer is". Whether it is *up* is not a
+        configuration fact and is never guessed here — the first call says so.
         """
         if not self.configured_enabled:
             return False, "disabled in config (archive.enabled)"
-        if self.repo is None:
-            return False, "archive.repo not configured — point it at the folder-explorer checkout"
-        if not self.repo.is_dir():
-            return False, f"folder-explorer checkout not found at {self.repo}"
-        if self.python is None or not self.python.is_file():
+        if not self.client.configured:
             return False, (
-                f"folder-explorer's Python is not at {self.python} — build its venv, or set "
-                "archive.python"
-            )
-        if self.script is None or not self.script.is_file():
-            return False, (
-                f"no app/cli/email_batch.py in {self.repo} — this needs a folder-explorer "
-                "checkout with the email batch verbs"
+                "search.folder_explorer_url not configured — point it at folder-explorer, "
+                "which does the archiving"
             )
         return True, None
 
@@ -288,7 +245,7 @@ class ArchiveBatchService(ItemActions):
             "configured": self.enabled,
             "reason": None if self.enabled else self.reason,
             "running": self.running,
-            "repo": str(self.repo) if self.repo else None,
+            "url": self.client.host if self.client.configured else None,
             "candidates": self.candidates,
             "confidence_threshold": self.threshold,
             "timeout_seconds": self.timeout,
@@ -311,148 +268,34 @@ class ArchiveBatchService(ItemActions):
             if not thread.is_alive():
                 self._thread = None
 
-    # ------------------------------------------------------------ children
-    def _spawn_batch(self, args: list[str], *, verb: str) -> dict[str, Any]:
-        """One ``email batch`` call → its one JSON document, or ``ArchiveError``."""
-        assert self.python is not None and self.repo is not None
-        cmd = [
-            str(self.python), *BATCH_MODULE,
-            "--start-timeout", str(OUTLOOK_START_TIMEOUT_S), *args,
-        ]
-        logger.info("ℹ️ archive: %s — spawning folder-explorer's email batch", verb)
-        try:
-            proc = subprocess.run(  # noqa: S603 — a configured local interpreter and script
-                cmd, cwd=str(self.repo), capture_output=True, timeout=self.timeout,
-                creationflags=NO_WINDOW,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ArchiveError(
-                "archive_timeout",
-                f"the archiver did not finish {verb} within {self.timeout:.0f} s — Outlook may be "
-                "showing a dialog nobody can see",
-                http_status=504,
-            ) from exc
-        except OSError as exc:
-            raise ArchiveError(
-                "archive_spawn_failed",
-                f"could not run folder-explorer's email batch: {type(exc).__name__}: {exc}",
-                http_status=502,
-            ) from exc
+    # ------------------------------------------------------------ the service
+    def _call(self, verb: str, body: dict[str, Any]) -> dict[str, Any]:
+        """One archive verb -> the archiver's one document, or :class:`ArchiveError`.
 
-        # The child reconfigures its stdout to UTF-8 before printing, so this is
-        # UTF-8 whatever the console code page is — decoded explicitly rather
-        # than through ``text=True``'s ambient locale.
-        stdout = proc.stdout.decode("utf-8", errors="replace").strip()
-        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
-        try:
-            doc = json.loads(stdout)
-        except ValueError as exc:
-            raise ArchiveError(
-                "archive_bad_output",
-                f"the archiver's {verb} printed no readable JSON (exit {proc.returncode})",
-                http_status=502, detail=(stderr or stdout)[-800:] or None,
-            ) from exc
-        if not isinstance(doc, dict):
-            raise ArchiveError(
-                "archive_bad_output", f"the archiver's {verb} printed a {type(doc).__name__}, "
-                "not a document", http_status=502,
-            )
-
-        version = doc.get("schema_version")
-        if version != SUPPORTED_SCHEMA_VERSION:
-            raise ArchiveError(
-                "archive_schema_mismatch",
-                f"the archiver's batch output is schema_version {version!r}; this build "
-                f"understands {SUPPORTED_SCHEMA_VERSION}",
-                http_status=502,
-            )
-        if "error" in doc:
-            raise self._child_error(doc["error"], verb=verb, returncode=proc.returncode)
-        if proc.returncode != 0:
-            raise ArchiveError(
-                "archive_child_failed",
-                f"the archiver exited with code {proc.returncode} on {verb}",
-                http_status=502, detail=stderr[-800:] or None,
-            )
-        return doc
-
-    @staticmethod
-    def _child_error(error: Any, *, verb: str, returncode: int) -> ArchiveError:
-        """The child's own ``{"error": {code, message}}``, classified for the API."""
-        code = str((error or {}).get("code", "")) if isinstance(error, dict) else ""
-        message = str((error or {}).get("message", "")) if isinstance(error, dict) else str(error)
-        if code in ("outlook_unavailable", "com_unavailable"):
-            return ArchiveError(
-                "archive_outlook_unavailable",
-                f"Outlook could not be reached, so no mail was touched by {verb}: {message}",
-                http_status=502, detail=code,
-            )
-        if code == "config_missing":
-            return ArchiveError(
-                "archive_child_unconfigured",
-                f"the email archiver's own config could not be loaded: {message}",
-                http_status=502, detail=code,
-            )
-        return ArchiveError(
-            "archive_child_failed",
-            f"the archiver refused {verb} ({code or 'no code'}): {message}",
-            http_status=502, detail=f"exit {returncode}",
-        )
-
-    def _spawn_with_payload(self, verb: str, flag: str, payload: list[dict[str, Any]]) -> dict[str, Any]:
-        """``apply`` / ``revert``: the payload through a temp file, deleted afterwards.
-
-        The file carries archive paths, and an archive path carries the mail's
-        subject — so it lives for exactly one child call and is removed in a
-        ``finally``, never left in the temp folder for something else to read.
-
-        Both verbs are also the two that leave a folder's numbering ragged, so
-        both are asked to repair it (``--renumber``, ``archive.renumber``) — and
-        every path the repair renames is healed here from the map it returns.
-        Asking for it without healing would be worse than not asking.
+        ``apply`` and ``revert`` are the two verbs that leave a folder's
+        numbering ragged, so both are asked to repair it (``archive.renumber``)
+        — and every path the repair renames is healed by the caller from the
+        map the document returns. Asking for it without healing would be worse
+        than not asking.
         """
-        handle, path = tempfile.mkstemp(prefix=f"taskos-archive-{verb}-", suffix=".json")
-        try:
-            with os.fdopen(handle, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False)
-            args = [verb, flag, path, "--renumber"] if self.renumber else [verb, flag, path]
-            return self._spawn_batch(args, verb=verb)
-        finally:
-            try:
-                os.unlink(path)
-            except OSError as exc:  # pragma: no cover - defensive
-                logger.warning("⚠️ archive: could not remove %s — %s", path, exc)
+        if verb in ("apply", "revert") and self.renumber:
+            body = {**body, "renumber": True}
+        return self.client.run(verb, body, timeout=self.timeout)
 
     def _rescan_index(self, folders: list[str]) -> str | None:
         """Re-index each folder this run filed into; the reasons any did not, or ``None``.
 
-        One scoped ``email index --root <folder>`` per folder: it lists only that
-        folder and takes only the email lock, so it never waits behind a disk scan.
+        One ``index`` call per folder: it lists only that folder and takes only
+        the email lock, so it never waits behind a disk scan.
         """
         problems: list[str] = []
         for folder in folders:
-            problem = self._index_folder(folder)
+            problem = self.client.index(folder, SCAN_WAIT_S, timeout=SCAN_TIMEOUT_S)
             if problem:
                 problems.append(f"{last_component(folder) or folder}: {problem}")
         if problems:
             return "the email index has not confirmed what was filed — " + " · ".join(problems)
         logger.info("ℹ️ archive: folder-explorer re-indexed the %d folder(s) this run filed", len(folders))
-        return None
-
-    def _index_folder(self, folder: str) -> str | None:
-        """One scoped re-index; the reason it did not finish, or ``None``."""
-        assert self.python is not None and self.repo is not None
-        try:
-            proc = subprocess.run(  # noqa: S603 — same configured interpreter
-                [str(self.python), *INDEX_MODULE, "--root", folder, "--wait", str(SCAN_WAIT_S)],
-                cwd=str(self.repo), capture_output=True, timeout=SCAN_TIMEOUT_S, creationflags=NO_WINDOW,
-            )
-        except subprocess.TimeoutExpired:
-            return f"the re-index did not finish within {SCAN_TIMEOUT_S:.0f} s"
-        except OSError as exc:
-            return f"the re-index could not start: {type(exc).__name__}: {exc}"
-        if proc.returncode != 0:
-            return f"{_INDEX_EXITS.get(proc.returncode, 'the re-index failed')} (exit {proc.returncode})"
         return None
 
     # ---------------------------------------------------------------- runs
@@ -519,7 +362,7 @@ class ArchiveBatchService(ItemActions):
             self._lock.release()
 
     def _execute(self, conn: sqlite3.Connection, run_id: int, limit: int | None) -> dict[str, Any]:
-        plan = self._spawn_batch(["plan", "--candidates", str(self.candidates)], verb="plan")
+        plan = self._call("plan", {"candidates": self.candidates})
         mails = [m for m in plan.get("mails") or [] if isinstance(m, dict)]
         already_filed = filed_message_ids(conn)
         decisions: list[dict[str, Any]] = []
@@ -569,7 +412,7 @@ class ArchiveBatchService(ItemActions):
         )
         if decisions:
             try:
-                result = self._spawn_with_payload("apply", "--decisions", decisions)
+                result = self._call("apply", {"decisions": decisions})
             except Exception as exc:
                 # The rows went in as ``archived`` before the call; a whole-call
                 # failure confirmed none of them, and left that way they would
@@ -844,7 +687,7 @@ class ArchiveBatchService(ItemActions):
     def _log_finish(entry: dict[str, Any]) -> None:
         """Breadcrumb for the two additive ``apply`` fields (email-archiver#59).
 
-        Neither is stored — they describe *how* one child call went, not the
+        Neither is stored — they describe *how* one archive call went, not the
         state of the mail — but which of them applied is the first thing anyone
         asks when a stuck mail finally leaves the Inbox, so the log has to be
         able to answer it. Read by name and defensively: an older archiver
@@ -877,7 +720,6 @@ class ArchiveBatchService(ItemActions):
 
 
 __all__ = [
-    "SUPPORTED_SCHEMA_VERSION",
     "ArchiveBatchService",
     "ArchiveError",
 ]

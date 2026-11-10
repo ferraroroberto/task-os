@@ -54,7 +54,6 @@ validation record links to:
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -122,6 +121,7 @@ from tests.fixtures.archiver_fake import (
     plan_doc,
     revert_doc,
     revert_result,
+    stop_all,
 )
 
 
@@ -134,8 +134,7 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
     od = work / "od"
     od.mkdir(parents=True)
     build_emails_db(work / "emails.db", root=od, flags=True)
-    repo = build_fake_archiver(
-        work / "archiver",
+    fake = build_fake_archiver(
         plan=[plan_doc([
             # over the threshold → filed by the run
             mail(FILED_ID, subject="Boiler service due", sender="service@example.invalid",
@@ -194,13 +193,14 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
         work / "config.json",
         placeholders={"onedrive": od.as_posix(), "user": "sam", "archive": "E:/archive"},
         email_db=str(work / "emails.db"),
-        archive={
-            "enabled": True, "repo": str(repo), "python": sys.executable,
-            "timeout_seconds": 60, "confidence_threshold": 0.7,
-        },
+        folder_explorer_url=fake.url,
+        archive={"enabled": True, "timeout_seconds": 60, "confidence_threshold": 0.7},
     )
-    with booted(work, work / "tasks.db", cfg) as base:
-        yield ArchiveInstance(base, od, repo, work / "tasks.db")
+    try:
+        with booted(work, work / "tasks.db", cfg) as base:
+            yield ArchiveInstance(base, od, fake, work / "tasks.db")
+    finally:
+        stop_all()
 
 
 def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, shots: Path) -> None:

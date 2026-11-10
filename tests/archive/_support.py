@@ -5,7 +5,6 @@ mail documents and the file paths they name.
 from __future__ import annotations
 
 import sqlite3
-import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -19,11 +18,12 @@ from src import db as dbmod
 from src import tasks_repo as repo
 from src.ai import AIClient
 from src.archive_batch import ArchiveBatchService
-from src.config import AIConfig, AppConfig, ArchiveConfig
+from src.config import AIConfig, AppConfig, ArchiveConfig, SearchConfig
 from tests.conftest import write_test_config
 from tests.fixtures.archiver_fake import (
     FOLDER_BILLS,
     FOLDER_HOUSE,
+    FakeArchiver,
     apply_doc,
     apply_result,
     build_fake_archiver,
@@ -40,9 +40,9 @@ OLDER_FOLDER = "E:/archive/house/heating"
 
 
 def service_for(
-    repo: Path, *, ai: object | None = None, **archive_kwargs: object
+    fake: FakeArchiver, *, ai: object | None = None, **archive_kwargs: object
 ) -> ArchiveBatchService:
-    """A service wired to the fake checkout, spawned with this interpreter.
+    """A service wired to the fake archive API at ``search.folder_explorer_url``.
 
     ``ai`` defaults to a **real** ``AIClient`` over a config with AI switched
     off: no test process may reach the machine's live hub, and the honest
@@ -50,11 +50,12 @@ def service_for(
     ``ai_disabled``, not a mock. The #158 tests pass :class:`FakeHub` instead.
     """
     defaults: dict[str, object] = {
-        "enabled": True, "repo": str(repo), "python": sys.executable, "timeout_seconds": 60.0,
+        "enabled": True, "timeout_seconds": 60.0,
     }
     config = AppConfig(
         ai=AIConfig(enabled=False),
         archive=ArchiveConfig(**{**defaults, **archive_kwargs}),  # type: ignore[arg-type]
+        search=SearchConfig(folder_explorer_url=fake.url),
         placeholders={"archive": "E:/archive"},
     )
     return ArchiveBatchService(config, ai_client=ai if ai is not None else AIClient(config))
@@ -102,7 +103,6 @@ def _one_archived_item(conn: sqlite3.Connection, svc: ArchiveBatchService) -> di
 def _stuck_then_finished(tmp_path: Path, *, second: dict) -> Path:
     """A fake whose ``apply`` refuses the move once and then answers ``second``."""
     return build_fake_archiver(
-        tmp_path / "archiver",
         plan=[plan_doc([mail("stuck@example.invalid", subject="Roof survey",
                              candidates=[candidate(FOLDER_HOUSE, 0.9, date_prefix=True)])])],
         apply=[
@@ -152,19 +152,18 @@ def _capture_the_email(conn: sqlite3.Connection, path: str) -> dict:
 
 @contextmanager
 def client_for(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, repo: Path | None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeArchiver | None
 ) -> Iterator[TestClient]:
-    """An app wired to ``repo`` — the fake checkout, never the real archiver.
+    """An app wired to ``fake`` — the fake archive API, never the real archiver.
 
-    ``repo=None`` boots the install a fresh clone gets: the block off, and every
+    ``fake=None`` boots the install a fresh clone gets: the block off, and every
     route saying so.
     """
     monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
-    block = None if repo is None else {
-        "enabled": True, "repo": str(repo), "python": sys.executable, "timeout_seconds": 60,
-    }
+    block = None if fake is None else {"enabled": True, "timeout_seconds": 60}
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(write_test_config(
         tmp_path / "config.json", archive=block,
+        folder_explorer_url="" if fake is None else fake.url,
     )))
     from app.webapp.server import create_app
 

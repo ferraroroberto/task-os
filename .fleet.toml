@@ -145,7 +145,7 @@ baseline   = ".doc-refs-ratchet-baseline.json"
 # The docs name the ports of the services this app talks to on purpose: the local LLM hub
 # the whisper server and folder-explorer (search). The app's own :8448 resolves from `port` above. The archive and
 # email-search docs name folder-explorer's CLI module and batch file, which live in that repo.
-allow_refs = [":8000", ":8090", ":8453", "-m app.cli", "app/cli/email_batch.py"]
+allow_refs = [":8000", ":8090", ":8453", "-m app.cli"]
 # Names of removed features: a doc that names one sends the next reader to something that is gone.
 retired = [
   { term = "Table tab", why = "the Table tab was removed; use the Board or Today view" },

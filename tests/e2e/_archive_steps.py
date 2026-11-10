@@ -26,8 +26,27 @@ from tests.e2e._ui import (
     close_settings_sheet,
     open_settings_sheet,
 )
-from tests.e2e.conftest import INTERCEPT, _get, dismiss_toasts, shot
-from tests.fixtures.archiver_fake import calls
+from tests.e2e.conftest import INTERCEPT, _get, dismiss_toasts
+from tests.e2e.conftest import shot as _conftest_shot
+from tests.fixtures.archiver_fake import FakeArchiver
+
+_PIN_SERVICE_PORT_JS = r"""
+() => {
+  const el = document.querySelector('#statusArchiveUrl code');
+  if (el) el.textContent = el.textContent.replace(/:\d+$/, ':8453');
+}
+"""
+
+
+def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
+    """conftest's `shot()`, with the Service row's port pinned to the one folder-explorer really uses.
+
+    The fake archive service binds an ephemeral port and the sheet shows the address it was
+    given, so the port would differ on every run; every shot of the sheet goes through here.
+    """
+    page.evaluate(_PIN_SERVICE_PORT_JS)
+    _conftest_shot(page, path, full_page=full_page)
+
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -86,10 +105,10 @@ LONG_ATT_4 = "E:\\archive\\house\\heating\\2026-09-08 - 0006 - medical-form.pdf"
 CHILD_SLEEP_S = 2.6
 
 class ArchiveInstance:
-    def __init__(self, base: str, od: Path, repo: Path, db: Path) -> None:
+    def __init__(self, base: str, od: Path, fake: FakeArchiver, db: Path) -> None:
         self.base = base
         self.od = od
-        self.repo = repo
+        self.fake = fake
         self.db = db
 
 def _post_status(base: str, path: str, body: dict) -> int:
@@ -288,7 +307,7 @@ def _archive_sheet_before_run(page: Page, inst: ArchiveInstance, shots: Path) ->
     expect(pane.locator("#statusArchive")).to_contain_text("sorted by Claude Haiku · 8 mails a batch")
     expect(pane.locator("#statusArchiveRun")).to_have_text("never")
     expect(pane.locator("#statusArchiveRecent")).to_have_text("no finished run yet")
-    expect(pane.locator("#statusArchiveRepo code")).to_have_text(str(inst.repo))
+    expect(pane.locator("#statusArchiveUrl code")).to_have_text(inst.fake.url)
     expect(pane.locator("#statusArchiveThreshold")).to_contain_text("70%")
     expect(pane.locator("#archiveLimit")).to_have_value("")
     expect(pane.locator("#archiveRun")).to_be_enabled()
@@ -417,7 +436,7 @@ def _reused_row_and_kebab(
     assert reused_item["sequence"] is None
     assert {
         "message_id": REUSED_ID, "folder_path": "E:/archive/admin/renewals", "date_prefix": False,
-    } in [c for c in calls(inst.repo) if c["verb"] == "apply"][0]["payload"]
+    } in [c for c in inst.fake.calls if c["verb"] == "apply"][0]["payload"]
 
     # An `archived` row is finished, not reviewed: the API answers 409 on
     # accept, so the screen does not offer it.
@@ -474,7 +493,7 @@ def _file_unsure_by_hand(
     assert moved["reason"] == "filed here by hand from the Inbox"
     # It was never on disk, so nothing was undone first — the archiver was
     # asked to file it, once.
-    assert [c["verb"] for c in calls(inst.repo)] == ["plan", "apply", "apply"]
+    assert [c["verb"] for c in inst.fake.calls] == ["plan", "apply", "apply"]
 
 def _accept_and_bulk_cancel(page: Page, base: str, items: list[dict], run_id: int, stuck_row) -> dict:
     """Accept the broken row and a needs-review row; cancelling the bulk dialog hands the button back."""
@@ -529,7 +548,7 @@ def _revert_filed_row(
     )
     undone = next(i for i in _items(base, run_id) if i["message_id"] == FILED_ID)
     assert undone["status"] == "reverted" and undone["files"] == []
-    sent = [c for c in calls(inst.repo) if c["verb"] == "revert"][0]["payload"]
+    sent = [c for c in inst.fake.calls if c["verb"] == "revert"][0]["payload"]
     assert sent == [{"message_id": FILED_ID, "files": [HOUSE_FILE]}]
     # …and there is nothing left to press on it, which the row says out loud.
     expect(page.locator(f".archive-row[data-id='{filed_item['id']}'] .c-act")).to_have_text(
@@ -785,10 +804,10 @@ def _phone_retry_stuck(
     # folder, the same naming form — and the sequence the first attempt
     # allocated survives a reuse that allocates none.
     assert done["files"] == [STUCK_FILE] and done["sequence"] == "0043"
-    assert calls(inst.repo)[-1] == {
-        "verb": "apply", "argv": calls(inst.repo)[-1]["argv"],
-        "payload": [{"message_id": STUCK_ID, "folder_path": HOUSE, "date_prefix": False}],
-    }
+    last = inst.fake.calls[-1]
+    assert (last["verb"], last["payload"]) == (
+        "apply", [{"message_id": STUCK_ID, "folder_path": HOUSE, "date_prefix": False}],
+    )
 
 def _phone_back_to_settings(p: Page, phone: BrowserContext, shots: Path) -> None:
     """Done goes back to the Settings list at 390; the phone context closes."""

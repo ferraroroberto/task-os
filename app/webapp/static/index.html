@@ -836,7 +836,7 @@
           </div>
         </section>
         <section class="settings-sheet" id="archiveCard" data-sheet="archive" hidden>
-          <p class="card-meta">What is left in the Inbox once the flagged mail is a task: the archiver (<code>archive.repo</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
+          <p class="card-meta">What is left in the Inbox once the flagged mail is a task: folder-explorer's archiver (<code>search.folder_explorer_url</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
           <div class="archive-head">
             <div class="archive-actions">
               <button type="button" id="archiveRun" data-track="archive.run" class="button-surface archive-run" disabled>
@@ -857,7 +857,7 @@
             </div>
             <dl class="status-rows" id="archiveStatus" aria-live="polite">
               <div class="status-row"><dt>Archiver</dt><dd id="statusArchive" class="muted">Loading…</dd></div>
-              <div class="status-row"><dt>Location</dt><dd id="statusArchiveRepo" class="muted">–</dd></div>
+              <div class="status-row"><dt>Service</dt><dd id="statusArchiveUrl" class="muted">–</dd></div>
               <div class="status-row"><dt>Threshold</dt><dd id="statusArchiveThreshold" class="muted">–</dd></div>
               <div class="status-row"><dt>Last run</dt><dd id="statusArchiveRun" class="muted">–</dd></div>
               <div class="status-row"><dt id="archiveRecentLabel">Recent runs</dt><dd id="statusArchiveRecent" class="muted">–</dd></div>

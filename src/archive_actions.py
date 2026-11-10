@@ -1,8 +1,8 @@
 """Per-mail actions on an archived item: undo, move by hand, retry, accept.
 
-Each one is a short archiver call (or none) on one row of the report screen,
+Each one is a short archive-API call (or none) on one row of the report screen,
 taken under the same lock a run holds. :class:`ItemActions` is mixed into
-``src.archive_batch.ArchiveBatchService``, which supplies the spawn, the lock,
+``src.archive_batch.ArchiveBatchService``, which supplies the archive call, the lock,
 the placeholders and the renumber healing these methods lean on."""
 
 from __future__ import annotations
@@ -147,16 +147,14 @@ class ItemActions:
         return get_item(conn, item_id) or reverted
 
     def _revert_once(self, item: dict[str, Any]) -> dict[str, Any]:
-        """One ``revert`` child call for one item → ``{ok, message, entry, doc}``.
+        """One ``revert`` call for one item → ``{ok, message, entry, doc}``.
 
         The whole document rides back, not only this mail's entry: the
         renumbering that closed the hole this undo left is reported per
         *folder*, and healing it is the caller's step (:meth:`_heal_renumber`)
         because only the caller has the connection.
         """
-        doc = self._spawn_with_payload(
-            "revert", "--items", [{"message_id": item["message_id"], "files": item["files"]}]
-        )
+        doc = self._call("revert", {"items": [{"message_id": item["message_id"], "files": item["files"]}]})
         entry = next((r for r in doc.get("results") or [] if isinstance(r, dict)), None)
         if entry is None:
             return {
@@ -252,10 +250,10 @@ class ItemActions:
                         f"nothing was moved: {undo['message']}", http_status=502,
                     )
             try:
-                applied = self._spawn_with_payload("apply", "--decisions", [{
+                applied = self._call("apply", {"decisions": [{
                     "message_id": item["message_id"], "folder_path": destination,
                     "date_prefix": date_prefix,
-                }])
+                }]})
             except Exception as exc:
                 # The undo leg already deleted the files and sent the mail back
                 # to the Inbox. Leaving the row ``archived`` would name files
@@ -394,10 +392,10 @@ class ItemActions:
         self._require_retryable(item)
         self._claim()
         try:
-            applied = self._spawn_with_payload("apply", "--decisions", [{
+            applied = self._call("apply", {"decisions": [{
                 "message_id": item["message_id"], "folder_path": item["chosen_folder"],
                 "date_prefix": bool(item["date_prefix"]),
-            }])
+            }]})
         finally:
             self._lock.release()
 
