@@ -79,14 +79,19 @@ class MirrorConfig:
 class SearchConfig:
     """The Search tab's indexes.
 
-    ``email_db``        folder-explorer's email index, opened read-only.
+    ``folder_explorer_url``  folder-explorer's address (``http://127.0.0.1:8453``): the
+                        Folders and Emails groups ask its v1 search API, task-os
+                        keeps no index of its own. Blank = both groups say so.
+    ``email_db``        folder-explorer's email index, opened read-only by the
+                        flagged-mail poller only (``capture.email_poll_minutes``);
+                        search never opens it.
     ``email_deep_url``  folder-explorer's page (``https://<your-host>.ts.net:8453/``).
                         Set, the Emails group links to its own email search with
                         the same words, where operators, facets and Show all live;
                         blank, no link.
     """
 
-    folder_roots: list[str] = field(default_factory=list)
+    folder_explorer_url: str = ""
     email_db: str = ""
     email_deep_url: str = ""
 
@@ -96,8 +101,7 @@ class CaptureConfig:
     """Inbound capture (#98) — things flagged elsewhere become Inbox tasks.
 
     The email poller reads folder-explorer's email index through ``search.email_db``,
-    the same path the emails adapter searches — one key, one file, read-only
-    from here either way. ``email_poll_minutes`` ≤ 0 turns the poller off
+    read-only. ``email_poll_minutes`` ≤ 0 turns the poller off
     with that as its visible reason.
     """
 
@@ -680,7 +684,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             backup_dir=str(mirror.get("backup_dir", MirrorConfig.backup_dir)),
         ),
         search=SearchConfig(
-            folder_roots=_as_str_list(search.get("folder_roots")),
+            folder_explorer_url=str(search.get("folder_explorer_url", "") or "").strip(),
             email_db=str(search.get("email_db", "")),
             email_deep_url=str(search.get("email_deep_url", "") or "").strip(),
         ),

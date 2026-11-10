@@ -51,15 +51,14 @@ _DEFAULT_TIMEOUT_SECONDS = 15.0
 
 #: Bound for a verb whose server-side work routinely outlives
 #: ``_DEFAULT_TIMEOUT_SECONDS``: ``/api/ai/triage`` is itself bounded by
-#: ``ai.timeout_seconds`` (30 s by default); ``/api/folders/reindex`` scans
-#: the whole tree in the foreground; ``/api/issues/sync`` makes several
+#: ``ai.timeout_seconds`` (30 s by default); ``/api/issues/sync`` makes several
 #: ``gh`` calls of up to 20 s each. Margin over the slowest of those bounds,
 #: so the server — not this client's socket — is the one that reports a
 #: real timeout.
 _LONG_TIMEOUT_SECONDS = 45.0
 
 #: Paths that get `_LONG_TIMEOUT_SECONDS` instead of the default.
-_LONG_TIMEOUT_PATHS = frozenset({"/api/ai/triage", "/api/folders/reindex", "/api/issues/sync"})
+_LONG_TIMEOUT_PATHS = frozenset({"/api/ai/triage", "/api/issues/sync"})
 
 
 def _tls_context(base: str) -> ssl.SSLContext | None:
@@ -225,9 +224,6 @@ class HttpBackend:
     def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
         return self._call("POST", f"/api/tasks/{task_id}/issue", {"repo": repo, "actor": self.actor})
 
-    def folders_reindex(self) -> dict[str, Any]:
-        return self._call("POST", "/api/folders/reindex")
-
     def folders_search(self, q: str) -> dict[str, Any]:
         return self._call("GET", "/api/folders/search?" + urllib.parse.urlencode({"q": q}))
 
@@ -356,21 +352,15 @@ class LocalBackend:
 
     def search(self, q: str, kinds: list[str] | None = None) -> dict[str, Any]:
         # The same four adapters the webapp runs, built here over this
-        # process's config: the folder index loaded from its file (no scan),
-        # the issue service cold (local refs only — the sync's cache lives in
-        # the app), the email index read-only.
-        from src.folder_index import FolderIndexService
+        # process's config: folders and emails over folder-explorer's API, the
+        # issue service cold (local refs only — the sync's cache lives in the app).
         from src.issue_sync import IssueSyncService
         from src.search import build_federated
+        from src.search.folder_explorer import FolderExplorerClient
 
         config = load_config()
-        folders = FolderIndexService(config)
-        if folders.enabled:
-            try:
-                folders.load()
-            except OSError:
-                pass
-        return build_federated(config, folders=folders, issues=IssueSyncService(config)).search(q, kinds=kinds)
+        client = FolderExplorerClient(config.search.folder_explorer_url)
+        return build_federated(config, folder_explorer=client, issues=IssueSyncService(config)).search(q, kinds=kinds)
 
     def people(self) -> list[dict[str, Any]]:
         return self._wrap(self._repo.list_people)
@@ -437,16 +427,10 @@ class LocalBackend:
         from src.calendar_lane import CalendarService
         from src.email_capture import EmailCaptureService
         from src.enrich import EnrichClient
-        from src.folder_index import FolderIndexService
+        from src.search.folder_explorer import FolderExplorerClient
         from src.voice import VoiceClient
 
         config = load_config()
-        folders = FolderIndexService(config)
-        if folders.enabled:
-            try:
-                folders.load()
-            except OSError:
-                pass
         placeholders = dict(config.placeholders)
         return {
             "https": UNKNOWN,
@@ -457,7 +441,7 @@ class LocalBackend:
             },
             "mirror": self._mirror_service().status(self.conn),
             "backup": BackupScheduler(config).status(),
-            "folders": folders.status(),
+            "folders": FolderExplorerClient(config.search.folder_explorer_url).summary(),
             # Built but never started — offline there is no poller thread, so
             # `running` is False and `next_run` None. Both are facts about this
             # process, not guesses; the enabled/reason pair (does this install
@@ -527,19 +511,14 @@ class LocalBackend:
         except IssueProviderError as exc:
             raise CliError(str(exc), code="provider_error") from exc
 
-    def _folders(self) -> Any:
-        from src.folder_index import FolderIndexService
-
-        svc = FolderIndexService(load_config())
-        if not svc.enabled:
-            raise CliError(svc.reason, code="folders_disabled")
-        return svc
-
-    def folders_reindex(self) -> dict[str, Any]:
-        return self._folders().reindex()
-
     def folders_search(self, q: str) -> dict[str, Any]:
-        svc = self._folders()
-        svc.load()
-        items = svc.search(q)
-        return {"q": q, "items": items, "count": len(items), "indexing": False, "entries": svc.status()["entries"]}
+        from src.search.folder_explorer import FolderExplorerClient, Unavailable
+        from src.search.folders_adapter import folder_item
+
+        config = load_config()
+        try:
+            body = FolderExplorerClient(config.search.folder_explorer_url).folders(q, 30)
+        except Unavailable as exc:
+            raise CliError(f"folder-explorer is {exc.state}: {exc.reason}", code="folders_unavailable") from exc
+        items = [folder_item(r, config.placeholders) for r in body.get("results") or []]
+        return {"q": q, "items": items, "count": len(items)}

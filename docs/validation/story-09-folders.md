@@ -100,3 +100,8 @@ The story is unchanged (click a folder chip → Explorer opens **this** PC's syn
 **2026-10-05 (#339):** Escape on the folder popover closes the popover and stops there; the drawer under it stays open. The popover registered its Escape listener on first open, after app.js's document-level one, so the same key also closed the drawer. It now takes Escape in the capture phase while it is open. Step 2 presses Escape on the hint and checks the drawer and the `#task/N` hash survive, seen red first (the drawer closed).
 
 **2026-10-10 (#394):** steps 1–3 click the folder chip in the drawer's link pills, where it now leads; the Folder editor (step 4 on), the link editor (step 8) and the phone's two-line folder check (step 7) open More fields first. The AI chip of step 8 is clicked in the pills too. Result: **verified** (e2e desktop + phone).
+
+**Re-proved 2026-11-10 (#631, step 2/4 of folder-explorer#113).** The drawer's folder picker and the Settings Folder opener card read folder-explorer's v1 folder search instead of a task-os folder index: the e2e instance serves a fake folder-explorer (`tests/fixtures/folder_explorer_fake.py`) over the temp tree. Step 3's card row now says *answered by folder-explorer at …* (the address only, so `/api/status` never waits on it) and the *rescan folders* button and palette command are gone, folder-explorer owning the scan. Shot 3 re-baselined.
+
+- [x] Automated: `tests/e2e/test_story_09_folders.py` green, the picker still attaching `{onedrive}/house/kitchen/plans` on Enter.
+- [ ] **Not verified — a headed walk with the picker against the real folder-explorer.**

@@ -38,7 +38,7 @@ export async function refreshStatus(ctx) {
     renderOpener(ctx, body.opener);
     renderIndexRow(ctx, ctx.els.statusIndex, body.folders);
     const f = body.folders;
-    setWord(ctx, ctx.els.folderCardMeta, f && f.enabled ? (f.indexing ? 'indexing' : (f.last_error ? 'error' : 'indexed')) : 'index off');
+    setWord(ctx, ctx.els.folderCardMeta, f && f.enabled ? 'on' : 'off');
     renderCapture(ctx, body.capture);
     renderArchive(ctx, body.archive);
     // A run this page did not start (another device): hand it to the Archive

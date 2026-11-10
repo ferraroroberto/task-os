@@ -6,7 +6,7 @@
   "placeholders": { "onedrive": "E:/onedrive", "user": "sam", "sharepoint": {} },
   "web_roots": {},
   "mirror":  { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" },
-  "search":  { "folder_roots": ["{onedrive}/Documentos"], "email_db": "C:/sqlite/folder-explorer/emails.sqlite3", "email_deep_url": "" },
+  "search":  { "folder_explorer_url": "http://127.0.0.1:8453", "email_db": "C:/sqlite/folder-explorer/emails.sqlite3", "email_deep_url": "" },
   "capture": { "email_poll_minutes": 10 },
   "voice":   { "transcribe_url": "http://127.0.0.1:8000/v1/audio/transcriptions", "fallback_url": "", "partial_interval_seconds": 1.5 },
   "enrich":  { "url": "http://127.0.0.1:8000/v1/chat/completions", "model": "agentic_light_nothink", "timeout_seconds": 30 },

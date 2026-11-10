@@ -1,7 +1,7 @@
 """The search-adapter contract — one shape for every index the search box reads.
 
-An adapter wraps one index (``tasks_fts``, the folder index, the email
-archiver's ``emails_fts``, the issue cache) and answers two questions:
+An adapter wraps one index (``tasks_fts``, folder-explorer's folder and email
+search, the issue cache) and answers two questions:
 
 - :meth:`SearchAdapter.is_configured` → ``(True, None)`` when the index can be
   queried on this install, else ``(False, reason)`` — the federated layer turns
@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-__all__ = ["KINDS", "Hit", "SearchAdapter", "fts_query", "mark_terms", "terms"]
+__all__ = ["KINDS", "Hit", "SearchAdapter", "mark_terms", "terms"]
 
 KINDS: tuple[str, ...] = ("tasks", "folders", "emails", "issues")
 MARK_OPEN = "["
@@ -82,31 +82,10 @@ def terms(q: str) -> list[str]:
     return [t for t in (q or "").split() if t.strip()]
 
 
-def fts_query(q: str, *, min_prefix: int = 1) -> str:
-    """Free text → a safe FTS5 MATCH string: every word a quoted term, ANDed.
-
-    Quotes defuse ``#``, ``-``, ``:`` and friends; the trailing ``*`` makes
-    ``pass`` hit ``passport`` — on words of at least ``min_prefix`` characters,
-    a shorter one matching exactly (the emails adapter's choice, see there).
-
-    ``src.tasks_repo._fts_query`` is the one copy this does not replace: the
-    domain layer importing this package would load its ``__init__`` — the
-    federated layer and every adapter, which import ``tasks_repo`` back — on
-    every import of ``tasks_repo``. ``tests/search/test_search_adapters.py`` pins the
-    two to the same answer instead.
-    """
-    out = []
-    for t in terms(q):
-        quoted = '"' + t.replace('"', '""') + '"'
-        out.append(quoted + "*" if len(t) >= min_prefix else quoted)
-    return " ".join(out)
-
-
 def mark_terms(text: str, q: str) -> str:
     """Wrap every case-insensitive occurrence of each query word in ``[`` ``]``.
 
-    For indexes with no snippet function (the folder index's substring search,
-    the LIKE fallback) so their hits highlight the same way FTS snippets do.
+    For indexes with no snippet function (a path, a title) so their hits highlight the same way FTS snippets do.
     """
     words = sorted(set(terms(q)), key=len, reverse=True)      # longest first: one pass, no nesting
     if not words or not text:

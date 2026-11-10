@@ -141,8 +141,9 @@ def fmt_tree(nodes: list[dict[str, Any]], depth: int = 0) -> list[str]:
 
 
 def fmt_search(result: dict[str, Any]) -> str:
-    """The federated result as text — one block per kind; an unconfigured or
-    errored group says so on its header line (never a silent blank)."""
+    """The federated result as text — one block per kind; an unconfigured,
+    unavailable (folder-explorer down, still indexing, unreadable) or errored
+    group says so on its header line (never a silent blank)."""
     out: list[str] = []
     for g in result.get("groups") or []:
         kind = g["kind"]
@@ -150,6 +151,10 @@ def fmt_search(result: dict[str, Any]) -> str:
             continue
         if not g.get("configured"):
             out.append(f"{kind}: not configured — {g.get('reason') or 'unknown'}")
+            continue
+        if g.get("unavailable"):
+            u = g["unavailable"]
+            out.append(f"{kind}: unavailable ({u['state']}) — {u['reason']}")
             continue
         head = f"{kind} ({g.get('count', 0)} · {g.get('took_ms', 0)} ms)"
         if g.get("error"):
@@ -301,18 +306,11 @@ def fmt_ai_status(ai: dict[str, Any]) -> str:
 def fmt_folders_status(f: dict[str, Any]) -> str:
     if not f.get("enabled"):
         return f"folders  not configured — {f.get('reason') or 'unknown'}"
-    roots = ", ".join(
-        f"{r.get('ref')} → {r.get('path')}" + ("" if r.get("exists") else f" ({r.get('error') or 'missing'})")
-        for r in f.get("roots") or []
-    )
-    return (f"folders  {f.get('entries', 0)} folder(s) · roots {roots} · last indexed {f.get('last_indexed') or '-'}"
-            + (" · indexing now" if f.get("indexing") else "")
-            + (" · stale (>24 h)" if f.get("stale") and f.get("last_indexed") else "")
-            + (f" · last error {f['last_error']}" if f.get("last_error") else ""))
+    return f"folders  searched in folder-explorer at {f.get('url')}"
 
 
 def fmt_folders_search(r: dict[str, Any]) -> str:
     items = r.get("items") or []
     if not items:
-        return "(no folders match)" + (" — index still building" if r.get("indexing") else "")
+        return "(no folders match)"
     return "\n".join(f"{i['ref']}\n    {i['path']}" for i in items)

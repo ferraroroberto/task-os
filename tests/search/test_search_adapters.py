@@ -1,15 +1,15 @@
-"""Federated search (``src/search/``, Step 10) — the four adapters on fixture
-indexes, the not-configured states with their reasons, the federated grouping
-/ timeout / error handling, the API and the CLI. Hermetic: the seed for
-tasks / issues, a temp tree for folders, the synthetic archiver index
-(``tests/fixtures/emails_fixture.py``) for emails — never a real mailbox or a
-real synced folder."""
+"""Federated search (``src/search/``, Step 10) — the four adapters, the
+not-configured and unavailable states with their reasons, the federated grouping
+/ timeout / error handling, the API and the CLI. Hermetic: the seed for tasks /
+issues, and a fake folder-explorer (``tests/fixtures/folder_explorer_fake.py``)
+over a temp tree and the synthetic mails for folders and emails — never a real
+mailbox, a real synced folder or the real folder-explorer."""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -19,19 +19,18 @@ from fastapi.testclient import TestClient
 from src import db as dbmod
 from src import tasks_repo as repo
 from src.config import load_config
-from src.db import read_only_uri
-from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.issues.base import IssueInfo
 from src.issues.fake import FakeProvider
 from src.search import KINDS, FederatedSearch, Hit, build_federated, parse_kinds
-from src.search.base import fts_query, mark_terms
+from src.search.base import mark_terms
 from src.search.emails_adapter import EmailsAdapter
+from src.search.folder_explorer import FolderExplorerClient, Unavailable
 from src.search.folders_adapter import FoldersAdapter
 from src.search.issues_adapter import IssuesAdapter
 from src.search.tasks_adapter import TasksAdapter
 from tests.conftest import write_test_config
-from tests.fixtures.emails_fixture import EMAILS, build_emails_db
+from tests.fixtures.folder_explorer_fake import FakeFolderExplorer, fixture_mails, folders_under
 from tests.fixtures.seed import PINNED_ANCHOR, seed_db
 
 # ------------------------------------------------------------------ fixtures
@@ -54,24 +53,23 @@ def seeded_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def emails_db(tmp_path: Path, od: Path) -> Path:
-    path = tmp_path / "emails.db"
-    build_emails_db(path, root=od)
-    return path
+def fe(od: Path) -> Iterator[FakeFolderExplorer]:
+    fake = FakeFolderExplorer(folders=folders_under(od), emails=fixture_mails(od))
+    yield fake
+    fake.stop()
 
 
 @pytest.fixture
-def cfg(tmp_path: Path, od: Path, emails_db: Path) -> Path:
+def client_fe(fe: FakeFolderExplorer) -> FolderExplorerClient:
+    return FolderExplorerClient(fe.url)
+
+
+@pytest.fixture
+def cfg(tmp_path: Path, od: Path, fe: FakeFolderExplorer) -> Path:
     return write_test_config(
-        tmp_path / "config.json", folder_roots=["{onedrive}"],
-        placeholders={"onedrive": od.as_posix(), "user": "sam"}, email_db=str(emails_db),
+        tmp_path / "config.json", folder_explorer_url=fe.url,
+        placeholders={"onedrive": od.as_posix(), "user": "sam"},
     )
-
-
-def _folders(cfg: Path, tmp_path: Path) -> FolderIndexService:
-    svc = FolderIndexService(load_config(cfg), index_path=tmp_path / "idx.txt")
-    svc.reindex()
-    return svc
 
 
 def _issues(tmp_path: Path, extra: list[dict[str, Any]] | None = None) -> IssueSyncService:
@@ -93,12 +91,8 @@ def _issues(tmp_path: Path, extra: list[dict[str, Any]] | None = None) -> IssueS
 
 
 def test_helpers_fts_query_and_marks() -> None:
-    assert fts_query('kitchen "quo:tes" x') == '"kitchen"* "\"\"quo:tes\"\""* "x"*'
-    assert fts_query("   ") == ""
-    assert fts_query("x ab", min_prefix=2) == '"x" "ab"*'      # the emails adapter's form
-    # tasks_repo keeps its own copy (see fts_query's docstring): same answer.
-    for q in ('kitchen "quo:tes" x', "   ", "#12 a-b c:d", "pass port"):
-        assert repo._fts_query(q) == fts_query(q)
+    assert repo._fts_query('kitchen "quo:tes" x') == '"kitchen"* "\"\"quo:tes\"\""* "x"*'
+    assert repo._fts_query("   ") == ""
     assert mark_terms("The Kitchen kit", "kit kitchen") == "The [Kitchen] [kit]"     # longest first, no nesting
     assert mark_terms("plain", "") == "plain" and mark_terms("", "x") == ""
     assert parse_kinds(None) == list(KINDS) and parse_kinds("emails, tasks,bogus") == ["tasks", "emails"]
@@ -127,102 +121,129 @@ def test_tasks_adapter_hits_on_seed(seeded_db: Path) -> None:
 # ----------------------------------------------------------- folders adapter
 
 
-def test_folders_adapter_configured_and_not(cfg: Path, tmp_path: Path) -> None:
-    svc = _folders(cfg, tmp_path)
-    a = FoldersAdapter(svc)
-    assert a.is_configured() == (True, None) and a.note() is None
+def test_folders_adapter_hits_from_folder_explorer(client_fe: FolderExplorerClient, od: Path, fe: FakeFolderExplorer) -> None:
+    a = FoldersAdapter(client_fe, {"onedrive": od.as_posix()})
+    assert a.is_configured() == (True, None)
     hits = a.search("kitchen", 10)
     assert [h.ref for h in hits] == ["{onedrive}/house/kitchen", "{onedrive}/house/kitchen/plans"]
     h = hits[0].to_dict()
     assert h["title"] == "kitchen" and h["subtitle"] == "{onedrive}/house/kitchen"
     assert h["url"] == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
     assert h["snippet"].endswith("/house/[kitchen]") and h["path"].endswith("/od/house/kitchen")
-    assert hits[0].score > hits[1].score
+    assert a.search("nothing-like-this", 10) == []              # ok + no match is an empty list
+    assert a.availability() == ("ok", None, "1 of 1 root(s) scanned")
+    assert fe.requests[0].startswith("/api/v1/search/folders?")
 
-    off = FoldersAdapter(FolderIndexService(load_config(write_test_config(tmp_path / "off.json")), index_path=tmp_path / "x.txt"))
-    ok, reason = off.is_configured()
-    assert ok is False and "folder_roots not configured" in reason
-    assert FoldersAdapter(None).is_configured() == (False, "folder index service not started")
-    empty = FoldersAdapter(FolderIndexService(load_config(cfg), index_path=tmp_path / "empty.txt"))
-    assert empty.is_configured()[0] and empty.note() == "index empty — reindex from Settings"
+
+def test_folders_adapter_not_configured_without_an_address() -> None:
+    off = FoldersAdapter(FolderExplorerClient(""))
+    assert off.is_configured() == (False, "search.folder_explorer_url not configured")
+    assert FoldersAdapter(None).is_configured() == (False, "search.folder_explorer_url not configured")
 
 
 # ------------------------------------------------------------ emails adapter
 
 
-def test_emails_adapter_fts_bm25_and_refs(emails_db: Path, od: Path) -> None:
-    a = EmailsAdapter(str(emails_db), {"onedrive": od.as_posix()})
+def test_emails_adapter_hits_refs_and_marks(client_fe: FolderExplorerClient, od: Path) -> None:
+    a = EmailsAdapter(client_fe, {"onedrive": od.as_posix()})
     assert a.is_configured() == (True, None)
-    assert read_only_uri(emails_db).endswith("?mode=ro") and read_only_uri(emails_db).startswith("file:")
     hits = a.search("kitchen", 10)
-    # subject × 10 beats body × 1: the "Kitchen quotes" mail ranks above the forms mail whose body says kitchen-table
+    # folder-explorer ranks: the subject match first, then the mail whose body says kitchen-table
     assert [h.title for h in hits] == ["Kitchen quotes from the installer", "School enrolment forms — deadline Friday"]
     top = hits[0].to_dict()
     assert top["snippet"] == "[Kitchen] quotes from the installer"
     assert top["ref"] == "{onedrive}/mail/house/2026-08-10 Kitchen quotes.msg"      # folded onto the placeholder
     assert top["path"] == od.as_posix() + "/mail/house/2026-08-10 Kitchen quotes.msg"
     assert top["url"].startswith("taskos://open?ref=%7Bonedrive%7D%2Fmail%2Fhouse")
-    assert top["subtitle"] == "Sam Rivera <sam@example.com> · 2026-08-10 · house"
-    assert top["email_id"] == 1 and top["date"] == "2026-08-10T09:12:00" and top["folder"].endswith("/mail/house")
-    assert hits[1].to_dict()["snippet"].startswith("…") or "[kitchen]" in hits[1].to_dict()["snippet"]
-    # prefix + AND: "pass" hits passport; two words must both match
-    assert [h.title for h in a.search("pass", 10)] == ["Passport renewal appointment confirmed"]
+    assert top["subtitle"] == "Sam Rivera · 2026-08-10 · house"
+    assert top["email_id"] == 1 and top["date"] == "2026-08-10T09:12:00+02:00" and top["folder"].endswith("/mail/house")
+    assert hits[0].score > hits[1].score
+    assert "[kitchen]" in hits[1].to_dict()["snippet"]
     assert [h.title for h in a.search("fence tuesday", 10)] == ["Fence repair — availability next week"]
     assert a.search("fence passport", 10) == []
-    # sender × 3: a query on the sender's name finds the mail
-    assert a.search("jordan", 10)[0].title.startswith("School enrolment")
     # a path outside every placeholder stays absolute
-    bare = EmailsAdapter(str(emails_db), {})
+    bare = EmailsAdapter(client_fe, {})
     assert bare.search("water", 10)[0].ref == od.as_posix() + "/mail/admin/2026-08-05 Water bill.msg"
-    # limit + a query of only punctuation
-    assert len(a.search("mail", 2)) <= 2 and a.search("   ", 10) == []
+    assert len(a.search("mail", 2)) <= 2
+    assert a.availability() == ("ok", None, "6 mail(s)")
 
 
-def test_emails_adapter_is_read_only(emails_db: Path, od: Path) -> None:
-    a = EmailsAdapter(str(emails_db), {})
-    conn = a._connect()
-    with pytest.raises(sqlite3.OperationalError):
-        conn.execute("INSERT INTO emails(file_path, folder_path, filename, file_mtime) VALUES ('x','y','z',1)")
-    conn.close()
-    # the file did not gain a WAL/SHM sidecar and still has its 6 rows
-    assert not Path(str(emails_db) + "-wal").exists()
-    check = sqlite3.connect(str(emails_db))
-    assert check.execute("SELECT COUNT(*) FROM emails").fetchone()[0] == len(EMAILS)
-    check.close()
-
-
-def test_the_emails_group_links_to_folder_explorer_deep_search(emails_db: Path) -> None:
+def test_the_emails_group_links_to_folder_explorer_deep_search(client_fe: FolderExplorerClient) -> None:
     """Set, the group carries folder-explorer's email search for the same words; blank, no link."""
-    deep = EmailsAdapter(str(emails_db), {}, "https://explorer.example.invalid:8453/#explore")
+    deep = EmailsAdapter(client_fe, {}, "https://explorer.example.invalid:8453/#explore")
     fed = FederatedSearch([deep])
     group = {g["kind"]: g for g in fed.search("boiler service & co")["groups"]}["emails"]
     assert group["deep_link"] == "https://explorer.example.invalid:8453/#search?mode=emails&q=boiler%20service%20%26%20co"
     assert {g["kind"]: g for g in fed.search("")["groups"]}["emails"]["deep_link"] is None
-    plain = {g["kind"]: g for g in FederatedSearch([EmailsAdapter(str(emails_db), {})]).search("boiler")["groups"]}
+    plain = {g["kind"]: g for g in FederatedSearch([EmailsAdapter(client_fe, {})]).search("boiler")["groups"]}
     assert plain["emails"]["deep_link"] is None and plain["tasks"]["deep_link"] is None
 
 
-def test_emails_adapter_like_fallback_without_fts(tmp_path: Path, od: Path) -> None:
-    legacy = tmp_path / "legacy.db"
-    build_emails_db(legacy, root=od, fts=False, touch_files=False)
-    a = EmailsAdapter(str(legacy), {"onedrive": od.as_posix()})
-    assert a.is_configured() == (True, None)
-    hits = a.search("kitchen", 10)
-    assert {h.title for h in hits} == {"Kitchen quotes from the installer", "School enrolment forms — deadline Friday"}
-    assert hits[0].to_dict()["date"] >= hits[1].to_dict()["date"]        # newest first
-    assert all("[" in h.snippet for h in hits)                             # mark_terms did the highlighting
-    assert [h.title for h in a.search("fence tuesday", 10)] == ["Fence repair — availability next week"]
+def test_emails_adapter_not_configured_without_an_address() -> None:
+    assert EmailsAdapter(FolderExplorerClient(""), {}).is_configured() == (False, "search.folder_explorer_url not configured")
 
 
-def test_emails_adapter_not_configured_reasons(tmp_path: Path) -> None:
-    ok, reason = EmailsAdapter("", {}).is_configured()
-    assert ok is False and reason == "search.email_db not configured"
-    ok, reason = EmailsAdapter(str(tmp_path / "missing.db"), {}).is_configured()
-    assert ok is False and reason.startswith("email index not found at ")
-    other = tmp_path / "other.db"
-    sqlite3.connect(str(other)).execute("CREATE TABLE t(x)").connection.commit()
-    ok, reason = EmailsAdapter(str(other), {}).is_configured()
-    assert ok is False and "no emails table" in reason
+# --------------------------------------------- folder-explorer's five states
+
+
+@pytest.mark.parametrize(("part", "state", "reason", "expected"), [
+    ("folders", "not-configured", "no root has a finished scan yet", "not-configured"),
+    ("folders", "indexing", "the first scan is running", "indexing"),
+    ("emails", "error", "the email index could not be read: disk I/O error", "failed"),
+    ("emails", "failed", "the first email build died", "failed"),
+])
+def test_a_part_that_cannot_answer_is_its_state_never_an_empty_list(
+    fe: FakeFolderExplorer, client_fe: FolderExplorerClient, part: str, state: str, reason: str, expected: str,
+) -> None:
+    fe.set_state(part, state, reason)
+    adapter = FoldersAdapter(client_fe) if part == "folders" else EmailsAdapter(client_fe)
+    with pytest.raises(Unavailable) as caught:
+        adapter.search("kitchen", 10)
+    assert (caught.value.state, caught.value.reason) == (expected, reason)
+    assert adapter.availability()[:2] == (expected, reason)
+    # the federated group carries it as `unavailable`, with no hits and no error
+    fed = FederatedSearch([adapter])
+    g = {x["kind"]: x for x in fed.search("kitchen")["groups"]}[part]
+    assert g["unavailable"] == {"state": expected, "reason": reason}
+    assert g["configured"] is True and g["hits"] == [] and g["count"] == 0 and g["error"] is None
+
+
+def test_folder_explorer_down_is_unreachable_not_zero_results(fe: FakeFolderExplorer, client_fe: FolderExplorerClient) -> None:
+    fe.stop()
+    fed = FederatedSearch([FoldersAdapter(client_fe), EmailsAdapter(client_fe)])
+    by = {g["kind"]: g for g in fed.search("kitchen")["groups"]}
+    for kind in ("folders", "emails"):
+        assert by[kind]["unavailable"]["state"] == "unreachable" and by[kind]["hits"] == []
+        assert "did not answer" in by[kind]["unavailable"]["reason"]
+    st = {s["kind"]: s for s in fed.status()}
+    assert st["folders"]["configured"] is True and st["folders"]["state"] == "unreachable"
+
+
+@pytest.mark.parametrize(("mode", "needle"), [
+    ("garbled", "without a v1 envelope"), ("bare422", "HTTP 422 without a v1 envelope"),
+    ("v2", "schema_version 2"), ("mystery", "unknown state 'melting'"),
+])
+def test_an_answer_that_is_not_the_contract_is_failed(
+    fe: FakeFolderExplorer, client_fe: FolderExplorerClient, mode: str, needle: str,
+) -> None:
+    fe.mode = mode
+    with pytest.raises(Unavailable) as caught:
+        client_fe.folders("kitchen", 5)
+    assert caught.value.state == "failed" and needle in caught.value.reason
+
+
+def test_a_blank_address_is_not_configured_with_no_request() -> None:
+    client = FolderExplorerClient("")
+    assert client.summary() == {"enabled": False, "reason": "search.folder_explorer_url not configured", "url": None}
+    with pytest.raises(Unavailable) as caught:
+        client.folders("x", 5)
+    assert caught.value.state == "not-configured"
+
+
+def test_summary_reports_the_address_without_a_request(fe: FakeFolderExplorer) -> None:
+    client = FolderExplorerClient(fe.url + "/")
+    assert client.summary() == {"enabled": True, "reason": None, "url": fe.url}
+    assert fe.requests == []
 
 
 # ------------------------------------------------------------ issues adapter
@@ -288,9 +309,9 @@ class _Broken:
         raise RuntimeError("index corrupt")
 
 
-def test_federated_groups_always_four_and_visible_states(seeded_db: Path, cfg: Path, tmp_path: Path) -> None:
+def test_federated_groups_always_four_and_visible_states(seeded_db: Path, cfg: Path) -> None:
     config = load_config(cfg)
-    fed = build_federated(config, folders=_folders(cfg, tmp_path), issues=None)
+    fed = build_federated(config, folder_explorer=FolderExplorerClient(config.search.folder_explorer_url), issues=None)
     r = fed.search("kitchen", limit=5)
     assert [g["kind"] for g in r["groups"]] == list(KINDS)
     by = {g["kind"]: g for g in r["groups"]}
@@ -305,7 +326,8 @@ def test_federated_groups_always_four_and_visible_states(seeded_db: Path, cfg: P
     assert by2["emails"]["hits"] == [] and by2["issues"]["configured"] is False
     # status() = the Settings card
     st = {s["kind"]: s for s in fed.status()}
-    assert st["emails"]["configured"] is True and st["issues"]["reason"] == "issue service not started"
+    assert st["emails"]["configured"] is True and st["emails"]["state"] == "ok" and st["issues"]["reason"] == "issue service not started"
+    assert st["issues"]["state"] == "not-configured"
     # blank query = the four groups, nothing run
     r3 = fed.search("   ")
     assert r3["q"] == "" and all(g["count"] == 0 for g in r3["groups"])
@@ -321,6 +343,7 @@ def test_federated_timeout_and_error_are_group_states(seeded_db: Path) -> None:
     assert by["emails"]["configured"] is True and by["emails"]["error"] == "timed out after 0 s" and by["emails"]["hits"] == []
     assert by["issues"]["configured"] is True and by["issues"]["error"] == "RuntimeError: index corrupt"
     assert by["folders"]["configured"] is False and by["folders"]["reason"] == "no adapter"
+    assert by["emails"]["unavailable"] is None and by["issues"]["unavailable"] is None
 
 
 # ---------------------------------------------------------------- API + CLI
@@ -332,7 +355,6 @@ def client(seeded_db: Path, cfg: Path, monkeypatch: pytest.MonkeyPatch, tmp_path
     from app.webapp.server import create_app
 
     with TestClient(create_app(), client=("127.0.0.1", 50000)) as c:
-        c.post("/api/folders/reindex")
         yield c
 
 
@@ -359,8 +381,6 @@ def test_cli_search_federated_local_and_json(seeded_db: Path, cfg: Path, monkeyp
     from src import cli
 
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(cfg))
-    monkeypatch.setattr(dbmod, "DEFAULT_DB_PATH", seeded_db)          # the folder index file lands next to it
-    FolderIndexService(load_config(cfg)).reindex()
     backend = cli.LocalBackend(actor="tester")
     code = cli.main(["search", "kitchen"], backend=backend)
     out = capsys.readouterr().out

@@ -19,7 +19,7 @@ Route families (each in ``app/webapp/routers/``):
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
     folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
-            /api/folders/search  → the folder index; POST /api/folders/reindex
+            /api/folders/search  → folder-explorer's folder search, as the picker reads it
             /opener/opener.cmd   → the per-PC handler a second PC downloads (public)
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
                                  → the issue provider (GitHub via gh): status, sync now,
@@ -56,8 +56,8 @@ the repo's write listener + the 2 s import watcher),
 ``src.backup.BackupScheduler`` (daily 03:00 copy + a startup copy when
 today's is missing), ``src.issue_sync.IssueSyncService`` (the forge's
 open issues → coding tasks, first pass 10 s after startup then every
-``issues.sync_minutes``), ``src.folder_index.FolderIndexService`` (startup
-reindex when the index file is missing / older than 24 h, hourly re-check) and
+``issues.sync_minutes``), ``src.search.folder_explorer.FolderExplorerClient``
+(``app.state.folder_explorer``: no thread, one GET per search) and
 ``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
 read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
 ``src.voice.VoiceClient`` (``app.state.voice``), ``src.enrich.EnrichClient``
@@ -131,12 +131,12 @@ from src.config import load_config
 from src.db import db_path, init_db, usage_db_path
 from src.email_capture import EmailCaptureService
 from src.enrich import EnrichClient
-from src.folder_index import FolderIndexService
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
 from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
 from src.search import build_federated
+from src.search.folder_explorer import FolderExplorerClient
 from src.static_versioning import IMMUTABLE_CACHE_CONTROL, SHEET_BUNDLE_NAME
 from src.tasks_repo import RepoError
 from src.usage_log import usage_router
@@ -245,7 +245,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mirror = Mirror(config)
     app.state.backup = BackupScheduler(config)
     app.state.issues = IssueSyncService(config)
-    app.state.folders = FolderIndexService(config)
+    # No thread and no index of its own: folder and email search are GETs to
+    # folder-explorer's v1 API, made when a query arrives.
+    app.state.folder_explorer = FolderExplorerClient(config.search.folder_explorer_url)
     app.state.capture = EmailCaptureService(config)
     # No thread and nothing to start: the voice client is a cached reachability
     # probe plus one forwarding POST.
@@ -264,17 +266,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # finds the copy expired, and runs in one short-lived worker bounded by
     # `calendar.timeout_seconds`.
     app.state.calendar = CalendarService(config)
-    app.state.search = build_federated(config, folders=app.state.folders, issues=app.state.issues)
-    for a in app.state.search.status():
-        if not a["configured"]:
-            logger.warning("⚠️ search: %s adapter off — %s", a["kind"], a["reason"])
+    app.state.search = build_federated(config, folder_explorer=app.state.folder_explorer, issues=app.state.issues)
+    if not app.state.folder_explorer.configured:
+        logger.warning("⚠️ search: folders and emails off — search.folder_explorer_url not configured")
     repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
     repo.set_folder_web_resolver(lambda ref: placeholders.web_url(ref, config.web_roots))
     repo.set_members([p.id for p in config.people])
     app.state.mirror.start()
     app.state.backup.start()
     app.state.issues.start()
-    app.state.folders.start()
     app.state.capture.start()
     try:
         yield
@@ -282,7 +282,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.mirror.stop()
         app.state.backup.stop()
         app.state.issues.stop()
-        app.state.folders.stop()
         app.state.capture.stop()
         # Not a poller to stop — this waits for an archiving run that is mid-
         # flight, so shutdown never lands between a mail's files and its move.

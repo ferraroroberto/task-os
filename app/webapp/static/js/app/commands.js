@@ -67,10 +67,6 @@ export function paletteCommands(app) {
     app.onFilterChange(Object.assign({}, DEFAULT_FILTERS, { scope: app.state.filters.scope, whose: app.state.filters.whose }));
   } });
   cmds.push({ id: 'sync-issues', label: 'Sync issues', hint: app.state.issues && app.state.issues.enabled ? 'one pass now (' + app.state.issues.provider + ')' : 'issue provider not configured', icon: 'refresh-cw', run: function () { return app.syncIssues(); } });
-  cmds.push({ id: 'reindex-folders', label: 'Rescan folders', hint: 'refresh the folder index now', icon: 'folder', run: async function () {
-    try { const r = await api('/api/folders/reindex', { method: 'POST', body: {} }); toast('Folder index: ' + r.entries + ' folder(s) in ' + r.seconds + ' s', 'success'); app.settings.refreshStatus(); }
-    catch (err) { toast(err.message || 'Reindex failed', 'error'); }
-  } });
   cmds.push({ id: 'export-mirror', label: 'Export mirror', hint: 'every task to mirror.dir now', icon: 'copy', run: async function () {
     try { const r = await api('/api/mirror/export', { method: 'POST', body: {} }); toast('Mirror: ' + r.written + ' written, ' + r.removed + ' removed', 'success'); }
     catch (err) { toast(err.message || 'Export failed', 'error'); }

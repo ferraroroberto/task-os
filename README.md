@@ -34,7 +34,7 @@ tasks show 2            # activity log shows due: ∅ → 2026-09-01
 tasks triage            # stage one AI suggestion per Inbox task; y/n/q reviews them
 tasks mirror status     # markdown mirror + backup: enabled? where? last export / import
 tasks issues sync       # my open GitHub issues → coding tasks in To do; closed ones → done
-tasks folders search kitchen   # the folder index (search.folder_roots) — refs you can paste on a task
+tasks folders search kitchen   # folder-explorer's folder search (search.folder_explorer_url) — refs you can paste on a task
 ```
 
 Playwright browsers for the e2e suite: `& .\.venv\Scripts\python.exe -m playwright install chromium webkit` (once).

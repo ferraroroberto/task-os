@@ -1,4 +1,4 @@
-"""Folders route family — placeholder resolution + the folder index (Step 9).
+"""Folders route family — placeholder resolution + folder-explorer's folder search (Step 9).
 
     POST /api/resolve  {"ref": "<ref or absolute path>"}
         → {ref, path, resolved, unresolved, href, web_url}
@@ -8,11 +8,12 @@
           path (display only); ``href`` the ``taskos://open?ref=…`` link;
           ``web_url`` the cloud twin from ``config.web_roots`` (#28), or null.
     GET  /api/folders/search?q=<terms>&limit=30
-        → {q, items: [{path, ref, name, depth}], count, indexing, reason?}
-          substring AND search over the folder index (see src/folder_index.py);
-          409 ``folders_disabled`` when no root is configured / resolves.
-    POST /api/folders/reindex
-        → {entries, roots, seconds, index_file} — rescan now, foreground.
+        → {q, items: [{path, ref, name, depth}], count}
+          folder-explorer's v1 folder search (src/search/folder_explorer.py), each
+          hit's path folded onto the placeholders; 503 ``folders_unavailable``
+          with ``detail: {state, reason}`` when folder-explorer cannot answer
+          (``not-configured`` · ``indexing`` · ``failed`` · ``unreachable``) —
+          never an empty ``items`` that would read as "no folder matches".
 
 ``/api/resolve`` is a POST although it only reads: ``ref`` is a *query
 parameter name on every tracking-parameter blocklist*, so a URL-cleaning
@@ -22,9 +23,8 @@ the drawer's "paste an absolute path" then 422s on a server that never saw
 the value (#66). A body carries no query string, so no cleaner can touch it,
 and the folder path stays out of the URL, the history and any access log.
 
-The service lives on ``app.state.folders`` (started by the lifespan; the
-startup reindex runs in its own daemon thread). The ``tasks folders …`` CLI
-calls these when the app is up.
+The client lives on ``app.state.folder_explorer`` (built by the lifespan). The
+``tasks folders …`` CLI calls these when the app is up.
 """
 
 from __future__ import annotations
@@ -34,8 +34,10 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
-from app.webapp.routers._helpers import error_response, service_unavailable
+from app.webapp.routers._helpers import error_response
 from src import placeholders
+from src.search.folder_explorer import Unavailable
+from src.search.folders_adapter import folder_item
 
 router = APIRouter(prefix="/api", tags=["folders"])
 
@@ -44,8 +46,6 @@ class ResolveBody(BaseModel):
     ref: str = Field(min_length=1)
 
 
-def _service(request: Request) -> Any:
-    return getattr(request.app.state, "folders", None)
 
 
 @router.post("/resolve")
@@ -62,19 +62,14 @@ def folders_search(
     q: str = Query(min_length=1),
     limit: int = Query(default=30, ge=1, le=200),
 ) -> Any:
-    svc = _service(request)
-    if svc is None or not svc.enabled:
-        return service_unavailable(svc, "folders_disabled", "folder index")
-    items = svc.search(q, limit=limit)
-    return {"q": q, "items": items, "count": len(items), "indexing": svc.indexing, "entries": svc.status()["entries"]}
-
-
-@router.post("/folders/reindex")
-def folders_reindex(request: Request) -> Any:
-    svc = _service(request)
-    if svc is None or not svc.enabled:
-        return service_unavailable(svc, "folders_disabled", "folder index")
+    client = getattr(request.app.state, "folder_explorer", None)
+    if client is None:
+        return error_response(503, "folders_unavailable", "folder search client not started",
+                              detail={"state": "not-configured", "reason": "folder search client not started"})
     try:
-        return svc.reindex()
-    except Exception as exc:  # noqa: BLE001 — surfaced as the envelope, logged by the service
-        return error_response(500, "reindex_failed", str(exc))
+        body = client.folders(q, limit)
+    except Unavailable as exc:
+        return error_response(503, "folders_unavailable", f"folder-explorer is {exc.state}: {exc.reason}",
+                              detail={"state": exc.state, "reason": exc.reason})
+    items = [folder_item(r, request.app.state.config.placeholders) for r in body.get("results") or []]
+    return {"q": q, "items": items, "count": len(items)}

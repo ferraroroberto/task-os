@@ -25,7 +25,7 @@
     tasks backup                        copy the database to mirror.backup_dir now
     tasks issues sync|status            issue provider: one sync pass now · status (default)
     tasks issue create N --repo owner/name   open an issue from task N and link it (→ coding)
-    tasks folders reindex|status|search "q"   the folder index (search.folder_roots)
+    tasks folders status|search "q"   folder search through folder-explorer (search.folder_explorer_url)
 
 Every command takes ``--json`` for machine-readable output (the same shapes
 the REST API returns — a fact only a live request can settle, such as
@@ -475,9 +475,6 @@ def _cmd_issue(args: argparse.Namespace, backend: HttpBackend | LocalBackend) ->
 
 
 def _cmd_folders(args: argparse.Namespace, backend: HttpBackend | LocalBackend) -> tuple[Any, str]:
-    if args.action == "reindex":
-        r = backend.folders_reindex()
-        return r, f"folders: {r['entries']} folder(s) indexed under {', '.join(r['roots'])} in {r['seconds']}s → {r['index_file']}"
     if args.action == "search":
         if not args.query:
             raise CliError("folders search needs a query", code="usage")
@@ -665,9 +662,9 @@ def _add_service_commands(sub: argparse._SubParsersAction, common: argparse.Argu
     ic.add_argument("id", type=int)
     ic.add_argument("--repo", required=True, help="owner/name to open the issue in")
 
-    fo = sub.add_parser("folders", parents=[common], help="folder index: reindex · status · search")
-    fo.add_argument("action", choices=("reindex", "status", "search"), nargs="?", default="status",
-                    help="reindex = rescan search.folder_roots now · search = substring AND over the index · status (default)")
+    fo = sub.add_parser("folders", parents=[common], help="folder search through folder-explorer: status · search")
+    fo.add_argument("action", choices=("status", "search"), nargs="?", default="status",
+                    help="search = folder-explorer's folder search for the words · status (default)")
     fo.add_argument("query", nargs="?", help="search terms (for: search)")
 
 

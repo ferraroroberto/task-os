@@ -9,4 +9,4 @@ The recognition is the server's (`tasks_repo.infer_link_kind`), so an agent in a
 
 Where to get the URL: every Claude Code commit carries a `Claude-Session: https://claude.ai/code/session_…` trailer, the session list at claude.ai/code shows it, or ask the session itself for its link. List summaries carry `ai_url` + `ai_label` (the first `ai` link) so rows never scan the links table client-side.
 
-Folder links and the folder index that backs the drawer's folder picker are documented in [Folders that open on any PC](folders.md#folders-that-open-on-any-pc).
+Folder links and the folder search that backs the drawer's folder picker are documented in [Folders that open on any PC](folders.md#folders-that-open-on-any-pc).
