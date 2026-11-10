@@ -20,13 +20,9 @@ from typing import Any
 
 from src import archive_rank, clock
 from src.archive_renumber import loads
+from src.archive_state import FILED_STATUSES, ItemStatus, RunStatus, derive_item_state
 
 logger = logging.getLogger(__name__)
-
-#: The two states in which a mail is actually filed somewhere.
-FILED_STATUSES = ("archived", "moved")
-#: What a human may still act on.
-REVIEWABLE_STATUSES = ("needs_review", "failed")
 
 _ITEM_COLUMNS = (
     "id", "run_id", "message_id", "entry_id", "subject", "sender", "sent_at",
@@ -51,19 +47,20 @@ def _row(row: sqlite3.Row | None, columns: tuple[str, ...]) -> dict[str, Any] | 
 
 
 def _item_dict(row: sqlite3.Row) -> dict[str, Any]:
-    """One item row as the API renders it: JSON columns parsed, flags real bools."""
+    """One item row as the API renders it: JSON columns parsed, flags real bools, ``state`` derived."""
     item = dict(_row(row, _ITEM_COLUMNS) or {})
     item["candidates"] = loads(item.pop("candidates_json"), [])
     item["files"] = loads(item.pop("files_json"), [])
     item["date_prefix"] = bool(item["date_prefix"])
+    item["state"] = derive_item_state(item).value
     return item
 
 
 def create_run(conn: sqlite3.Connection) -> dict[str, Any]:
     """Open a run row in ``running``; its id is what ``POST /api/archive/run`` returns."""
     cur = conn.execute(
-        "INSERT INTO archive_runs (started_at, status) VALUES (?, 'running')",
-        (clock.now_iso(),),
+        "INSERT INTO archive_runs (started_at, status) VALUES (?, ?)",
+        (clock.now_iso(), RunStatus.RUNNING.value),
     )
     conn.commit()
     return get_run(conn, int(cur.lastrowid))  # type: ignore[return-value]
@@ -75,15 +72,15 @@ def _item_counts(conn: sqlite3.Connection, run_id: int) -> tuple[int, int, int, 
     Derived rather than accumulated on purpose: the counters can then never
     disagree with the items, which are what the screen renders.
     """
-    counts = {s: 0 for s in ("archived", "needs_review", "failed", "reverted", "moved")}
+    counts = {s.value: 0 for s in ItemStatus}
     for row in conn.execute(
         "SELECT status, COUNT(*) AS n FROM archive_items WHERE run_id = ? GROUP BY status",
         (run_id,),
     ).fetchall():
         counts[str(row["status"])] = int(row["n"])
     return (
-        sum(counts.values()), counts["archived"] + counts["moved"],
-        counts["needs_review"], counts["failed"],
+        sum(counts.values()), counts[ItemStatus.ARCHIVED] + counts[ItemStatus.MOVED],
+        counts[ItemStatus.NEEDS_REVIEW], counts[ItemStatus.FAILED],
     )
 
 
@@ -102,8 +99,16 @@ def sync_run_counts(conn: sqlite3.Connection, run_id: int) -> None:
     conn.commit()
 
 
+def open_run_ids(conn: sqlite3.Connection) -> list[int]:
+    """Every run row still open, oldest first — the rows a restart left behind."""
+    rows = conn.execute(
+        "SELECT id FROM archive_runs WHERE status = ? ORDER BY id", (RunStatus.RUNNING.value,)
+    ).fetchall()
+    return [int(r["id"]) for r in rows]
+
+
 def finish_run(
-    conn: sqlite3.Connection, run_id: int, *, status: str, error: str | None = None,
+    conn: sqlite3.Connection, run_id: int, *, status: RunStatus, error: str | None = None,
     agreement: float | None = None,
 ) -> dict[str, Any]:
     """Close a run, recomputing its counters from the rows it actually wrote."""
@@ -111,7 +116,7 @@ def finish_run(
     conn.execute(
         "UPDATE archive_runs SET finished_at = ?, status = ?, planned = ?, archived = ?, "
         "needs_review = ?, failed = ?, error = ?, agreement = ? WHERE id = ?",
-        (clock.now_iso(), status, planned, archived, needs_review, failed, error, agreement, run_id),
+        (clock.now_iso(), RunStatus(status).value, planned, archived, needs_review, failed, error, agreement, run_id),
     )
     conn.commit()
     return get_run(conn, run_id)  # type: ignore[return-value]
@@ -222,9 +227,7 @@ def filed_message_ids(conn: sqlite3.Connection) -> set[str]:
 
 
 __all__ = [
-    "FILED_STATUSES",
     "MAX_HINT_CHARS",
-    "REVIEWABLE_STATUSES",
     "create_run",
     "filed_message_ids",
     "finish_run",
@@ -233,6 +236,7 @@ __all__ = [
     "insert_item",
     "list_items",
     "list_runs",
+    "open_run_ids",
     "recent_corrections",
     "record_correction",
     "update_item",

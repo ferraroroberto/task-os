@@ -4,6 +4,7 @@
 'use strict';
 
 import { codeEl, pct } from '../../format.js';
+import { runFailed } from '../archive/state.js';
 import { setWord } from './words.js';
 
 /** The batch archiver's half of `GET /api/status`: where
@@ -41,7 +42,7 @@ export function renderArchive(ctx, st) {
 function archiveWord(st) {
   if (st.running) return 'running';
   const last = st.last_run;
-  if (st.last_error || (last && last.status === 'failed')) return 'error';
+  if (st.last_error || runFailed(last)) return 'error';
   if (last && last.agreement != null) return pct(last.agreement) + ' agreed';
   return 'on';
 }

@@ -7,6 +7,7 @@ import { api } from '../../api.js';
 import { toast } from '../../toast.js';
 import { renderHead, renderPicker, renderRecent } from './head.js';
 import { renderReport } from './report.js';
+import { runIsLive } from './state.js';
 
 const RUNS_LIMIT = 20;
 
@@ -59,7 +60,7 @@ export async function refresh(ctx) {
   // `tick` polls `runId`, and a finished run there would end the poll (and the
   // Settings row's "running", which follows this pane's) while the new run
   // is still going.
-  if (st.status && st.status.running && st.runs.length && st.runs[0].status === 'running') {
+  if (st.status && st.status.running && st.runs.length && runIsLive(st.runs[0])) {
     st.runId = st.runs[0].id;
     st.liveRunId = st.runs[0].id;
     ctx.els.pick.value = String(st.runId);

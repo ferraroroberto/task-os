@@ -52,6 +52,10 @@ Each mail ends in one of five states, and the run row counts them:
 
 Failures you can tell apart, because the fix differs for each: *not configured here* (409 with the reason — `archive.enabled` off, or no `search.folder_explorer_url`), *folder-explorer unreachable* (`archive_unreachable`: nothing answered at that address — it is down, restarting or the address is wrong), *timed out* (`archive_timeout`, from either side), *folder-explorer busy* (`archive_busy`, 409 — it is serving another archive call), *Outlook unreachable* (`archive_outlook_unavailable`, the archiver's own `outlook_unavailable` / `com_unavailable` / `outlook_off`), *not answered by an archive API at all* (`archive_bad_output` — a proxy page or a build without the routes — and `archive_schema_mismatch`), and *a run already in flight in this app* (409 — one Outlook, one call at a time; `revert` and `move` take the same lock). Each reaches the run's `error`, the toast of a row action and the log; none is folded into an empty Inbox or a clean run. A fifth is deliberately **not** fatal: if a folder's re-index afterwards fails (busy past its wait, the folder outside folder-explorer's email folders, the index not set up), the mails are still filed, so the run finishes `done` and carries each folder's reason in its `error`. Filed-but-not-confirmed is its own state, never folded into a clean run.
 
+## States
+
+A run and a mail each have a derived `state` in the API; [archive-state.md](archive-state.md) lists them and says who reads them.
+
 ## Renumbering, and the paths it heals
 
 The `NNN` prefix on an archived mail is meant to be browsable: open a folder, read down the list, read the thread in the order it happened. Two ordinary operations break that — a `revert` leaves a hole, and an `apply` always takes the highest number even for a mail older than everything already filed. The archiver repairs it (`renumber`), and task-os asks for the repair on both verbs that cause it: `archive.renumber` (default true) puts `--renumber` on the `apply` and the `revert` it spawns.

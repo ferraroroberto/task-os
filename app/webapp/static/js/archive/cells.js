@@ -10,11 +10,14 @@ const STATE_WORDS = {
   archived: 'filed',
   moved: 'moved by you',
   needs_review: 'needs you',
-  failed: 'failed',
+  reviewed: 'reviewed',
+  failed_on_disk: 'failed',
+  failed_clean: 'failed',
   reverted: 'reverted',
 };
 const STATE_TONE = {
-  archived: 'ok', moved: 'ok', needs_review: 'warn', failed: 'warn', reverted: 'off',
+  archived: 'ok', moved: 'ok', needs_review: 'warn', reviewed: 'off',
+  failed_on_disk: 'warn', failed_clean: 'warn', reverted: 'off',
 };
 //: The desktop table caps a row's file chips so five real files (and their
 //: attachments) cannot force a subject/state row several lines tall.
@@ -31,9 +34,8 @@ const FILE_NAME_PREFIX = /^(?:\d{4}-\d{2}-\d{2} - )?\d+ - /;
 
 export function stateChip(item) {
   const s = document.createElement('span');
-  const reviewed = item.status === 'needs_review' && item.decided_at;
-  s.className = 'archive-state status-' + (reviewed ? 'off' : STATE_TONE[item.status] || 'off');
-  s.textContent = reviewed ? 'reviewed' : STATE_WORDS[item.status] || item.status;
+  s.className = 'archive-state status-' + (STATE_TONE[item.state] || 'off');
+  s.textContent = STATE_WORDS[item.state] || item.state;
   if (item.decided_at) s.title = 'reviewed ' + fmtTsShort(item.decided_at);
   return s;
 }

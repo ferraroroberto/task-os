@@ -10,7 +10,7 @@ import {
   confidenceEl, destinationEl, filesEl, reasonEl, stateChip, subjectCellEl, subjectEl,
 } from './cells.js';
 import { actionsFor, rowMenuFor } from './rowactions.js';
-import { REVIEWABLE } from './rules.js';
+import { needsAnswer, runIsLive } from './state.js';
 
 // Who sent it and when ride under the subject: two columns fewer is
 // what lets the grid fit the window, the row's actions on screen.
@@ -38,16 +38,14 @@ function drawReport(ctx) {
   }
   const items = st.run.items || [];
   if (!items.length) {
-    els.host.appendChild(emptyCard('archive', st.run.status === 'running'
+    els.host.appendChild(emptyCard('archive', runIsLive(st.run)
       ? 'The run has started — mails appear as they are decided'
       : 'This run touched no mail'));
     els.acceptAll.hidden = true;
     return;
   }
   els.host.appendChild(ctx.phoneMq.matches ? renderCards(ctx, items) : renderTable(ctx, items));
-  const pending = items.filter(function (i) {
-    return REVIEWABLE.indexOf(i.status) >= 0 && !i.decided_at;
-  });
+  const pending = items.filter(needsAnswer);
   els.acceptAll.hidden = pending.length === 0;
   // A static button: `runAction` disabled it, and nothing but this redraw
   // gives it back — a cancelled confirm would otherwise leave it dead.

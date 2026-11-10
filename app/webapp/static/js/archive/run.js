@@ -8,6 +8,7 @@ import { toast } from '../../toast.js';
 import { renderPicker } from './head.js';
 import { loadRuns, refresh, refreshStatus } from './load.js';
 import { renderReport } from './report.js';
+import { runFailed, runIsLive, runReason } from './state.js';
 import { counts } from './text.js';
 
 //: How often the screen re-reads a run that is still going. The run itself is
@@ -16,8 +17,8 @@ const POLL_MS = 1500;
 
 function progressText(r) {
   if (!r) return '';
-  if (r.status === 'running') return 'running… ' + counts(r);
-  return r.status === 'failed' ? 'failed — ' + (r.error || 'no reason recorded') : 'done · ' + counts(r);
+  if (runIsLive(r)) return 'running… ' + counts(r);
+  return runFailed(r) ? r.state + ' — ' + runReason(r) : 'done · ' + counts(r);
 }
 
 export function startPolling(ctx) {
@@ -47,11 +48,11 @@ async function tick(ctx) {
   // from the live run only while it is the one on show.
   if (st.runId === st.liveRunId) { st.run = live; renderReport(ctx); }
   ctx.els.progress.textContent = progressText(live);
-  if (live.status === 'running') { startPolling(ctx); return; }
+  if (runIsLive(live)) { startPolling(ctx); return; }
   st.polling = false;
-  toast(live.status === 'failed'
-    ? 'Archive run failed — ' + (live.error || 'see the report')
-    : 'Archive run done · ' + counts(live), live.status === 'failed' ? 'error' : 'success');
+  toast(runFailed(live)
+    ? 'Archive run ' + live.state + ' — ' + runReason(live)
+    : 'Archive run done · ' + counts(live), runFailed(live) ? 'error' : 'success');
   await Promise.all([refreshStatus(ctx), loadRuns(ctx)]);
   renderPicker(ctx);   // may settle `runId` on the latest run when none was picked yet
   if (st.runId === st.liveRunId) st.run = live;
