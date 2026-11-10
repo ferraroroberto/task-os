@@ -47,7 +47,6 @@
 /src/pooled_http.py
 /src/runtime_data.py
 /src/usage_log.py
-/src/vendor/foldersearcher_core.py
 /tests/e2e/_browser_sweep.py
 /tests/e2e/_e2e_live_guard.py
 /tests/e2e/_geometry.py
