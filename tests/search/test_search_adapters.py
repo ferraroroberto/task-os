@@ -8,6 +8,7 @@ mailbox, a real synced folder or the real folder-explorer."""
 from __future__ import annotations
 
 import json
+import socket
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -217,6 +218,18 @@ def test_folder_explorer_down_is_unreachable_not_zero_results(fe: FakeFolderExpl
         assert "did not answer" in by[kind]["unavailable"]["reason"]
     st = {s["kind"]: s for s in fed.status()}
     assert st["folders"]["configured"] is True and st["folders"]["state"] == "unreachable"
+
+
+def test_a_configured_address_nobody_answers_on_is_unavailable_never_empty(tmp_path: Path) -> None:
+    """An address read from the config (here a port with no listener) reaches the groups as ``unreachable``."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    cfg = load_config(write_test_config(tmp_path / "config.json", folder_explorer_url=f"https://127.0.0.1:{port}"))
+    client = FolderExplorerClient(cfg.search.folder_explorer_url)
+    by = {g["kind"]: g for g in FederatedSearch([FoldersAdapter(client), EmailsAdapter(client, {})]).search("kitchen")["groups"]}
+    for kind in ("folders", "emails"):
+        assert by[kind]["unavailable"]["state"] == "unreachable" and by[kind]["hits"] == [] and by[kind]["count"] == 0
 
 
 @pytest.mark.parametrize(("mode", "needle"), [
