@@ -1,5 +1,5 @@
 """Generate / rotate / clear the webapp's bearer token (``auth.token``) — or,
-with ``--person <id>``, one member's own token (``auth.people.<id>.token``, #474).
+with ``--person <id>``, one member's own token (``auth.people.<id>.token``).
 
 Loopback (this PC) never needs it. Any other client — the phone over the
 tailnet, a script on another machine, an LLM — must present it: as

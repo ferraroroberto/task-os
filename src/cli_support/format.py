@@ -63,7 +63,7 @@ def fmt_ls(items: list[dict[str, Any]]) -> str:
 
 
 def group_journal(items: list[dict[str, Any]], done_from: str, done_to: str) -> dict[str, Any]:
-    """The done journal's shape (#102): closed tasks grouped by the local
+    """The done journal's shape: closed tasks grouped by the local
     calendar day of ``done_at``, newest day first, each day with its count.
 
     The same grouping the web journal draws — ``done_at`` is a local
@@ -248,7 +248,7 @@ def fmt_status(status: dict[str, Any]) -> str:
 
 
 def fmt_capture_status(c: dict[str, Any]) -> str:
-    """The flagged-email poller's line (#98) — off always says why."""
+    """The flagged-email poller's line — off always says why."""
     if not c.get("enabled"):
         return f"capture  not configured — {c.get('reason') or 'unknown'}"
     r = c.get("last_result") or {}
@@ -265,7 +265,7 @@ def fmt_capture_status(c: dict[str, Any]) -> str:
 
 
 def fmt_voice_status(v: dict[str, Any]) -> str:
-    """The voice endpoints' line (#92, #144) — which one is serving, or why
+    """The voice endpoints' line — which one is serving, or why
     neither is."""
     if not v.get("enabled"):
         return f"voice    off — {v.get('reason') or 'unknown'}"
@@ -284,7 +284,7 @@ def fmt_voice_status(v: dict[str, Any]) -> str:
 
 
 def fmt_enrich_status(e: dict[str, Any]) -> str:
-    """The text model's line (#147) — which model, or why there is none.
+    """The text model's line — which model, or why there is none.
 
     Off is never silent: a spoken line still becomes a task, it just keeps
     the deterministic parse, and this is where you find out that is what you

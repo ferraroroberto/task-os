@@ -1,4 +1,4 @@
-"""One-time import of the time-tracker prototype's database export (#457).
+"""One-time import of the time-tracker prototype's database export.
 
 The prototype (a private claude.ai artifact) kept its data in a document store.
 Its export is a folder with one JSON file per document, file name = document id:

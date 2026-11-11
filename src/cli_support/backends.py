@@ -65,7 +65,7 @@ def _tls_context(base: str) -> ssl.SSLContext | None:
     """HTTPS to loopback skips certificate verification (hostname included): the served leaf names the
     tailnet host (``<host>.ts.net``), never ``127.0.0.1``, and loopback is
     already the owner (``src/auth.py``) — the same exception the tray's own
-    probe makes (``WebappManager.is_reachable``, #259). Any other host is
+    probe makes (``WebappManager.is_reachable``). Any other host is
     verified as usual (``None`` = urllib's default context)."""
     parts = urllib.parse.urlsplit(base)
     if parts.scheme != "https" or (parts.hostname or "") not in _LOOPBACK_HOSTS:
@@ -499,7 +499,7 @@ class LocalBackend:
 
     def issue_create(self, task_id: int, repo: str) -> dict[str, Any]:
         """The same workflow the route runs — ``src.issue_sync.issue_from_task``
-        (issue #35). ``_wrap`` turns its repo-family errors (already_linked,
+. ``_wrap`` turns its repo-family errors (already_linked,
         issues_disabled, validation, not_found) into the CLI's dialect; the
         provider error is mapped here, as the route maps it to its 502."""
         from src.issue_sync import issue_from_task

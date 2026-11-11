@@ -100,7 +100,7 @@ class ItemActions:
         """The shapes a human may file into a folder they picked.
 
         Wider than :meth:`_require_revertible` on purpose: a ``needs_review``
-        mail is the one the screen (#159) most needs to move — the system was
+        mail is the one the screen most needs to move — the system was
         not confident enough to file it, so a human names the folder. There is
         nothing on disk to undo first, which is the only difference; every
         other state is either already handled (filed → undo, then re-file) or
@@ -188,13 +188,13 @@ class ItemActions:
 
         A ``needs_review`` mail has nothing on disk, so there is no undo leg for
         it — it is simply filed where the human said, which is how the report
-        screen (#159) resolves the rows the ranking refused to decide. Every
+        screen resolves the rows the ranking refused to decide. Every
         other movable row is undone first and then filed afresh; the archiver
         owns the filenames either way.
 
         A move that lands is also the clearest correction there is, so it writes
-        an ``archive_corrections`` row (#158) carrying the optional ``hint`` —
-        the one-line note the report screen (#159) offers — into every later
+        an ``archive_corrections`` row carrying the optional ``hint`` —
+        the one-line note the report screen offers — into every later
         prompt.
         """
         item = self._require(conn, item_id)
@@ -370,14 +370,14 @@ class ItemActions:
             )
 
     def retry(self, conn: sqlite3.Connection, item_id: int) -> dict[str, Any]:
-        """Send a refused move back to the archiver, unchanged (#174).
+        """Send a refused move back to the archiver, unchanged.
 
         The shape this exists for: ``apply`` wrote the ``.msg`` and then Outlook
         refused the move (``move_failed``), so the files are on disk and the mail
         is still in the Inbox — and every later ``plan`` reports it
         ``already_archived``, so no run would ever pick it up again. The remedy
         the archiver names is *apply the same decision again*
-        (email-archiver#59): it writes nothing, reuses the existing file, moves
+: it writes nothing, reuses the existing file, moves
         the mail and tags it.
 
         So nothing is re-decided here. The **same** message, folder and naming
@@ -464,10 +464,10 @@ class ItemActions:
         Only the two rows that ask for a human (``needs_review``, ``failed``)
         can be accepted: an ``archived`` row is finished, not reviewed, and
         answering 409 there keeps "I have seen this" from silently meaning two
-        different things on the screen (#159).
+        different things on the screen.
 
         Accepting a ``needs_review`` mail that *had* a folder is the other half
-        of the correction memory (#158): the system was not confident enough to
+        of the correction memory: the system was not confident enough to
         file it and a human said that folder was right after all, which is a
         worked example exactly as a ``move`` is. A ``failed`` row teaches
         nothing about folders — the archiver broke, the ranking did not — and

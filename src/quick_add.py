@@ -7,8 +7,8 @@ the PWA and the terminal agree on what a phrase means:
     pay water bill by tomorrow          → "pay water bill", due tomorrow  (on / by / due prefix ok)
     write sensor driver in 2 weeks      → "write sensor driver", due +14 days
     renew insurance due oct 15 starts oct 1
-                                        → due Oct 15 **and** starts Oct 1 (issue #87)
-    order sensor #12                    → parent = task 12
+                                        → due Oct 15 **and** starts Oct 1
+    order sensor #<id>                  → parent = the task with that id
     order sensor › garden-bot           → parent = the task whose title matches "garden-bot"
     fix tap > Bathroom tomorrow         → parent "Bathroom" (ASCII ">" works too), due tomorrow
 
@@ -55,7 +55,7 @@ _MAX_DATE_WORDS = 4
 def strip_lead_in(phrase: str) -> str:
     """A date phrase without its introducing word — ``before friday`` → ``friday``.
 
-    Shared with :mod:`src.enrich` (#147), which asks a model for "the words
+    Shared with :mod:`src.enrich`, which asks a model for "the words
     that say when" and gets them with their preposition attached. One
     vocabulary, so a phrase means the same thing typed and spoken.
     """

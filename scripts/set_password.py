@@ -1,5 +1,5 @@
 """Set or clear the optional login password (``auth.password_hash``) — or, with
-``--person <id>``, one member's own (``auth.people.<id>.password_hash``, #474).
+``--person <id>``, one member's own (``auth.people.<id>.password_hash``).
 
 The bearer token gates every non-loopback request; a password is a memorable
 alternative to type at ``/login`` instead of pasting the token. Only the

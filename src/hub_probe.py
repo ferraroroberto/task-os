@@ -4,7 +4,7 @@ One TCP connect, cached by :class:`CachedProbe` for :data:`PROBE_TTL_S`: the
 AI client (:mod:`src.ai.client`), the voice client (:mod:`src.voice`) and the
 enrich client (:mod:`src.enrich`) all ask "is anything accepting connections
 there?" the same way, and all cache the answer the same way — one lock, one
-TTL'd verdict, one ``checked_at`` stamp (#439).
+TTL'd verdict, one ``checked_at`` stamp.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""The spoken sentence becomes a title and a description (#147).
+"""The spoken sentence becomes a title and a description.
 
 A sentence you say carries more than a title. *"Urgent, I need to call the
 plumber about the leaking radiator in the guest room before Friday"* is a
@@ -12,7 +12,7 @@ untouched, so "the CLI and the UI agree on what a phrase means" still holds
 for everything typed — and typing keeps its instant, deterministic preview
 instead of waiting on a model.
 
-**The model is named here**, unlike transcription (#144), which names none so
+**The model is named here**, unlike transcription, which names none so
 the hub can apply its ``roles.audio.transcribe`` role. There is no text role
 to defer to, and the choice is load-bearing:
 
@@ -280,7 +280,7 @@ def enrich_line(
     Always answers, and always says which of the two answered. The
     deterministic :func:`src.quick_add.parse` runs first and is the floor: the
     model can only replace the title, add a description and point at dates.
-    ``parent_ref`` stays the parser's, because ``#12`` and ``› garden-bot`` are
+    ``parent_ref`` stays the parser's, because a ``#<id>`` reference and ``› garden-bot`` are
     syntax, not language — the model was never asked about them.
     """
     today = today or clock.today()

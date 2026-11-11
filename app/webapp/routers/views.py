@@ -8,8 +8,8 @@
            "calendar"}
           ``due`` = open tasks due ≤ today grouped by root project (sorted by
           due date within each group); ``week`` = tomorrow … +7 days,
-          same shape; ``calendar`` = the read-only calendar lane (#96,
-          ``src.calendar_lane``): today's events from ``calendar.ics_url``
+          same shape; ``calendar`` = the read-only calendar lane
+          (``src.calendar_lane``): today's events from ``calendar.ics_url``
           plus the state that says whether an empty list is a free day. It
           never holds the response longer than ``calendar.timeout_seconds``.
     POST /api/calendar/refresh

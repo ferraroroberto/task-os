@@ -1,4 +1,4 @@
-"""Time route family — the time tracker behind the Time tab (#457).
+"""Time route family — the time tracker behind the Time tab.
 
     GET    /api/time/meta                 people, ``you`` (the viewer's member id or null), areas +
                                           categories, compare area, long-timer threshold,
@@ -29,7 +29,7 @@
 
 Every rule is in ``src/time_repo.py``; the routes only hand it the configured
 people (``config.time``). Gated by ``AuthMiddleware`` like every ``/api/``
-route. A write is for the viewer (#475: their own token, or the install owner
+route. A write is for the viewer (their own token, or the install owner
 on loopback) unless the body names someone, so the owner can still edit the
 other person's entry from the PC; the person is a label, never a credential. Named
 ``time_tracker`` so the module can never shadow the stdlib ``time``.
@@ -71,7 +71,7 @@ def _viewer_id(request: Request) -> str | None:
 
 
 def _person(request: Request, explicit: str | None) -> str:
-    """The person a write is for: the one the body names, else the viewer (#475)."""
+    """The person a write is for: the one the body names, else the viewer."""
     if explicit:
         return explicit
     you = _viewer_id(request)

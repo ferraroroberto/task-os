@@ -209,7 +209,7 @@ def update_task(
     leaves the task re-parented; ``type='coding'`` is refused unless an
     issue_ref exists; ``status='done'`` stamps ``done_at`` (and leaving
     ``done`` clears it). ``owner`` is compared, and logged, as the effective
-    owner (#476): naming the install owner on a task whose NULL already means
+    owner: naming the install owner on a task whose NULL already means
     them changes nothing.
     """
     unknown = set(changes) - set(_TASK_FIELDS)
@@ -271,7 +271,7 @@ def set_due(conn: sqlite3.Connection, task_id: int, due: str | date | None, *, a
 
 def set_starts(conn: sqlite3.Connection, task_id: int, starts: str | date | None, *, actor: str | None = None) -> dict[str, Any]:
     """Set (or clear, with ``None``) the day the task starts mattering — what
-    the Today row's snooze control and ``tasks starts`` both do (#87)."""
+    the Today row's snooze control and ``tasks starts`` both do."""
     return update_task(conn, task_id, actor=actor, starts=starts)
 
 
@@ -298,7 +298,7 @@ def bulk_update(
     so the activity rows, the ``done_at`` stamp, the recurrence roll and the
     mirror hooks are identical to editing the tasks one by one. ``complete``
     is the bulk form of the row status select's ``complete`` pseudo-status
-    (issue #54) — it rolls a recurring task's due instead of closing it;
+ — it rolls a recurring task's due instead of closing it;
     ``status='done'`` stays a plain field update, closed for good.
 
     **Every id is attempted.** A :class:`RepoError` on one id becomes that
@@ -384,13 +384,13 @@ def add_blocker(
     *,
     actor: str | None = None,
 ) -> dict[str, Any]:
-    """``blocker_id`` must close before ``task_id`` counts as unblocked (#100).
+    """``blocker_id`` must close before ``task_id`` counts as unblocked.
 
     Refuses a self-block and a cycle: ``blocker_id`` may not be (transitively)
     blocked by ``task_id`` already — a separate graph from the parent tree, so
     a blocks-edge may freely cross subtrees; only its own edges can cycle.
-    Logs ``blocked_by`` on ``task_id`` and ``blocks`` on ``blocker_id`` (#100
-    asks for both sides to tell the story); idempotent on a duplicate edge.
+    Logs ``blocked_by`` on ``task_id`` and ``blocks`` on ``blocker_id``, so both
+    sides tell the story; idempotent on a duplicate edge.
     """
     task_id = int(task_id)
     blocker_id = int(blocker_id)
@@ -450,10 +450,10 @@ def done(conn: sqlite3.Connection, task_id: int, *, actor: str | None = None) ->
     completed) plus ``due`` old→new. A ``recurrence_anchor`` makes that
     occurrence a fixed day — a Friday task completed on Monday lands on the
     coming Friday, not the next Monday — and the catch-up means an overdue
-    task never rolls onto another overdue date (#112).
+    task never rolls onto another overdue date.
     Non-recurring → ``status='done'``, ``done_at`` stamped, ``status`` logged.
 
-    The roll deliberately leaves ``starts`` alone (#87). A start date is an
+    The roll deliberately leaves ``starts`` alone. A start date is an
     absolute one-time gate, not a cadence: it always eventually arrives, so a
     snoozed recurring task wakes on its start day and rolls normally from then
     on. Advancing it with the due would make the gate chase the task forever.
@@ -486,7 +486,7 @@ def delete_task(
 
     A task the doomed subtree blocks loses that blocker: the ``task_blocks``
     row cascades with the row, but a still-alive dependent gets an explicit
-    ``blocked_by`` old→None activity row (#100) so its own log says why it
+    ``blocked_by`` old→None activity row so its own log says why it
     unblocked rather than the edge just vanishing silently.
     """
     current = _require_task(conn, task_id)
@@ -510,7 +510,7 @@ def delete_task(
 
 
 def bulk_delete(conn: sqlite3.Connection, task_ids: Iterable[int]) -> list[dict[str, Any]]:
-    """Delete many tasks — one result row per id, in order (issue #121).
+    """Delete many tasks — one result row per id, in order.
 
     The bulk twin of :func:`delete_task`, shaped like :func:`bulk_update`:
     **every id is attempted**, a :class:`RepoError` on one id is that id's
@@ -556,7 +556,7 @@ def capture_task(
 ) -> tuple[dict[str, Any] | None, str]:
     """Land a task from a capture source, once → ``(task, "created" | "unchanged")`` or ``(None, "dismissed")``.
 
-    The rule behind every inbound channel (#98): flagged emails polled from the
+    The rule behind every inbound channel: flagged emails polled from the
     archiver's index, a WhatsApp message the radar marks, anything later. It is
     :func:`import_task`'s one-way twin — an import *reconciles* (a changed
     source field lands on the task), a capture only ever **lands**:
@@ -566,7 +566,7 @@ def capture_task(
       moving the task on: none of it is undone by the next pass. A captured
       task, once real, is yours.
     - ``external_id`` captured before but its task since **deleted** →
-      ``(None, "dismissed")``, no write (#254). Deleting is yours too: the
+      ``(None, "dismissed")``, no write. Deleting is yours too: the
       source keeps offering the id (an archived ``.msg`` keeps its flag), and
       ``capture_keys`` — which outlives the row — is what stops it coming back.
     - otherwise the task is created normally (``created`` activity, ``status``

@@ -98,7 +98,7 @@ def registration_mode() -> str | None:
     ``None`` covers both "not installed" and "not this OS" — the caller already
     has :func:`installed_here` for that distinction. ``"fallback"`` matters
     because it hands the URL to a command interpreter as a string, which
-    re-parses it (see ``opener/opener.ps1``). ``"launcher-stale"`` (task-os#130)
+    re-parses it (see ``opener/opener.ps1``). ``"launcher-stale"``
     is a launcher registered before the ``conhost.exe --headless`` wrap landed —
     still safe, but every open flashes a console window; reported so the PC can
     be told to re-run the install command, same as a fallback install.

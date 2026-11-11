@@ -138,7 +138,7 @@ def issue_from_task(conn: Any, task_id: int, target_repo: str, *,
     The one implementation behind ``POST /api/tasks/{id}/issue`` and
     ``tasks issue create`` — the guards, the create, the link row, the
     ``issue_refs`` row and the ``code`` fallback are one workflow, and having
-    it twice is what let the two drift (fleet issue #35). Raises the repo's own
+    it twice is what let the two drift. Raises the repo's own
     error family (:class:`AlreadyLinked` 409 · :class:`IssuesDisabled` 409 ·
     ``ValidationError`` 422 · ``NotFound`` 404) so the router's app-level
     handler and the CLI's ``_wrap`` each translate it in their own dialect;

@@ -1,4 +1,4 @@
-"""Generate, stage, accept and reject AI suggestions for Inbox tasks (#95)."""
+"""Generate, stage, accept and reject AI suggestions for Inbox tasks."""
 
 from __future__ import annotations
 

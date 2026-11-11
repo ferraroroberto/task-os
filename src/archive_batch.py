@@ -1,15 +1,15 @@
-"""Batch archiving of the Outlook Inbox through folder-explorer's archive verbs (#157, Step 1/3).
+"""Batch archiving of the Outlook Inbox through folder-explorer's archive verbs.
 
 One gesture files the whole Inbox: every mail is written into the archive
 folder the archiver ranks best, moved to Outlook's *Archive* folder and tagged,
 and the run is recorded here so a human can review it and undo any single mail.
 This module is the backend half — the schema (v14/v15), the service that drives
 the archiver, and the state machine the API in ``app/webapp/routers/archive.py``
-exposes. The screen (#159) builds on it.
+exposes. The screen builds on it.
 
 **Which folder** is decided in two layers. The archiver's suggester ranks the
-candidates; the local model then picks among them (``src/archive_rank.py``,
-#158) with a confidence and a one-line reason, and every human correction is
+candidates; the local model then picks among them (``src/archive_rank.py``)
+with a confidence and a one-line reason, and every human correction is
 stored in ``archive_corrections`` and fed back into the next run's prompt. A hub
 that is down, off or answering junk degrades that batch to the suggester's own
 top candidate, with the reason on every mail in it and on the run — the run
@@ -59,18 +59,18 @@ State machine, one ``archive_items`` row per mail:
                   archiver's index, and recorded with the existing file)
     needs_review  left in the Inbox: the best candidate scored below
                   ``archive.confidence_threshold``, or there was none. A human
-                  resolves it from the report screen (#159) — ``accept`` to
+                  resolves it from the report screen — ``accept`` to
                   leave it in the Inbox as seen, or ``move`` into any folder,
                   which files it for the first time (no undo leg)
     failed        the archiver refused or broke on this mail; ``error`` says
                   which of its codes. Revertible when files were still written
                   (``apply`` fills ``files`` *before* the move on purpose) — and
-                  ``retry``-able for exactly that reason (#174): the same
+                  ``retry``-able for exactly that reason: the same
                   decision goes back to ``apply``, which reuses the file it has
                   already written and finishes the move Outlook refused. Also
                   every row handed to an ``apply`` that failed as a whole
                   (timeout, error document, unreadable output): nothing was
-                  confirmed, so none may stay ``archived`` (#440)
+                  confirmed, so none may stay ``archived``
     reverted     the files are gone and the mail is back in the Inbox
     moved         re-filed into a folder a human picked
 
@@ -80,7 +80,7 @@ whatever the archiver's index believes, and a reverted mail is free to be
 archived again.
 
 Both verbs that disturb a folder's numbering also ask the archiver to repair it
-(``renumber``, ``archive.renumber``, email-archiver#61) — and the archiver
+(``renumber``, ``archive.renumber``) — and the archiver
 heals only its own index, so every path it renames is healed from the map it
 returns — by :func:`~src.archive_renumber.apply_renumber_map`, which rewrites
 ``archive_items.files_json``, the email link's ref and the captured task's
@@ -238,7 +238,7 @@ class ArchiveBatchService(ItemActions):
         return True, None
 
     def status(self, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
-        """What ``/api/status``'s ``archive`` key, the Archive tab (#159) and the CLI render."""
+        """What ``/api/status``'s ``archive`` key, the Archive tab and the CLI render."""
         last_run: dict[str, Any] | None = None
         own = conn is None
         c = conn or connect()
@@ -501,7 +501,7 @@ class ArchiveBatchService(ItemActions):
         )
 
     def _rank(self, conn: sqlite3.Connection, mails: list[dict[str, Any]]) -> Ranking:
-        """Let the local model choose among the archiver's candidates (#158).
+        """Let the local model choose among the archiver's candidates.
 
         Reads the correction memory here, where the database is, and hands
         :func:`src.archive_rank.rank` plain data — that function stays pure, and
@@ -526,7 +526,7 @@ class ArchiveBatchService(ItemActions):
 
         Three sources, in order: the archiver's index already has the mail (then
         nothing is decided at all), the **model** chose among the candidates
-        (#158), or the model could not be asked and the archiver's own top
+, or the model could not be asked and the archiver's own top
         candidate stands, with the reason saying so.
         """
         already = mail.get("already_archived")
@@ -644,7 +644,7 @@ class ArchiveBatchService(ItemActions):
     ) -> None:
         """Turn every row handed to a failed ``apply`` from ``archived`` into ``failed``.
 
-        ``files`` is left alone: a finish (#174) row already knows its ``.msg``,
+        ``files`` is left alone: a finish row already knows its ``.msg``,
         and what a call that never answered wrote is not known either way.
         """
         message = f"apply failed as a whole, so this mail was not confirmed filed: {reason}"
@@ -661,7 +661,7 @@ class ArchiveBatchService(ItemActions):
 
         The document's own ``files`` are read **through** its renumber map: with
         ``--renumber`` they name what each mail was written as, before the
-        re-sequencing that ran after it (email-archiver#61), and storing those
+        re-sequencing that ran after it, and storing those
         would record a path that no longer exists.
         """
         renames = rename_index(result)
@@ -742,7 +742,7 @@ class ArchiveBatchService(ItemActions):
 
     @staticmethod
     def _log_finish(entry: dict[str, Any]) -> None:
-        """Breadcrumb for the two additive ``apply`` fields (email-archiver#59).
+        """Breadcrumb for the two additive ``apply`` fields.
 
         Neither is stored — they describe *how* one archive call went, not the
         state of the mail — but which of them applied is the first thing anyone

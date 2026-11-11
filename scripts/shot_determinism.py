@@ -1,8 +1,7 @@
 r"""Prove the story gallery is reproducible: run the e2e suite twice, diff the shots.
 
 `docs/screenshots/` is the on-screen proof `docs/validation.md` links to, so it
-is only worth anything if a change in it means a change in the app. Before #134
-it did not: an animation still in flight, a pane that had not painted, and the
+is only worth anything if a change in it means a change in the app. Before the capture rules it did not: an animation still in flight, a pane that had not painted, and the
 run's own wall clock all leaked into the files, so ~30% of them moved between
 two runs of the *same* commit and a maintainer could not tell a visual
 regression from capture noise.
@@ -33,7 +32,7 @@ captured something still in flight, and the fix belongs in that story or in
 
 Two runs minutes apart answer "is the capture stable?" — and, structurally,
 nothing else. They cannot see the *other* drift, the one that actually bit
-(#225): a gallery that no longer matches what today's code renders. Both
+: a gallery that no longer matches what today's code renders. Both
 snapshots are fresh, so a shot that has been wrong in the repo for twenty
 commits compares clean against itself. Nothing was comparing the committed
 bytes, which is why 76 of them had silently drifted before anyone looked.
@@ -164,7 +163,7 @@ def _run_suite(label: str) -> None:
     gives it no console of its own, so an inherited stream reaches nothing a
     reader ever sees, and a suite that failed inside this script used to say
     only "pytest exit 1" — a red gate with the reason thrown away, which is
-    how the diagnosis of #166 lost half a day. Success prints the tail (the
+    how a diagnosis loses half a day. Success prints the tail (the
     counts and timing), failure prints the whole report before exiting.
     """
     env = {**os.environ, "PYTHONUTF8": "1"}
@@ -221,7 +220,7 @@ def _baseline_bytes(rel: str) -> bytes | None:
 def _check_against_gallery() -> int:
     """Compare the gallery on disk against the one git is holding.
 
-    This is the comparison that was missing (#225). It only ever looks at what
+    This is the comparison that was missing. It only ever looks at what
     the run just rewrote — `git diff` names those — so it is as meaningful
     after a routed partial e2e slice as after a full suite, and costs nothing
     when the slice was `skip`.

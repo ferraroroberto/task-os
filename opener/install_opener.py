@@ -18,7 +18,7 @@ it to ``opener.cmd`` through the environment::
 
 Registering ``opener.cmd`` directly instead makes Windows hand the URL to a
 command interpreter as a *string*, which re-parses it: a quote in the URL ends
-the argument and starts a second command (task-os#40 — measured on Windows 11
+the argument and starts a second command (measured on Windows 11
 against every cmd registration shape, all of them injectable). So that shape is
 the **fallback**, used only where a machine policy blocks running a script file,
 and when it is used the installer says so out loud — a degraded install is a
@@ -70,7 +70,7 @@ def launcher_command_line(dest: Path) -> str:
     """The preferred registration: an executable that takes the URL as an argument.
 
     Wrapped in ``conhost.exe --headless`` so ShellExecute allocates no visible
-    console — measured on this PC (task-os#130): plain ``powershell.exe``, even
+    console — measured on this PC: plain ``powershell.exe``, even
     with ``-WindowStyle Hidden``, still flashes a Windows Terminal window
     because WT is the default terminal here; the headless pseudo-console does
     not. The undocumented switch also swallows stdout on the *caller* side, so

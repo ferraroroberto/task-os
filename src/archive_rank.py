@@ -1,6 +1,6 @@
-"""The local model picks the archive folder among the suggester's candidates (#158, Step 2/3).
+"""The local model picks the archive folder among the suggester's candidates.
 
-Step 1 (#157) files every Inbox mail into the folder email-archiver's suggester
+Step 1 files every Inbox mail into the folder email-archiver's suggester
 ranks first. That suggester is a search engine: full-text match, thread
 continuity, folder-name similarity. It is right first or second most of the
 time, and it cannot read a mail. This module asks the local LLM hub to choose

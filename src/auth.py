@@ -15,7 +15,7 @@ Two classes of caller:
 No token configured (the committed sample) means **only loopback can use the
 app**: the gate is closed, not open, and startup says so loudly.
 
-**One token per person** (#474): those two secrets are the install owner's
+**One token per person**: those two secrets are the install owner's
 (the first member); another member gets their own (``auth.people.<id>``,
 ``gen_token.py --person`` / ``set_password.py --person``), so the credential
 itself says who signed in. Each passes the gate exactly as the owner's does,
@@ -130,7 +130,7 @@ def is_public_path(path: str) -> bool:
 
 def token_person(presented: str | None, auth: AuthConfig) -> str | None:
     """The member a presented token belongs to — the owner for ``auth.token``,
-    a member for their own ``auth.people`` token (#474) — else ``None``."""
+    a member for their own ``auth.people`` token — else ``None``."""
     if not presented:
         return None
     # Bytes, not str: compare_digest refuses a non-ASCII str, and a cookie is
@@ -180,7 +180,7 @@ class SignIn:
 
 def check_secret(secret: str, auth: AuthConfig, team: TeamConfig | None = None) -> SignIn | None:
     """What ``/login`` accepts: a member's token itself, a member's optional
-    password (the owner's or their own, #474), or — in team mode — the shared
+    password (the owner's or their own), or — in team mode — the shared
     team password. ``None`` when refused."""
     person = token_person(secret, auth)
     if person is not None:
@@ -235,7 +235,7 @@ def classify(scope: Scope, auth: AuthConfig, team: TeamConfig | None = None) -> 
 
 @dataclass(frozen=True)
 class Viewer:
-    """Who a request is (#474) — ``GET /api/me``'s body. ``id`` / ``name`` are
+    """Who a request is — ``GET /api/me``'s body. ``id`` / ``name`` are
     the member; ``via`` how that was established: ``"token"`` (their own
     token, as a bearer header or the cookie a token or password sign-in set),
     ``"team"`` (the team sign-in: the name it picked, ``id`` ``None`` when

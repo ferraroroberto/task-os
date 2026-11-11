@@ -6,7 +6,7 @@ Same shape as the sister trays (photo-ocr / voice-transcriber / app-launcher):
 - ``start()``  — adopts an already-listening webapp (no second spawn) or
   spawns ``python -m app.webapp.serve`` from this venv, under the
   vendored ``cross_process_lock`` so two trays starting at once can't both
-  spawn (project-scaffolding#39). Before the spawn it runs the cert
+  spawn. Before the spawn it runs the cert
   auto-renew (``src.certs.ensure_cert_fresh``) and passes ``--ssl-*`` when
   ``webapp/certificates/{cert,key}.pem`` exist — HTTPS on the tailnet name,
   plain HTTP (logged loudly) otherwise.

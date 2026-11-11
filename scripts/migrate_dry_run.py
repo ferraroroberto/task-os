@@ -1,4 +1,4 @@
-"""Rehearse a schema migration on a copy of a database — never on the database itself (#476).
+"""Rehearse a schema migration on a copy of a database — never on the database itself.
 
 The app migrates its database at every startup (``src/db.py::init_db``), so a
 schema step reaches the live file the moment the tray restarts on a new build.

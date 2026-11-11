@@ -1,4 +1,4 @@
-"""Hand every task about one contact to a member, in one pass (#476).
+"""Hand every task about one contact to a member, in one pass.
 
 Before v20 a task had no owner, so every task reads as the install owner's.
 Some of them are really another member's — the ones about a contact that

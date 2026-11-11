@@ -5,7 +5,7 @@ user types map to one deterministic rule set. "Today" is ``src.clock``'s, not
 ``date.today()``: a pinned process — the e2e instances — has to resolve
 "next friday" against the day it believes in, or the date the parser writes
 into the quick-add Due field is the only thing on the page still reading the
-machine's calendar (#225).
+machine's calendar.
 
     today · tomorrow · yesterday
     fri · friday               → the coming Friday (today if today is Friday)
@@ -25,7 +25,7 @@ lands on ``2026-02-28`` (month-end clamps, never overflows into March),
 quarterly is three months, yearly clamps Feb 29 → Feb 28.
 
 A recurrence may also carry an **anchor** — the fixed day it lands on, stored
-beside the cadence in ``tasks.recurrence_anchor`` (issue #112, the iCalendar
+beside the cadence in ``tasks.recurrence_anchor`` (the iCalendar
 split ``FREQ=WEEKLY;BYDAY=FR``):
 
     weekly  + ``fri``                  every Friday
@@ -37,7 +37,7 @@ split ``FREQ=WEEKLY;BYDAY=FR``):
     (no anchor)                        the plain offset from the due date
 
 And an **interval** N — repeat every N cadences rather than every one, stored
-in ``tasks.recurrence_interval`` (issue #229, iCalendar's ``INTERVAL=N``).
+in ``tasks.recurrence_interval`` (iCalendar's ``INTERVAL=N``).
 NULL, and 1, mean every cadence; any cadence takes one, anchored or not:
 
     daily     + 3                      every 3 days
@@ -59,8 +59,7 @@ it. The roll lands on the first anchored day, in a qualifying period, after
 both that due and today. A rolled due therefore always sits in a qualifying
 period itself, so the phase survives every completion (no drift, however late
 the task is ticked), and editing the due by hand deliberately re-phases it.
-With N = 1 every period qualifies and this is exactly the anchored roll #112
-shipped.
+With N = 1 every period qualifies and this is exactly the plain anchored roll.
 """
 
 from __future__ import annotations
@@ -198,7 +197,7 @@ def normalise_anchor(recurrence: str | None, anchor: str | None) -> str | None:
 
 
 def parse_interval(interval: object) -> int | None:
-    """An "every N" in its stored shape, or ``None`` for every cadence (#229).
+    """An "every N" in its stored shape, or ``None`` for every cadence.
 
     ``None``, blank and ``1`` all mean "every cadence" and come back ``None`` —
     one spelling of no interval, so an explicit 1 never reads as a change. A
@@ -325,7 +324,7 @@ def next_due(
     *,
     today: date | None = None,
 ) -> date:
-    """The due date a recurring task rolls to when it is completed (#112).
+    """The due date a recurring task rolls to when it is completed.
 
     The first occurrence strictly after **both** the completed ``due`` and
     ``today``: completing a Friday-anchored task on a Monday lands on the
@@ -336,7 +335,7 @@ def next_due(
 
     ``due`` of ``None`` rolls from today. An unanchored cadence keeps the
     plain offset it has always had, now with the same catch-up. ``interval``
-    (#229) repeats every N cadences; an anchored one takes its phase from
+ repeats every N cadences; an anchored one takes its phase from
     ``due``'s week or month — see the module docstring.
     """
     if recurrence not in RECURRENCES:
@@ -457,7 +456,7 @@ def parse_days_ago(text: str | None, today: date | None = None) -> date | None:
     """``"30d"`` → the day 30 days **before** today; ``None`` when *text* is not that form.
 
     The look-back vocabulary of ``tasks ls --updated-before`` (and the web
-    filter card's modified window, #101). It is deliberately a separate function
+    filter card's modified window). It is deliberately a separate function
     from :func:`parse_date`, where the same ``Nd`` token means N days *ahead*
     (``--due 3d``): a caller asks for "a date to look back from" or "a date to
     plan for", and the direction is that choice, not something to guess from the

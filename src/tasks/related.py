@@ -69,7 +69,7 @@ def add_comment(
 def update_comment(
     conn: sqlite3.Connection, task_id: int, comment_id: int, body: str
 ) -> dict[str, Any]:
-    """Rewrite one comment's body in place (#155).
+    """Rewrite one comment's body in place.
 
     Author, ``ts`` and ``origin`` are deliberately kept: the row stays whose it
     was and keeps saying where it came from — an edit corrects the text, it does
@@ -168,9 +168,9 @@ _ISSUE_URL_RE = re.compile(r"github\.com/[^/]+/[^/]+/issues/\d+")
 
 def infer_link_kind(url: str) -> str:
     """The ``kind`` a link is stored under when the caller names none — the
-    one rule for the drawer, quick-add, the CLI and any script (#257): a
+    one rule for the drawer, quick-add, the CLI and any script: a
     ``{placeholder}`` ref is a folder, ``mailto:`` an email, a known AI chat
-    host an AI conversation (#77), a GitHub issue URL an issue, else web."""
+    host an AI conversation, a GitHub issue URL an issue, else web."""
     url = (url or "").strip()
     if url.startswith("{"):
         return "folder"
@@ -222,7 +222,7 @@ def rename_link_url(
 
     The one write that exists because a link's *target* moved rather than
     because anyone edited the task — the archiver renumbering a folder renames
-    the ``.msg`` an email link holds the ref of (#176), and a chip pointing at
+    the ``.msg`` an email link holds the ref of, and a chip pointing at
     a file that is no longer there is a dead chip. Identity only: no activity
     row, because the log records what a human or a channel did to a task and a
     file being renamed on disk is neither. The write listeners *are* notified —
@@ -261,7 +261,7 @@ def rename_external_id(
     partial unique index refuses it, and this says so in the log and returns 0
     rather than merging two tasks nobody asked it to merge.
 
-    The ``capture_keys`` row moves too, **with or without a task** (#254): a
+    The ``capture_keys`` row moves too, **with or without a task**: a
     capture already dismissed by a delete must stay dismissed under its new
     name, or the renamed ``.msg`` lands again. The count is still tasks moved.
     """

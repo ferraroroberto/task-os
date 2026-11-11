@@ -1,4 +1,4 @@
-"""Staged AI Inbox triage routes (#95).
+"""Staged AI Inbox triage routes.
 
 Generation is blocking and may take seconds, so it runs in FastAPI's worker
 thread. Every response is staged; only the explicit accept endpoint writes a

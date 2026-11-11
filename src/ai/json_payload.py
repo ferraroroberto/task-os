@@ -1,4 +1,4 @@
-"""Pull the JSON payload out of a chat model's reply (#262).
+"""Pull the JSON payload out of a chat model's reply.
 
 Open-weight models wrap the answer they were asked for in things that are not
 part of it: a ``<think>`` block (Qwen-family templates), a Markdown fence, or a

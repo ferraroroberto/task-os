@@ -9,16 +9,16 @@
     tasks show N
     tasks tree [N]
     tasks comment N "text"
-    tasks set N [--title] [--status] [--priority] [--desc] [--folder ref|none] [--owner id]   edit fields (#257)
+    tasks set N [--title] [--status] [--priority] [--desc] [--folder ref|none] [--owner id]   edit fields
     tasks link N URL [--label "..."] [--kind web|folder|email|issue|ai]   kind inferred when omitted
     tasks due N <date>          natural (fri, next friday, in 2 weeks) or ISO; "none" clears
     tasks starts N <date>       the day it starts mattering; same vocabulary, "none" clears
     tasks done N
-    tasks journal [--weeks N]   what got done, grouped by day, newest first (#102)
+    tasks journal [--weeks N]   what got done, grouped by day, newest first
     tasks move N --parent M     (--parent root → top level)
-    tasks block N --on M        N is blocked by M — refused on a self-block or a cycle (#100)
+    tasks block N --on M        N is blocked by M — refused on a self-block or a cycle
     tasks unblock N M           remove M as a blocker of N
-    tasks rm N [--yes]          delete N and its subtree — asks [y/N] on stderr; alias: delete (#121)
+    tasks rm N [--yes]          delete N and its subtree — asks [y/N] on stderr; alias: delete
     tasks search "q" [--kind tasks|folders|emails|issues]   federated: tasks · folders · emails · issues
     tasks people
     tasks mirror export|import|status   markdown mirror: full export · one watcher pass · status
@@ -126,7 +126,7 @@ def pick_backend(args: argparse.Namespace) -> HttpBackend | LocalBackend:
 def _default_bases(port: int) -> list[str]:
     """Where the app is on this PC: HTTPS first when the cert pair exists (the
     tray then serves TLS — ``src/certs.py``), plain HTTP always as the second
-    try, like the tray's own probe (#259)."""
+    try, like the tray's own probe."""
     from src import certs
 
     plain = f"http://127.0.0.1:{port}"
@@ -151,7 +151,7 @@ def _parse_before_arg(text: str) -> str:
 
     The relative form is :func:`src.dates.parse_days_ago`'s, resolved CLI-side —
     the wire (and the repo layer) only ever see a plain date, same as the web
-    filter card (#101).
+    filter card.
     """
     ago = parse_days_ago(text)
     if ago is not None:
@@ -258,7 +258,7 @@ def _triage_dialogue(args: argparse.Namespace, backend: HttpBackend | LocalBacke
 def _folder_arg(value: str) -> str | None:
     """``--folder`` → the stored ref: ``none`` / empty clears, an absolute path
     folds onto the configured placeholders (``{onedrive}/…``) exactly as the
-    drawer's ``POST /api/resolve`` does, so the chip opens on any PC (#257)."""
+    drawer's ``POST /api/resolve`` does, so the chip opens on any PC."""
     from src import placeholders
 
     if value.strip().lower() in ("", "none"):

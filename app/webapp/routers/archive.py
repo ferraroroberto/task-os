@@ -1,4 +1,4 @@
-"""Archive route family — batch-archive the Outlook Inbox (#157).
+"""Archive route family — batch-archive the Outlook Inbox.
 
     POST /api/archive/run  {limit?}      → 202 the run row, ``running``; the
                                            work continues in a worker thread
@@ -12,9 +12,9 @@
     POST /api/archive/items/{id}/retry   → re-send the same decision, finishing a
                                            ``failed`` mail whose files are on disk
 
-``hint`` is the optional one-line note the report screen (#159) offers when you
+``hint`` is the optional one-line note the report screen offers when you
 overrule the ranking ("bills from this sender always go to the flat"). It is
-stored on the ``archive_corrections`` row the action writes (#158) and ridden
+stored on the ``archive_corrections`` row the action writes and ridden
 into every later prompt as a few-shot example, so a correction explained once
 does not have to be repeated.
 
@@ -27,7 +27,7 @@ does with this route is `curl` it.
 Everything the archiver does happens in folder-explorer, over HTTP (``src/archive_batch.py``),
 so every route here is thin: it hands ``ArchiveError`` to the one JSON envelope
 and lets the service own the state machine. The run's own progress is not
-polled: ``GET /api/archive/runs/{id}`` is the whole story, and the screen (#159)
+polled: ``GET /api/archive/runs/{id}`` is the whole story, and the screen
 reads it.
 
 There is deliberately no ``GET /api/archive/status``: the service's configured /
@@ -144,7 +144,7 @@ async def archive_item_move(
 async def archive_item_retry(
     item_id: int, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> Any:
-    """Finish a mail the archiver wrote but could not move (#174) — no body."""
+    """Finish a mail the archiver wrote but could not move — no body."""
     service = _service(request)
     if service is None or not service.enabled:
         return service_unavailable(service, "archive_disabled", "archive")

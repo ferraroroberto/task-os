@@ -16,7 +16,7 @@ Attach an existing issue (``PUT /api/tasks/{id}/issue``) and detach
 The service lives on ``app.state.issues`` (started by the lifespan).
 
 The create-from-task workflow itself is ``src.issue_sync.issue_from_task``
-— the CLI's local backend runs the same one (issue #35); this route only
+— the CLI's local backend runs the same one; this route only
 resolves the actor and translates the provider error into the 502 envelope.
 """
 

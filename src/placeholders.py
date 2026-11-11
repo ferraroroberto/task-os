@@ -22,7 +22,7 @@ opener flips them for Explorer).
 Unknown tokens are left verbatim and reported in ``unresolved`` — an
 unestablished fact is its own visible state, never a silently wrong path.
 
-:func:`web_url` is the phone's third road (#28): a ref whose **leading** token
+:func:`web_url` is the phone's third road: a ref whose **leading** token
 has a ``config.web_roots`` entry gets the provider's *web* URL derived —
 ``web_roots.onedrive + "/house/kitchen"``, each segment percent-encoded — so a
 device with no opener can still open the folder in the cloud UI. No web root,
@@ -66,7 +66,7 @@ def opener_url(ref: str) -> str:
 
 
 def web_url(ref: str, web_roots: Mapping[str, str]) -> str | None:
-    """The cloud web twin of a ref, or ``None`` when there is none to derive (#28).
+    """The cloud web twin of a ref, or ``None`` when there is none to derive.
 
     ``{onedrive}/house/kitchen`` with ``web_roots = {"onedrive": "https://…"}``
     → ``https://…/house/kitchen``, each remaining segment percent-encoded (the
