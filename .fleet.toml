@@ -68,7 +68,7 @@ notify         = { src = "src/notify", sha = "fe8cc1bdbd038ed65947186248df13072e
 compression    = { src = "src/compression.py", sha = "d930466848d17d47261261c490c4e9c1cce9399e", dest = "src/compression.py" }
 # gen_tailscale_cert.py is copy-to-adapt, not vendor-verbatim (project-scaffolding#232) —
 # it is not in the scaffold's [components] catalog, so no [vendored] entry here either.
-webapp_serve = { src = "app/webapp/serve.py", sha = "41ca8abd5a2755a06bd8a620a72967211161d58e", dest = "app/webapp/serve.py" }
+webapp_serve = { src = "app/webapp/serve.py", sha = "6d779b94b028a898aa87200174a57c6573bdb7a5", dest = "app/webapp/serve.py" }
 instruction_frontmatter = { src = "scripts/instruction_frontmatter.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_frontmatter.py" }
 instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac326c398df8f44486f386ff0e0b6d4c61c", dest = "scripts/instruction_repeats.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
