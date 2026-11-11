@@ -1,4 +1,4 @@
-"""The Today calendar lane (#96) — today's events from a private ICS URL.
+"""The Today calendar lane — today's events from a private ICS URL.
 
 Read-only, one direction: calendar → eyes. :class:`CalendarService` fetches
 ``calendar.ics_url`` with a bounded request, keeps the last good copy, and

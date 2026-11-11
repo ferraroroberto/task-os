@@ -1,6 +1,6 @@
 """The archive run/item/correction rows — task-os's own record of what was filed.
 
-Split out of ``src/archive_batch.py`` in #186: that module held three unrelated
+Kept apart from ``src/archive_batch.py``, which mixes three unrelated
 concerns, and this is the one with no subprocess and no service state at all.
 Every function here is a connection plus a few columns, so the router and the
 tests read a run without importing the service that drives the archiver's CLI,
@@ -171,7 +171,7 @@ def record_correction(
     conn: sqlite3.Connection, item: dict[str, Any], *, chosen_folder: str,
     hint: str | None = None,
 ) -> dict[str, Any]:
-    """Remember that a human filed this mail here, not where the system said (#158).
+    """Remember that a human filed this mail here, not where the system said.
 
     Everything the next prompt needs is **copied**, never joined: the run and
     its items may be deleted, the lesson stays. ``suggested_folder`` is what the

@@ -5,7 +5,7 @@ The real file is gitignored (it carries this machine's paths); the committed
 missing real file falls back to the sample so a fresh clone boots — with the
 markdown mirror and the backup **off** (the sample's placeholders resolve to
 a real synced folder; a checkout without its own config must never write
-into it, #126) — and every key has a code-level default so a partial file
+into it) — and every key has a code-level default so a partial file
 never crashes startup.
 
 ``TASKOS_CONFIG_PATH`` overrides the file location — the e2e harness points a
@@ -100,7 +100,7 @@ class SearchConfig:
 
 @dataclass(frozen=True)
 class CaptureConfig:
-    """Inbound capture (#98) — things flagged elsewhere become Inbox tasks.
+    """Inbound capture — things flagged elsewhere become Inbox tasks.
 
     The email poller asks folder-explorer's flagged-mail endpoint at
     ``search.folder_explorer_url``. ``email_poll_minutes`` ≤ 0 turns the poller off
@@ -112,9 +112,9 @@ class CaptureConfig:
 
 @dataclass(frozen=True)
 class VoiceConfig:
-    """Voice quick-add (#92) — where a recorded phrase goes to become text.
+    """Voice quick-add — where a recorded phrase goes to become text.
 
-    Two endpoints, the pattern ``voice-transcriber`` already uses (#144):
+    Two endpoints, the pattern ``voice-transcriber`` already uses:
 
     ``transcribe_url``  the **hub** (``local-llm-hub`` on :8000). No model is
                         named in the request, so the hub applies its
@@ -133,11 +133,11 @@ class VoiceConfig:
     nothing but the HTTPS endpoint it already has.
 
     ``partial_interval_seconds`` is how often the page re-posts the take it has
-    accumulated so far, so the transcript appears *while* you speak (#146).
+    accumulated so far, so the transcript appears *while* you speak.
     Every pass transcribes the whole recording again — that is what
     ``voice-transcriber``'s rolling worker does too, and it is affordable
     because parakeet answers a short clip in a fraction of a second. ``0``
-    turns partials off: one transcription on stop, as #92 shipped.
+    turns partials off: one transcription on stop.
     """
 
     transcribe_url: str = "http://127.0.0.1:8000/v1/audio/transcriptions"
@@ -147,7 +147,7 @@ class VoiceConfig:
 
 @dataclass(frozen=True)
 class EnrichConfig:
-    """Turning a spoken sentence into title + description (#147).
+    """Turning a spoken sentence into title + description.
 
     ``url``    the hub's OpenAI-shape chat endpoint. Blank = enrichment off,
                with that as the visible reason; the transcript still lands and
@@ -167,7 +167,7 @@ class EnrichConfig:
 
 @dataclass(frozen=True)
 class AIConfig:
-    """Staged AI inbox triage (#95) through the local LLM hub.
+    """Staged AI inbox triage through the local LLM hub.
 
     ``enabled`` is the explicit off switch. ``base_url`` is the hub root used
     by the Anthropic SDK; ``model`` is deliberately configuration, never a
@@ -207,13 +207,13 @@ class ArchiveConfig:
                  with that as the visible reason.
     ``renumber`` ask the archiver to re-sequence every folder an ``apply`` or a
                  ``revert`` disturbed, so its ``NNN`` prefixes stay contiguous
-                 and in sent-date order (email-archiver#61). On by default: the
+                 and in sent-date order. On by default: the
                  renaming is the archiver's own repair of a folder *this* app's
                  filing broke, and every path it renames is healed here from
                  the map it returns (:func:`~src.archive_renumber.apply_renumber_map`).
                  Off leaves both verbs behaving exactly as they did.
 
-    The ranking (#158) reaches the same hub ``ai.base_url`` names, with its own
+    The ranking reaches the same hub ``ai.base_url`` names, with its own
     model: ``model`` is deliberately not ``ai.model``, because triage and
     archiving are different jobs and may want different models — and a second
     :class:`~src.ai.client.AIClient` bound to it means the triage lock and this
@@ -245,7 +245,7 @@ class ArchiveConfig:
 
 @dataclass(frozen=True)
 class CalendarConfig:
-    """The read-only calendar lane on Today (#96).
+    """The read-only calendar lane on Today.
 
     ``ics_url``          a private ICS address (Google's "secret address in
                          iCal format", Outlook's published ICS link;
@@ -281,7 +281,7 @@ class TeamConfig:
 
 @dataclass(frozen=True)
 class Person:
-    """One member of the install (#474): ``id`` is what every row stores and
+    """One member of the install: ``id`` is what every row stores and
     what ``auth.people`` keys a secret by, ``name`` only what the screen shows."""
 
     id: str
@@ -294,7 +294,7 @@ IMPLICIT_PERSON = Person(id="me", name="Me")
 
 @dataclass(frozen=True)
 class TimeConfig:
-    """The time tracker (#457). ``people`` are who track time (never empty: a
+    """The time tracker. ``people`` are who track time (never empty: a
     missing or empty list is the one implicit person ``me``); with one person
     there is no picker, head-to-head or guess card. ``compare_area`` is the
     area slug the household comparison reads; ``long_timer_minutes`` how long
@@ -325,7 +325,7 @@ def _people(value: Any, key: str) -> tuple[Person, ...]:
 
 @dataclass(frozen=True)
 class PersonSecret:
-    """One member's own sign-in (#474): the bearer ``token``
+    """One member's own sign-in: the bearer ``token``
     (``scripts/gen_token.py --person``) and the optional ``password_hash``
     (``scripts/set_password.py --person``)."""
 
@@ -340,7 +340,7 @@ class AuthConfig:
     ``scripts/gen_token.py`` writes; ``password_hash`` the optional memorable
     alternative ``scripts/set_password.py`` stores (PBKDF2, never plaintext).
     Both are the install owner's (``owner``: the first member's id). ``people``
-    holds the other members' own secrets (#474) — only for ids still in the
+    holds the other members' own secrets — only for ids still in the
     members list, so removing a member signs them out. No token anywhere (the
     committed sample) = only this PC can use the app."""
 
@@ -782,7 +782,7 @@ def save_auth(
     path: Path | None = None,
 ) -> Path:
     """Write ``auth.token`` / ``auth.password_hash`` into the **real** config —
-    or, with ``person``, that member's ``auth.people.<id>`` pair (#474).
+    or, with ``person``, that member's ``auth.people.<id>`` pair.
 
     Only the fields passed (non-``None``) change; everything else in the file
     is preserved. A missing ``config/config.json`` is created from the

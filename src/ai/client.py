@@ -1,4 +1,4 @@
-"""One bounded Anthropic-SDK client for task-os AI features (#95).
+"""One bounded Anthropic-SDK client for task-os AI features.
 
 The endpoint is local-llm-hub, never a provider URL or an inline CLI process.
 Configuration decides whether AI is enabled and which live hub model alias to
@@ -37,7 +37,7 @@ class AIClient:
     """Configured local-hub client with cached status and one-shot generation.
 
     ``model`` and ``timeout`` override ``ai.model`` / ``ai.timeout_seconds`` for
-    a feature that needs its own (archive ranking, #158, uses ``archive.model``
+    a feature that needs its own (archive ranking uses ``archive.model``
     and ``archive.ai_timeout_seconds``: a batch of mails is a far longer request
     than one triage, because an open-weight model emits its reasoning before the
     answer). Each instance carries its own in-flight lock, so two features never

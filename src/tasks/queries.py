@@ -83,10 +83,10 @@ _EXTERNAL_ID_TABLES = ("tasks", "comments", "people")
 def captured_keys(conn: sqlite3.Connection, prefix: str) -> dict[str, bool]:
     """Every capture key starting with ``prefix`` → whether a task still carries it.
 
-    ``False`` is a dismissal (#254): captured once, task since deleted. What
+    ``False`` is a dismissal: captured once, task since deleted. What
     :func:`capture_task` would answer ``unchanged`` / ``dismissed`` for, read in
     one pass, so a source can step over keys it has already settled instead of
-    spending its batch limit on them (#440).
+    spending its batch limit on them.
     """
     cut = len(prefix)
     keys = {
@@ -182,7 +182,7 @@ def _starts_and_blocker_gate(
     when ``blocked="only"`` and nothing is blocked (the result is empty).
 
     - ``deferred``: what to do with a task whose ``starts`` has not arrived
-      (#87) — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
+ — ``"hide"`` (only awake tasks), ``"only"`` (only sleeping ones —
       the filter card's *Deferred*, ``tasks ls --deferred``) or ``"all"``.
       Unset follows the working-view/closed-view split below: a closed view
       means "hide nothing", so it lifts this gate too — otherwise a count
@@ -193,7 +193,7 @@ def _starts_and_blocker_gate(
       Today and the CLI are all projections of :func:`list_tasks`, so they
       inherit it. :func:`tree` and :func:`search` do not go through here on
       purpose — a deferred task stays findable.
-    - ``blocked``: what to do with a task that has an open blocker (#100) —
+    - ``blocked``: what to do with a task that has an open blocker —
       ``"hide"`` (only unblocked tasks — the default working-view rule),
       ``"only"`` (only blocked ones — the status multi-select's ``blocked``
       pseudo-filter, ``tasks ls --blocked``) or ``"all"``. Unset follows the
@@ -206,7 +206,7 @@ def _starts_and_blocker_gate(
       not the ``"open"`` shorthand), or a ``done_on``/``done_from``/``done_to``
       window. Those are all read as the done journal / closed history, where
       a still-blocked or not-yet-started task that already finished must not
-      vanish (#263). Pass ``deferred``/``blocked`` explicitly to override
+      vanish. Pass ``deferred``/``blocked`` explicitly to override
       either default in either kind of view.
     """
     if deferred is None:
@@ -356,14 +356,14 @@ def list_tasks(
     - ``project``: descendant-of ``project`` (any depth);
     - ``due``: ``today`` · ``week`` · ``overdue`` · a date; or ``due_from``/``due_to``;
     - ``person_id``: one id or a list (the filter card's multi-select);
-    - ``owner``: one member id or a list (#476) — a NULL owner counts as the
+    - ``owner``: one member id or a list — a NULL owner counts as the
       install owner's, so naming them also returns every task nobody gave one;
     - ``q``: FTS over title/description/comments (see :func:`search`);
     - ``done_on``: a local calendar date — only tasks whose ``done_at`` falls
       on that day (the Board's *Done today* column; ``done_at`` is a local
       timestamp, so the boundary is local midnight).
     - ``done_from`` / ``done_to``: an inclusive window of local calendar days
-      over ``done_at`` — the done journal's page (#102), same midnight rule.
+      over ``done_at`` — the done journal's page, same midnight rule.
       ``done_at`` is the closed-at stamp, so ``status=done,cancelled`` plus a
       window is "everything that closed that week". A done window flips the
       order to **newest closing first** (``done_at`` desc): it is only ever
@@ -373,7 +373,7 @@ def list_tasks(
       falls on or after that day (the shared filter card's *modified* window).
     - ``updated_before``: the inverse twin — only tasks whose ``updated_at``
       falls strictly before that day (the filter card's *untouched > N days*
-      stale windows, #101). Any write moves ``updated_at`` — sync and mirror
+      stale windows). Any write moves ``updated_at`` — sync and mirror
       included — so a GitHub-synced task never looks stale.
     - closed (done/cancelled) tasks are hidden unless ``include_closed`` or a
       status filter names them.
@@ -384,7 +384,7 @@ def list_tasks(
     top ancestor — the project the Board, Today and Search rows and the filter card name) and ``last_comment``.
     ``descriptions=False`` leaves the ``description`` key off every item: the
     web app's boot never reads one from the list (the drawer fetches its own
-    task) and it is most of the payload (#309); the default keeps today's
+    task) and it is most of the payload; the default keeps today's
     shape for the CLI and every other caller.
     """
     where: list[str] = []
@@ -489,7 +489,7 @@ def tree(
     closed project keeps showing while it has open descendants.
     ``descriptions=False`` leaves the ``description`` key off every node: the
     web app boots from the whole forest and never reads one there (the drawer
-    fetches its own task), yet the closed ones are most of the payload (#280).
+    fetches its own task), yet the closed ones are most of the payload.
     """
     rows = conn.execute("SELECT * FROM tasks ORDER BY id").fetchall()
     by_parent: dict[int | None, list[dict[str, Any]]] = {}
@@ -553,7 +553,7 @@ def projects(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Every task that has children — ``{id, title, depth, status}`` in tree order.
 
     The web app's project filter and *Move to…* list, closed projects
-    included: the boot's forest no longer carries closed tasks (#309), and a
+    included: the boot's forest no longer carries closed tasks, and a
     project whose children are all closed is a leaf there, so this is the one
     place that says what a project is (``tree()``'s ``is_project`` rule).
     """
@@ -750,7 +750,7 @@ def _group_by_root(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """``[{root, items}]`` — grouped by top ancestor (``None`` = no project);
     groups ordered by their earliest due, then root title; inside a group,
     items keep the incoming due → priority → id order (the list order),
-    recurring or not — same as every other view (#118, following #116)."""
+    recurring or not — same as every other view."""
     groups: dict[int | None, dict[str, Any]] = {}
     for it in items:
         root = it.get("root")

@@ -10,13 +10,13 @@ Two ways to pin it:
 - :func:`use_clock` — a context manager, for an in-process seed or test
   (``with use_clock(lambda: dt): ...``);
 - ``TASKOS_CLOCK`` — an ISO 8601 datetime, for a whole process a test does not
-  run in-line. The e2e suite's disposable instances set it (#134): the story
+  run in-line. The e2e suite's disposable instances set it: the story
   gallery in ``docs/screenshots/`` is only proof if a change in it means a
   change in the app, and an unpinned instance writes the run's own minute onto
   every activity row, comment and build footer, so two runs of one commit
   disagree. The mirror instance, whose import-conflict rule is *defined* by a
   clock that advances, adds ``TASKOS_CLOCK_TICK=1``: the instant becomes a
-  start, and the clock counts real elapsed time from it (#459), so its
+  start, and the clock counts real elapsed time from it, so its
   timestamps still advance but begin at the same place every run.
 
 Nothing in production sets ``TASKOS_CLOCK``; an unparseable value is a hard

@@ -6,7 +6,7 @@
           path pasted in the drawer becomes ``{onedrive}/…`` — the portable
           form the task stores); ``path`` is this server's resolved absolute
           path (display only); ``href`` the ``taskos://open?ref=…`` link;
-          ``web_url`` the cloud twin from ``config.web_roots`` (#28), or null.
+          ``web_url`` the cloud twin from ``config.web_roots``, or null.
     GET  /api/folders/search?q=<terms>&limit=30
         → {q, items: [{path, ref, name, depth}], count}
           folder-explorer's v1 folder search (src/search/folder_explorer.py), each
@@ -20,7 +20,7 @@ parameter name on every tracking-parameter blocklist*, so a URL-cleaning
 browser extension (uBlock Origin's "Remove tracking parameters", AdGuard,
 ClearURLs, Brave shields) strips it by redirecting to the query-less URL —
 the drawer's "paste an absolute path" then 422s on a server that never saw
-the value (#66). A body carries no query string, so no cleaner can touch it,
+the value. A body carries no query string, so no cleaner can touch it,
 and the folder path stays out of the URL, the history and any access log.
 
 The client lives on ``app.state.folder_explorer`` (built by the lifespan). The

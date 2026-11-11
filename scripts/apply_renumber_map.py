@@ -1,7 +1,7 @@
-"""Heal this database's stored ``.msg`` paths from a saved renumber map (#176).
+"""Heal this database's stored ``.msg`` paths from a saved renumber map.
 
 The archiver re-sequences a folder so its ``NNN`` prefixes stay contiguous and
-in sent-date order (email-archiver#61) and prints the old → new map; from a
+in sent-date order and prints the old → new map; from a
 batch ``apply`` / ``revert`` task-os reads that map straight off the child's
 answer and heals itself. This script is the same heal for a map produced **out
 of band** — ``main_batch.py renumber --folder …`` run by hand, or the repair of

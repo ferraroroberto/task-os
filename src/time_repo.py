@@ -1,4 +1,4 @@
-"""The time tracker's rows (#457) — areas, categories, entries, timers, guesses.
+"""The time tracker's rows — areas, categories, entries, timers, guesses.
 
 Every rule about tracked time lives here and nowhere else: the router
 (``app/webapp/routers/time.py``) and the prototype importer call these
@@ -26,13 +26,13 @@ The rules worth knowing before changing anything:
 - **Archived, not deleted**: an archived area or category cannot be started
   or picked, and every entry already in it keeps showing and counting. Only a
   category nothing points at — no entry, no running timer — can be deleted
-  (:func:`delete_category`, #463): one made by mistake.
+  (:func:`delete_category`): one made by mistake.
 - **Totals count configured people only** — the prototype's ``validEntries``
   rule, so imported totals match it; History lists every entry.
 - **An import only ever adds** (:func:`import_rows`): keyed on the prototype's
   document id, a re-run inserts nothing, and a guess changed here after the
   import is never overwritten by it.
-- **A pushing app owns its entries** (:func:`upsert_by_source`, #469): an entry
+- **A pushing app owns its entries** (:func:`upsert_by_source`): an entry
   whose ``source_id`` is namespaced (``usage:app-launcher:2026-10-14``) is
   created or replaced by the app that pushed it, so a hand edit is overwritten
   by the next push and a hand delete is recreated. The pattern needs a colon,
@@ -487,7 +487,7 @@ def _check_source_id(source_id: str) -> str:
 def upsert_by_source(conn: sqlite3.Connection, source_id: str, *, person: str, category_id: int, day: str,
                      minutes: int, people: Collection[str], note: str | None = None) -> tuple[dict[str, Any], bool]:
     """Create or replace the duration-only entry a pushing app keys on
-    ``source_id`` (#469); returns ``(entry, created)``. The same checks as
+    ``source_id``; returns ``(entry, created)``. The same checks as
     :func:`create_entry`. Re-sending what is already stored changes nothing,
     ``updated_at`` included, so a nightly re-push does not churn."""
     _check_source_id(source_id)

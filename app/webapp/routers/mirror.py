@@ -5,15 +5,15 @@
                                errors, events, …}, backup: {enabled, dir, last_file, next_run, …},
                                folders: {enabled, reason, url} (folder-explorer's address; its live state is GET /api/search/status),
                                capture: {enabled, reason, source, poll_minutes, last_run,
-                               last_result, last_error, next_run, running} (#98),
-                               voice: {enabled, reason, url, serving, checked_at} (#92),
-                               ai: {enabled, reason, model, checked_at} (#95),
+                               last_result, last_error, next_run, running},
+                               voice: {enabled, reason, url, serving, checked_at},
+                               ai: {enabled, reason, model, checked_at},
                                archive: {configured, reason, running, repo, candidates,
                                confidence_threshold, timeout_seconds, last_run,
-                               last_error} (#157),
+                               last_error},
                                calendar: {configured, reason, state, error, source,
                                fetched_at, failing_since, stale, refreshing,
-                               events_today, …} (#96 — the host only, never the URL),
+                               events_today, …} (the host only, never the URL),
                                opener: {install, uninstall, env_template, installed_here},
                                placeholders: {…}}
                               — the one status the Settings pane reads (the https /
@@ -23,7 +23,7 @@
     POST /api/mirror/export   full export now → {tasks, written, removed}
     POST /api/mirror/import   one watcher pass now → {checked, imported, errors}
     GET  /api/mirror/events   every standing import conflict/rejection, most recent first
-                               (issue #84 — the Settings mirror card's "inspect")
+                               (the Settings mirror card's "inspect")
     DELETE /api/mirror/events clear every standing event → {cleared}
     POST /api/backup          one backup now → {file, dir} (409 when disabled)
 

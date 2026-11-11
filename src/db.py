@@ -4,8 +4,7 @@ Opens the task database — ``<fleet runtime-data root>/task-os/tasks.db``, reso
 by ``src/runtime_data.py`` — and brings it to the current schema through the
 versioned migrations in ``src/schema.py`` (``settings.schema_version`` is the
 marker). Every handler takes ``db: sqlite3.Connection = Depends(get_db)`` —
-never a per-handler ``sqlite3.connect`` (the fleet's one-dependency rule,
-project-scaffolding#96).
+never a per-handler ``sqlite3.connect`` (the fleet's one-dependency rule).
 
 ``TASKOS_DB_PATH`` overrides the file location — the e2e harness and unit
 tests point at a temp file so no test ever touches the real database.

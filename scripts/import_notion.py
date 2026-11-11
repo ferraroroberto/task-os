@@ -1,4 +1,4 @@
-"""One-shot, idempotent Notion → task-os importer (Step 3/13, issue #4).
+"""One-shot, idempotent Notion → task-os importer.
 
     python -m scripts.import_notion --dry-run --database-id <id> --env-file E:/path/.env
     python -m scripts.import_notion --database-id <id> --env-file … [--db data/tasks.db]

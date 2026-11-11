@@ -10,7 +10,7 @@ it in a folder a sync client (OneDrive, a shared drive) can carry around:
     due · starts · recurrence · recurrence_anchor · recurrence_interval
     person (name)
     folder_ref · next_action
-    blocked_by: [id, id]     the tasks that must close first (#100)
+    blocked_by: [id, id]     the tasks that must close first
     links: [{url, label, kind}] · created_at · updated_at · done_at · exported_at
     ---
     ## Description            markdown, free
@@ -38,7 +38,7 @@ differs from the recorded one, parses them and applies:
   ``recurrence_interval``, ``person`` (by
   name), ``folder_ref``, ``next_action``, ``parent``; and the
   ``## Description`` body;
-- ``blocked_by: [ids]`` (#100) — a relation, not a scalar field, diffed
+- ``blocked_by: [ids]`` — a relation, not a scalar field, diffed
   against the stored edges and applied add/remove through
   :func:`src.tasks_repo.add_blocker` / :func:`~src.tasks_repo.remove_blocker`
   — the same cycle-guard rejection path ``parent`` gets from :func:`~src.tasks_repo.move`;
@@ -47,7 +47,7 @@ differs from the recorded one, parses them and applies:
   by (ts, author, body) — as comments ``origin=md`` (author from the line, else
   the configured owner). The origin token is read but never part of that
   identity: an imported comment is always stored as ``md``, so keying on what
-  the line claimed made a ``· ui:`` line re-import on every pass (#123). A
+  the line claimed made a ``· ui:`` line re-import on every pass. A
   bare line (no timestamp) is always a new comment — that is how you add one
   by typing into the file, and the re-export dates it;
 - ``## Log``, read-only keys (``id``, ``type``, ``links``, timestamps) and
@@ -57,7 +57,7 @@ differs from the recorded one, parses them and applies:
 **Conflict rule** — per field: if the DB changed that field *after* the file
 was written (latest ``activity.ts`` for the field > the recorded
 ``exported_at``), the DB wins and the rejected file value is kept as a
-``mirror_events`` row (schema v6; issue #84) — ``import conflict on <field>:
+``mirror_events`` row (schema v6) — ``import conflict on <field>:
 file said <x>, kept <y>`` — nothing is silently lost, but it never becomes a
 comment on the task. A value the repo refuses (bad status, unknown person, a
 cycle) is recorded the same way (``import rejected on …``). Deduped on
@@ -67,7 +67,7 @@ After every import the file is re-exported so it converges to canonical
 form. Malformed YAML → the file is skipped (warning once per change, counted
 in :meth:`Mirror.status` ``errors``), never a crash.
 
-**Provenance rule** (#126) — the file's ``exported_at`` is the one line no
+**Provenance rule** — the file's ``exported_at`` is the one line no
 human edit touches, so it says whose rendering a file is. Equal to what we
 last wrote: our file, edited. Older: a stale copy of our file (a sync client
 restoring a previous version) — still an edit, judged against *that*
@@ -501,7 +501,7 @@ class Mirror:
           stamp and anything the DB changed since it wins;
         - **newer** — we never wrote this: another task-os instance rendered
           *its* database into this folder (a fresh checkout on the sample
-          config, a harness pointed at the real folder — #126). Not an edit.
+          config, a harness pointed at the real folder). Not an edit.
           ``foreign`` carries the reason and :meth:`_apply_fields` applies nothing.
         """
         stamp = parsed.frontmatter.get("exported_at")
@@ -595,7 +595,7 @@ class Mirror:
         *,
         foreign: str | None,
     ) -> None:
-        """``blocked_by: [ids]`` import (#100) — a relation, not a scalar, so it
+        """``blocked_by: [ids]`` import — a relation, not a scalar, so it
         cannot go through :meth:`_apply_fields`'s per-field diff: the wanted set
         is diffed against the stored one and applied edge by edge, each add
         through :func:`src.tasks_repo.add_blocker` (the same cycle-guard

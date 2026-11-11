@@ -11,7 +11,7 @@ reclaim-then-start owned by the shared ``tray_lifecycle.ps1``). Menu:
     --
     Quit              — stop the webapp and exit
 
-Self-heal per project-scaffolding#201 (vendored ``app/tray/watchdog.py``):
+Self-heal (vendored ``app/tray/watchdog.py``):
 the initial spawn retries with backoff on a background thread, a health
 watchdog splits *dead* (not listening → respawn, then ``rearm()`` if that
 failed) from *wedged* (listening, ``/healthz`` silent → alert only), and every

@@ -78,7 +78,7 @@ class CycleError(ValidationError):
 
 
 class CaptureDismissed(RepoError):
-    """A capture source replayed an id whose task was deleted (#254)."""
+    """A capture source replayed an id whose task was deleted."""
 
     code = "capture_dismissed"
     http_status = 410
@@ -132,7 +132,7 @@ _folder_web_resolver: FolderResolver | None = None
 
 
 def set_folder_web_resolver(fn: FolderResolver | None) -> None:
-    """Install (or clear) the ``ref → cloud web URL`` hook (#28). Only the
+    """Install (or clear) the ``ref → cloud web URL`` hook. Only the
     fallback: an explicit ``links(kind=folder)`` web link on the task always
     wins. The app sets it from ``config.web_roots``
     (``src.placeholders.web_url``); with none installed, no derivation."""
@@ -189,7 +189,7 @@ def _validate_enum(field: str, value: Any, nullable: bool = False) -> None:
 
 
 def _validate_anchor(recurrence: str | None, value: Any) -> str | None:
-    """The canonical anchor for ``recurrence``; a bad one is a 422 (#112)."""
+    """The canonical anchor for ``recurrence``; a bad one is a 422."""
     try:
         return normalise_anchor(recurrence, value)
     except AnchorError as exc:
@@ -210,7 +210,7 @@ def _carry_anchor(recurrence: str | None, value: Any) -> str | None:
 
 
 def _validate_interval(recurrence: str | None, value: Any) -> int | None:
-    """The stored "every N" for ``recurrence``; a bad one is a 422 (#229)."""
+    """The stored "every N" for ``recurrence``; a bad one is a 422."""
     try:
         return normalise_interval(recurrence, value)
     except IntervalError as exc:
@@ -326,7 +326,7 @@ def _blocked_reachable(conn: sqlite3.Connection, blocker_id: int) -> set[int]:
 
 def _currently_blocked_ids(conn: sqlite3.Connection) -> set[int]:
     """Every task with at least one still-open blocker — the one query
-    :func:`list_tasks` filters on (#100)."""
+    :func:`list_tasks` filters on."""
     rows = conn.execute(
         "SELECT DISTINCT tb.blocked_id FROM task_blocks tb JOIN tasks t ON t.id = tb.blocker_id"
         f" WHERE t.status NOT IN ({CLOSED_SQL})"
@@ -346,7 +346,7 @@ def _blocker_rows(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]
 
 
 def _blocked_fields(blocked_by: list[dict[str, Any]]) -> dict[str, Any]:
-    """The blocked-by keys every task shape carries (#100), from its blockers.
+    """The blocked-by keys every task shape carries, from its blockers.
 
     The blockers themselves (id/title/status, for the drawer's list and the
     mirror export) plus the two derived facts every list view wants without
@@ -361,7 +361,7 @@ def _blocked_fields(blocked_by: list[dict[str, Any]]) -> dict[str, Any]:
 def _summary_lookups(conn: sqlite3.Connection, ids: list[int]) -> dict[str, Any]:
     """The five row-scoped lookups :func:`_summary` needs, fetched once for a
     whole page of task ids — five queries for the page instead of five per row,
-    the strategy :func:`_enrich_list` and :func:`tree` already use (#186)."""
+    the strategy :func:`_enrich_list` and :func:`tree` already use."""
     marks = ", ".join("?" * len(ids))
     children: dict[int, int] = {
         r["parent_id"]: int(r["n"])
@@ -410,7 +410,7 @@ def _summaries(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> list[dic
 
     Same shape per row; the five row-scoped lookups come from
     :func:`_summary_lookups` instead of being re-queried per row, so a list
-    view costs a fixed number of queries rather than five per row (#186). The
+    view costs a fixed number of queries rather than five per row. The
     people lookup is keyed on the rows' ``person_id`` set, so it runs only
     when some row is assigned.
     """

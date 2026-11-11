@@ -1,7 +1,7 @@
-"""Healing the stored paths an archiver renumber renamed (#176, split out in #186).
+"""Healing the stored paths an archiver renumber renamed.
 
 The archiver re-sequences a folder's ``NNN`` prefixes after ``apply`` and
-``revert`` (email-archiver#61) and hands back a ``renumbered`` map; this module
+``revert`` and hands back a ``renumbered`` map; this module
 turns that map into the three ``UPDATE``s that keep task-os's own copies of those
 paths true. It is a function of one JSON document and a connection — no
 subprocess, no service state — so ``src/archive_batch.py`` calls into it after

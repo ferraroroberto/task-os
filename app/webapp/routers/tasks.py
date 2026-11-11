@@ -1,14 +1,14 @@
 """Tasks route family — CRUD, tree, move, done, comments, links, issue, activity.
 
-    GET    /api/tasks                    filtered flat list (summaries); descriptions=false drops them (the boot, #309)
+    GET    /api/tasks                    filtered flat list (summaries); descriptions=false drops them (the boot)
     POST   /api/tasks                    create → 201; with an ``external_id``
-                                         (a capture source's own id, #98) the
+                                         (a capture source's own id) the
                                          create is idempotent — a replay gets
                                          the same task back untouched on 200
     POST   /api/tasks/bulk               {ids, status?, due?, starts?, priority?, owner?} → per-id results
-    POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root; #121)
-    GET    /api/tasks/tree?root=N        nested forest (or N's subtree); descriptions=false drops them (the boot, #280)
-    GET    /api/projects                 every task with children, closed too: {id, title, depth, status} (#309)
+    POST   /api/tasks/bulk/delete        {ids} → per-id results (subtrees go with their root)
+    GET    /api/tasks/tree?root=N        nested forest (or N's subtree); descriptions=false drops them (the boot)
+    GET    /api/projects                 every task with children, closed too: {id, title, depth, status}
     GET    /api/tasks/{id}               detail: links, comments, activity, children, breadcrumb
     PATCH  /api/tasks/{id}               update fields (parent_id goes through the cycle guard)
     DELETE /api/tasks/{id}               delete the task and its subtree
@@ -30,24 +30,24 @@
     GET    /api/activity?task=N&limit=   newest first (all tasks when no task)
     POST   /api/parse                    {text} → quick-add split: title, due, parent
     GET    /api/dates?phrases=a,b        {today, dates: {phrase: ISO | null}} — what each
-                                         date phrase means today (the date sheet, #391)
+                                         date phrase means today (the date sheet)
 
 Query filters on the list: ``status`` (repeatable, or ``open``), ``parent``
 (id or ``root``), ``project`` (descendant-of), ``due`` (``today`` · ``week``
 · ``overdue`` · date), ``due_from`` / ``due_to``, ``type``, ``person``
 (repeatable / comma-separated ids), ``owner`` (repeatable / comma-separated
-member ids; the install owner's include every task nobody gave one, #476),
+member ids; the install owner's include every task nobody gave one),
 ``q`` (full text), ``updated_since``
-(date), ``updated_before`` (date — the stale windows' inverse twin, #101),
+(date), ``updated_before`` (date — the stale windows' inverse twin),
 ``done_on`` (date), ``done_from`` / ``done_to`` (dates — the done journal's
-window, #102; newest closing first), ``include_closed``, ``limit``.
+window; newest closing first), ``include_closed``, ``limit``.
 
-``status`` also takes the pseudo-value ``deferred`` (#87) — not a status but
+``status`` also takes the pseudo-value ``deferred`` — not a status but
 a modifier: it flips the list from awake tasks to the sleeping ones (``starts``
 still in the future), intersected with any real statuses alongside it. The
 split happens here, in the one presentational place that knows the URL
 vocabulary; the rule itself is ``list_tasks(deferred=…)``. ``status`` also
-takes ``blocked`` (#100), the same shape: narrows to tasks with an open
+takes ``blocked``, the same shape: narrows to tasks with an open
 blocker instead of following the default hide rule; ``list_tasks(blocked=…)``
 owns the rule.
 
@@ -57,7 +57,7 @@ weekend``, ``in 2 weeks``, ISO) — resolved here through
 ``src.dates.parse_date`` so the repo layer only ever sees ISO dates; an
 unknown phrase is a 422, never a silently unset date.
 
-A new task's ``owner`` (#476) is the body's, else the viewer's — the member
+A new task's ``owner`` is the body's, else the viewer's — the member
 whose credential made the request (``src.auth.resolve_viewer``: the install
 owner on plain loopback). A subtask is its creator's, never its parent's.
 
@@ -134,7 +134,7 @@ class TaskUpdate(BaseModel):
 
 
 class BulkBody(BaseModel):
-    """One change applied to many tasks — the Board/Today selection (issue #81).
+    """One change applied to many tasks — the Board/Today selection.
 
     ``status`` takes the same vocabulary as the row select, ``complete``
     included; ``due``, ``starts`` and ``priority`` take the same values as a
@@ -143,9 +143,9 @@ class BulkBody(BaseModel):
     the due itself) with an explicit ``due``.
 
     ``starts`` and ``priority`` joined the body with the single-key row
-    actions (issue #99): the same keystroke has to mean the same thing on a
+    actions: the same keystroke has to mean the same thing on a
     selection as on one row, and the row keys snooze and cycle priority.
-    ``owner`` (#476) is the bar's Set owner…: a selection reassigned at once.
+    ``owner`` is the bar's Set owner…: a selection reassigned at once.
     """
 
     ids: list[int] = Field(min_length=1, max_length=500)
@@ -158,7 +158,7 @@ class BulkBody(BaseModel):
 
 
 class BulkDeleteBody(BaseModel):
-    """The Select bar's delete (issue #121) — its own body, so a delete can
+    """The Select bar's delete — its own body, so a delete can
     never travel with a status or a date in the same request."""
 
     ids: list[int] = Field(min_length=1, max_length=500)
@@ -235,7 +235,7 @@ def _split_deferred(statuses: list[str]) -> tuple[list[str], str | None]:
 
 
 def _split_blocked(statuses: list[str]) -> tuple[list[str], str | None]:
-    """``[…, "blocked"] → (the real statuses, "only")`` (#100) — the same
+    """``[…, "blocked"] → (the real statuses, "only")`` — the same
     split as ``deferred``, its own pseudo-value on the same status list."""
     if BLOCKED not in statuses:
         return statuses, None
@@ -331,13 +331,13 @@ def list_tasks(
 def create_task(
     body: TaskCreate, request: Request, response: Response, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    """Create a task — idempotent when the body carries an ``external_id`` (#98).
+    """Create a task — idempotent when the body carries an ``external_id``.
 
     A capture source (the email poller here, whatsapp-radar over HTTP) posts the
     source's own id; the first call creates (**201**), a replay gets the same
     task back **untouched** on **200**, so a retry after a timeout can never
     make a second Inbox task. A replay after that task was deleted is **410**
-    ``capture_dismissed`` (#254) — the delete stands. Without ``external_id``
+    ``capture_dismissed`` — the delete stands. Without ``external_id``
     nothing changes.
     """
     fields = _resolve_dates(
@@ -366,7 +366,7 @@ def create_task(
 def bulk_tasks(
     body: BulkBody, request: Request, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    """Apply one change to a selection of tasks (issue #81; #99 added the fields).
+    """Apply one change to a selection of tasks.
 
     Declared before ``/tasks/{task_id}`` so the literal path always wins.
     ``due`` / ``starts`` are resolved **once** here: an unparseable phrase is
@@ -397,7 +397,7 @@ def bulk_tasks(
 def bulk_delete_tasks(
     body: BulkDeleteBody, db: sqlite3.Connection = Depends(get_db)
 ) -> dict[str, Any]:
-    """Delete a selection of tasks, subtrees included (issue #121).
+    """Delete a selection of tasks, subtrees included.
 
     Per-id results like the bulk change: an id already gone is a named
     ``ok: false`` row on a 200, never a lost batch. ``deleted`` counts every
@@ -617,7 +617,7 @@ MAX_DATE_PHRASES = 20
 def resolve_dates(phrases: str = Query(..., min_length=1)) -> dict[str, Any]:
     """What each date phrase resolves to today: ``{today, dates: {phrase: ISO | null}}``.
 
-    The date sheet (#391) shows the date beside every phrase it offers. The
+    The date sheet shows the date beside every phrase it offers. The
     phrase is still what a pick sends, so this is the same ``parse_date`` the
     write path runs, on the same clock: the date shown is the date written. An
     unknown phrase is a 422, never a blank beside it.

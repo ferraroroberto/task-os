@@ -1,4 +1,4 @@
-"""Voice quick-add — a recorded phrase becomes a quick-add line, locally (#92).
+"""Voice quick-add — a recorded phrase becomes a quick-add line, locally.
 
 Hold the mic on the quick-add bar, say *"buy a new filter for the dehumidifier
 next week"*, let go: the clip goes to the fleet's transcription service and the
@@ -6,7 +6,7 @@ transcript comes back through the ordinary ``src.quick_add`` parse, so the
 chips preview is the one you would have got by typing. Nothing leaves the
 house — the audio's whole journey is browser → task-os → ``local-llm-hub``.
 
-**Through the hub, not around it (#144).** The primary endpoint is the hub on
+**Through the hub, not around it.** The primary endpoint is the hub on
 ``:8000``; because the request names no model, the hub applies its
 ``roles.audio.transcribe`` chain — **parakeet** on the Mac's ANE first
 (~0.2 s for a phrase), whisper behind it — and records the call in its
@@ -107,8 +107,8 @@ def build_multipart(
     """``(body, content_type_header)`` for one ``multipart/form-data`` upload.
 
     Hand-rolled on purpose: the whole outbound need is one file part plus a
-    couple of scalars. ``requests`` arrived later (#185, for the keep-alive
-    session in :mod:`src.pooled_http`) and could build this with ``files=``,
+    couple of scalars. ``requests`` is used for the keep-alive
+    session in :mod:`src.pooled_http` and could build this with ``files=``,
     but the body is built **once** and posted to each endpoint in turn, and
     the tests read these exact bytes back — so the swap would buy nothing and
     cost the assertions.
@@ -171,7 +171,7 @@ _LABELS = {HUB: "the hub", FALLBACK: "the local whisper server"}
 class VoiceClient:
     """The install's voice endpoints: which one is there, and what it heard.
 
-    Two of them, primary first (#144). The primary is the **hub**, which
+    Two of them, primary first. The primary is the **hub**, which
     resolves the fleet's ``roles.audio.transcribe`` chain — parakeet on the
     Mac's ANE ahead of whisper — precisely because no model is named in the
     request; it also puts the call in the hub's observability ring. The
@@ -248,7 +248,7 @@ class VoiceClient:
         without reading a log; ``url`` is that endpoint's URL, falling back to
         the configured primary when nothing answered.
         ``partial_interval_seconds`` is the live-transcript cadence the page
-        should use — ``0`` means "transcribe once, on stop" (#146).
+        should use — ``0`` means "transcribe once, on stop".
         """
         reachable, reason, serving, url = self.probe()
         return {

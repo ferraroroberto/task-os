@@ -28,7 +28,7 @@ ACTOR_HEADER = "X-Actor"
 def resolve_actor(request: Request, explicit: str | None = None) -> str:
     """Who is acting: an explicit body field → the ``X-Actor`` header → in
     team mode, the name this browser picked (``src.team``) → a member signed
-    in with their own token (#474) → the first configured team member (the
+    in with their own token → the first configured team member (the
     owner's name: with a top-level ``people`` block, the first member's) →
     ``"me"``."""
     if explicit and explicit.strip():

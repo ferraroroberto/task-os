@@ -1,4 +1,4 @@
-"""Capture route family — the inbound channels that land tasks in Inbox (#98).
+"""Capture route family — the inbound channels that land tasks in Inbox.
 
     POST /api/capture/email/run   one flagged-email pass now →
                                   {listed, created, unchanged, dismissed, errors, created_ids}

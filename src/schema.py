@@ -24,16 +24,16 @@ Version history:
        cascade on purpose: the exporter needs the old ``path`` after a task is
        deleted so it can remove the file, then drops the row itself.
     5  links.kind gains 'ai' — an AI-conversation link (Claude, ChatGPT,
-       Gemini, Copilot — one kind, no per-provider split; issue #77). SQLite
+       Gemini, Copilot — one kind, no per-provider split). SQLite
        cannot widen a CHECK in place, so the step rebuilds ``links`` and
        recreates its index; v2's DDL stays frozen on the shipped kind list.
-    6  mirror_events(id, task_id, kind, field, file_value, kept_value, ts)  (issue #84)
+    6  mirror_events(id, task_id, kind, field, file_value, kept_value, ts)
        — a conflicting or rejected mirror import value, recorded here instead
        of as a comment on the task. Deduped on (task_id, field, file_value)
        so a permanently unresolvable value produces one standing row, not one
        per import pass; ``src/mirror.py`` clears a task's row for a field once
        that field imports cleanly. No existing comment is touched or removed.
-    7  tasks.starts (TEXT date, nullable) + its index                (issue #87)
+    7  tasks.starts (TEXT date, nullable) + its index
        — the day a task starts mattering. Until it arrives the task is
        *deferred*: ``src/tasks_repo.py``'s ``list_tasks`` hides it from the
        working views (Board · Today · Table · ``tasks ls``) while the Tree and
@@ -41,28 +41,28 @@ Version history:
        a second mechanism. The recurrence roll never touches it — see the
        contract note below.
     8  tasks.planned_on (TEXT date, nullable) + tasks.plan_order (INTEGER,
-       nullable) + an index on planned_on                            (issue #89)
+       nullable) + an index on planned_on
        — the day a task was committed to ("My plan" on Today) and its position
        inside that day's plan. ``planned_on`` is a first-class task field
        (activity-logged, mirrored); ``plan_order`` is presentation-level
        ordering managed by ``src/tasks_repo.py`` only (appended on plan,
        cleared on unplan, rewritten by ``plan_reorder``) — never PATCHed
        directly, never mirrored.
-    9  tasks.recurrence_anchor (TEXT, nullable)                     (issue #112)
+    9  tasks.recurrence_anchor (TEXT, nullable)
        — the fixed day a recurrence lands on, beside the cadence rather than
        inside it (the iCalendar split: ``FREQ=WEEKLY;BYDAY=FR``). ``weekly``
        takes a weekday list (``fri``, ``mon,tue,wed,thu,fri``), ``monthly``
        takes ``day-N`` or ``<1..4|last>-<weekday>``; the other cadences take
        none. NULL keeps the plain offset roll. Grammar and arithmetic live in
        ``src/dates.py``, validation in ``src/tasks_repo.py``.
-    10 tasks.done_at backfilled for cancelled tasks — no DDL           (issue #102)
+    10 tasks.done_at backfilled for cancelled tasks — no DDL
        — ``done_at`` becomes the *closed-at* stamp: set when a task enters
        ``done`` **or** ``cancelled``, cleared when it reopens. The done
        journal groups both by that day. Rows cancelled before this step carry
        the timestamp of their ``status → cancelled`` activity row (the moment
        it actually happened), or ``updated_at`` when no such row exists (an
        import that arrived already cancelled).
-    11 task_blocks(blocker_id, blocked_id) + its two indexes           (issue #100)
+    11 task_blocks(blocker_id, blocked_id) + its two indexes
        — a *blocks* edge, separate from the parent tree: ``blocker_id`` must
        close before ``blocked_id`` counts as unblocked. ``ON DELETE CASCADE``
        on both columns drops a task's edges when it (or the other end) is
@@ -70,50 +70,50 @@ Version history:
        walks ``task_blocks`` alone — a blocks-edge may cross parent subtrees
        freely, unlike ``move()``'s parent-tree guard.
     12 ai_suggestions(id, task_id, payload, status, created_at, resolved_at)
-       + its two indexes                                             (issue #95)
+       + its two indexes
        — staged AI suggestions. A resolved row is durable history; only one
        ``pending`` row may exist per task, and a new triage run replaces it.
-    13 Doing retired — no DDL                                       (issue #153)
+    13 Doing retired — no DDL
        — existing ``doing`` rows are moved to ``todo``, and a guard trigger
        rejects any further insert or update into that value (SQLite cannot
        narrow ``tasks``'s CHECK in place because of its cascading child
        tables; a fresh database gets the narrower CHECK directly).
     14 archive_runs(id, started_at, finished_at, status, planned, archived,
        needs_review, failed, error) + archive_items(id, run_id, message_id,
-       …) + their indexes                                            (issue #157)
+       …) + their indexes
        — batch archiving of the Outlook Inbox through email-archiver. One
        ``archive_runs`` row per batch run, one ``archive_items`` row per mail
        it decided on; the partial unique index on ``message_id`` enforces a
        mail is filed exactly once.
     15 archive_corrections(id, item_id, message_id, …) + its index +
-       archive_runs.agreement (REAL, nullable)                       (issue #158)
+       archive_runs.agreement (REAL, nullable)
        — the local model's few-shot memory: one row each time a human
        overrules or confirms a filing choice. ``agreement`` is the share of
        model-ranked mails the archiver's own suggester would have filed the
        same way; NULL means the model ranked nothing that run, never 0.0.
-    16 tasks.recurrence_interval (INTEGER, nullable)                (issue #229)
+    16 tasks.recurrence_interval (INTEGER, nullable)
        — repeat every N cadences ("every 7 weeks on Saturday"), beside the
        cadence and its anchor for v9's reason. NULL = every cadence, so every
        existing recurring task rolls exactly as before. Validation (NULL or
        2–999) and the phase rule for an anchored interval live in
        ``src/dates.py``.
-    17 capture_keys(external_id, captured_at) + backfill            (issue #254)
+    17 capture_keys(external_id, captured_at) + backfill
        — every source id a *capture* ever landed, kept apart from the task
        row so deleting the task dismisses the capture instead of resetting
        it: the source (a still-flagged ``.msg``) keeps offering the id, and
        ``tasks_repo.capture_task`` answers ``dismissed`` rather than landing it
        again. Backfilled from every keyed task that was not *imported* (an
        import reconciles on purpose and has no tombstone).
-    18 drops tasks.planned_on, tasks.plan_order and v8's index         (issue #369)
+    18 drops tasks.planned_on, tasks.plan_order and v8's index
        — the "My plan" feature was removed. Every other column and row is
        untouched; v8 stays as shipped so an old database still reaches here.
     19 time_areas / time_categories / time_entries / time_timers /
-       time_guesses + their indexes, seeded areas and categories       (issue #457)
+       time_guesses + their indexes, seeded areas and categories
        — the time tracker, written only by ``src/time_repo.py``. An area holds
        categories and both are archived, never deleted, so a past entry keeps
        its category. ``person`` is a ``time.people`` id, never a display name;
        an entry's clock range is both columns or neither.
-    20 tasks.owner (TEXT, nullable) + idx_tasks_owner               (issue #476)
+    20 tasks.owner (TEXT, nullable) + idx_tasks_owner
        — the member whose task it is, a ``people`` id and never the ``person_id``
        contact a task is about. NULL reads as the install owner, so every
        existing row keeps working untouched.
@@ -123,7 +123,7 @@ Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 status / parent / priority change writes ``activity``; recurrence rolls the
 same task's due forward on done — to the first occurrence that is after both
 the completed due *and* today, so an overdue task never rolls into another
-overdue date (issue #112) — and leaves ``starts`` alone (issue #87): a
+overdue date — and leaves ``starts`` alone: a
 start date is an absolute one-time gate that always eventually arrives, so a
 snoozed recurring task wakes on its start day and rolls normally from then on
 rather than being hidden forever by a gate that moves with it.

@@ -11,11 +11,11 @@ Route families (each in ``app/webapp/routers/``):
     search  /api/search?q=&kinds=&limit= → federated: tasks · folders · emails · issues,
                                    grouped, unconfigured = visible; /api/search/status
     views   /api/board · /api/today → the Board's four buckets · Today grouped by project,
-                                   with the read-only calendar lane's group (#96);
+                                   with the read-only calendar lane's group;
                                    POST /api/calendar/refresh fetches the calendar now
     mirror  /api/status          → install status: https + auth (Step 7), markdown mirror +
-                                   backup, folder index + opener (Step 9), capture (#98),
-                                   local AI (#95), calendar lane (#96); POST
+                                   backup, folder index + opener (Step 9), capture,
+                                   local AI, calendar lane; POST
                                    /api/mirror/export, /api/mirror/import, /api/backup
                                    run them on demand
     folders POST /api/resolve    → folder ref ↔ absolute path (placeholders, Step 9)
@@ -24,19 +24,19 @@ Route families (each in ``app/webapp/routers/``):
     issues  /api/issues/status · POST /api/issues/sync · GET/POST /api/tasks/{id}/issue
                                  → the issue provider (GitHub via gh): status, sync now,
                                    the drawer's issue panel, create an issue from a task
-    capture POST /api/capture/email/run → one flagged-email pass now (#98); the
+    capture POST /api/capture/email/run → one flagged-email pass now; the
                                    poller's own state rides /api/status's `capture`
     voice   POST /api/transcribe  → the recorded clip forwarded to the fleet's
-                                   whisper server, back as {text, parse} (#92); the
+                                   whisper server, back as {text, parse}; the
                                    endpoint's own state rides /api/status's `voice`
     ai      GET /api/ai/suggestions · POST /api/ai/triage and individual
-                                   accept/reject → staged Inbox proposals (#95)
+                                   accept/reject → staged Inbox proposals
     archive POST /api/archive/run · GET /api/archive/runs[/{id}] · per-item
                                    revert / move / accept → the Outlook Inbox
                                    filed through email-archiver's batch CLI as a
-                                   subprocess (#157); the service's own state
+                                   subprocess; the service's own state
                                    rides /api/status's `archive`
-    time_tracker /api/time/…     → the Time tab (#457): timers (start / switch / stop /
+    time_tracker /api/time/…     → the Time tab: timers (start / switch / stop /
                                    discard), entries, summary, CSV, guesses, area +
                                    category admin; every rule in src/time_repo.py
     auth    GET /login · POST /api/login|logout — the token / password →
@@ -61,9 +61,9 @@ open issues → coding tasks, first pass 10 s after startup then every
 ``src.email_capture.EmailCaptureService`` (flagged emails in the archiver's
 read-only index → Inbox tasks, every ``capture.email_poll_minutes``).
 ``src.voice.VoiceClient`` (``app.state.voice``), ``src.enrich.EnrichClient``
-(``app.state.enrich``, #147) and ``src.ai.AIClient`` (``app.state.ai``, #95)
+(``app.state.enrich``) and ``src.ai.AIClient`` (``app.state.ai``)
 are the exceptions with no
-thread to start: voice quick-add (#92) is a cached reachability probe of the
+thread to start: voice quick-add is a cached reachability probe of the
 transcription endpoint plus one forwarding POST per recording, and enrichment
 is the same shape against the hub's chat endpoint. AI triage makes one bounded
 Anthropic-shape request and stages its validated answer for explicit review.
@@ -71,7 +71,7 @@ All stay disabled — with a logged, status-visible reason — when not
 configured. ``src.search.FederatedSearch`` (``app.state.search``) is built
 over the folder-index and issue-sync services so the search box reads the same
 folder index and issue cache they keep warm. The lifespan also installs the repo's folder
-resolvers (``src.placeholders``: path + ``config.web_roots`` cloud twin, #28)
+resolvers (``src.placeholders``: path + ``config.web_roots`` cloud twin)
 so every task payload carries ``folder_resolved`` / ``folder_url``.
 
 Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
@@ -79,7 +79,7 @@ Errors are one JSON envelope everywhere — ``{"error": {"code", "message",
 ``http_status``), request-validation failures (422) and plain HTTP errors.
 
 Run under uvicorn with the pinned selector loop (Windows proactor wedges on an
-aborted client — app-launcher#388):
+aborted client):
 
     python -m uvicorn app.webapp.server:app --host 0.0.0.0 --port 8448 \
         --loop app.webapp.event_loop:selector_loop_factory
@@ -160,7 +160,7 @@ class CachingStaticFiles(StaticFiles):
     installed iOS PWA heuristic-cache the module graph across deploys. This
     subclass stamps an explicit policy per suffix and rewrites each served
     ``.js`` module's relative ``import`` URLs with the build's fleet hash so an
-    edit to any module busts the whole graph (project-scaffolding#78).
+    edit to any module busts the whole graph.
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:

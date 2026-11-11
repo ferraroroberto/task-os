@@ -238,9 +238,10 @@ builders = [
 [comment_ratchet]
 enabled  = true
 baseline = ".comment-ratchet-baseline.json"
-# Decision-history phrases in comments and docstrings fail at zero. The docstring `#NNN` rule
-# stays off: it finds 256 references in 60 files, too many to burn in one pass.
+# Decision-history phrases in comments and docstrings fail at zero, and so does a `#NNN`
+# reference inside a Python docstring.
 history_phrases = true
+docstrings = true
 
 # /perf-review (fleet-config skills/perf-review): "ready" is Today's due list drawn, not
 # first contentful paint, which goes green on a painted shell before any task has loaded.

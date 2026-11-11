@@ -1,4 +1,4 @@
-"""The one background poller the in-app schedulers share (#262).
+"""The one background poller the in-app schedulers share.
 
 :class:`~src.issue_sync.IssueSyncService` and
 :class:`~src.email_capture.EmailCaptureService` are the same machine — a daemon

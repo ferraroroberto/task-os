@@ -1,4 +1,4 @@
-"""Just enough iCalendar (RFC 5545) to answer "what is on my calendar today" (#96).
+"""Just enough iCalendar (RFC 5545) to answer "what is on my calendar today".
 
 Stdlib only, read-only, one question: given a feed's text and a local day,
 which events touch that day, and at what local times. Everything else in the

@@ -1,4 +1,4 @@
-"""Voice route family — a recorded phrase becomes a quick-add line (#92, #146).
+"""Voice route family — a recorded phrase becomes a quick-add line.
 
     POST /api/transcribe          the raw audio body → {text, parse: {…}} in
                                   one round trip (409 when voice is not
@@ -10,7 +10,7 @@
                                   made of the spoken sentence, or the
                                   deterministic parse and the reason why not
 
-``?parse=0`` exists for the live transcript (#146): while you are still
+``?parse=0`` exists for the live transcript: while you are still
 speaking the page re-posts its growing take every ``partial_interval_seconds``,
 and each of those passes wants the words and nothing else. Parsing a *partial*
 would be worse than wasteful — a due date appearing and moving as the sentence
@@ -109,7 +109,7 @@ async def enrich(
     request: Request,
     db: sqlite3.Connection = Depends(get_db),
 ) -> Any:
-    """The spoken sentence, split into the fields the form already has (#147).
+    """The spoken sentence, split into the fields the form already has.
 
     Answers **200 whatever happens**, because there is nothing here for a
     client to recover from: the transcript is already on the line by the time

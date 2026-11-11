@@ -1,6 +1,6 @@
 """Windows event-loop shim for uvicorn.
 
-Copied from app-launcher, where it fixed app-launcher#386/#388. The code is
+Copied from app-launcher, where it fixed a proactor wedge on aborted clients. The code is
 verbatim; the references below are re-pointed at this repo.
 
 On Windows, asyncio's default proactor event loop closes its listening
