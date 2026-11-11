@@ -133,15 +133,34 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 TASK_TYPES = ("task", "coding", "note")
-TASK_STATUSES = ("inbox", "todo", "standby", "done", "cancelled")
+
+
+class TaskStatus(StrEnum):
+    """Where a task is, as every reader sees it: the ``tasks.status`` column's ``CHECK``.
+
+    The one declared task state. Any status may move to any other (a reopened
+    task is the same row), so the guard is the value set itself: the column and
+    the repo's field validation refuse anything outside it, and the browser's
+    mirror (``static/js/tasks/status.js``) is kept equal by a test.
+    """
+
+    INBOX = "inbox"          # arrived on its own (a capture) and not triaged yet
+    TODO = "todo"            # on the list
+    STANDBY = "standby"      # parked on purpose
+    DONE = "done"            # finished
+    CANCELLED = "cancelled"  # dropped
+
+
+TASK_STATUSES = tuple(s.value for s in TaskStatus)
 #: The two statuses a task leaves the working views in — both stamp ``done_at``
 #: . Here beside the enum rather than in ``tasks_repo`` so the CLI's
 #: formatters read it without importing the domain module on the HTTP path.
-CLOSED_STATUSES = ("done", "cancelled")
+CLOSED_STATUSES = (TaskStatus.DONE.value, TaskStatus.CANCELLED.value)
 #: :data:`CLOSED_STATUSES` as the body of a SQL ``IN (…)``, built from the tuple
 #: so no query anywhere restates the pair. Lives beside the tuple rather than in
 #: one consumer, because four modules ask this same question in SQL.
@@ -152,11 +171,11 @@ CLOSED_SQL = ", ".join(f"'{s}'" for s in CLOSED_STATUSES)
 #: the act of writing it. Every hand-driven surface reads this one name
 #: (``tasks_repo.create_task``, quick-add, the CLI's own formatting), so the UI
 #: and the terminal cannot disagree about what "no status given" means.
-DEFAULT_STATUS = "todo"
+DEFAULT_STATUS = TaskStatus.TODO.value
 #: What a capture lands in, for the reason above. ``tasks_repo.capture_task``
 #: names it explicitly rather than inheriting :data:`DEFAULT_STATUS`, so the
 #: arrivals tray does not move when the hand-made default does.
-CAPTURE_STATUS = "inbox"
+CAPTURE_STATUS = TaskStatus.INBOX.value
 TASK_PRIORITIES = ("high", "medium", "low", "none")
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
 LINK_KINDS = ("web", "folder", "email", "issue", "ai")

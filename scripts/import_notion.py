@@ -56,7 +56,7 @@ from src import tasks_repo as repo
 from src.db import connect, connect_read_only, db_path, init_db
 from src.logger import configure_logging
 from src.runtime import files as runtime_files
-from src.schema import SCHEMA_VERSION, current_version
+from src.schema import SCHEMA_VERSION, TaskStatus, current_version
 
 logger = logging.getLogger("import_notion")
 
@@ -420,7 +420,7 @@ def map_page(entry: dict[str, Any], people: dict[str, dict[str, Any]]) -> Mapped
 
     created_at = local_iso(page.get("created_time")) or repo.now_iso()
     updated_at = local_iso(page.get("last_edited_time")) or created_at
-    done_at = updated_at if status == "done" else None
+    done_at = updated_at if status == TaskStatus.DONE else None
 
     rel = _prop(page, "connection") or []
     linked: list[tuple[str, str]] = []

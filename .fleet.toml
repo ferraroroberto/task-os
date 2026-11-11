@@ -480,3 +480,20 @@ derive = "derive_item_state"
 name   = "archive-ui-state"
 module = "app/webapp/static/js/archive/state.js"
 type   = "ArchiveState"
+
+# The task status and the AI suggestion status are stored states with no derive function: the column's
+# value is the state, and the module's enum is the only place that spells the set. docs/task-status.md.
+[[state_machines]]
+name   = "task-status"
+module = "src/schema.py"
+type   = "TaskStatus"
+
+[[state_machines]]
+name   = "task-status-ui"
+module = "app/webapp/static/js/tasks/status.js"
+type   = "Status"
+
+[[state_machines]]
+name   = "ai-suggestion"
+module = "src/ai/triage.py"
+type   = "SuggestionStatus"

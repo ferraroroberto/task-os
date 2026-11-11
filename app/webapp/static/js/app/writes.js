@@ -11,6 +11,7 @@ import { api } from '../../api.js';
 import { confirmDialog } from '../../confirm.js';
 import * as selection from '../../selection.js';
 import { toast } from '../../toast.js';
+import { Status } from '../tasks/status.js';
 
 export async function triageInbox(app) {
   if (app.state.triaging) return;
@@ -81,8 +82,8 @@ export async function patchTask(app, id, changes) {
  *  PATCH — closed for good, off the series — as does every other
  *  status. */
 export async function setStatus(app, id, status) {
-  const task = status === 'complete' || status === 'done' ? await app.resolveTask(id) : null;
-  const completes = status === 'complete' || (status === 'done' && task && !task.recurrence);
+  const task = status === 'complete' || status === Status.DONE ? await app.resolveTask(id) : null;
+  const completes = status === 'complete' || (status === Status.DONE && task && !task.recurrence);
   if (!completes) return app.patchTask(id, { status: status });
   if (!task) {
     toast('That task is no longer on the list', 'error');

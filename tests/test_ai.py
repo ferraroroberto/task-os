@@ -18,6 +18,7 @@ from src import tasks_repo as repo
 from src.ai import AIClient, AIError
 from src.ai.json_payload import json_payload
 from src.ai.triage import (
+    SuggestionStatus,
     accept_suggestion,
     assemble_context,
     generate_suggestions,
@@ -301,3 +302,17 @@ def test_api_stages_accepts_and_rejects(
         item = client.post("/api/ai/triage", json={}).json()["items"][0]
         rejected = client.post(f"/api/ai/suggestions/{item['id']}/reject")
         assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
+
+
+# state-machine-proof: ai-suggestion
+def test_a_resolved_suggestion_cannot_be_answered_again_and_an_unknown_status_is_refused(
+    conn: sqlite3.Connection, triage_state: dict[str, int],
+) -> None:
+    item = generate_suggestions(conn, FakeAI(proposed(triage_state)))[0]
+    accept_suggestion(conn, item["id"])
+    for answer in (accept_suggestion, reject_suggestion):
+        with pytest.raises(repo.NotFound):
+            answer(conn, item["id"])
+    assert [s["id"] for s in list_suggestions(conn, status=SuggestionStatus.ACCEPTED)] == [item["id"]]
+    with pytest.raises(repo.ValidationError):
+        list_suggestions(conn, status="paused")

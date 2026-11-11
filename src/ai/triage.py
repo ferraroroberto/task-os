@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from collections.abc import Iterable
 from datetime import date
+from enum import StrEnum
 from typing import Any
 
 from src import clock
@@ -16,6 +17,20 @@ from src.ai.json_payload import json_payload
 from src.schema import CLOSED_SQL
 
 logger = logging.getLogger(__name__)
+
+
+class SuggestionStatus(StrEnum):
+    """Where a staged suggestion is: the ``ai_suggestions.status`` column.
+
+    ``PENDING`` is the only status that moves (to accepted or rejected, once);
+    a resolved suggestion is never re-opened, and :func:`_pending` is the guard
+    that refuses a second answer.
+    """
+
+    PENDING = "pending"    # staged, waiting for a human
+    ACCEPTED = "accepted"  # applied to its task
+    REJECTED = "rejected"  # dismissed without touching the task
+
 
 MAX_TASKS = 50
 MAX_PROJECT_NODES = 200
@@ -220,9 +235,9 @@ def _suggestion_row(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any
 
 
 def list_suggestions(
-    conn: sqlite3.Connection, *, status: str | None = "pending",
+    conn: sqlite3.Connection, *, status: str | None = SuggestionStatus.PENDING,
 ) -> list[dict[str, Any]]:
-    if status is not None and status not in {"pending", "accepted", "rejected"}:
+    if status is not None and status not in set(SuggestionStatus):
         raise repo.ValidationError(f"unknown suggestion status: {status}")
     sql = "SELECT * FROM ai_suggestions"
     args: tuple[Any, ...] = ()
@@ -251,12 +266,13 @@ def generate_suggestions(
     for suggestion in suggestions:
         task_id = suggestion.pop("task_id")
         conn.execute(
-            "DELETE FROM ai_suggestions WHERE task_id = ? AND status = 'pending'",
-            (task_id,),
+            "DELETE FROM ai_suggestions WHERE task_id = ? AND status = ?",
+            (task_id, SuggestionStatus.PENDING.value),
         )
         conn.execute(
-            "INSERT INTO ai_suggestions(task_id, payload, status, created_at) VALUES (?,?, 'pending', ?)",
-            (task_id, json.dumps(suggestion, ensure_ascii=False, separators=(",", ":")), created_at),
+            "INSERT INTO ai_suggestions(task_id, payload, status, created_at) VALUES (?,?,?,?)",
+            (task_id, json.dumps(suggestion, ensure_ascii=False, separators=(",", ":")),
+             SuggestionStatus.PENDING.value, created_at),
         )
     conn.commit()
     logger.info("ℹ️ ai triage: staged %d suggestion(s) from %d context chars", len(suggestions), len(context))
@@ -265,7 +281,8 @@ def generate_suggestions(
 
 def _pending(conn: sqlite3.Connection, suggestion_id: int) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT * FROM ai_suggestions WHERE id = ? AND status = 'pending'", (suggestion_id,)
+        "SELECT * FROM ai_suggestions WHERE id = ? AND status = ?",
+        (suggestion_id, SuggestionStatus.PENDING.value),
     ).fetchone()
     if row is None:
         raise repo.NotFound(f"pending suggestion {suggestion_id} not found")
@@ -282,8 +299,8 @@ def accept_suggestion(conn: sqlite3.Connection, suggestion_id: int) -> dict[str,
     updated = repo.update_task(conn, int(row["task_id"]), actor="ai", status="todo", **changes)
     resolved_at = clock.now_iso()
     conn.execute(
-        "UPDATE ai_suggestions SET status = 'accepted', resolved_at = ? WHERE id = ?",
-        (resolved_at, suggestion_id),
+        "UPDATE ai_suggestions SET status = ?, resolved_at = ? WHERE id = ?",
+        (SuggestionStatus.ACCEPTED.value, resolved_at, suggestion_id),
     )
     conn.commit()
     return {"suggestion": _suggestion_row(conn, conn.execute(
@@ -294,8 +311,8 @@ def accept_suggestion(conn: sqlite3.Connection, suggestion_id: int) -> dict[str,
 def reject_suggestion(conn: sqlite3.Connection, suggestion_id: int) -> dict[str, Any]:
     _pending(conn, suggestion_id)
     conn.execute(
-        "UPDATE ai_suggestions SET status = 'rejected', resolved_at = ? WHERE id = ?",
-        (clock.now_iso(), suggestion_id),
+        "UPDATE ai_suggestions SET status = ?, resolved_at = ? WHERE id = ?",
+        (SuggestionStatus.REJECTED.value, clock.now_iso(), suggestion_id),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM ai_suggestions WHERE id = ?", (suggestion_id,)).fetchone()

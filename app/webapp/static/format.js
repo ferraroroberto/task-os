@@ -12,7 +12,8 @@
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 
-export const STATUSES = ['inbox', 'todo', 'standby', 'done', 'cancelled'];
+// The status words live in one declared module; callers that already import them from here keep working.
+export { STATUSES } from './js/tasks/status.js';
 export const PRIORITIES = ['high', 'medium', 'low', 'none'];
 
 const DAY_MS = 86400000;

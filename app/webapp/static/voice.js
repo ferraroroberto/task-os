@@ -214,6 +214,7 @@ const WAVE_GAIN = 2.5;       // speech peaks sit well under full scale
 /** The `source` seam `attachRecWave` accepts, backed by `m.blocks`. */
 function tapLevelSource(m) {
   return {
+    // state-literal-exempt: AudioContext.state is the browser's own enum, not a task-os lifecycle
     get running() { return !!m.ctx && m.ctx.state === 'running' && m.captured > 0; },
     connect: function () { /* the tap already owns the stream */ },
     close: function () { /* the recorder owns the context */ },
