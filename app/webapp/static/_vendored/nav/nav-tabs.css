@@ -358,11 +358,14 @@
      --nav-fade-band masked out to transparent so it has no bottom edge, on
      its own compositing layer. Its opacity is --nav-fade-on, which
      nav-tabs.js raises from 0 at scroll-top to 1 over the first band of
-     scroll: at rest the first row sits right under the status bar, undimmed.
+     scroll. At scroll-top the layer is not generated at all (no
+     data-nav-top-glass on <html>): an installed iOS app still paints a
+     promoted backdrop-filter layer at opacity 0, frosting the header under
+     it, so at rest the first row sits right under the status bar, crisp.
      The page head (black-translucent, viewport-fit=auto, theme-color in the
      page colour) is part of the same recipe. */
   body::after {
-    content: '';
+    content: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -378,6 +381,9 @@
     mask-image: linear-gradient(to bottom, #000 calc(100% - var(--nav-fade-band, 16px)), transparent 100%);
     transform: translateZ(0);
     will-change: transform;
+  }
+  html[data-nav-top-glass] body::after {
+    content: '';
   }
   @media (prefers-reduced-transparency: reduce) {
     body::before,

@@ -188,25 +188,37 @@ function watchGlassSettle(nav) {
 
 // Dropping the filter for one frame makes WebKit discard the bar's backdrop
 // layer and build a new one at its current bounds; the glass is back on the
-// next frame.
+// next frame. The top glass is a backdrop layer too, so it is dropped and
+// regenerated with the bar.
 function recompositeGlass(nav) {
   nav.classList.add('glass-rebuild');
+  document.documentElement.removeAttribute('data-nav-top-glass');
   requestAnimationFrame(function () {
-    requestAnimationFrame(function () { nav.classList.remove('glass-rebuild'); });
+    requestAnimationFrame(function () {
+      nav.classList.remove('glass-rebuild');
+      syncTopGlass();
+    });
   });
 }
 
-// The top glass (body::after in nav-tabs.css) is off at scroll-top, so the
-// first row sits undimmed right under the status bar, and reaches full
-// opacity over the first --nav-fade-band of scroll.
+// The top glass (body::after in nav-tabs.css) does not exist at scroll-top,
+// so the first row sits crisp right under the status bar; it is generated on
+// the first scrolled pixel and reaches full opacity over the first
+// --nav-fade-band of scroll.
+let topGlassBand = 16;
+
+function syncTopGlass() {
+  const root = document.documentElement;
+  const reveal = Math.min(1, Math.max(0, window.scrollY / topGlassBand));
+  root.style.setProperty('--nav-fade-on', String(reveal));
+  root.toggleAttribute('data-nav-top-glass', reveal > 0);
+}
+
 function gateTopFade() {
   const root = document.documentElement;
-  const band = parseFloat(getComputedStyle(root).getPropertyValue('--nav-fade-band')) || 16;
-  function update() {
-    root.style.setProperty('--nav-fade-on', String(Math.min(1, Math.max(0, window.scrollY / band))));
-  }
-  window.addEventListener('scroll', update, { passive: true });
-  update();
+  topGlassBand = parseFloat(getComputedStyle(root).getPropertyValue('--nav-fade-band')) || 16;
+  window.addEventListener('scroll', syncTopGlass, { passive: true });
+  syncTopGlass();
 }
 
 // tab name → { button, pane }. The pane is resolved from aria-controls; a tab
