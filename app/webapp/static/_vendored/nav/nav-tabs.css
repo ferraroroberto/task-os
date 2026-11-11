@@ -231,10 +231,11 @@
    position, radius, glass and the safe-area handling must stay identical
    across apps (don't re-author it per-app).
 
-   Instant on the first frame: the page head uses the `default` status-bar
-   style, so an installed iOS app starts with its final viewport and a plain
-   bottom-anchored fixed bar is in place from frame one. The bar's position
-   never derives from the viewport height and nothing on it animates on load. */
+   The page head uses the `black-translucent` status-bar style with
+   `viewport-fit=auto`: the installed iOS app's web view then starts below the
+   status bar with a zero safe-area inset, and the top glass below covers the
+   viewport's top edge. The bar's position never derives from a measured
+   viewport height and nothing on it animates on load. */
 @media (pointer: coarse) and (max-width: 520px) {
   /* The document is always one pixel taller than the viewport: an installed
      iOS app shrinks its viewport 59px whenever the document can't scroll and
@@ -258,8 +259,9 @@
       max(var(--nav-fade-tail, 24px), var(--bottom-tabs-margin, 21px)) +
       var(--bottom-tabs-height, 61px) + var(--bottom-tabs-margin, 21px) + var(--gap)
     );
-    /* Top = the safe area only in a browser tab: the top fade is off at
-       scroll-top, so the first card sits right under the status bar. */
+    /* Top = the safe area only, in a browser tab and the installed app alike:
+       the top glass is off at scroll-top, so the first card sits right under
+       the status bar. */
     padding: env(safe-area-inset-top, 0px) var(--gap) var(--nav-bottom-reserve);
     scroll-padding-bottom: var(--nav-bottom-reserve);
   }
@@ -323,16 +325,14 @@
     inset: 0;
   }
 
-  /* Scroll-edge fades: a gentle hint that more content lies past each edge,
-     never a wall, and no solid zone. Both edges use one eased curve: from
-     the screen edge inward the content's opacity runs 0, .25, .5, .75, .92
-     and 1 at 0, 10, 25, 50, 75 and 100% of the band, so content stays at
-     least half visible over three quarters of each band and only vanishes at
-     the edge. Drawn as page colour (--bg) over the content, coverage being
-     one minus that opacity. Inert: above .app, below the bar's 120, and
+  /* Scroll-edge layers: a gentle hint that more content lies past each edge,
+     never a wall. Inert: above .app, below the bar's 120, and
      pointer-events: none so taps reach the row beneath.
      Bottom: from --nav-fade-tail above the bar's top edge down to the screen
-     edge, so rows show through the bar's glass and fade out under it. */
+     edge, so rows show through the bar's glass and fade out under it. One
+     eased curve: from the screen edge inward the content's opacity runs 0,
+     .25, .5, .75, .92 and 1 at 0, 10, 25, 50, 75 and 100% of the band, drawn
+     as page colour (--bg) over the content, with no solid zone. */
   body::before {
     content: '';
     position: fixed;
@@ -352,37 +352,32 @@
       var(--bg) 100%
     );
   }
-  /* Top: a --nav-fade-band band from the top of the viewport, solid only
-     through the safe area. In an installed iOS app with the `default` status
-     bar the viewport starts below the status bar and no fixed layer paints in
-     that strip, so the band starts at the viewport top and stays thin.
-     Its opacity is --nav-fade-on, which nav-tabs.js raises from 0 at
-     scroll-top to 1 over the first band of scroll: at rest the first row sits
-     right under the status bar, undimmed, with no top padding past the safe
-     area. */
+  /* Top: the translucent top glass the owner validated on the installed
+     iPhone app. A layer pinned to the viewport top through the safe area
+     plus --nav-fade-band: the page colour at 50% under a 20px blur, its last
+     --nav-fade-band masked out to transparent so it has no bottom edge, on
+     its own compositing layer. Its opacity is --nav-fade-on, which
+     nav-tabs.js raises from 0 at scroll-top to 1 over the first band of
+     scroll: at rest the first row sits right under the status bar, undimmed.
+     The page head (black-translucent, viewport-fit=auto, theme-color in the
+     page colour) is part of the same recipe. */
   body::after {
     content: '';
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px));
+    height: calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 16px));
     z-index: 110;
     pointer-events: none;
     opacity: var(--nav-fade-on, 0);
-    background: linear-gradient(
-      to bottom,
-      var(--bg) env(safe-area-inset-top, 0px),
-      color-mix(in srgb, var(--bg) 75%, transparent)
-        calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px) * 0.1),
-      color-mix(in srgb, var(--bg) 50%, transparent)
-        calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px) * 0.25),
-      color-mix(in srgb, var(--bg) 25%, transparent)
-        calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px) * 0.5),
-      color-mix(in srgb, var(--bg) 8%, transparent)
-        calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px) * 0.75),
-      transparent calc(env(safe-area-inset-top, 0px) + var(--nav-fade-band, 12px))
-    );
+    background: color-mix(in srgb, var(--bg) 50%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--nav-fade-band, 16px)), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--nav-fade-band, 16px)), transparent 100%);
+    transform: translateZ(0);
+    will-change: transform;
   }
   @media (prefers-reduced-transparency: reduce) {
     body::before,
@@ -406,15 +401,6 @@
     html {
       min-height: calc(100vh + 1px);
       min-height: calc(100lvh + 1px);
-    }
-    /* Content starts --standalone-head-offset below the safe area. iOS rasters
-       the header card soft when the page content begins right at the
-       safe-area edge of the installed app, and 20px lower renders it sharp on
-       the device. Plain padding, so it creates no layer and the bar (a
-       body-level sibling of .app) does not move; a browser tab and the
-       desktop keep the safe area alone. */
-    .app {
-      padding-top: calc(env(safe-area-inset-top, 0px) + var(--standalone-head-offset, 20px));
     }
     .tabs {
       top: calc(100vh - var(--bottom-tabs-margin, 21px) - var(--bottom-tabs-height, 61px));

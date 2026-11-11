@@ -196,12 +196,12 @@ function recompositeGlass(nav) {
   });
 }
 
-// The top scroll-edge fade (body::after in nav-tabs.css) is off at
-// scroll-top, so the first row sits undimmed right under the status bar, and
-// reaches full strength over the first --nav-fade-band of scroll.
+// The top glass (body::after in nav-tabs.css) is off at scroll-top, so the
+// first row sits undimmed right under the status bar, and reaches full
+// opacity over the first --nav-fade-band of scroll.
 function gateTopFade() {
   const root = document.documentElement;
-  const band = parseFloat(getComputedStyle(root).getPropertyValue('--nav-fade-band')) || 12;
+  const band = parseFloat(getComputedStyle(root).getPropertyValue('--nav-fade-band')) || 16;
   function update() {
     root.style.setProperty('--nav-fade-on', String(Math.min(1, Math.max(0, window.scrollY / band))));
   }

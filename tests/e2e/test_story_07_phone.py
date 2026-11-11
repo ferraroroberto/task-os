@@ -397,7 +397,10 @@ def _home_screen_metadata(page: Page, base: str, shots: Path):
     touch = page.locator("link[rel='apple-touch-icon']").get_attribute("href")
     assert touch and page.request.get(f"{base}{touch}").status == 200
     viewport = page.locator("meta[name='viewport']").get_attribute("content") or ""
-    assert "viewport-fit=cover" in viewport and "width=device-width" in viewport
+    assert "viewport-fit=auto" in viewport and "width=device-width" in viewport
+    expect(page.locator("meta[name='apple-mobile-web-app-status-bar-style']")).to_have_attribute(
+        "content", "black-translucent"
+    )
     assert page.locator("meta[name='theme-color']").count() >= 1
 
     # 1. Fresh phone → Today is the landing tab.
