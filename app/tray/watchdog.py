@@ -6,7 +6,7 @@ scaffold re-propagates everywhere. Everything app-specific (the probe, the
 respawn action, the log path, the toast) is passed in by the caller, never
 hardcoded here, which is what keeps the file identical. Full reasoning + the
 worked wiring pattern: scaffold ``docs/windows-tray.md`` (gotcha 5) +
-project-scaffolding#201 / app-launcher#386 / photo-ocr#110.
+the sister apps' tray watchdog wiring.
 
 The tray is the only long-lived process watching the webapp, and it starts that
 webapp exactly once. Two failure modes follow from that, both observed in the
@@ -16,7 +16,7 @@ field, and this module supplies one primitive for each:
   not free yet, a cert renewal is in flight, a dependency hub is not up — one
   failed ``manager.start()`` at tray boot leaves the webapp dead for the tray's
   entire lifetime. :func:`retry_with_backoff` turns that single attempt into a
-  bounded, escalating retry (photo-ocr#110: six days of silent downtime).
+  bounded, escalating retry (a spawn that failed once used to mean days of silent downtime).
 
 * **The webapp dies or wedges later and nothing notices.** :class:`HealthWatchdog`
   is a consecutive-failure monitor with edge-triggered callbacks — it fires once
@@ -46,7 +46,9 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Sequence
+from enum import Enum
 from pathlib import Path
+from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +98,78 @@ def retry_with_backoff(
             sleep(delays[attempt - 1])
 
 
+class WatchState(Enum):
+    """The closed set of modes a :class:`HealthWatchdog` is in."""
+
+    #: No failing probe on the books: the start state, and any passing probe.
+    HEALTHY = "healthy"
+    #: Failing probes, still below the threshold; no alert has fired.
+    FAILING = "failing"
+    #: At or past the threshold and alerted: ``on_wedge`` fired and awaits a recovery.
+    WEDGED = "wedged"
+    #: At or past the threshold, alert already fired, handler called ``rearm()``:
+    #: ``on_wedge`` fires again on the next failing probe, and a passing one is a recovery.
+    REARMED = "rearmed"
+
+
+class WatchStep(NamedTuple):
+    """What one probe does: the next state and count, and the callbacks to fire."""
+
+    state: WatchState
+    failures: int
+    wedge: bool
+    recover: bool
+    failing: bool
+
+
+def next_watch_state(
+    state: WatchState, ok: bool, failures: int, threshold: int
+) -> WatchStep:
+    """The only code that maps ``(state, probe result)`` to the next state.
+
+    ``failures`` is the consecutive-failure count before this probe. A pair that
+    cannot occur (healthy with failures, wedged below the threshold, ...) raises
+    ``ValueError`` rather than being read as the nearest legal state.
+    """
+    if state is WatchState.HEALTHY:
+        legal = failures == 0
+    elif state is WatchState.FAILING:
+        legal = 0 < failures < threshold
+    else:
+        legal = failures >= threshold
+    if not legal:
+        raise ValueError(
+            f"impossible watchdog state: {state.value} with {failures} consecutive "
+            f"failures (threshold {threshold})"
+        )
+
+    if ok:
+        # Both alerted states owe the owner a recovery: the wedge alert went out.
+        alerted = state in (WatchState.WEDGED, WatchState.REARMED)
+        return WatchStep(WatchState.HEALTHY, 0, False, alerted, False)
+
+    failures += 1
+    if state is WatchState.WEDGED:
+        return WatchStep(WatchState.WEDGED, failures, False, False, True)
+    if failures >= threshold:
+        return WatchStep(WatchState.WEDGED, failures, True, False, True)
+    return WatchStep(WatchState.FAILING, failures, False, False, False)
+
+
 class HealthWatchdog:
     """Consecutive-failure health monitor with edge-triggered callbacks.
 
     :meth:`tick` runs one probe. After ``failures_to_alert`` *consecutive*
     failures it fires ``on_wedge(count)`` **once** — edge-triggered, not again
     until a recovery (or an explicit :meth:`rearm`) re-arms it — and the first
-    success after an alert fires ``on_recover()``.
+    success after an alert, re-armed or not, fires ``on_recover()``. The current
+    mode is the read-only :attr:`state`.
+
+    The optional ``on_failing(count)`` is level-triggered: it fires on every
+    failed probe while the watchdog is alerted (on the alert tick itself, right
+    after ``on_wedge``). A recovery policy such as "restart once it has been
+    failing past a grace period" lives in that callback, so the watchdog needs
+    to know nothing about the grace period or the retry.
 
     A probe that raises counts as a failure: the tray must never die because a
     health check threw.
@@ -114,13 +181,20 @@ class HealthWatchdog:
         on_wedge: Callable[[int], None],
         on_recover: Callable[[], None],
         failures_to_alert: int = DEFAULT_FAILURES_TO_ALERT,
+        on_failing: Callable[[int], None] | None = None,
     ) -> None:
         self._probe = probe
         self._on_wedge = on_wedge
         self._on_recover = on_recover
+        self._on_failing = on_failing
         self._failures_to_alert = failures_to_alert
         self._consecutive_failures = 0
-        self._alerted = False
+        self._state = WatchState.HEALTHY
+
+    @property
+    def state(self) -> WatchState:
+        """The current mode, for a tooltip or status route to read."""
+        return self._state
 
     def rearm(self) -> None:
         """Allow ``on_wedge`` to fire again on the next failing tick, without
@@ -130,9 +204,11 @@ class HealthWatchdog:
         (e.g. attempted a respawn) and wants another shot next interval if that
         action didn't fix things. Without it, a handler that respawns and fails
         stays silently alerted forever — a dead process never produces the
-        recovery that would otherwise re-arm the edge.
+        recovery that would otherwise re-arm the edge. A recovery after a
+        re-arm still fires ``on_recover``.
         """
-        self._alerted = False
+        if self._state is WatchState.WEDGED:
+            self._state = WatchState.REARMED
 
     def tick(self) -> bool:
         """Run one probe, fire the edge callbacks, and return the probe result."""
@@ -142,18 +218,20 @@ class HealthWatchdog:
             logger.debug("watchdog probe raised: %s", exc)
             ok = False
 
-        if ok:
-            if self._alerted:
-                self._alerted = False
-                self._on_recover()
-            self._consecutive_failures = 0
-            return True
-
-        self._consecutive_failures += 1
-        if not self._alerted and self._consecutive_failures >= self._failures_to_alert:
-            self._alerted = True
-            self._on_wedge(self._consecutive_failures)
-        return False
+        step = next_watch_state(
+            self._state, ok, self._consecutive_failures, self._failures_to_alert
+        )
+        self._state = step.state
+        self._consecutive_failures = step.failures
+        if step.recover:
+            self._on_recover()
+        if step.wedge:
+            self._on_wedge(step.failures)
+        # Read the state after ``on_wedge`` ran: a handler that called
+        # ``rearm()`` has declared itself un-alerted, so no failing tick fires.
+        if step.failing and self._state is WatchState.WEDGED and self._on_failing is not None:
+            self._on_failing(step.failures)
+        return ok
 
     def run(
         self, stop: threading.Event, interval_s: float = DEFAULT_INTERVAL_S
@@ -222,5 +300,8 @@ __all__ = [
     "DEFAULT_STARTUP_RETRY_DELAYS_S",
     "BreadcrumbLog",
     "HealthWatchdog",
+    "WatchState",
+    "WatchStep",
+    "next_watch_state",
     "retry_with_backoff",
 ]
