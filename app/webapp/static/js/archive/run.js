@@ -5,6 +5,7 @@
 
 import { api } from '../../api.js';
 import { toast } from '../../toast.js';
+import { holdBusy, releaseBusy } from '../busy.js';
 import { renderPicker } from './head.js';
 import { loadRuns, refresh, refreshStatus } from './load.js';
 import { renderReport } from './report.js';
@@ -70,7 +71,7 @@ export async function startRun(ctx) {
     toast('“First N mails” takes a whole number from 1 to 1000, or nothing for the whole Inbox', 'error');
     return;
   }
-  st.busy = true;
+  holdBusy(st);
   els.run.disabled = true;
   els.progress.textContent = 'starting…';
   try {
@@ -92,11 +93,11 @@ export async function startRun(ctx) {
     els.progress.textContent = '';
     toast(err.message || 'Could not start the run', 'error');
     // Released before the redraw, which re-reads it for the button's state.
-    st.busy = false;
+    releaseBusy(st);
     // A run this screen had not seen (another device started it): follow
     // it, as opening the sheet would, rather than only re-reading the head.
     await refresh(ctx);
   } finally {
-    st.busy = false;
+    releaseBusy(st);
   }
 }

@@ -1,17 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": "app/webapp/static/format.js", "counts": {"state-set-repeat": 1}},
-    {"key": "app/webapp/static/journal.js", "counts": {"state-literal": 1}},
-    {"key": "app/webapp/static/js/app/journal.js", "counts": {"state-set-repeat": 1}},
-    {"key": "app/webapp/static/js/app/writes.js", "counts": {"state-literal": 2}},
-    {"key": "app/webapp/static/js/archive/actions.js", "counts": {"state-write": 2}},
-    {"key": "app/webapp/static/js/archive/run.js", "counts": {"state-write": 3}},
-    {"key": "app/webapp/static/js/time/timer.js", "counts": {"state-write": 7}},
-    {"key": "app/webapp/static/voice.js", "counts": {"state-literal": 1}},
-    {"key": "scripts/import_notion.py", "counts": {"state-literal": 1}},
-    {"key": "src/ai/triage.py", "counts": {"state-literal": 1}},
-    {"key": "src/cli_support/format.py", "counts": {"state-literal": 1}},
-    {"key": "src/issue_sync.py", "counts": {"state-literal": 1}}
-  ]
+  "entries": []
 }

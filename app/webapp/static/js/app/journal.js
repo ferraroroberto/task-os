@@ -7,6 +7,7 @@
 
 import { api, qs } from '../../api.js';
 import { addDays, todayISO } from '../../format.js';
+import { CLOSED_STATUSES, Status } from '../tasks/status.js';
 import { renderJournal } from '../../journal.js';
 import { toast } from '../../toast.js';
 
@@ -28,7 +29,7 @@ export function journalWindow(app) {
 export function journalParams(app) {
   const f = app.state.filters;
   return {
-    status: app.state.journal.cancelled ? ['done', 'cancelled'] : ['done'],
+    status: app.state.journal.cancelled ? CLOSED_STATUSES : [Status.DONE],
     owner: app.whoseOwner() || undefined,
     project: f.project || undefined,
     person: f.person.length ? f.person : undefined,

@@ -7,6 +7,7 @@ import { api } from '../../api.js';
 import { askSwitch, openEntryEditor } from '../../time-dialogs.js';
 import { fmtMinutes } from '../../time-format.js';
 import { toast } from '../../toast.js';
+import { holdBusy, releaseBusy } from '../busy.js';
 import { nameOf, refreshLive, refreshRecent, timerOf } from './data.js';
 import { renderGlance, renderStart, renderTimer } from './log.js';
 
@@ -27,7 +28,7 @@ export async function startTimer(ctx, c) {
     doSwitch = await askSwitch({ from: running.category_name, to: c.name });
     if (!doSwitch) return;
   }
-  st.busy = true;
+  holdBusy(st);
   try {
     const out = await api('/api/time/timers', {
       method: 'POST', body: { person: st.person, category_id: c.id, switch: doSwitch },
@@ -37,7 +38,7 @@ export async function startTimer(ctx, c) {
   } catch (err) {
     if (err.code === 'timer_running') {
       // Started on another device meanwhile: say why, then offer the switch.
-      st.busy = false;
+      releaseBusy(st);
       await afterTimerChange(ctx);
       const other = timerOf(ctx, st.person);
       toast('A timer is already running for you' + (other ? ': ' + other.category_name : ''));
@@ -46,7 +47,7 @@ export async function startTimer(ctx, c) {
     }
     toast(err.message, 'error');
   } finally {
-    st.busy = false;
+    releaseBusy(st);
   }
   await afterTimerChange(ctx);
 }
@@ -57,14 +58,14 @@ export async function stopTimer(ctx) {
   const input = document.getElementById('timeLongMinutes');
   const body = {};
   if (input && Number(input.value) > 0) body.minutes = Math.round(Number(input.value));
-  st.busy = true;
+  holdBusy(st);
   try {
     const entry = await api('/api/time/timers/' + encodeURIComponent(st.person) + '/stop', { method: 'POST', body: body });
     toast('Saved ' + fmtMinutes(entry.minutes) + ' of ' + entry.category_name);
   } catch (err) {
     toast(err.code === 'no_timer' ? 'That timer was already stopped on another device' : err.message, 'error');
   } finally {
-    st.busy = false;
+    releaseBusy(st);
   }
   await afterTimerChange(ctx);
 }
@@ -72,14 +73,14 @@ export async function stopTimer(ctx) {
 export async function discardTimer(ctx) {
   const st = ctx.st;
   if (st.busy) return;
-  st.busy = true;
+  holdBusy(st);
   try {
     await api('/api/time/timers/' + encodeURIComponent(st.person), { method: 'DELETE' });
     toast('Timer discarded');
   } catch (err) {
     toast(err.code === 'no_timer' ? 'That timer was already stopped on another device' : err.message, 'error');
   } finally {
-    st.busy = false;
+    releaseBusy(st);
   }
   await afterTimerChange(ctx);
 }

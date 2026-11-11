@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 from src.dates import describe_recurrence
-from src.schema import CLOSED_STATUSES, DEFAULT_STATUS
+from src.schema import CLOSED_STATUSES, DEFAULT_STATUS, TaskStatus
 
 
 def _recurrence_text(t: dict[str, Any]) -> str:
@@ -89,7 +89,7 @@ def fmt_journal(journal: dict[str, Any]) -> str:
         when = date.fromisoformat(d["day"]).strftime("%a %d %b") if d["day"] else "(no date)"
         lines.append(f"{when} · {d['count']} done")
         for t in d["items"]:
-            mark = "x" if t.get("status") == "done" else "-"
+            mark = "x" if t.get("status") == TaskStatus.DONE else "-"
             crumb = _crumb(t)
             lines.append(f"  [{mark}] {_fmt_task_line(t)}" + (f"  {crumb}" if crumb else ""))
     return "\n".join(lines)

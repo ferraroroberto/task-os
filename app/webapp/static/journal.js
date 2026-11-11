@@ -30,6 +30,7 @@ import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { icon } from './_vendored/icons/icons.js';
 import { switchEl } from './_vendored/switch/switch.js';
 import { addDays, fmtDay, todayISO } from './format.js';
+import { Status } from './js/tasks/status.js';
 import { rowList } from './rows.js';
 
 /** [{day, items, done, cancelled}] by the local day of `done_at`, newest
@@ -47,7 +48,7 @@ export function groupByDay(items) {
       groups.push(last);
     }
     last.items.push(t);
-    if (t.status === 'cancelled') last.cancelled += 1; else last.done += 1;
+    if (t.status === Status.CANCELLED) last.cancelled += 1; else last.done += 1;
   });
   return groups;
 }

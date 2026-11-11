@@ -8,6 +8,7 @@ import { api } from '../../api.js';
 import { confirmDialog } from '../../confirm.js';
 import { resolveFolderRef } from '../../folderpick.js';
 import { toast } from '../../toast.js';
+import { holdBusy, releaseBusy } from '../busy.js';
 import { isFiled } from './state.js';
 import { shortFolder } from './text.js';
 
@@ -36,13 +37,13 @@ export function actionButton(ctx, glyph, label, handler, opts) {
  *  world — so no two actions can race the archiver's single lock. */
 export function runAction(ctx, button, handler) {
   if (ctx.st.busy) return;
-  ctx.st.busy = true;
+  holdBusy(ctx.st);
   button.disabled = true;
   Promise.resolve()
     .then(handler)
     .catch(function (err) { if (err) toast(err.message || 'Action failed', 'error'); })
     .then(function () {
-      ctx.st.busy = false;
+      releaseBusy(ctx.st);
       return ctx.reload();
     });
 }
