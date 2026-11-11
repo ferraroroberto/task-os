@@ -27,7 +27,7 @@ decision.
 ``busy``      the ``busy`` refusal folder-explorer answers while another call runs
 ``not_this_pc``  the ``403`` refusal for a caller that is not on its PC
 
-It also answers ``GET /api/v1/search/status`` as all-ok, so an instance whose one
+It also answers ``GET /api/v1/mail/flagged`` from ``FakeArchiver.flagged`` and ``GET /api/v1/search/status`` as all-ok, so an instance whose one
 folder-explorer address is this fake does not show Search as down.
 
 ``stop()`` closes the connections it still serves, so a stopped fake reads as
@@ -45,6 +45,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+
+from tests.fixtures.flagged_mail import flagged_page
 
 SCHEMA_VERSION = 1
 
@@ -322,6 +324,8 @@ class FakeArchiver:
         self.sleep = sleep
         self.sleep_verbs = sleep_verbs
         self.mode = "ok"
+        #: ``mail/flagged``'s mails (``flagged_mail.flagged_mails``); empty = nothing flagged
+        self.flagged: list[dict[str, Any]] = []
         self.calls: list[dict[str, Any]] = []
         self.index_calls: list[dict[str, Any]] = []
         self._seen = {"plan": 0, "apply": 0, "revert": 0}
@@ -341,10 +345,16 @@ class FakeArchiver:
                 super().finish()
 
             def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's name
-                """Only the search status, so an app wired to this one address does not read as "search down"."""
+                """The search status, so an app wired to this one address does not read as "search down", and the flagged mail."""
                 ok = {"state": "ok", "reason": None}
-                answer = {"schema_version": SCHEMA_VERSION, **ok, "folders": {**ok, "roots": 1, "scanned": 1, "scanning": False},
-                          "emails": {**ok, "count": 0}} if self.path.split("?")[0].endswith("/search/status") else {"detail": "Not Found"}
+                route = self.path.split("?")[0]
+                if route.endswith("/search/status"):
+                    answer = {"schema_version": SCHEMA_VERSION, **ok, "folders": {**ok, "roots": 1, "scanned": 1, "scanning": False},
+                              "emails": {**ok, "count": 0}}
+                elif route.endswith("/mail/flagged"):
+                    answer = {"schema_version": SCHEMA_VERSION, **ok, **flagged_page(fake.flagged, self.path)}
+                else:
+                    answer = {"detail": "Not Found"}
                 payload = json.dumps(answer).encode("utf-8")
                 self.send_response(200 if "state" in answer else 404)
                 self.send_header("Content-Type", "application/json")

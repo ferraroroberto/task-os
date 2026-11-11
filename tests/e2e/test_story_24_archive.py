@@ -15,12 +15,12 @@
     Settings stays the one complete picture of what this install can do (#167,
     #397).
 
-One instance, because one index feeds both halves: folder-explorer's email index
-is what capture reads, and its ``email batch`` verbs are what the run
-drives. Both are **synthetic** — the emails come from
-``tests/fixtures/emails_fixture.py`` and the archiver is
-``tests/fixtures/archiver_fake.build_fake_archiver``, a real checkout with
-canned JSON answers and no Outlook anywhere near it. ``archive.enabled`` is
+One instance, because one folder-explorer address feeds both halves: its
+flagged-mail route is what capture reads, and its archive verbs are what the run
+drives. Both are **synthetic** — the flagged mails come from
+``tests/fixtures/emails_fixture.py`` via ``flagged_mail.flagged_mails`` and the
+archiver is ``tests/fixtures/archiver_fake.build_fake_archiver``, a loopback fake
+with canned JSON answers and no Outlook anywhere near it. ``archive.enabled`` is
 true **only** in this instance's temp config; the committed sample keeps it
 off (``tests/archive/test_archive_api.py::test_the_sample_config_never_arms_the_real_archiver``).
 
@@ -129,6 +129,7 @@ from tests.fixtures.archiver_fake import (
 def archive_webapp() -> Iterator[ArchiveInstance]:
     """One disposable instance over the synthetic index **and** the fake archiver."""
     from tests.fixtures.emails_fixture import build_emails_db
+    from tests.fixtures.flagged_mail import flagged_mails
 
     work = e2e_workdir("archive")
     od = work / "od"
@@ -192,10 +193,10 @@ def archive_webapp() -> Iterator[ArchiveInstance]:
     cfg = write_test_config(
         work / "config.json",
         placeholders={"onedrive": od.as_posix(), "user": "sam", "archive": "E:/archive"},
-        email_db=str(work / "emails.db"),
         folder_explorer_url=fake.url,
         archive={"enabled": True, "timeout_seconds": 60, "confidence_threshold": 0.7},
     )
+    fake.flagged = flagged_mails(work / "emails.db")
     try:
         with booted(work, work / "tasks.db", cfg) as base:
             yield ArchiveInstance(base, od, fake, work / "tasks.db")

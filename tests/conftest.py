@@ -42,7 +42,6 @@ def write_test_config(
     folder_explorer_url: str = "",
     placeholders: dict[str, str] | None = None,
     web_roots: dict[str, str] | None = None,
-    email_db: str = "",
     transcribe_url: str = "",
     fallback_url: str = "",
     partial_interval_seconds: float | None = None,
@@ -57,9 +56,7 @@ def write_test_config(
     ``backup_dir`` (blank = disabled), ``search.folder_explorer_url`` (blank =
     the Folders and Emails groups report not configured — the sample names the
     real folder-explorer; tests that search pass a fake's loopback address),
-    ``search.email_db`` (blank = the flagged-mail poller reports not configured —
-    the sample points at the real folder-explorer index; capture tests pass the
-    synthetic fixture), ``voice.transcribe_url`` / ``voice.fallback_url``
+    ``voice.transcribe_url`` / ``voice.fallback_url``
     (both blank = voice reports not reachable — the sample points at the
     fleet's real hub and whisper server, and a suite whose result depends on
     whether either happens to be running on the developer's machine is not a
@@ -77,7 +74,6 @@ def write_test_config(
     raw = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
     raw["mirror"] = {"dir": dir, "backup_dir": backup_dir}
     raw.setdefault("search", {})["folder_explorer_url"] = folder_explorer_url
-    raw["search"]["email_db"] = email_db
     raw["voice"] = {"transcribe_url": transcribe_url, "fallback_url": fallback_url}
     if partial_interval_seconds is not None:
         raw["voice"]["partial_interval_seconds"] = partial_interval_seconds

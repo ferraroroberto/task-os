@@ -644,14 +644,14 @@ def test_capture_run_is_409_with_a_reason_when_the_poller_is_off(client: TestCli
     assert r.status_code == 409
     err = r.json()["error"]
     assert err["code"] == "capture_disabled"
-    assert "search.email_db" in err["message"]
+    assert "search.folder_explorer_url" in err["message"]
 
 
 def test_status_carries_the_capture_state(client: TestClient) -> None:
     st = client.get("/api/status").json()
     assert "capture" in st
     assert st["capture"]["enabled"] is False
-    assert st["capture"]["reason"] == "search.email_db not configured"
+    assert st["capture"]["reason"] == "search.folder_explorer_url not configured"
 
 
 def test_link_without_kind_is_classified_server_side(seeded: TestClient) -> None:

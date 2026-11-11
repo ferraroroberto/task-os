@@ -25,12 +25,14 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from tests.fixtures.emails_fixture import EMAILS
+from tests.fixtures.flagged_mail import flagged_page
 
 MARK_START, MARK_END = "", ""
 _HTTP = {"ok": 200, "not-configured": 503, "indexing": 503, "error": 500, "failed": 500}
@@ -58,11 +60,16 @@ def folders_under(root: Path) -> list[str]:
 
 
 class FakeFolderExplorer:
-    def __init__(self, *, folders: list[str] | None = None, emails: list[dict[str, Any]] | None = None) -> None:
+    def __init__(self, *, folders: list[str] | None = None, emails: list[dict[str, Any]] | None = None,
+                 flagged: list[dict[str, Any]] | None = None) -> None:
         self.folders = list(folders or [])
         self.emails = list(emails or [])
-        self.state = {"folders": ("ok", None), "emails": ("ok", None)}
+        #: ``mail/flagged``'s mails (``flagged_mail.flagged_mails``), oldest first
+        self.flagged = list(flagged or [])
+        self.state = {"folders": ("ok", None), "emails": ("ok", None), "flagged": ("ok", None)}
         self.mode = "ok"
+        #: seconds every answer waits first — a hung folder-explorer, for the client's timeout
+        self.delay = 0.0
         self.requests: list[str] = []
         self._live: set[socket.socket] = set()
         fake = self
@@ -80,6 +87,8 @@ class FakeFolderExplorer:
 
             def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's name
                 fake.requests.append(self.path)
+                if fake.delay:
+                    time.sleep(fake.delay)
                 status, body = fake._answer(self.path)
                 payload = body if isinstance(body, bytes) else json.dumps(body).encode("utf-8")
                 self.send_response(status)
@@ -127,9 +136,13 @@ class FakeFolderExplorer:
         route = parts.path.rsplit("/", 1)[-1]
         if route == "status":
             return 200, self._envelope("ok", None, folders=self._part("folders"), emails=self._part("emails"))
-        if route not in ("folders", "emails"):
+        if route not in ("folders", "emails", "flagged"):
             return 404, {"detail": "Not Found"}
         state, reason = self.state[route]
+        if route == "flagged":
+            if state != "ok":
+                return _HTTP[state], self._envelope(state, reason, mails=[], total=0)
+            return 200, self._envelope("ok", None, **flagged_page(self.flagged, raw))
         empty = {"results": [], "total": 0} if route == "folders" else {"hits": [], "total": 0}
         if state != "ok":
             return _HTTP[state], self._envelope(state, reason, query=q.get("q", ""), **empty)
