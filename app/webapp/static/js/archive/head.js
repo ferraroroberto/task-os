@@ -4,6 +4,7 @@
 'use strict';
 
 import { fmtTsShort, modelName, pct, statusPart } from '../../format.js';
+import { runIsLive, runTone } from './state.js';
 import { counts, outcomes } from './text.js';
 
 /** `09/09 01:03` — the head's compact stamp: the locale's own day/month
@@ -45,7 +46,7 @@ function renderRunSummary(el, last, narrow) {
   const at = last.finished_at || last.started_at;
   el.append(
     narrow ? stampShort(at) : fmtTsShort(at), ' · ',
-    statusPart(last.status === 'failed' || last.status === 'running' ? 'warn' : 'ok', last.status),
+    statusPart(runTone(last), last.state),
     ' · ' + (narrow ? outcomes(last) : counts(last))
   );
   if (last.agreement != null) {
@@ -122,7 +123,7 @@ function drawRecent(ctx) {
   const recent = ctx.els.recent;
   recent.replaceChildren();
   recent.classList.remove('muted');
-  const done = ctx.st.runs.filter(function (r) { return r.status !== 'running'; });
+  const done = ctx.st.runs.filter(function (r) { return !runIsLive(r); });
   if (!done.length) { recent.textContent = 'no finished run yet'; return; }
   const total = done.reduce(function (a, r) { return a + (r.planned || 0); }, 0);
   const filed = done.reduce(function (a, r) { return a + (r.archived || 0); }, 0);
@@ -155,7 +156,7 @@ export function renderPicker(ctx) {
   st.runs.forEach(function (r) {
     const o = document.createElement('option');
     o.value = String(r.id);
-    o.textContent = '#' + r.id + ' · ' + fmtTsShort(r.started_at) + ' · ' + r.status
+    o.textContent = '#' + r.id + ' · ' + fmtTsShort(r.started_at) + ' · ' + r.state
       + ' · ' + (r.planned || 0) + ' mail(s)';
     pick.appendChild(o);
   });

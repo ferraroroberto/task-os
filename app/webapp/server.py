@@ -262,6 +262,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # No thread of its own either: a run is started on demand and drives the
     # archiver's batch CLI in one worker thread for its lifetime.
     app.state.archive = ArchiveBatchService(config)
+    # A run row a previous process left open will never be closed by anyone:
+    # this process is the first that can say so.
+    app.state.archive.close_interrupted_runs()
     # No thread of its own either: a fetch starts when a Today request
     # finds the copy expired, and runs in one short-lived worker bounded by
     # `calendar.timeout_seconds`.

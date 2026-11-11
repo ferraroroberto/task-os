@@ -6,7 +6,7 @@
 import { icon } from '../../_vendored/icons/icons.js';
 import { acceptItem, actionButton, retryItem, revertItem, runAction } from './actions.js';
 import { movePanel } from './movepanel.js';
-import { REVIEWABLE, canMove, canRetry, isDecided, isFiled } from './rules.js';
+import { canMove, canRetry, isDecided, isFiled, isReverted, needsAnswer } from './state.js';
 
 /** The buttons one row offers, and (when it can be moved) the panel that
  *  goes with them. `onToggle` lets the grid show/hide the extra row the
@@ -14,7 +14,7 @@ import { REVIEWABLE, canMove, canRetry, isDecided, isFiled } from './rules.js';
 export function actionsFor(ctx, item, hooks) {
   const wrap = document.createElement('div');
   wrap.className = 'archive-row-actions icon-button-group';
-  if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
+  if (needsAnswer(item)) {
     wrap.appendChild(actionButton(ctx, 'check', 'Accept', function () { return acceptItem(item, null); }, { track: 'archive.accept' }));
   }
   let body = null;
@@ -59,7 +59,7 @@ function revertKebab(ctx, item) {
 function nothingToPress(item) {
   const none = document.createElement('span');
   none.className = 'muted';
-  none.textContent = item.status === 'reverted' ? 'back in the Inbox'
+  none.textContent = isReverted(item) ? 'back in the Inbox'
     : isDecided(item) ? 'nothing left to do' : '–';
   return none;
 }
@@ -79,7 +79,7 @@ export function rowMenuFor(ctx, item, hooks) {
   kebab.className = 'icon-button archive-kebab action-row-kebab';
   kebab.setAttribute('aria-label', 'Actions for ' + (item.subject || '(no subject)'));
   kebab.innerHTML = icon('ellipsis-vertical');
-  if (REVIEWABLE.indexOf(item.status) >= 0 && !isDecided(item)) {
+  if (needsAnswer(item)) {
     items.push({ label: 'Accept', glyph: 'check', dataset: { action: 'accept' },
       onTap: function () { runAction(ctx, kebab, function () { return acceptItem(item, null); }); } });
   }

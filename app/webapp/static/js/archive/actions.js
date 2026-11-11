@@ -8,7 +8,7 @@ import { api } from '../../api.js';
 import { confirmDialog } from '../../confirm.js';
 import { resolveFolderRef } from '../../folderpick.js';
 import { toast } from '../../toast.js';
-import { isFiled } from './rules.js';
+import { isFiled } from './state.js';
 import { shortFolder } from './text.js';
 
 /** A visible row verb: the vendored plain icon-button,

@@ -47,6 +47,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response, service_unavailable
 from src.archive_batch import ArchiveError
+from src.archive_state import annotate_run
 from src.archive_store import MAX_HINT_CHARS, get_run, list_items, list_runs
 from src.db import get_db
 
@@ -70,6 +71,12 @@ def _service(request: Request) -> Any:
     return getattr(request.app.state, "archive", None)
 
 
+def _with_state(request: Request, run: dict[str, Any]) -> dict[str, Any]:
+    """The run row plus its derived ``state`` — a missing service has no worker."""
+    service = _service(request)
+    return service.annotate(run) if service is not None else annotate_run(run, worker_alive=False)
+
+
 @router.post("/run", status_code=202)
 def archive_run(
     request: Request,
@@ -89,19 +96,22 @@ def archive_run(
 
 @router.get("/runs")
 def archive_runs(
+    request: Request,
     db: sqlite3.Connection = Depends(get_db),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
-    runs = list_runs(db, limit=limit)
+    runs = [_with_state(request, r) for r in list_runs(db, limit=limit)]
     return {"runs": runs, "count": len(runs)}
 
 
 @router.get("/runs/{run_id}")
-def archive_run_detail(run_id: int, db: sqlite3.Connection = Depends(get_db)) -> Any:
+def archive_run_detail(
+    run_id: int, request: Request, db: sqlite3.Connection = Depends(get_db)
+) -> Any:
     run = get_run(db, run_id)
     if run is None:
         return error_response(404, "not_found", f"no archive run {run_id}")
-    return {**run, "items": list_items(db, run_id)}
+    return {**_with_state(request, run), "items": list_items(db, run_id)}
 
 
 @router.post("/items/{item_id}/revert")

@@ -460,3 +460,23 @@ clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='archive']"]
 tab = "today"
 id = "settings-opener"
 clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='opener']"]
+
+# Declared implicit-state machines: the one module that owns each, so the state rules stop reporting
+# it. The archive lifecycle is two machines in one Python module and a JS mirror of both tables;
+# docs/archive-state.md says who reads them. Convention: project-scaffolding docs/implicit-state-machines.md.
+[[state_machines]]
+name   = "archive-run"
+module = "src/archive_state.py"
+type   = "RunState"
+derive = "derive_run_state"
+
+[[state_machines]]
+name   = "archive-item"
+module = "src/archive_state.py"
+type   = "ItemState"
+derive = "derive_item_state"
+
+[[state_machines]]
+name   = "archive-ui-state"
+module = "app/webapp/static/js/archive/state.js"
+type   = "ArchiveState"

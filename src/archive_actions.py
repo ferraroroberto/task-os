@@ -14,13 +14,15 @@ from typing import Any
 
 from src import clock, placeholders
 from src.archive_renumber import path_key, rename_files, rename_index
-from src.archive_store import (
-    FILED_STATUSES,
-    REVIEWABLE_STATUSES,
-    get_item,
-    record_correction,
-    update_item,
+from src.archive_state import (
+    INBOX_WAITING_STATES,
+    ON_DISK_STATES,
+    REVIEWABLE_STATES,
+    ItemState,
+    ItemStatus,
+    derive_item_state,
 )
+from src.archive_store import get_item, record_correction, update_item
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +76,12 @@ class ItemActions:
     def _has_files_on_disk(item: dict[str, Any]) -> bool:
         """Is there anything of this mail in the archive tree right now?
 
-        The two filed states always have files; a ``failed`` row has them
-        whenever ``apply`` got as far as writing before it broke. Everything
-        else — ``needs_review``, ``reverted`` — is a mail that is still (or
+        The two filed states always have files; a failed row has them
+        whenever ``apply`` got as far as writing before it broke
+        (``failed_on_disk``). Everything else is a mail that is still (or
         again) in the Inbox with nothing on disk.
         """
-        return item["status"] in FILED_STATUSES or (
-            item["status"] == "failed" and bool(item["files"])
-        )
+        return derive_item_state(item) in ON_DISK_STATES
 
     @classmethod
     def _require_revertible(cls, item: dict[str, Any]) -> None:
@@ -107,7 +107,7 @@ class ItemActions:
         genuinely nothing to act on (``reverted``: the mail is back in the
         Inbox and a fresh run owns it again).
         """
-        if cls._has_files_on_disk(item) or item["status"] == "needs_review":
+        if cls._has_files_on_disk(item) or derive_item_state(item) in INBOX_WAITING_STATES:
             return
         raise ArchiveError(
             "archive_bad_state",
@@ -339,7 +339,7 @@ class ItemActions:
             self._heal_renumber(conn, applied, {path_key(destination): item_id})
             return get_item(conn, item_id) or moved
         message = self._apply_error_message(entry.get("error"), files)
-        update_item(conn, item_id, status="failed", error=message, **common)
+        update_item(conn, item_id, status=ItemStatus.FAILED.value, error=message, **common)
         if undo is not None:
             self._heal_renumber(conn, undo["doc"])
         self._heal_renumber(conn, applied)
@@ -354,7 +354,7 @@ class ItemActions:
         disk has no folder to send back — re-deciding that one is a *run*'s job,
         not a retry's.
         """
-        if item["status"] != "failed" or not item["files"]:
+        if derive_item_state(item) is not ItemState.FAILED_ON_DISK:
             raise ArchiveError(
                 "archive_bad_state",
                 f"archive item {item['id']} is {item['status']} with no archived file — a retry "
@@ -432,7 +432,7 @@ class ItemActions:
             return get_item(conn, item_id) or finished
         message = self._apply_error_message(entry.get("error"), files)
         update_item(
-            conn, item_id, status="failed",
+            conn, item_id, status=ItemStatus.FAILED.value,
             files_json=json.dumps(files, ensure_ascii=False), error=message,
         )
         self._heal_renumber(conn, applied)
@@ -474,13 +474,14 @@ class ItemActions:
         neither does a mail no folder was ever ranked for, so neither writes one.
         """
         item = self._require(conn, item_id)
-        if item["status"] not in REVIEWABLE_STATUSES:
+        state = derive_item_state(item)
+        if state not in REVIEWABLE_STATES:
             raise ArchiveError(
                 "archive_bad_state",
                 f"archive item {item_id} is {item['status']}, which needs no review",
                 http_status=409,
             )
         accepted = update_item(conn, item_id, decided_at=clock.now_iso())
-        if item["status"] == "needs_review" and item["chosen_folder"]:
+        if state in INBOX_WAITING_STATES and item["chosen_folder"]:
             record_correction(conn, item, chosen_folder=item["chosen_folder"], hint=hint)
         return accepted

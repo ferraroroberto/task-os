@@ -6,7 +6,7 @@ import { icon } from '../../_vendored/icons/icons.js';
 import { mountFolderPicker } from '../../folderpick.js';
 import { toast } from '../../toast.js';
 import { moveItem, runAction, verbButton } from './actions.js';
-import { isFiled } from './rules.js';
+import { isFiled } from './state.js';
 import { sameFolder, shortFolder } from './text.js';
 
 const MAX_HINT = 500;

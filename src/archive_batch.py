@@ -115,6 +115,7 @@ from src.archive_renumber import (
     rename_index,
     renumbered_folders,
 )
+from src.archive_state import INTERRUPTED_ERROR, ItemStatus, RunStatus, annotate_run
 from src.archive_store import (
     create_run,
     filed_message_ids,
@@ -122,6 +123,7 @@ from src.archive_store import (
     get_item,
     insert_item,
     list_runs,
+    open_run_ids,
     recent_corrections,
     sync_run_counts,
     update_item,
@@ -213,6 +215,8 @@ class ArchiveBatchService(ItemActions):
         self.last_error: str | None = None
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        #: The run row the lock is held for; ``None`` while no worker drives one.
+        self._active_run_id: int | None = None
         if not self.enabled:
             logger.warning("⚠️ archive: batch archiving off — %s", self.reason)
 
@@ -240,7 +244,7 @@ class ArchiveBatchService(ItemActions):
         c = conn or connect()
         try:
             runs = list_runs(c, limit=1)
-            last_run = runs[0] if runs else None
+            last_run = self.annotate(runs[0]) if runs else None
         except sqlite3.Error as exc:  # a status must never be the thing that 500s
             logger.warning("⚠️ archive: could not read the last run — %s", exc)
         finally:
@@ -264,6 +268,35 @@ class ArchiveBatchService(ItemActions):
     @property
     def running(self) -> bool:
         return self._lock.locked()
+
+    def annotate(self, run: dict[str, Any]) -> dict[str, Any]:
+        """A run row plus its derived ``state`` — the one way a run row leaves this service."""
+        return annotate_run(run, worker_alive=self._active_run_id == run["id"])
+
+    def close_interrupted_runs(self) -> list[int]:
+        """Close the rows a previous process left ``running``; the ids it closed.
+
+        Called once at the app's startup, never from the constructor: the CLI
+        builds this service just to read a status while the app may be mid-run,
+        and a sweep there would close a live run's row. Skipped while this
+        service holds a worker. The close recomputes the counters from the items
+        the run wrote, so the mails it had already decided still show.
+        """
+        if self.running:
+            return []
+        conn = connect()
+        try:
+            closed = open_run_ids(conn)
+            for run_id in closed:
+                finish_run(conn, run_id, status=RunStatus.FAILED, error=INTERRUPTED_ERROR)
+        finally:
+            conn.close()
+        if closed:
+            logger.warning(
+                "⚠️ archive: closed %d run(s) the app stopped in the middle of — %s",
+                len(closed), ", ".join(f"#{i}" for i in closed),
+            )
+        return closed
 
     def stop(self, timeout: float = 5.0) -> None:
         """Let an in-flight run finish (lifespan shutdown, and the tests' join)."""
@@ -328,9 +361,11 @@ class ArchiveBatchService(ItemActions):
         try:
             conn = connect()
             try:
-                return create_run(conn)
+                run = create_run(conn)
             finally:
                 conn.close()
+            self._active_run_id = int(run["id"])
+            return self.annotate(run)
         except BaseException:
             self._lock.release()
             raise
@@ -366,15 +401,16 @@ class ArchiveBatchService(ItemActions):
             except ArchiveError as exc:
                 self.last_error = f"{exc.code}: {exc}"
                 logger.error("❌ archive: run %d failed — %s", run_id, exc)
-                return finish_run(conn, run_id, status="failed", error=str(exc))
+                return finish_run(conn, run_id, status=RunStatus.FAILED, error=str(exc))
             except Exception as exc:  # noqa: BLE001 — a bad run is a recorded state, not a dead app
                 self.last_error = f"{type(exc).__name__}: {exc}"
                 logger.exception("❌ archive: run %d failed unexpectedly", run_id)
-                return finish_run(conn, run_id, status="failed", error=self.last_error)
+                return finish_run(conn, run_id, status=RunStatus.FAILED, error=self.last_error)
             self.last_error = None
             return run
         finally:
             conn.close()
+            self._active_run_id = None
             self._lock.release()
 
     def _execute(self, conn: sqlite3.Connection, run_id: int, limit: int | None) -> dict[str, Any]:
@@ -460,7 +496,7 @@ class ArchiveBatchService(ItemActions):
         # archiver's index has not confirmed what was filed.
         notes = [*ranking.errors, scan_error] if scan_error else list(ranking.errors)
         return finish_run(
-            conn, run_id, status="done", error=" · ".join(notes) or None,
+            conn, run_id, status=RunStatus.DONE, error=" · ".join(notes) or None,
             agreement=ranking.agreement,
         )
 
@@ -615,7 +651,7 @@ class ArchiveBatchService(ItemActions):
         for decision in decisions:
             item_id = item_by_message.get(str(decision["message_id"]))
             if item_id is not None:
-                update_item(conn, item_id, status="failed", error=message)
+                update_item(conn, item_id, status=ItemStatus.FAILED.value, error=message)
         logger.warning("⚠️ archive: apply failed as a whole — %d mail(s) marked failed", len(decisions))
 
     def _record_apply(
@@ -663,7 +699,7 @@ class ArchiveBatchService(ItemActions):
             # what makes it revertible.
             message = self._apply_error_message(error, files)
             update_item(
-                conn, item_id, status="failed",
+                conn, item_id, status=ItemStatus.FAILED.value,
                 files_json=json.dumps(files, ensure_ascii=False),
                 sequence=str(entry.get("sequence_number") or "") or None,
                 entry_id=str(entry.get("entry_id") or "") or None, error=message,

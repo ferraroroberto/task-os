@@ -43,6 +43,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           federated.py — concurrent, grouped, unconfigured = visible) · ai/ (Anthropic-compatible hub client +
                           staged Inbox triage validation/application · json_payload.py, the one reply-unwrapping helper) · email_capture.py (flagged mail → Inbox, read-only)
                           archive_batch.py (the archiver's batch CLI as a subprocess: plan → decide → apply → rescan)
+                          archive_state.py (the run and item states, declared once and derived — every reader asks it; docs/archive-state.md)
                           archive_actions.py (revert · move · accept · retry on one item — mixed into the service)
                           archive_store.py (the run / item / correction rows — no subprocess, no service state)
                           archive_renumber.py (heals stored .msg paths from the archiver's renumber map)
