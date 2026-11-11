@@ -50,10 +50,13 @@ _LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
 class Unavailable(Exception):
     """A search part that cannot answer right now: its ``state`` and a plain-text ``reason``."""
 
-    def __init__(self, state: str, reason: str) -> None:
+    def __init__(self, state: str, reason: str, *, timed_out: bool = False) -> None:
         super().__init__(f"{state}: {reason}")
         self.state = state
         self.reason = reason
+        #: ``unreachable`` splits in two for a caller that waits long enough to tell them
+        #: apart: nothing answered (down) versus an answer that did not come in time.
+        self.timed_out = timed_out
 
 
 class FolderExplorerClient:
@@ -101,6 +104,10 @@ class FolderExplorerClient:
         """``GET /api/v1/search/emails``; the body when ``ok``, else :class:`Unavailable`."""
         return self._get("/api/v1/search/emails", {"q": q, "limit": limit})
 
+    def flagged(self, limit: int, offset: int = 0) -> dict[str, Any]:
+        """``GET /api/v1/mail/flagged`` — one page of flagged mail, oldest first; the body when ``ok``."""
+        return self._get("/api/v1/mail/flagged", {"limit": limit, "offset": offset})
+
     def post(self, path: str, body: dict[str, Any], timeout_s: float) -> requests.Response:
         """One JSON POST over the shared pool, never resent: a write whose reply was lost may have run.
 
@@ -116,7 +123,10 @@ class FolderExplorerClient:
                                   verify=self._verify)
         except requests.RequestException as exc:
             logger.warning("⚠️ folder-explorer %s: %s", path, type(exc).__name__)
-            raise Unavailable(UNREACHABLE, f"folder-explorer at {self.host} did not answer ({type(exc).__name__})") from exc
+            raise Unavailable(
+                UNREACHABLE, f"folder-explorer at {self.host} did not answer ({type(exc).__name__})",
+                timed_out=isinstance(exc, requests.Timeout),
+            ) from exc
         try:
             body = resp.json()
         except ValueError:

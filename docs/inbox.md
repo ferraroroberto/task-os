@@ -18,20 +18,23 @@ The response is an all-or-nothing contract. It must be JSON with exactly one res
 
 Search is *pull* — you go looking. Capture is *push*: something you already marked elsewhere lands in Inbox on its own, so nothing depends on remembering it. Two channels, both idempotent, both **one-way**.
 
-**Flagged emails.** `src/email_capture.py` polls the archiver's index — the `search.email_db` file, opened `file:…?mode=ro` with a fresh connection per query (never a write, never a migration: the archiver owns that file). Every message carrying an Outlook **follow-up flag** becomes an Inbox task: title = the subject, description = `From email: sender · date` + the flag's own text + the preview, plus a `links(kind=email)` row holding the `.msg` ref — so the existing [opener chip](folders.md#folders-that-open-on-any-pc) opens the mail with no new UI. `created_by` is `email-archiver`, so the activity row says which channel brought it in.
+**Flagged emails.** `src/email_capture.py` polls folder-explorer's `GET /api/v1/mail/flagged` (oldest first, paged by `offset`) at `search.folder_explorer_url`; task-os opens no database file of folder-explorer's, so its on-disk schema is its own business. Every message carrying an Outlook **follow-up flag** becomes an Inbox task: title = the subject, description = `From email: sender · date` + the preview, plus a `links(kind=email)` row holding the `.msg` ref — so the existing [opener chip](folders.md#folders-that-open-on-any-pc) opens the mail with no new UI. `created_by` is `email-archiver`, so the activity row says which channel brought it in.
 
-The flag is something the **archiver** records while scanning, in two columns this repo only ever reads:
+The flag is something the **archiver** records while scanning (`flag_status` 2 = flagged for follow-up; a mail marked complete is not listed), and folder-explorer owns what that means: the route answers the mails and `total`, in the same envelope and states as search. Its states are shown, never folded into "no flagged mail":
 
-| Column | Source | Meaning |
+| State | Meaning | Fix |
 | --- | --- | --- |
-| `flag_status` | MAPI `PidTagFlagStatus` (`0x1090`) | `0`/absent = none · `1` = complete · `2` = flagged for follow-up |
-| `flag_request` | `PidLidFlagRequest` | the flag's text ("Follow up"), nullable |
+| `unreachable` | nothing answered at `search.folder_explorer_url` | start folder-explorer, or correct the address |
+| `slow` | no answer within 10 s | folder-explorer is up but stuck; the next pass retries |
+| `indexing` | its first email index build is running | wait |
+| `not-configured` | no email index, or one built before flags were read | set up / re-index the email folders there |
+| `failed` | it answered, but not the contract (an unreadable index, or a folder-explorer without the route) | update folder-explorer |
 
-> **Partially shipped.** `email-archiver` records `flag_status`, so a current install captures flagged mail into Inbox. `flag_request` (the flag's own text) is not recorded yet, so the captured task's description falls back to sender · date · preview with no `Flag:` line — the poller starts carrying it the moment the archiver ships that column, with no change here. The gesture it is built for is *flag in Outlook, then archive as usual*: the index covers archived mail, so a flagged message you never archive is never seen.
+A pass that cannot list creates nothing and leaves the last good result in place; the state, since when, and the last pass that listed are on `GET /api/status` under `capture.source`, and the card and `tasks mirror status` say it in words ("unreachable since …"). A change of state is logged once, and so is the recovery, not every poll. The gesture the capture is built for is *flag in Outlook, then archive as usual*: the index covers archived mail, so a flagged message you never archive is never seen.
 
 **WhatsApp messages.** whatsapp-radar owns its own data and its own UX; when you mark a message it POSTs `/api/tasks` with the message id as `external_id` and the bearer token. task-os just receives.
 
-**Both dedupe on `external_id`**, and that is the whole contract: `POST /api/tasks` carrying one is idempotent — the first call creates (**201**), every replay returns that same task **untouched** on **200**, so a retry after a timeout cannot make a second Inbox task. The email side keys on `email:` + the `.msg` ref folded onto the placeholders (`email:{onedrive}/mail/house/…msg`) rather than the archiver's `emails.id`, which is a rowid that reshuffles if the index is ever rebuilt; a mail *moved* inside the archive changes its ref and so captures once more.
+**Both dedupe on `external_id`**, and that is the whole contract: `POST /api/tasks` carrying one is idempotent — the first call creates (**201**), every replay returns that same task **untouched** on **200**, so a retry after a timeout cannot make a second Inbox task. The email side keys on `email:` + the `.msg` ref folded onto the placeholders (`email:{onedrive}/mail/house/…msg`) rather than the mail's row id in folder-explorer's index, which reshuffles if the index is ever rebuilt; a mail *moved* inside the archive changes its ref and so captures once more.
 
 One-way means what it says: **clearing the flag never removes the task**, and no later pass overwrites a title you edited or a status you moved. A captured task, once real, is yours.
 

@@ -1,47 +1,48 @@
 """Email capture — a flagged email in the archiver's index becomes an Inbox task.
 
-The push half of cross-fleet capture (#98): instead of remembering to search
+The push half of cross-fleet capture: instead of remembering to search
 for the mail that needs action, you flag it in Outlook, archive it as usual,
 and the next pass lands it in Inbox with the ``.msg`` attached. The WhatsApp
 half needs nothing here — whatsapp-radar POSTs ``/api/tasks`` with an
 ``external_id`` and the router's own idempotency (``tasks_repo.capture_task``)
 does the deduping.
 
-**The index is read-only from here, always.** :class:`FlaggedEmailIndex` opens
-the archiver's ``emails.db`` with the ``file:…?mode=ro`` URI, a fresh
-connection per query — the archiver owns that file and this module never writes, migrates or copies it.
-The flag is therefore something the *archiver* records while scanning: two
-columns on ``emails``,
+**task-os opens no folder-explorer database.** :class:`FlaggedEmailIndex` pages
+folder-explorer's ``GET /api/v1/mail/flagged`` (oldest first, ``limit``/``offset``)
+through :class:`~src.search.folder_explorer.FolderExplorerClient`, so the
+flag's meaning (``flag_status`` 2, "follow up") and the on-disk schema stay
+folder-explorer's. An index that records no flags answers ``not-configured``
+with that as its reason — the Settings card, ``/api/status`` and ``tasks status``
+show it, never an empty result.
 
-    flag_status   INTEGER   MAPI PidTagFlagStatus (0x1090):
-                            0 / absent = none · 1 = complete · 2 = flagged
-    flag_request  TEXT      the flag's own text ("Follow up"), nullable
+A pass that cannot list raises :class:`~src.search.folder_explorer.Unavailable`
+before anything is created, and ``last_result`` stays the last good pass:
+"folder-explorer is down" can never read as "0 flagged". The service keeps the
+source's own state (:class:`SourceHealth`): ``unreachable`` (nothing
+answered), ``slow`` (no answer within the capture timeout), ``indexing``,
+``not-configured`` or ``failed`` (answered, but not the contract — a
+folder-explorer without the route included), with since when.
 
-An index without ``flag_status`` is **not configured, with that as its
-reason** — not an empty result. That is the honest state on an archiver build
-older than the flag release, and it is what the Settings card, ``/api/status``
-and ``tasks status`` all show until the archiver ships it.
-
-One pass (:func:`capture_once`) reads every ``flag_status = 2`` row and offers
-it to :func:`~src.tasks_repo.capture_task`, keyed on
+One pass (:func:`capture_once`) offers every flagged mail to
+:func:`~src.tasks_repo.capture_task`, keyed on
 
     external_id = "email:" + <the .msg path folded onto the placeholders>
 
-— the ref, not ``emails.id``: the id is an autoincrement rowid that reshuffles
-if the index is ever rebuilt, while the folded ref (``email:{onedrive}/…``) is
-stable across a rebuild and portable to a second PC. A mail *moved* inside the
-archive changes its ref and so captures once more; archiving is a one-time
-gesture, so that is rare and visible rather than silent drift. A *renumber* is
-not that case: the archiver renames a whole folder's files to keep its
-sequence contiguous (email-archiver#61), and :func:`rename_ref` carries the
-link and the capture key onto the new name, so nothing is captured twice.
+— the ref, not folder-explorer's row id: the id reshuffles if the index is ever
+rebuilt, while the folded ref (``email:{onedrive}/…``) is stable across a
+rebuild and portable to a second PC. A mail *moved* inside the archive changes
+its ref and so captures once more; archiving is a one-time gesture, so that is
+rare and visible rather than silent drift. A *renumber* is not that case: the
+archiver renames a whole folder's files to keep its sequence contiguous, and
+:func:`rename_ref` carries the link and the capture key onto the new name, so
+nothing is captured twice.
 
 Capture is one-way by construction. Clearing the flag later does not delete or
 close the task, and nothing here ever writes back to the mail — see
 :func:`~src.tasks_repo.capture_task`. The other direction holds too: deleting a
-captured task *dismisses* that mail (#254). Its archived ``.msg`` keeps the
-flag it was saved with, so the index offers it on every pass; the capture key
-outlives the task and the pass counts it ``dismissed`` instead of landing it.
+captured task *dismisses* that mail. Its archived ``.msg`` keeps the flag it was
+saved with, so folder-explorer lists it on every pass; the capture key outlives
+the task and the pass counts it ``dismissed`` instead of landing it.
 
 :class:`EmailCaptureService` runs it in-app: a thread started from the webapp
 lifespan like the issue sync — first pass shortly after startup, then every
@@ -56,14 +57,13 @@ import logging
 import sqlite3
 from collections.abc import Container, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
 from src.config import AppConfig
-from src.db import connect_read_only
 from src.placeholders import normalize_path, to_ref
 from src.poller import Poller
+from src.search.folder_explorer import FAILED, UNREACHABLE, FolderExplorerClient, Unavailable
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +71,6 @@ logger = logging.getLogger(__name__)
 #: not the issue sync's ``sync``: an activity row should say *which* channel
 #: brought the task in, and whatsapp-radar already posts as ``whatsapp-radar``.
 CAPTURE_ACTOR = "email-archiver"
-#: ``PidTagFlagStatus`` — the one value meaning "flagged for follow-up".
-FLAG_FOLLOWUP = 2
-#: The column the archiver must expose before any of this can run.
-FLAG_COLUMN = "flag_status"
 EXTERNAL_ID_PREFIX = "email:"
 INITIAL_DELAY_S = 15.0
 #: Real-second override for `INITIAL_DELAY_S`. `TASKOS_CLOCK` pins every
@@ -90,40 +86,14 @@ DESCRIPTION_MAX = 10_000
 #: One pass never lands more than this, so a first run against a large archive
 #: cannot flood Inbox in one go; the rest arrive on the following passes.
 BATCH_LIMIT = 200
-
-
-def open_readonly(db_path: str) -> sqlite3.Connection:
-    """The archiver's ``emails.db``, opened read-only."""
-    conn = connect_read_only(db_path, timeout=5, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def is_archiver_index(db_path: str) -> tuple[bool, str | None]:
-    """``(True, None)``, or ``False`` + why *db_path* is not a usable archiver index.
-
-    Blank path, missing file, cannot open, no ``emails`` table: each its own
-    reason, so the Settings card says which fix applies.
-    """
-    if not db_path:
-        return False, "search.email_db not configured"
-    if not Path(db_path).is_file():
-        return False, f"email index not found at {db_path}"
-    try:
-        conn = open_readonly(db_path)
-    except sqlite3.Error as exc:
-        return False, f"cannot open {db_path}: {exc}"
-    try:
-        has_emails = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'emails'"
-        ).fetchone() is not None
-    except sqlite3.Error as exc:
-        return False, f"cannot read {db_path}: {exc}"
-    finally:
-        conn.close()
-    if not has_emails:
-        return False, f"no emails table in {db_path} — not an email-archiver index"
-    return True, None
+#: Mails asked per request — folder-explorer's own ceiling for the route.
+PAGE_SIZE = 200
+#: A background thread can wait longer than the Search tab's 1.8 s: a pass is
+#: not holding anyone's screen, and a slow answer is still an answer.
+CAPTURE_TIMEOUT_S = 10.0
+#: Source states beyond the client's own: ``slow`` is "no answer in time" (the
+#: process may be up), ``unknown`` is "no pass has run yet", never a guess.
+SLOW, UNKNOWN, OK = "slow", "unknown", "ok"
 
 
 def external_id_for(ref: str) -> str:
@@ -137,7 +107,7 @@ def rename_ref(
     """An archived ``.msg`` was renamed — its link and its capture key follow it.
 
     The archiver renumbers a folder after a batch ``apply`` / ``revert`` so its
-    ``NNN`` prefixes stay contiguous (email-archiver#61), which renames files
+    ``NNN`` prefixes stay contiguous, which renames files
     task-os is holding the ref of in exactly the two places this module put
     them: the ``links(kind='email')`` row the drawer draws its chip from, and
     the ``external_id`` the capture is keyed on. Healing both from the
@@ -187,45 +157,23 @@ class CaptureResult:
 
 
 class FlaggedEmailIndex:
-    """Read-only reader over the archiver's ``emails.db`` — the flagged rows only."""
+    """The flagged mails folder-explorer lists — read through its v1 API, never from its files."""
 
-    def __init__(self, db_path: str, placeholders: Mapping[str, str] | None = None) -> None:
-        self.db_path = (db_path or "").strip()
+    def __init__(self, client: FolderExplorerClient, placeholders: Mapping[str, str] | None = None) -> None:
+        self.client = client
         self.placeholders = dict(placeholders or {})
 
     # ------------------------------------------------------------- state
     def is_configured(self) -> tuple[bool, str | None]:
-        """``(True, None)``, or ``False`` + the one reason that actually applies.
+        """``(True, None)``, or ``False`` + why this install names no folder-explorer.
 
-        Distinct failures, distinct messages — a caller must be able to tell
-        "you never pointed me at an index" from "your archiver is too old to
-        record flags", because the fix is different for each. The blank path /
-        missing file / cannot open / no ``emails`` table preamble is
-        :func:`is_archiver_index`; this adds only the flag-column check a
-        capture index also needs.
+        Static on purpose: whether folder-explorer is up, still indexing or has no
+        flag column is the live state of each pass (:class:`SourceHealth`), and a
+        probe here would hold the app's boot on a hung service.
         """
-        ok, reason = is_archiver_index(self.db_path)
-        if not ok:
-            return ok, reason
-        conn = self._connect()
-        try:
-            if FLAG_COLUMN not in self._columns(conn):
-                return False, (
-                    f"the email index has no {FLAG_COLUMN} column — this needs an email-archiver "
-                    "build that records the Outlook follow-up flag while scanning"
-                )
-        except sqlite3.Error as exc:
-            return False, f"cannot read {self.db_path}: {exc}"
-        finally:
-            conn.close()
-        return True, None
-
-    def _connect(self) -> sqlite3.Connection:
-        return open_readonly(self.db_path)
-
-    @staticmethod
-    def _columns(conn: sqlite3.Connection) -> set[str]:
-        return {str(r["name"]) for r in conn.execute("PRAGMA table_info(emails)").fetchall()}
+        if self.client.configured:
+            return True, None
+        return False, "search.folder_explorer_url not configured"
 
     # ------------------------------------------------------------ reading
     def flagged(
@@ -241,22 +189,22 @@ class FlaggedEmailIndex:
         every pass: they are stepped over and returned apart (the second list),
         and only the rest count toward ``limit`` — otherwise the oldest
         ``limit`` mails would fill the window forever and the next one would
-        never be reached (#440).
+        never be reached.
+
+        Raises :class:`Unavailable` when folder-explorer cannot list; nothing is
+        returned from a half-read. A mail that shifts between two pages is
+        caught by the next pass, which is idempotent.
         """
-        conn = self._connect()
-        try:
-            has_request = "flag_request" in self._columns(conn)
-            request_col = "flag_request" if has_request else "NULL AS flag_request"
-            cursor = conn.execute(
-                f"SELECT id, file_path, folder_path, filename, subject, sender, date_sent, "
-                f"       body_preview, {request_col} "
-                f"  FROM emails WHERE {FLAG_COLUMN} = ? ORDER BY date_sent, id",
-                (FLAG_FOLLOWUP,),
-            )
-            entries: list[dict[str, Any]] = []
-            skipped: list[str] = []
-            for row in cursor:
-                entry = self._entry(row)
+        entries: list[dict[str, Any]] = []
+        skipped: list[str] = []
+        offset = 0
+        while len(entries) < int(limit):
+            body = self.client.flagged(PAGE_SIZE, offset)
+            mails = body.get("mails")
+            if not isinstance(mails, list):
+                raise Unavailable(FAILED, "folder-explorer's flagged-mail answer has no mails list")
+            for mail in mails:
+                entry = self._entry(mail)
                 key = external_id_for(entry["ref"])
                 if key in settled:
                     skipped.append(key)
@@ -264,32 +212,31 @@ class FlaggedEmailIndex:
                 entries.append(entry)
                 if len(entries) >= int(limit):
                     break
-        finally:
-            conn.close()
+            offset += len(mails)
+            total = body.get("total")
+            if not mails or (isinstance(total, int) and offset >= total):
+                break
         return entries, skipped
 
-    def _entry(self, e: sqlite3.Row) -> dict[str, Any]:
-        path = normalize_path(e["file_path"] or "")
+    def _entry(self, m: Mapping[str, Any]) -> dict[str, Any]:
+        path = normalize_path(str(m.get("path") or ""))
         ref = to_ref(path, self.placeholders)
-        filename = e["filename"] or path.rsplit("/", 1)[-1]
+        filename = str(m.get("filename") or "") or path.rsplit("/", 1)[-1]
         return {
             "ref": ref,
             "path": path,
             "filename": filename,
-            "subject": (e["subject"] or "").strip() or filename,
-            "sender": (e["sender"] or "").strip(),
-            "date": (e["date_sent"] or "")[:10],
-            "body_preview": (e["body_preview"] or "").strip(),
-            "flag_request": (e["flag_request"] or "").strip() or None,
+            "subject": str(m.get("subject") or "").strip() or filename,
+            "sender": str(m.get("sender") or "").strip(),
+            "date": str(m.get("date") or "")[:10],
+            "body_preview": str(m.get("preview") or "").strip(),
         }
 
 
 def _description(entry: Mapping[str, Any]) -> str:
-    """``From email: <sender> · <date>`` then the flag's own text and the preview."""
+    """``From email: <sender> · <date>`` then the preview."""
     head = " · ".join(b for b in (entry.get("sender"), entry.get("date")) if b)
     lines = [f"From email: {head}" if head else "From email"]
-    if entry.get("flag_request"):
-        lines.append(f"Flag: {entry['flag_request']}")
     if entry.get("body_preview"):
         lines.extend(["", str(entry["body_preview"])])
     return "\n".join(lines)[:DESCRIPTION_MAX]
@@ -300,10 +247,11 @@ def capture_once(
 ) -> CaptureResult:
     """One pass: every flagged email becomes (or already is) an Inbox task.
 
-    Raises :class:`sqlite3.Error` only when the *listing* fails — nothing is
-    created from a bad read, the same rule the issue sync follows. A single
-    email that cannot be landed becomes a ``result.errors`` entry and the pass
-    carries on.
+    Raises :class:`~src.search.folder_explorer.Unavailable` (folder-explorer cannot
+    list) or :class:`sqlite3.Error` (the tasks database cannot be read) only when
+    the *listing* fails — nothing is created from a bad read, the same rule the
+    issue sync follows. A single email that cannot be landed becomes a
+    ``result.errors`` entry and the pass carries on.
     """
     result = CaptureResult()
     # Keys already settled (captured, or captured and since deleted) are stepped
@@ -318,7 +266,7 @@ def capture_once(
             result.dismissed += 1
     result.listed = len(entries) + len(skipped)
     for entry in entries:
-        # The task and its link are one landing: a row the index can hand over
+        # The task and its link are one landing: a row folder-explorer can hand over
         # with an empty subject or path fails somewhere in here, and the whole
         # attempt has to become an error entry rather than ending the pass —
         # one unusable email must not cost the other 199 their capture.
@@ -354,6 +302,31 @@ def capture_once(
     return result
 
 
+@dataclass
+class SourceHealth:
+    """What the last pass learned about folder-explorer, as ``/api/status`` shows it.
+
+    ``state`` is ``unknown`` until the first pass has run, never a guess;
+    ``since`` is when the current state began, ``last_ok`` the last pass that
+    listed, ``failures`` the consecutive passes that could not.
+    """
+
+    state: str = UNKNOWN
+    reason: str | None = None
+    since: str | None = None
+    last_ok: str | None = None
+    failures: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"state": self.state, "reason": self.reason, "since": self.since,
+                "last_ok": self.last_ok, "failures": self.failures}
+
+
+def source_state(exc: Unavailable) -> str:
+    """The client's state, with "no answer in time" told apart from "nothing answered"."""
+    return SLOW if exc.state == UNREACHABLE and exc.timed_out else exc.state
+
+
 class EmailCaptureService(Poller[CaptureResult]):
     """The in-app poller + status holder (one per process, on ``app.state.capture``)."""
 
@@ -364,7 +337,8 @@ class EmailCaptureService(Poller[CaptureResult]):
     def __init__(self, config: AppConfig, index: FlaggedEmailIndex | None = None, *,
                  interval_minutes: int | None = None, initial_delay: float | None = None) -> None:
         self.index = index if index is not None else FlaggedEmailIndex(
-            config.search.email_db, config.placeholders
+            FolderExplorerClient(config.search.folder_explorer_url, timeout_s=CAPTURE_TIMEOUT_S),
+            config.placeholders,
         )
         minutes = config.capture.email_poll_minutes if interval_minutes is None else interval_minutes
         self.interval_minutes = int(minutes)
@@ -375,15 +349,17 @@ class EmailCaptureService(Poller[CaptureResult]):
             self.enabled, self.reason = self.index.is_configured()
         self.last_run: str | None = None
         self.last_result: CaptureResult | None = None
+        self.source = SourceHealth()
         if not self.enabled:
             logger.warning("⚠️ capture: flagged-email capture off — %s", self.reason)
 
     # ------------------------------------------------------------- status
     def status(self) -> dict[str, Any]:
+        client = self.index.client
         return {
             "enabled": self.enabled,
             "reason": None if self.enabled else self.reason,
-            "source": self.index.db_path,
+            "source": {"url": client.host if client.configured else None, **self.source.to_dict()},
             "poll_minutes": self.interval_minutes,
             "last_run": self.last_run,
             "last_result": self.last_result.to_dict() if self.last_result else None,
@@ -397,14 +373,29 @@ class EmailCaptureService(Poller[CaptureResult]):
         return capture_once(conn, self.index)
 
     def _record_success(self, result: CaptureResult) -> None:
+        was, now = self.source, repo.now_iso()
         self.last_error = None
-        self.last_run = repo.now_iso()
+        self.last_run = now
         self.last_result = result
+        self.source = SourceHealth(state=OK, since=was.since if was.state == OK else now, last_ok=now)
+        if was.state not in (OK, UNKNOWN):
+            logger.info("✅ capture: folder-explorer lists again (was %s since %s)", was.state, was.since)
         logger.info("✅ capture: %s", result.summary())
 
     def _record_failure(self, exc: Exception) -> None:
-        self.last_error = f"{type(exc).__name__}: {exc}"
-        logger.exception("❌ capture: pass failed")
+        if not isinstance(exc, Unavailable):
+            self.last_error = f"{type(exc).__name__}: {exc}"
+            logger.exception("❌ capture: pass failed")
+            return
+        state, was = source_state(exc), self.source
+        since = was.since if was.state == state else repo.now_iso()
+        self.source = SourceHealth(state=state, reason=exc.reason, since=since,
+                                   last_ok=was.last_ok, failures=was.failures + 1)
+        # The state leads the message and says since when, so the card and `tasks status`
+        # read "unreachable since 14:02" instead of looking merely idle.
+        self.last_error = f"{state} since {since}: {exc.reason}"
+        if was.state != state:
+            logger.warning("⚠️ capture: flagged mail unavailable — %s (%s)", state, exc.reason)
 
     def _start_message(self) -> str:
         return (f"ℹ️ capture: flagged emails every {self.interval_minutes} min "
@@ -412,7 +403,7 @@ class EmailCaptureService(Poller[CaptureResult]):
 
 
 __all__ = [
-    "BATCH_LIMIT", "CAPTURE_ACTOR", "EXTERNAL_ID_PREFIX", "FLAG_COLUMN", "FLAG_FOLLOWUP",
-    "INITIAL_DELAY_S", "CaptureResult", "EmailCaptureService", "FlaggedEmailIndex",
-    "capture_once", "external_id_for", "rename_ref",
+    "BATCH_LIMIT", "CAPTURE_ACTOR", "CAPTURE_TIMEOUT_S", "EXTERNAL_ID_PREFIX", "INITIAL_DELAY_S", "SLOW",
+    "CaptureResult", "EmailCaptureService", "FlaggedEmailIndex", "SourceHealth",
+    "capture_once", "external_id_for", "rename_ref", "source_state",
 ]

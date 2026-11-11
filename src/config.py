@@ -88,9 +88,6 @@ class SearchConfig:
                         PC (``https://127.0.0.1:8453``); set = that address;
                         set blank = off, both groups say so. (The dataclass
                         default is blank so a hand-built config never reaches out.)
-    ``email_db``        folder-explorer's email index, opened read-only by the
-                        flagged-mail poller only (``capture.email_poll_minutes``);
-                        search never opens it.
     ``email_deep_url``  folder-explorer's page (``https://<your-host>.ts.net:8453/``).
                         Set, the Emails group links to its own email search with
                         the same words, where operators, facets and Show all live;
@@ -98,7 +95,6 @@ class SearchConfig:
     """
 
     folder_explorer_url: str = ""
-    email_db: str = ""
     email_deep_url: str = ""
 
 
@@ -106,8 +102,8 @@ class SearchConfig:
 class CaptureConfig:
     """Inbound capture (#98) — things flagged elsewhere become Inbox tasks.
 
-    The email poller reads folder-explorer's email index through ``search.email_db``,
-    read-only. ``email_poll_minutes`` ≤ 0 turns the poller off
+    The email poller asks folder-explorer's flagged-mail endpoint at
+    ``search.folder_explorer_url``. ``email_poll_minutes`` ≤ 0 turns the poller off
     with that as its visible reason.
     """
 
@@ -640,6 +636,18 @@ def _folder_explorer_url(search: dict[str, Any]) -> str:
     return str(value).strip()
 
 
+#: Keys an older config may still carry; read by nothing now, noted once per process.
+_RETIRED_SEARCH_KEYS = {"email_db": "flagged mail now comes from folder-explorer's API at search.folder_explorer_url"}
+_retired_noted: set[str] = set()
+
+
+def _note_retired(search: dict[str, Any]) -> None:
+    for key, why in _RETIRED_SEARCH_KEYS.items():
+        if key in search and key not in _retired_noted:
+            _retired_noted.add(key)
+            logger.info("ℹ️ config: search.%s is ignored — %s", key, why)
+
+
 def load_config(path: Path | None = None) -> AppConfig:
     """Parse ``path`` (default: :func:`config_path`) into an :class:`AppConfig`.
 
@@ -653,6 +661,7 @@ def load_config(path: Path | None = None) -> AppConfig:
     issues = _as_dict(raw.get("issues"))
     mirror = _mirror_block(src, _as_dict(raw.get("mirror")))
     search = _as_dict(raw.get("search"))
+    _note_retired(search)
     capture = _as_dict(raw.get("capture"))
     voice = _as_dict(raw.get("voice"))
     enrich = _as_dict(raw.get("enrich"))
@@ -694,7 +703,6 @@ def load_config(path: Path | None = None) -> AppConfig:
         ),
         search=SearchConfig(
             folder_explorer_url=_folder_explorer_url(search),
-            email_db=str(search.get("email_db", "")),
             email_deep_url=str(search.get("email_deep_url", "") or "").strip(),
         ),
         capture=CaptureConfig(

@@ -450,11 +450,11 @@ def test_capture_status_over_both_backends(run: Runner) -> None:
     c = _json(out)["capture"]
     assert set(c) == {"enabled", "reason", "source", "poll_minutes", "last_run",
                       "last_result", "last_error", "next_run", "running"}
-    assert c["enabled"] is False and c["reason"] == "search.email_db not configured"
+    assert c["enabled"] is False and c["reason"] == "search.folder_explorer_url not configured"
 
     code, out, _ = run("mirror", "status")
     assert code == 0
-    assert "capture  not configured — search.email_db not configured" in out
+    assert "capture  not configured — search.folder_explorer_url not configured" in out
 
 
 def test_voice_status_over_both_backends(run: Runner) -> None:
