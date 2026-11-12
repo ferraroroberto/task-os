@@ -54,7 +54,6 @@ import {
 } from './filters.js';
 import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
-import { wireNavDebug } from './js/navdebug.js';
 import { flattenOpen, parentTargets } from './parentpick.js';
 import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
@@ -902,8 +901,6 @@ async function boot() {
       else dropPreselected();
     },
   });
-  // Off unless asked for: ?navdebug=1, or five taps on the build line.
-  wireNavDebug();
   if (wantsSearch) { nav.setTab('search'); if (location.hash === '#search') history.replaceState(null, '', location.pathname + location.search); }
   // A PWA last left on the retired Settings tab reopens on Settings once;
   // the nav has already stored its default tab in that key's place.
