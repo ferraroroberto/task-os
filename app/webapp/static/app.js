@@ -650,10 +650,10 @@ function onHashChange() {
   }
   const id = hashTaskId();
   // #journal: open it, or — Back to a hashless URL — leave it and let
-  // the nav re-show the tab it still holds.
+  // the nav re-show the last real tab (it holds none while the journal is up).
   const wantsJournal = JOURNAL_HASH.test(location.hash);
   if (wantsJournal && !state.journal.open) app.openJournal();
-  else if (!wantsJournal && state.journal.open && id == null) { app.hideJournal(); nav.setTab(nav.getTab()); }
+  else if (!wantsJournal && state.journal.open && id == null) { app.hideJournal(); nav.setTab(state.tab); }
   if (id == null) { if (drawer.currentId() != null) drawer.close(); return; }
   if (drawer.currentId() !== id) drawer.open(id);
 }

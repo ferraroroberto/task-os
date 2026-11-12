@@ -25,9 +25,7 @@ export function openSettings(app) {
   if (app.drawer.currentId() != null) app.closeTask();
   if (!app.state.settingsOpen) {
     app.state.settingsOpen = true;
-    const navEl = document.querySelector('nav.tabs');
-    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-    navEl.dataset.activeTab = 'settings';
+    if (app.nav) app.nav.setTab(null);
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== app.els.paneSettings; });
     app.els.settingsBtn.setAttribute('aria-current', 'page');
     app.setHeadTitle('Settings', 'i-settings');

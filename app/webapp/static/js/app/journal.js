@@ -71,17 +71,15 @@ export function refreshJournal(app) {
 }
 
 /** Show the journal over whichever pane the nav has up. The pill itself is
- *  untouched (vendored contract); only its lit state comes off the tab whose
- *  pane is now covered, so no tab claims to be showing. Any tab press leaves
+ *  untouched (vendored contract); setTab(null) takes its lit state off the
+ *  tab whose pane is now covered, so no tab claims to be showing. Any tab press leaves
  *  (the nav re-shows its pane on its own — see boot()). */
 export function openJournal(app) {
   app.hideSettings();
   if (app.time) app.time.hide();
   if (!app.state.journal.open) {
     app.state.journal.open = true;
-    const navEl = document.querySelector('nav.tabs');
-    navEl.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-    navEl.dataset.activeTab = 'journal';
+    if (app.nav) app.nav.setTab(null);
     document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== app.els.paneJournal; });
     window.scrollTo(0, 0);
     app.setHeadTitle('Done journal', 'i-book-open');
