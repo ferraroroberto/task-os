@@ -25,9 +25,9 @@ from src.no_window import NO_WINDOW
 from src.placeholders import opener_url
 
 REPO = Path(__file__).resolve().parents[1]
-HANDLER = REPO / "opener" / "opener.cmd"
-LAUNCHER = REPO / "opener" / "opener.ps1"
-INSTALLER = REPO / "opener" / "install_opener.py"
+HANDLER = REPO / "assets" / "opener" / "opener.cmd"
+LAUNCHER = REPO / "assets" / "opener" / "opener.ps1"
+INSTALLER = REPO / "assets" / "opener" / "install_opener.py"
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="the opener is a Windows cmd handler")
 

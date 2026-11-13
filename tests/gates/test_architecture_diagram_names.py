@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DIAGRAM = REPO_ROOT / "docs" / "architecture.mmd"
-_ROOTS = ("src", "app", "scripts", "opener", "tests/fixtures")
+_ROOTS = ("src", "app", "scripts", "assets/opener", "tests/fixtures")
 _MODULE_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*\.py)\b")
 _CLASS_RE = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Service|Client|Scheduler))\b")
 

@@ -85,7 +85,7 @@ Owner-feedback polish rounds after a phase closes — story-level validation (ad
 ### Owner's checklist — the on-screen items only the owner can walk
 
 - [ ] **Phone (Story 07):** open `https://<your-host>.ts.net:8448` on the phone (on the tailnet) → sign in with the token/password → Add to Home Screen → launch standalone → quick-add, Board swipe, drawer, folder-chip long-press → theme persists.
-- [ ] **Second PC (Story 09):** paste the one-line install from `opener/install.txt` (or run `opener/install_opener.py`) → click a folder chip in the browser → the browser's one-time prompt → Explorer opens that PC's synced copy.
+- [ ] **Second PC (Story 09):** paste the one-line install from `assets/opener/install.txt` (or run `assets/opener/install_opener.py`) → click a folder chip in the browser → the browser's one-time prompt → Explorer opens that PC's synced copy.
 - [ ] **Email through the opener (Story 10):** click an email hit's chip → the `.msg` opens in the mail client.
 - [ ] **Story 06:** type in a real editor window and save (the harness could only script the save).
 - [ ] **A real microphone (Story 22):** click the mic in the add dialog on this PC and speak — every walk so far injected real speech as a real audio stream, which is not the same as a physical microphone in a real room. Worth watching specifically: whether the rolling partials keep up with unhurried speech, and whether AGC on a real capture chain leaves the level where `normalize` expects it.

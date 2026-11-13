@@ -51,7 +51,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           calendar_lane.py (the Today calendar lane: bounded ICS fetch, last good copy kept) · ics.py (just enough iCalendar
                           to say what is on today) · pooled_http.py (keep-alive outbound HTTP client, vendored verbatim)
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
-opener/                   the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
+assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_time_prototype.py (#457),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py, set_team_password.py,
@@ -90,8 +90,7 @@ Every offender that existed on adoption is recorded in `.structure-ratchet-basel
 | Folder | Why it is there |
 |---|---|
 | `app/` · `src/` · `tests/` · `docs/` | the shape's required folders: the UI and tray, the logic, the suites, the reference |
-| `scripts/` · `config/` · `assets/` · `brand/` | allowed by the shape: ops CLIs, committed config and its samples, static files the app ships, the icon masters |
-| `opener/` | the declared exception (`extra_roots` in `.fleet.toml`): the per-PC folder opener, a native install helper (PowerShell, a command handler, an installer) that a user runs on another machine, so it belongs to neither the app nor the logic |
+| `scripts/` · `config/` · `assets/` · `brand/` | allowed by the shape: ops CLIs, committed config and its samples, static files the app ships (the per-PC folder opener among them), the icon masters |
 
 `data/` and `webapp/` are gitignored runtime output and never tracked, so the check does not see them.
 

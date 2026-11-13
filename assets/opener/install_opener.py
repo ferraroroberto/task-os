@@ -137,7 +137,7 @@ def plan(dest: Path, *, uninstall: bool, launcher: bool, scheme: str = SCHEME) -
         "mode   " + ("launcher (the URL reaches the handler as an argument)"
                      if launcher else
                      "FALLBACK — this PC cannot run the launcher, so the URL reaches a "
-                     "command interpreter as a string (see opener/README.md)"),
+                     "command interpreter as a string (see assets/opener/README.md)"),
     ]
 
 
@@ -148,7 +148,7 @@ def install(dest: Path, scheme: str = SCHEME) -> bool:
 
     for name in (HANDLER_NAME, LAUNCHER_NAME):
         if not (HERE / name).exists():
-            raise SystemExit(f"error: {HERE / name} not found (run from the repo's opener/ folder)")
+            raise SystemExit(f"error: {HERE / name} not found (run from the repo's assets/opener/ folder)")
     # runtime-write-exempt: the install folder is the user's own per-user choice outside the checkout; this installer is stdlib-only and cannot import the repo's guarded writer
     dest.mkdir(parents=True, exist_ok=True)
     for name in (HANDLER_NAME, LAUNCHER_NAME):
@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"mode:      launcher ({dest / LAUNCHER_NAME})")
         else:
             print("mode:      FALLBACK — this PC cannot run the launcher, so the URL reaches a")
-            print("           command interpreter as a string; see opener/README.md 'Caveats'.")
+            print("           command interpreter as a string; see assets/opener/README.md 'Caveats'.")
         print(f"try it:    start {args.scheme}://open?ref=%7Bonedrive%7D")
     return 0
 
