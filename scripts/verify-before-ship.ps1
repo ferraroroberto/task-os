@@ -145,7 +145,7 @@ $env:PYTHONIOENCODING = "utf-8"
 
 . (Join-Path $PSScriptRoot "box_lock_gate.ps1"); Enter-BoxLockGate
 
-Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests opener launcher.py }
+Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests assets launcher.py }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }
 # The wrapper maps the script's exit 3 to NOT CONFIRMED (tests/gates/test_static_ratchet_gate.py
 # pins it); call it, never scripts/static_ratchet.py directly.

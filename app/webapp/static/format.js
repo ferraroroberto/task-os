@@ -181,7 +181,7 @@ function shortFolderLabel(ref) {
 
 // ------------------------------------------------------- folder chips
 // A folder ref is a link the browser hands to the per-PC opener
-// (taskos://open?ref=…, opener/README.md). The page never resolves a ref
+// (taskos://open?ref=…, assets/opener/README.md). The page never resolves a ref
 // itself: `resolved` is the server's absolute path (this install's
 // placeholders) and is only ever shown — as the tooltip, in the copy popover.
 // Coarse pointer (phone): no Explorer to open, so the tap opens the chip's

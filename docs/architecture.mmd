@@ -12,7 +12,7 @@ flowchart LR
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI) · GitLab (via glab api)<br/>issues assigned to me"]
     radar["whatsapp-radar · src/task_os/client.py<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
-    opener["per-PC opener · opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
+    opener["per-PC opener · assets/opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
   end
 
   subgraph webapp["FastAPI webapp · :8448 (HTTPS when webapp/certificates/ exists)<br/>app/webapp/server.py"]

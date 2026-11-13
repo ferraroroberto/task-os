@@ -1,8 +1,8 @@
-"""What the app knows about the per-PC folder opener (``opener/``) — Step 9.
+"""What the app knows about the per-PC folder opener (``assets/opener/``) — Step 9.
 
-The handler itself is ``opener/opener.cmd``, the launcher Windows actually
-registers is ``opener/opener.ps1``, and the install one-liner lives in
-``opener/install.txt`` (single source: the first non-comment line is the
+The handler itself is ``assets/opener/opener.cmd``, the launcher Windows actually
+registers is ``assets/opener/opener.ps1``, and the install one-liner lives in
+``assets/opener/install.txt`` (single source: the first non-comment line is the
 install command, the second the uninstall command). This module reads them for
 ``GET /api/status`` → ``opener`` so the Settings *Folder opener* card can show
 the command with this server's address filled in, plus an ``opener.env``
@@ -28,7 +28,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OPENER_DIR = PROJECT_ROOT / "opener"
+OPENER_DIR = PROJECT_ROOT / "assets" / "opener"
 HANDLER_PATH = OPENER_DIR / "opener.cmd"
 LAUNCHER_PATH = OPENER_DIR / "opener.ps1"
 INSTALL_TXT = OPENER_DIR / "install.txt"
@@ -98,7 +98,7 @@ def registration_mode() -> str | None:
     ``None`` covers both "not installed" and "not this OS" — the caller already
     has :func:`installed_here` for that distinction. ``"fallback"`` matters
     because it hands the URL to a command interpreter as a string, which
-    re-parses it (see ``opener/opener.ps1``). ``"launcher-stale"``
+    re-parses it (see ``assets/opener/opener.ps1``). ``"launcher-stale"``
     is a launcher registered before the ``conhost.exe --headless`` wrap landed —
     still safe, but every open flashes a console window; reported so the PC can
     be told to re-run the install command, same as a fallback install.

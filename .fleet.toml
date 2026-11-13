@@ -11,7 +11,6 @@ depends_on  = ["folder-explorer", "local-llm-hub", "voice-transcriber"]
 description = "One task list: projects, Inbox capture, calendar, voice add, mail archiving, time tracking."
 # The repo layout the structure ratchet holds the root folders to (docs/layout.md).
 shape       = "webapp-tray"
-extra_roots = ["opener"]  # the per-PC folder opener helper: a standalone installer, not app code
 
 # Vendored byte-for-byte from project-scaffolding (and the two fleet reference
 # apps for the modules the scaffold does not ship yet). sha = the source repo
@@ -337,9 +336,6 @@ prefix = "scripts/"
 [[e2e.rule]]
 tier   = "none"
 prefix = "config/"
-[[e2e.rule]]
-tier   = "none"
-prefix = "opener/"
 [[e2e.rule]]
 tier   = "none"
 prefix = "docs/"

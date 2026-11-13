@@ -8,7 +8,7 @@ it, never the browser:
   the drawer's field) — :func:`resolve` with ``config.placeholders``, where a
   ``{sharepoint:<name>}`` token reads ``placeholders.sharepoint.<name>``
   (flattened by ``src.config`` to the key ``sharepoint:<name>``);
-- **the per-PC opener** (``opener/opener.cmd``), for opening — the same tokens
+- **the per-PC opener** (``assets/opener/opener.cmd``), for opening — the same tokens
   from that PC's environment (``%OneDrive%`` / ``%OneDriveCommercial%``,
   ``%USERNAME%``) and its ``opener.env``.
 
