@@ -110,7 +110,7 @@ def test_v19_migrates_to_v20_without_touching_a_row(tmp_path: Path) -> None:
     entries = c.execute("SELECT id, person, minutes FROM time_entries ORDER BY id").fetchall()
     c.close()
 
-    assert dbmod.init_db(path) == 20
+    assert dbmod.init_db(path) == 21
     c = sqlite3.connect(path)
     try:
         assert {t: c.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables} == counts
@@ -247,7 +247,7 @@ def test_migrate_dry_run_never_writes_the_source(tmp_path: Path, capsys: pytest.
     report = migrate_dry_run.dry_run(path)
     assert (path.stat().st_mtime_ns, _sha(path)) == (mtime, digest)
     assert not list(tmp_path.glob("tasks.db-*"))                        # no WAL / shm left beside it
-    assert (report["schema_version_before"], report["schema_version_after"]) == (19, 20)
+    assert (report["schema_version_before"], report["schema_version_after"]) == (19, 21)
     assert report["row_counts_unchanged"] and report["content_unchanged"] and report["source_mtime_unchanged"]
     assert report["null_owner_tasks"] == 4
     assert all(t.get("content_unchanged", True) for t in report["tables"])

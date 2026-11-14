@@ -1,0 +1,65 @@
+{
+  "exported_at": "2026-01-01T00:00:00Z",
+  "site": "https://tenant.example/sites/placeholder",
+  "list": { "id": "00000000-0000-0000-0000-000000000000", "title": "Placeholder tasks" },
+  "fields": [
+    { "InternalName": "Title", "Title": "Title", "TypeAsString": "Text" },
+    { "InternalName": "Status", "Title": "Status", "TypeAsString": "Choice", "Choices": ["Not started", "In progress", "Completed", "On hold"] },
+    { "InternalName": "Priority", "Title": "Priority", "TypeAsString": "Choice", "Choices": ["(1) High", "(2) Normal", "(3) Low"] },
+    { "InternalName": "AssignedTo", "Title": "Assigned To", "TypeAsString": "User" },
+    { "InternalName": "Contact", "Title": "Contact", "TypeAsString": "User" },
+    { "InternalName": "DueDate", "Title": "Due Date", "TypeAsString": "DateTime" },
+    { "InternalName": "Details", "Title": "Details", "TypeAsString": "Note" },
+    { "InternalName": "Updates", "Title": "Updates", "TypeAsString": "Note" }
+  ],
+  "items": [
+    {
+      "Id": 1, "Title": "Draft the quarterly plan", "Created": "2026-01-05T08:00:00Z", "Modified": "2026-01-20T10:00:00Z",
+      "Status": "In progress", "Priority": "(1) High", "DueDate": "2026-02-01T00:00:00Z", "AssignedToId": 7,
+      "Details": "<div>Outline first, then review at https://docs.example/plan.</div>",
+      "FieldValuesAsText": { "AssignedTo": "Person A", "Contact": "Contact X", "Editor": "Person B" },
+      "AttachmentFiles": [{ "FileName": "spec.pdf", "ServerRelativeUrl": "/sites/placeholder/Lists/Tasks/Attachments/1/spec.pdf" }],
+      "_comments": [
+        { "id": "12", "text": "Second thought: split it in two.", "createdDate": "2026-01-12T09:00:00Z", "author": { "name": "Person B" }, "replyCount": 0, "_replies": [] },
+        { "id": "11", "text": "Looks fine. See https://docs.example/plan.", "createdDate": "2026-01-10T09:00:00Z", "author": { "name": "Person A" }, "replyCount": 2,
+          "_replies": [
+            { "id": "14", "text": "Agreed.", "createdDate": "2026-01-11T09:00:00Z", "author": { "name": "Person B" } },
+            { "id": "13", "text": "Thanks, noted.", "createdDate": "2026-01-10T12:00:00Z", "author": { "name": "Person A" } }
+          ] },
+        { "id": "15", "text": "   ", "createdDate": "2026-01-13T09:00:00Z", "author": { "name": "Person A" }, "replyCount": 0, "_replies": [] }
+      ],
+      "_versions": [
+        { "VersionId": 512, "VersionLabel": "1.0", "Created": "2026-01-06T08:00:00Z", "Editor": { "LookupValue": "Person A" }, "Updates": "Kicked off." },
+        { "VersionId": 1024, "VersionLabel": "2.0", "Created": "2026-01-14T08:00:00Z", "Editor": { "LookupValue": "Person B" }, "Updates": "Kicked off.\nReviewed draft, see https://docs.example/review." },
+        { "VersionId": 1536, "VersionLabel": "3.0", "Created": "2026-01-20T10:00:00Z", "Editor": { "LookupValue": "Person A" }, "Updates": "Kicked off.\nReviewed draft, see https://docs.example/review.\nSent for sign-off." }
+      ]
+    },
+    {
+      "Id": 2, "Title": "Book the venue", "Created": "2026-01-06T08:00:00Z", "Modified": "2026-01-18T16:30:00Z",
+      "Status": "Completed", "Priority": "(2) Normal", "DueDate": null,
+      "FieldValuesAsText": { "AssignedTo": "Person B", "Contact": "Contact X; Contact Y" },
+      "AttachmentFiles": [],
+      "_comments": [],
+      "_versions": [
+        { "VersionId": 512, "Created": "2026-01-06T08:00:00Z", "Editor": { "LookupValue": "Person B" }, "Updates": "Called the venue." },
+        { "VersionId": 1024, "Created": "2026-01-18T16:30:00Z", "Editor": { "LookupValue": "Person B" }, "Updates": "Booked.\nCalled the venue." }
+      ]
+    },
+    {
+      "Id": 3, "Title": "Review the budget", "Created": "2026-01-07T08:00:00Z", "Modified": "2026-01-07T08:00:00Z",
+      "Status": "On hold", "Priority": "(9) Odd", "DueDate": "2026-03-15T00:00:00Z",
+      "FieldValuesAsText": { "AssignedTo": "Person Z" },
+      "AttachmentFiles": [],
+      "_comments": [],
+      "_versions": [
+        { "VersionId": 512, "Created": "2026-01-07T08:00:00Z", "Editor": { "LookupValue": "Person Z" }, "Updates": "First note." },
+        { "VersionId": 1024, "Created": "2026-01-08T08:00:00Z", "Editor": { "LookupValue": "Person Z" }, "Updates": "Rewritten from scratch." }
+      ]
+    },
+    {
+      "Id": 4, "Title": "", "Created": "2026-01-08T08:00:00Z", "Modified": "2026-01-08T08:00:00Z",
+      "FieldValuesAsText": {},
+      "AttachmentFiles": [], "_comments": [], "_versions": []
+    }
+  ]
+}
