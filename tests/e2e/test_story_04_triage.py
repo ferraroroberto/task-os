@@ -469,7 +469,7 @@ def _quick_add_with_both_dates(page: Page, base: str, shots: Path, due, starts) 
     shot(page, shots / "story-13-starts-snooze-1-desktop.png")
     quick_add.locator(".quick-add-input").press("Enter")
     expect(quick_add).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("renew insurance")
+    expect(page.locator("#toast")).to_contain_text("renew insurance")
 
     created = next(t for t in _get(base, "/api/tasks?status=deferred")["items"]
                    if t["title"] == "renew insurance")
@@ -541,7 +541,7 @@ def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today)
     menu.get_by_text("Next week", exact=True).click()
 
     next_week = (today + timedelta(days=7)).isoformat()
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     snoozed = _get(base, f"/api/tasks/{task_id}")
     assert snoozed["starts"] == next_week
@@ -593,7 +593,7 @@ def _snooze_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
     expect(picker).to_be_visible()
     picker.get_by_text("Tomorrow", exact=True).click()
     tomorrow = (today + timedelta(days=1)).isoformat()
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
     assert _get(base, f"/api/tasks/{task_id}")["starts"] == tomorrow

@@ -220,7 +220,7 @@ def _quick_add_create(page: Page, base: str, shots: Path, quick_add, qa, friday:
     #    row is focused (default filter = open).
     qa.press("Enter")
     expect(quick_add).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("renew passport")
+    expect(page.locator("#toast")).to_contain_text("renew passport")
     # the todo filter hides a standby task — clear to see it, as a user would
     open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
     expect(page).to_have_url(f"{base}/")
@@ -274,7 +274,7 @@ def _parent_move_remove_and_cycle(
     """Pick, remove and re-pick a parent; a cycle the server refuses is a toast; a deep link opens it."""
     picker.locator(f".parent-opt[data-id='{family_id}']").click()
     expect(picker).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("under Family admin")
+    expect(page.locator("#toast")).to_contain_text("under Family admin")
     moved = _get(base, f"/api/tasks/{new_id}")
     assert moved["parent_id"] == family_id
     assert [c["title"] for c in moved["breadcrumb"]] == ["Family admin"]
@@ -285,7 +285,7 @@ def _parent_move_remove_and_cycle(
     shot(page, shots / "story-04-triage-7-desktop.png")
     # Remove parent: one tap from the head, no confirmation, back to the top level
     drawer.locator(".drawer-remove-parent").click()
-    expect(page.locator(".toast-success").last).to_contain_text("to the top level")
+    expect(page.locator("#toast")).to_contain_text("to the top level")
     expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
     expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
     assert _get(base, f"/api/tasks/{new_id}")["parent_id"] is None
@@ -319,7 +319,7 @@ def _parent_move_remove_and_cycle(
     back = page.request.post(f"{base}/api/tasks/{kitchen_id}/move", data={"parent_id": home_id})
     assert back.ok, back.text()
     picker.locator(f".parent-opt[data-id='{kitchen_id}']").click()
-    expect(page.locator(".toast-error").last).to_contain_text("cycle")
+    expect(page.locator("#toast.error")).to_contain_text("cycle")
     assert _get(base, f"/api/tasks/{home_id}")["parent_id"] is None
     assert _get(base, f"/api/tasks/{kitchen_id}")["parent_id"] == home_id
 
@@ -358,7 +358,7 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
     expect(cadence).to_have_value("weekly")
     expect(anchor).to_have_value("fri")
-    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    page.evaluate("document.getElementById('toast').hidden = true")
     shot(page, shots / "story-17-recurrence-anchor-1-desktop.png")
 
     # Complete it: the same task stays open and its new due is a Friday,
@@ -427,7 +427,7 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     # check settles nothing: the new activity rows are what the redraw adds (#459).
     expect(drawer.locator(".activity-row").nth(0)).to_contain_text("recurrence_anchor")
     expect(drawer.locator(".activity-row").nth(1)).to_contain_text("recurrence_interval")
-    page.evaluate("document.querySelectorAll('.toast').forEach(t => t.remove())")
+    page.evaluate("document.getElementById('toast').hidden = true")
     # Frame the drawer rather than inherit its scroll offset (#459). Where it ends
     # up is whatever Playwright's scroll-into-view and the redraws between them
     # left, against a layout that was still moving (the drawer's content grows by

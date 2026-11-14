@@ -298,7 +298,7 @@ def _enter_makes_the_task(page: Page, ctx, base: str, shots: Path, dialog, due, 
     expect(down_line).to_have_value(SPOKEN)
     expect(down.locator(".quick-add-due")).to_have_value(due)
     expect(down.locator(".quick-add-desc")).to_have_value("")
-    expect(page.locator(".toast-error")).to_have_count(0)
+    expect(page.locator("#toast.error:visible")).to_have_count(0)
     page.keyboard.press("Escape")
     expect(down).to_be_hidden()
     inst.chat.status = 200
