@@ -41,6 +41,7 @@
 /scripts/usage_track_ratchet.py
 /scripts/usage_track_scan.py
 /src/compression.py
+/src/login_alert.py
 /src/login_lockout.py
 /src/no_window.py
 /src/notify
