@@ -64,6 +64,27 @@ export function nextPriority(p) {
 }
 
 // -------------------------------------------------------------- actions
+/** A snooze with its phrase already chosen — the Today row's chips and a
+ *  swipe set to it commit in one gesture, with `snooze`'s plan, undo and
+ *  toast, so a push-out means the same write wherever it is reached. */
+function snoozeUntil(id, phrase, label) {
+  return {
+    id: id, key: null, kbd: null, icon: 'clock', label: label, hint: null,
+    plan: function (tasks) { return oneGroup(tasks, { starts: phrase }); },
+    invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
+    applies: isOpen,
+    message: function (tasks, arg, after) { return snoozedMessage(tasks, after); },
+  };
+}
+
+/** What a snooze toast says: where the task went, and that its due came along. */
+function snoozedMessage(tasks, after) {
+  const s = after && after.length === 1 ? after[0].starts : null;
+  if (!s) return 'Snoozed';
+  const moved = tasks.length === 1 && after[0].due !== tasks[0].due;
+  return 'Snoozed to ' + fmtDay(s) + (moved ? ' · due moved too' : '');
+}
+
 /**
  * The row actions. Each declares:
  *   plan(tasks, arg)          → the groups to write
@@ -143,13 +164,10 @@ export const ACTIONS = [
     // the undo puts both back.
     invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
     applies: isOpen,
-    message: function (tasks, arg, after) {
-      const s = after && after.length === 1 ? after[0].starts : null;
-      if (!s) return 'Snoozed';
-      const moved = tasks.length === 1 && after[0].due !== tasks[0].due;
-      return 'Snoozed to ' + fmtDay(s) + (moved ? ' · due moved too' : '');
-    },
+    message: function (tasks, arg, after) { return snoozedMessage(tasks, after); },
   },
+  snoozeUntil('snooze-tomorrow', 'tomorrow', 'Snooze until tomorrow'),
+  snoozeUntil('snooze-next-week', 'next week', 'Snooze until next week'),
   {
     id: 'priority', key: 'p', kbd: 'P', icon: 'activity',
     label: 'Cycle priority', hint: 'none, low, medium, then high; each task from its own',

@@ -47,7 +47,8 @@ def test_the_table_keeps_its_ids_and_keys() -> None:
     (table,) = _call_js([[None, "keys", None, None, None]])
     assert [(a[0], a[1]) for a in table] == [
         ("complete", "e"), ("reopen", None), ("change-date", "d"), ("due-tomorrow", "t"),
-        ("due-next-week", "w"), ("snooze", "s"), ("priority", "p"), ("status-inbox", "1"),
+        ("due-next-week", "w"), ("snooze", "s"), ("snooze-tomorrow", None),
+        ("snooze-next-week", None), ("priority", "p"), ("status-inbox", "1"),
         ("status-todo", "2"), ("status-standby", "3"), ("status-cancelled", None),
     ]
 
@@ -154,3 +155,25 @@ def test_messages_name_the_result_the_server_answered() -> None:
     assert got[2] == "Completed"
     assert got[3] == "Snoozed to Sat 10 Oct"
     assert got[4] == "Priority medium"
+
+
+def test_the_one_tap_snoozes_plan_undo_and_say_what_snooze_says() -> None:
+    """The Today chips and a swipe run a fixed-phrase snooze: same write, undo and toast as the sheet's pick."""
+    tasks = [PLAIN, OTHER]
+    snoozed = dict(PLAIN, starts="2026-10-02")
+    got = _call_js([
+        ["snooze-tomorrow", "plan", tasks, None, None],
+        ["snooze-next-week", "plan", tasks, None, None],
+        ["snooze-tomorrow", "invert", tasks, None, None],
+        ["snooze-next-week", "message", [PLAIN], None, [snoozed]],
+        ["snooze-tomorrow", "message", [PLAIN], None, [dict(snoozed, due="2026-10-02")]],
+        ["snooze-tomorrow", "applies", PLAIN, None, None],
+        ["snooze-tomorrow", "applies", dict(PLAIN, status="done"), None, None],
+    ])
+    assert got[0] == [{"ids": [1, 3], "changes": {"starts": "tomorrow"}}]
+    assert got[1] == [{"ids": [1, 3], "changes": {"starts": "next week"}}]
+    assert got[2] == [{"ids": [1], "changes": {"starts": None, "due": "2026-10-01"}},
+                      {"ids": [3], "changes": {"starts": "2026-10-09", "due": None}}]
+    assert got[3] == "Snoozed to Fri 2 Oct"
+    assert got[4] == "Snoozed to Fri 2 Oct · due moved too"
+    assert got[5:] == [True, False]
