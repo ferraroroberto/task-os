@@ -4,7 +4,7 @@ with ``--person <id>``, one member's own token (``auth.people.<id>.token``).
 Loopback (this PC) never needs it. Any other client — the phone over the
 tailnet, a script on another machine, an LLM — must present it: as
 ``Authorization: Bearer <token>``, or by signing in once at ``/login`` (the
-token itself, or the password ``scripts/set_password.py`` sets), which stores
+token itself, or the password ``python -m src.password set`` sets), which stores
 it as a 90-day cookie. With no token configured the app refuses every
 non-loopback request — the gate is closed, not open.
 
@@ -78,8 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     print()
     who = f"{args.person}'s phone" if args.person else "the phone"
     print(f"Next: tray.bat --restart, then on {who} open https://<your-host>.ts.net:8448,")
-    print("paste the token at /login (or set a password: scripts/set_password.py"
-          + (f" --person {args.person}" if args.person else "") + ", which prompts for it).")
+    setter = f"scripts/set_password.py --person {args.person}" if args.person else "python -m src.password set"
+    print(f"paste the token at /login (or set a password: {setter}, which prompts for it).")
     if args.force:
         print("Rotated: " + (f"{args.person}'s devices are" if args.person else "every device signed in with it is")
               + " signed out until they sign in again.")

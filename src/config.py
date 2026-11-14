@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src import password
 from src.runtime import files as runtime_files
 
 logger = logging.getLogger(__name__)
@@ -337,8 +338,10 @@ class PersonSecret:
 @dataclass(frozen=True)
 class AuthConfig:
     """Non-loopback access (Step 7). ``token`` is the bearer secret
-    ``scripts/gen_token.py`` writes; ``password_hash`` the optional memorable
-    alternative ``scripts/set_password.py`` stores (PBKDF2, never plaintext).
+    ``scripts/gen_token.py`` writes; ``password_hash`` the owner's legacy
+    memorable alternative (PBKDF2, never plaintext), which
+    :attr:`owner_password_hash` uses only until the vendored ``src/password.py``
+    has stored its own hash.
     Both are the install owner's (``owner``: the first member's id). ``people``
     holds the other members' own secrets — only for ids still in the
     members list, so removing a member signs them out. No token anywhere (the
@@ -358,9 +361,15 @@ class AuthConfig:
         pairs = [(self.owner, self.token)] if self.token else []
         return pairs + [(p.id, p.token) for p in self.people if p.token]
 
+    @property
+    def owner_password_hash(self) -> str:
+        """The owner's password hash: ``src/password.py``'s once it has one, else the legacy config value."""
+        return password.stored_hash() or self.password_hash
+
     def password_hashes(self) -> list[tuple[str, str]]:
         """``(member id, password hash)`` for every configured password, the owner's first."""
-        pairs = [(self.owner, self.password_hash)] if self.password_hash else []
+        owner_hash = self.owner_password_hash
+        pairs = [(self.owner, owner_hash)] if owner_hash else []
         return pairs + [(p.id, p.password_hash) for p in self.people if p.password_hash]
 
     def token_of(self, person_id: str) -> str:
@@ -415,9 +424,9 @@ class AppConfig:
 
     def member_secret_problem(self, person_id: str) -> str | None:
         """Why ``person_id`` cannot hold a secret of its own
-        (``gen_token.py`` / ``set_password.py --person``), else ``None``."""
+        (``gen_token.py --person`` / ``set_password.py --person``), else ``None``."""
         if person_id == self.owner.id:
-            return f"{person_id!r} is the install owner — their secrets are auth.token / auth.password_hash; drop --person"
+            return f"{person_id!r} is the install owner — their token is auth.token (drop --person), their password python -m src.password set"
         if self.person(person_id) is None:
             ids = ", ".join(p.id for p in self.people)
             return f"{person_id!r} is not a member (people: {ids}) — add them to the people block first"

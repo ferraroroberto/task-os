@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -29,6 +30,12 @@ from src import db as dbmod
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_CONFIG = REPO_ROOT / "config" / "config.sample.json"
+
+# The login password hash (src/password.py) is read on every login, so a run
+# must never see the live config/app_password.json: point it at a file that
+# does not exist. Assigned, not defaulted, so no outer value reaches the live
+# file; servers the suite spawns inherit it.
+os.environ["APP_PASSWORD_FILE"] = str(Path(tempfile.mkdtemp(prefix="task-os-password-")) / "app_password.json")
 
 #: The address a test client presents as the install owner (the auth gate treats loopback as the owner).
 LOOPBACK = ("127.0.0.1", 50000)

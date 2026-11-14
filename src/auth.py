@@ -8,8 +8,9 @@ Two classes of caller:
   ``scripts/gen_token.py`` wrote into ``config/config.json`` — as an
   ``Authorization: Bearer <token>`` header (scripts, an LLM) or as the
   ``taskos_token`` cookie the ``/login`` page sets for 90 days (the phone).
-  ``/login`` also accepts the optional password (``scripts/set_password.py``,
-  stored as a PBKDF2 hash) and hands the same cookie back — a memorable
+  ``/login`` also accepts the optional password (``python -m src.password set``,
+  the vendored ``src/password.py``: a PBKDF2 hash in ``config/app_password.json``)
+  and hands the same cookie back — a memorable
   secret to type instead of pasting a token.
 
 No token configured (the committed sample) means **only loopback can use the
@@ -63,6 +64,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.config import IMPLICIT_PERSON, AuthConfig, Person, TeamConfig
+from src.password import verify_hash
 from src.team import NAME_COOKIE, member_from_cookie
 
 logger = logging.getLogger(__name__)
@@ -81,37 +83,6 @@ PUBLIC_EXACT = frozenset({
     "/healthz", "/api/version", "/login", "/api/login",
     "/opener/opener.cmd", "/opener/opener.ps1",
 })
-
-_PBKDF2_ITERATIONS = 200_000
-_HASH_PREFIX = "pbkdf2_sha256"
-
-
-# ------------------------------------------------------------------ passwords
-
-def hash_password(password: str) -> str:
-    """``pbkdf2_sha256$<iterations>$<salt>$<digest>`` — stdlib only, salted."""
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ITERATIONS)
-    return "$".join([
-        _HASH_PREFIX,
-        str(_PBKDF2_ITERATIONS),
-        base64.b64encode(salt).decode("ascii"),
-        base64.b64encode(digest).decode("ascii"),
-    ])
-
-
-def verify_password(password: str, stored: str) -> bool:
-    """Constant-time check of ``password`` against a :func:`hash_password` value."""
-    try:
-        prefix, iterations, salt_b64, digest_b64 = stored.split("$")
-        if prefix != _HASH_PREFIX:
-            return False
-        salt = base64.b64decode(salt_b64)
-        expected = base64.b64decode(digest_b64)
-        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
-    except (ValueError, TypeError):
-        return False
-    return hmac.compare_digest(actual, expected)
 
 
 def new_token() -> str:
@@ -187,9 +158,9 @@ def check_secret(secret: str, auth: AuthConfig, team: TeamConfig | None = None) 
         return SignIn("token", secret)
     for person, stored in auth.password_hashes():
         # A password only unlocks a token: a member with none has nothing to hand back.
-        if auth.token_of(person) and verify_password(secret, stored):
+        if auth.token_of(person) and verify_hash(secret, stored):
             return SignIn("password", auth.token_of(person))
-    if team is not None and team_session(auth, team) and verify_password(secret, team.password_hash):
+    if team is not None and team_session(auth, team) and verify_hash(secret, team.password_hash):
         return SignIn("team")
     return None
 

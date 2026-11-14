@@ -1,6 +1,6 @@
 """The one way the password setters ask for a new password.
 
-``set_password.py`` (the owner's and each member's sign-in) and
+``set_password.py`` (each member's own sign-in) and
 ``set_team_password.py`` (the shared team sign-in) read the secret here, with
 no echo and never as an argument, so it lands neither in the shell history nor
 in a terminal transcript. One length rule, one confirm-twice flow.

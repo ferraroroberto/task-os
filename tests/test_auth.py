@@ -15,8 +15,10 @@ from fastapi.testclient import TestClient
 
 from src import config as cfgmod
 from src import db as dbmod
+from src import password as app_password
 from src import team as teammod
-from src.auth import COOKIE_NAME, TEAM_COOKIE, hash_password, team_session, verify_password
+from src.auth import COOKIE_NAME, TEAM_COOKIE, team_session
+from src.password import hash_password, verify_hash
 from src.team import NAME_COOKIE
 from tests.conftest import LOOPBACK, write_test_config
 
@@ -162,12 +164,30 @@ def test_sample_config_ships_with_auth_empty() -> None:
     assert cfg.auth.token == "" and cfg.auth.password_hash == "" and not cfg.auth.enabled
 
 
+def test_set_password_refuses_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts import set_password
+
+    with pytest.raises(SystemExit):
+        set_password.main([], read_secret=answers("1234", "1234"))  # the owner's is python -m src.password set
+
+
+def test_the_vendored_hash_is_the_owners_password_once_set(make_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(app_password.ENV_VAR, str(tmp_path / "app_password.json"))
+    app = make_app(password_hash=hash_password("legacy horse"))
+    with TestClient(app, client=PHONE) as c:
+        assert c.post("/api/login", json={"secret": "legacy horse"}).status_code == 200  # until the setter runs
+    app_password.set_password("4321")
+    with TestClient(app, client=PHONE) as c:
+        assert c.post("/api/login", json={"secret": "4321"}).status_code == 200
+        assert c.post("/api/login", json={"secret": "legacy horse"}).status_code == 401
+
+
 def test_password_hash_roundtrip() -> None:
     h = hash_password("s3cret-phrase")
     assert h.startswith("pbkdf2_sha256$") and "s3cret-phrase" not in h
-    assert verify_password("s3cret-phrase", h)
-    assert not verify_password("s3cret-phras", h)
-    assert not verify_password("s3cret-phrase", "garbage")
+    assert verify_hash("s3cret-phrase", h)
+    assert not verify_hash("s3cret-phras", h)
+    assert not verify_hash("s3cret-phrase", "garbage")
     assert hash_password("x") != hash_password("x")  # salted
 
 
@@ -177,14 +197,12 @@ def answers(*values: str):
     return lambda prompt: next(it)
 
 
-def test_gen_token_and_set_password_scripts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    from scripts import gen_token, set_password
+def test_gen_token_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    from scripts import gen_token
 
     target = tmp_path / "config.json"
     monkeypatch.setattr(cfgmod, "CONFIG_PATH", target)
     monkeypatch.setattr(gen_token, "CONFIG_PATH", target)
-    monkeypatch.setattr(set_password, "CONFIG_PATH", target)
-    assert set_password.main([], read_secret=answers("longenough", "longenough")) == 1   # no token yet
     assert gen_token.main([]) == 0
     first = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
     assert len(first) >= 32
@@ -193,13 +211,6 @@ def test_gen_token_and_set_password_scripts(tmp_path: Path, monkeypatch: pytest.
     assert gen_token.main(["--force"]) == 0
     second = json.loads(target.read_text(encoding="utf-8"))["auth"]["token"]
     assert second != first
-    assert set_password.main([], read_secret=answers("short", "short")) == 1
-    assert set_password.main([], read_secret=answers("longenough", "different1")) == 1
-    assert set_password.main([], read_secret=answers("longenough", "longenough")) == 0
-    stored = json.loads(target.read_text(encoding="utf-8"))["auth"]["password_hash"]
-    assert verify_password("longenough", stored)
-    assert set_password.main(["--clear"]) == 0
-    assert json.loads(target.read_text(encoding="utf-8"))["auth"]["password_hash"] == ""
     assert gen_token.main(["--clear"]) == 0
     assert json.loads(target.read_text(encoding="utf-8"))["auth"]["token"] == ""
     out = capsys.readouterr().out
@@ -417,7 +428,7 @@ def test_set_team_password_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert set_team_password.main([], read_secret=answers("longenough", "longenough")) == 0
     team = json.loads(target.read_text(encoding="utf-8"))["team"]
     assert team["enabled"] is True and team["people"] == PEOPLE      # the rest of the block is kept
-    assert verify_password("longenough", team["password_hash"])
+    assert verify_hash("longenough", team["password_hash"])
     assert set_team_password.main(["--clear"]) == 0
     assert json.loads(target.read_text(encoding="utf-8"))["team"]["password_hash"] == ""
     assert "longenough" not in capsys.readouterr().out
@@ -629,7 +640,7 @@ def test_gen_token_and_set_password_for_a_person(tmp_path: Path, monkeypatch: py
     assert json.loads(target.read_text(encoding="utf-8"))["auth"]["people"]["p2"]["token"] == p2
     assert set_password.main(["--person", "p2"], read_secret=answers("longenough", "longenough")) == 0
     auth = json.loads(target.read_text(encoding="utf-8"))["auth"]
-    assert verify_password("longenough", auth["people"]["p2"]["password_hash"]) and auth["password_hash"] == ""
+    assert verify_hash("longenough", auth["people"]["p2"]["password_hash"]) and auth["password_hash"] == ""
     assert "longenough" not in capsys.readouterr().out
     cfg = cfgmod.load_config(target)
     assert cfg.auth.token_of("p2") == p2 and cfg.auth.token_of("p1") == owner
