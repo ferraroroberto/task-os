@@ -436,7 +436,7 @@ class LocalBackend:
             "https": UNKNOWN,
             "auth": {
                 "enabled": config.auth.enabled,
-                "password": bool(config.auth.password_hash),
+                "password": bool(config.auth.owner_password_hash),
                 "client": UNKNOWN,
             },
             "mirror": self._mirror_service().status(self.conn),

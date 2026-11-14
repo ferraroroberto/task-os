@@ -209,7 +209,7 @@ def access_status(request: Request) -> dict[str, Any]:
         "https": request.url.scheme == "https",
         "auth": {
             "enabled": auth.enabled,
-            "password": bool(auth.password_hash),
+            "password": bool(auth.owner_password_hash),
             "client": getattr(request.state, "auth", "unknown"),
         },
     }

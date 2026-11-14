@@ -40,7 +40,7 @@ from urllib.parse import quote
 import pytest
 from playwright.sync_api import Browser, Page, expect
 
-from src.auth import hash_password
+from src.password import hash_password
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface

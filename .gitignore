@@ -29,3 +29,6 @@ test-results/
 /.claude/skills/*
 !/.claude/skills/verify-task-os/
 .proof/
+
+# The app password hash (src/password.py)
+config/app_password.json

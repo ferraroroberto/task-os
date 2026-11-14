@@ -27,8 +27,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts._password_prompt import prompt_new_password  # noqa: E402
-from src.auth import hash_password  # noqa: E402
 from src.config import CONFIG_PATH, load_config, save_team_password_hash  # noqa: E402
+from src.password import hash_password  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

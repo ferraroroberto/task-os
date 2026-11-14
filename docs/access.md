@@ -17,11 +17,11 @@ tray.bat --restart
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\gen_token.py                # writes auth.token into config/config.json (created from the sample if missing)
-& .\.venv\Scripts\python.exe scripts\set_password.py             # optional: a memorable secret to type instead (prompts twice, no echo; PBKDF2 hash stored, never the password)
+& .\.venv\Scripts\python.exe -m src.password set                # optional: a memorable secret to type instead (prompts twice, no echo; PBKDF2 hash stored, never the password)
 tray.bat --restart                                               # config is read at startup
 ```
 
-`gen_token.py --force` rotates the token and signs every device out at once (the cookie *is* the token); `--clear` goes back to loopback-only. `set_password.py --clear` removes the password. Failed and successful sign-ins are logged with the client address (and the member's id) in `data/logs/task-os.log`.
+`gen_token.py --force` rotates the token and signs every device out at once (the cookie *is* the token); `--clear` goes back to loopback-only. The password is the app password every fleet app shares (the vendored `src/password.py`): any non-empty password works and its hash lives in `config/app_password.json` (gitignored). Until it has been set, an older `auth.password_hash` in `config/config.json` still signs in; after, that value is ignored and can be deleted. Failed and successful sign-ins are logged with the client address (and the member's id) in `data/logs/task-os.log`.
 
 **One token per person.** Those two secrets are the **install owner's** — the first entry of `people` (or of `time.people` while there is no `people` block). Every other member gets their own, so the credential itself says who signed in and each one revokes on its own:
 
@@ -31,7 +31,7 @@ tray.bat --restart                                               # config is rea
 tray.bat --restart
 ```
 
-Both refuse an id that is not a member, and the owner's id (whose secrets are the plain `auth.token` / `auth.password_hash`). Only a newly generated token is ever printed. Removing someone from the members list makes their token fail the gate (`401`) at the next restart. Who a request is — that member on any client, this PC with no credential = the owner — is `GET /api/me`, and comments and activity with no explicit author are signed with that member's name (the owner keeps their current name). A person binding never grants access by itself: it is read only from a credential the gate already accepted.
+Both refuse an id that is not a member, and the owner's id (whose token is the plain `auth.token` and whose password is `python -m src.password set`). Only a newly generated token is ever printed. Removing someone from the members list makes their token fail the gate (`401`) at the next restart. Who a request is — that member on any client, this PC with no credential = the owner — is `GET /api/me`, and comments and activity with no explicit author are signed with that member's name (the owner keeps their current name). A person binding never grants access by itself: it is read only from a credential the gate already accepted.
 
 **Setting up a second phone.** On the host: `gen_token.py --person <their id>` and `tray.bat --restart`. On their phone: if it was signed in with the owner's shared secret, Settings → **Phone access** → **Sign out on this device**; then at the sign-in card paste *their* token (or type their password). Settings → **Phone access** now reads **Signed in as <their name>**.
 

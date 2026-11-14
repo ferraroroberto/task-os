@@ -55,7 +55,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
 scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
-                          gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py, set_team_password.py,
+                          gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py (members), set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic; domain folders archive/ · tasks/ · search/ · issues/ · runtime/ · gates/ · imports/ keep the flat top under 40 modules) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic
                           email-archiver index) + e2e/ (Playwright, one story test per step; its tests tag every surface they open with
