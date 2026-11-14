@@ -245,6 +245,27 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     # deleted below: pulling it out from under the in-flight GETs aborts
     # them, and WebKit reports an aborted request as a page error.
     page.wait_for_load_state("networkidle")
+    # A swipe can be set to a one-tap snooze (Settings → Row actions): left
+    # then snoozes with no sheet, the same toast and Undo. The chips that do
+    # this on a desktop row are not drawn on a phone, whose meta line has no
+    # width to spare.
+    expect(row.locator(".trow-snooze")).to_be_hidden()
+    page.evaluate("localStorage.setItem('task-os.rowactions', JSON.stringify({left: 'snooze-tomorrow'}))")
+    page.reload()
+    row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
+    expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
+    row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
+    toast = page.locator(".toast-success").last
+    expect(toast).to_contain_text("Snoozed to")
+    expect(sheet).to_be_hidden()
+    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["starts"]
+    toast.locator(".toast-action").tap()
+    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
+    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["starts"] is None
+    page.evaluate("localStorage.removeItem('task-os.rowactions')")
+    page.reload()
+    page.wait_for_load_state("networkidle")
     return row
 
 

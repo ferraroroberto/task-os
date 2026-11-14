@@ -15,6 +15,9 @@
  *             own tap target, so the whole line opens the task
  *   verb      Move — the one visible action, on a fine pointer: the
  *             date sheet, because re-dating is most of the owner's edits
+ *   snooze    on Today only: two one-tap chips, Tomorrow and Next week —
+ *             the snooze action with its phrase already chosen, so the most
+ *             repeated triage act is one tap with the same toast and Undo
  *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
  *             move, snooze, priority, folder, AI, issue). Right-
  *             click and the keyboard's menu key open the same menu
@@ -230,6 +233,39 @@ function moveVerb(t, menu) {
 }
 
 /**
+ * Snooze chips: the ⋯ menu's Snooze…, with the two push-outs that are most of
+ * its picks already chosen. They commit through the view's menu, so a tap is
+ * the same write, toast and Undo as the sheet's option; the sheet (⋯, `S`)
+ * still holds the rest of the phrases and the date picker. Shown on Today's
+ * open rows only — a view passes `snooze: true` — and on a fine pointer only:
+ * a phone row has no width to spare (its meta line is on a budget), so there
+ * the same two actions are what a swipe can be set to.
+ */
+function snoozeChips(t, menu) {
+  const group = document.createElement('span');
+  group.className = 'trow-snooze';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Snooze ' + t.title);
+  // each chip carries its own constant usage id, so the two are counted apart
+  const fill = function (btn, actionId, phrase, label) {
+    btn.type = 'button';
+    btn.className = 'trow-snooze-chip';
+    btn.textContent = label;
+    btn.title = 'Snooze until ' + phrase;
+    btn.setAttribute('aria-label', 'Snooze ' + t.title + ' until ' + phrase);
+    btn.addEventListener('click', function () { menu.snooze(t, actionId, btn); });
+  };
+  const tomorrow = document.createElement('button');
+  tomorrow.dataset.track = 'row.snooze-tomorrow';
+  fill(tomorrow, 'snooze-tomorrow', 'tomorrow', 'Tomorrow');
+  const nextWeek = document.createElement('button');
+  nextWeek.dataset.track = 'row.snooze-next-week';
+  fill(nextWeek, 'snooze-next-week', 'next week', 'Next week');
+  group.append(tomorrow, nextWeek);
+  return group;
+}
+
+/**
  * The row's ⋯ kebab, wired to the view's menu. A right-click on the row (and
  * the menu key, which the browser sends as the same event) opens that menu
  * too — on a fine pointer only: a touch long-press is kept free.
@@ -258,19 +294,21 @@ function rowKebab(t, menu, li) {
  *          onToggleSelect?: (id:number)=>void,
  *          menu?: {attach: (t:object, kebab:HTMLElement)=>void,
  *                  toggleDone: (t:object, el:HTMLElement)=>void,
- *                  move: (t:object, el:HTMLElement)=>void}}} handlers
+ *                  move: (t:object, el:HTMLElement)=>void,
+ *                  snooze: (t:object, actionId:string, el:HTMLElement)=>void}}} handlers
  *          menu (optional) is the view's row menu (rowmenu.js) — the kebab,
  *          the circle and the Move verb all commit through it
  * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
- *          selected?: boolean, swipe?: boolean, verb?: boolean}} [opts]
+ *          selected?: boolean, swipe?: boolean, verb?: boolean, snooze?: boolean}} [opts]
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on: the checkbox replaces the
  *                       circle, the kebab goes, and the row gesture ticks;
  *          swipe      = false where the view owns the sideways swipe (the Board);
  *          verb       = false where a column is too narrow for a third square
- *                       (the Board's columns; the ⋯ menu and `d` still move)
+ *                       (the Board's columns; the ⋯ menu and `d` still move);
+ *          snooze     = true where the row wears the one-tap snooze chips (Today)
  */
 export function taskRow(t, handlers, opts) {
   const o = opts || {};
@@ -317,6 +355,7 @@ export function taskRow(t, handlers, opts) {
   main.addEventListener('click', activate);
   li.appendChild(main);
 
+  if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.snooze) li.appendChild(snoozeChips(t, handlers.menu));
   if (handlers.menu && !o.selectable && !CLOSED[t.status] && o.verb !== false) li.appendChild(moveVerb(t, handlers.menu));
   if (handlers.menu && !o.selectable) li.appendChild(rowKebab(t, handlers.menu, li));
   // A touch swipe runs a row action (swipe.js) — an open task's row
