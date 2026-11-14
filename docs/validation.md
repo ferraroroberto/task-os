@@ -54,6 +54,7 @@ Check the capture with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism
 | 30 | [Today as a split view (#336)](validation/story-30-today-split.md) | inside `tests/e2e/test_story_04_triage.py` (`_walk_today_split`) | verified in the browser (e2e desktop) · first due task pre-selected (#393) | 2026-10-10 |
 | 31 | [Every open task within Today's reach (#350)](validation/story-31-today-horizons.md) | inside `tests/e2e/test_story_05_board.py` (`_walk_today_horizons`) | verified in the browser (e2e desktop) · scope switch + overline headers added (#391) · header exceptions, Later / No date folded (#393) | 2026-10-10 |
 | 32 | [Track time and compare shares (#457)](validation/story-32-time.md) | `tests/e2e/test_story_32_time.py` · `tests/test_time.py` · `tests/test_import_time_prototype.py` | verified in the browser (e2e desktop + phone, scripted walk) · logs as the signed-in person, no device picker (#475) · **two real devices on the live install = owner's checklist** | 2026-10-18 |
+| 33 | [Import a SharePoint list with its comments and history (#668)](validation/story-33-sharepoint-import.md) | `tests/imports/test_import_sharepoint.py` · `tests/test_schema.py` | verified on synthetic data (dry run, import, re-run, drawer read on a disposable instance) · **the export script on a live site and a real-list import = owner's checklist** | 2026-11-14 |
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 

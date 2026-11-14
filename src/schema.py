@@ -117,6 +117,11 @@ Version history:
        — the member whose task it is, a ``people`` id and never the ``person_id``
        contact a task is about. NULL reads as the install owner, so every
        existing row keeps working untouched.
+    21 comments.origin gains 'sharepoint' — the SharePoint list importer's
+       comments. SQLite cannot widen a CHECK in place, so the step rebuilds
+       ``comments`` (ids kept, so ``comments_fts`` stays valid) and recreates
+       its indexes and FTS triggers; v2's DDL stays frozen on the shipped
+       origin list.
 
 Contract (plan §04): a task with children is a project; ``coding`` ⇔ an
 ``issue_refs`` row exists (enforced in ``src/tasks_repo.py``); every due /
@@ -179,7 +184,7 @@ CAPTURE_STATUS = TaskStatus.INBOX.value
 TASK_PRIORITIES = ("high", "medium", "low", "none")
 RECURRENCES = ("daily", "weekly", "monthly", "quarterly", "yearly")
 LINK_KINDS = ("web", "folder", "email", "issue", "ai")
-COMMENT_ORIGINS = ("ui", "cli", "md", "notion", "import", "sync")
+COMMENT_ORIGINS = ("ui", "cli", "md", "notion", "import", "sync", "sharepoint")
 ISSUE_PROVIDERS = ("github", "gitlab")
 
 
@@ -200,6 +205,21 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+"""
+
+# The three triggers that keep the external-content ``comments_fts`` in step
+# with ``comments``: v2 creates them, and v21 recreates them after its rebuild
+# drops the table (and with it, the triggers).
+_COMMENTS_FTS_TRIGGERS = """CREATE TRIGGER comments_ai AFTER INSERT ON comments BEGIN
+    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
+END;
+CREATE TRIGGER comments_ad AFTER DELETE ON comments BEGIN
+    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
+END;
+CREATE TRIGGER comments_au AFTER UPDATE OF body ON comments BEGIN
+    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
+    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
+END;
 """
 
 _V2 = f"""
@@ -250,7 +270,7 @@ CREATE TABLE comments (
     author  TEXT,
     ts      TEXT NOT NULL,
     body    TEXT NOT NULL,
-    origin  TEXT NOT NULL DEFAULT 'ui' CHECK (origin IN ({_in(COMMENT_ORIGINS)}))
+    origin  TEXT NOT NULL DEFAULT 'ui' CHECK (origin IN ('ui', 'cli', 'md', 'notion', 'import', 'sync'))
 );
 CREATE INDEX idx_comments_task ON comments(task_id, ts);
 
@@ -300,17 +320,7 @@ CREATE VIRTUAL TABLE comments_fts USING fts5(
     content='comments', content_rowid='id',
     tokenize='unicode61 remove_diacritics 2'
 );
-CREATE TRIGGER comments_ai AFTER INSERT ON comments BEGIN
-    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
-END;
-CREATE TRIGGER comments_ad AFTER DELETE ON comments BEGIN
-    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
-END;
-CREATE TRIGGER comments_au AFTER UPDATE OF body ON comments BEGIN
-    INSERT INTO comments_fts(comments_fts, rowid, body) VALUES ('delete', old.id, old.body);
-    INSERT INTO comments_fts(rowid, body) VALUES (new.id, new.body);
-END;
-"""
+{_COMMENTS_FTS_TRIGGERS}"""
 
 _V3 = """
 ALTER TABLE tasks ADD COLUMN external_id TEXT;
@@ -669,11 +679,35 @@ ALTER TABLE tasks ADD COLUMN owner TEXT;
 CREATE INDEX idx_tasks_owner ON tasks(owner);
 """
 
+# comments.origin gains 'sharepoint'. A CHECK cannot be altered in place, so the
+# table is rebuilt (nothing references ``comments``, so dropping it cascades
+# nothing — the ``DROP TABLE tasks`` hazard of v9 does not arise). Ids are kept,
+# which keeps the external-content ``comments_fts`` rows valid; the drop takes
+# the three FTS triggers and both indexes with it, so they are recreated. v2
+# above keeps the shipped origin list as a literal.
+_V21 = f"""
+CREATE TABLE comments_new (
+    id          INTEGER PRIMARY KEY,
+    task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    author      TEXT,
+    ts          TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    origin      TEXT NOT NULL DEFAULT 'ui' CHECK (origin IN ({_in(COMMENT_ORIGINS)})),
+    external_id TEXT
+);
+INSERT INTO comments_new(id, task_id, author, ts, body, origin, external_id)
+    SELECT id, task_id, author, ts, body, origin, external_id FROM comments;
+DROP TABLE comments;
+ALTER TABLE comments_new RENAME TO comments;
+CREATE INDEX idx_comments_task ON comments(task_id, ts);
+CREATE UNIQUE INDEX idx_comments_external_id ON comments(external_id) WHERE external_id IS NOT NULL;
+{_COMMENTS_FTS_TRIGGERS}"""
+
 #: version → SQL script that upgrades from version - 1.
 MIGRATIONS: dict[int, str] = {
     1: _V1, 2: _V2, 3: _V3, 4: _V4, 5: _V5, 6: _V6, 7: _V7, 8: _V8, 9: _V9, 10: _V10, 11: _V11,
     12: _V12, 13: _V13, 14: _V14, 15: _V15, 16: _V16, 17: _V17, 18: _V18, 19: _V19,
-    20: _V20,
+    20: _V20, 21: _V21,
 }
 
 #: The version a freshly migrated database carries.

@@ -53,10 +53,11 @@ from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
-from src.db import connect, connect_read_only, db_path, init_db
+from src.db import connect, db_path, init_db
+from src.imports.common import ensure_person, fmt_counts, plan_against
 from src.logger import configure_logging
 from src.runtime import files as runtime_files
-from src.schema import SCHEMA_VERSION, TaskStatus, current_version
+from src.schema import TaskStatus
 
 logger = logging.getLogger("import_notion")
 
@@ -466,26 +467,11 @@ def _also_linked_id(task_external_id: str, person_external_id: str) -> str:
     return f"{task_external_id}/also-linked/{person_external_id}"
 
 
-def _ensure_person(conn: sqlite3.Connection, external_id: str, name: str, counts: Counter[str]) -> int:
-    row = repo.find_by_external_id(conn, "people", external_id)
-    if row:
-        return int(row["id"])
-    same = conn.execute(
-        "SELECT id FROM people WHERE external_id IS NULL AND name = ? COLLATE NOCASE", (name,)
-    ).fetchone()
-    if same:
-        repo.update_person(conn, int(same["id"]), external_id=external_id)
-        counts["people_linked"] += 1
-        return int(same["id"])
-    counts["people_created"] += 1
-    return int(repo.create_person(conn, name, external_id=external_id)["id"])
-
-
 def apply_import(conn: sqlite3.Connection, mapped: list[MappedTask]) -> Counter[str]:
     """Write every mapped page through the repo; returns the per-outcome counters."""
     counts: Counter[str] = Counter()
     for m in mapped:
-        person_id = _ensure_person(conn, *m.person, counts) if m.person else None
+        person_id = ensure_person(conn, *m.person, counts) if m.person else None
         task, outcome = repo.import_task(
             conn, external_id=m.external_id, title=m.title, actor=ACTOR,
             created_at=m.created_at, updated_at=m.updated_at, done_at=m.done_at,
@@ -570,25 +556,21 @@ def summarize(mapped: list[MappedTask]) -> dict[str, Any]:
     }
 
 
-def _fmt(d: dict[str, Any]) -> str:
-    return " · ".join(f"{k} {v}" for k, v in sorted(d.items(), key=lambda kv: (-kv[1], str(kv[0])))) or "—"
-
-
 def render_report(summary: dict[str, Any], plan: Counter[str], *, dry_run: bool, db: Path, applied: Counter[str] | None = None) -> str:
     head = "Notion import — DRY RUN (nothing written)" if dry_run else "Notion import — applied"
     lines = [
         head,
         f"  target db  : {db}",
         f"  pages      : {summary['pages']}",
-        f"  status     : {_fmt(summary['status'])}   (source: {_fmt(summary['source_status'])})",
-        f"  priority   : {_fmt(summary['priority'])}   (source: {_fmt(summary['source_priority'])})",
-        f"  recurrence : {_fmt(summary['recurrence'])}   (source: {_fmt(summary['source_recurrent'])})",
+        f"  status     : {fmt_counts(summary['status'])}   (source: {fmt_counts(summary['source_status'])})",
+        f"  priority   : {fmt_counts(summary['priority'])}   (source: {fmt_counts(summary['source_priority'])})",
+        f"  recurrence : {fmt_counts(summary['recurrence'])}   (source: {fmt_counts(summary['source_recurrent'])})",
         f"  due dates  : {summary['due_set']} set",
         f"  links      : {summary['with_link']} pages with a link",
         f"  body       : {summary['with_body']} pages with content",
         f"  comments   : {summary['comments_total']} on {summary['pages_with_comments']} pages (longest thread {summary['longest_thread']})",
         f"  people     : {summary['people_distinct']} distinct in relations · {summary['pages_with_person']} pages get a person · {summary['also_linked_comments']} extra relations → 'also linked' comments",
-        f"  notes      : {_fmt(summary['notes'])}",
+        f"  notes      : {fmt_counts(summary['notes'])}",
     ]
     for kind, values in summary["unmapped_values"].items():
         lines.append(f"               {kind}: {', '.join(values)}")
@@ -657,22 +639,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = summarize(mapped)
 
     if args.dry_run:
-        # Read-only look at an existing DB (plain connect, SELECTs only — no
-        # migration, no pragma, no file created) so the plan can say what a
-        # write would create / update / leave alone.
-        conn: sqlite3.Connection | None = None
-        if target_db.exists():
-            conn = connect_read_only(target_db)
-            conn.row_factory = sqlite3.Row
-            if current_version(conn) < SCHEMA_VERSION:
-                logger.info("ℹ️ dry run: %s is at schema v%d (< %d) — plan assumes nothing imported yet", target_db, current_version(conn), SCHEMA_VERSION)
-                conn.close()
-                conn = None
-        try:
-            plan = plan_import(conn, mapped)
-        finally:
-            if conn:
-                conn.close()
+        plan = plan_against(target_db, plan_import, mapped)
         print(render_report(summary, plan, dry_run=True, db=target_db))
         return 0
 

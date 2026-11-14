@@ -60,6 +60,7 @@ One line each; the full reference for a feature is the page it links to.
 | [API](docs/api.md) | The JSON API under `/api/`, one error envelope everywhere |
 | [Phone access, sign-in and team mode](docs/access.md) | Tailscale HTTPS, token / password sign-in, the installable PWA, and a shared install for a small team |
 | [Importing from Notion](docs/import-notion.md) | The one-shot, idempotent Notion importer |
+| [Importing from SharePoint](docs/sharepoint-import.md) | The one-shot, idempotent SharePoint list importer: items, comments with replies, and the history of append-changes columns, from a browser export |
 
 ## Reference
 

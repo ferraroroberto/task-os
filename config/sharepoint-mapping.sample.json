@@ -1,0 +1,11 @@
+{
+  "title": "Title",
+  "description": "Details",
+  "due": "DueDate",
+  "status": { "column": "Status", "values": { "Not started": "todo", "In progress": "todo", "Completed": "done" } },
+  "priority": { "column": "Priority", "values": { "(1) High": "high", "(2) Normal": "medium", "(3) Low": "low" } },
+  "person": { "column": "Contact" },
+  "owner": { "column": "AssignedTo", "members": { "Person A": "p1", "Person B": "p2" } },
+  "append_columns": ["Updates"],
+  "text_columns": ["Details", "Updates"]
+}
