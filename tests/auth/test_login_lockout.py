@@ -5,6 +5,7 @@ reaches Telegram) and a temp config; every secret here is synthetic."""
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from pathlib import Path
 
@@ -148,3 +149,14 @@ def test_alerts_config_falls_back_to_none_when_telegram_is_half_filled() -> None
     assert cfgmod._alerts_config({"notifier": "carrier-pigeon"}).notifier == "none"
     full = {"notifier": "Telegram", "telegram_bot_token": "x", "telegram_chat_id": "1"}
     assert cfgmod._alerts_config(full).notifier == "telegram"
+
+
+def test_no_alert_channel_is_reported_unconfigured(rig, caplog: pytest.LogCaptureFixture) -> None:
+    app, clock, _ = rig
+    app.state.login_lockout = build_lockout(None, clock=clock)
+    with caplog.at_level(logging.WARNING, logger="src.login_alert"):
+        with TestClient(app, client=PHONE) as c:
+            for _ in range(3):
+                _wrong(c)
+            _drain_alert_threads()
+    assert "unconfigured" in caplog.text and "3 wrong passwords" in caplog.text
