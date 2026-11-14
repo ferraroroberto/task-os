@@ -16,7 +16,7 @@ shape       = "webapp-tray"
 # apps for the modules the scaffold does not ship yet). sha = the source repo
 # commit the copy was taken from; /propagate-vendored hash-verifies + bumps.
 [vendored]
-nav            = { src = "app/webapp/static/_vendored/nav",           sha = "9e6be351ac1e711c9c82fb8987e2405b0a1c28fe", dest = "app/webapp/static/_vendored/nav" }
+nav            = { src = "app/webapp/static/_vendored/nav",           sha = "cb9fff9130453c781146f2cdf5083d83fb43b0df", dest = "app/webapp/static/_vendored/nav" }
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
 card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
 button         = { src = "app/webapp/static/_vendored/button",        sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "app/webapp/static/_vendored/button" }
@@ -50,8 +50,8 @@ box_lock_gate = { src = "scripts/box_lock_gate.ps1", sha = "de5b351ecbc58f0908bc
 instruction_ratchet = { src = "scripts/instruction_ratchet.py", sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "scripts/instruction_ratchet.py" }
 doc_refs_ratchet = { src = "scripts/doc_refs_ratchet.py", sha = "a68f6e49393f0ef0b94ab3c79f4338a50d89fa49", dest = "scripts/doc_refs_ratchet.py" }
 dead_code_ratchet = { src = "scripts/dead_code_ratchet.py", sha = "4d0b0ff30e23eb95c73c4b0b1517ec6a43d3a836", dest = "scripts/dead_code_ratchet.py" }
-conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "ab06ad732591d4edab00774ee93a455189c14577", dest = "scripts/conventions_ratchet.py" }
-conventions_readers = { src = "scripts/conventions_readers.py", sha = "ab06ad732591d4edab00774ee93a455189c14577", dest = "scripts/conventions_readers.py" }
+conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "cb9fff9130453c781146f2cdf5083d83fb43b0df", dest = "scripts/conventions_ratchet.py" }
+conventions_readers = { src = "scripts/conventions_readers.py", sha = "cb9fff9130453c781146f2cdf5083d83fb43b0df", dest = "scripts/conventions_readers.py" }
 conventions_state = { src = "scripts/conventions_state.py", sha = "4d0b0ff30e23eb95c73c4b0b1517ec6a43d3a836", dest = "scripts/conventions_state.py" }
 runtime_write_ratchet = { src = "scripts/runtime_write_ratchet.py", sha = "4a06ca84fc9c5005d4be7fa505c9d0e7c0472dba", dest = "scripts/runtime_write_ratchet.py" }
 runtime_write_resolve = { src = "scripts/runtime_write_resolve.py", sha = "5505185c5f4b10eea5ab268e7b6676c6c54340c4", dest = "scripts/runtime_write_resolve.py" }
@@ -178,7 +178,7 @@ baseline = ".dead-code-ratchet-baseline.json"
 [conventions_ratchet]
 enabled  = true
 baseline = ".conventions-ratchet-baseline.json"
-rules    = ["no-window", "logging-not-print", "no-drive-path", "password-input-vendored", "login-lockout", "subprocess-timeout", "state-literal", "state-set-repeat", "state-write"]
+rules    = ["no-window", "logging-not-print", "no-drive-path", "password-input-vendored", "nav-standalone-head", "login-lockout", "subprocess-timeout", "state-literal", "state-set-repeat", "state-write"]
 
 # Outbound HTTP goes through the pooled session, not a bare requests call.
 [[conventions_ratchet.must_use]]
