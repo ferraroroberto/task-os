@@ -48,3 +48,17 @@ Three defects found on the walk, all invisible to the tests, all fixed:
 Result: **verified** (e2e desktop + phone legs · unit across repo, API, CLI, mirror, parser · headed desktop walk in both themes, including undo, the CLI on both backends and a hand-edited mirror round-trip) · real phone = owner's checklist. Date: 2026-08-30.
 
 **2026-10-05 (#350):** the Table view (grid and Tree) was removed. The Tree that kept sleeping tasks on screen is gone; the Board under the `deferred` pill is where they show, with their marker. Shot 3 (the Table under that pill) is retired with the Table.
+
+## Today's snooze chips (2026-11-14)
+
+**Story:** snoozing is the most repeated triage act, so a Today row on a mouse or trackpad carries it as one click, and a swipe can be set to it on a phone.
+
+**Steps:** hover a Today row on the desktop → *Tomorrow* and *Next week* appear over the end of the title, left of Move and the kebab → click *Tomorrow* → the toast reads `Snoozed to …` with Undo, the task leaves the list and `starts` is tomorrow → Undo restores it → the same with *Next week* (`starts` a week out) → move the pointer off the row and the chips are gone, the row back at the action-row budget. On the phone the chips are not drawn (the meta line has no width to spare); Settings → Row actions can set a swipe to *Snooze until tomorrow* / *Snooze until next week*, which snoozes with no sheet and the same toast and Undo.
+
+**Expected:** the chips commit through the shared action runner (`snooze-tomorrow`, `snooze-next-week` in `actions.js`), so the write, the due-moves-with-start rule, the toast and Undo are the sheet's. Every open Today row has them; the Board's rows, closed rows and Select mode do not. Both chips carry a `data-track` id.
+
+**Screenshots:** [chips on the hovered row](../screenshots/story-13-starts-snooze-3-desktop.png); the Today shots that were taken with the pointer over a row now show them (`story-05-board-6`, `story-05-board-13`, `story-13-starts-snooze-4`, `story-29-row-actions-1`, `story-30-today-split-2`, `story-31-today-horizons-1`), and Settings → Row actions lists the two new actions (`story-29-row-actions-2`).
+
+**Test:** `tests/e2e/test_story_04_triage.py::test_desktop_triage` — `_snooze_from_the_chips` (desktop hover, both chips, Undo, hidden at rest) and the phone assertion that no chip is drawn; `tests/e2e/test_story_07_phone.py` — a swipe left set to `snooze-tomorrow` snoozes and Undo restores; `tests/test_row_actions.py::test_the_one_tap_snoozes_plan_undo_and_say_what_snooze_says`.
+
+**Result:** the unit legs and both e2e legs pass in Chromium and WebKit with synthetic touch pointers on the disposable seeded instance, and the full gate is green. **Not verified:** a headed walk by hand, the swipe's feel on a real phone and on real hardware, and the chips in dark mode (the colours are the app's own tokens, no dark-specific shot was taken). Date: 2026-11-14.

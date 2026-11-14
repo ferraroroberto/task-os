@@ -558,7 +558,46 @@ def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today)
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     undone = _get(base, f"/api/tasks/{task_id}")
     assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores both
+    _snooze_from_the_chips(page, base, shots, task_id, today)
     return menu, row, task_id, toast
+
+
+def _snooze_from_the_chips(page: Page, base: str, shots: Path, task_id: int, today) -> None:
+    """The two chips on a Today row snooze in one click, with the sheet's toast and Undo.
+
+    Screenshots: docs/screenshots/story-13-starts-snooze-3-desktop.png
+    """
+    dismiss_toasts(page)
+    row = _trow(page, "School enrolment forms", "#paneToday")
+    chips = row.locator(".trow-snooze-chip")
+    expect(chips).to_have_count(2)
+    row.hover()
+    expect(chips).to_have_text(["Tomorrow", "Next week"])
+    # laid out for the hovered row only, over the title's end, so a resting row keeps the action-row budget
+    page.mouse.move(0, 0)
+    expect(row.locator(".trow-snooze")).to_be_hidden()
+    row.hover()
+    expect(row.locator(".trow-snooze")).to_be_visible()
+    shot(page, shots / "story-13-starts-snooze-3-desktop.png")
+    before = _get(base, f"/api/tasks/{task_id}")
+    chips.first.click()
+    toast = page.locator(".toast-success").last
+    expect(toast).to_contain_text("Snoozed to")
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] == (today + timedelta(days=1)).isoformat()
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_have_count(0)
+    toast.locator(".toast-action").click()
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
+    undone = _get(base, f"/api/tasks/{task_id}")
+    assert (undone["starts"], undone["due"]) == (None, before["due"])
+    row = _trow(page, "School enrolment forms", "#paneToday")
+    row.hover()
+    row.get_by_role("button", name=re.compile("until next week")).click()
+    expect(page.locator(".toast-success").last).to_contain_text("Snoozed to")
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] == (today + timedelta(days=7)).isoformat()
+    page.locator(".toast-success").last.locator(".toast-action").click()
+    expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
+    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    page.mouse.move(0, 0)
 
 
 def _row_menu_in_full(page: Page, shots: Path, menu, row):
@@ -864,6 +903,10 @@ def _phone_snooze_target(page: Page, base: str, shots: Path):
     assert_min_target(page.locator("#paneToday .today-group .trow-kebab:visible"))
     assert_no_overlap(page.locator("#paneToday .today-group .trow-main:visible, "
                                    "#paneToday .today-group .trow-kebab:visible"))
+    # the desktop's snooze chips are not drawn on a touch screen: the row's meta
+    # line is on a budget a phone cannot spare width from (story 07 walks the
+    # swipe that does the same in one gesture)
+    expect(page.locator("#paneToday .today-group .trow-snooze-chip:visible")).to_have_count(0)
     today_row.locator(".trow-kebab").tap()
     page.locator(".row-menu [data-action='snooze']").tap()
     menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
