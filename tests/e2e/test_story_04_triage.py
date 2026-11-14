@@ -758,7 +758,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
 
 def _phone_board_rows(page: Page, shots: Path, rows, watering) -> None:
     """The Board's Todo column as the shared rows, with 44px targets."""
-    expect(watering.locator(".trow-project")).to_have_text("Side project: garden-bot")
+    expect(watering.locator(".trow-pill-project")).to_have_text("Side project: garden-bot")
     expect(watering.locator(".trow-due")).to_be_visible()
     expect(watering).to_have_attribute("data-status", "todo")
     expect(rows.locator(".trow-status")).to_have_count(0)

@@ -305,7 +305,7 @@ def _status_columns(page: Page, base: str, shots: Path) -> dict:
     # and the person are not on it: the row menu opens each link.
     quotes = _card(page, "Get three quotes")
     expect(quotes).to_have_attribute("data-status", "todo")
-    expect(quotes.locator(".trow-project")).to_have_text("Home renovation")
+    expect(quotes.locator(".trow-pill-project")).to_have_text("Home renovation")
     expect(quotes.locator(".trow-person")).to_have_count(0)
     kitchen = _card(page, "Kitchen")
     expect(kitchen.locator(".trow-meta .trow-folder")).to_have_count(0)

@@ -47,7 +47,7 @@ import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
 import { icon } from './_vendored/icons/icons.js';
 import { addDays, fmtDay, parseISO, todayISO } from './format.js';
-import { CLOSED, sortItems, taskRow } from './rows.js';
+import { CLOSED, sortBoardItems, taskRow } from './rows.js';
 
 export const BOARD_COLUMNS = [
   { key: 'inbox', label: 'Inbox', short: 'Inbox' },
@@ -176,7 +176,9 @@ export function mountBoard(handlers, barHost) {
    * @param {Array<object>} items   the shared filtered list in the scope (done = done today unless the done pill is pressed)
    * @param {object} filters        {status: [...], sort}
    * @param {{selectable?: boolean, isSelected?: (id:number)=>boolean,
-   *          ai?: object, triaging?: boolean, suggestions?: object}} [opts]
+   *          ai?: object, triaging?: boolean, suggestions?: object,
+   *          assignees?: Object<string,string>}} [opts]  `assignees` (member id → name)
+   *          is passed only in the Everyone view; it turns on the assignee pill
    * @returns {{inbox: number, overdue: number, today: number}}  the header line's counts
    */
   function render(items, filters, opts) {
@@ -202,7 +204,10 @@ export function mountBoard(handlers, barHost) {
       today: open.filter(function (x) { return x.due === t; }).length,
     };
 
-    const rowOpts = { selectable: !!o.selectable, isSelected: o.isSelected, suggestions: o.suggestions, mode: mode };
+    const rowOpts = {
+      selectable: !!o.selectable, isSelected: o.isSelected, suggestions: o.suggestions, mode: mode,
+      assignees: o.assignees,
+    };
     let shown = 0;
     // Only the mode on screen holds rows: a task is one row in the pane, so
     // the keymap, the selection marks and a new task's focus find that one.
@@ -452,8 +457,8 @@ function laneSection(lane) {
 /** Fill one lane's parts `p` from its entry: heading, count, strip and rows
  *  (a `tail` closes the list under its own sub-heading). */
 function paintLane(p, lane, sort, handlers, rowOpts) {
-  const rows = sortItems(lane.rows, sort);
-  const tail = lane.tail && lane.tail.rows.length ? sortItems(lane.tail.rows, sort) : [];
+  const rows = sortBoardItems(lane.rows, sort);
+  const tail = lane.tail && lane.tail.rows.length ? sortBoardItems(lane.tail.rows, sort) : [];
   const total = rows.length + tail.length;
   p.section.dataset.drop = lane.drop == null ? '' : lane.drop;
   p.section.setAttribute('aria-label', lane.label);
@@ -511,6 +516,10 @@ function buildRow(t, handlers, opts) {
     swipe: week,
     // a lane has no width for a third square beside the circle and the kebab
     verb: false,
+    // the project leads the title as a pill (rows are no longer clustered by
+    // it); the assignee joins it in the Everyone view only, where it varies
+    pills: true,
+    assignee: o.assignees ? o.assignees[t.owner] : undefined,
   });
   if (o.selectable) return li;
   const suggestion = o.suggestions ? o.suggestions[t.id] : null;

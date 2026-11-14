@@ -131,7 +131,7 @@ def _file_under_the_project(page: Page, base: str, shots: Path, drawer, sensor):
     assert moved["parent_id"] == bot_id and moved["activity"][0]["field"] == "parent"
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Side project: garden-bot"])
     expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
-    expect(row.locator(".trow-project")).to_have_text("Side project: garden-bot")
+    expect(row.locator(".trow-pill-project")).to_have_text("Side project: garden-bot")
     # one context name per row (#392): the project now, the code is the drawer's
     expect(row.locator(".trow-code")).to_have_count(0)
     dismiss_toasts(page)

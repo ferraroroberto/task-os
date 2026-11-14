@@ -69,6 +69,31 @@ export function sortItems(items, sort) {
   return items.slice().sort(compareItems(sort));
 }
 
+// A–Z that ignores case and reads digit runs as numbers ("Step 2" before "Step 10").
+const NAME_ORDER = { sensitivity: 'base', numeric: true };
+function cmpName(a, b) { return (a || '').localeCompare(b || '', undefined, NAME_ORDER); }
+
+/**
+ * The Board's order inside one lane: due day first, then — within a day —
+ * the rows with no project, then the projects A–Z, then the title A–Z. The
+ * project never clusters rows across days; it only breaks a tie on one.
+ * A task with no ancestor has no project.
+ */
+export function compareDueProjectTitle(a, b) {
+  const pa = a.root ? a.root.title : '';
+  const pb = b.root ? b.root.title : '';
+  // an empty name sorts first by itself, so "no project first" needs no branch
+  return cmpDue(a, b) || cmpName(pa, pb) || cmpName(a.title, b.title) || (a.id - b.id);
+}
+
+/** A Board lane's rows: the due-day order above for the default sort; a sort
+ *  the owner picked in the filter sheet keeps its own meaning. */
+export function sortBoardItems(items, sort) {
+  return !sort || sort === 'due'
+    ? items.slice().sort(compareDueProjectTitle)
+    : sortItems(items, sort);
+}
+
 export function sortLabel(sort) {
   const s = SORTS.find(function (x) { return x[0] === sort; });
   return s ? s[1] : 'due date';
@@ -143,9 +168,12 @@ function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
  * The link glyphs (folder, AI conversation, issue) and the person are not on
  * the row: the row menu opens each link, the drawer shows all of them.
  * @param {object} t
- * @param {{hideProject?: boolean, hideStatus?: boolean}} [opts]
+ * @param {{hideProject?: boolean, hideStatus?: boolean, pills?: boolean, assignee?: string}} [opts]
  *        hideProject: the view's sub-header names the project (Today's groups);
- *        hideStatus: the view already says the status (the Board's columns)
+ *        pills: a title pill names the project, so a task with a project has no
+ *        context name here (never its issue code in the project's place);
+ *        hideStatus: the view already says the status (the Board's columns);
+ *        assignee: a neutral pill naming who the task is assigned to (Everyone views)
  */
 export function metaLine(t, opts) {
   const o = opts || {};
@@ -175,17 +203,42 @@ export function metaLine(t, opts) {
     meta.appendChild(metaPart('state trow-ctx', null, t.status, 'Status ' + t.status));
   }
   if (t.priority === 'high') meta.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
-  const project = t.root && !o.hideProject ? t.root.title : '';
+  const project = t.root && !o.hideProject && !o.pills ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
   // three levels down reads "Home renovation › Kitchen" on hover)
   if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
-  else if (t.code) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
+  else if (t.code && !(o.pills && t.root)) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
+  // who the task is assigned to, where the view shows everyone's (the Board's Everyone scope)
+  if (o.assignee) {
+    const who = pill('assignee', o.assignee, 'neutral', 'Assigned to ' + o.assignee);
+    who.classList.add('trow-ctx');
+    meta.appendChild(who);
+  }
   if (t.child_count) meta.appendChild(metaPart('kids trow-count', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
   if (t.comment_count) {
     meta.appendChild(metaPart('comments trow-count', 'message-square', String(t.comment_count),
       t.last_comment ? t.last_comment.author + ': ' + (t.last_comment.body || '') : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments')));
   }
   return meta;
+}
+
+/** A pill: the vendored chip, its text in a label that ellipsizes before the
+ *  pill crowds its neighbours out. */
+function pill(cls, text, tone, title) {
+  const el = toneChip('', tone);
+  el.classList.add('trow-pill', 'trow-pill-' + cls);
+  const label = document.createElement('span');
+  label.className = 'chip-label';
+  label.textContent = text;
+  el.appendChild(label);
+  el.title = title;
+  return el;
+}
+
+/** The project pill that leads a row's title where the view asks for it (the
+ *  Board); null for a task with no project. */
+function projectPill(t) {
+  return t.root ? pill('project', t.root.title, 'accent', breadcrumbText(t.breadcrumb) || t.root.title) : null;
 }
 
 /**
@@ -300,7 +353,12 @@ function rowKebab(t, menu, li) {
  *          the circle and the Move verb all commit through it
  * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
- *          selected?: boolean, swipe?: boolean, verb?: boolean, snooze?: boolean}} [opts]
+ *          selected?: boolean, swipe?: boolean, verb?: boolean, snooze?: boolean,
+ *          pills?: boolean, assignee?: string}} [opts]
+ *          pills      = true where the row leads its title with the project as a pill
+ *                       (the Board; the project then leaves the meta line);
+ *          assignee   = the assigned person's name, a pill on the meta line — passed only
+ *                       where the view shows everyone's tasks;
  *          extra      = a line that wraps under the row (a Search snippet);
  *          tag        = the element name ('li' default, 'div' for a non-list host);
  *          selectable = Select mode is on: the checkbox replaces the
@@ -349,7 +407,16 @@ export function taskRow(t, handlers, opts) {
   title.className = 'trow-title action-row-title';
   title.textContent = t.title;
   title.title = t.title;
-  main.appendChild(title);
+  const lead = o.pills ? projectPill(t) : null;
+  if (lead) {
+    // the project pill leads the title on one line; the title keeps the ellipsis
+    const head = document.createElement('span');
+    head.className = 'trow-head';
+    head.append(lead, title);
+    main.appendChild(head);
+  } else {
+    main.appendChild(title);
+  }
   const meta = metaLine(t, o);
   if (meta.childNodes.length) main.appendChild(meta);
   main.addEventListener('click', activate);

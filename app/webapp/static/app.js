@@ -539,6 +539,15 @@ function selectOpts() {
   return { selectable: selection.isActive(), isSelected: selection.has };
 }
 
+/** member id → name while the whose switch is on Everyone (it exists only with
+ *  two or more members); undefined in Mine, where every row is the viewer's. */
+function assigneeNames() {
+  if (state.filters.whose !== 'everyone' || state.members.length < 2) return undefined;
+  const names = {};
+  state.members.forEach(function (m) { names[m.id] = m.name; });
+  return names;
+}
+
 function renderBoardPane() {
   if (!board) {
     board = mountBoard({
@@ -558,6 +567,7 @@ function renderBoardPane() {
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   state.boardCounts = board.render(boardItems(), state.filters, Object.assign({
     ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
+    assignees: assigneeNames(),
   }, selectOpts()));
   menus.board.endRender();
   app.renderHeadStatus();

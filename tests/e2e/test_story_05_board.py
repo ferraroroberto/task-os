@@ -262,6 +262,8 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
     assert page.evaluate(stored) == "everyone"
     expect(row).to_be_visible()
+    # Everyone names who each row is assigned to, as a pill after the project
+    expect(row.locator(".trow-pill-assignee")).to_have_text("Person 2")
     expect(switch.locator(".segmented-item")).to_have_text(["Mine", "Everyone"])
     _clear_toasts(page)
     shot(page, shots / "story-05-board-16-desktop.png")
@@ -276,6 +278,9 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     board("/?whose=mine")
     expect(pressed).to_have_text("Mine")
     expect(row).to_have_count(0)
+    # Mine is always the viewer: its rows carry the project pill, never an assignee pill
+    expect(page.locator("#paneBoard .trow-pill-project").first).to_be_visible()
+    expect(page.locator("#paneBoard .trow-pill-assignee")).to_have_count(0)
     assert page.evaluate(stored) == "everyone"
     # 5. …the journal follows: a closed task of the second member's is off it on
     #    Mine and on it under Everyone (the seed's, handed over and back)
