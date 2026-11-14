@@ -48,7 +48,7 @@ structure_layout = { src = "scripts/structure_layout.py", sha = "dae6225912362ec
 structure_band = { src = "scripts/structure_band.py", sha = "3b708fd3c54ab7b93b08d489406c405762c83c41", dest = "scripts/structure_band.py" }
 box_lock_gate = { src = "scripts/box_lock_gate.ps1", sha = "de5b351ecbc58f0908bc1cbdcdf76fd41f36005d", dest = "scripts/box_lock_gate.ps1" }
 instruction_ratchet = { src = "scripts/instruction_ratchet.py", sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "scripts/instruction_ratchet.py" }
-doc_refs_ratchet = { src = "scripts/doc_refs_ratchet.py", sha = "4a06ca84fc9c5005d4be7fa505c9d0e7c0472dba", dest = "scripts/doc_refs_ratchet.py" }
+doc_refs_ratchet = { src = "scripts/doc_refs_ratchet.py", sha = "a68f6e49393f0ef0b94ab3c79f4338a50d89fa49", dest = "scripts/doc_refs_ratchet.py" }
 dead_code_ratchet = { src = "scripts/dead_code_ratchet.py", sha = "4d0b0ff30e23eb95c73c4b0b1517ec6a43d3a836", dest = "scripts/dead_code_ratchet.py" }
 conventions_ratchet = { src = "scripts/conventions_ratchet.py", sha = "ab06ad732591d4edab00774ee93a455189c14577", dest = "scripts/conventions_ratchet.py" }
 conventions_readers = { src = "scripts/conventions_readers.py", sha = "ab06ad732591d4edab00774ee93a455189c14577", dest = "scripts/conventions_readers.py" }
@@ -140,6 +140,7 @@ repeated_text_words = 12
 claude_md_max_lines = 120
 [doc_refs_ratchet]
 enabled    = true
+trees    = true
 baseline   = ".doc-refs-ratchet-baseline.json"
 # The docs name the ports of the services this app talks to on purpose: the local LLM hub
 # the whisper server and folder-explorer (search). The app's own :8448 resolves from `port` above. The archive and
