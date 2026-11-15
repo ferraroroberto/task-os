@@ -249,7 +249,7 @@ def _drawer_folder_editor(page: Page, base: str, shots: Path, inst, kitchen):
     field.fill(str(inst.od / "admin" / "car"))                              # backslashes, absolute
     field.press("Enter")
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fadmin%2Fcar")
-    expect(page.locator(".toast")).to_contain_text("Stored as {onedrive}/admin/car")
+    expect(page.locator("#toast")).to_contain_text("Stored as {onedrive}/admin/car")
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/admin/car"
     shot(page, shots / "story-09-folders-4-desktop.png")
     return drawer, field, folder_pill

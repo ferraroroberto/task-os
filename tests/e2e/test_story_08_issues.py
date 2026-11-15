@@ -57,7 +57,7 @@ def _sync_now_lands_the_issue(page: Page, base: str, shots: Path, todo_before):
     expect(page.locator("#paneToday")).to_be_visible()   # the landing tab (#319)
     expect(page.locator(".home-head #issuesSync")).to_have_count(0)
     _sync_now(page)
-    expect(page.locator(".toast-success").last).to_contain_text("Issues synced: 3 open · 2 new")
+    expect(page.locator("#toast")).to_contain_text("Issues synced: 3 open · 2 new")
     page.click("nav.tabs .tab[data-tab='board']")
     expect(page.locator("#paneBoard")).to_be_visible()
     # the status columns, every task in them: a synced issue's task is
@@ -126,7 +126,7 @@ def _file_under_the_project(page: Page, base: str, shots: Path, drawer, sensor):
     picker.locator(".parent-filter").fill("garden-bot")
     picker.locator(f".parent-opt[data-id='{bot_id}']").click()
     expect(picker).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("under Side project: garden-bot")
+    expect(page.locator("#toast")).to_contain_text("under Side project: garden-bot")
     moved = _get(base, f"/api/tasks/{sensor['id']}")
     assert moved["parent_id"] == bot_id and moved["activity"][0]["field"] == "parent"
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Side project: garden-bot"])
@@ -146,7 +146,7 @@ def _closed_issue_closes_the_task(page: Page, base: str, shots: Path, drawer, in
     # 4. The issue is closed on the forge → Sync now → the task is done, the log says sync.
     inst.set_issue("example/garden-bot", 14, state="closed")
     _sync_now(page)
-    expect(page.locator(".toast-success").last).to_contain_text("1 closed")
+    expect(page.locator("#toast")).to_contain_text("1 closed")
     done = _get(base, f"/api/tasks/{sensor['id']}")
     assert done["status"] == "done" and done["done_at"] and done["issue_ref"]["state"] == "closed"
     acts = [(a["field"], a["old_value"], a["new_value"], a["actor"]) for a in done["activity"][:2]]
@@ -192,7 +192,7 @@ def _create_issue_from_a_task(page: Page, base: str, shots: Path, drawer, inst, 
     shot(page, shots / "story-08-issues-5-desktop.png")
     repo_input.fill("example/garden-bot")
     panel.locator(".issue-create button").click()
-    expect(page.locator(".toast-success").last).to_contain_text("Created example/garden-bot#15")
+    expect(page.locator("#toast")).to_contain_text("Created example/garden-bot#15")
     expect(panel.locator(".chip-issue")).to_have_text("garden-bot#15")
     expect(panel.locator(".issue-state")).to_have_text("open")
     expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#15")

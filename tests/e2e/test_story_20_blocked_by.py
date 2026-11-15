@@ -165,7 +165,7 @@ def _cycle_guard_in_the_ui(page, base: str, shots: Path, drawer) -> None:
     expect(sel_b).to_have_value(str(a_id))
     shot(page, shots / "story-20-blocked-by-5-desktop.png")
     blocked_sec.locator(".blocker-form button").click()
-    expect(page.locator(".toast-error").last).to_contain_text("cycle")
+    expect(page.locator("#toast.error")).to_contain_text("cycle")
     assert _get(base, f"/api/tasks/{b_id}")["blocked"] is False
     assert _get(base, f"/api/tasks/{b_id}")["blocked_by"] == []
 

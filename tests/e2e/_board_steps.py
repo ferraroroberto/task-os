@@ -87,7 +87,7 @@ def _lane_of(due: str | None) -> str:
 def _clear_toasts(page: Page) -> None:
     """Toasts stack and outlive a step, so each assertion below reads only its
     own: drop what is on screen before pressing the next key."""
-    page.evaluate("document.getElementById('toasts').replaceChildren()")
+    page.evaluate("(() => { const t = document.getElementById('toast'); t.hidden = true; t.replaceChildren(); })()")
 
 
 def _open_issue_from_menu(page: Page, row, fragment: str) -> None:
@@ -245,12 +245,12 @@ def _week_lane_drag_and_clear(page: Page, base: str, shots: Path) -> None:
     assert not changed, changed                                   # only the due date moved
     act = after["activity"][0]
     assert (act["field"], act["old_value"], act["new_value"]) == ("due", before["due"], saturday), act
-    expect(page.locator(".toasts")).to_contain_text("Due Sat 12 Sep")
+    expect(page.locator("#toast")).to_contain_text("Due Sat 12 Sep")
     shot(page, shots / "story-05-board-14-desktop.png")
-    page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
+    page.locator("#toast").get_by_role("button", name=re.compile("^Undo")).click()
     # The "Undone" toast is raised after the inverse write lands: waiting on it
     # keeps the API read below off a slower runner's race (#411).
-    expect(page.locator(".toasts")).to_contain_text("Undone")
+    expect(page.locator("#toast")).to_contain_text("Undone")
     expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
     assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
     dismiss_toasts(page)
@@ -263,11 +263,11 @@ def _week_lane_drag_and_clear(page: Page, base: str, shots: Path) -> None:
     ceiling.locator(".trow-kebab").click()
     page.locator(".row-menu [data-action='change-date']").click()
     page.locator(".snooze-pop .snooze-menu[data-field='due'] .snooze-clear").click()
-    expect(page.locator(".toasts")).to_contain_text("Due date cleared")
+    expect(page.locator("#toast")).to_contain_text("Due date cleared")
     assert _get(base, f"/api/tasks/{cid}")["due"] is None
     expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(1)
-    page.locator(".toasts").get_by_role("button", name=re.compile("^Undo")).click()
-    expect(page.locator(".toasts")).to_contain_text("Undone")
+    page.locator("#toast").get_by_role("button", name=re.compile("^Undo")).click()
+    expect(page.locator("#toast")).to_contain_text("Undone")
     assert _get(base, f"/api/tasks/{cid}")["due"] == ceiling_due
     expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(0)
     dismiss_toasts(page)
@@ -559,7 +559,7 @@ def _move_verb_apply(page: Page, base: str, sheet, sid: int) -> None:
         sheet.locator(".snooze-opt[data-phrase='tomorrow']").click()
     assert written.value.ok, f"the Move write answered {written.value.status}"
     expect(page.locator(f"#paneToday section.today .today-group .trow[data-id='{sid}']")).to_have_count(0)
-    moved = page.locator(".toast-success").last
+    moved = page.locator("#toast")
     expect(moved).to_contain_text("Due ")
     assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow
     moved.locator(".toast-action").click()
@@ -580,7 +580,7 @@ def _complete_recurring_then_done(page: Page, base: str, shots: Path, today: dic
     assert _get(base, f"/api/tasks/{vid}")["recurrence"] == "weekly"
     expect(vocab.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
     vocab.locator(".trow-done").click()
-    expect(page.locator(".toasts")).to_contain_text("Completed")
+    expect(page.locator("#toast")).to_contain_text("Completed")
     expect(page.locator(".toast-action").first).to_have_text("Undo (Z)")
     next_due = (E2E_ANCHOR + timedelta(days=7)).isoformat()
     expect(page.locator(f"#paneToday section.today .trow[data-id='{vid}']")).to_have_count(0)
@@ -744,7 +744,7 @@ def _bulk_move_and_partial_failure(page: Page, base: str, shots: Path, ids: list
     page.locator(f"#paneBoard .trow[data-id='{ids[1]}'] .trow-check").check()
     page.evaluate(f"fetch('/api/tasks/{ids[1]}', {{method: 'DELETE'}})")
     page.locator("#boardBulk .bulk-status").select_option("todo")
-    expect(page.locator(".toasts")).to_have_text(re.compile(rf"1 updated .* 1 failed .*#{ids[1]}"))
+    expect(page.locator("#toast")).to_have_text(re.compile(rf"1 updated .* 1 failed .*#{ids[1]}"))
     assert _get(base, f"/api/tasks/{ids[0]}")["status"] == "todo"
     shot(page, shots / "story-05-board-12-desktop.png")
 

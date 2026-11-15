@@ -65,6 +65,8 @@
   <link rel="stylesheet" href="/static/styles/overlays.css">
   <link rel="stylesheet" href="/static/styles/archive.css">
   <link rel="stylesheet" href="/static/styles/time.css">
+  <link rel="stylesheet" href="/static/_vendored/toast/toast.css">
+  <link rel="stylesheet" href="/static/_vendored/build-watch/build-watch.css">
   <title>task-os</title>
 </head>
 <body>
@@ -980,9 +982,9 @@
        as they change. Built per open by filters.js for the tab that asked. -->
   <dialog data-track-view="filters" class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>
 
-  <!-- Toasts: user-initiated command results / errors (design.md "Async data
-       & feedback") — one polite live region, assertive for errors. -->
-  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <!-- Toast: user-initiated command results / errors (design.md "Async data
+       & feedback"), the vendored _vendored/toast skeleton. -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="/static/app.js"></script>
 </body>

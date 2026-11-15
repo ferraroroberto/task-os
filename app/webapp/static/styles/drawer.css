@@ -1,4 +1,4 @@
-/* The task drawer, the issue panel, toasts and the touch-target floor. Linked after the file before it in index.html: rule order is the cascade. */
+/* The task drawer, the issue panel and the touch-target floor. Linked after the file before it in index.html: rule order is the cascade. */
 
 /* ------------------------------------------------------------ drawer */
 /* Desktop: fixed right-hand panel below the sticky nav (level with the page
@@ -368,49 +368,6 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
 .settings-sheet .button-surface .icon, .settings-sheet .button-ghost .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .is-busy .icon { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ------------------------------------------------------------ toasts */
-.toasts {
-  position: fixed;
-  right: var(--gap);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--gap));
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  max-width: min(420px, calc(100vw - 2 * var(--gap)));
-  pointer-events: none;
-}
-.toast {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 10px var(--gap);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow);
-  color: var(--fg);
-  font-size: var(--font-label);
-  pointer-events: auto;
-}
-.toast-error { border-color: var(--deficit-border-soft); color: var(--danger); }
-.toast-success { color: var(--success); }
-.toast span { flex: 1 1 auto; color: var(--fg); }
-/* The optional inline action (the snooze undo) — a ghost button: transparent
-   on a hairline, never a tinted fill competing with the toast's own surface. */
-.toast-action {
-  flex: none;
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: var(--font-caption);
-  font-weight: 600;
-  white-space: nowrap;
-}
-@media (pointer: coarse) { .toast-action { min-height: var(--row-sm); } }
-@media (pointer: coarse) and (max-width: 520px) {
-  .toasts { left: var(--gap); right: var(--gap); bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); max-width: none; }
-}
 
 /* ------------------------------------------------- 44px targets on touch */
 @media (pointer: coarse) {
