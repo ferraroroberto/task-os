@@ -246,10 +246,7 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     # them, and WebKit reports an aborted request as a page error.
     page.wait_for_load_state("networkidle")
     # A swipe can be set to a one-tap snooze (Settings → Row actions): left
-    # then snoozes with no sheet, the same toast and Undo. The chips that do
-    # this on a desktop row are not drawn on a phone, whose meta line has no
-    # width to spare.
-    expect(row.locator(".trow-snooze")).to_be_hidden()
+    # then snoozes with no sheet, the same toast and Undo.
     page.evaluate("localStorage.setItem('task-os.rowactions', JSON.stringify({left: 'snooze-tomorrow'}))")
     page.reload()
     row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")

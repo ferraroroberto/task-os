@@ -158,7 +158,7 @@ def test_messages_name_the_result_the_server_answered() -> None:
 
 
 def test_the_one_tap_snoozes_plan_undo_and_say_what_snooze_says() -> None:
-    """The Today chips and a swipe run a fixed-phrase snooze: same write, undo and toast as the sheet's pick."""
+    """A swipe or menu entry set to a fixed-phrase snooze: same write, undo and toast as the sheet's pick."""
     tasks = [PLAIN, OTHER]
     snoozed = dict(PLAIN, starts="2026-10-02")
     got = _call_js([

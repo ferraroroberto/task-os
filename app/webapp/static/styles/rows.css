@@ -75,6 +75,12 @@
   .trow-head > .trow-pill-project { display: none; }
   .trow-meta.action-row-meta > .trow-pill-project-compact { display: inline-flex; }
 }
+/* Below ~260px the row's main button is too narrow for the due, a count and a
+   pill's minimum width at once, and the count would be squeezed out of the box:
+   the figures win and the project is read in the drawer. */
+@container lane (max-width: 259px) {
+  .trow-meta.action-row-meta > .trow-pill-project-compact { display: none; }
+}
 .trow-meta .trow-pill-project-compact { padding: 0 5px; font-size: inherit; line-height: 1.35; }
 .trow-meta.action-row-meta > .trow-pill-project-compact.trow-ctx:not(:first-child)::before { content: none; }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
@@ -108,6 +114,8 @@
 /* a squeezed pill keeps an initial and its ellipsis instead of shrinking to a blank chip */
 .trow-meta.action-row-meta > .trow-pill-project-compact, .trow-meta.action-row-meta > .trow-pill-assignee { min-width: 2.4em; }
 .trow-meta.action-row-meta > .trow-pill-assignee.trow-ctx:not(:first-child)::before { content: none; }
+/* a count is a figure an ellipsis must never cut (the vendored meta tail's rule): it keeps its width, the context name gives way */
+.trow-meta.action-row-meta > .trow-count { flex: none; }
 .trow-count { display: inline-flex; align-items: center; gap: 2px; }
 .trow-count .icon { vertical-align: 0; }
 .trow-recur { margin-right: 2px; }
@@ -118,45 +126,6 @@
    touch screen swipes the row left for the same date sheet, and the ⋯ menu
    holds Move… everywhere (WCAG 2.5.1). */
 @media (pointer: coarse) { .trow-move { display: none; } }
-/* Snooze chips (rows.js `snoozeChips`, Today only): Tomorrow and Next week as
-   two quiet text buttons laid over the end of the title, left of Move and the
-   kebab. They are an accelerator, not a resting control: not laid out at all
-   until the row is hovered, holds focus or is the keyboard's target, so the
-   row keeps the action-row budget (toggle, one extra, kebab) and nothing
-   shifts under the cursor (they sit over the row, they take no width from
-   it). A touch screen draws none — a phone row has no width to spare, its
-   meta line is on a budget — and its one-gesture snooze is a swipe set to
-   the same two actions. The ⋯ menu and `S` stay the keyboard's way. */
-.trow-snooze {
-  display: none;
-  position: absolute;
-  top: 50%;
-  right: calc(2 * var(--row-sm) + 4px);
-  transform: translateY(-50%);
-  z-index: 1;
-  align-items: center;
-  gap: 2px;
-  padding-left: var(--space-md);
-  background: linear-gradient(to right, transparent, var(--card-2) var(--space-md));
-}
-.trow-snooze-chip {
-  min-height: var(--control-h);
-  padding: 0 var(--space-sm);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--accent-text);
-  font: inherit;
-  font-size: var(--font-body-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.trow-snooze-chip:hover { background: var(--accent-soft); }
-.trow-snooze-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (pointer: fine) {
-  .trow:is(:hover, :focus-within, .is-key-target) .trow-snooze { display: inline-flex; }
-}
 /* The completion circle (the vendored .action-row-fav): outline at rest, the
    check when closed. Done reads as success, not the favourite's attention. */
 /* The vendored action-row and icon-button colour the toggle 2-5 classes deep

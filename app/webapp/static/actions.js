@@ -64,9 +64,9 @@ export function nextPriority(p) {
 }
 
 // -------------------------------------------------------------- actions
-/** A snooze with its phrase already chosen — the Today row's chips and a
- *  swipe set to it commit in one gesture, with `snooze`'s plan, undo and
- *  toast, so a push-out means the same write wherever it is reached. */
+/** A snooze with its phrase already chosen — a swipe or a ⋯ menu entry set to
+ *  it (Settings → Row actions) commits in one gesture, with `snooze`'s plan,
+ *  undo and toast, so a push-out means the same write wherever it is reached. */
 function snoozeUntil(id, phrase, label) {
   return {
     id: id, key: null, kbd: null, icon: 'clock', label: label, hint: null,

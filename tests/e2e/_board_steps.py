@@ -294,7 +294,11 @@ def _status_columns(page: Page, base: str, shots: Path) -> dict:
     assert counts["done"] == 0                                    # seed's done tasks are old
     expect(_col(page, "done").locator(".board-col-label")).to_have_text("Done today")
     expect(_col(page, "done")).to_have_class(re.compile(r"\bis-empty\b"))   # collapsed: its header alone
-    assert boxes[3]["width"] < boxes[0]["width"] / 2, boxes
+    assert boxes[3]["width"] < boxes[0]["width"] * 0.6, boxes
+    # the lane holds its header's own width (not a sliver): the journal link sits inside the title
+    link = _col(page, "done").locator(".board-col-link").bounding_box()
+    title = _col(page, "done").locator(".board-col-title").bounding_box()
+    assert link and title and link["x"] + link["width"] <= title["x"] + title["width"] + 0.5, (link, title)
     # Status mode with Inbox tasks: Triage sits on the mode line, not in a column head
     expect(page.locator("#paneBoard .board-bar .board-triage")).to_be_visible()
     expect(page.locator("#paneBoard .board-col .board-triage")).to_have_count(0)

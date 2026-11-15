@@ -103,6 +103,8 @@
 .drawer-parent-tools { display: contents; }
 .drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--hit-min); padding: 0 var(--space-sm); border-color: transparent; background: transparent; color: var(--muted); }
 .drawer-parent-tools .button-ghost:hover { color: var(--fg); }
+/* painted 44px already (min-height above), so the invisible band would reach into the crumb line above when the tools wrap */
+.drawer-parent-tools .button-ghost::before { inset: 0; }
 .drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
 .drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
 /* A one-row textarea that grows with its content (fit via drawer.js): a long
