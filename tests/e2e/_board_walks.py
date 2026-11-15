@@ -35,7 +35,6 @@ from tests.e2e._surface import surface
 from tests.e2e._ui import board_mode, close_filter_sheet, filter_button, open_filter_sheet
 from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, scroll_to_top, shot
 
-
 #: Each Board column is a scroller of its own; story 16 frames them from their tops.
 BOARD_COLUMNS = "#paneBoard .board-col"
 
