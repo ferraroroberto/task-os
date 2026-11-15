@@ -718,8 +718,8 @@ def _bulk_status_and_owner(page: Page, base: str, shots: Path, ids: list[int]) -
     #      away, brings them back — the rest of the walk goes on under it.
     for i in (ids[0], ids[2]):
         expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(0)
-    expect(page.locator("#boardWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
-    page.locator("#boardWhose .whose-switch .segmented-item[data-whose='everyone']").click()
+    expect(page.locator("#boardOwners .owner-pill[aria-pressed='true']")).to_have_text("Mine")
+    page.locator("#boardOwners .owner-pill[data-owner='everyone']").click()
     for i in (ids[0], ids[2]):
         expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(1)
 

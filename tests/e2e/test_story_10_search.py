@@ -327,7 +327,7 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
 
     # 9. search covers everyone, whichever way Mine · Everyone is set (#477): a
     # task of the install's second member is found from the owner's phone on
-    # Mine and on Everyone, the Search tab carries no whose switch, and the
+    # Mine and on Everyone, the Search tab carries no person row, and the
     # palette finds it too. Today on Mine does not list it.
     zebra = _task_post(base, {"title": "Zebra paperwork", "owner": "p2", "due": "2026-09-07"})
     assert zebra["owner"] == "p2"
@@ -335,10 +335,10 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
         p.goto(f"{base}/?q=zebra{whose}#search")
         expect(p.locator("#paneSearch")).to_be_visible()
         expect(_task_hit(p, "Zebra paperwork")).to_be_visible()
-        expect(p.locator("#paneSearch .whose-switch")).to_have_count(0)
+        expect(p.locator("#paneSearch .owner-row")).to_have_count(0)
     p.goto(f"{base}/")
     p.click("nav.tabs .tab[data-tab='today']")
-    expect(p.locator("#todayWhose .whose-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+    expect(p.locator("#todayOwners .owner-pill[aria-pressed='true']")).to_have_text("Mine")
     expect(p.locator("#paneToday .trow[data-id]").first).to_be_visible()
     expect(p.locator("#paneToday .trow", has=p.locator(".trow-title", has_text="Zebra paperwork"))).to_have_count(0)
     p.keyboard.press("Control+K")

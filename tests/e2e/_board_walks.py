@@ -16,6 +16,7 @@ from playwright.sync_api import Browser, Page, Playwright, expect
 
 from tests.e2e._board_steps import (
     COLUMNS,
+    DESKTOP,
     PHONE,
     _assert_scope_switch_spans_row,
     _card,
@@ -32,7 +33,7 @@ from tests.e2e._geometry import (
 )
 from tests.e2e._surface import surface
 from tests.e2e._ui import board_mode, close_filter_sheet, filter_button, open_filter_sheet
-from tests.e2e.conftest import E2E_ANCHOR, _get, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, shot
 
 
 def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
@@ -664,3 +665,76 @@ def _phone_journal(page: Page, base: str, shots: Path) -> None:
     page.locator("nav.tabs .tab[data-tab='today']").tap()
     expect(page.locator("#paneJournal")).to_be_hidden()
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
+
+
+def _pick_two_people(page: Page, shots: Path, row, switch, stored: str) -> None:
+    """§ 6b of ``_walk_whose_switch``: several people at once, from Everyone.
+    ``row`` is the handed-over task's card, ``switch`` the Board's person row."""
+    item = lambda who: switch.locator(f".owner-pill[data-owner='{who}']")  # noqa: E731
+    pressed = switch.locator(".owner-pill[aria-pressed='true']")
+    # several people at once: from Everyone a tap on Person 2 is that person
+    #     alone; Mine added to it is both — each card then names its assignee,
+    #     the pick is in the URL (`owner`, the contact filter keeps `person`)
+    #     and a reload keeps it; the taps back end on Mine, no key
+    item("p2").click()
+    expect(pressed).to_have_text(["Person 2"])
+    expect(row).to_be_visible()
+    item("p1").click()
+    expect(pressed).to_have_text(["Mine", "Person 2"])
+    expect(page).to_have_url(re.compile(r"[?&]owner=p2%2Cp1"))
+    expect(row.locator(".trow-pill-assignee")).to_have_text("Person 2")
+    own = page.locator("#paneBoard .trow-pill-assignee", has_text="Person 1")
+    expect(own.first).to_be_visible()
+    page.reload()
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(pressed).to_have_text(["Mine", "Person 2"])
+    expect(row).to_be_visible()
+    _clear_toasts(page)
+    shot(page, shots / "story-05-board-20-desktop.png")
+    item("p2").click()
+    expect(pressed).to_have_text(["Mine"])      # the list form: a strict one-element match would fail mid-reload
+    expect(page).not_to_have_url(re.compile(r"[?&]owner="))
+    expect(row).to_have_count(0)
+    assert page.evaluate(stored) == "mine"
+
+
+def _walk_many_members(playwright: Playwright) -> None:
+    """An install with eight members keeps Mine, five people, "+3 more" and
+    Everyone in the row; the sheet filters by name, a tick there joins the row
+    (the pick leads it from then on), and the URL carries it through a reload.
+    A throwaway instance on the sample with six more members."""
+    from tests.conftest import write_test_config
+    from tests.fixtures.seed import seed_db
+
+    work = e2e_workdir("many-members")
+    seed_db(work / "tasks.db", E2E_ANCHOR)
+    cfg = write_test_config(work / "config.json")
+    raw = json.loads(cfg.read_text(encoding="utf-8"))
+    raw["time"]["people"] = [{"id": f"p{i}", "name": f"Person {i}"} for i in range(1, 9)]
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    with booted(work, work / "tasks.db", cfg) as base:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport=DESKTOP)
+            page.goto(f"{base}/")
+            people = page.locator("#todayOwners .owner-row")
+            expect(people.locator(".owner-pill")).to_have_text(
+                ["Mine", "Person 2", "Person 3", "Person 4", "Person 5", "Person 6", "+2 more", "Everyone"])
+            people.locator(".owner-pill[data-kind='more']").click()
+            sheet = page.locator("#ownerDialog")
+            expect(sheet).to_be_visible()
+            expect(sheet.locator(".filter-check")).to_have_count(7)
+            sheet.locator(".owner-filter").fill("person 8")
+            expect(sheet.locator(".filter-check:not([hidden])")).to_have_text(["Person 8"])
+            sheet.locator(".filter-check:not([hidden]) input").check()
+            expect(page).to_have_url(re.compile(r"[?&]owner=p1%2Cp8"))
+            sheet.locator(".filter-done").click()
+            expect(sheet).to_be_hidden()
+            expect(people.locator(".owner-pill[aria-pressed='true']")).to_have_text(["Mine", "Person 8"])
+            page.reload()
+            expect(people.locator(".owner-pill[aria-pressed='true']")).to_have_text(["Mine", "Person 8"])
+            # the picked and the recently picked lead the row, the rest wait behind it
+            expect(people.locator(".owner-pill")).to_have_text(
+                ["Mine", "Person 8", "Person 2", "Person 3", "Person 4", "Person 5", "+2 more", "Everyone"])
+        finally:
+            browser.close()

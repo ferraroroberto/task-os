@@ -27,7 +27,7 @@ import { addDays, isBlocked, isDeferred, STATUSES, todayISO } from './format.js'
 import { modalCard, onceClosed } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
-export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine' };
+export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine', owners: [] };
 /**
  * Which kind of task a list shows: the ones you
  * make, the issues the forge sync brings in, or both — labelled Tasks · Issues
@@ -40,14 +40,20 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  */
 export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
 /**
- * Whose tasks a list shows: the viewer's own or every
- * member's. A separate axis from `SCOPES`, not folded into it. One URL key,
- * `whose`, written only for Everyone (absent = Mine); the pick is also kept
- * per device under `WHOSE_KEY` and an explicit URL value wins over it. Like
- * the scope it is the segmented switch's, never the sheet's, so Clear leaves
- * it alone. The Search tab ignores it: search covers everyone.
+ * Whose tasks a list shows: the viewer's own, every member's, or the members
+ * picked on the person row (`owners`, member ids). A separate axis from
+ * `SCOPES`, not folded into it. `whose` is Mine · Everyone and one URL key,
+ * written only for Everyone (absent = Mine); the pick is also kept per device
+ * under `WHOSE_KEY` and an explicit URL value wins over it. `owners` is the
+ * several-allowed pick: one URL key, `owner` (the contact filter owns
+ * `person`), and while it is set it narrows the list in place of `whose`.
+ * Like the scope the row is a switch's, never the sheet's, so Clear leaves
+ * both alone. The Search tab ignores them: search covers everyone.
  */
 export const WHOSE = [['mine', 'Mine'], ['everyone', 'Everyone']];
+/** The row shows this many people before the rest go behind "+N more"; an
+ *  install of up to `MAX_INLINE_OWNERS + 1` members (the viewer is Mine) shows all. */
+export const MAX_INLINE_OWNERS = 5;
 export const WHOSE_KEY = 'task-os.whose';
 /**
  * The status multi-select's pseudo-value. Not a status: it flips the
@@ -101,6 +107,7 @@ export function filtersFromSearch(search, stored) {
   f.scope = SCOPES.some(function (s) { return s[0] === p.get('scope'); }) ? p.get('scope') : 'mine';
   const whose = p.get('whose');
   f.whose = WHOSE.some(function (w) { return w[0] === whose; }) ? whose : (stored === 'everyone' ? 'everyone' : 'mine');
+  f.owners = csv(p.get('owner')).filter(function (s) { return /^[\w.-]+$/.test(s); });
   return f;
 }
 
@@ -114,7 +121,8 @@ export function filtersToSearch(f) {
   if (f.q) p.set('q', f.q);
   if (f.sort && f.sort !== 'due') p.set('sort', f.sort);
   if (f.scope && f.scope !== 'mine') p.set('scope', f.scope);
-  if (f.whose === 'everyone') p.set('whose', 'everyone');
+  if (f.owners && f.owners.length) p.set('owner', f.owners.join(','));
+  else if (f.whose === 'everyone') p.set('whose', 'everyone');
   const s = p.toString();
   return s ? '?' + s : '';
 }
@@ -144,16 +152,92 @@ export function updatedBefore(window, now) {
 }
 
 /**
- * The member a Mine view narrows to, or undefined when nothing narrows: the
- * switch is on Everyone, the install has fewer than two members (no switch,
- * nothing to narrow), or the viewer is not known — an unknown never hides a
- * task. The server counts a NULL owner as the install owner's.
+ * The member id(s) a view narrows to, comma-joined, or undefined when nothing
+ * narrows: the install has fewer than two members (no row, nothing to narrow),
+ * or it is on Everyone, or Mine with the viewer not known — an unknown never
+ * hides a task. Picked people win over Mine · Everyone. The server counts a
+ * NULL owner as the install owner's.
  * @param {object} f  the filter state
  * @param {string|null} viewer  `GET /api/me`'s id
  * @param {number} members  how many members the install has
  */
 export function ownerOf(f, viewer, members) {
-  return f.whose === 'mine' && viewer && members >= 2 ? String(viewer) : undefined;
+  if (members < 2) return undefined;
+  if (f.owners && f.owners.length) return f.owners.join(',');
+  return f.whose === 'mine' && viewer ? String(viewer) : undefined;
+}
+
+/** The members the person row has pressed: the picked ones, else the viewer
+ *  under Mine, else nobody (Everyone, or a viewer that is not known). */
+export function pickedOwners(f, viewer) {
+  if (f.owners && f.owners.length) return f.owners;
+  return f.whose === 'mine' && viewer ? [String(viewer)] : [];
+}
+
+/** Does a view name each row's assignee? — more than one person is on it. */
+export function showsAssignees(f, members) {
+  if (members < 2) return false;
+  if (f.owners && f.owners.length) return f.owners.length > 1;
+  return f.whose === 'everyone';
+}
+
+/**
+ * The state after a tap on a person pill (Mine is the viewer's own pill):
+ * the pick toggles in the set the row shows, and a set that empties falls back
+ * to Mine — the row never shows nothing. The viewer alone is Mine, no key.
+ * @returns {{owners: string[], whose: string}}
+ */
+export function toggleOwner(f, id, viewer) {
+  if (!id) return { owners: [], whose: 'mine' };
+  const at = pickedOwners(f, viewer);
+  const next = at.indexOf(id) >= 0 ? at.filter(function (x) { return x !== id; }) : at.concat([id]);
+  if (!next.length || (next.length === 1 && next[0] === viewer)) return { owners: [], whose: 'mine' };
+  return { owners: next, whose: 'mine' };
+}
+
+/**
+ * Which people the row draws and how many wait behind "+N more". Up to
+ * `MAX_INLINE_OWNERS` members besides the viewer (whose pill is Mine) show in
+ * full; more and the row keeps the picked ones, then the recently picked, then
+ * the members in their order, up to `MAX_INLINE_OWNERS`. `ordered` lists every
+ * non-viewer member the same way for the searchable sheet.
+ * @param {Array<{id: string, name: string}>} members
+ * @param {string|null} viewer
+ * @param {string[]} picked  the pressed ids
+ * @param {string[]} recent  member ids, most recently picked first
+ * @returns {{shown: Array, more: number, ordered: Array}}
+ */
+export function visibleOwners(members, viewer, picked, recent) {
+  const others = members.filter(function (m) { return m.id !== viewer; });
+  const rank = function (m) {
+    const r = (recent || []).indexOf(m.id);
+    return [picked.indexOf(m.id) >= 0 ? 0 : 1, r >= 0 ? r : 1e6, members.indexOf(m)];
+  };
+  const ordered = others.slice().sort(function (a, b) {
+    const x = rank(a), y = rank(b);
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+  });
+  if (others.length <= MAX_INLINE_OWNERS) return { shown: others, more: 0, ordered: ordered };
+  const pickedCount = ordered.filter(function (m) { return picked.indexOf(m.id) >= 0; }).length;
+  const room = Math.max(MAX_INLINE_OWNERS, pickedCount);
+  return { shown: ordered.slice(0, room), more: ordered.length - room, ordered: ordered };
+}
+
+/** The device's remembered picks, newest first. */
+export const RECENT_OWNERS_KEY = 'task-os.recent-owners';
+const MAX_RECENT_OWNERS = 8;
+
+/** The remembered ids; an empty, odd or unreadable store reads as none. */
+export function storedRecentOwners(storage) {
+  try {
+    const v = JSON.parse(storage && storage.getItem(RECENT_OWNERS_KEY));
+    return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string'; }).slice(0, MAX_RECENT_OWNERS) : [];
+  } catch (_) { return []; }
+}
+
+/** `recent` with `id` moved to the front. */
+export function bumpRecentOwner(recent, id) {
+  return [id].concat((recent || []).filter(function (x) { return x !== id; })).slice(0, MAX_RECENT_OWNERS);
 }
 
 /** The /api/tasks query for a filter state (undefined = not sent; arrays join with commas).
@@ -265,7 +349,7 @@ export function activeFilterCount(f, hide) {
 
 /** Do two states draw the same sheet? (the text, the scope and whose are not on it) */
 function sameControls(a, b) {
-  const strip = { q: '', scope: 'mine', whose: 'mine' };
+  const strip = { q: '', scope: 'mine', whose: 'mine', owners: [] };
   return filtersToSearch(Object.assign({}, a, strip)) === filtersToSearch(Object.assign({}, b, strip));
 }
 
@@ -485,10 +569,10 @@ function textInput(onValue) {
   return el;
 }
 
-/** What Clear leaves: the defaults, keeping the scope, whose and — where this
+/** What Clear leaves: the defaults, keeping the scope, whose, the picked people and — where this
  *  tab has no text field of its own (Search) — the query. */
 function clearedFilters(base, keepQuery) {
-  return Object.assign({}, DEFAULT_FILTERS, { q: keepQuery ? base.q : '', scope: base.scope, whose: base.whose });
+  return Object.assign({}, DEFAULT_FILTERS, { q: keepQuery ? base.q : '', scope: base.scope, whose: base.whose, owners: base.owners });
 }
 
 /** The count's one home is the text field's placeholder. */

@@ -1,16 +1,13 @@
-/* task-os — the two view switches under a pane's strip.
+/* task-os — the scope switch under a pane's strip.
  *
  *   scope  Tasks · Issues · All   which kind of task
- *                                 ("Mine" is the other axis, `whose`)
- *   whose  Mine · Everyone        whose tasks; only
- *                                 mounted on Today and Board, and only shown
- *                                 with two or more members
+ *                                 (whose tasks is the other axis: the person
+ *                                 row, js/app/owners.js)
  *
  * The vendored segmented control (`_vendored/segmented/`, project-scaffolding)
- * over the shared filter state's `scope` and `whose` keys (filters.js
- * `SCOPES`, `WHOSE`). One builder for every list that shows either — the two
- * are separate axes and never fold into one control. The raised segment is the
- * state, so a switch says what is on and nothing above it repeats that in words.
+ * over the shared filter state's `scope` key (filters.js `SCOPES`). One builder
+ * for every list that shows it. The raised segment is the state, so a switch
+ * says what is on and nothing above it repeats that in words.
  *
  * Built once per host and updated in place, so a re-render never moves the
  * focus off the segment the user just pressed.
@@ -18,7 +15,7 @@
 
 'use strict';
 
-import { SCOPES, WHOSE } from './filters.js';
+import { SCOPES } from './filters.js';
 
 /** One switch: `key` names the data attribute and the usage-log prefix. */
 function mountSwitch(host, spec, onChange) {
@@ -64,14 +61,4 @@ function mountSwitch(host, spec, onChange) {
  */
 export function mountScope(host, onChange) {
   return mountSwitch(host, { key: 'scope', className: 'scope-switch', label: 'Kind of task', options: SCOPES }, onChange);
-}
-
-/**
- * Mount the whose switch (Mine · Everyone) into `host`.
- * @param {HTMLElement} host
- * @param {(whose: string) => void} onChange  the picked value, only when it changed
- * @returns {{render: (whose: string) => void}}
- */
-export function mountWhose(host, onChange) {
-  return mountSwitch(host, { key: 'whose', className: 'whose-switch', label: 'Whose tasks', options: WHOSE }, onChange);
 }

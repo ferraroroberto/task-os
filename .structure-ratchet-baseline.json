@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "band": {"files": 3, "functions": 12},
+  "band": {"files": 3, "functions": 11},
   "root_extras": [],
   "shape_contract": {
     "root_files": ["tasks.bat"],
