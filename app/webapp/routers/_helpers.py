@@ -28,9 +28,9 @@ ACTOR_HEADER = "X-Actor"
 def resolve_actor(request: Request, explicit: str | None = None) -> str:
     """Who is acting: an explicit body field → the ``X-Actor`` header → in
     team mode, the name this browser picked (``src.team``) → a member signed
-    in with their own token → the first configured team member (the
-    owner's name: with a top-level ``people`` block, the first member's) →
-    ``"me"``."""
+    in with their own token → this install's ``your_name`` → the first
+    configured team member (the owner's name: with a top-level ``people``
+    block, the first member's) → ``"me"``."""
     if explicit and explicit.strip():
         return explicit.strip()
     header = request.headers.get(ACTOR_HEADER, "").strip()
@@ -45,8 +45,7 @@ def resolve_actor(request: Request, explicit: str | None = None) -> str:
     viewer = getattr(request.state, "viewer", None)
     if viewer is not None and viewer.name and config is not None and viewer.id != config.owner.id:
         return viewer.name
-    people = getattr(team, "people", None) or []
-    return str(people[0]) if people else DEFAULT_ACTOR
+    return getattr(config, "install_name", None) or DEFAULT_ACTOR
 
 
 def error_response(

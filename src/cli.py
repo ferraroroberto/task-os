@@ -36,8 +36,8 @@ server over HTTP(S) when it answers
 ``http://…``; override with ``--server URL`` /
 ``TASKOS_URL``); otherwise — app down — it opens the database directly, so
 the CLI works either way. ``--local`` forces the direct path. ``--actor``
-names who is acting (activity / comment author); default = the configured
-first team member.
+names who is acting (activity / comment author); default = the install's
+``your_name``, else the configured first team member.
 
 A task whose ``--starts`` day has not arrived is *deferred*: ``tasks ls``
 leaves it out (as do the web app's Board and Today), ``tasks ls
@@ -109,7 +109,7 @@ def server_answers(base: str, timeout: float = PROBE_TIMEOUT_S) -> bool:
 
 def pick_backend(args: argparse.Namespace) -> HttpBackend | LocalBackend:
     config = load_config()
-    actor = args.actor or (config.team.people[0] if config.team.people else None)
+    actor = args.actor or config.install_name
     if args.local:
         return LocalBackend(actor)
     explicit = args.server or os.environ.get(SERVER_ENV, "").strip()
