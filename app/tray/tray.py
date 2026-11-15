@@ -13,10 +13,12 @@ reclaim-then-start owned by the shared ``tray_lifecycle.ps1``). Menu:
 
 Self-heal (vendored ``app/tray/watchdog.py``):
 the initial spawn retries with backoff on a background thread, a health
-watchdog splits *dead* (not listening → respawn, then ``rearm()`` if that
-failed) from *wedged* (listening, ``/healthz`` silent → alert only), and every
-attempt leaves a breadcrumb in ``webapp/watchdog.log`` — the only durable
-trail under ``pythonw``, which has no ``sys.stderr``.
+watchdog splits *starting* (the child this tray spawned is alive inside its
+startup window → back off), *dead* (not listening → respawn) and *wedged*
+(listening, ``/healthz`` silent → alert only), and every attempt leaves a
+breadcrumb in ``webapp/watchdog.log`` — the only durable trail under
+``pythonw``, which has no ``sys.stderr``. Every spawn goes through one
+``RespawnGuard`` so a slow boot never stacks a second copy on the port.
 """
 
 from __future__ import annotations
@@ -25,14 +27,18 @@ import logging
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 
 from app.tray.single_instance import SingleInstance
 from app.tray.watchdog import (
     DEFAULT_STARTUP_RETRY_DELAYS_S,
+    DEFAULT_STARTUP_WINDOW_S,
     BreadcrumbLog,
     HealthWatchdog,
+    RespawnGuard,
+    RespawnOutcome,
     retry_with_backoff,
 )
 from app.webapp.manager import WebappManager, WebappManagerConfig
@@ -50,6 +56,9 @@ MUTEX_NAME = r"Global\task-os-tray"
 # `clip` copies a short URL and answers in well under a second, so a child still
 # alive after 10 s is wedged and must not stall the tray menu thread.
 CLIP_TIMEOUT_S = 10
+# How often the boot thread asks a freshly spawned webapp whether it answers yet,
+# to toast "ready" without holding the spawn path (which must not block).
+READY_POLL_S = 2.0
 
 
 def _build_icon():
@@ -102,6 +111,7 @@ class TrayApp:
         self.instance = instance  # held for the tray's lifetime (named mutex)
         self.manager = WebappManager(WebappManagerConfig(port=config.port, server=config.server))
         self.wd_log = BreadcrumbLog(WATCHDOG_LOG)
+        self.guard = RespawnGuard(self.wd_log)  # owns the one webapp child this tray spawned
         self.watchdog_stop = threading.Event()
         self.watchdog = HealthWatchdog(
             probe=self.manager.is_reachable,
@@ -116,15 +126,42 @@ class TrayApp:
         self.wd_log(f"webapp start attempt {attempt} failed: {exc}")
         logger.warning("⚠️ webapp start attempt %d failed: %s", attempt, exc)
 
+    def _spawn(self) -> int:
+        """Spawn the webapp and return its pid without waiting for readiness.
+
+        A readiness wait that times out raises with the child still alive, and
+        the pid would be lost to the guard: that is how copies stacked up.
+        """
+        self.manager.start(wait=False)
+        pid = self.manager.child_pid
+        if pid is None:
+            raise RuntimeError(f"webapp child exited at once — see {self.manager.log_path}")
+        return pid
+
+    def _announce_ready(self) -> None:
+        """Toast once the spawned webapp answers, giving up after its startup window."""
+        deadline = time.monotonic() + DEFAULT_STARTUP_WINDOW_S
+        while not self.watchdog_stop.wait(READY_POLL_S):
+            if self.manager.is_reachable():
+                self.wd_log(f"webapp started at {self.manager.base_url}")
+                _notify("task-os ready", self.manager.public_url)
+                return
+            if time.monotonic() >= deadline:
+                self.wd_log("webapp not answering after its startup window")
+                return
+
     def _start(self) -> None:
         try:
+            if self.manager.is_port_in_use():
+                self.wd_log(f"webapp already listening on :{self.config.port} -- adopted")
+                _notify("task-os ready", self.manager.public_url)
+                return
             retry_with_backoff(
-                lambda: self.manager.start(wait=True),
+                lambda: self.guard.respawn(self._spawn),
                 DEFAULT_STARTUP_RETRY_DELAYS_S,
                 self._on_start_attempt_failed,
             )
-            self.wd_log(f"webapp started at {self.manager.base_url}")
-            _notify("task-os ready", self.manager.public_url)
+            self._announce_ready()
         except Exception as exc:  # noqa: BLE001 — exhausted: loud, never silent
             self.starter_exc = exc
             self.wd_log(f"webapp start FAILED permanently: {exc}")
@@ -132,6 +169,12 @@ class TrayApp:
             _notify("task-os start failed", str(exc))
 
     def _on_wedge(self, count: int) -> None:
+        if self.guard.is_starting():
+            # Our own child is alive inside its startup window: a slow boot, not
+            # a failure. Spawning again would leave two copies on the port.
+            self.wd_log(f"webapp pid {self.guard.pid} still starting ({count} failed probes)")
+            self.watchdog.rearm()
+            return
         if self.manager.is_port_in_use():
             # Wedged: listening but not answering. Alert only — auto-killing a
             # stuck process can mask what is actually wrong.
@@ -143,16 +186,19 @@ class TrayApp:
         # Dead: not listening at all — safe to respawn.
         self.wd_log(f"webapp not listening ({count} consecutive failures) -- respawning")
         try:
-            self.manager.start(wait=True)
-            self.wd_log("webapp respawned successfully")
-            _notify("task-os webapp respawned", self.manager.base_url)
+            if self.guard.respawn(self._spawn) is RespawnOutcome.SPAWNED:
+                self.wd_log("webapp respawned")
+                _notify("task-os webapp respawned", self.manager.base_url)
         except Exception as exc:  # noqa: BLE001
             self.wd_log(f"webapp respawn failed: {exc}")
             logger.error("❌ webapp respawn failed: %s", exc)
             _notify("task-os respawn failed", str(exc))
-            self.watchdog.rearm()  # try again next tick, don't go silent
+        # Re-evaluate next tick either way: a respawned child must be probed
+        # again, a failed one retried, and neither waits on a recovery edge.
+        self.watchdog.rearm()
 
     def _on_recover(self) -> None:
+        self.guard.mark_healthy()
         self.wd_log("webapp health recovered")
         logger.info("✅ webapp answering /healthz again")
         _notify("task-os webapp recovered", self.manager.base_url)
@@ -170,7 +216,14 @@ class TrayApp:
         def _do_restart() -> None:
             try:
                 _notify("task-os", "Restarting webapp…")
-                self.manager.restart(wait=True)
+                try:
+                    self.manager.restart(wait=True)
+                finally:
+                    # A readiness timeout leaves the new child alive: the guard
+                    # must know it or the next respawn stacks a copy beside it.
+                    pid = self.manager.child_pid
+                    if pid is not None:
+                        self.guard.track(pid)
                 self.wd_log("webapp restarted from tray menu")
                 _notify("task-os webapp restarted", self.manager.public_url)
             except Exception as exc:  # noqa: BLE001
