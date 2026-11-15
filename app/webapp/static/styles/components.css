@@ -252,7 +252,7 @@ a.chip:hover { text-decoration: underline; }
    its row on every width with the three segments sharing it equally (the
    control's own equal columns; no 360px cap stops it
    short of the row). The row under the strip on every width. */
-.scope-switch { width: 100%; }
+.scope-switch, .owner-switch { width: 100%; }
 /* Dark only: the switch sits on the canvas, not in a card, and there the dark
    `card` (#161b22) is DARKER than the neutral-soft track over the canvas, so
    the selected segment read sunk instead of raised; card-2 (#21262d) is
@@ -260,7 +260,8 @@ a.chip:hover { text-decoration: underline; }
    vendored file stays verbatim): the lift is the dark hairline grey #30363d,
    fg on it 11:1. The pre-paint stamp writes data-theme from the OS scheme
    when no choice is stored, so "follows the system" lands on this rule too. */
-[data-theme="dark"] .scope-switch { --card: var(--line); }
+[data-theme="dark"] .scope-switch,
+[data-theme="dark"] .owner-switch { --card: var(--line); }
 
 /* What sits under a strip: the person row on a line of its own, then Tasks ·
    Issues · All. The person row is absent with one member, and the scope then
@@ -272,54 +273,11 @@ a.chip:hover { text-decoration: underline; }
 /* Nothing in it (no tasks yet hides both): no empty flex box for the pane's gap to count. */
 .view-switches:not(:has(> :not([hidden]))) { display: none; }
 
-/* The person row: Mine · each member · +N more · Everyone as filter pills (the
-   chip geometry; a pressed one is filled). It scrolls sideways when the pills do
-   not fit, so a phone keeps one row. Each pill is a 44px touch target holding
-   the painted chip. */
-.owner-row {
-  display: flex;
-  gap: var(--space-xs);
-  padding: 2px;
-  margin: -2px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-.owner-row::-webkit-scrollbar { display: none; }
-.owner-pill {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--hit-min);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--fg);
-  font: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.owner-pill-face {
-  display: inline-block;
-  max-width: 12rem;
-  padding: 4px var(--space-md);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--neutral-soft);
-  font-size: var(--font-label);
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.owner-pill:hover .owner-pill-face { border-color: var(--accent-border-soft); }
-.owner-pill[aria-pressed="true"] .owner-pill-face {
-  background: var(--accent-fill);
-  border-color: var(--accent-fill);
-  color: var(--accent-fg);
-}
-.owner-pill:focus-visible { outline: none; }
-.owner-pill:focus-visible .owner-pill-face { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The person row is the same vendored segmented control as the scope switch
+   (`.owner-switch` shares `.scope-switch`'s width and dark lift above). A
+   member's name can be longer than its equal column, so its label (a span, so the segment's own 44px band is not clipped) clips with an
+   ellipsis instead of running into the next segment; its `title` holds the whole name. */
+.owner-switch .segmented-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* ------------------------------------------- the pane's top strip */
 /* Board / Today open with the filter reached for most — the

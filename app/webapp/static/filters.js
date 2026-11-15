@@ -45,15 +45,16 @@ export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
  * `SCOPES`, not folded into it. `whose` is Mine · Everyone and one URL key,
  * written only for Everyone (absent = Mine); the pick is also kept per device
  * under `WHOSE_KEY` and an explicit URL value wins over it. `owners` is the
- * several-allowed pick: one URL key, `owner` (the contact filter owns
+ * several-allowed pick (made on the "+N more" sheet; the row itself is
+ * single-choice): one URL key, `owner` (the contact filter owns
  * `person`), and while it is set it narrows the list in place of `whose`.
  * Like the scope the row is a switch's, never the sheet's, so Clear leaves
  * both alone. The Search tab ignores them: search covers everyone.
  */
 export const WHOSE = [['mine', 'Mine'], ['everyone', 'Everyone']];
-/** The row shows this many people before the rest go behind "+N more"; an
- *  install of up to `MAX_INLINE_OWNERS + 1` members (the viewer is Mine) shows all. */
-export const MAX_INLINE_OWNERS = 5;
+/** The person row is one segmented control, which holds at most this many
+ *  segments (Mine, the people, "+N more", Everyone); more members go behind "+N more". */
+export const MAX_OWNER_SEGMENTS = 5;
 export const WHOSE_KEY = 'task-os.whose';
 /**
  * The status multi-select's pseudo-value. Not a status: it flips the
@@ -182,9 +183,20 @@ export function showsAssignees(f, members) {
 }
 
 /**
- * The state after a tap on a person pill (Mine is the viewer's own pill):
- * the pick toggles in the set the row shows, and a set that empties falls back
- * to Mine — the row never shows nothing. The viewer alone is Mine, no key.
+ * The state after a tap on a person segment: that person alone, replacing
+ * whatever was picked. The viewer's own segment is Mine, which writes no key.
+ * @returns {{owners: string[], whose: string}}
+ */
+export function pickOwner(id, viewer) {
+  if (!id || id === viewer) return { owners: [], whose: 'mine' };
+  return { owners: [id], whose: 'mine' };
+}
+
+/**
+ * The state after a tick in the "+N more" sheet (the one place several people
+ * can be picked): the pick toggles in the set the row shows, and a set that
+ * empties falls back to Mine, so the row never shows nothing. The viewer alone
+ * is Mine, no key.
  * @returns {{owners: string[], whose: string}}
  */
 export function toggleOwner(f, id, viewer) {
@@ -196,11 +208,12 @@ export function toggleOwner(f, id, viewer) {
 }
 
 /**
- * Which people the row draws and how many wait behind "+N more". Up to
- * `MAX_INLINE_OWNERS` members besides the viewer (whose pill is Mine) show in
- * full; more and the row keeps the picked ones, then the recently picked, then
- * the members in their order, up to `MAX_INLINE_OWNERS`. `ordered` lists every
- * non-viewer member the same way for the searchable sheet.
+ * Which people the row draws and how many wait behind "+N more". The row is
+ * one segmented control of at most `MAX_OWNER_SEGMENTS` segments: Mine (the
+ * viewer), Everyone and the people between. Every non-viewer member shows when
+ * they all fit; otherwise one segment goes to "+N more" and the rest keep the
+ * picked people, then the recently picked, then the members in their order.
+ * `ordered` lists every non-viewer member the same way for the searchable sheet.
  * @param {Array<{id: string, name: string}>} members
  * @param {string|null} viewer
  * @param {string[]} picked  the pressed ids
@@ -217,10 +230,10 @@ export function visibleOwners(members, viewer, picked, recent) {
     const x = rank(a), y = rank(b);
     return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
   });
-  if (others.length <= MAX_INLINE_OWNERS) return { shown: others, more: 0, ordered: ordered };
-  const pickedCount = ordered.filter(function (m) { return picked.indexOf(m.id) >= 0; }).length;
-  const room = Math.max(MAX_INLINE_OWNERS, pickedCount);
-  return { shown: ordered.slice(0, room), more: ordered.length - room, ordered: ordered };
+  // Everyone takes a segment, and so does Mine when the viewer is known.
+  const room = MAX_OWNER_SEGMENTS - (viewer ? 2 : 1);
+  if (others.length <= room) return { shown: others, more: 0, ordered: ordered };
+  return { shown: ordered.slice(0, room - 1), more: ordered.length - (room - 1), ordered: ordered };
 }
 
 /** The device's remembered picks, newest first. */

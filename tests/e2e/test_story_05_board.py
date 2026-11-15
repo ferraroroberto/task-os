@@ -152,7 +152,7 @@ from tests.e2e._board_steps import (
     _week_lanes,
 )
 from tests.e2e._board_walks import (
-    _pick_two_people,
+    _pick_one_person,
     _walk_done_journal,
     _walk_keyboard_actions,
     _walk_many_members,
@@ -248,9 +248,9 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     The journal follows the switch. Leaves the device on Mine, the task back
     with the owner, as the rest of the story expects.
     """
-    switch = page.locator("#boardOwners .owner-row")
-    item = lambda who: switch.locator(f".owner-pill[data-owner='{who}']")  # noqa: E731
-    pressed = switch.locator(".owner-pill[aria-pressed='true']")
+    switch = page.locator("#boardOwners .owner-switch")
+    item = lambda who: switch.locator(f".segmented-item[data-owner='{who}']")  # noqa: E731
+    pressed = switch.locator(".segmented-item[aria-pressed='true']")
     row = page.locator(f"#paneBoard .trow[data-id='{handed}']")
     stored = "() => localStorage.getItem('task-os.whose')"
 
@@ -270,7 +270,7 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     expect(row).to_be_visible()
     # Everyone names who each row is assigned to, as a pill after the project
     expect(row.locator(".trow-pill-assignee")).to_have_text("Person 2")
-    expect(switch.locator(".owner-pill")).to_have_text(["Mine", "Person 2", "Everyone"])
+    expect(switch.locator(".segmented-item")).to_have_text(["Mine", "Person 2", "Everyone"])
     _clear_toasts(page)
     shot(page, shots / "story-05-board-16-desktop.png")
     # 2. the scope beside it reads Tasks · Issues · All and is its own axis
@@ -310,7 +310,7 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     expect(pressed).to_have_text("Everyone")
     expect(row).to_be_visible()
     assert page.evaluate(stored) == "mine"
-    _pick_two_people(page, shots, row, switch, stored)
+    _pick_one_person(page, shots, row, switch, stored)
     # 7. the way back: the task to the owner, the device on Mine, no key
     hand(handed, "p1")
     board("/")
@@ -340,32 +340,41 @@ def _second_member_sees_their_own(context, base: str, shots: Path, owners, title
         assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
         # 1. no picker: Today opens on their own tasks, the switch says Mine
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        people = page.locator("#todayOwners .owner-row")
-        pressed = people.locator(".owner-pill[aria-pressed='true']")
+        people = page.locator("#todayOwners .owner-switch")
+        pressed = people.locator(".segmented-item[aria-pressed='true']")
         expect(pressed).to_have_text("Mine")
         expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
         for title in ("Water the ferns", "Order paint samples"):
             expect(_today_row(page, title)).to_be_visible()
         assert owners(page) == {"p2"}
         expect(page).not_to_have_url(re.compile(r"[?&]whose="))
-        expect(people.locator(".owner-pill")).to_have_text(["Mine", "Person 1", "Everyone"])
-        assert_min_target(page.locator("#todayOwners .owner-pill, #todayScope .segmented-item"))
-        assert_no_overlap(page.locator("#todayOwners .owner-pill, #todayScope .segmented-item"))
-        _assert_labels_fit(page, "#todayOwners .owner-pill-face, #todayScope .segmented-item")
+        expect(people.locator(".segmented-item")).to_have_text(["Mine", "Person 1", "Everyone"])
+        assert_min_target(page.locator("#todayOwners .segmented-item, #todayScope .segmented-item"))
+        assert_no_overlap(page.locator("#todayOwners .segmented-item, #todayScope .segmented-item"))
+        _assert_labels_fit(page, "#todayOwners .segmented-item, #todayScope .segmented-item")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-17-phone.png")
         # 2. one tap on Everyone: both members' tasks, the choice in the URL and on the device
-        people.locator(".owner-pill[data-owner='everyone']").tap()
+        people.locator(".segmented-item[data-owner='everyone']").tap()
         expect(pressed).to_have_text("Everyone")
         expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
         page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
         assert owners(page) == {"p1", "p2"}
         shot(page, shots / "story-05-board-18-phone.png")
+        # a person is one tap too: Person 1 alone, then Everyone again for the steps below
+        people.locator(".segmented-item[data-owner='p1']").tap()
+        expect(pressed).to_have_text("Person 1")
+        expect(page).to_have_url(re.compile(r"[?&]owner=p1"))
+        page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 0")
+        assert owners(page) == {"p1"}
+        people.locator(".segmented-item[data-owner='everyone']").tap()
+        expect(pressed).to_have_text("Everyone")
+        page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
         # 3. the pick follows to the Board (one filter state) and survives a reload
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(page.locator("#boardOwners .owner-pill[aria-pressed='true']")).to_have_text("Everyone")
-        assert_min_target(page.locator("#boardOwners .owner-pill, #boardScope .segmented-item"))
-        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .owner-pill-face")
+        expect(page.locator("#boardOwners .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
+        assert_min_target(page.locator("#boardOwners .segmented-item, #boardScope .segmented-item"))
+        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .segmented-item")
         assert_no_horizontal_overflow(page)
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='today']")
@@ -386,7 +395,7 @@ def _owner_phone_is_unaffected(page: Page, base: str, shots: Path, owners, phone
         page = other.new_page()
         page.goto(f"{base}/")
         assert page.request.get(f"{base}/api/me").json()["id"] == "p1"
-        expect(page.locator("#todayOwners .owner-pill[aria-pressed='true']")).to_have_text("Mine")
+        expect(page.locator("#todayOwners .segmented-item[aria-pressed='true']")).to_have_text("Mine")
         expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
         assert owners(page) == {"p1"}
         expect(_today_row(page, "Water the ferns")).to_have_count(0)
@@ -399,9 +408,9 @@ def _owner_phone_is_unaffected(page: Page, base: str, shots: Path, owners, phone
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-        expect(page.locator("#boardOwners .owner-row")).to_be_visible()
-        assert_min_target(page.locator("#boardOwners .owner-pill, #boardScope .segmented-item"))
-        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .owner-pill-face")
+        expect(page.locator("#boardOwners .owner-switch")).to_be_visible()
+        assert_min_target(page.locator("#boardOwners .segmented-item, #boardScope .segmented-item"))
+        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .segmented-item")
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-19-phone-dark.png")
     finally:
@@ -469,11 +478,11 @@ def _walk_one_member(playwright: Playwright) -> None:
             page.goto(f"{base}/")
             expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
             expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
-            expect(page.locator(".owner-row")).to_have_count(0)
+            expect(page.locator(".owner-switch")).to_have_count(0)
             expect(page.locator("#todayOwners")).to_be_hidden()
             page.click("nav.tabs .tab[data-tab='board']")
             expect(page.locator("#boardScope .scope-switch")).to_be_visible()
-            expect(page.locator(".owner-row")).to_have_count(0)
+            expect(page.locator(".owner-switch")).to_have_count(0)
             expect(page.locator("#paneBoard .trow[data-id]").first).to_be_visible()
         finally:
             browser.close()
