@@ -462,9 +462,9 @@ def _drag_row_and_open_drawer(page: Page, base: str, shots: Path, api: dict) -> 
 
 
 def _today_due_list(page: Page, base: str, shots: Path) -> tuple:
-    """Today lists due and overdue by project. Returns today's payload, header, Soon and a row."""
-    # 6. Today: due ≤ today grouped by root project, overdue first, sorted
-    #    by due then priority within a group — recurring or not (#116).
+    """Today lists due and overdue in the Board's order. Returns today's payload, header, Soon and a row."""
+    # 6. Today: due ≤ today, overdue first, in the Board's order — recurring
+    #    or not, the date decides the position (#116).
     page.click("nav.tabs .tab[data-tab='today']")
     expect(page.locator("#paneToday")).to_be_visible()
     today = _get(base, "/api/today")
@@ -481,32 +481,36 @@ def _today_due_list(page: Page, base: str, shots: Path) -> tuple:
     open_rows = page.locator("#paneToday .trow[data-id]").count()
     expect(page.locator("#todayFilterText .filter-q")).to_have_attribute(
         "placeholder", f"Filter {open_rows} tasks…")
-    groups = page.locator("#paneToday section.today .today-group")
-    expect(groups).to_have_count(len(today["due"]))
-    titles = groups.locator(".today-group-title").evaluate_all(
-        "els => els.map(e => e.firstChild.textContent.trim())"
-    )
-    assert titles[0] == "Home renovation" and "Family admin" in titles and "No project" in titles
-    # first group holds only overdue rows
-    expect(groups.first.locator(".trow.is-overdue")).to_have_count(2)
-    fam = groups.filter(has=page.locator(".today-group-link", has_text="Family admin"))
-    fam_titles = fam.locator(".trow-title").evaluate_all("els => els.map(e => e.textContent)")
-    # both due today — the tie breaks on priority, not on the recurring
-    # "Dentist check-up" being recurring (#116: a task's schedule always
-    # decides its position, so a date/priority change actually reorders it)
-    assert fam_titles == ["School enrolment forms", "Dentist check-up"]
-    expect(fam.locator(".trow").last.locator(".trow-recur")).to_be_visible()
+    # no project sub-headers: the due rows are one flat list in the Board's
+    # order (due day, no project first, project A-Z, title A-Z) and the
+    # project is each row's leading pill
+    expect(page.locator("#paneToday .today-group-title")).to_have_count(0)
+    due_rows = page.locator("#paneToday section.today .today-list .trow[data-id]")
+    keys = due_rows.evaluate_all(
+        "els => els.map(e => [e.querySelector('.trow-due').dataset.due,"
+        " (e.querySelector('.trow-pill-project') || {textContent: ''}).textContent,"
+        " e.querySelector('.trow-title').textContent])")
+    assert keys == sorted(keys, key=lambda k: (k[0], k[1].casefold(), k[2].casefold())), keys
+    assert keys[0][0] < E2E_ANCHOR.isoformat()                     # overdue leads
+    expect(due_rows.first.locator(".trow-pill-project")).to_be_visible()
+    # both Family admin tasks are due today: the title breaks the tie, and
+    # the recurring "Dentist check-up" keeps its repeat glyph
+    fam_titles = [k[2] for k in keys if k[1] == "Family admin"]
+    assert fam_titles == ["Dentist check-up", "School enrolment forms"]
+    expect(_today_row(page, "Dentist check-up").locator(".trow-recur")).to_be_visible()
     # the ONE row here too (#46): the circle and kebab on every row, no
-    # snooze clock (#311); the project is NOT repeated on the meta line —
-    # the group already names it
+    # snooze clock (#311); the project leads as a pill, never repeated on
+    # the meta line
     school = _today_row(page, "School enrolment forms")
     expect(school).to_be_visible()
+    expect(school.locator(".trow-pill-project")).to_have_text("Family admin")
     expect(school).to_have_attribute("data-status", "todo")
     expect(school.locator(".trow-done")).to_have_attribute("aria-pressed", "false")
     expect(school.locator(".trow-kebab")).to_be_visible()
     expect(page.locator("#paneToday section.today .trow .snooze-summary")).to_have_count(0)
     expect(school.locator(".trow-person")).to_have_count(0)     # the drawer's field (#392)
     expect(page.locator("#paneToday .trow-project")).to_have_count(0)
+    expect(school.locator(".trow-pill-assignee")).to_have_count(0)   # Mine: the assignee varies nowhere
     soon = page.locator(".today-soon")
     assert soon.evaluate("el => el.open") is True                 # open by default (#253)
     # Today opens on Mine (#391): the synced issues are behind the switch,
@@ -562,7 +566,7 @@ def _move_verb_apply(page: Page, base: str, sheet, sid: int) -> None:
     ) as written:
         sheet.locator(".snooze-opt[data-phrase='tomorrow']").click()
     assert written.value.ok, f"the Move write answered {written.value.status}"
-    expect(page.locator(f"#paneToday section.today .today-group .trow[data-id='{sid}']")).to_have_count(0)
+    expect(page.locator(f"#paneToday section.today .today-list .trow[data-id='{sid}']")).to_have_count(0)
     moved = page.locator("#toast")
     expect(moved).to_contain_text("Due ")
     assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow

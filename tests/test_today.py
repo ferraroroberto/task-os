@@ -21,17 +21,18 @@ MODULE = Path(__file__).resolve().parents[1] / "app" / "webapp" / "static" / "to
 NODE = shutil.which("node")
 
 # Reads [items, today] on stdin, buckets them, and prints the counts with the
-# header line those counts produce.
+# header line those counts produce and each horizon's row ids in drawn order.
 _RUNNER = """
 const mod = await import(process.argv[1]);
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
 const [items, today] = JSON.parse(input);
 const data = mod.bucketToday(items, today);
-const rows = n => data[n].reduce((s, g) => s + g.items.length, 0);
+const ids = n => data[n].map(it => it.id);
 process.stdout.write(JSON.stringify({
   counts: data.counts, line: mod.headLine(data.counts),
-  rows: {due: rows('due'), week: rows('week'), later: rows('later'), nodate: rows('nodate')},
+  rows: {due: ids('due').length, week: ids('week').length, later: ids('later').length, nodate: ids('nodate').length},
+  ids: {due: ids('due'), week: ids('week'), later: ids('later'), nodate: ids('nodate')},
 }));
 """
 
@@ -50,8 +51,9 @@ def _today(items: list[dict]) -> dict:
     return json.loads(proc.stdout)
 
 
-def _task(i: int, due: str | None) -> dict:
-    return {"id": i, "title": f"task {i}", "due": due, "priority": "medium", "root": None}
+def _task(i: int, due: str | None, *, project: str | None = None, title: str | None = None) -> dict:
+    root = {"id": 100 + len(project), "title": project} if project else None
+    return {"id": i, "title": title or f"task {i}", "due": due, "priority": "medium", "root": root}
 
 
 def test_header_names_overdue_and_due_today_from_the_drawn_counts() -> None:
@@ -72,3 +74,26 @@ def test_nothing_due_is_a_plain_fact_not_an_exception() -> None:
     out = _today([_task(1, "2026-10-11"), _task(2, None)])
     assert out["line"] == {"text": "Nothing due today", "attention": False}
     assert out["rows"]["due"] == 0
+
+
+def test_a_horizon_is_one_flat_list_in_the_boards_order() -> None:
+    # Soon (due +1 … +7): the earlier day wins whatever the project, so Beta's
+    # task due tomorrow sits above Alpha's due in three days; inside one day
+    # the no-project row leads, then project A-Z, then the title A-Z
+    out = _today([
+        _task(1, "2026-10-13", project="Alpha"),
+        _task(2, "2026-10-11", project="Beta", title="Zed"),
+        _task(3, "2026-10-11", project="Alpha", title="Mid"),
+        _task(4, "2026-10-11", title="Loose"),
+        _task(5, "2026-10-11", project="Alpha", title="Early"),
+    ])
+    assert out["ids"]["week"] == [4, 5, 3, 2, 1]
+
+
+def test_every_horizon_is_flat_and_keeps_every_task() -> None:
+    out = _today([
+        _task(1, "2026-10-10", project="Beta"), _task(2, "2026-10-09", project="Alpha"),
+        _task(3, "2026-12-01", project="Beta"), _task(4, "2026-11-01", project="Alpha"),
+        _task(5, None, project="Beta", title="b"), _task(6, None, project="Alpha", title="a"),
+    ])
+    assert out["ids"] == {"due": [2, 1], "week": [], "later": [4, 3], "nodate": [6, 5]}

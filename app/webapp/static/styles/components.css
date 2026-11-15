@@ -237,7 +237,7 @@ a.chip:hover { text-decoration: underline; }
 /* A list's section header that only separates (Today's horizons): design.md's
    `overline` role, the one legal caps use, with its count beside it in the
    same quiet caption. Numbers are never transformed, so the count is its own
-   element. Project sub-headers stay in the label role (.today-group-title). */
+   element. The Journal's day sub-headers stay in the label role (.today-group-title). */
 .overline {
   font-size: var(--font-caption);
   font-weight: 600;
