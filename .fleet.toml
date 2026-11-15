@@ -18,16 +18,16 @@ shape       = "webapp-tray"
 [vendored]
 nav            = { src = "app/webapp/static/_vendored/nav",           sha = "cb9fff9130453c781146f2cdf5083d83fb43b0df", dest = "app/webapp/static/_vendored/nav" }
 icons          = { src = "app/webapp/static/_vendored/icons",         sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/icons" }
-card           = { src = "app/webapp/static/_vendored/card",          sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/card" }
+card           = { src = "app/webapp/static/_vendored/card",          sha = "8f15c49560adbc076d24a8a63dd671868ffa7a4e", dest = "app/webapp/static/_vendored/card" }
 button         = { src = "app/webapp/static/_vendored/button",        sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "app/webapp/static/_vendored/button" }
 modal          = { src = "app/webapp/static/_vendored/modal",         sha = "713b1d1e36989440679ec4e415ff149b14d96c81", dest = "app/webapp/static/_vendored/modal" }
 disclosure     = { src = "app/webapp/static/_vendored/disclosure",    sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/disclosure" }
 empty-state    = { src = "app/webapp/static/_vendored/empty-state",   sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/empty-state" }
 select-native  = { src = "app/webapp/static/_vendored/select-native", sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/select-native" }
-switch         = { src = "app/webapp/static/_vendored/switch",        sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/switch" }
+switch         = { src = "app/webapp/static/_vendored/switch",        sha = "8f15c49560adbc076d24a8a63dd671868ffa7a4e", dest = "app/webapp/static/_vendored/switch" }
 home-head      = { src = "app/webapp/static/_vendored/home-head",     sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "app/webapp/static/_vendored/home-head" }
 text-size      = { src = "app/webapp/static/_vendored/text-size",      sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/text-size" }
-action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "6c8ae06472edc4c7448a767656060cd2b79cefe9", dest = "app/webapp/static/_vendored/action-row" }
+action-row     = { src = "app/webapp/static/_vendored/action-row",    sha = "8f15c49560adbc076d24a8a63dd671868ffa7a4e", dest = "app/webapp/static/_vendored/action-row" }
 segmented      = { src = "app/webapp/static/_vendored/segmented",     sha = "5d460bd1d9d44eed955c5357d1c9f622f2550ad8", dest = "app/webapp/static/_vendored/segmented" }
 row-menu       = { src = "app/webapp/static/_vendored/row-menu",      sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "app/webapp/static/_vendored/row-menu" }
 page-foot      = { src = "app/webapp/static/_vendored/page-foot",     sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "app/webapp/static/_vendored/page-foot" }
