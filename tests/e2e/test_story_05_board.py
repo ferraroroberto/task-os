@@ -529,7 +529,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(dialog).to_be_hidden()
     expect(drawer).to_be_hidden()
     assert page.evaluate("location.hash") == ""
-    expect(page.locator(".toasts")).to_contain_text('Deleted "Repaint the garden fence" · 3 tasks')
+    expect(page.locator("#toast")).to_contain_text('Deleted "Repaint the garden fence" · 3 tasks')
     assert _status(page, base, f"/api/tasks/{fence}") == 404
     assert _status(page, base, f"/api/tasks/{kid}") == 404
     expect(page.locator(f"#boardHost .trow[data-id='{fence}']")).to_have_count(0)
@@ -547,7 +547,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     shot(page, shots / "story-19-delete-task-2-desktop.png")
     dialog.locator(".button-tint.danger").click()
     expect(dialog).to_be_hidden()
-    expect(page.locator(".toasts")).to_contain_text("2 tasks deleted")
+    expect(page.locator("#toast")).to_contain_text("2 tasks deleted")
     expect(page.locator(f"#boardHost .trow[data-id='{dupe}']")).to_have_count(0)
     expect(page.locator(f"#boardHost .trow[data-id='{test}']")).to_have_count(0)
     assert _status(page, base, f"/api/tasks/{dupe}") == 404

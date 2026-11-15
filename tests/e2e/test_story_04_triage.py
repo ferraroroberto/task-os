@@ -469,7 +469,7 @@ def _quick_add_with_both_dates(page: Page, base: str, shots: Path, due, starts) 
     shot(page, shots / "story-13-starts-snooze-1-desktop.png")
     quick_add.locator(".quick-add-input").press("Enter")
     expect(quick_add).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("renew insurance")
+    expect(page.locator("#toast")).to_contain_text("renew insurance")
 
     created = next(t for t in _get(base, "/api/tasks?status=deferred")["items"]
                    if t["title"] == "renew insurance")
@@ -541,7 +541,7 @@ def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today)
     menu.get_by_text("Next week", exact=True).click()
 
     next_week = (today + timedelta(days=7)).isoformat()
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     snoozed = _get(base, f"/api/tasks/{task_id}")
     assert snoozed["starts"] == next_week
@@ -573,15 +573,17 @@ def _snooze_from_the_chips(page: Page, base: str, shots: Path, task_id: int, tod
     expect(chips).to_have_count(2)
     row.hover()
     expect(chips).to_have_text(["Tomorrow", "Next week"])
-    # laid out for the hovered row only, over the title's end, so a resting row keeps the action-row budget
+    # laid out for the hovered (or focused) row only, over the title's end, so a resting row keeps the
+    # action-row budget; the closed row menu handed focus back to this row's ⋯, so rest means focus too
     page.mouse.move(0, 0)
+    page.evaluate("document.activeElement.blur()")
     expect(row.locator(".trow-snooze")).to_be_hidden()
     row.hover()
     expect(row.locator(".trow-snooze")).to_be_visible()
     shot(page, shots / "story-13-starts-snooze-3-desktop.png")
     before = _get(base, f"/api/tasks/{task_id}")
     chips.first.click()
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     assert _get(base, f"/api/tasks/{task_id}")["starts"] == (today + timedelta(days=1)).isoformat()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_have_count(0)
@@ -592,9 +594,9 @@ def _snooze_from_the_chips(page: Page, base: str, shots: Path, task_id: int, tod
     row = _trow(page, "School enrolment forms", "#paneToday")
     row.hover()
     row.get_by_role("button", name=re.compile("until next week")).click()
-    expect(page.locator(".toast-success").last).to_contain_text("Snoozed to")
+    expect(page.locator("#toast")).to_contain_text("Snoozed to")
     assert _get(base, f"/api/tasks/{task_id}")["starts"] == (today + timedelta(days=7)).isoformat()
-    page.locator(".toast-success").last.locator(".toast-action").click()
+    page.locator("#toast").locator(".toast-action").click()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
     page.mouse.move(0, 0)
@@ -632,7 +634,7 @@ def _snooze_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
     expect(picker).to_be_visible()
     picker.get_by_text("Tomorrow", exact=True).click()
     tomorrow = (today + timedelta(days=1)).isoformat()
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
     assert _get(base, f"/api/tasks/{task_id}")["starts"] == tomorrow

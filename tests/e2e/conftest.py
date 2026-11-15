@@ -668,54 +668,43 @@ def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
 
 
 def dismiss_toasts(page: Page) -> None:
-    """Clear the toast stack so the shot behind it is not a shot of the clock.
+    """Hide the toast so the shot behind it is not a shot of the clock.
 
-    A toast dies on a wall-clock timer (`toast.js`: 4.5 s, 10 s with an
-    action) that no fixture pins — `TASKOS_CLOCK` moves the *app's* now, not
-    `setTimeout`. So a capture taken while one is near its end is a coin toss
-    on how long the run took to get there, and the whole stack reflows when
-    the longest line leaves it (#166: story 24's dark report shot moved by
-    74974 px between two runs of one commit for exactly that reason). A story
-    that means to show a toast captures it while it is young, right after the
-    action that raised it; every other shot clears the stack first.
+    A toast dies on a wall-clock timer (the vendored toast: 2.2 s, 4.5 s for an
+    error, 10 s with an action) that no fixture pins — `TASKOS_CLOCK` moves the
+    *app's* now, not `setTimeout`. So a capture taken while one is near its end
+    is a coin toss on how long the run took to get there. A story that means to
+    show a toast captures it while it is young, right after the action that
+    raised it; every other shot hides it first.
     """
-    for close in page.locator(".toast-close").all():
-        try:
-            close.click(timeout=1000)
-        except Exception:  # noqa: BLE001 — a toast that expired mid-loop is fine
-            pass
-    expect(page.locator(".toast")).to_have_count(0)
+    page.evaluate("() => { const t = document.getElementById('toast'); if (t) t.hidden = true; }")
+    expect(page.locator("#toast")).to_be_hidden()
 
 
 _HOLD_TOASTS_JS = """
 () => {
   if (window.__taskosToastsHeld) return;
   window.__taskosToastsHeld = true;
-  const remove = Element.prototype.remove;
-  Element.prototype.remove = function () {
-    if (this.classList && this.classList.contains('toast')) return;
-    return remove.call(this);
-  };
+  const t = document.getElementById('toast');
+  if (!t) return;
+  new MutationObserver(function () {
+    if (t.hidden && t.textContent) t.hidden = false;
+  }).observe(t, { attributes: true, attributeFilter: ['hidden'] });
 }
 """
 
 
 def hold_toasts(page: Page) -> None:
-    """Keep every toast on screen until this document is left (#236).
+    """Keep the toast on screen until this document is left.
 
-    The other half of `dismiss_toasts`. "Capture it young" only covers the
-    toast the last action raised. A shot that frames a *stack* — a toast from
-    one step and another from the next — also frames the older toast's
-    remaining lifetime, and that lifetime is real wall-clock time: unloaded,
-    story 09's fifth shot catches its older toast at ~1.3 s of 4.5 s and
-    story 23's second at ~0.9 s, and on a loaded host the older one is simply
-    gone (10,885 and 12,248 px of drift, one toast short).
-
-    Call it before the action that raises the first toast such a shot frames.
-    It pins what the gallery shows — the stack as a reader left it — the way
-    the pinned clock pins a date. While held, a toast's own close and action
-    buttons cannot remove it either, so never pair it with `dismiss_toasts`
-    on the same document; a navigation to a new document releases it.
+    The other half of `dismiss_toasts`. "Capture it young" only covers a shot
+    taken right after the action; a shot framed a step later also frames the
+    toast's remaining lifetime, which is real wall-clock time, and on a loaded
+    host the toast is simply gone. Call it before the action that raises the
+    toast such a shot frames: it pins what the gallery shows the way the
+    pinned clock pins a date. While held, the toast's own action cannot hide
+    it either, so never pair it with `dismiss_toasts` on the same document; a
+    navigation to a new document releases it.
     """
     page.evaluate(_HOLD_TOASTS_JS)
 

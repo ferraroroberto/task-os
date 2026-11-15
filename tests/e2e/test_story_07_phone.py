@@ -86,7 +86,7 @@ from tests.e2e._ui import (
     board_mode,
     open_settings_sheet,
 )
-from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, E2E_TOKEN, settle, shot
+from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, E2E_TOKEN, dismiss_toasts, settle, shot
 
 PHONE = {"width": 390, "height": 844}
 PHONE_LG = {"width": 430, "height": 932}
@@ -233,7 +233,7 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     expect(row).not_to_have_class(re.compile(r"\bis-(swiping|leaving)\b"))
     assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"
     row.locator(".trow-main").evaluate(SWIPE_JS, [100, 300])
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Completed")
     expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
     expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
@@ -255,7 +255,7 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
     expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
     row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
-    toast = page.locator(".toast-success").last
+    toast = page.locator("#toast")
     expect(toast).to_contain_text("Snoozed to")
     expect(sheet).to_be_hidden()
     expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
@@ -452,7 +452,7 @@ def _quick_add_from_today(page: Page, base: str, shots: Path) -> None:
     expect(quick_add.locator(".quick-add-due")).to_have_value(E2E_ANCHOR.isoformat())
     qa.press("Enter")
     expect(quick_add).to_be_hidden()
-    expect(page.locator(".toast-success").last).to_contain_text("Water the balcony plants")
+    expect(page.locator("#toast")).to_contain_text("Water the balcony plants")
     added = page.locator("#paneToday section.today .trow", has=page.locator(".trow-title", has_text=re.compile(r"^Water the balcony plants$")))
     expect(added).to_be_visible()
     # todo: the hand-made default (#148); the row carries it as data-status.
@@ -563,8 +563,7 @@ def _code_line_and_drawer(page: Page, shots: Path, drawer) -> None:
     expect(link_chip).to_have_text(re.compile("Kitchen folder"))
     assert "{onedrive}/house/kitchen" in (link_chip.get_attribute("title") or "")   # the unresolved ref, per PC
     assert_min_target(drawer.locator(".drawer-close"))
-    page.locator(".toast .toast-close").evaluate_all("els => els.forEach(b => b.click())")   # clear the quick-add toast
-    expect(page.locator(".toast")).to_have_count(0)
+    dismiss_toasts(page)                                     # clear the quick-add toast
     shot(page, shots / "story-07-phone-4-phone.png")
     drawer.locator(".drawer-close").tap()
     expect(drawer).to_be_hidden()

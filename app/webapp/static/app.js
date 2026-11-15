@@ -75,6 +75,7 @@ import { JOURNAL_HASH } from './js/app/journal.js';
 import * as settingsPane from './js/app/settings.js';
 import { SETTINGS_HASH, SETTINGS_SHEET_HASH } from './js/app/settings.js';
 import * as writes from './js/app/writes.js';
+import { initBuildWatch } from './_vendored/build-watch/build-watch.js';
 
 const THEME_KEY = 'task-os.theme';
 const TAB_KEY = 'task-os.tab';
@@ -939,6 +940,8 @@ async function boot() {
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   app.fetchVersion();
+  // "New version available · Reload" when a deploy lands under an open page.
+  initBuildWatch();
   settings.refreshStatus();
   await Promise.all([loadPeople(), loadMembers()]);
   await Promise.all([refreshAll(), app.fetchIssuesStatus(), loadStatus()]);

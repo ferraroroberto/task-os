@@ -60,13 +60,13 @@ def _keys_row_actions(page: Page, base: str, shots: Path) -> int:
     readme.locator(".trow-main").focus()
     _clear_toasts(page)
     page.keyboard.press("p")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Priority medium"))
     expect(page.locator(".toast-action").first).to_have_text("Undo (Z)")
     assert _get(base, f"/api/tasks/{rid}")["priority"] == "medium"
     shot(page, shots / "story-16-keyboard-triage-1-desktop.png")
     _clear_toasts(page)
     page.keyboard.press("z")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Undone"))
     detail = _get(base, f"/api/tasks/{rid}")
     assert detail["priority"] == "low"
     prio = [a for a in detail["activity"] if a["field"] == "priority"]
@@ -79,7 +79,7 @@ def _keys_row_actions(page: Page, base: str, shots: Path) -> int:
     expect(page.locator(f"#paneBoard .trow[data-id='{rid}'] .trow-main")).to_be_focused()
     _clear_toasts(page)
     page.keyboard.press("t")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Due tomorrow"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Due tomorrow"))
     assert _get(base, f"/api/tasks/{rid}")["due"] == (E2E_ANCHOR + timedelta(days=1)).isoformat()
 
     # 17. `e` completes — and on a recurring task that means the roll, whose
@@ -90,12 +90,12 @@ def _keys_row_actions(page: Page, base: str, shots: Path) -> int:
     weekly.locator(".trow-main").focus()
     _clear_toasts(page)
     page.keyboard.press("e")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Completed"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Completed"))
     rolled = _get(base, f"/api/tasks/{wid}")
     assert rolled["due"] > before["due"] and rolled["status"] == before["status"]
     _clear_toasts(page)
     page.keyboard.press("z")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Undone"))
     assert _get(base, f"/api/tasks/{wid}")["due"] == before["due"]
 
     # 18. The keys are inert wherever text is being typed — the Board's filter
@@ -131,12 +131,12 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     page.evaluate(f"document.querySelector('.trow[data-id=\"{ids[0]}\"] .trow-main').focus()")
     _clear_toasts(page)
     page.keyboard.press("1")
-    expect(page.locator(".toasts")).to_have_text(re.compile("2 tasks"))
+    expect(page.locator("#toast")).to_have_text(re.compile("2 tasks"))
     assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["inbox", "inbox"]
     shot(page, shots / "story-16-keyboard-triage-2-desktop.png")
     _clear_toasts(page)
     page.keyboard.press("z")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Undone"))
     assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["todo", "standby"]
     # the ticks survive a keyed action (several keys, one set), so Escape is
     # what leaves Select mode — the toggle is hidden while the bar is up
@@ -155,10 +155,10 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     hit.locator(".trow-main").focus()
     _clear_toasts(page)
     page.keyboard.press("p")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Priority medium"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Priority medium"))
     _clear_toasts(page)
     page.keyboard.press("z")
-    expect(page.locator(".toasts")).to_have_text(re.compile("Undone"))
+    expect(page.locator("#toast")).to_have_text(re.compile("Undone"))
     assert _get(base, f"/api/tasks/{rid}")["priority"] == "low"
     page.click("nav.tabs .tab[data-tab='board']")
 
