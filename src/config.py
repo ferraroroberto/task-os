@@ -411,7 +411,16 @@ class AppConfig:
     auth: AuthConfig = field(default_factory=AuthConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
     people: tuple[Person, ...] = (IMPLICIT_PERSON,)
+    # Who acts on this PC: the author of what the web app and the CLI write when
+    # no one else is named. Blank = the first team member, else none.
+    your_name: str = ""
     source_path: Path | None = None
+
+    @property
+    def install_name(self) -> str | None:
+        """The name an unnamed write is signed with: ``your_name``, else the first
+        team member, else ``None`` (callers then fall back to the repo's default)."""
+        return self.your_name or (self.team.people[0] if self.team.people else None)
 
     @property
     def owner(self) -> Person:
@@ -745,6 +754,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         ),
         alerts=_alerts_config(alerts),
         people=people,
+        your_name=str(raw.get("your_name", "") or "").strip(),
         source_path=src,
     )
 

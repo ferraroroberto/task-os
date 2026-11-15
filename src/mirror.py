@@ -217,7 +217,7 @@ class Mirror:
         poll_s: float = POLL_S,
     ) -> None:
         self.dir, self.reason = resolve_dir(config.mirror.dir, config.placeholders, label="mirror.dir")
-        self.owner = config.team.people[0] if config.team.people else repo.DEFAULT_ACTOR
+        self.owner = config.install_name or repo.DEFAULT_ACTOR
         self.db_path = db_path
         self.debounce_s = debounce_s
         self.poll_s = poll_s

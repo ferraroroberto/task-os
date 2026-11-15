@@ -1,6 +1,6 @@
 # API
 
-All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error": {"code", "message", "detail"?}}` (404 `not_found`, 422 `validation_error`, 409 `cycle`). The actor recorded on activity/comments is the body's `actor`/`author`, else the `X-Actor` header, else (team mode) the name this browser picked, else the name of a member signed in with their own token, else the first `team.people` entry in config.
+All under `/api/`, JSON in and out; errors are one envelope everywhere: `{"error": {"code", "message", "detail"?}}` (404 `not_found`, 422 `validation_error`, 409 `cycle`). The actor recorded on activity/comments is the body's `actor`/`author`, else the `X-Actor` header, else (team mode) the name this browser picked, else the name of a member signed in with their own token, else `your_name` from config, else the first `team.people` entry.
 
 | Method · path | What |
 | --- | --- |
