@@ -102,7 +102,7 @@ function createIssueForm(ctx, t, st, configured) {
   dl.replaceChildren();
   repos.forEach(function (r) { const o = document.createElement('option'); o.value = r; dl.appendChild(o); });
   if (repos.length === 1) repoInput.value = repos[0];
-  const createBtn = formButton(createForm, 'button-surface', icon('plus') + ' Create issue', { track: 'drawer.issue-create' });
+  const createBtn = formButton(createForm, 'button-primary', icon('plus') + ' Create issue', { track: 'drawer.issue-create' });
   createBtn.disabled = !configured;
   createBtn.title = configured ? "Open an issue with this task's title and description, then link it" : 'Issue provider not configured';
   createForm.append(repoInput, createBtn);
