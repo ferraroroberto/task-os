@@ -91,6 +91,8 @@
 .board-status::-webkit-scrollbar { display: none; }
 .board-status .board-col { flex: 0 0 100%; scroll-snap-align: start; overflow: hidden; }
 .board-col { min-width: 0; display: flex; flex-direction: column; padding: 0; }
+/* a lane is the container its rows ask how wide they are (rows.css `@container lane`) */
+.board-col { container: lane / inline-size; }
 /* Week mode on the phone: one list, the lanes stacked as its sections. */
 .board-week { display: flex; flex-direction: column; gap: var(--space-md); }
 .board-list { border-top: 1px solid var(--line-muted); }

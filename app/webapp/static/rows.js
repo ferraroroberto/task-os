@@ -208,6 +208,15 @@ export function metaLine(t, opts) {
   // three levels down reads "Home renovation › Kitchen" on hover)
   if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
   else if (t.code && !(o.pills && t.root)) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
+  // The project pill's twin: a lane too narrow to lead the title with it
+  // (styles/rows.css, `@container lane`) shows it here, in the context slot,
+  // where it can ellipsize without starving the title.
+  if (o.pills && t.root) {
+    const twin = projectPill(t);
+    twin.classList.replace('trow-pill-project', 'trow-pill-project-compact');
+    twin.classList.add('trow-ctx');
+    meta.appendChild(twin);
+  }
   // who the task is assigned to, where the view shows everyone's (the Board's Everyone scope)
   if (o.assignee) {
     const who = pill('assignee', o.assignee, 'neutral', 'Assigned to ' + o.assignee);
