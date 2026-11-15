@@ -13,8 +13,11 @@ export function descriptionSection(ctx, t) {
   const toggle = document.createElement('button');
   toggle.dataset.track = 'drawer.desc-toggle';
   toggle.type = 'button';
-  toggle.className = 'button-ghost';
-  toggle.innerHTML = icon(ctx.descEditing ? 'eye' : 'pencil') + ' ' + (ctx.descEditing ? 'Preview' : 'Edit');
+  toggle.className = 'icon-button';
+  const toggleLabel = ctx.descEditing ? 'Preview description' : 'Edit description';
+  toggle.setAttribute('aria-label', toggleLabel);
+  toggle.title = toggleLabel;
+  toggle.innerHTML = icon(ctx.descEditing ? 'eye' : 'pencil');
   desc.querySelector('h3').appendChild(descTools);
   descTools.appendChild(toggle);
   const body = document.createElement('div');

@@ -834,13 +834,13 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
     # the quick moves are two by two on the phone, each a whole target (#394)
     assert_min_target(drawer.locator(".quick-move"))
     assert_no_overlap(drawer.locator(".quick-move"))
-    # UX round 2 (#32): the composer keeps the Ctrl+Enter hint; Send stays
-    # on the Description "Edit" tier (ghost, same rendered height).
+    # the composer keeps the Ctrl+Enter hint; Send is the vendored primary
+    # (48px) and Description's Edit the icon button, a whole target too.
     expect(drawer.locator(".comment-input")).to_have_attribute(
         "placeholder", "Add a comment… (Ctrl+Enter to send)")
     send_box = drawer.locator(".comment-send").bounding_box()
-    edit_box = drawer.locator(".drawer-tools .button-ghost").first.bounding_box()
-    assert send_box and edit_box and abs(send_box["height"] - edit_box["height"]) <= 1, (send_box, edit_box)
+    assert send_box and abs(send_box["height"] - 48) <= 1, send_box
+    assert_min_target(drawer.locator(".drawer-tools .icon-button").first)
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-04-triage-10-phone.png")
     # …and every field under More fields is a whole target too, once opened

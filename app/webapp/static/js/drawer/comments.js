@@ -22,7 +22,7 @@ function commentComposer(ctx, t) {
   ta.title = 'Ctrl+Enter to send; links become chips';
   // Same tier and metrics as the Description "Edit" button — quiet, not a
   // full-height primary block.
-  const send = formButton(composer, 'button-ghost comment-send', icon('send-horizontal') + ' Send', { track: 'drawer.comment-send' });
+  const send = formButton(composer, 'button-primary comment-send', icon('send-horizontal') + ' Send', { track: 'drawer.comment-send' });
   send.setAttribute('aria-label', 'Send comment');
   composer.append(ta, send);
   composer.addEventListener('submit', async function (ev) {
