@@ -23,10 +23,16 @@ and the access status.
                          authorship label, not a credential — src/team.py);
                          409 with team mode off, 422 for a name not in ``team.people``
     GET  /api/team/avatars/{index} → that person's ``data/avatars`` image, 404 without one
+    PUT  /api/your-name → {name} → saves the top-level ``your_name`` into the config file the
+                         app loaded and applies it live (blank clears it); 409 when the app
+                         runs on the sample or without a file, 422 for an over-long name or
+                         one with a control character
 
 ``access_status(request)`` — ``{https, auth: {enabled, password, client}}``:
 how this request came in and what the install accepts. Folded into the one
-``GET /api/status`` (``routers/mirror``) that drives the Settings pane.
+``GET /api/status`` (``routers/mirror``) that drives the Settings pane, beside
+``src.team.author_status`` — ``{your_name, author}``: the stored name and the name
+an unnamed write is signed with.
 
 Failed and successful sign-ins are logged with the client host (info level)
 so a phone-side review is one grep of ``data/logs/task-os.log``. A presented
@@ -36,6 +42,7 @@ secret is never logged — only its length.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -52,9 +59,10 @@ from src.auth import (
     team_session,
     token_person,
 )
-from src.config import AuthConfig, TeamConfig
+from src.config import AuthConfig, TeamConfig, can_write_config, clean_your_name, save_your_name
 from src.login_lockout import retry_after_header
-from src.team import NAME_COOKIE, avatar_file, encode_name, member_from_cookie
+from src.tasks_repo import DEFAULT_ACTOR
+from src.team import NAME_COOKIE, author_status, avatar_file, encode_name, member_from_cookie
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -213,3 +221,33 @@ def access_status(request: Request) -> dict[str, Any]:
             "client": getattr(request.state, "auth", "unknown"),
         },
     }
+
+
+@router.put("/api/your-name")
+def set_your_name(body: NameBody, request: Request) -> JSONResponse:
+    """Save ``your_name`` into the config file the app loaded and apply it live.
+
+    Blank clears it, restoring the fallback (first team member, else ``me``). The
+    file write comes first: a name the config cannot hold is never half-applied.
+    """
+    config = request.app.state.config
+    if not can_write_config(config.source_path):
+        return error_response(
+            409, "config_readonly",
+            "this install is running without its own config file, so there is nowhere to save the name",
+        )
+    try:
+        name = clean_your_name(body.name)
+    except ValueError as exc:
+        return error_response(422, "validation_error", str(exc))
+    try:
+        save_your_name(name, path=config.source_path)
+    except OSError as exc:
+        logger.warning("⚠️ could not save your_name to %s: %s", config.source_path.name, exc)
+        return error_response(500, "config_write_failed", "the config file could not be written")
+    request.app.state.config = replace(config, your_name=name)
+    mirror = getattr(request.app.state, "mirror", None)
+    if mirror is not None:
+        mirror.owner = request.app.state.config.install_name or DEFAULT_ACTOR
+    logger.info("👤 %s set your_name (%d chars)", _client(request), len(name))
+    return JSONResponse(author_status(request.app.state.config))

@@ -80,3 +80,83 @@ def test_the_cli_acts_under_the_set_name(tmp_path: Path, monkeypatch: pytest.Mon
     assert backend.actor == "Ada Example"
     explicit = cli.pick_backend(argparse.Namespace(actor="bot", local=True, server=None))
     assert explicit.actor == "bot"
+
+
+def _stored(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_the_settings_save_signs_the_next_comment_and_survives_a_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _config(tmp_path, monkeypatch, your_name=None, team_people=["Sam Rivera"])
+    before = _stored(path)
+    with _client(tmp_path, monkeypatch) as c:
+        assert c.get("/api/status").json()["author"] == {"your_name": "", "author": "Sam Rivera"}
+        saved = c.put("/api/your-name", json={"name": "  Ada   Example "})
+        assert saved.status_code == 200
+        assert saved.json() == {"your_name": "Ada Example", "author": "Ada Example"}
+        assert c.get("/api/status").json()["author"] == saved.json()
+        assert _write_comment_and_activity(c) == ("Ada Example", "Ada Example")
+        assert _stored(path) == {**before, "your_name": "Ada Example"}
+    assert cfgmod.load_config(path).your_name == "Ada Example"
+
+
+def test_clearing_the_name_restores_the_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = _config(tmp_path, monkeypatch, your_name="Ada Example", team_people=["Sam Rivera"])
+    with _client(tmp_path, monkeypatch) as c:
+        cleared = c.put("/api/your-name", json={"name": "   "})
+        assert cleared.json() == {"your_name": "", "author": "Sam Rivera"}
+        assert _write_comment_and_activity(c) == ("Sam Rivera", "Sam Rivera")
+    assert _stored(path)["your_name"] == ""
+
+
+def test_the_save_updates_the_mirror_author_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _config(tmp_path, monkeypatch, your_name=None, team_people=[])
+    with _client(tmp_path, monkeypatch) as c:
+        assert c.app.state.mirror.owner == "me"
+        c.put("/api/your-name", json={"name": "Ada Example"})
+        assert c.app.state.mirror.owner == "Ada Example"
+
+
+@pytest.mark.parametrize("bad", ["x" * 81, "bell\x07", "nul\x00"])
+def test_a_bad_name_is_refused_and_nothing_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad: str
+) -> None:
+    path = _config(tmp_path, monkeypatch, your_name="Ada Example", team_people=[])
+    before = path.read_text(encoding="utf-8")
+    with _client(tmp_path, monkeypatch) as c:
+        r = c.put("/api/your-name", json={"name": bad})
+        assert r.status_code == 422
+        assert r.json()["error"]["code"] == "validation_error"
+        assert c.get("/api/status").json()["author"]["your_name"] == "Ada Example"
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_the_sample_config_is_never_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(cfgmod.CONFIG_PATH_ENV, str(cfgmod.CONFIG_SAMPLE_PATH))
+    sample_before = cfgmod.CONFIG_SAMPLE_PATH.read_bytes()
+    with _client(tmp_path, monkeypatch) as c:
+        r = c.put("/api/your-name", json={"name": "Ada Example"})
+        assert r.status_code == 409
+        assert r.json()["error"]["code"] == "config_readonly"
+        assert c.get("/api/status").json()["author"]["your_name"] == ""
+    assert cfgmod.CONFIG_SAMPLE_PATH.read_bytes() == sample_before
+
+
+def test_a_non_loopback_client_without_a_token_cannot_set_the_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _config(tmp_path, monkeypatch, your_name=None, team_people=[])
+    monkeypatch.setenv(dbmod.DB_PATH_ENV, str(tmp_path / "tasks.db"))
+    from app.webapp.server import create_app
+
+    with TestClient(create_app(), client=("100.64.0.9", 1)) as c:
+        assert c.put("/api/your-name", json={"name": "Mallory"}).status_code in (401, 403)
+    assert "your_name" not in _stored(path) or _stored(path)["your_name"] == ""
+
+
+def test_a_newline_in_the_name_collapses_to_a_space(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _config(tmp_path, monkeypatch, your_name=None, team_people=[])
+    with _client(tmp_path, monkeypatch) as c:
+        assert c.put("/api/your-name", json={"name": "Ada\nExample"}).json()["your_name"] == "Ada Example"

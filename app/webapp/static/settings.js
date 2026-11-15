@@ -74,6 +74,7 @@ import { refreshSearchStatus } from './js/settings/search.js';
 import { createSheets } from './js/settings/sheets.js';
 import { refreshStatus } from './js/settings/status.js';
 import { headParts } from './js/settings/words.js';
+import { buildYourNameSheet, wireYourName } from './js/settings/yourname.js';
 
 /**
  * Wire the Settings pane once and hand back the bootstrap's handle.
@@ -90,6 +91,7 @@ import { headParts } from './js/settings/words.js';
  *            headParts: () => Array<{text: string, tone: string}>}}
  */
 export function mountSettings(opts) {
+  buildYourNameSheet();
   const ctx = {
     opts: opts,
     els: lookupEls(),
@@ -106,6 +108,7 @@ export function mountSettings(opts) {
   wireRowActions(ctx);
   wireCaptureRunNow(ctx);
   wireCalendarRefresh(ctx);
+  wireYourName(ctx);
   const sheets = createSheets(ctx);
 
   return {

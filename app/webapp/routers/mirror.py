@@ -15,7 +15,8 @@
                                fetched_at, failing_since, stale, refreshing,
                                events_today, …} (the host only, never the URL),
                                opener: {install, uninstall, env_template, installed_here},
-                               placeholders: {…}}
+                               placeholders: {…},
+                               author: {your_name, author}}
                               — the one status the Settings pane reads (the https /
                               auth part comes from routers/auth.access_status; the
                               folder index + opener parts are Step 9; the AI state
@@ -45,6 +46,7 @@ from app.webapp.routers._helpers import error_response, service_unavailable
 from app.webapp.routers.auth import access_status
 from src import opener, tasks_repo
 from src.db import get_db
+from src.team import author_status
 
 router = APIRouter(prefix="/api", tags=["mirror"])
 
@@ -66,6 +68,7 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     ph = dict(request.app.state.config.placeholders)
     return {
         **access_status(request),
+        "author": author_status(request.app.state.config),
         "mirror": mirror.status(db) if mirror else {"enabled": False, "reason": "mirror service not started"},
         "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
         "folders": folder_explorer.summary() if folder_explorer

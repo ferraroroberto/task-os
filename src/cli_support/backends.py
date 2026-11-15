@@ -428,6 +428,7 @@ class LocalBackend:
         from src.email_capture import EmailCaptureService
         from src.enrich import EnrichClient
         from src.search.folder_explorer import FolderExplorerClient
+        from src.team import author_status
         from src.voice import VoiceClient
 
         config = load_config()
@@ -464,6 +465,7 @@ class LocalBackend:
             "calendar": CalendarService(config).status(),
             "opener": opener.status(placeholders),
             "placeholders": placeholders,
+            "author": author_status(config),
         }
 
     def backup(self) -> dict[str, Any]:

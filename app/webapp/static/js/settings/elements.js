@@ -55,5 +55,10 @@ export function lookupEls() {
     statusAI: document.getElementById('statusAI'),
     statusAIModel: document.getElementById('statusAIModel'),
     searchCardMeta: document.getElementById('searchCardMeta'),
+    yourNameMeta: document.getElementById('yourNameMeta'),
+    yourNameForm: document.getElementById('yourNameForm'),
+    yourNameInput: document.getElementById('yourNameInput'),
+    yourNameSave: document.getElementById('yourNameSave'),
+    yourNameStatus: document.getElementById('yourNameStatus'),
   };
 }
