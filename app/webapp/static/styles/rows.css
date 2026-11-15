@@ -80,6 +80,10 @@
    the figures win and the project is read in the drawer. */
 @container lane (max-width: 259px) {
   .trow-meta.action-row-meta > .trow-pill-project-compact { display: none; }
+  /* Even without the pill, a due + flag + count can be wider than the ~100px button a
+     desktop six-lane Board leaves: the parts wrap onto a second line instead of being
+     squeezed past the button's edge, so only the rows that need the room grow. */
+  .trow .trow-meta.action-row-meta { flex-wrap: wrap; row-gap: 0; }
 }
 .trow-meta .trow-pill-project-compact { padding: 0 5px; font-size: inherit; line-height: 1.35; }
 .trow-meta.action-row-meta > .trow-pill-project-compact.trow-ctx:not(:first-child)::before { content: none; }
