@@ -269,6 +269,10 @@ function sameControls(a, b) {
   return filtersToSearch(Object.assign({}, a, strip)) === filtersToSearch(Object.assign({}, b, strip));
 }
 
+// One word each, so five segments share a phone-width sheet without wrapping;
+// the longer SORTS names stay for the sentence in the strip's filter summary.
+const SORT_SEGMENT_LABELS = { due: 'Due', priority: 'Priority', updated: 'Modified', created: 'Created', title: 'Title' };
+
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ---------------------------------------------------------------- controls
@@ -287,6 +291,42 @@ function selectEl(name, label, values, current, onChange) {
   });
   sel.addEventListener('change', function () { onChange(sel.value); });
   return sel;
+}
+
+/**
+ * One choice among a few peers as the vendored segmented control: the raised
+ * segment is the state, flipped here once the change is handed on.
+ * @param {string} name
+ * @param {string} label   the group's accessible name
+ * @param {Array<[string,string]>} values   [value, label], two to five
+ * @param {string} current
+ * @param {(next: string) => void} onChange
+ */
+function segmentedEl(name, label, values, current, onChange) {
+  const group = document.createElement('div');
+  group.className = 'segmented filter-segmented';
+  group.dataset.name = name;
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', label);
+  values.forEach(function (v) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'segmented-item';
+    b.dataset.value = String(v[0]);
+    b.dataset.track = 'filters.segment';
+    b.setAttribute('aria-pressed', String(String(v[0]) === String(current)));
+    b.textContent = v[1];
+    group.appendChild(b);
+  });
+  group.addEventListener('click', function (ev) {
+    const seg = ev.target.closest('.segmented-item');
+    if (!seg || seg.getAttribute('aria-pressed') === 'true') return;
+    group.querySelectorAll('.segmented-item').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b === seg));
+    });
+    onChange(seg.dataset.value);
+  });
+  return group;
 }
 
 /**
@@ -343,7 +383,9 @@ function sheetRow(name, label, control) {
 function sheetControls(card, f, options, hidden, set) {
   // 1. sort first: it orders every list, filtered or not
   if (!hidden.has('sort')) {
-    card.appendChild(sheetRow('sort', 'Sort', selectEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], cap(s[1])]; }), f.sort, set('sort'))));
+    const r = sheetRow('sort', 'Sort', segmentedEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], SORT_SEGMENT_LABELS[s[0]] || cap(s[1])]; }), f.sort, set('sort')));
+    r.classList.add('is-stacked');
+    card.appendChild(r);
   }
   // 2. status — `deferred` and `blocked` ride the end: the one visible way
   //    to see the sleeping and the locked tasks the working views
