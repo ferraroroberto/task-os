@@ -49,8 +49,8 @@ import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
-  WHOSE_KEY, filtersFromSearch, filtersToSearch, listParams, matchesScope, mountFilters,
-  ownerOf, storedWhose,
+  RECENT_OWNERS_KEY, WHOSE_KEY, bumpRecentOwner, filtersFromSearch, filtersToSearch, listParams, matchesScope,
+  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose, toggleOwner,
 } from './filters.js';
 import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
@@ -59,7 +59,7 @@ import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
 import { CLOSED } from './rows.js';
-import { mountScope, mountWhose } from './scope.js';
+import { mountScope } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
@@ -71,6 +71,7 @@ import * as commands from './js/app/commands.js';
 import * as head from './js/app/head.js';
 import * as issues from './js/app/issues.js';
 import * as journal from './js/app/journal.js';
+import { mountOwners, openOwnerSheet } from './js/app/owners.js';
 import { JOURNAL_HASH } from './js/app/journal.js';
 import * as settingsPane from './js/app/settings.js';
 import { SETTINGS_HASH, SETTINGS_SHEET_HASH } from './js/app/settings.js';
@@ -103,10 +104,10 @@ const els = {
   boardHost: document.getElementById('boardHost'),
   boardBar: document.getElementById('boardBar'),
   boardScope: document.getElementById('boardScope'),
-  boardWhose: document.getElementById('boardWhose'),
+  boardOwners: document.getElementById('boardOwners'),
   todayFilterText: document.getElementById('todayFilterText'),
   todayScope: document.getElementById('todayScope'),
-  todayWhose: document.getElementById('todayWhose'),
+  todayOwners: document.getElementById('todayOwners'),
   todayHost: document.getElementById('todayHost'),
   searchScope: document.getElementById('searchScope'),
   paneJournal: document.getElementById('paneJournal'),
@@ -121,6 +122,7 @@ const state = {
   people: [],
   members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first
   viewer: null,     // /api/me's id — who this request is; null = not established
+  recentOwners: storedRecentOwners(safeStorage()),   // member ids this device picked, newest first
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (the blocker picker; a closed blocker gates nothing)
   tree: [],         // /api/tasks/tree?descriptions=false — the open forest (closed leaves pruned): the blocker picker
@@ -170,7 +172,7 @@ let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 // `settings.<sheet>` and `journal`.
 const usage = initUsageLog();
 const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js)
-const whoses = {};        // tab → its Mine · Everyone switch (Today · Board only, two or more members)
+const ownerRows = {};    // tab → its person row (Today · Board only, two or more members)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection
 
@@ -232,7 +234,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'todayWhose', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'todayOwners', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -252,6 +254,10 @@ async function loadMembers() {
     state.members = me.people || [];
     state.viewer = me.id || null;
   } catch (_) { state.members = []; state.viewer = null; }
+  // a shared link can name a member this install no longer has: it narrows nothing
+  const known = new Set(state.members.map(function (m) { return m.id; }));
+  const owners = state.members.length < 2 ? [] : state.filters.owners.filter(function (id) { return known.has(id); });
+  if (owners.length !== state.filters.owners.length) state.filters = Object.assign({}, state.filters, { owners: owners });
 }
 
 /** The device's storage, or null where reading it throws (private mode). */
@@ -424,23 +430,54 @@ function renderScope(tab, host) {
 
 function renderSearchScope() { renderScope('search', els.searchScope); }
 
-/** Whose switch moved: the choice is kept per device and mirrored in
- *  the URL, and — unlike the scope — it narrows the server's list, so the
- *  lists and the journal are read again under it. Search never follows. */
-function onWhoseChange(whose) {
-  try { localStorage.setItem(WHOSE_KEY, whose); } catch (_) { /* private mode: this page only */ }
-  onFilterChange(Object.assign({}, state.filters, { whose: whose }));
+/** The person row moved: the pick narrows the server's list, so the lists
+ *  and the journal are read again under it. Search never follows. Mine and
+ *  Everyone are also kept per device (`WHOSE_KEY`); a picked person goes to the
+ *  front of the row's recents. */
+function applyOwners(next, picked) {
+  try {
+    if (!next.owners.length) localStorage.setItem(WHOSE_KEY, next.whose);
+    if (picked) {
+      state.recentOwners = bumpRecentOwner(state.recentOwners, picked);
+      localStorage.setItem(RECENT_OWNERS_KEY, JSON.stringify(state.recentOwners));
+    }
+  } catch (_) { /* private mode: this page only */ }
+  onFilterChange(Object.assign({}, state.filters, next));
 }
 
-/** One tab's Mine · Everyone switch, only with two or more members (one
- *  member has nothing to switch between). Mounted on first use like the scope's. */
-function renderWhose(tab, host) {
+/** A tap on a person pill (or a tick in the "+N more" sheet): toggle them. */
+function onOwnerToggle(id) {
+  const next = toggleOwner(state.filters, id, state.viewer);
+  const added = next.owners.indexOf(id) >= 0 && state.filters.owners.indexOf(id) < 0;
+  applyOwners(next, added ? id : null);
+}
+
+function onEveryone() {
+  if (state.filters.whose === 'everyone' && !state.filters.owners.length) return;
+  applyOwners({ owners: [], whose: 'everyone' }, null);
+}
+
+function openMoreOwners() {
+  openOwnerSheet({
+    people: ownerRowOf().ordered(),
+    picked: function () { return state.filters.owners; },
+    onToggle: onOwnerToggle,
+  });
+}
+
+function ownerRowOf() { return ownerRows.board || ownerRows.today; }
+
+/** One tab's person row, only with two or more members (one member has
+ *  nothing to switch between). Mounted on first use like the scope's. */
+function renderOwners(tab, host) {
   if (!host) return;
   const show = state.members.length >= 2;
   host.hidden = !show;
   if (!show) return;
-  if (!whoses[tab]) whoses[tab] = mountWhose(host, onWhoseChange);
-  whoses[tab].render(state.filters.whose);
+  if (!ownerRows[tab]) {
+    ownerRows[tab] = mountOwners(host, { onToggle: onOwnerToggle, onEveryone: onEveryone, onOpenMore: openMoreOwners });
+  }
+  ownerRows[tab].render(state.filters, { members: state.members, viewer: state.viewer, recent: state.recentOwners });
 }
 
 // --------------------------------------------------------------- render
@@ -540,10 +577,10 @@ function selectOpts() {
   return { selectable: selection.isActive(), isSelected: selection.has };
 }
 
-/** member id → name while the whose switch is on Everyone (it exists only with
- *  two or more members); undefined in Mine, where every row is the viewer's. */
+/** member id → name while more than one person is on the row (Everyone, or two
+ *  or more picked); undefined with one person, where every row is theirs. */
 function assigneeNames() {
-  if (state.filters.whose !== 'everyone' || state.members.length < 2) return undefined;
+  if (!showsAssignees(state.filters, state.members.length)) return undefined;
   const names = {};
   state.members.forEach(function (m) { names[m.id] = m.name; });
   return names;
@@ -563,7 +600,7 @@ function renderBoardPane() {
     }, els.boardBar);
   }
   els.boardBar.hidden = false;
-  renderWhose('board', els.boardWhose);
+  renderOwners('board', els.boardOwners);
   renderScope('board', els.boardScope);
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   state.boardCounts = board.render(boardItems(), state.filters, Object.assign({
@@ -575,7 +612,7 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  renderWhose('today', els.todayWhose);
+  renderOwners('today', els.todayOwners);
   renderScope('today', els.todayScope);
   state.todayCounts = renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: app.setStatus,

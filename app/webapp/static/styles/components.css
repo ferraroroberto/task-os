@@ -262,18 +262,64 @@ a.chip:hover { text-decoration: underline; }
    when no choice is stored, so "follows the system" lands on this rule too. */
 [data-theme="dark"] .scope-switch { --card: var(--line); }
 
-/* The two switches under a strip: Mine · Everyone beside Tasks · Issues
-   · All, sharing the row by their segment counts (2 : 3) so every segment is the
-   same width. Mine · Everyone is absent with one member, and the scope then
+/* What sits under a strip: the person row on a line of its own, then Tasks ·
+   Issues · All. The person row is absent with one member, and the scope then
    fills the row exactly as it did. */
-.view-switches { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
-.view-switches .scope-host { flex: 3 1 0; min-width: 0; }
-.view-switches .whose-host { flex: 2 1 0; }
-.view-switches .whose-host[hidden] { display: none; }
+.view-switches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); min-width: 0; }
+.view-switches .scope-host { flex: 1 1 0; min-width: 0; }
+.view-switches .owner-host { flex: 1 1 100%; min-width: 0; }
+.view-switches .owner-host[hidden] { display: none; }
 /* Nothing in it (no tasks yet hides both): no empty flex box for the pane's gap to count. */
 .view-switches:not(:has(> :not([hidden]))) { display: none; }
-.whose-switch { width: 100%; }
-[data-theme="dark"] .whose-switch { --card: var(--line); }
+
+/* The person row: Mine · each member · +N more · Everyone as filter pills (the
+   chip geometry; a pressed one is filled). It scrolls sideways when the pills do
+   not fit, so a phone keeps one row. Each pill is a 44px touch target holding
+   the painted chip. */
+.owner-row {
+  display: flex;
+  gap: var(--space-xs);
+  padding: 2px;
+  margin: -2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.owner-row::-webkit-scrollbar { display: none; }
+.owner-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.owner-pill-face {
+  display: inline-block;
+  max-width: 12rem;
+  padding: 4px var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+  font-size: var(--font-label);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.owner-pill:hover .owner-pill-face { border-color: var(--accent-border-soft); }
+.owner-pill[aria-pressed="true"] .owner-pill-face {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.owner-pill:focus-visible { outline: none; }
+.owner-pill:focus-visible .owner-pill-face { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ------------------------------------------- the pane's top strip */
 /* Board / Today open with the filter reached for most — the

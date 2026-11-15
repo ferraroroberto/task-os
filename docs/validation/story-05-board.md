@@ -61,3 +61,17 @@
 **Test:** `tests/webapp/test_board_order.py` (the comparator under node, written red first: all eight cases failed on the missing function before the code existed); `tests/e2e/test_story_05_board.py` — the Everyone step asserts the assignee pill on the handed-over row and the Mine step asserts none; the project assertions in stories 04 and 08 read the pill.
 
 **Result:** the unit and e2e legs pass on the disposable seeded instance, synthetic data only. The first layout put both pills before the title and the narrow desktop lanes squeezed them to blank stubs, so the assignee sits on the meta line, and a lane under 280px wide (the six Week lanes of a desktop window) shows the project pill there too, in the context slot, so the title keeps its width; a wider lane leads the title with it. **Not verified:** a headed walk by hand, the dark-mode pills beyond the tokens the chip already carries, and a real phone. Date: 2026-11-15.
+
+### Person row: several people on the Board at once (Today shares it)
+
+**Story:** the Board is shared by several people, and the owner wants to look at another person's tasks, or a few people side by side, without opening the filter sheet. The Mine · Everyone switch becomes a row of person pills: Mine first, each member, Everyone last; a tap toggles a person, so two or more can be on at once.
+
+**Steps:** open the Board as the first member → the row reads Mine · Person 2 · Everyone with Mine filled → Everyone → both members' tasks, each card naming its assignee → Person 2 → only their tasks → Mine as well → both filled, the URL carries `owner=p2,p1`, each card names its assignee, a reload keeps it → Person 2 again → Mine alone, no key. On the second member's phone the row reads Mine · Person 1 · Everyone and scrolls sideways if it must. On an install with eight members the row reads Mine · five people · +2 more · Everyone; +2 more opens a sheet with a name filter, ticking a person there puts them in the row and in the URL, and they lead the row after a reload.
+
+**Expected:** `filters.js` (`toggleOwner`, `pickedOwners`, `showsAssignees`, `visibleOwners`) and the `owner` key behave as `tests/test_scope.py` pins them under node; the pill row (`js/app/owners.js`) draws that state and nothing else; every pill is a 44px target and no label is clipped.
+
+**Screenshots:** [Mine and Person 2 on the Board](../screenshots/story-05-board-20-desktop.png) · [the row on the phone](../screenshots/story-05-board-17-phone.png) · [dark](../screenshots/story-05-board-19-phone-dark.png)
+
+**Test:** `tests/test_scope.py` (the pure rules, written with the code); `tests/e2e/test_story_05_board.py` — `_walk_whose_switch` (picking two people), `_walk_second_member_phone`, `_walk_many_members` (the "+N more" sheet); folded into the existing test, no new test function.
+
+**Result:** the unit and e2e legs pass on disposable seeded instances, synthetic data only; the desktop, phone and dark shots were looked at. **Not verified:** a headed walk by hand, a real phone's sideways scroll, and the "+N more" sheet's phone layout (it reuses the parent picker's full-screen shell; no shot). Date: 2026-11-15.

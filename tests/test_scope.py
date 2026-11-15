@@ -34,6 +34,13 @@ const out = JSON.parse(input).map(([fn, a, b]) => {
     b === 'none' ? null : b === 'throws' ? { getItem() { throw new Error('private mode'); } } : { getItem: () => a });
   if (fn === 'ownerOf') return mod.ownerOf(mod.filtersFromSearch(a.search), a.viewer, a.members);
   if (fn === 'ownerParam') return mod.listParams(mod.filtersFromSearch(a.search), a.owner).owner ?? null;
+  if (fn === 'toggle') return mod.toggleOwner(mod.filtersFromSearch(a.search), a.id, a.viewer);
+  if (fn === 'picked') return mod.pickedOwners(mod.filtersFromSearch(a.search), a.viewer);
+  if (fn === 'names') return mod.showsAssignees(mod.filtersFromSearch(a.search), a.members);
+  if (fn === 'visible') {
+    const v = mod.visibleOwners(a.members, a.viewer, a.picked, a.recent);
+    return { shown: v.shown.map((m) => m.id), more: v.more, ordered: v.ordered.map((m) => m.id) };
+  }
   if (fn === 'labels') return mod.SCOPES.map((s) => s[1]).concat(mod.WHOSE.map((w) => w[1]));
   if (fn === 'activeFilterCount') return mod.activeFilterCount(mod.filtersFromSearch(a), b);
   return mod[fn](a, b);
@@ -147,3 +154,90 @@ def test_the_list_query_carries_the_owner_the_switch_narrows_to() -> None:
         ["ownerParam", {"search": "", "owner": None}],
         ["ownerParam", {"search": "?whose=everyone", "owner": None}],
     ]) == ["p2", None, None]
+
+
+def test_owner_is_its_own_url_key_and_person_stays_the_contact_filter() -> None:
+    assert _call_js([
+        ["roundTrip", "?owner=p2,p3"], ["roundTrip", "?owner=p2&whose=everyone"],
+        ["roundTrip", "?person=3,5&owner=p2"], ["roundTrip", "?owner=bad id,p2"],
+    ]) == ["?owner=p2%2Cp3", "?owner=p2", "?person=3%2C5&owner=p2", "?owner=p2"]
+
+
+def test_picked_people_narrow_the_list_in_place_of_mine_and_everyone() -> None:
+    def owner(search: str, viewer: str | None, members: int) -> list:
+        return ["ownerOf", {"search": search, "viewer": viewer, "members": members}]
+
+    assert _call_js([
+        owner("?owner=p2", "p1", 3),
+        owner("?owner=p1,p3", "p1", 3),
+        owner("?owner=p2&whose=everyone", "p1", 3),
+        owner("?owner=p2", "p1", 1),        # one member: no row, nothing to narrow
+        owner("?owner=p2", None, 3),        # picked people need no known viewer
+    ]) == ["p2", "p1,p3", "p2", None, "p2"]
+
+
+def test_the_row_presses_the_picked_people_or_the_viewer_under_mine() -> None:
+    def picked(search: str, viewer: str | None) -> list:
+        return ["picked", {"search": search, "viewer": viewer}]
+
+    assert _call_js([
+        picked("", "p1"), picked("?whose=everyone", "p1"), picked("?owner=p2,p3", "p1"), picked("", None),
+    ]) == [["p1"], [], ["p2", "p3"], []]
+
+
+def test_a_tap_toggles_one_person_and_an_empty_set_falls_back_to_mine() -> None:
+    def tap(search: str, person: str) -> list:
+        return ["toggle", {"search": search, "id": person, "viewer": "p1"}]
+
+    mine = {"owners": [], "whose": "mine"}
+    assert _call_js([
+        tap("", "p2"),                          # Mine + Person 2
+        tap("?owner=p1,p2", "p1"),              # off again: Person 2 alone
+        tap("?owner=p2", "p2"),                 # the last one off: back to Mine
+        tap("?owner=p2,p3", "p3"),
+        tap("?whose=everyone", "p2"),           # from Everyone: that person alone
+        tap("?whose=everyone", "p1"),           # Mine from Everyone: Mine, no key
+        tap("?owner=p2", "p1"),                 # Mine added to a pick
+    ]) == [
+        {"owners": ["p1", "p2"], "whose": "mine"}, {"owners": ["p2"], "whose": "mine"}, mine,
+        {"owners": ["p2"], "whose": "mine"}, {"owners": ["p2"], "whose": "mine"}, mine,
+        {"owners": ["p2", "p1"], "whose": "mine"},
+    ]
+
+
+def test_rows_name_their_assignee_once_two_or_more_people_are_on() -> None:
+    def names(search: str, members: int = 3) -> list:
+        return ["names", {"search": search, "members": members}]
+
+    assert _call_js([
+        names(""), names("?whose=everyone"), names("?owner=p2"), names("?owner=p2,p3"),
+        names("?whose=everyone", 1),
+    ]) == [False, True, False, True, False]
+
+
+def _roster(n: int) -> list[dict]:
+    return [{"id": f"p{i}", "name": f"Person {i}"} for i in range(1, n + 1)]
+
+
+def test_a_small_install_shows_every_member_and_a_large_one_folds_the_rest() -> None:
+    def visible(n: int, picked: list[str], recent: list[str]) -> list:
+        return ["visible", {"members": _roster(n), "viewer": "p1", "picked": picked, "recent": recent}]
+
+    small, big, front, held = _call_js([
+        visible(6, [], []),                    # five besides the viewer: all in the row
+        visible(9, [], []),                    # eight besides: five and "+3 more"
+        visible(9, [], ["p8", "p7"]),          # the recently picked move to the front
+        visible(9, ["p9"], ["p8"]),            # a picked one is always in the row
+    ])
+    assert small == {"shown": ["p2", "p3", "p4", "p5", "p6"], "more": 0, "ordered": ["p2", "p3", "p4", "p5", "p6"]}
+    assert big["shown"] == ["p2", "p3", "p4", "p5", "p6"] and big["more"] == 3
+    assert front["shown"] == ["p8", "p7", "p2", "p3", "p4"] and front["more"] == 3
+    assert front["ordered"][:2] == ["p8", "p7"] and len(front["ordered"]) == 8
+    assert held["shown"][:2] == ["p9", "p8"] and held["more"] == 3
+
+
+def test_the_recent_picks_keep_the_newest_first_and_survive_a_bad_store() -> None:
+    assert _call_js([
+        ["bumpRecentOwner", ["p2", "p3"], "p3"], ["bumpRecentOwner", [], "p2"],
+        ["bumpRecentOwner", ["a", "b", "c", "d", "e", "f", "g", "h"], "z"],
+    ]) == [["p3", "p2"], ["p2"], ["z", "a", "b", "c", "d", "e", "f", "g"]]

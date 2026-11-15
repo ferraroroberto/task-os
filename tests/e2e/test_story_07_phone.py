@@ -482,6 +482,7 @@ def _board_status_carousel(page: Page, shots: Path, sizes):
     visible = _in_view(page, PHONE["width"])
     assert visible == ["standby"], visible
     assert_no_horizontal_overflow(page)
+    dismiss_toasts(page)   # the quick-add toast outlives the swipe by a load-dependent margin; the shot must not carry it by chance
     shot(page, shots / "story-07-phone-3-phone.png")
 
     # 4. Row → drawer full-screen; the folder chip carries the ref (Step 9 made it an opener link).

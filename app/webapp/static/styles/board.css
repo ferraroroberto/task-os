@@ -14,14 +14,10 @@
 .board-bar { display: flex; align-items: center; gap: var(--gap); }
 .board-bar[hidden] { display: none; }
 .board-bar .view-switches { flex: 3 1 0; }
-.board-bar .view-switches:has(.whose-host:not([hidden])) { flex-grow: 5; }
-/* Seven segments do not share a phone's row (Everyone ran into Mine): with the
-   whose switch up, Mine · Everyone + Tasks · Issues · All take a row of their
-   own and Week · Status (+ Triage) the one under it. */
-@media (max-width: 600px) {
-  .board-bar { flex-wrap: wrap; }
-  .board-bar .view-switches:has(.whose-host:not([hidden])) { flex-basis: 100%; }
-}
+/* With the person row up, it and Tasks · Issues · All take the width of the
+   bar and Week · Status (+ Triage) the line under it. */
+.board-bar:has(.owner-host:not([hidden])) { flex-wrap: wrap; }
+.board-bar .view-switches:has(.owner-host:not([hidden])) { flex-basis: 100%; }
 .board-modes { flex: 2 1 0; min-width: 0; }
 .board-bar .board-triage { flex: none; }
 /* The dark lift the scope switch carries, for the same reason (see .scope-switch). */
