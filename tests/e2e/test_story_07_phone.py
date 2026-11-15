@@ -245,21 +245,25 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     # deleted below: pulling it out from under the in-flight GETs aborts
     # them, and WebKit reports an aborted request as a page error.
     page.wait_for_load_state("networkidle")
-    # A swipe can be set to a one-tap snooze (Settings → Row actions): left
-    # then snoozes with no sheet, the same toast and Undo.
+    # A swipe can be set to a one-tap due push (Settings → Row actions): left
+    # then moves the due date with no sheet, the same toast and Undo, and the
+    # start date is never written. A device that saved the old snooze entry
+    # keeps working: the stored id follows to its due twin.
+    due_before = page.request.get(f"{base}/api/tasks/{task['id']}").json()["due"]
     page.evaluate("localStorage.setItem('task-os.rowactions', JSON.stringify({left: 'snooze-tomorrow'}))")
     page.reload()
     row = page.locator(f"#paneToday .trow[data-id='{task['id']}']")
     expect(row).to_have_class(re.compile(r"\bis-swipeable\b"))
     row.locator(".trow-main").evaluate(SWIPE_JS, [300, 100])
     toast = page.locator("#toast")
-    expect(toast).to_contain_text("Snoozed to")
+    expect(toast).to_contain_text("Due tomorrow")
     expect(sheet).to_be_hidden()
-    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
-    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["starts"]
+    moved = page.request.get(f"{base}/api/tasks/{task['id']}").json()
+    assert moved["starts"] is None and moved["due"] != due_before
     toast.locator(".toast-action").tap()
-    expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
-    assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["starts"] is None
+    expect(toast).to_contain_text("Undone")
+    undone = page.request.get(f"{base}/api/tasks/{task['id']}").json()
+    assert (undone["starts"], undone["due"]) == (None, due_before)
     page.evaluate("localStorage.removeItem('task-os.rowactions')")
     page.reload()
     page.wait_for_load_state("networkidle")

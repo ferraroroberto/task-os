@@ -4,7 +4,7 @@
  * Search tab's task hits) one key does the thing —
  *
  *   e  complete   1-3 status   t/w due tomorrow / next week
- *   s  snooze     p   priority cycle          z undo     ? this list
+ *   d  move       p   priority cycle          z undo     ? this list
  *
  * and with tasks ticked (Select mode) the same key does it to the whole
  * selection.
@@ -12,7 +12,7 @@
  * The actions themselves, their one write path and the undo live in
  * actions.js, which the row's own controls read too. This file owns
  * what is keyboard-only: which row a key means, putting focus back after the
- * write, the snooze popover a key opens, the shortcuts sheet, and the palette
+ * write, the date popover a key opens, the shortcuts sheet, and the palette
  * entries (`commands()`, which is how the keys are *visible* rather than
  * folklore) — a key added to the table shows up in all three or in none.
  */
@@ -95,7 +95,7 @@ function rememberedRow(lastRowId) {
  *
  *  A keyed action leaves the ticks alone (the bulk bar clears them, because
  *  there the value control was the whole gesture): keys are meant to come in
- *  runs — status, then a due date, then a snooze — over one picked set. */
+ *  runs — a status, then a due date, then a priority — over one picked set. */
 function targetOf(source, lastRowId) {
   if (selection.isActive() && selection.size()) {
     return { ids: selection.selectedIds(), row: rememberedRow(lastRowId) };
@@ -290,7 +290,7 @@ export function mountKeys(helpDialog, handlers) {
     if (ev.key === 'Escape') {
       // Escape closes the date picker and stops there: app.js's Escape would
       // otherwise also leave Select mode, throwing away the very selection
-      // this menu was about to snooze. This listener is registered *before*
+      // this menu was about to move. This listener is registered *before*
       // that one (see boot()), which is what lets it stop the chain.
       if (isDatePickerOpen()) { closeDatePicker(); ev.stopImmediatePropagation(); }
       return;

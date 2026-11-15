@@ -29,17 +29,29 @@ export const DEFAULTS = Object.freeze({
   right: 'complete',
   left: 'change-date',
   menu: Object.freeze([
-    'complete', 'reopen', 'change-date', 'snooze',
+    'complete', 'reopen', 'change-date',
     'status-inbox', 'status-todo', 'status-standby', 'status-cancelled', 'priority',
   ]),
 });
+
+/** The pre-merge snooze entries a device may still have stored, and the due
+ *  action each one now means: a saved swipe or menu keeps working. */
+const RENAMED = Object.freeze({
+  'snooze': 'change-date',
+  'snooze-tomorrow': 'due-tomorrow',
+  'snooze-next-week': 'due-next-week',
+});
+
+function currentId(id) {
+  return typeof id === 'string' && RENAMED[id] ? RENAMED[id] : id;
+}
 
 function known(id) {
   return ACTIONS.some(function (a) { return a.id === id; });
 }
 
 /**
- * Any stored value → a valid choice: unknown ids are dropped, a duplicate
+ * Any stored value → a valid choice: a renamed id follows its action, unknown ids are dropped, a duplicate
  * keeps its first place, a side that is not a known id or '' (nothing) falls
  * back to its default, and a missing menu list is the default list.
  * @param {*} raw
@@ -47,8 +59,8 @@ function known(id) {
  */
 export function normalizeRowPrefs(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
-  const side = function (v, dflt) { return v === '' || known(v) ? v : dflt; };
-  const menu = Array.isArray(r.menu) ? r.menu : DEFAULTS.menu;
+  const side = function (v, dflt) { v = currentId(v); return v === '' || known(v) ? v : dflt; };
+  const menu = Array.isArray(r.menu) ? r.menu.map(currentId) : DEFAULTS.menu;
   const seen = new Set();
   return {
     right: side(r.right, DEFAULTS.right),

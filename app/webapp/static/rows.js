@@ -16,7 +16,7 @@
  *   verb      Move — the one visible action, on a fine pointer: the
  *             date sheet, because re-dating is most of the owner's edits
  *   trailing  one 44px ⋯ kebab: every other action (rowmenu.js — status,
- *             move, snooze, priority, folder, AI, issue). Right-
+ *             move, priority, folder, AI, issue). Right-
  *             click and the keyboard's menu key open the same menu
  *
  * Select mode swaps the circle for the checkbox and drops the verb and the
@@ -153,7 +153,7 @@ function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
  *
  *   due        relative, the repeat glyph beside it when the task recurs
  *   flags      exception chips only, in the status chip's tone map: Blocked or
- *              the day a snooze ends (blocked wins), an Inbox / Standby
+ *              the day its start arrives (blocked wins), an Inbox / Standby
  *              status where the view does not already say it, and High. No
  *              mark for medium or low, and no danger tone: priority is a mode,
  *              not an alarm
@@ -186,12 +186,12 @@ export function metaLine(t, opts) {
   } else if (recur) {
     meta.appendChild(metaPart('recur', 'repeat', '', recur));
   }
-  // the clock says "snoozed until"; the words are on the tooltip, to keep the
+  // the clock says "starts"; the words are on the tooltip, to keep the
   // budget at 390px
   if (isBlocked(t)) meta.appendChild(flagChip('blocked', null, 'Blocked', 'neutral', blockedLabel(t)));
   else if (isDeferred(t)) {
     meta.appendChild(flagChip('starts', 'clock', startsLabel(t.starts).replace(/^starts /, ''), 'neutral',
-      'Snoozed until ' + fmtDay(t.starts)));
+      'Starts ' + fmtDay(t.starts)));
   }
   if (!o.hideStatus && STATUS_FLAGS[t.status]) {
     meta.appendChild(flagChip('state', null, sentence(t.status), STATUS_FLAGS[t.status], 'Status ' + t.status));

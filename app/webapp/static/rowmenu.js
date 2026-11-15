@@ -4,7 +4,7 @@
  * vendored data-driven row-menu, and its items are
  * built here from two sources —
  *
- *   the ACTIONS table (actions.js)  complete / reopen, move, snooze,
+ *   the ACTIONS table (actions.js)  complete / reopen, move,
  *                                   the statuses, priority — the same entries
  *                                   the keys, the palette and the swipes read,
  *                                   committed through the same runner, so a

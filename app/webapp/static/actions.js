@@ -64,27 +64,6 @@ export function nextPriority(p) {
 }
 
 // -------------------------------------------------------------- actions
-/** A snooze with its phrase already chosen — a swipe or a ⋯ menu entry set to
- *  it (Settings → Row actions) commits in one gesture, with `snooze`'s plan,
- *  undo and toast, so a push-out means the same write wherever it is reached. */
-function snoozeUntil(id, phrase, label) {
-  return {
-    id: id, key: null, kbd: null, icon: 'clock', label: label, hint: null,
-    plan: function (tasks) { return oneGroup(tasks, { starts: phrase }); },
-    invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
-    applies: isOpen,
-    message: function (tasks, arg, after) { return snoozedMessage(tasks, after); },
-  };
-}
-
-/** What a snooze toast says: where the task went, and that its due came along. */
-function snoozedMessage(tasks, after) {
-  const s = after && after.length === 1 ? after[0].starts : null;
-  if (!s) return 'Snoozed';
-  const moved = tasks.length === 1 && after[0].due !== tasks[0].due;
-  return 'Snoozed to ' + fmtDay(s) + (moved ? ' · due moved too' : '');
-}
-
 /**
  * The row actions. Each declares:
  *   plan(tasks, arg)          → the groups to write
@@ -94,8 +73,10 @@ function snoozedMessage(tasks, after) {
  *                               answered, for a message that names the result
  *   applies(task)             → whether the row menu offers it for this task
  *                               (the keys act regardless: a key is a deliberate ask)
- * `menu: 'starts' | 'due'` means the action asks for a date first (snooze,
- * change date) and commits from the date picker instead of straight away.
+ * `menu: 'due'` means the action asks for a date first (change date) and
+ * commits from the date picker instead of straight away. No row action writes
+ * `starts`: a task whose start day has not come leaves Board and Today, so the
+ * start date is edited from the drawer's field alone.
  * `key: null` is an action no key reaches — the row menu, the palette and the
  * swipes still do.
  */
@@ -156,18 +137,6 @@ export const ACTIONS = [
     applies: isOpen,
     message: function () { return 'Due next week'; },
   },
-  {
-    id: 'snooze', key: 's', kbd: 'S', icon: 'clock', menu: 'starts',
-    label: 'Snooze…', hint: 'tomorrow · this weekend · next week · a date',
-    plan: function (tasks, phrase) { return oneGroup(tasks, { starts: phrase }); },
-    // A snooze past a task's due carries the due with it (tasks_repo), so
-    // the undo puts both back.
-    invert: function (tasks) { return groupByCurrent(tasks, ['starts', 'due']); },
-    applies: isOpen,
-    message: function (tasks, arg, after) { return snoozedMessage(tasks, after); },
-  },
-  snoozeUntil('snooze-tomorrow', 'tomorrow', 'Snooze until tomorrow'),
-  snoozeUntil('snooze-next-week', 'next week', 'Snooze until next week'),
   {
     id: 'priority', key: 'p', kbd: 'P', icon: 'activity',
     label: 'Cycle priority', hint: 'none, low, medium, then high; each task from its own',

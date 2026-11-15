@@ -167,9 +167,9 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     #     palette lists the same keys, which is where they are discovered.
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
-    # 9 keyed actions + the row menu's . + Z + ?, then the five "getting around"
+    # 8 keyed actions + the row menu's . + Z + ?, then the five "getting around"
     # keys; the keyless actions (reopen, cancelled) live in the row menu (#311)
-    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(12)
+    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(11)
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")

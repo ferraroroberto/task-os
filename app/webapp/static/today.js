@@ -15,7 +15,7 @@
  * always sits above a later one whatever its project, recurring or not. The
  * project is the row's leading pill, and the assignee pill joins it in the
  * Everyone view, exactly as on the Board. Rows are the ONE task row (rows.js) — the
- * completion circle, the title over its meta line and the ⋯ menu, where Snooze… (every phrase, a date) and Change date… live. Flat hairline rows, no card wrapper. The list
+ * completion circle, the title over its meta line and the ⋯ menu, where Move… (every phrase, a date) lives. Flat hairline rows, no card wrapper. The list
  * arrives already narrowed to the scope switch's Mine · Issues · All (app.js,
  * scope.js). This is the phone's landing tab.
  *
