@@ -836,6 +836,12 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
     sheet = open_filter_sheet(page, "paneBoard")
     names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
     assert names == ["sort", "status", "project", "person", "due", "updated"], names
+    # five peers are a segmented control, not a select: due is the raised one
+    sort = sheet.locator(".filter-sheet-row[data-name='sort'] .segmented")
+    expect(sort.locator(".segmented-item")).to_have_text(["Due", "Priority", "Modified", "Created", "Title"])
+    expect(sort.locator(".segmented-item[aria-pressed='true']")).to_have_text("Due")
+    assert not any(sort.locator(".segmented-item").evaluate_all("els => els.map(e => e.scrollWidth > e.clientWidth)"))
+    expect(sheet.locator("select[name='sort']")).to_have_count(0)
     status = sheet.locator(".filter-checks[data-name='status']")
     expect(status.locator("input[name='status']")).to_have_count(7)
     expect(status.locator("input[name='status'][value='deferred']")).to_have_count(1)
