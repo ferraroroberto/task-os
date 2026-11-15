@@ -360,7 +360,7 @@
 .issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .issue-form { display: flex; gap: 6px; }
 .issue-form .input-native { flex: 1 1 auto; min-width: 0; }
-.issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
+.issue-form .button-primary, .issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
 a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); border-color: var(--line); }
 .chip-issue-closed .chip-label { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .chip-issue .chip-state { width: var(--icon-inline); height: var(--icon-inline); color: var(--success); }
