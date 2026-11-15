@@ -573,8 +573,10 @@ def _snooze_from_the_chips(page: Page, base: str, shots: Path, task_id: int, tod
     expect(chips).to_have_count(2)
     row.hover()
     expect(chips).to_have_text(["Tomorrow", "Next week"])
-    # laid out for the hovered row only, over the title's end, so a resting row keeps the action-row budget
+    # laid out for the hovered (or focused) row only, over the title's end, so a resting row keeps the
+    # action-row budget; the closed row menu handed focus back to this row's ⋯, so rest means focus too
     page.mouse.move(0, 0)
+    page.evaluate("document.activeElement.blur()")
     expect(row.locator(".trow-snooze")).to_be_hidden()
     row.hover()
     expect(row.locator(".trow-snooze")).to_be_visible()
