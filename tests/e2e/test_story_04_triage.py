@@ -101,7 +101,7 @@ from tests.e2e._ui import (
     open_settings_sheet,
     text_contrast,
 )
-from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, scroll_to_top, shot
 
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
@@ -572,6 +572,7 @@ def _row_menu_in_full(page: Page, shots: Path, menu, row):
     kebab = row.locator(".trow-kebab")
     expect(kebab).to_have_attribute("aria-haspopup", "menu")
     dismiss_toasts(page)
+    scroll_to_top(page)   # the menu is placed from the kebab where it is when pressed, so the list rests first
     kebab.click()
     menu = page.locator(".row-menu")
     expect(menu).to_be_visible()

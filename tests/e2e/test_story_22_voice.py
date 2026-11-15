@@ -167,6 +167,19 @@ def _bars_settled(mic) -> None:
     expect(mic.locator(".rec-wave-bars i:not([style*='scaleY(1)'])")).to_have_count(0)
 
 
+def _open_today(page: Page, base: str) -> None:
+    """Load the app and wait for the drawer Today opens by itself.
+
+    Desktop Today opens its first task in the drawer, and that drawer is on
+    screen behind every shot of the add dialog. Its fetch has no fixed
+    duration — and `settle()` stops waiting on the network after five seconds —
+    so the story waits, longer than that, for the task to be in it rather than
+    leaving the capture to catch it half-painted.
+    """
+    page.goto(base + "/")
+    expect(page.locator("#taskDrawer #drawerTitle")).to_have_value(re.compile(r"\S"), timeout=20_000)
+
+
 def _open_add(page: Page):
     """The + in the strip opens the add dialog, as a user would.
 
@@ -184,7 +197,7 @@ def _mic_live_and_recording(ctx, base: str, shots: Path, inst):
     """Steps 1-2: the mic is live; one click starts recording."""
     ctx.add_init_script(FAKE_MIC)
     page: Page = ctx.new_page()
-    page.goto(base + "/")
+    _open_today(page, base)
 
     # 1. the add dialog: the mic is live, and no hint is claiming otherwise
     dialog = _open_add(page)
@@ -371,7 +384,7 @@ def _no_endpoint_says_why(browser: Browser, shots: Path, voiceless_webapp) -> No
     ctx2 = browser.new_context(viewport=DESKTOP, color_scheme="light")
     ctx2.add_init_script(FAKE_MIC)
     p2: Page = ctx2.new_page()
-    p2.goto(voiceless_webapp.base + "/")
+    _open_today(p2, voiceless_webapp.base)
     d2 = _open_add(p2)
     hint = d2.locator(".quick-add-voice-hint")
     expect(hint).to_be_visible()

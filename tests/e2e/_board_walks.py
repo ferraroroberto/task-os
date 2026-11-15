@@ -33,7 +33,11 @@ from tests.e2e._geometry import (
 )
 from tests.e2e._surface import surface
 from tests.e2e._ui import board_mode, close_filter_sheet, filter_button, open_filter_sheet
-from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, shot
+from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, scroll_to_top, shot
+
+
+#: Each Board column is a scroller of its own; story 16 frames them from their tops.
+BOARD_COLUMNS = "#paneBoard .board-col"
 
 
 def _walk_keyboard_actions(page: Page, base: str, shots: Path) -> None:
@@ -134,6 +138,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     page.keyboard.press("1")
     expect(page.locator("#toast")).to_have_text(re.compile("2 tasks"))
     assert [_get(base, f"/api/tasks/{i}")["status"] for i in ids] == ["inbox", "inbox"]
+    scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-2-desktop.png")
     _clear_toasts(page)
     page.keyboard.press("z")
@@ -172,6 +177,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(11)
     expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
+    scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
     surface(page, "app.keys-help")
     page.keyboard.press("Escape")
@@ -182,6 +188,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     page.click("#themeToggle")
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
+    scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-4-desktop.png")
     page.keyboard.press("Escape")
     page.click("#themeToggle")
@@ -190,6 +197,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     page.fill("#paletteInput", ">priority")
     expect(page.locator(".palette-item").first).to_contain_text("Cycle priority")
     expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
+    scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-5-desktop.png")
     surface(page, "app.palette")
     page.keyboard.press("Escape")
