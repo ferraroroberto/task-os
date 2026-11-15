@@ -18,11 +18,11 @@ export function section(name, title, iconName) {
 }
 
 /** A sub-form's labelled button: Add link, Set folder, Add blocker, Add
- *  child, Create issue, Link, Send. Each is a utility at the control height
- *  (`button-surface` / `button-ghost`), never the view's primary action, so
- *  none is a submit button — the design measure reads every
- *  `button[type=submit]` as the primary and holds it to button-primary's
- *  48px. The click and Enter in any of the form's inputs both submit
+ *  child, Create issue, Link, Send. The class is the caller's: the commits
+ *  (Send, Add blocker, Add child, Add link) are the vendored `button-primary`,
+ *  the rest utilities on `button-surface`. None is a submit button — the
+ *  design measure reads every `button[type=submit]` as the view's primary
+ *  and holds it to button-primary's 48px. The click and Enter in any of the form's inputs both submit
  *  the form, so its one submit handler stays the one write path; a disabled
  *  button stops Enter as it stopped the native submit. */
 export function formButton(form, className, html, opts) {

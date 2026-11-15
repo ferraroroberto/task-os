@@ -147,7 +147,7 @@ function linkAddForm(ctx, t) {
   label.className = 'input-native';
   label.placeholder = 'label (optional)';
   label.setAttribute('aria-label', 'Link label');
-  linkForm.append(url, label, formButton(linkForm, 'button-surface', 'Add link', { track: 'drawer.link-add' }));
+  linkForm.append(url, label, formButton(linkForm, 'button-primary', 'Add link', { track: 'drawer.link-add' }));
   linkForm.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const u = url.value.trim();

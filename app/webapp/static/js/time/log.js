@@ -14,6 +14,7 @@ export function buildLog(ctx) {
   log.start = el('section', 'card action-list time-start');
   const add = el('button', 'button-tint time-add', 'Add time already spent');
   add.type = 'button';
+  add.setAttribute('aria-haspopup', 'dialog');
   add.dataset.track = 'time-add';
   add.addEventListener('click', function () { ctx.addEntry(); });
   ctx.els.log.replaceChildren(log.glance, log.timer, log.start, add);

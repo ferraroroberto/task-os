@@ -364,7 +364,7 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     assert pill_style(ai_row.locator("a.chip-ai")) == folder_pill
     # pasting an AI conversation URL infers kind=ai — no manual kind anywhere
     drawer.locator(".link-form .input-native").first.fill("https://chatgpt.com/c/synthetic-e2e")
-    drawer.locator(".link-form .button-surface").click()
+    drawer.locator(".link-form .button-primary").click()
     expect(drawer.locator(".link-row a.chip-ai")).to_have_count(2)
     links = _get(base, f"/api/tasks/{watering['id']}/links")["items"]
     assert next(x for x in links if x["url"].startswith("https://chatgpt.com/"))["kind"] == "ai"

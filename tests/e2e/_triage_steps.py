@@ -160,9 +160,10 @@ def _drawer_quick_moves_and_comment(
 
     # 4. Add a comment containing a link → chip with href, newest first.
     # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
-    # hint, quiet ghost Send (the Description Edit tier).
+    # hint, Send is the vendored primary (a commit), Description's Edit the pencil icon button.
     expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment… (Ctrl+Enter to send)")
-    expect(drawer.locator(".comment-send")).to_have_class(re.compile(r"\bbutton-ghost\b"))
+    expect(drawer.locator(".comment-send")).to_have_class(re.compile(r"\bbutton-primary\b"))
+    expect(drawer.locator(".drawer-tools .icon-button").first).to_have_attribute("aria-label", "Edit description")
     drawer.locator(".comment-input").fill(f"Office booked, details at {LINK} — bring photos")
     drawer.locator(".comment-input").press("Control+Enter")
     newest = drawer.locator(".comment").first

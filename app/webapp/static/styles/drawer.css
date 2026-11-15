@@ -238,7 +238,7 @@
 .link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
-.link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
+.link-form .button-primary, .child-add .button-primary { white-space: nowrap; flex: none; }
 /* Blocked by — same row/form shape as Links: a flat list of removable
    rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
    the-gap floor. */
@@ -261,15 +261,17 @@
 }
 .blocker-form { display: flex; gap: 6px; flex-wrap: nowrap; }
 .blocker-form .select-native { flex: 1 1 auto; min-width: 0; }
-.blocker-form .button-surface { white-space: nowrap; flex: none; }
+.blocker-form .button-primary { white-space: nowrap; flex: none; }
 .comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
 /* `align-content` centres the text in the two-row box instead of parking it
    against the top edge, so the placeholder reads level with the Send button
    beside it. `safe` keeps the first line reachable once the comment grows past
    the box: centred overflow would push the top out of the scroll area. */
 .comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; align-content: safe center; }
-/* Send matches the Description "Edit" button (ghost tier, same metrics). */
-.comment-send { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
+/* Send is the vendored button-primary (48px); the inline editor's Save and
+   Cancel are the quiet ghost pair, so only they take the compact metrics. */
+.comment-send { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
+.comment-edit-wrap .comment-send { min-height: 28px; padding: 2px var(--space-sm); }
 .comment-list { display: flex; flex-direction: column; }
 /* Repeating entries = flat list rows on a hairline (design.md list-row). */
 .comment { padding: var(--space-sm) 0; border-top: 1px solid var(--line-muted); }
