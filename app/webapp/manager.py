@@ -148,6 +148,18 @@ class WebappManager:
             return f"https://{host}:{self.config.port}"
         return self.base_url
 
+    @property
+    def child_pid(self) -> int | None:
+        """The pid of the webapp this manager spawned and that is still running.
+
+        ``None`` when nothing was spawned here (an adopted external webapp
+        included) or the child has exited. ``start(wait=False)`` cannot say:
+        its status carries no pid until the child answers ``/healthz``.
+        """
+        if self._proc is not None and self._proc.poll() is None:
+            return self._proc.pid
+        return None
+
     def is_reachable(self) -> bool:
         """A real ``/healthz`` round-trip — a port check cannot see a wedge."""
         host = _loopback_host(self.config.host)
