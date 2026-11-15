@@ -42,7 +42,6 @@ const CLOSED = { done: 1, cancelled: 1 };
  *          onOpen: (id:number) => void}} ctx
  * @returns {{attach: (t:object, kebab:HTMLElement) => void, toggleDone: (t:object, el:HTMLElement) => void,
  *            move: (t:object, el:HTMLElement) => void,
- *            snooze: (t:object, actionId:string, el:HTMLElement) => void,
  *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
 export function createTaskMenu(ctx) {
@@ -138,8 +137,6 @@ export function createTaskMenu(ctx) {
     toggleDone: function (t, el) { run(actionById(CLOSED[t.status] ? 'reopen' : 'complete'), t, el); },
     /** The row's Move verb: the menu's Move…, one tap sooner. */
     move: function (t, el) { run(actionById('change-date'), t, el); },
-    /** A snooze chip: the `snooze-tomorrow` / `snooze-next-week` action, no sheet. */
-    snooze: function (t, actionId, el) { ctx.actions.run(actionById(actionId), [t], undefined, refocus(t, el)); },
     endRender: function () { ctl.endRender(); },
     close: function () { ctl.close(); },
   };

@@ -93,6 +93,10 @@
 .board-col { min-width: 0; display: flex; flex-direction: column; padding: 0; }
 /* a lane is the container its rows ask how wide they are (rows.css `@container lane`) */
 .board-col { container: lane / inline-size; }
+/* An empty lane holds no rows to ask, and inline-size containment would size it
+   to nothing: it collapses to its header's own width instead (desktop, below), so
+   the Done lane's journal link stays inside its title. */
+.board-col.is-empty { container-type: normal; }
 /* Week mode on the phone: one list, the lanes stacked as its sections. */
 .board-week { display: flex; flex-direction: column; gap: var(--space-md); }
 .board-list { border-top: 1px solid var(--line-muted); }

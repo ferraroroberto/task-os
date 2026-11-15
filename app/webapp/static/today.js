@@ -16,8 +16,7 @@
  * groups to tell apart: a lone "No project" header
  * separated nothing. Rows are the ONE task row (rows.js) — the
  * completion circle, the title over its meta line (the project hidden only
- * where a sub-header already names it), the Tomorrow / Next week snooze chips
- * and the ⋯ menu, where Snooze… (every phrase, a date) and Change date… live. Flat hairline rows, no card wrapper. The list
+ * where a sub-header already names it) and the ⋯ menu, where Snooze… (every phrase, a date) and Change date… live. Flat hairline rows, no card wrapper. The list
  * arrives already narrowed to the scope switch's Mine · Issues · All (app.js,
  * scope.js). This is the phone's landing tab.
  *
@@ -216,7 +215,7 @@ function buildGroup(group, handlers, o, headed) {
   wrap.dataset.root = rootId == null ? '' : String(rootId);
   if (headed) wrap.appendChild(groupTitle(group, handlers));
   const list = rowList(group.items, handlers, {
-    hideProject: headed, snooze: true,
+    hideProject: headed,
     selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
   });
   list.classList.add('today-list');

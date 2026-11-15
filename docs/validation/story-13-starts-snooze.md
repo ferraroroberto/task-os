@@ -57,8 +57,14 @@ Result: **verified** (e2e desktop + phone legs · unit across repo, API, CLI, mi
 
 **Expected:** the chips commit through the shared action runner (`snooze-tomorrow`, `snooze-next-week` in `actions.js`), so the write, the due-moves-with-start rule, the toast and Undo are the sheet's. Every open Today row has them; the Board's rows, closed rows and Select mode do not. Both chips carry a `data-track` id.
 
-**Screenshots:** [chips on the hovered row](../screenshots/story-13-starts-snooze-3-desktop.png); the Today shots that were taken with the pointer over a row now show them (`story-05-board-6`, `story-05-board-13`, `story-13-starts-snooze-4`, `story-29-row-actions-1`, `story-30-today-split-2`, `story-31-today-horizons-1`), and Settings → Row actions lists the two new actions (`story-29-row-actions-2`).
+**Screenshots:** the chips on the hovered row (retired below, shot removed); the Today shots that were taken with the pointer over a row now show them (`story-05-board-6`, `story-05-board-13`, `story-13-starts-snooze-4`, `story-29-row-actions-1`, `story-30-today-split-2`, `story-31-today-horizons-1`), and Settings → Row actions lists the two new actions (`story-29-row-actions-2`).
 
 **Test:** `tests/e2e/test_story_04_triage.py::test_desktop_triage` — `_snooze_from_the_chips` (desktop hover, both chips, Undo, hidden at rest) and the phone assertion that no chip is drawn; `tests/e2e/test_story_07_phone.py` — a swipe left set to `snooze-tomorrow` snoozes and Undo restores; `tests/test_row_actions.py::test_the_one_tap_snoozes_plan_undo_and_say_what_snooze_says`.
 
 **Result:** the unit legs and both e2e legs pass in Chromium and WebKit with synthetic touch pointers on the disposable seeded instance, and the full gate is green. The chips were also looked at in dark mode on the seeded instance (a headless Chromium hover at 1440×900): accent text on the hover tint, the fade matching the row. **Not verified:** a headed walk by hand, and the swipe's feel on a real phone. Date: 2026-11-14.
+
+## Snooze chips retired (2026-11-15)
+
+**Why:** with the pointer over a Today row, the two chips made five controls beside the row's own button, past the action-row budget of a toggle, one extra and the kebab, and their boxes lay over the row's main button, so the design review failed the row for control count and for overlapping tap areas. The hover-only design kept a resting row inside the budget but not the row under the pointer or the keyboard's target.
+
+**Now:** a row carries the circle, the Move verb and the ⋯ menu. One-tap snooze stays available where it costs no row width: Settings → Row actions can set a swipe or a ⋯ menu entry to *Snooze until tomorrow* / *Snooze until next week* (the same actions, toast and Undo), and the ⋯ menu's *Snooze…* and the `S` key are unchanged. The chip walk and `story-13-starts-snooze-3-desktop.png` are gone; the unit test of the two actions and the phone swipe leg remain.
