@@ -43,6 +43,10 @@
   }
   body[data-drawer="open"] { overflow: hidden; }
   body[data-drawer="open"] nav.tabs { visibility: hidden; }
+  /* The sheet covers the whole screen, so the page under it is not a tap target: its
+     headers and rows are dropped from hit-testing and the accessibility tree (a layout
+     and scroll position keep, nothing reflows when the sheet closes). */
+  body[data-drawer="open"] .app > :not(.drawer) { visibility: hidden; }
 }
 /* Today's split view: at the drawer's own desktop breakpoint the Today
    tab is two columns, the list on the left and the detail pane on the right,
