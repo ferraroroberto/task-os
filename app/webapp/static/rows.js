@@ -165,8 +165,7 @@ function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
  * The link glyphs (folder, AI conversation, issue) and the person are not on
  * the row: the row menu opens each link, the drawer shows all of them.
  * @param {object} t
- * @param {{hideProject?: boolean, hideStatus?: boolean, pills?: boolean, assignee?: string}} [opts]
- *        hideProject: the view's sub-header names the project (Today's groups);
+ * @param {{hideStatus?: boolean, pills?: boolean, assignee?: string}} [opts]
  *        pills: a title pill names the project, so a task with a project has no
  *        context name here (never its issue code in the project's place);
  *        hideStatus: the view already says the status (the Board's columns);
@@ -200,7 +199,7 @@ export function metaLine(t, opts) {
     meta.appendChild(metaPart('state trow-ctx', null, t.status, 'Status ' + t.status));
   }
   if (t.priority === 'high') meta.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
-  const project = t.root && !o.hideProject && !o.pills ? t.root.title : '';
+  const project = t.root && !o.pills ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
   // three levels down reads "Home renovation › Kitchen" on hover)
   if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
@@ -323,7 +322,7 @@ function rowKebab(t, menu, li) {
  *                  move: (t:object, el:HTMLElement)=>void}}} handlers
  *          menu (optional) is the view's row menu (rowmenu.js) — the kebab,
  *          the circle and the Move verb all commit through it
- * @param {{depth?: number, extra?: HTMLElement, hideProject?: boolean,
+ * @param {{depth?: number, extra?: HTMLElement,
  *          hideStatus?: boolean, draggable?: boolean, tag?: string, selectable?: boolean,
  *          selected?: boolean, swipe?: boolean, verb?: boolean,
  *          pills?: boolean, assignee?: string}} [opts]
@@ -411,7 +410,9 @@ export function taskRow(t, handlers, opts) {
  * @param {Array<object>} items
  * @param {{onOpen: Function, onStatus: Function, onToggleSelect?: Function, menu?: object}} handlers
  * @param {object} [opts]  forwarded to every row; `isSelected(id)` resolves
- *                         each row's `selected` flag
+ *                         each row's `selected` flag; `assignees` (member id →
+ *                         name) gives each row its assignee pill, passed only
+ *                         in the Everyone view
  */
 export function rowList(items, handlers, opts) {
   const o = opts || {};
@@ -419,7 +420,9 @@ export function rowList(items, handlers, opts) {
   ul.className = 'trows';
   ul.setAttribute('role', 'list');
   items.forEach(function (t) {
-    const rowOpts = o.isSelected ? Object.assign({}, o, { selected: o.isSelected(t.id) }) : o;
+    const rowOpts = Object.assign({}, o);
+    if (o.isSelected) rowOpts.selected = o.isSelected(t.id);
+    if (o.assignees) rowOpts.assignee = o.assignees[t.owner];
     ul.appendChild(taskRow(t, handlers, rowOpts));
   });
   return ul;

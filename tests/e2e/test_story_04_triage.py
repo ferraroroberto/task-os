@@ -344,7 +344,7 @@ def _first_due_task_fills_the_right(page: Page, base: str, shots: Path, drawer, 
     assert list_box["x"] + list_box["width"] <= drawer_box["x"] + 1, (list_box, drawer_box)
     assert 0.35 * DESKTOP["width"] <= list_box["width"] <= 0.6 * DESKTOP["width"], list_box
     assert 0.35 * DESKTOP["width"] <= drawer_box["width"] <= 0.6 * DESKTOP["width"], drawer_box
-    kebab = pane.locator(".today-group .trow-kebab").first.bounding_box()
+    kebab = pane.locator(".today-list .trow-kebab").first.bounding_box()
     assert kebab and kebab["x"] + kebab["width"] <= drawer_box["x"], "the ⋯ must sit inside the list half"
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-30-today-split-1-desktop.png")
@@ -369,7 +369,7 @@ def _close_and_keymap_beside_it(page: Page, base: str, shots: Path, drawer, draw
     expect(empty).to_contain_text("Select a task to see its details")
     empty_box = empty.bounding_box()
     assert empty_box and abs(empty_box["x"] - drawer_box["x"]) <= 1, (empty_box, drawer_box)
-    row = pane.locator(".today-group .trow").first
+    row = pane.locator(".today-list .trow").first
     task_id = int(row.get_attribute("data-id"))
     row.locator(".trow-kebab").click()
     menu = page.locator(".row-menu")
@@ -862,14 +862,14 @@ def _phone_snooze_target(page: Page, base: str, shots: Path):
     page.goto(f"{base}/")          # drop the story's ?status=todo first
     page.locator("nav.tabs .tab[data-tab='today']").tap()
     expect(page.locator("#paneToday")).to_be_visible()
-    today_row = page.locator("#paneToday .today-group .trow").first
+    today_row = page.locator("#paneToday .today-list .trow").first
     expect(today_row).to_be_visible()
     # the row has no clock any more (#311): snooze lives in the ⋯ menu,
     # whose kebab is a touch target clear of the open target
     # (the rows on screen: Later and No date start folded, #393)
-    assert_min_target(page.locator("#paneToday .today-group .trow-kebab:visible"))
-    assert_no_overlap(page.locator("#paneToday .today-group .trow-main:visible, "
-                                   "#paneToday .today-group .trow-kebab:visible"))
+    assert_min_target(page.locator("#paneToday .today-list .trow-kebab:visible"))
+    assert_no_overlap(page.locator("#paneToday .today-list .trow-main:visible, "
+                                   "#paneToday .today-list .trow-kebab:visible"))
     today_row.locator(".trow-kebab").tap()
     page.locator(".row-menu [data-action='snooze']").tap()
     menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")

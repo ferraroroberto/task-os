@@ -658,7 +658,7 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         shot(page, shots / "story-31-today-horizons-1-desktop.png")
         # 2. The text filter reaches both from the top strip
         q = page.locator("#todayFilterText .filter-q")
-        listed = pane.locator(".today-group .trow[data-id]")
+        listed = pane.locator(".today-list .trow[data-id]")
         q.fill("residence card")
         expect(listed).to_have_count(1)
         expect(later.locator(f".trow[data-id='{far}']")).to_be_visible()
@@ -686,13 +686,13 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     The seed's one synced coding task (it carries an issue_ref) is the Issues
     scope; everything else is Mine. The pick survives a reload through
     ``?scope=``, and Mine writes no key at all. Under Issues the Soon horizon
-    holds a single project's group, so it draws no sub-header and the row
-    names its project on the meta line instead.
+    holds a single project's rows, drawn as the Board draws them: no
+    sub-header, the project as the row's leading pill.
     """
     pane = page.locator("#paneToday")
     switch = page.locator("#todayScope .segmented.scope-switch")
     pressed = switch.locator(".segmented-item[aria-pressed='true']")
-    rows = pane.locator(".today-group .trow[data-id]")
+    rows = pane.locator(".today-list .trow[data-id]")
     open_items = _get(base, "/api/tasks")["items"]
     issue_ids = sorted(t["id"] for t in open_items if t.get("issue_ref"))
     assert issue_ids, "the seed carries one synced coding task"
@@ -712,9 +712,9 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     page.reload()
     expect(pressed).to_have_text("Issues")
     expect(rows).to_have_count(len(issue_ids))
-    # one group in the horizon: no sub-header, the row names its project
+    # no sub-header anywhere on Today: the row leads with its project's pill
     expect(pane.locator(".today-group-title")).to_have_count(0)
-    expect(rows.first.locator(".trow-project")).to_be_visible()
+    expect(rows.first.locator(".trow-pill-project")).to_be_visible()
     _clear_toasts(page)
     shot(page, shots / "story-31-today-horizons-3-desktop.png")
     # 4. All, then back to Mine, which drops the key again

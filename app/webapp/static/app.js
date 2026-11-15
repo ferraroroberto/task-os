@@ -624,7 +624,7 @@ function renderTodayPane() {
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,
   }, Object.assign({
     sort: state.filters.sort, query: state.filters.q,
-    calendar: state.calendar,
+    calendar: state.calendar, assignees: assigneeNames(),
   }, selectOpts()));
   menus.today.endRender();
   app.renderHeadStatus();

@@ -10,13 +10,12 @@
  * Soon sits open, Later and No date start closed with their counts and keep
  * whatever the user toggled across re-renders.
  * Under a text filter all three open, so a match is never folded away. Inside a horizon
- * the tasks are grouped by root project with the shared due-first sort inside
- * each group (a task's date always decides its position, recurring or
- * not), and the project sub-headers are drawn only when there are two or more
- * groups to tell apart: a lone "No project" header
- * separated nothing. Rows are the ONE task row (rows.js) — the
- * completion circle, the title over its meta line (the project hidden only
- * where a sub-header already names it) and the ⋯ menu, where Snooze… (every phrase, a date) and Change date… live. Flat hairline rows, no card wrapper. The list
+ * the tasks are ONE flat list in the Board's order (rows.js `sortBoardItems`:
+ * due day, then no project, then project A–Z, then title), so an earlier date
+ * always sits above a later one whatever its project, recurring or not. The
+ * project is the row's leading pill, and the assignee pill joins it in the
+ * Everyone view, exactly as on the Board. Rows are the ONE task row (rows.js) — the
+ * completion circle, the title over its meta line and the ⋯ menu, where Snooze… (every phrase, a date) and Change date… live. Flat hairline rows, no card wrapper. The list
  * arrives already narrowed to the scope switch's Mine · Issues · All (app.js,
  * scope.js). This is the phone's landing tab.
  *
@@ -36,7 +35,7 @@ import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { calendarLane } from './calendar.js';
 import { collapsibleCard } from './collapsible.js';
 import { addDays, relDue, todayISO } from './format.js';
-import { compareItems, rowList } from './rows.js';
+import { rowList, sortBoardItems } from './rows.js';
 
 /** Later and No date's open state as the user left it: closed until
  *  toggled, kept across the re-renders a refresh or a filter change makes,
@@ -60,10 +59,10 @@ export function bucketToday(items, today, sort) {
   });
   return {
     today: t,
-    due: groupByRoot(due, sort),
-    week: groupByRoot(week, sort),
-    later: groupByRoot(later, sort),
-    nodate: groupByRoot(nodate, sort),
+    due: sortBoardItems(due, sort),
+    week: sortBoardItems(week, sort),
+    later: sortBoardItems(later, sort),
+    nodate: sortBoardItems(nodate, sort),
     counts: {
       overdue: due.filter(function (it) { return it.due < t; }).length,
       today: due.filter(function (it) { return it.due === t; }).length,
@@ -91,37 +90,13 @@ export function headLine(counts) {
   return bits.length ? { text: bits.join(' · '), attention: true } : { text: 'Nothing due today', attention: false };
 }
 
-/** [{root, items}] — by top ancestor (null = no project); groups ordered by
- *  earliest due then title; inside a group, the shared sort — same as every
- *  other view, so editing a task's due date always reorders it correctly
- *  relative to its group-mates, recurring or not. */
-function groupByRoot(items, sort) {
-  const cmp = compareItems(sort || 'due');
-  const groups = new Map();
-  items.forEach(function (it) {
-    const key = it.root ? it.root.id : null;
-    if (!groups.has(key)) groups.set(key, { root: it.root || null, items: [] });
-    groups.get(key).items.push(it);
-  });
-  const out = Array.from(groups.values());
-  out.forEach(function (g) {
-    g.items.sort(cmp);
-  });
-  out.sort(function (a, b) {
-    const ad = a.items.reduce(function (m, it) { return m == null || it.due < m ? it.due : m; }, null) || '';
-    const bd = b.items.reduce(function (m, it) { return m == null || it.due < m ? it.due : m; }, null) || '';
-    return ad.localeCompare(bd) || ((a.root ? a.root.title : '').localeCompare(b.root ? b.root.title : ''));
-  });
-  return out;
-}
-
 /**
  * @param {HTMLElement} host
  * @param {Array<object>} items  the shared filtered list
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
  *          onToggleSelect?: (id:number)=>void}} handlers
  * @param {{sort?: string, today?: string, query?: string,
- *          calendar?: object|null,
+ *          calendar?: object|null, assignees?: Object<string,string>,
  *          selectable?: boolean, isSelected?: (id:number)=>boolean}} [opts]
  * @returns {{overdue: number, today: number, week: number, later: number, nodate: number}}
  *          the horizon counts drawn — the page header's exceptions line reads
@@ -164,7 +139,7 @@ export function renderToday(host, items, handlers, opts) {
         actionLabel: 'Add a task for today', onAction: function () { handlers.onAdd({ due: t }); },
       } : undefined));
   } else {
-    appendGroups(section, data.due, handlers, o);
+    appendRows(section, data.due, handlers, o);
   }
   main.appendChild(section);
 
@@ -184,7 +159,7 @@ export function renderToday(host, items, handlers, opts) {
  *  hairline instead of a card box). `forceOpen` null = always open (Soon);
  *  otherwise the horizon keeps the user's toggle (`horizonOpen`), and `true`
  *  (a text filter is on) opens it without recording that as their choice. */
-function horizon(cls, title, groups, n, handlers, o, forceOpen, empty) {
+function horizon(cls, title, items, n, handlers, o, forceOpen, empty) {
   const card = collapsibleCard({
     className: 'disclosure-flat today-horizon ' + cls, title: title, titleClass: 'overline',
     count: String(n), countClass: 'section-count',
@@ -195,28 +170,18 @@ function horizon(cls, title, groups, n, handlers, o, forceOpen, empty) {
     card.card.open = forceOpen || horizonOpen[cls];
     if (!forceOpen) card.card.addEventListener('toggle', function () { horizonOpen[cls] = card.card.open; });
   }
-  if (!groups.length && empty) card.body.appendChild(empty);
-  appendGroups(card.body, groups, handlers, o);
+  if (!items.length && empty) card.body.appendChild(empty);
+  appendRows(card.body, items, handlers, o);
   return card.card;
 }
 
-/** One horizon's project groups. A sub-header only separates, so it is drawn
- *  only when there are two or more groups; with one, the rows name their own
- *  project on the meta line instead. */
-function appendGroups(host, groups, handlers, o) {
-  const headed = groups.length >= 2;
-  groups.forEach(function (g) { host.appendChild(buildGroup(g, handlers, o, headed)); });
-}
-
-function buildGroup(group, handlers, o, headed) {
-  const wrap = document.createElement('section');
-  wrap.className = 'today-group' + (headed ? '' : ' is-unheaded');
-  const rootId = group.root ? group.root.id : null;
-  wrap.dataset.root = rootId == null ? '' : String(rootId);
-  if (headed) wrap.appendChild(groupTitle(group, handlers));
-  const list = rowList(group.items, handlers, {
-    hideProject: headed,
-    selectable: !!(o && o.selectable), isSelected: o && o.isSelected,
+/** One horizon's rows as one flat list. The project and (Everyone view) the
+ *  assignee are the row's leading pills, the Board's own row options. */
+function appendRows(host, items, handlers, o) {
+  if (!items.length) return;
+  const list = rowList(items, handlers, {
+    pills: true, assignees: o.assignees,
+    selectable: !!o.selectable, isSelected: o.isSelected,
   });
   list.classList.add('today-list');
   // The overdue / due-today tint on the whole row. The date comes off the
@@ -228,29 +193,5 @@ function buildGroup(group, handlers, o, headed) {
     const rel = relDue(chip ? chip.dataset.due : '');
     if (rel.tone) row.classList.add('is-' + rel.tone);
   });
-  wrap.appendChild(list);
-  return wrap;
-}
-
-/** A project sub-header: the root's name (it opens the project) and its count. */
-function groupTitle(group, handlers) {
-  const title = document.createElement('h3');
-  title.className = 'today-group-title';
-  if (group.root) {
-    const btn = document.createElement('button');
-    btn.dataset.track = 'today.group-open';
-    btn.type = 'button';
-    btn.className = 'today-group-link';
-    btn.textContent = group.root.title;
-    btn.addEventListener('click', function () { handlers.onOpen(group.root.id); });
-    title.appendChild(btn);
-  } else {
-    title.textContent = 'No project';
-    title.classList.add('is-loose');
-  }
-  const n = document.createElement('span');
-  n.className = 'today-group-count';
-  n.textContent = String(group.items.length);
-  title.appendChild(n);
-  return title;
+  host.appendChild(list);
 }
