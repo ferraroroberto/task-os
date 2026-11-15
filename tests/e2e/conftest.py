@@ -758,6 +758,31 @@ def scroll_to_bottom(page: Page, target: Locator) -> None:
     )
 
 
+def scroll_to_top(page: Page, scrollers: str | None = None) -> None:
+    """Put scrollers that have moved back at offset zero before a capture.
+
+    The counterpart of `scroll_to_bottom` for a shot that means to show a pane
+    from its start. Where a list rests after a re-render or a focus move
+    depends on which of two layout passes the browser's scroll anchoring ran
+    after, and `settle()` only waits for an offset to stop moving — it cannot
+    tell a wrong rest from a right one. A story that frames a pane from its top
+    says so before it opens whatever it is about to photograph, because a popover
+    is placed from where its anchor is *then*.
+
+    With no argument it resets the window and every element that has scrolled;
+    a CSS selector limits it to the matching scrollers and leaves the window
+    alone, for a shot whose framing includes where the page itself rests.
+    """
+    if scrollers is None:
+        page.evaluate(
+            "() => { window.scrollTo(0, 0);"
+            " document.querySelectorAll('*').forEach(e => { if (e.scrollTop) e.scrollTop = 0; }); }"
+        )
+    else:
+        page.evaluate("sel => document.querySelectorAll(sel).forEach(e => { e.scrollTop = 0; })", scrollers)
+    settle(page)
+
+
 #: Chromium switches every capture needs. Only Chromium: WebKit and Firefox
 #: reject unknown switches at launch.
 _CHROMIUM_CAPTURE_ARGS = ("--disable-partial-raster",)

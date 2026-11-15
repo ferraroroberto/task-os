@@ -58,20 +58,21 @@ screen is still unpinned. Everything the app paints from a clock, a path or a
 build identity is pinned for exactly this reason — see
 `tests/e2e/conftest.py`'s "deterministic capture" section.
 
-Known open flake, so far unreproduced on demand: under heavy host load, all
-four of story 22's desktop shots can move together at once — thousands of
-pixels, well past the raster bands above, common bbox the Board behind the
-add dialog. That is real content movement, not the rasteriser. A dedicated
-CPU-load harness scoped to `test_story_22_voice.py` has not reproduced the
-board-wide mover; a smaller, unrelated raster excursion on the phone nav's
-search icon reproduces instead at moderate load, and load pushed far enough
-instead starves the disposable webapp's own boot (a timeout, not a silent
-content shift) rather than reproducing it. That rules out plain CPU
-contention as the trigger; what does trigger it (disk I/O? memory pressure?
-a specific concurrent process?) is still unknown. Reproduce with:
-`& .\.venv\Scripts\python.exe -m scripts.shot_determinism --keep <dir>` in a
-loop under whatever load actually shows up next, then diff `run-1` vs `run-2`
-of the four `story-22-voice-*-desktop.png` files.
+Two captures used to move on their own and are now pinned by their stories:
+
+* Story 22's four desktop shots moved together over the Today drawer behind the
+  add dialog: the drawer opens its first task by itself and the shot caught its
+  fetch half-painted once the host was slow enough to outlast `settle()`'s
+  five-second network wait. Delaying only the page's own task-detail responses
+  past that bound reproduces it on demand; the story now waits for the drawer's
+  title before it opens the dialog.
+* Story 16's Board shots and story 29's row menu depend on where a scroller
+  rests after a layout shift, which two runs of one commit settle differently;
+  `conftest.scroll_to_top` puts them at zero first.
+
+Story 22's phone shot still lands in the glyph band on some runs: the folder
+search magnifier's stroke falls across a sub-pixel, a few pixels at most
+14/255 off. That is this rasteriser differing from itself, not content.
 """
 
 from __future__ import annotations
