@@ -59,6 +59,24 @@
   white-space: nowrap;
 }
 .trow-title { font-size: var(--font-body); font-weight: 600; line-height: 1.5; color: var(--fg); }
+/* The Board's title line: the project as a vendored chip before the title. It
+   takes at most 45% of the line and ellipsizes inside it, so the title keeps the
+   rest; the chip holds its caption size in a tight box so the row keeps its height. */
+.trow-head { display: flex; align-items: center; gap: var(--space-xs); width: 100%; min-width: 0; }
+/* the head fills the main (a flex column that would otherwise centre it), the title starts at the edge */
+.trow-head > .trow-title { flex: 1 1 auto; min-width: 4em; text-align: start; }
+.trow-pill { padding: 0 var(--space-sm); line-height: 1.4; font-weight: 500; }
+.trow-head > .trow-pill-project { flex: 0 1 auto; min-width: 3.5em; max-width: 45%; }
+/* The twin on the meta line (rows.js `metaLine`) is for a lane too narrow to lead
+   the title with the pill: there the pill moves down to the context slot, where
+   it ellipsizes before anything else on the line and the title keeps its width. */
+.trow-pill-project-compact { display: none; }
+@container lane (max-width: 279px) {
+  .trow-head > .trow-pill-project { display: none; }
+  .trow-meta.action-row-meta > .trow-pill-project-compact { display: inline-flex; }
+}
+.trow-meta .trow-pill-project-compact { padding: 0 5px; font-size: inherit; line-height: 1.35; }
+.trow-meta.action-row-meta > .trow-pill-project-compact.trow-ctx:not(:first-child)::before { content: none; }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
 /* The meta line: quiet text, one line, its parts joined by a middle dot.
    Nothing on it is a target — the whole line belongs to the row's open. */
@@ -85,6 +103,11 @@
    chip's caption size, and a tighter box so the 60px row keeps its height. */
 .trow-meta .trow-flag { padding: 0 5px; font-size: inherit; line-height: 1.35; gap: 2px; }
 .trow-meta .trow-flag .icon { flex: none; vertical-align: 0; }
+/* The assignee pill (the Everyone scope): the context slot, so it ellipsizes before any other part and takes no leading dot. */
+.trow-meta .trow-pill-assignee { padding: 0 5px; font-size: inherit; line-height: 1.35; }
+/* a squeezed pill keeps an initial and its ellipsis instead of shrinking to a blank chip */
+.trow-meta.action-row-meta > .trow-pill-project-compact, .trow-meta.action-row-meta > .trow-pill-assignee { min-width: 2.4em; }
+.trow-meta.action-row-meta > .trow-pill-assignee.trow-ctx:not(:first-child)::before { content: none; }
 .trow-count { display: inline-flex; align-items: center; gap: 2px; }
 .trow-count .icon { vertical-align: 0; }
 .trow-recur { margin-right: 2px; }

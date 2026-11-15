@@ -280,8 +280,8 @@ def _parent_move_remove_and_cycle(
     assert [c["title"] for c in moved["breadcrumb"]] == ["Family admin"]
     assert moved["activity"][0]["field"] == "parent"
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Family admin"])
-    # …and the row says where it lives now (the meta line's project part)
-    expect(_trow(page, "renew passport", "#paneBoard").locator(".trow-project")).to_have_text("Family admin")
+    # …and the row says where it lives now (the project pill before the title)
+    expect(_trow(page, "renew passport", "#paneBoard").locator(".trow-pill-project")).to_have_text("Family admin")
     shot(page, shots / "story-04-triage-7-desktop.png")
     # Remove parent: one tap from the head, no confirmation, back to the top level
     drawer.locator(".drawer-remove-parent").click()
