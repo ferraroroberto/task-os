@@ -54,7 +54,7 @@ half, the detail pane in the right (empty state until a task opens). Its shots:
     docs/screenshots/story-25-recurrence-interval-2-phone.png
 
 **Story 29 — act on a row from its menu (#311)** rides inside
-``_walk_starts_and_snooze`` (step 4b): the same Today row, snoozed from its ⋯
+``_walk_starts_and_snooze`` (step 4b): the same Today row, moved from its ⋯
 kebab (the row has no clock any more) and read in full, through the shared
 action runner. Its shots:
 
@@ -92,6 +92,7 @@ from tests.e2e._triage_steps import (
 )
 from tests.e2e._ui import (
     SWIPE_JS,
+    assert_date_sheet,
     board_mode,
     close_filter_sheet,
     filter_button,
@@ -498,11 +499,11 @@ def _deferred_is_visible(page: Page, base: str, shots: Path):
     titles = rows.locator(".trow-title").all_inner_texts()
     assert sorted(titles) == ["Book boiler service", "renew insurance"], titles
     expect(rows.locator(".trow-starts")).to_have_count(2)
-    # #392: a neutral exception chip — the clock says "snoozed until", the day follows
+    # #392: a neutral exception chip — the clock says "starts", the day follows
     snoozed = _trow(page, "renew insurance", "#paneBoard").locator(".trow-starts")
     expect(snoozed).to_have_text(re.compile(r"^\d+ \w{3}$"))
     expect(snoozed).to_have_attribute("data-tone", "neutral")
-    expect(snoozed).to_have_attribute("title", re.compile(r"^Snoozed until \w{3} \d+ \w{3}$"))
+    expect(snoozed).to_have_attribute("title", re.compile(r"^Starts \w{3} \d+ \w{3}$"))
     dismiss_toasts(page)
     shot(page, shots / "story-13-starts-snooze-2-desktop.png")
     open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
@@ -511,10 +512,11 @@ def _deferred_is_visible(page: Page, base: str, shots: Path):
     return snoozed
 
 
-def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today):
-    """Step 4: snooze from a Today row's menu, and undo."""
-    # 4. Snooze from a Today row's menu: pick an option, the task leaves, the
-    #    toast names the day it went to — and Undo puts it straight back.
+def _move_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today):
+    """Step 4: move a Today row's due date from its menu — the start date is left alone — and undo."""
+    # 4. Move a Today row from its menu: pick an option and only the due date
+    #    changes — the task never falls asleep, so it never leaves the working
+    #    views — the toast names the day, and Undo puts the due date straight back.
     page.click("nav.tabs .tab[data-tab='today']")
     row = _trow(page, "School enrolment forms", "#paneToday")
     expect(row).to_be_visible()
@@ -533,31 +535,29 @@ def _snooze_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today)
     before = _get(base, f"/api/tasks/{task_id}")
     assert before["starts"] is None
     row.locator(".trow-kebab").click()
-    page.locator(".row-menu [data-action='snooze']").click()
+    page.locator(".row-menu [data-action='change-date']").click()
     menu = page.locator(".snooze-pop .snooze-menu")
     expect(menu).to_be_visible()
-    expect(menu.locator(".snooze-opt")).to_have_count(4)   # 3 phrases + pick a date
+    expect(menu).to_have_attribute("data-field", "due")
+    assert_date_sheet(menu, base)
     shot(page, shots / "story-13-starts-snooze-4-desktop.png")
     menu.get_by_text("Next week", exact=True).click()
 
     next_week = (today + timedelta(days=7)).isoformat()
     toast = page.locator("#toast")
-    expect(toast).to_contain_text("Snoozed to")
-    snoozed = _get(base, f"/api/tasks/{task_id}")
-    assert snoozed["starts"] == next_week
-    # #486: the due date travels with the start when it would fall before it,
-    # so the task is never left asleep past its own due day
+    expect(toast).to_contain_text("Due ")
+    expect(toast).not_to_contain_text("Snoozed")
+    moved = _get(base, f"/api/tasks/{task_id}")
     assert before["due"] and before["due"] < next_week, before["due"]
-    assert snoozed["due"] == next_week
-    expect(toast).to_contain_text("due moved too")
-    expect(_trow(page, "School enrolment forms", "#paneToday")).to_have_count(0)
-    # the change is in the log like any other field change
-    assert "starts" in [a["field"] for a in _get(base, f"/api/tasks/{task_id}")["activity"]]
+    assert (moved["due"], moved["starts"]) == (next_week, None)   # the start date is never written from a list
+    assert [a["field"] for a in moved["activity"]][:1] == ["due"]
+    # the task is not deferred: it never left the working views
+    assert task_id not in [t["id"] for t in _get(base, "/api/tasks?status=deferred")["items"]]
 
     toast.locator(".toast-action").click()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     undone = _get(base, f"/api/tasks/{task_id}")
-    assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores both
+    assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores the due date
     return menu, row, task_id, toast
 
 
@@ -565,7 +565,7 @@ def _row_menu_in_full(page: Page, shots: Path, menu, row):
     """Step 4b: the row's menu, read in full."""
     # 4b. Story 29 (#311): the row's ⋯ menu, read in full. The kebab lists the
     #     row's actions — the shared table's, offered only where they apply,
-    #     then the task's own links — and its Snooze… opens the date picker,
+    #     then the task's own links — and its Move… opens the date picker,
     #     commits through the same runner (toast + Undo), and the keyboard
     #     reaches the menu with `.`.
     row = _trow(page, "School enrolment forms", "#paneToday")
@@ -577,7 +577,7 @@ def _row_menu_in_full(page: Page, shots: Path, menu, row):
     expect(menu).to_be_visible()
     expect(kebab).to_have_attribute("aria-expanded", "true")
     actions = menu.locator(".row-menu-item").evaluate_all("els => els.map(e => e.dataset.action)")
-    assert actions[:3] == ["complete", "change-date", "snooze"], actions
+    assert actions[:2] == ["complete", "change-date"] and "snooze" not in actions, actions
     assert "reopen" not in actions and "status-todo" not in actions   # open task, already todo
     assert actions[-1] == "open"
     expect(menu.locator(".row-menu-item").first).to_be_focused()
@@ -585,21 +585,23 @@ def _row_menu_in_full(page: Page, shots: Path, menu, row):
     return actions, menu, row
 
 
-def _snooze_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
-    """The menu's snooze opens the date picker beside the row."""
-    menu.locator("[data-action='snooze']").click()
+def _move_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
+    """The menu's Move… opens the date picker beside the row."""
+    before = _get(base, f"/api/tasks/{task_id}")["due"]
+    menu.locator("[data-action='change-date']").click()
     expect(menu).to_be_hidden()
     picker = page.locator(".snooze-pop .snooze-menu")
     expect(picker).to_be_visible()
     picker.get_by_text("Tomorrow", exact=True).click()
     tomorrow = (today + timedelta(days=1)).isoformat()
     toast = page.locator("#toast")
-    expect(toast).to_contain_text("Snoozed to")
+    expect(toast).to_contain_text("Due ")
     expect(toast.locator(".toast-action")).to_have_text("Undo (Z)")
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] == tomorrow
+    moved = _get(base, f"/api/tasks/{task_id}")
+    assert (moved["due"], moved["starts"]) == (tomorrow, None)
     toast.locator(".toast-action").click()
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None
+    assert _get(base, f"/api/tasks/{task_id}")["due"] == before
     # `.` on a focused row opens its menu; Escape closes it, focus back on the kebab
     _trow(page, "School enrolment forms", "#paneToday").locator(".trow-main").focus()
     page.keyboard.press(".")
@@ -614,19 +616,20 @@ def _snooze_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
 def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, row, task_id) -> None:
     """Step 4c: Settings → Row actions sets the swipes and the menu."""
     # 4c. Story 29 (#311): Settings → Row actions sets, on this device, what a
-    #     swipe runs and what the menu lists. Swipe left → Snooze…, Cycle
-    #     priority out of the menu, Snooze… moved to the top: the row's menu
-    #     follows, a swipe left opens the snooze picker, and the action a
+    #     swipe runs and what the menu lists. Swipe left → Move…, Cycle
+    #     priority out of the menu, Move… moved to the top: the row's menu
+    #     follows, a swipe left opens the date picker, and the action a
     #     swipe runs cannot be taken out of the menu (WCAG 2.5.1). Reset puts
     #     the plan's defaults back.
+    due_before = _get(base, f"/api/tasks/{task_id}")["due"]
     card = open_settings_sheet(page, "rows")
     meta = page.locator("#rowActionsMeta")
     expect(meta).to_have_text("Default")
-    page.select_option("#swipeLeftSelect", "snooze")
+    page.select_option("#swipeLeftSelect", "change-date")
     lst = page.locator("#rowMenuList")
-    expect(lst.locator("[data-action='snooze'] .row-actions-tick")).to_have_attribute("aria-pressed", "true")
-    expect(lst.locator("[data-action='snooze'] .row-actions-tick")).to_be_disabled()
-    expect(lst.locator("[data-action='snooze'] .row-actions-hint")).to_have_text("used by swipe left")
+    expect(lst.locator("[data-action='change-date'] .row-actions-tick")).to_have_attribute("aria-pressed", "true")
+    expect(lst.locator("[data-action='change-date'] .row-actions-tick")).to_be_disabled()
+    expect(lst.locator("[data-action='change-date'] .row-actions-hint")).to_have_text("used by swipe left")
     lst.locator("[data-action='priority'] .row-actions-tick").click()
     expect(lst.locator("[data-action='priority'] .row-actions-tick")).to_have_attribute("aria-pressed", "false")
     # every control on the card is a real 44px target (the design review's TOUCH-01)
@@ -635,28 +638,28 @@ def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, r
     sizes = lst.locator(".row-actions-tick svg, .row-actions-move svg").evaluate_all(
         "els => els.map(e => Math.round(e.getBoundingClientRect().width))")
     assert set(sizes) == {16}, sizes
-    for _ in range(3):                                   # 4th in the default list → 1st
-        lst.locator("[data-action='snooze'] [data-move='up']").click()
-    expect(lst.locator(".row-actions-item").first).to_have_attribute("data-action", "snooze")
-    expect(lst.locator("[data-action='snooze'] [data-move='up']")).to_be_disabled()
+    for _ in range(2):                                   # 3rd in the default list → 1st
+        lst.locator("[data-action='change-date'] [data-move='up']").click()
+    expect(lst.locator(".row-actions-item").first).to_have_attribute("data-action", "change-date")
+    expect(lst.locator("[data-action='change-date'] [data-move='up']")).to_be_disabled()
     expect(meta).to_have_text("Custom")
     stored = page.evaluate("JSON.parse(localStorage.getItem('task-os.rowactions'))")
-    assert stored["left"] == "snooze" and stored["menu"][0] == "snooze" and "priority" not in stored["menu"], stored
+    assert stored["left"] == "change-date" and stored["menu"][0] == "change-date" and "priority" not in stored["menu"], stored
     card.scroll_into_view_if_needed()
     shot(page, shots / "story-29-row-actions-2-desktop.png")
     page.click("nav.tabs .tab[data-tab='today']")
     row = _trow(page, "School enrolment forms", "#paneToday")
     row.locator(".trow-kebab").click()
     actions = page.locator(".row-menu .row-menu-item").evaluate_all("els => els.map(e => e.dataset.action)")
-    assert actions[0] == "snooze" and "priority" not in actions, actions
+    assert actions[0] == "change-date" and "priority" not in actions, actions
     page.keyboard.press("Escape")
     expect(page.locator(".row-menu")).to_have_count(0)
     row.locator(".trow-main").evaluate(SWIPE_JS, [900, 300])          # synthetic touch: the wiring
     picker = page.locator(".snooze-pop .snooze-menu")
-    expect(picker).to_have_attribute("data-field", "starts")
+    expect(picker).to_have_attribute("data-field", "due")
     page.keyboard.press("Escape")
     expect(picker).to_have_count(0)
-    assert _get(base, f"/api/tasks/{task_id}")["starts"] is None    # a cancelled pick writes nothing
+    assert _get(base, f"/api/tasks/{task_id}")["due"] == due_before    # a cancelled pick writes nothing
     open_settings_sheet(page, "rows")
     page.click("#rowActionsReset")
     expect(meta).to_have_text("Default")
@@ -698,7 +701,8 @@ def _drawer_edits_starts(page: Page, base: str, task_id, today) -> None:
 
 def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     """A task created asleep stays out of the working views until its day, is
-    findable under *Deferred*, and a Today row can be pushed away and undone.
+    findable under *Deferred*, and a Today row can be moved to another due date and
+    back without ever falling asleep.
 
     Screenshots: docs/screenshots/story-13-starts-snooze-{1,2,4,5}-desktop.png
     """
@@ -707,10 +711,10 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     due = (today + timedelta(days=60)).isoformat()
     _quick_add_with_both_dates(page, base, shots, due, starts)
     snoozed = _deferred_is_visible(page, base, shots)
-    menu, row, task_id, toast = _snooze_from_a_today_row(page, base, shots, snoozed, today)
+    menu, row, task_id, toast = _move_from_a_today_row(page, base, shots, snoozed, today)
     actions, menu, row = _row_menu_in_full(page, shots, menu, row)
     surface(page, "today.row-menu")
-    picker = _snooze_from_the_menu(page, base, menu, task_id, toast, today)
+    picker = _move_from_the_menu(page, base, menu, task_id, toast, today)
     _settings_row_actions(page, base, shots, actions, picker, row, task_id)
     _drawer_edits_starts(page, base, task_id, today)
 
@@ -854,9 +858,9 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
 
 
 def _phone_snooze_target(page: Page, base: str, shots: Path):
-    """Story 13: the snooze control as a touch target on Today."""
+    """Story 13: the date sheet a row's Move… opens, as a touch target on Today."""
     # --------------------------------------------- story 13 (#87) ----
-    # The snooze control is a real touch target on the phone — this is the
+    # The date sheet is a real touch target on the phone — this is the
     # device where "not today" is most often decided — and its popover
     # never pushes the page sideways.
     page.goto(f"{base}/")          # drop the story's ?status=todo first
@@ -864,14 +868,14 @@ def _phone_snooze_target(page: Page, base: str, shots: Path):
     expect(page.locator("#paneToday")).to_be_visible()
     today_row = page.locator("#paneToday .today-list .trow").first
     expect(today_row).to_be_visible()
-    # the row has no clock any more (#311): snooze lives in the ⋯ menu,
+    # the row has no clock any more (#311): Move… lives in the ⋯ menu,
     # whose kebab is a touch target clear of the open target
     # (the rows on screen: Later and No date start folded, #393)
     assert_min_target(page.locator("#paneToday .today-list .trow-kebab:visible"))
     assert_no_overlap(page.locator("#paneToday .today-list .trow-main:visible, "
                                    "#paneToday .today-list .trow-kebab:visible"))
     today_row.locator(".trow-kebab").tap()
-    page.locator(".row-menu [data-action='snooze']").tap()
+    page.locator(".row-menu [data-action='change-date']").tap()
     menu = page.locator("dialog#dateDialog .snooze-menu.date-sheet")
     expect(menu).to_be_visible()
     assert_min_target(menu.locator(".snooze-opt"))

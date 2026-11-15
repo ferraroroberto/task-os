@@ -1,12 +1,12 @@
 # Task workflow
 
-## Start dates & snooze
+## Start dates
 
 A task can carry a **start date** (`starts`) — the day it starts mattering. Until then it is **deferred**: absent from the working views (Board, Today, `tasks ls`), present everywhere that claims to show everything (the Board under the `deferred` filter pill, search, `tasks show`, `tasks ls --status all`), and back on its own on the day it starts. "Renew car insurance, due 15 Oct, nothing to do before 1 Oct" is created asleep and simply appears on 1 Oct.
 
 Deferred is a **visible state, never a silent absence**. Wherever a sleeping task still shows it wears a quiet `starts 5 Sep` marker on its meta line, and the filter sheet's status ticks carry a **`deferred`** entry that lists exactly those tasks. That entry is a *modifier*, not a status: it flips the list from awake to sleeping and intersects with any real statuses ticked beside it, so `?status=deferred` is the sleeping open tasks and `?status=deferred,todo` the sleeping ones that are `todo`. Like every filter, the state is the URL.
 
-**Snooze** is that same field worn as a row control, not a second mechanism, reached from the row's ⋯ menu (*Snooze*) or the `S` key — and, when Settings → Row actions sets a swipe or a menu entry to *Snooze until tomorrow* / *Snooze until next week*, in one gesture with the same toast and Undo: *Tomorrow · This weekend · Next week · Pick a date…* — one tap sets `starts`, the task leaves the list, and a toast names where it went (`Snoozed to Sat 5 Sep`) with an **Undo** that puts the old value back. **A snooze never strands a task:** when the new start day is after the task's due date, the due date moves to the same day (the toast says `due moved too`, Undo restores both) — so the task reappears on its due day instead of coming back overdue; a later due date, a task with no due date, and any request that names `due` itself are left exactly as sent. The rule lives in `update_task`, so the Board, Today, the keys, the bulk bar, the CLI and the drawer all follow it. The drawer edits **Starts** beside **Due** with the same control, and quick-add takes both off one line — `renew insurance due oct 15 starts oct 1` (a bare trailing date is still the *due* date; a start date says `starts`).
+**A list never writes the start date.** Every date change reached from a row — the ⋯ menu's *Move…*, a swipe, the `D` / `T` / `W` keys, Select mode's Move and the desktop row's Move button — moves the **due** date, so the task stays on the Board in its new place: *Tomorrow · This weekend · Next week · Today · Pick a date… · No date*. One tap sets `due`, a toast names where it went (`Due Sat 5 Sep`) with an **Undo** that puts the old value back. There is no snooze action: a task that fell asleep from a list would vanish from the working views, which is the surprise this avoids. A swipe or menu entry saved on a device under the old snooze names follows to its due twin (*Move…*, *Due tomorrow*, *Due next week*). The start date is a deliberate edit: the drawer edits **Starts** beside **Due** with the same control, quick-add takes both off one line — `renew insurance due oct 15 starts oct 1` (a bare trailing date is still the *due* date; a start date says `starts`) — and `tasks starts` sets it from the CLI. **A start date never strands a task:** when the new start day is after the task's due date, the due date moves to the same day (Undo restores both) — so the task reappears on its due day instead of coming back overdue; a later due date, a task with no due date, and any request that names `due` itself are left exactly as sent. The rule lives in `update_task`, so the Board, Today, the bulk bar, the CLI and the drawer all follow it.
 
 Everywhere a date is typed it is the one vocabulary from `src/dates.py` — `tomorrow`, `fri`, `next friday`, `this weekend`, `in 2 weeks`, `oct 15`, `2026-10-01`, `none` to clear — resolved server-side, so the UI, the CLI, quick-add and the markdown mirror cannot disagree.
 
@@ -72,12 +72,12 @@ Every row action is one key, so a triage pass is keys instead of mouse trips. `T
 | `E` | complete — a recurring task rolls to its next date, exactly as its row select's `complete` does |
 | `1` `2` `3` | status inbox · todo · standby |
 | `T` / `W` | due tomorrow / next week |
-| `S` | the snooze menu — *tomorrow · this weekend · next week · pick a date* |
+| `D` | the date menu — *tomorrow · this weekend · next week · today · pick a date · no date* |
 | `P` | cycle priority none → low → medium → high; over a selection each task moves from **its own** value |
 | `Z` | undo the last change |
 | `?` | the shortcuts sheet |
 
-With tasks ticked ([Select several tasks at once](views.md#views)) the same key applies to the set, and the ticks stay — keys come in runs (a status, then a due date, then a snooze) over one picked set. The keys are inert wherever text is being typed and while the drawer, the palette or the quick-add dialog is open.
+With tasks ticked ([Select several tasks at once](views.md#views)) the same key applies to the set, and the ticks stay — keys come in runs (a status, then a due date, then a priority) over one picked set. The keys are inert wherever text is being typed and while the drawer, the palette or the quick-add dialog is open.
 
 **Undo** is a real write, not a client-side rollback: the inverse goes back through the API, so the reversal gets its own `new → old` activity row and survives a reload. It is single-level and lives exactly as long as its toast — over a selection it puts each task's own prior value back, one call per group of tasks that shared one. Completing a recurring task undoes to the *pre-roll* due date.
 

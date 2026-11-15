@@ -1,9 +1,9 @@
 /* task-os — snooze and change-date: the one date picker a row action opens.
  *
- * Snooze is not a field of its own — it is `starts` worn as a row action. The
- * menu offers four options; picking one PATCHes `{starts: <phrase>}` and the
- * task leaves the working views until that day. Re-dating is the
- * same menu over `due`, with Today in front and a way to clear the date. The
+ * Every date change reached from a list moves the *due* date, so the task
+ * stays on the Board in its new place; the start date is edited from the
+ * drawer's field alone (a task whose start day has not come leaves the working
+ * views). The menu offers the push-outs, Today and a way to clear the date. The
  * options send the *phrase*, not a date the browser computed: `src/dates.py`
  * owns the date vocabulary for the CLI, quick-add, the drawer and the mirror,
  * and a second implementation here would be a second set of rules to keep in
@@ -14,9 +14,8 @@
  * hands off to `duePicker()` from dueinput.js — the calendar button with the coarse-pointer
  * branch — instead of hand-rolling a third native-picker call site.
  *
- * A row action that asks for a date (the `s` and `d` keys, the ⋯ menu's
- * Snooze… and Move…, a swipe, the desktop row's Move button and Select mode's
- * Move) opens the same menu through
+ * A row action that asks for a date (the `d` key, the ⋯ menu's Move…, a
+ * swipe, the desktop row's Move button and Select mode's Move) opens the same menu through
  * `openDatePicker()`: anchored beside the row on a fine pointer, in the
  * vendored editor modal on a phone.
  *
@@ -35,16 +34,14 @@ import { duePicker } from './dueinput.js';
 import { fmtDay, todayISO } from './format.js';
 import { modalCard, onceClosed } from './modal.js';
 
-/** [phrase sent to the API, what the button says]. */
-export const SNOOZE_OPTIONS = [
+/** [phrase sent to the API, what the button says]: the push-outs first, since
+ *  most re-dates push a task out, then "do it today". */
+export const DUE_OPTIONS = [
   ['tomorrow', 'Tomorrow'],
   ['this weekend', 'This weekend'],
   ['next week', 'Next week'],
+  ['today', 'Today'],
 ];
-
-/** Re-dating offers one step sooner than snoozing — "do it today" is a due
- *  date — after the push-outs, which are most re-dates. */
-export const DUE_OPTIONS = SNOOZE_OPTIONS.concat([['today', 'Today']]);
 
 // ------------------------------------------------- what each phrase means
 const PHRASES = DUE_OPTIONS.map(function (opt) { return opt[0]; });
@@ -116,12 +113,6 @@ export function phraseButtons(options, onPick) {
 
 /** What each date field's menu says about itself. */
 const FIELDS = {
-  starts: {
-    options: SNOOZE_OPTIONS,
-    name: function (t) { return 'Snooze ' + t.title + ' until'; },
-    pickName: function (t) { return 'Snooze ' + t.title + ' until a date you pick'; },
-    heading: 'Snooze until',
-  },
   due: {
     options: DUE_OPTIONS,
     name: function (t) { return 'Move ' + t.title + ' to another date'; },
@@ -139,7 +130,7 @@ const FIELDS = {
  * whole reason the phrases go to the server.
  *
  * @param {object} t                          a task summary (`title`, and `due` for the clear option)
- * @param {'starts'|'due'} field
+ * @param {'due'} field
  * @param {(phrase:string|null) => void} onPick  a phrase, an ISO date from the picker,
  *        or null ("No date" — due only, and only while the task has one)
  * @returns {HTMLElement} a `<div class="snooze-menu">`
@@ -263,7 +254,7 @@ function openDialog(t, field, onPick) {
  * Ask for a date for one task: a phrase, an ISO date, or null to clear `due`.
  * Nothing is written here — `onPick` runs only on a pick, never on a cancel.
  * @param {object} t
- * @param {'starts'|'due'} field
+ * @param {'due'} field
  * @param {HTMLElement|null} anchor   what the popover sits beside (a row, a kebab, the bulk bar)
  * @param {(phrase:string|null) => void} onPick
  */

@@ -31,7 +31,7 @@ process.stdout.write(JSON.stringify(out));
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not on PATH — the JS side cannot be loaded")
 
 DEFAULT_MENU = [
-    "complete", "reopen", "change-date", "snooze",
+    "complete", "reopen", "change-date",
     "status-inbox", "status-todo", "status-standby", "status-cancelled", "priority",
 ]
 
@@ -55,23 +55,32 @@ def test_anything_stored_lands_on_a_valid_choice() -> None:
     got = _call_js([
         ("normalizeRowPrefs", [None]),
         ("normalizeRowPrefs", ["garbage"]),
-        ("normalizeRowPrefs", [{"right": "launch-rockets", "left": "", "menu": ["snooze", "nope", "snooze", 7, "complete"]}]),
+        ("normalizeRowPrefs", [{"right": "launch-rockets", "left": "", "menu": ["status-todo", "nope", "status-todo", 7, "complete"]}]),
         ("normalizeRowPrefs", [{"right": "priority"}]),
     ])
     assert got[0] == {"right": "complete", "left": "change-date", "menu": DEFAULT_MENU}
     assert got[1] == got[0]
     # an unknown side falls back, '' (nothing) is kept, the list drops unknowns and repeats
-    assert got[2] == {"right": "complete", "left": "", "menu": ["snooze", "complete"]}
+    assert got[2] == {"right": "complete", "left": "", "menu": ["status-todo", "complete"]}
     assert got[3] == {"right": "priority", "left": "change-date", "menu": DEFAULT_MENU}
+
+
+def test_a_stored_snooze_choice_follows_to_the_due_action_it_became() -> None:
+    """A swipe or menu entry saved before snoozing moved to ``due`` keeps working, as its due twin."""
+    (got,) = _call_js([
+        ("normalizeRowPrefs", [{"right": "snooze-tomorrow", "left": "snooze",
+                               "menu": ["snooze", "snooze-next-week", "change-date", "complete"]}]),
+    ])
+    assert got == {"right": "due-tomorrow", "left": "change-date", "menu": ["change-date", "due-next-week", "complete"]}
 
 
 def test_a_swipe_action_always_stays_in_the_menu() -> None:
     got = _call_js([
-        ("menuOrder", [{"right": "complete", "left": "snooze", "menu": ["priority"]}]),
+        ("menuOrder", [{"right": "complete", "left": "status-todo", "menu": ["priority"]}]),
         ("menuOrder", [{"right": "", "left": "", "menu": []}]),
         ("menuOrder", [{"right": "priority", "left": "priority", "menu": ["priority", "complete"]}]),
     ])
-    assert got == [["priority", "complete", "snooze"], [], ["priority", "complete"]]
+    assert got == [["priority", "complete", "status-todo"], [], ["priority", "complete"]]
 
 
 def test_default_is_only_the_untouched_choice() -> None:

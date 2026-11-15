@@ -23,6 +23,7 @@ let input = '';
 for await (const chunk of process.stdin) input += chunk;
 const out = JSON.parse(input).map(([id, method, tasks, arg, after]) => {
   if (method === 'keys') return mod.ACTIONS.map((a) => [a.id, a.key, a.label]);
+  if (method === 'menus') return mod.ACTIONS.map((a) => a.menu || null);
   const a = mod.actionById(id);
   if (!a) return null;
   return method === "applies" ? a.applies(tasks) : a[method](tasks, arg, after);
@@ -47,8 +48,7 @@ def test_the_table_keeps_its_ids_and_keys() -> None:
     (table,) = _call_js([[None, "keys", None, None, None]])
     assert [(a[0], a[1]) for a in table] == [
         ("complete", "e"), ("reopen", None), ("change-date", "d"), ("due-tomorrow", "t"),
-        ("due-next-week", "w"), ("snooze", "s"), ("snooze-tomorrow", None),
-        ("snooze-next-week", None), ("priority", "p"), ("status-inbox", "1"),
+        ("due-next-week", "w"), ("priority", "p"), ("status-inbox", "1"),
         ("status-todo", "2"), ("status-standby", "3"), ("status-cancelled", None),
     ]
 
@@ -59,14 +59,14 @@ def test_plans_write_one_group_through_the_bulk_fields() -> None:
         ["complete", "plan", tasks, None, None],
         ["due-tomorrow", "plan", tasks, None, None],
         ["due-next-week", "plan", tasks, None, None],
-        ["snooze", "plan", tasks, "this weekend", None],
+        ["change-date", "plan", tasks, "this weekend", None],
         ["status-standby", "plan", tasks, None, None],
     ])
     assert got == [
         [{"ids": [1, 2], "changes": {"status": "complete"}}],
         [{"ids": [1, 2], "changes": {"due": "tomorrow"}}],
         [{"ids": [1, 2], "changes": {"due": "next week"}}],
-        [{"ids": [1, 2], "changes": {"starts": "this weekend"}}],
+        [{"ids": [1, 2], "changes": {"due": "this weekend"}}],
         [{"ids": [1, 2], "changes": {"status": "standby"}}],
     ]
 
@@ -74,14 +74,14 @@ def test_plans_write_one_group_through_the_bulk_fields() -> None:
 def test_the_menu_offers_only_what_applies() -> None:
     """The row menu hides an action that would do nothing or does not fit (#311)."""
     done = dict(PLAIN, status="done")
-    ids = ["complete", "reopen", "change-date", "snooze", "priority", "status-todo", "status-cancelled"]
+    ids = ["complete", "reopen", "change-date", "priority", "status-todo", "status-cancelled"]
     got = _call_js([[i, "applies", t, None, None] for t in (PLAIN, done) for i in ids])
-    assert dict(zip(ids, got[:7], strict=True)) == {
-        "complete": True, "reopen": False, "change-date": True, "snooze": True,
+    assert dict(zip(ids, got[:6], strict=True)) == {
+        "complete": True, "reopen": False, "change-date": True,
         "priority": True, "status-todo": False, "status-cancelled": True,     # already todo
     }
-    assert dict(zip(ids, got[7:], strict=True)) == {
-        "complete": False, "reopen": True, "change-date": False, "snooze": False,
+    assert dict(zip(ids, got[6:], strict=True)) == {
+        "complete": False, "reopen": True, "change-date": False,
         "priority": True, "status-todo": False, "status-cancelled": False,   # closed: Reopen instead
     }
 
@@ -122,17 +122,12 @@ def test_every_undo_puts_back_each_tasks_own_prior_value() -> None:
     tasks = [PLAIN, WEEKLY, OTHER]
     got = _call_js([
         ["due-tomorrow", "invert", tasks, None, None],
-        ["snooze", "invert", tasks, "tomorrow", None],
         ["priority", "invert", tasks, None, None],
         ["status-inbox", "invert", tasks, None, None],
     ])
     assert got == [
         [{"ids": [1], "changes": {"due": "2026-10-01"}}, {"ids": [2], "changes": {"due": "2026-10-02"}},
          {"ids": [3], "changes": {"due": None}}],
-        # snooze can move `due` with `starts` (#486), so its undo puts both back
-        [{"ids": [1], "changes": {"starts": None, "due": "2026-10-01"}},
-         {"ids": [2], "changes": {"starts": None, "due": "2026-10-02"}},
-         {"ids": [3], "changes": {"starts": "2026-10-09", "due": None}}],
         [{"ids": [1], "changes": {"priority": "low"}}, {"ids": [2], "changes": {"priority": "none"}},
          {"ids": [3], "changes": {"priority": "high"}}],
         [{"ids": [1], "changes": {"status": "todo"}}, {"ids": [2], "changes": {"status": "inbox"}},
@@ -142,38 +137,49 @@ def test_every_undo_puts_back_each_tasks_own_prior_value() -> None:
 
 def test_messages_name_the_result_the_server_answered() -> None:
     rolled = dict(WEEKLY, due="2026-10-09")
-    snoozed = dict(PLAIN, starts="2026-10-10")
     got = _call_js([
         ["complete", "message", [PLAIN], None, [dict(PLAIN, status="done")]],
         ["complete", "message", [WEEKLY], None, [rolled]],
         ["complete", "message", [PLAIN, WEEKLY], None, [dict(PLAIN, status="done"), rolled]],
-        ["snooze", "message", [PLAIN], "this weekend", [snoozed]],
         ["priority", "message", [PLAIN], None, None],
     ])
     assert got[0] == "Completed"
     assert got[1].startswith("Completed — next: Fri 9 Oct")
     assert got[2] == "Completed"
-    assert got[3] == "Snoozed to Sat 10 Oct"
-    assert got[4] == "Priority medium"
+    assert got[3] == "Priority medium"
 
 
-def test_the_one_tap_snoozes_plan_undo_and_say_what_snooze_says() -> None:
-    """A swipe or menu entry set to a fixed-phrase snooze: same write, undo and toast as the sheet's pick."""
+def test_no_row_action_writes_the_start_date() -> None:
+    """A list action only ever moves ``due``; ``starts`` is the drawer's field alone.
+
+    A task whose start day has not come leaves Board and Today, so a row action
+    that wrote it made the task vanish. The plan and the undo of every action,
+    and the field a date-asking action opens its sheet over, are held to it.
+    """
+    tasks = [PLAIN, WEEKLY, OTHER]
+    (table,) = _call_js([[None, "keys", None, None, None]])
+    calls = [[a[0], method, tasks, "next week", None] for a in table for method in ("plan", "invert")]
+    got = _call_js(calls)
+    for (action_id, method, *_), result in zip(calls, got, strict=True):
+        written = {field for group in result for field in group["changes"]}
+        assert "starts" not in written, f"{action_id}.{method} writes starts"
+    (menus,) = _call_js([[None, "menus", None, None, None]])
+    assert set(menus) <= {None, "due"}
+
+
+def test_the_due_pushes_are_one_tap_actions_with_their_own_undo() -> None:
+    """The swipe / ⋯-menu entries that push the due out: write, undo and toast all speak of the due."""
     tasks = [PLAIN, OTHER]
-    snoozed = dict(PLAIN, starts="2026-10-02")
     got = _call_js([
-        ["snooze-tomorrow", "plan", tasks, None, None],
-        ["snooze-next-week", "plan", tasks, None, None],
-        ["snooze-tomorrow", "invert", tasks, None, None],
-        ["snooze-next-week", "message", [PLAIN], None, [snoozed]],
-        ["snooze-tomorrow", "message", [PLAIN], None, [dict(snoozed, due="2026-10-02")]],
-        ["snooze-tomorrow", "applies", PLAIN, None, None],
-        ["snooze-tomorrow", "applies", dict(PLAIN, status="done"), None, None],
+        ["due-tomorrow", "plan", tasks, None, None],
+        ["due-next-week", "plan", tasks, None, None],
+        ["due-tomorrow", "invert", tasks, None, None],
+        ["due-next-week", "message", [PLAIN], None, [dict(PLAIN, due="2026-10-08")]],
+        ["due-tomorrow", "applies", PLAIN, None, None],
+        ["due-tomorrow", "applies", dict(PLAIN, status="done"), None, None],
     ])
-    assert got[0] == [{"ids": [1, 3], "changes": {"starts": "tomorrow"}}]
-    assert got[1] == [{"ids": [1, 3], "changes": {"starts": "next week"}}]
-    assert got[2] == [{"ids": [1], "changes": {"starts": None, "due": "2026-10-01"}},
-                      {"ids": [3], "changes": {"starts": "2026-10-09", "due": None}}]
-    assert got[3] == "Snoozed to Fri 2 Oct"
-    assert got[4] == "Snoozed to Fri 2 Oct · due moved too"
-    assert got[5:] == [True, False]
+    assert got[0] == [{"ids": [1, 3], "changes": {"due": "tomorrow"}}]
+    assert got[1] == [{"ids": [1, 3], "changes": {"due": "next week"}}]
+    assert got[2] == [{"ids": [1], "changes": {"due": "2026-10-01"}}, {"ids": [3], "changes": {"due": None}}]
+    assert got[3] == "Due next week"
+    assert got[4:] == [True, False]

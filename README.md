@@ -46,7 +46,7 @@ One line each; the full reference for a feature is the page it links to.
 | Feature | In short |
 | --- | --- |
 | [Views](docs/views.md) | Today, Board, Time, Search and Settings: the task row, filters, the drawer, quick-add; PC-first, with the phone as an adaptive second rendering |
-| [Task workflow](docs/task-workflow.md) | Start dates and snooze, blocked-by dependencies, the read-only calendar lane beside Today, keyboard triage |
+| [Task workflow](docs/task-workflow.md) | Start dates, blocked-by dependencies, the read-only calendar lane beside Today, keyboard triage |
 | [Inbox](docs/inbox.md) | New arrivals land in Inbox by themselves (flagged emails, marked messages); one-press AI triage through the local LLM hub |
 | [Archive the Inbox](docs/inbox-archive.md) | Settings → Email archiving files the whole Outlook Inbox through folder-explorer's archive verbs and reports each row for review |
 | [Voice quick-add](docs/voice.md) | Dictate a task from the add dialog; transcription goes browser → task-os → local LLM hub, nothing leaves the house |
