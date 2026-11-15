@@ -75,3 +75,17 @@
 **Test:** `tests/test_scope.py` (the pure rules, written with the code); `tests/e2e/test_story_05_board.py` — `_walk_whose_switch` (picking two people), `_walk_second_member_phone`, `_walk_many_members` (the "+N more" sheet); folded into the existing test, no new test function.
 
 **Result:** the unit and e2e legs pass on disposable seeded instances, synthetic data only; the desktop, phone and dark shots were looked at. **Not verified:** a headed walk by hand, a real phone's sideways scroll, and the "+N more" sheet's phone layout (it reuses the parent picker's full-screen shell; no shot). Date: 2026-11-15.
+
+## The person row is the segmented control (#696)
+
+**Story:** the owner wants the person switcher above the Board and Today to look and behave like the Tasks · Issues · All switch under it.
+
+**Steps:** Today as the second member on a 390px phone → the row reads Mine · Person 1 · Everyone as the vendored segmented control, same track, height, radius and raised selected segment as the scope switch under it, in light and dark → a tap on Person 1 raises that segment alone and lists only their tasks (`owner=p1`) → Everyone again. On the desktop Board, Everyone → Person 2 alone (no assignee pill, every card is theirs; a reload keeps it) → a link naming two people (`owner=p1,p2`) lists both with no segment raised → Mine, no key. On an install with eight members the row holds five segments, Mine · Person 2 · Person 3 · +5 more · Everyone; +5 more opens the sheet, a tick there picks several people and +5 more is the raised segment, the picked person leads the row after a reload, and a tap on a person in the row picks that one alone.
+
+**Expected:** the row is single-choice (several people are picked only in the "+N more" sheet); every segment is a 44px target and no label runs into the next; the row keeps one line on a 390px phone with no sideways scroll; the choice is still remembered per device (`task-os.whose`) and in the URL.
+
+**Screenshots:** [the row on the phone, light](../screenshots/story-05-board-17-phone.png) · [dark](../screenshots/story-05-board-19-phone-dark.png) · [one person on the Board](../screenshots/story-05-board-20-desktop.png)
+
+**Test:** `tests/e2e/test_story_05_board.py` — `_walk_whose_switch` (one person at a time), `_walk_second_member_phone` (a person tap on the phone), `_walk_many_members` (the "+N more" sheet); folded into the existing test, no new test function. Every Board, Today, Search and keyboard-triage shot that shows the row is re-baselined.
+
+**Result:** the e2e legs pass on disposable seeded instances, synthetic data only; the phone shots were looked at in light and dark. **Not verified:** a headed walk by hand, a real phone. Date: 2026-11-15.

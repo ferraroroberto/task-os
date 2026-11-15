@@ -35,6 +35,7 @@ const out = JSON.parse(input).map(([fn, a, b]) => {
   if (fn === 'ownerOf') return mod.ownerOf(mod.filtersFromSearch(a.search), a.viewer, a.members);
   if (fn === 'ownerParam') return mod.listParams(mod.filtersFromSearch(a.search), a.owner).owner ?? null;
   if (fn === 'toggle') return mod.toggleOwner(mod.filtersFromSearch(a.search), a.id, a.viewer);
+  if (fn === 'pick') return mod.pickOwner(a.id, a.viewer);
   if (fn === 'picked') return mod.pickedOwners(mod.filtersFromSearch(a.search), a.viewer);
   if (fn === 'names') return mod.showsAssignees(mod.filtersFromSearch(a.search), a.members);
   if (fn === 'visible') {
@@ -185,7 +186,7 @@ def test_the_row_presses_the_picked_people_or_the_viewer_under_mine() -> None:
     ]) == [["p1"], [], ["p2", "p3"], []]
 
 
-def test_a_tap_toggles_one_person_and_an_empty_set_falls_back_to_mine() -> None:
+def test_a_sheet_tick_toggles_one_person_and_an_empty_set_falls_back_to_mine() -> None:
     def tap(search: str, person: str) -> list:
         return ["toggle", {"search": search, "id": person, "viewer": "p1"}]
 
@@ -202,6 +203,15 @@ def test_a_tap_toggles_one_person_and_an_empty_set_falls_back_to_mine() -> None:
         {"owners": ["p1", "p2"], "whose": "mine"}, {"owners": ["p2"], "whose": "mine"}, mine,
         {"owners": ["p2"], "whose": "mine"}, {"owners": ["p2"], "whose": "mine"}, mine,
         {"owners": ["p2", "p1"], "whose": "mine"},
+    ]
+
+
+def test_a_tap_on_a_segment_picks_that_person_alone_and_the_viewer_is_mine() -> None:
+    def pick(person: str) -> list:
+        return ["pick", {"id": person, "viewer": "p1"}]
+
+    assert _call_js([pick("p2"), pick("p1")]) == [
+        {"owners": ["p2"], "whose": "mine"}, {"owners": [], "whose": "mine"},
     ]
 
 
@@ -224,16 +234,16 @@ def test_a_small_install_shows_every_member_and_a_large_one_folds_the_rest() -> 
         return ["visible", {"members": _roster(n), "viewer": "p1", "picked": picked, "recent": recent}]
 
     small, big, front, held = _call_js([
-        visible(6, [], []),                    # five besides the viewer: all in the row
-        visible(9, [], []),                    # eight besides: five and "+3 more"
+        visible(4, [], []),                    # three besides the viewer: Mine + 3 + Everyone is five segments
+        visible(9, [], []),                    # eight besides: two, then "+6 more"
         visible(9, [], ["p8", "p7"]),          # the recently picked move to the front
         visible(9, ["p9"], ["p8"]),            # a picked one is always in the row
     ])
-    assert small == {"shown": ["p2", "p3", "p4", "p5", "p6"], "more": 0, "ordered": ["p2", "p3", "p4", "p5", "p6"]}
-    assert big["shown"] == ["p2", "p3", "p4", "p5", "p6"] and big["more"] == 3
-    assert front["shown"] == ["p8", "p7", "p2", "p3", "p4"] and front["more"] == 3
+    assert small == {"shown": ["p2", "p3", "p4"], "more": 0, "ordered": ["p2", "p3", "p4"]}
+    assert big["shown"] == ["p2", "p3"] and big["more"] == 6
+    assert front["shown"] == ["p8", "p7"] and front["more"] == 6
     assert front["ordered"][:2] == ["p8", "p7"] and len(front["ordered"]) == 8
-    assert held["shown"][:2] == ["p9", "p8"] and held["more"] == 3
+    assert held["shown"] == ["p9", "p8"] and held["more"] == 6
 
 
 def test_the_recent_picks_keep_the_newest_first_and_survive_a_bad_store() -> None:

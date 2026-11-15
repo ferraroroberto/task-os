@@ -667,31 +667,32 @@ def _phone_journal(page: Page, base: str, shots: Path) -> None:
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
 
 
-def _pick_two_people(page: Page, shots: Path, row, switch, stored: str) -> None:
-    """§ 6b of ``_walk_whose_switch``: several people at once, from Everyone.
+def _pick_one_person(page: Page, shots: Path, row, switch, stored: str) -> None:
+    """§ 6b of ``_walk_whose_switch``: one person at a time, from Everyone.
     ``row`` is the handed-over task's card, ``switch`` the Board's person row."""
-    item = lambda who: switch.locator(f".owner-pill[data-owner='{who}']")  # noqa: E731
-    pressed = switch.locator(".owner-pill[aria-pressed='true']")
-    # several people at once: from Everyone a tap on Person 2 is that person
-    #     alone; Mine added to it is both — each card then names its assignee,
-    #     the pick is in the URL (`owner`, the contact filter keeps `person`)
-    #     and a reload keeps it; the taps back end on Mine, no key
+    item = lambda who: switch.locator(f".segmented-item[data-owner='{who}']")  # noqa: E731
+    pressed = switch.locator(".segmented-item[aria-pressed='true']")
+    # the row is one choice, like Tasks · Issues · All: from Everyone a tap on
+    #     Person 2 is that person alone (the pick is in the URL — `owner`, the
+    #     contact filter keeps `person` — and a reload keeps it), and a tap on
+    #     Mine replaces it, no key
     item("p2").click()
     expect(pressed).to_have_text(["Person 2"])
     expect(row).to_be_visible()
-    item("p1").click()
-    expect(pressed).to_have_text(["Mine", "Person 2"])
-    expect(page).to_have_url(re.compile(r"[?&]owner=p2%2Cp1"))
-    expect(row.locator(".trow-pill-assignee")).to_have_text("Person 2")
-    own = page.locator("#paneBoard .trow-pill-assignee", has_text="Person 1")
-    expect(own.first).to_be_visible()
+    expect(page).to_have_url(re.compile(r"[?&]owner=p2"))
+    expect(row.locator(".trow-pill-assignee")).to_have_count(0)      # one person alone: every row is theirs
     page.reload()
     page.click("nav.tabs .tab[data-tab='board']")
-    expect(pressed).to_have_text(["Mine", "Person 2"])
+    expect(pressed).to_have_text(["Person 2"])
     expect(row).to_be_visible()
     _clear_toasts(page)
     shot(page, shots / "story-05-board-20-desktop.png")
-    item("p2").click()
+    # a link that names two people still lists both, with no segment raised
+    page.goto(f"{page.url.split('?')[0]}?owner=p1,p2")
+    page.click("nav.tabs .tab[data-tab='board']")
+    expect(row).to_be_visible()
+    expect(pressed).to_have_count(0)
+    item("p1").click()
     expect(pressed).to_have_text(["Mine"])      # the list form: a strict one-element match would fail mid-reload
     expect(page).not_to_have_url(re.compile(r"[?&]owner="))
     expect(row).to_have_count(0)
@@ -699,10 +700,13 @@ def _pick_two_people(page: Page, shots: Path, row, switch, stored: str) -> None:
 
 
 def _walk_many_members(playwright: Playwright) -> None:
-    """An install with eight members keeps Mine, five people, "+3 more" and
-    Everyone in the row; the sheet filters by name, a tick there joins the row
-    (the pick leads it from then on), and the URL carries it through a reload.
-    A throwaway instance on the sample with six more members."""
+    """An install with eight members keeps Mine, two people, "+5 more" and
+    Everyone in the row (five segments, the most one segmented control holds);
+    the sheet filters by name, a tick there picks several people, "+N more" is
+    the raised segment while they are, the picked person joins the row (the
+    pick leads it from then on) and the URL carries it through a reload. A tap
+    on a person in the row picks that one alone. A throwaway instance on the
+    sample with six more members."""
     from tests.conftest import write_test_config
     from tests.fixtures.seed import seed_db
 
@@ -717,10 +721,10 @@ def _walk_many_members(playwright: Playwright) -> None:
         try:
             page = browser.new_page(viewport=DESKTOP)
             page.goto(f"{base}/")
-            people = page.locator("#todayOwners .owner-row")
-            expect(people.locator(".owner-pill")).to_have_text(
-                ["Mine", "Person 2", "Person 3", "Person 4", "Person 5", "Person 6", "+2 more", "Everyone"])
-            people.locator(".owner-pill[data-kind='more']").click()
+            people = page.locator("#todayOwners .owner-switch")
+            expect(people.locator(".segmented-item")).to_have_text(
+                ["Mine", "Person 2", "Person 3", "+5 more", "Everyone"])
+            people.locator(".segmented-item[data-kind='more']").click()
             sheet = page.locator("#ownerDialog")
             expect(sheet).to_be_visible()
             expect(sheet.locator(".filter-check")).to_have_count(7)
@@ -730,11 +734,15 @@ def _walk_many_members(playwright: Playwright) -> None:
             expect(page).to_have_url(re.compile(r"[?&]owner=p1%2Cp8"))
             sheet.locator(".filter-done").click()
             expect(sheet).to_be_hidden()
-            expect(people.locator(".owner-pill[aria-pressed='true']")).to_have_text(["Mine", "Person 8"])
+            several = people.locator(".segmented-item[aria-pressed='true']")
+            expect(several).to_have_text("+5 more")
             page.reload()
-            expect(people.locator(".owner-pill[aria-pressed='true']")).to_have_text(["Mine", "Person 8"])
+            expect(several).to_have_text("+5 more")
             # the picked and the recently picked lead the row, the rest wait behind it
-            expect(people.locator(".owner-pill")).to_have_text(
-                ["Mine", "Person 8", "Person 2", "Person 3", "Person 4", "Person 5", "+2 more", "Everyone"])
+            expect(people.locator(".segmented-item")).to_have_text(
+                ["Mine", "Person 8", "Person 2", "+5 more", "Everyone"])
+            people.locator(".segmented-item[data-owner='p8']").click()
+            expect(several).to_have_text("Person 8")
+            expect(page).to_have_url(re.compile(r"[?&]owner=p8(&|$)"))
         finally:
             browser.close()

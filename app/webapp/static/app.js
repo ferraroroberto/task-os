@@ -50,7 +50,7 @@ import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
   RECENT_OWNERS_KEY, WHOSE_KEY, bumpRecentOwner, filtersFromSearch, filtersToSearch, listParams, matchesScope,
-  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose, toggleOwner,
+  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose, pickOwner, toggleOwner,
 } from './filters.js';
 import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
@@ -445,7 +445,12 @@ function applyOwners(next, picked) {
   onFilterChange(Object.assign({}, state.filters, next));
 }
 
-/** A tap on a person pill (or a tick in the "+N more" sheet): toggle them. */
+/** A tap on a person segment: that person alone. */
+function onOwnerPick(id) {
+  applyOwners(pickOwner(id, state.viewer), id === state.viewer ? null : id);
+}
+
+/** A tick in the "+N more" sheet: toggle them in the set. */
 function onOwnerToggle(id) {
   const next = toggleOwner(state.filters, id, state.viewer);
   const added = next.owners.indexOf(id) >= 0 && state.filters.owners.indexOf(id) < 0;
@@ -475,7 +480,7 @@ function renderOwners(tab, host) {
   host.hidden = !show;
   if (!show) return;
   if (!ownerRows[tab]) {
-    ownerRows[tab] = mountOwners(host, { onToggle: onOwnerToggle, onEveryone: onEveryone, onOpenMore: openMoreOwners });
+    ownerRows[tab] = mountOwners(host, { onPick: onOwnerPick, onEveryone: onEveryone, onOpenMore: openMoreOwners });
   }
   ownerRows[tab].render(state.filters, { members: state.members, viewer: state.viewer, recent: state.recentOwners });
 }
