@@ -13,6 +13,7 @@ import { renderCapture } from './capture.js';
 import { renderIndexRow, renderOpener } from './folders.js';
 import { renderBackupRow, renderMirrorEventsRow, renderMirrorRow } from './mirror.js';
 import { renderEnrich, renderVoice } from './voice.js';
+import { renderYourName } from './yourname.js';
 import { setWord } from './words.js';
 
 // One GET /api/status feeds the Settings pane's Phone access card (https +
@@ -48,6 +49,7 @@ export async function refreshStatus(ctx) {
     renderVoice(ctx, body.voice);
     renderEnrich(ctx, body.enrich);
     renderAI(ctx, body.ai);
+    renderYourName(ctx, body.author);
   } catch (err) {
     // An unreachable status is its own visible state, never a stale "Loading…".
     ctx.statusFailed = true;
@@ -65,6 +67,7 @@ export async function refreshStatus(ctx) {
     renderVoice(ctx, null);
     renderEnrich(ctx, null);
     renderAI(ctx, null);
+    renderYourName(ctx, null);
   }
   ctx.opts.onHead();
 }

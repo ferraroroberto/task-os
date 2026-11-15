@@ -837,6 +837,39 @@ def save_team_password_hash(password_hash: str, *, path: Path | None = None) -> 
     return _write_secret_config(target, raw)
 
 
+MAX_YOUR_NAME = 80
+
+
+def clean_your_name(value: Any) -> str:
+    """``value`` as a ``your_name`` to store: trimmed, inner whitespace collapsed.
+    Blank is allowed (it restores the fallback). Over :data:`MAX_YOUR_NAME`
+    characters or with a control character raises ``ValueError`` — the name is
+    written into one-line mirror comments and the activity feed, so a newline
+    would corrupt both."""
+    name = " ".join(str(value or "").split())
+    if len(name) > MAX_YOUR_NAME:
+        raise ValueError(f"a name is at most {MAX_YOUR_NAME} characters")
+    if any(not ch.isprintable() for ch in name):
+        raise ValueError("a name cannot contain control characters")
+    return name
+
+
+def can_write_config(src: Path | None) -> bool:
+    """The running app loaded a real config file it may write back — not the
+    committed sample (the public twin) and not defaults from a missing file."""
+    return src is not None and not _is_sample(src) and src.exists()
+
+
+def save_your_name(name: str, *, path: Path | None = None) -> Path:
+    """Write the top-level ``your_name`` into the **real** config — the same contract
+    as :func:`save_auth` (every other key is preserved; the sample is never written).
+    The caller passes the file the running app loaded (``AppConfig.source_path``)
+    and swaps its in-memory config itself, so no restart is needed."""
+    target, raw = _read_for_secret_write(path)
+    raw["your_name"] = clean_your_name(name)
+    return _write_secret_config(target, raw)
+
+
 def _read_for_secret_write(path: Path | None) -> tuple[Path, dict[str, Any]]:
     target = path or CONFIG_PATH
     if target == CONFIG_SAMPLE_PATH:

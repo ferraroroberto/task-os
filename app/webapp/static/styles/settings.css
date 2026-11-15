@@ -77,6 +77,8 @@
 .settings-sheet { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); font-size: var(--font-body-sm); }
 .settings-sheet[hidden] { display: none; }
 .settings-sheet .card-meta { margin: 0; font-size: var(--font-body-sm); line-height: 1.5; }
+.your-name-form { display: grid; gap: var(--space-sm); }
+.your-name-field { display: grid; gap: var(--space-xs); }
 .settings-sheet .button-ghost, .settings-sheet .button-surface { font-size: var(--font-body-sm); }
 /* Instant model: Done only closes, so it ends the sheet in the flow rather
    than pinned over its last controls (the filter sheet's lesson). */

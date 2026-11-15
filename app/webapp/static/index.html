@@ -707,6 +707,11 @@
         <section class="card action-list settings-group" aria-labelledby="settingsGroupInstall">
           <ul class="action-rows">
             <li class="action-row">
+              <button data-track="settings-link.yourname" type="button" class="action-row-main settings-link" data-settings-sheet="yourname" aria-haspopup="dialog">
+                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg><span class="action-row-title">Your name</span><span class="settings-link-value" id="yourNameMeta"></span><svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
+              </button>
+            </li>
+            <li class="action-row">
               <button data-track="settings-link.install" type="button" class="action-row-main settings-link" data-settings-sheet="install" aria-haspopup="dialog">
                 <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
                 <span class="action-row-title">Database</span>
@@ -927,6 +932,7 @@
             <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
           </dl>
         </section>
+        <section class="settings-sheet" id="yourNameCard" data-sheet="yourname" hidden></section><!-- body built by js/settings/yourname.js -->
         <section class="settings-sheet" id="installCard" data-sheet="install" hidden>
           <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
         </section>

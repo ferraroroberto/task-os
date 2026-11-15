@@ -15,7 +15,7 @@ git clone https://github.com/ferraroroberto/task-os E:\automation\task-os
 cd E:\automation\task-os
 py -m venv .venv
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-copy config\config.sample.json config\config.json      # then edit paths for this machine, and set "your_name" (who comments and activity are recorded under)
+copy config\config.sample.json config\config.json      # then edit paths for this machine, and set "your_name" (who comments and activity are recorded under; also Settings → Your name)
 
 tray.bat            # tray icon → owns the webapp on :8448 (HTTPS once a cert exists — see docs/access.md)
 ```

@@ -20,7 +20,8 @@ import re
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from src.config import PROJECT_ROOT, TeamConfig
+from src.config import PROJECT_ROOT, AppConfig, TeamConfig
+from src.tasks.schema import DEFAULT_ACTOR
 
 NAME_COOKIE = "taskos_name"
 AVATARS_DIR = PROJECT_ROOT / "data" / "avatars"
@@ -56,3 +57,10 @@ def avatar_file(name: str, avatars_dir: Path | None = None) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def author_status(config: AppConfig) -> dict[str, str]:
+    """``{your_name, author}`` for ``GET /api/status`` and ``tasks mirror status``:
+    what ``your_name`` holds (blank = unset) and the name an unnamed write is
+    signed with right now."""
+    return {"your_name": config.your_name, "author": config.install_name or DEFAULT_ACTOR}

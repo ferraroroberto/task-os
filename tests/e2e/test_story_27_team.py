@@ -28,6 +28,12 @@ Shots:
     docs/screenshots/story-27-team-2-desktop.png  the teammate's comment, named, with its chips
     docs/screenshots/story-27-team-3-desktop.png  the owner's view of the same thread (dark)
     docs/screenshots/story-27-team-4-phone.png    pick your name on the phone (dark)
+    docs/screenshots/story-27-team-5-desktop.png  Settings -> Your name, set (dark)
+    docs/screenshots/story-27-team-6-phone.png    Settings -> Your name, set, on the phone (light)
+
+The owner's browser also walks Settings -> Your name: it answers under the
+install's fallback (``team.people[0]``) until a name is saved there, then under
+that name, and under the fallback again once the field is cleared.
 """
 
 from __future__ import annotations
@@ -44,12 +50,13 @@ from src.password import hash_password
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface
-from tests.e2e._ui import open_settings_sheet
+from tests.e2e._ui import close_settings_sheet, open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
     _get,
     booted,
+    dismiss_toasts,
     e2e_workdir,
     settle,
     shot,
@@ -87,6 +94,30 @@ def _task_id(base: str, title: str) -> int:
 
 def _newest_comment(page: Page):
     return page.locator("#taskDrawer .comment-list .comment").first
+
+
+def _save_your_name(page: Page, name: str, *, fallback: str, base: str | None = None, tap: bool = False) -> None:
+    """Settings -> Your name: type *name* (blank clears it) and save, as a user would.
+    The row says the saved name ("not set" when blank); the status line says who an
+    unnamed write is signed as: *name*, else *fallback*."""
+    if base is not None:
+        page.goto(f"{base}/")
+    open_settings_sheet(page, "yourname", tap=tap)
+    field = page.locator("#yourNameInput")
+    expect(field).to_be_visible()
+    field.fill(name)
+    (page.locator("#yourNameSave").tap if tap else page.locator("#yourNameSave").click)()
+    signed = name or fallback
+    expect(page.locator("#yourNameMeta")).to_have_text(name or "not set")
+    expect(page.locator("#yourNameStatus")).to_contain_text(f"recorded as {signed}")
+
+
+def _back_to_the_task(page: Page, base: str, task_id: int) -> None:
+    """Leave Settings (its sheet, then the pane for a tab) and open the task's drawer."""
+    close_settings_sheet(page)
+    page.locator("nav.tabs .tab[data-tab='board']").click()
+    page.goto(f"{base}/#task/{task_id}")
+    expect(page.locator("#taskDrawer")).to_be_visible()
 
 
 def _park_on_comments(page: Page) -> None:
@@ -177,25 +208,7 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
     finally:
         mate.close()
 
-    # ---- the owner: a fresh context on this PC sees Sam's comment, answers as themselves
-    owner = browser.new_context(viewport=DESKTOP, color_scheme="dark")
-    try:
-        page = owner.new_page()
-        page.goto(f"{base}/#task/{quotes}")
-        drawer = page.locator("#taskDrawer")
-        expect(drawer).to_be_visible()
-        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Sam Rivera")
-        drawer.locator(".comment-input").fill("Thanks — booking the first one.")
-        drawer.locator(".comment-send").click()
-        expect(_newest_comment(page).locator(".comment-body")).to_have_text("Thanks — booking the first one.")
-        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Alex Chen")
-        _park_on_comments(page)
-        shot(page, shots / "story-27-team-3-desktop.png")
-    finally:
-        owner.close()
-
-    thread = [(c["author"], c["body"]) for c in _get(base, f"/api/tasks/{quotes}")["comments"]][-2:]
-    assert thread == [("Sam Rivera", COMMENT), ("Alex Chen", "Thanks — booking the first one.")]
+    _owner_names_themselves(browser, base, quotes, shots)
 
     # ---- the name step on a phone
     phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="dark")
@@ -210,3 +223,62 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
         shot(page, shots / "story-27-team-4-phone.png")
     finally:
         phone.close()
+
+    _phone_names_themselves(browser, base, shots)
+
+
+def _owner_names_themselves(browser: Browser, base: str, quotes: int, shots: Path) -> None:
+    """The owner's fresh context sees Sam's comment, then names themselves in Settings."""
+    owner = browser.new_context(viewport=DESKTOP, color_scheme="dark")
+    try:
+        page = owner.new_page()
+        page.goto(f"{base}/#task/{quotes}")
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Sam Rivera")
+
+        # Settings -> Your name: unset, the row and the field show the fallback
+        _save_your_name(page, "Ada Example", fallback="Alex Chen")
+        surface(page, "settings.your-name")
+        dismiss_toasts(page)
+        shot(page, shots / "story-27-team-5-desktop.png")
+
+        # the next comment is signed with the saved name
+        _back_to_the_task(page, base, quotes)
+        drawer.locator(".comment-input").fill("Thanks — booking the first one.")
+        drawer.locator(".comment-send").click()
+        expect(_newest_comment(page).locator(".comment-body")).to_have_text("Thanks — booking the first one.")
+        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Ada Example")
+        _park_on_comments(page)
+        shot(page, shots / "story-27-team-3-desktop.png")
+
+        # clearing the field restores the fallback
+        _save_your_name(page, "", fallback="Alex Chen")
+        _back_to_the_task(page, base, quotes)
+        drawer.locator(".comment-input").fill("Noted.")
+        drawer.locator(".comment-send").click()
+        expect(_newest_comment(page).locator(".comment-body")).to_have_text("Noted.")
+        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Alex Chen")
+    finally:
+        owner.close()
+
+    thread = [(c["author"], c["body"]) for c in _get(base, f"/api/tasks/{quotes}")["comments"]][-3:]
+    assert thread == [
+        ("Sam Rivera", COMMENT), ("Ada Example", "Thanks — booking the first one."), ("Alex Chen", "Noted."),
+    ]
+
+
+def _phone_names_themselves(browser: Browser, base: str, shots: Path) -> None:
+    """Settings -> Your name on a phone, light."""
+    light = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="light")
+    try:
+        page = light.new_page()
+        _save_your_name(page, "Ada Example", fallback="Alex Chen", base=base, tap=True)
+        assert_min_target(page.locator("#yourNameInput"))
+        assert_min_target(page.locator("#yourNameSave"))
+        assert_no_horizontal_overflow(page)
+        dismiss_toasts(page)
+        shot(page, shots / "story-27-team-6-phone.png")
+        _save_your_name(page, "", fallback="Alex Chen", base=base, tap=True)
+    finally:
+        light.close()
