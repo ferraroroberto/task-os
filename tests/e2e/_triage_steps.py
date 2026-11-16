@@ -425,9 +425,9 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     expect(page.locator(f".trow-recur[title={label}], .due-recur[title={label}]").first).to_be_attached()
     expect(every).to_have_value("7")
     # The Every field already reads 7 before the drawer's re-render lands, so that
-    # check settles nothing: the new activity rows are what the redraw adds (#459).
-    expect(drawer.locator(".activity-row").nth(0)).to_contain_text("recurrence_anchor")
-    expect(drawer.locator(".activity-row").nth(1)).to_contain_text("recurrence_interval")
+    # check settles nothing: the new activity rows, named in the drawer's words, are what the redraw adds (#459).
+    expect(drawer.locator(".activity-row").nth(0)).to_contain_text("repeat on")
+    expect(drawer.locator(".activity-row").nth(1)).to_contain_text("repeat every")
     page.evaluate("document.getElementById('toast').hidden = true")
     # Frame the drawer rather than inherit its scroll offset (#459). Where it ends
     # up is whatever Playwright's scroll-into-view and the redraws between them

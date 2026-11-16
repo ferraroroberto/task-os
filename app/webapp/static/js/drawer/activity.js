@@ -10,6 +10,23 @@ import { memberName } from './fields.js';
 /** The issue sync's actor (src/issue_sync.py SYNC_ACTOR): its activity rows fold. */
 const SYNC_ACTOR = 'sync';
 
+/** A logged field key in the words the drawer's own fields use, so a stored
+ *  column name (`folder_ref`) never reads as ordinary text; the row keeps the
+ *  key itself on `data-field`. */
+const FIELD_WORDS = {
+  recurrence: 'repeat',
+  recurrence_anchor: 'repeat on',
+  recurrence_interval: 'repeat every',
+  folder_ref: 'folder',
+  person_id: 'person',
+};
+
+/** The words for a field: the drawer's word where it has one, else the key
+ *  with its underscores read as spaces. */
+function fieldWords(field) {
+  return FIELD_WORDS[field] || String(field).replace(/_/g, ' ');
+}
+
 function activityRow(ctx, a) {
   const row = document.createElement('div');
   row.className = 'activity-row';
@@ -20,7 +37,7 @@ function activityRow(ctx, a) {
   // only (uniform-weight feedback).
   const f = document.createElement('span');
   f.className = 'activity-field';
-  f.textContent = a.field;
+  f.textContent = fieldWords(a.field);
   change.appendChild(f);
   change.appendChild(document.createTextNode(' '));
   const oldV = document.createElement('span');

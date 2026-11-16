@@ -106,8 +106,12 @@ export function renderToday(host, items, handlers, opts) {
   const o = opts || {};
   const t = o.today || todayISO();
   const data = bucketToday(items, t, o.sort);
-  host.innerHTML = '';
   const counts = data.counts;
+  // The list scrolls inside its own box on a wide window (styles/today.css), and a re-render
+  // replaces that box, so the position it was at is put back after the rows are drawn.
+  const prevMain = host.querySelector('.today-main');
+  const scrolled = prevMain ? prevMain.scrollTop : 0;
+  host.innerHTML = '';
   // Tasks on the left, the calendar lane on the right (hidden < 1024 px) — and
   // no lane at all, the tasks full width, while no calendar is configured.
   const layout = document.createElement('div');
@@ -152,6 +156,7 @@ export function renderToday(host, items, handlers, opts) {
       } : undefined)));
   if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o, !!q));
   if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o, !!q));
+  if (scrolled) main.scrollTop = scrolled;
   return counts;
 }
 
