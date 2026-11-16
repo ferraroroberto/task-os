@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import json
 import re
-import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -44,6 +43,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
+from tests.e2e._port_pool import post_json
 from tests.e2e._surface import surface
 from tests.e2e._ui import assert_control_boundaries, close_filter_sheet, open_filter_sheet
 from tests.e2e.conftest import (
@@ -104,10 +104,7 @@ def search_webapp() -> Iterator[SearchInstance]:
 
 
 def _task_post(base: str, body: dict) -> dict:
-    req = urllib.request.Request(f"{base}/api/tasks", data=json.dumps(body).encode("utf-8"), method="POST")
-    req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(res.read().decode("utf-8"))
+    return post_json(base, "/api/tasks", body, timeout=60)
 
 
 def _open_group(page: Page, kind: str):

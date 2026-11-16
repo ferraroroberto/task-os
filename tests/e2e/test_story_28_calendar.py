@@ -36,7 +36,6 @@ from __future__ import annotations
 import json
 import re
 import time
-import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -44,6 +43,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
+from tests.e2e._port_pool import post_json
 from tests.e2e._surface import surface
 from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import (
@@ -83,11 +83,8 @@ def calendar_webapp() -> Iterator[CalendarInstance]:
 
 def _refresh(base: str) -> tuple[dict, float]:
     """``POST /api/calendar/refresh`` — the group and how long the answer took."""
-    req = urllib.request.Request(f"{base}/api/calendar/refresh", data=b"{}", method="POST")
-    req.add_header("Content-Type", "application/json")
     started = time.perf_counter()
-    with urllib.request.urlopen(req, timeout=15) as res:
-        body = json.loads(res.read().decode("utf-8"))
+    body = post_json(base, "/api/calendar/refresh", timeout=15)
     return body, time.perf_counter() - started
 
 
