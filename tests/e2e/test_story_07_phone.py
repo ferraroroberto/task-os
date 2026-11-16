@@ -459,11 +459,31 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         page.locator("#settingsGroupFeatures").scroll_into_view_if_needed()
         shot(page, shots / "story-07-phone-13-phone.png")
 
+        # Every block off at once: each key owns something tagged on the page, and
+        # all of it leaves the layout (the one CSS rule, read from the computed style).
+        for key in ("calendar", "issues", "email", "ai", "mirror"):
+            assert page.request.put(f"{base}/api/features/{key}", data={"enabled": False}).status == 200
+        page.reload()
+        expect(page.locator("html")).to_have_attribute("data-features-off", "time calendar issues email ai mirror")
+        tagged = page.evaluate(
+            "() => [...document.querySelectorAll('[data-feature]')].map(e => "
+            "[e.dataset.feature, getComputedStyle(e).display])"
+        )
+        assert {k for k, _ in tagged} == {"time", "calendar", "issues", "email", "ai", "mirror"}, tagged
+        assert all(display == "none" for _, display in tagged), tagged
+
         # On again: the tab and its routes are back, with no restart.
+        for key in ("calendar", "issues", "email", "ai", "mirror"):
+            assert page.request.put(f"{base}/api/features/{key}", data={"enabled": True}).status == 200
+        page.reload()
+        page.locator("#settingsBtn").tap()
+        group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
         group.locator("[data-feature-key='time'] .toggle").tap()
         expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
         expect(page.locator("nav.tabs .tab[data-tab='time']")).to_be_visible()
         assert page.request.get(f"{base}/api/time/meta").status == 200
+        # A reload aborts the fetch that was in flight; webkit reports that as a page error.
+        errors = [e for e in errors if "access control checks" not in e]
         assert errors == [], errors
         context.close()
     finally:
