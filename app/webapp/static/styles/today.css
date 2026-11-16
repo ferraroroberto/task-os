@@ -76,3 +76,18 @@
 .cal-summary { font-size: var(--font-label); overflow-wrap: anywhere; }
 .cal-span { color: var(--muted); font-size: var(--font-caption); }
 
+
+/* Beside the detail pane the list scrolls inside its own box, under the header, filters and
+   scope tabs that stay put, like a Board column (board.css). Rows below the box's edge take no
+   tap, so a long list never stacks its hit areas under one another across the whole page. */
+@media (min-width: 1024px) {
+  .today-main {
+    max-height: calc(100vh - 300px);
+    min-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* the room a focus ring needs, taken back by the negative margin so the rows keep their line */
+    padding: 0 2px;
+    margin: 0 -2px;
+  }
+}
