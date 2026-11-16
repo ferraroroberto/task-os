@@ -38,11 +38,13 @@ watcher's bookkeeping.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from app.webapp.routers._helpers import error_response, service_unavailable
+from app.webapp.features import off_section
+from app.webapp.routers._helpers import error_response, require_feature, service_unavailable
 from app.webapp.routers.auth import access_status
 from src import opener, tasks_repo
 from src.db import get_db
@@ -66,28 +68,38 @@ def status(request: Request, db: sqlite3.Connection = Depends(get_db)) -> dict[s
     archive = getattr(request.app.state, "archive", None)
     calendar = getattr(request.app.state, "calendar", None)
     ph = dict(request.app.state.config.placeholders)
+    off = request.app.state.config.features_off
+
+    def section(key: str, service: Any, read: Callable[[Any], dict[str, Any]], missing: str,
+                extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """A section's status: the switched-off stand-in (the service is not asked, so a
+        probe or a fetch never runs for it), else the service's own, else "not started"."""
+        if key in off:
+            return off_section(extra)
+        return read(service) if service else {"enabled": False, "reason": missing, **(extra or {})}
+
     return {
         **access_status(request),
         "author": author_status(request.app.state.config),
-        "mirror": mirror.status(db) if mirror else {"enabled": False, "reason": "mirror service not started"},
-        "backup": backup.status() if backup else {"enabled": False, "reason": "backup service not started"},
-        "folders": folder_explorer.summary() if folder_explorer
-        else {"enabled": False, "reason": "folder search client not started"},
-        "capture": capture.status() if capture else {"enabled": False, "reason": "capture service not started"},
-        "voice": voice.status() if voice else {"enabled": False, "reason": "voice service not started"},
-        "enrich": enrich.status() if enrich
-        else {"enabled": False, "reason": "enrichment service not started"},
-        "ai": ai.status() if ai else {"enabled": False, "reason": "AI service not started"},
-        "archive": archive.status(db) if archive
-        else {"configured": False, "reason": "archive service not started"},
-        "calendar": calendar.status() if calendar
-        else {"configured": False, "state": "off", "reason": "calendar service not started"},
+        "mirror": section("mirror", mirror, lambda s: s.status(db), "mirror service not started"),
+        "backup": section("mirror", backup, lambda s: s.status(), "backup service not started"),
+        "folders": section("email", folder_explorer, lambda s: s.summary(), "folder search client not started"),
+        "capture": section("email", capture, lambda s: s.status(), "capture service not started"),
+        "voice": section("ai", voice, lambda s: s.status(), "voice service not started"),
+        "enrich": section("ai", enrich, lambda s: s.status(), "enrichment service not started"),
+        "ai": section("ai", ai, lambda s: s.status(), "AI service not started"),
+        "archive": section(
+            "email", archive, lambda s: s.status(db), "archive service not started", {"configured": False},
+        ),
+        "calendar": section(
+            "calendar", calendar, lambda s: s.status(), "calendar service not started", {"state": "off", "configured": False},
+        ),
         "opener": opener.status(ph),
         "placeholders": ph,
     }
 
 
-@router.post("/mirror/export")
+@router.post("/mirror/export", dependencies=[Depends(require_feature("mirror"))])
 def mirror_export(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
     mirror, _ = _services(request)
     if mirror is None or not mirror.enabled:
@@ -95,7 +107,7 @@ def mirror_export(request: Request, db: sqlite3.Connection = Depends(get_db)) ->
     return mirror.export_all(db)
 
 
-@router.post("/mirror/import")
+@router.post("/mirror/import", dependencies=[Depends(require_feature("mirror"))])
 def mirror_import(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Any:
     mirror, _ = _services(request)
     if mirror is None or not mirror.enabled:
@@ -113,7 +125,7 @@ def mirror_events_clear(db: sqlite3.Connection = Depends(get_db)) -> Any:
     return {"cleared": tasks_repo.clear_mirror_events(db)}
 
 
-@router.post("/backup")
+@router.post("/backup", dependencies=[Depends(require_feature("mirror"))])
 def backup_now(request: Request) -> Any:
     _, backup = _services(request)
     if backup is None or not backup.enabled:

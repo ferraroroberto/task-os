@@ -101,11 +101,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
+from app.webapp.features import apply_features
 from app.webapp.routers import (
     ai,
     archive,
     auth,
     capture,
+    features,
     folders,
     issues,
     mirror,
@@ -131,6 +133,7 @@ from src.config import load_config
 from src.db import db_path, init_db, usage_db_path
 from src.email_capture import EmailCaptureService
 from src.enrich import EnrichClient
+from src.features import FeatureOff, search_kind_off_reason
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
 from src.login_guard import build_lockout, notifier_for
@@ -269,16 +272,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # finds the copy expired, and runs in one short-lived worker bounded by
     # `calendar.timeout_seconds`.
     app.state.calendar = CalendarService(config)
-    app.state.search = build_federated(config, folder_explorer=app.state.folder_explorer, issues=app.state.issues)
+    app.state.search = build_federated(
+        config, folder_explorer=app.state.folder_explorer, issues=app.state.issues,
+        switched_off=lambda kind: search_kind_off_reason(app.state.config.features_off, kind),
+    )
     if not app.state.folder_explorer.configured:
         logger.warning("⚠️ search: folders and emails off — search.folder_explorer_url not configured")
     repo.set_folder_resolver(_folder_resolver_for(config.placeholders))
     repo.set_folder_web_resolver(lambda ref: placeholders.web_url(ref, config.web_roots))
     repo.set_members([p.id for p in config.people])
-    app.state.mirror.start()
-    app.state.backup.start()
-    app.state.issues.start()
-    app.state.capture.start()
+    # Starts the pollers of every block that is on; a switched-off block's stay down.
+    apply_features(app)
     try:
         yield
     finally:
@@ -297,6 +301,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RepoError)
     async def _repo_error(request: Request, exc: RepoError) -> Response:
+        return error_response(exc.http_status, exc.code, str(exc))
+
+    @app.exception_handler(FeatureOff)
+    async def _feature_off(request: Request, exc: FeatureOff) -> Response:
         return error_response(exc.http_status, exc.code, str(exc))
 
     @app.exception_handler(RequestValidationError)
@@ -339,6 +347,7 @@ def create_app() -> FastAPI:
     app.include_router(issues.router)
     app.include_router(folders.router)
     app.include_router(capture.router)
+    app.include_router(features.router)
     app.include_router(voice.router)
     app.include_router(ai.router)
     app.include_router(archive.router)

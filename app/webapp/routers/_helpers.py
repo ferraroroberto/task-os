@@ -3,13 +3,14 @@ the actor resolver and the JSON error shape."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from src.features import OFF_REASON, Feature, FeatureOff, feature
 from src.static_versioning import BuildInfo
 from src.tasks_repo import DEFAULT_ACTOR
 from src.team import NAME_COOKIE, member_from_cookie
@@ -46,6 +47,19 @@ def resolve_actor(request: Request, explicit: str | None = None) -> str:
     if viewer is not None and viewer.name and config is not None and viewer.id != config.owner.id:
         return viewer.name
     return getattr(config, "install_name", None) or DEFAULT_ACTOR
+
+
+def require_feature(key: str) -> Callable[[Request], None]:
+    """A route dependency that answers 409 ``feature_off`` while this machine has
+    switched the block ``key`` off (``src/features.py``). Read per request from
+    ``app.state.config``, so a switch takes effect with no restart."""
+    label = (feature(key) or Feature(key, key, "")).label
+
+    def _dependency(request: Request) -> None:
+        if key in request.app.state.config.features_off:
+            raise FeatureOff(f"{label} is {OFF_REASON}")
+
+    return _dependency
 
 
 def error_response(

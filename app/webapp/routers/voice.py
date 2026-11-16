@@ -50,13 +50,13 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, require_feature
 from src import quick_add
 from src.db import get_db
 from src.enrich import enrich_line
 from src.voice import MAX_AUDIO_BYTES, VoiceError
 
-router = APIRouter(prefix="/api", tags=["voice"])
+router = APIRouter(prefix="/api", tags=["voice"], dependencies=[Depends(require_feature("ai"))])
 
 
 @router.post("/transcribe")

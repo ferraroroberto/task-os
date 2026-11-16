@@ -63,6 +63,7 @@ import { mountScope } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
+import { featureOn, restorableTab } from './js/features.js';
 import { mountTime } from './time.js';
 import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
@@ -198,6 +199,7 @@ const app = {
   refreshAll: refreshAll,
   renderBoardPane: renderBoardPane,
   indexSuggestions: indexSuggestions,
+  loadStatus: loadStatus,
   openTask: openTask,
   closeTask: closeTask,
   whoseOwner: whoseOwner,
@@ -282,7 +284,8 @@ function indexSuggestions(items) {
  *  back here, so both paths tell one story. */
 async function loadStatus() {
   try {
-    const results = await Promise.all([api('/api/status'), api('/api/ai/suggestions')]);
+    const off = !featureOn('ai');   // an off block has no suggestions to ask for (409)
+    const results = await Promise.all([api('/api/status'), off ? { items: [] } : api('/api/ai/suggestions')]);
     state.ai = results[0].ai || { enabled: false, reason: 'AI status unavailable' };
     state.archive = results[0].archive || null;
     indexSuggestions(results[1].items);
@@ -862,6 +865,7 @@ function wireSettings() {
     // New captured tasks land in Inbox, so the views behind Settings are stale
     // until they reload — same follow-up an issue sync does after it creates.
     onCaptured: function () { refreshAll(); },
+    onFeatures: app.featuresChanged,
     // Refresh now on the Calendar card answers the fresh lane: Today
     // shows it without a second round trip.
     onCalendar: function (group) { state.calendar = group; renderTodayPane(); },
@@ -923,6 +927,7 @@ async function boot() {
     storedTab = localStorage.getItem(TAB_KEY);
     RETIRED_KEYS.forEach(function (k) { localStorage.removeItem(k); });
   } catch (_) { /* private mode */ }
+  storedTab = restorableTab(storedTab, TAB_KEY);
   const wantsSearch = location.hash === '#search' || (f.q !== '' && storedTab === 'search');
   let searchQ = '';
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }

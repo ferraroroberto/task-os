@@ -31,10 +31,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, require_feature
 from src import placeholders
 from src.search.folder_explorer import Unavailable
 from src.search.folders_adapter import folder_item
@@ -56,7 +56,7 @@ def resolve(request: Request, body: ResolveBody) -> dict[str, Any]:
     return r.as_dict()
 
 
-@router.get("/folders/search")
+@router.get("/folders/search", dependencies=[Depends(require_feature("email"))])
 def folders_search(
     request: Request,
     q: str = Query(min_length=1),

@@ -6,6 +6,7 @@
 'use strict';
 
 import { api } from '../../api.js';
+import { featureOn } from '../features.js';
 import { DEFAULT_FILTERS } from '../../filters.js';
 import { STATUSES } from '../../format.js';
 import { toast } from '../../toast.js';
@@ -34,6 +35,11 @@ export function archiveHint(app) {
   const needs = app.archiveNeedsYou();
   return needs ? needs + ' mail(s) from the last run need you' : 'file the Outlook Inbox in one run';
 }
+
+//: The palette commands that belong to a feature block, left out while it is off.
+const COMMAND_FEATURE = {
+  'go-time': 'time', 'go-archive': 'email', 'sync-issues': 'issues', 'export-mirror': 'mirror',
+};
 
 /** The palette's command list — built per open so hints reflect the moment. */
 export function paletteCommands(app) {
@@ -77,5 +83,5 @@ export function paletteCommands(app) {
     try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }
     location.assign('/login');
   } });
-  return cmds;
+  return cmds.filter(function (c) { return !(c.id in COMMAND_FEATURE) || featureOn(COMMAND_FEATURE[c.id]); });
 }

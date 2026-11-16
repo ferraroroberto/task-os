@@ -343,3 +343,13 @@ html, body {
 .card.disclosure-flat > .collapse-summary { padding-left: var(--space-xs); padding-right: var(--space-xs); }
 .card.disclosure-flat > .collapse-body { padding: 0 0 var(--space-xs); }
 
+
+/* A feature block this machine switched off (src/features.py): the server stamps
+   html[data-features-off] and Settings rewrites it live, so anything tagged
+   data-feature="<key>" leaves the layout with no reload. */
+:root[data-features-off~="time"] [data-feature="time"],
+:root[data-features-off~="calendar"] [data-feature="calendar"],
+:root[data-features-off~="issues"] [data-feature="issues"],
+:root[data-features-off~="email"] [data-feature="email"],
+:root[data-features-off~="ai"] [data-feature="ai"],
+:root[data-features-off~="mirror"] [data-feature="mirror"] { display: none !important; }

@@ -59,6 +59,11 @@ async def index(request: Request) -> Response:
     if not index_path.exists():
         raise HTTPException(status_code=500, detail="index.html missing")
     html = BUILD_INFO.stamp_html(index_path.read_text(encoding="utf-8"))
+    # The switched-off feature blocks ride the page itself, so a hidden tab is
+    # hidden at first paint rather than after a fetch (the keys are a fixed set).
+    off = request.app.state.config.features_off
+    if off:
+        html = html.replace('<html lang="en">', f'<html lang="en" data-features-off="{" ".join(sorted(off))}">', 1)
     # The shell must always revalidate: a cached shell pointing at an old
     # ?v= entry module would defeat the fleet-hash cache-busting entirely.
     # The validator makes that revalidation a bodyless 304 on a relaunch.

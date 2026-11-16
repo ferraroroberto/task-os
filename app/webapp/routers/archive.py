@@ -45,13 +45,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from app.webapp.routers._helpers import error_response, service_unavailable
+from app.webapp.routers._helpers import error_response, require_feature, service_unavailable
 from src.archive_batch import ArchiveError
 from src.archive_state import annotate_run
 from src.archive_store import MAX_HINT_CHARS, get_run, list_items, list_runs
 from src.db import get_db
 
-router = APIRouter(prefix="/api/archive", tags=["archive"])
+router = APIRouter(prefix="/api/archive", tags=["archive"], dependencies=[Depends(require_feature("email"))])
 
 
 class RunBody(BaseModel):

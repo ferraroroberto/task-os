@@ -16,6 +16,7 @@ app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{c
                           · ai (/api/ai/triage, staged suggestion list + individual accept/reject)
                           · archive (/api/archive/run, /api/archive/runs[/{id}], per-item revert|move|accept|retry)
                           · search (/api/search — federated, /api/search/status)
+                          · features (GET /api/features, PUT /api/features/{key} — Settings → Available features: the machine-local switches, src/features.py, applied live by app/webapp/features.py)
                           · usage (/api/usage/events|summary — the vendored src/usage_log.py, see Usage log)
 app/webapp/static/        the PWA: index.html, login.html, styles/ (fleet tokens in base.css, then one sheet per view or shared surface, linked in cascade order by both pages), app.js (state + routing — the composer: each part is a `js/app/<part>.js` taking `app` first), board.js,
                           today.js, drawer.js (the drawer's composer: open / close / refresh and the `ctx` its parts share; each part is a `js/drawer/<part>.js` taking `ctx` first), quickadd.js (the add dialog's composer — each part is a `js/quickadd/<part>.js` taking `ctx` first; its form is `js/quickadd/markup.js`), search.js (the Search tab's composer — each part is a `js/search/<part>.js` taking `ctx` first), time.js (the Time tab's composer, #457 — each part is a `js/time/<part>.js` taking `ctx` first) + time-dialogs.js · time-settings.js · time-format.js,
@@ -37,7 +38,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           mirror.py (markdown mirror: export / watcher import) · mirror_format.py (the file format: render / parse, pure text) · backup.py (dated .db copies, daily job)
                           auth.py (loopback owner · bearer / cookie gate · team sign-in) · team.py (team mode's picked name + avatars) · certs.py (cert pair, auto-renew hook)
                           issues/ (IssueProvider contract + the one CLI runner · github.py via gh · gitlab.py via glab api · fake.py for tests) · issue_sync.py (sync pass + scheduler) · poller.py (the one background-poller base both schedulers share)
-                          placeholders.py (folder ref ↔ path) · opener.py
+                          features.py (the coarse feature blocks and the config key a machine switches them off with) · placeholders.py (folder ref ↔ path) · opener.py
                           (install command / env template for Settings)
                           search/ (federated search: base.py adapter contract · tasks / folders / emails / issues adapters ·
                           federated.py — concurrent, grouped, unconfigured = visible) · ai/ (Anthropic-compatible hub client +

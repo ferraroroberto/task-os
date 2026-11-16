@@ -536,6 +536,7 @@ function buildRow(t, handlers, opts) {
 function triageButton(handlers) {
   const button = document.createElement('button');
   button.dataset.track = 'board.triage';
+  button.dataset.feature = 'ai';
   button.type = 'button';
   button.className = 'button-ghost board-triage hit-target';
   button.hidden = true;
