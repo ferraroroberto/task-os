@@ -393,7 +393,7 @@
       <span class="tab-label">Board</span>
     </button>
     <!-- Time: third, before the utility Search tab — used daily. -->
-    <button id="tabTime" type="button" class="tab" data-tab="time"
+    <button id="tabTime" type="button" class="tab" data-tab="time" data-feature="time"
             role="tab" aria-selected="false" aria-controls="paneTime" tabindex="-1">
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
       <span class="tab-label">Time</span>
@@ -515,7 +515,7 @@
          measure. Nothing loads until the tab is first shown. On a first visit
          with two or more people configured, the person picker stands in for
          the views. -->
-    <section id="paneTime" class="pane" role="tabpanel" aria-labelledby="tabTime" aria-label="Time" hidden>
+    <section id="paneTime" class="pane" role="tabpanel" aria-labelledby="tabTime" aria-label="Time" data-feature="time" hidden>
       <div class="pane-body">
         <div class="segmented time-views" id="timeViews" role="group" aria-label="Time view">
           <button type="button" class="segmented-item" aria-pressed="true" data-view="log" data-track="time-view.log">Log</button>

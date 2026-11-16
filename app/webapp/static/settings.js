@@ -40,6 +40,9 @@
  *                  somewhere to be up.
  *   AI             whether the local hub used by staged Inbox triage is
  *                  enabled and reachable, plus the configured model.
+ *   Features       one switch per coarse feature block (src/features.py): off
+ *                  hides its screens and stops its background work, machine-local,
+ *                  no restart. The rows of an off block leave the other groups too.
  *   Search         which of the four indexes this install can query (Step 10);
  *                  the Search tab's own idle view is refreshed through
  *                  `opts.onSearchStatus`.
@@ -67,6 +70,7 @@ import { wireCalendarRefresh } from './js/settings/calendar.js';
 import { wireCaptureRunNow } from './js/settings/capture.js';
 import { wirePaletteOpen, wireTextSize } from './js/settings/device.js';
 import { lookupEls } from './js/settings/elements.js';
+import { mountFeatures } from './js/settings/features.js';
 import { renderIssues, wireIssueSyncNow } from './js/settings/issues.js';
 import { wireMirrorEventsClear } from './js/settings/mirror.js';
 import { wireRowActions } from './js/settings/rowactions.js';
@@ -82,7 +86,8 @@ import { buildYourNameSheet, wireYourName } from './js/settings/yourname.js';
  *          onOpenPalette: () => void, onRowActions?: () => void,
  *          onCaptured: () => void, onArchiveRun: () => void,
  *          onCalendar: (group: object) => void, onHead: () => void,
- *          onOpenSheet: (key: string) => void, onCloseSheet: () => void}} opts
+ *          onOpenSheet: (key: string) => void, onCloseSheet: () => void,
+ *          onFeatures: (key: string, on: boolean) => void}} opts
  * @returns {{refreshStatus: () => Promise<void>, refreshSearchStatus: () => Promise<void>,
  *            renderArchive: (st: object|null) => void,
  *            renderIssues: (status: object|null) => void,
@@ -109,10 +114,12 @@ export function mountSettings(opts) {
   wireCaptureRunNow(ctx);
   wireCalendarRefresh(ctx);
   wireYourName(ctx);
+  const features = mountFeatures(ctx);
   const sheets = createSheets(ctx);
 
   return {
     refreshStatus: ctx.refreshStatus,
+    refreshFeatures: features.refresh,
     renderArchive: function (st) { renderArchive(ctx, st); },
     refreshSearchStatus: function () { return refreshSearchStatus(ctx); },
     renderIssues: function (st) { renderIssues(ctx, st); },

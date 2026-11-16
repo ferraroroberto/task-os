@@ -116,3 +116,13 @@
 .status-row .status-off { color: var(--muted); font-weight: 600; }
 .status-row .status-warn { color: var(--danger-text); font-weight: 600; }
 
+
+/* Available features: the vendored action-row with a trailing switch. The text
+   column is not a control (the switch is the one), so it keeps the default cursor
+   and no press tint; the state line is a second muted line, in the attention tone
+   when the block is on but its dependency is missing here. */
+.action-row-main.settings-feature-main { cursor: default; }
+.action-row-main.settings-feature-main:active { background: transparent; }
+.settings-feature-state[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
+.settings-features-note { margin: calc(-1 * var(--space-xs)) 14px var(--gap); font-size: var(--font-body-sm); }
+.settings-features-note:empty { display: none; }

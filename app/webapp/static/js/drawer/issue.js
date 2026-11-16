@@ -159,6 +159,7 @@ export function renderIssuePanel(ctx, t) {
   const st = (ctx.opts.issues && ctx.opts.issues()) || null;
   const configured = !!(st && st.enabled);
   const issue = section('issue', 'Issue', t.issue_ref ? providerIcon(t.issue_ref.provider) : 'git-branch');
+  issue.dataset.feature = 'issues';
   issue.querySelector('h3').appendChild(syncTools(ctx, st, configured));
 
   const ib = document.createElement('div');

@@ -28,13 +28,18 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from app.webapp.routers._helpers import error_response, resolve_actor, service_unavailable
+from app.webapp.routers._helpers import (
+    error_response,
+    require_feature,
+    resolve_actor,
+    service_unavailable,
+)
 from src import tasks_repo as repo
 from src.db import get_db
 from src.issue_sync import issue_from_task
 from src.issues import IssueProviderError
 
-router = APIRouter(prefix="/api", tags=["issues"])
+router = APIRouter(prefix="/api", tags=["issues"], dependencies=[Depends(require_feature("issues"))])
 
 
 class CreateIssueBody(BaseModel):

@@ -28,8 +28,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from app.webapp.routers._helpers import require_feature
 from src import tasks_repo as repo
 from src.db import get_db
+from src.features import OFF_REASON
 
 router = APIRouter(prefix="/api", tags=["views"])
 
@@ -54,11 +56,15 @@ def today(
 ) -> dict[str, Any]:
     payload = repo.today_view(db, person_id=person)
     calendar = getattr(request.app.state, "calendar", None)
-    payload["calendar"] = calendar.today() if calendar else dict(_CALENDAR_NOT_STARTED)
+    if "calendar" in request.app.state.config.features_off:
+        # No fetch and no lane: a group that is not configured draws nothing.
+        payload["calendar"] = {**_CALENDAR_NOT_STARTED, "reason": OFF_REASON}
+    else:
+        payload["calendar"] = calendar.today() if calendar else dict(_CALENDAR_NOT_STARTED)
     return payload
 
 
-@router.post("/calendar/refresh")
+@router.post("/calendar/refresh", dependencies=[Depends(require_feature("calendar"))])
 def calendar_refresh(request: Request) -> dict[str, Any]:
     calendar = getattr(request.app.state, "calendar", None)
     return calendar.refresh() if calendar else dict(_CALENDAR_NOT_STARTED)

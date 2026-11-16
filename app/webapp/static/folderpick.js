@@ -112,7 +112,7 @@ export function mountFolderPicker(host, opts) {
     } catch (err) {
       items = []; active = -1; paint();
       // folder-explorer's own state (down, still indexing, not set up) is the answer, not "No folder matches".
-      note.textContent = err.code === 'folders_unavailable'
+      note.textContent = err.code === 'feature_off' ? err.message : err.code === 'folders_unavailable'
         ? 'Folder search unavailable — ' + err.message
         : ('Search failed: ' + err.message);
     }

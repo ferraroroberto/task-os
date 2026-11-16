@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from src import password
+from src.features import features_block, off_keys
 from src.runtime import files as runtime_files
 
 logger = logging.getLogger(__name__)
@@ -414,6 +415,7 @@ class AppConfig:
     # Who acts on this PC: the author of what the web app and the CLI write when
     # no one else is named. Blank = the first team member, else none.
     your_name: str = ""
+    features_off: frozenset[str] = frozenset()
     source_path: Path | None = None
 
     @property
@@ -755,6 +757,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         alerts=_alerts_config(alerts),
         people=people,
         your_name=str(raw.get("your_name", "") or "").strip(),
+        features_off=off_keys(raw.get("features")),
         source_path=src,
     )
 
@@ -867,6 +870,16 @@ def save_your_name(name: str, *, path: Path | None = None) -> Path:
     and swaps its in-memory config itself, so no restart is needed."""
     target, raw = _read_for_secret_write(path)
     raw["your_name"] = clean_your_name(name)
+    return _write_secret_config(target, raw)
+
+
+def save_features(off: frozenset[str], *, path: Path | None = None) -> Path:
+    """Write the ``features`` block (only the switched-off blocks, as ``false``) into the
+    **real** config, as :func:`save_your_name` does; all on removes the key."""
+    target, raw = _read_for_secret_write(path)
+    raw.pop("features", None)
+    if off:
+        raw["features"] = features_block(off)
     return _write_secret_config(target, raw)
 
 

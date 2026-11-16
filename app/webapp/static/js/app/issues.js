@@ -8,6 +8,7 @@
 import { buildReadoutText } from '../../_vendored/page-foot/page-foot.js';
 import { api } from '../../api.js';
 import { toast } from '../../toast.js';
+import { featureOn } from '../features.js';
 
 // ---------------------------------------------------------- build identity
 export async function fetchVersion(app) {
@@ -32,7 +33,8 @@ export async function fetchVersion(app) {
 // (settings.js), the drawer and the palette read `state.issues`.
 export async function fetchIssuesStatus(app) {
   try {
-    app.state.issues = await api('/api/issues/status');
+    // A switched-off block is not asked: the route answers 409, and the drawer and palette hide it.
+    app.state.issues = featureOn('issues') ? await api('/api/issues/status') : null;
   } catch (err) {
     app.state.issues = null;
   }

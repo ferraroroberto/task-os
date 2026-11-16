@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from app.webapp.routers._helpers import error_response
+from app.webapp.routers._helpers import error_response, require_feature
 from src.ai import (
     AIError,
     accept_suggestion,
@@ -24,7 +24,7 @@ from src.ai import (
 )
 from src.db import get_db
 
-router = APIRouter(prefix="/api/ai", tags=["ai"])
+router = APIRouter(prefix="/api/ai", tags=["ai"], dependencies=[Depends(require_feature("ai"))])
 
 
 class TriageBody(BaseModel):

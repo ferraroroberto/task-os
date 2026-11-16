@@ -53,6 +53,8 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-9-phone.png    a slim row's tap targets (#311)
     docs/screenshots/story-07-phone-10-phone.png   the date sheet, a date beside each phrase (#391)
     docs/screenshots/story-07-phone-11-phone.png   the parent picker, full-screen (#468)
+    docs/screenshots/story-07-phone-12-phone.png   Settings → Available features, every block on (light)
+    docs/screenshots/story-07-phone-13-phone.png   the same group in dark with Time off
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -397,10 +399,75 @@ def test_phone_install_metadata_and_story(
     seeded_webapp: str, authed_webapp: str, playwright: Playwright, browser: Browser, shots: Path
 ) -> None:
     _phone_story(seeded_webapp, playwright, shots)
+    # Settings → Available features rides the same function, on the same
+    # instance and after the phone story: folded in so the e2e suite does not grow.
+    _available_features(seeded_webapp, playwright, shots)
     # The /login walk rides the same test function on its own token-configured
     # instance: folded in so the e2e suite stays within its node budget (#457,
     # the #96 / #279 precedent) — same steps, same shots.
     _login_page_and_token_sign_in(authed_webapp, playwright, browser, shots)
+
+
+def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
+    """Settings → Available features at 390 wide: a block switched off leaves the
+    app (its tab, its rows, its routes) and the choice survives a reload; switched
+    on it is back. Light first, then dark."""
+    wk = playwright.webkit.launch(headless=HEADLESS)
+    try:
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/")
+        time_tab = page.locator("nav.tabs .tab[data-tab='time']")
+        expect(time_tab).to_be_visible()
+        page.locator("#settingsBtn").tap()
+        group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
+        expect(group.locator(".settings-feature")).to_have_count(6)
+        expect(group.locator(".toggle[aria-checked='true']")).to_have_count(6)   # every block is on by default
+        assert_min_target(group.locator(".toggle"))
+        assert_no_horizontal_overflow(page)
+        page.locator("#settingsGroupFeatures").scroll_into_view_if_needed()
+        shot(page, shots / "story-07-phone-12-phone.png")
+
+        # Off: the tab, the Time Settings row and the routes go; nothing else does.
+        switch = group.locator("[data-feature-key='time'] .toggle")
+        switch.tap()
+        expect(switch).to_have_attribute("aria-checked", "false")
+        expect(page.locator("html")).to_have_attribute("data-features-off", "time")
+        expect(time_tab).to_be_hidden()
+        expect(page.locator("nav.tabs .tab:visible")).to_have_count(3)
+        expect(page.locator("#paneSettings [data-settings-sheet='timecats']")).to_be_hidden()
+        assert page.request.get(f"{base}/api/time/meta").status == 409
+        assert page.request.get(f"{base}/api/board").status == 200
+        # Off is the machine's, kept across a reload and served on the page itself.
+        page.reload()
+        expect(page.locator("html")).to_have_attribute("data-features-off", "time")
+        expect(time_tab).to_be_hidden()
+        assert_no_horizontal_overflow(page)
+        context.close()
+
+        # Dark, with Time still off: the same group, the off row read as off.
+        context = _phone_context(wk, PHONE, "dark")
+        page = context.new_page()
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/")
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        page.locator("#settingsBtn").tap()
+        group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
+        expect(group.locator("[data-feature-key='time'] .settings-feature-state")).to_have_text("Off on this machine")
+        page.locator("#settingsGroupFeatures").scroll_into_view_if_needed()
+        shot(page, shots / "story-07-phone-13-phone.png")
+
+        # On again: the tab and its routes are back, with no restart.
+        group.locator("[data-feature-key='time'] .toggle").tap()
+        expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
+        expect(page.locator("nav.tabs .tab[data-tab='time']")).to_be_visible()
+        assert page.request.get(f"{base}/api/time/meta").status == 200
+        assert errors == [], errors
+        context.close()
+    finally:
+        wk.close()
 
 
 def _home_screen_metadata(page: Page, base: str, shots: Path):

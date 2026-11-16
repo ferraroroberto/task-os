@@ -44,13 +44,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.webapp.routers._helpers import require_feature
 from src import clock
 from src import time_repo as repo
 from src.config import TimeConfig
 from src.db import get_db
 from src.tasks_repo import ValidationError
 
-router = APIRouter(prefix="/api/time", tags=["time"])
+router = APIRouter(prefix="/api/time", tags=["time"], dependencies=[Depends(require_feature("time"))])
 
 
 def _time(request: Request) -> TimeConfig:

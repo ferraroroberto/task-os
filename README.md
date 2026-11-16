@@ -66,6 +66,7 @@ One line each; the full reference for a feature is the page it links to.
 
 | Page | Holds |
 | --- | --- |
+| [Setup and migration](docs/setup-and-migration.md) | Running task-os on another computer, the exact list of state to copy across, and Settings → Available features |
 | [Layout](docs/layout.md) | The repository tree, the structure ratchet and where new code goes |
 | [Configuration](docs/configuration.md) | Every key of `config/config.json` |
 | [Data model](docs/data-model.md) | The SQLite tables, the schema version and the rules the repo layer enforces |

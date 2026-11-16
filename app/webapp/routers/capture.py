@@ -18,11 +18,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
-from app.webapp.routers._helpers import error_response, service_unavailable
+from app.webapp.routers._helpers import error_response, require_feature, service_unavailable
 
-router = APIRouter(prefix="/api", tags=["capture"])
+router = APIRouter(prefix="/api", tags=["capture"], dependencies=[Depends(require_feature("email"))])
 
 
 @router.post("/capture/email/run")

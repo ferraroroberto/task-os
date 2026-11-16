@@ -26,7 +26,7 @@ export function fillQuickAdd(dialog) {
            line as they are heard. Never a dead button: when no transcription
            endpoint answers it stays visible, disabled, and the reason is
            spelled out in the hint below. -->
-      <button type="button" class="icon-button quick-add-mic" data-track="quick-add.voice" aria-label="Dictate (click to start)"
+      <button type="button" class="icon-button quick-add-mic" data-feature="ai" data-track="quick-add.voice" aria-label="Dictate (click to start)"
               aria-pressed="false" disabled>
         <span class="quick-add-mic-glyph"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg></span>
       </button>

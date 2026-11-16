@@ -65,11 +65,26 @@ def parse_kinds(raw: str | Iterable[str] | None) -> list[str]:
 
 
 class FederatedSearch:
-    def __init__(self, adapters: Iterable[SearchAdapter], *, timeout_s: float = ADAPTER_TIMEOUT_S) -> None:
+    def __init__(
+        self,
+        adapters: Iterable[SearchAdapter],
+        *,
+        timeout_s: float = ADAPTER_TIMEOUT_S,
+        switched_off: Callable[[str], str | None] | None = None,
+    ) -> None:
         self.adapters: dict[str, SearchAdapter] = {}
         for a in adapters:
             self.adapters[a.kind] = a
         self.timeout_s = float(timeout_s)
+        # kind -> why this machine switched its feature block off (None = on),
+        # asked per call so a switch needs no restart.
+        self._switched_off = switched_off or (lambda kind: None)
+
+    def _configured(self, a: SearchAdapter) -> tuple[bool, str | None]:
+        """``a.is_configured()``, unless its block is switched off: then not
+        configured, and the reason says so."""
+        why = self._switched_off(a.kind)
+        return (False, why) if why else a.is_configured()
 
     # ------------------------------------------------------------- status
     def status(self) -> list[dict[str, Any]]:
@@ -88,7 +103,7 @@ class FederatedSearch:
         if a is None:
             return {"kind": kind, "name": None, "configured": False, "state": NOT_CONFIGURED,
                     "reason": "no adapter", "note": None}
-        ok, reason = a.is_configured()
+        ok, reason = self._configured(a)
         if not ok:
             return {"kind": kind, "name": a.name, "configured": False, "state": NOT_CONFIGURED,
                     "reason": reason, "note": None}
@@ -120,7 +135,7 @@ class FederatedSearch:
                 if a is None:
                     group["reason"] = "no adapter"
                     continue
-                ok, reason = a.is_configured()
+                ok, reason = self._configured(a)
                 group["configured"] = bool(ok)
                 group["reason"] = None if ok else reason
                 deep_link = getattr(a, "deep_link", None)
@@ -176,8 +191,10 @@ def build_federated(
     issues: Any | None = None,
     conn_factory: Callable[[], Any] | None = None,
     timeout_s: float = ADAPTER_TIMEOUT_S,
+    switched_off: Callable[[str], str | None] | None = None,
 ) -> FederatedSearch:
-    """The four adapters over ``config`` + the running services (may be ``None``)."""
+    """The four adapters over ``config`` + the running services (may be ``None``).
+    ``switched_off(kind)`` says why a kind's feature block is off, else ``None``."""
     return FederatedSearch(
         [
             TasksAdapter(conn_factory),
@@ -186,4 +203,5 @@ def build_federated(
             IssuesAdapter(issues, conn_factory),
         ],
         timeout_s=timeout_s,
+        switched_off=switched_off,
     )

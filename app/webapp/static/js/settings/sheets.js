@@ -5,6 +5,8 @@
 
 'use strict';
 
+import { featureOn } from '../features.js';
+
 /** Look up the sheet bodies, wire the rows and the close buttons, and hand
  *  back the show / hide the bootstrap calls. */
 export function createSheets(ctx) {
@@ -21,6 +23,8 @@ export function createSheets(ctx) {
    *  one (beside the detail pane on a wide screen). False for an unknown key. */
   function showSheet(key) {
     if (!bodies[key]) return false;
+    const owner = rowFor(key) && rowFor(key).closest('li').dataset.feature;
+    if (owner && !featureOn(owner)) return false;   // its block is switched off here
     const fresh = openKey !== key;
     Object.keys(bodies).forEach(function (k) { bodies[k].hidden = k !== key; });
     const row = rowFor(key);

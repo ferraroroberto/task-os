@@ -5,6 +5,7 @@
 
 'use strict';
 
+import { featureOn } from '../features.js';
 import { JOURNAL_HASH } from './journal.js';
 
 // Settings is a pane with no tab: the header gear opens it, `#settings`
@@ -32,7 +33,7 @@ export function openSettings(app) {
     app.usage.trackView('settings');
     app.dropPreselected();
     // Its poll stops under Settings, and its two Settings rows read its meta.
-    if (app.time) { app.time.hide(); app.time.settingsShown(); }
+    if (app.time) { app.time.hide(); if (featureOn('time')) app.time.settingsShown(); }
     app.renderHeadStatus();
     const scroller = document.querySelector('.app');
     if (scroller) scroller.scrollTop = 0;
@@ -44,6 +45,7 @@ export function openSettings(app) {
   app.settings.refreshStatus();
   app.fetchIssuesStatus();
   app.settings.refreshSearchStatus();
+  app.settings.refreshFeatures();
 }
 
 /** A `#settings` (or Settings card) / `#journal` hash with its pane not open
@@ -93,4 +95,16 @@ export function closeSettingsSheet(app) {
   if (SETTINGS_SHEET_HASH.test(location.hash)) {
     history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
   }
+}
+
+/** A feature block was switched (Settings → Available features): leave a tab that
+ *  just went away, then re-read everything its UI and the Settings rows were built from. */
+export function featuresChanged(app, key, on) {
+  if (key === 'time' && !on && app.nav && app.nav.getTab() === 'time') app.nav.setTab('today');
+  app.settings.refreshStatus();
+  app.settings.refreshSearchStatus();
+  if (app.search) app.search.reloadStatus();
+  app.fetchIssuesStatus();
+  app.loadStatus().then(function () { if (app.state.total) app.renderBoardPane(); });
+  app.refreshAll();
 }

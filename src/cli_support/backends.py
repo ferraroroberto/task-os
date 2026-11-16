@@ -275,7 +275,7 @@ class LocalBackend:
         if not self._touched:
             return 0
         mirror = self._mirror_service()
-        if not mirror.enabled:
+        if not mirror.enabled or "mirror" in load_config().features_off:
             return 0
         try:
             return mirror.export_ids(self.conn, sorted(self._touched))
@@ -354,13 +354,17 @@ class LocalBackend:
         # The same four adapters the webapp runs, built here over this
         # process's config: folders and emails over folder-explorer's API, the
         # issue service cold (local refs only — the sync's cache lives in the app).
+        from src.features import search_kind_off_reason
         from src.issue_sync import IssueSyncService
         from src.search import build_federated
         from src.search.folder_explorer import FolderExplorerClient
 
         config = load_config()
         client = FolderExplorerClient(config.search.folder_explorer_url)
-        return build_federated(config, folder_explorer=client, issues=IssueSyncService(config)).search(q, kinds=kinds)
+        return build_federated(
+            config, folder_explorer=client, issues=IssueSyncService(config),
+            switched_off=lambda kind: search_kind_off_reason(config.features_off, kind),
+        ).search(q, kinds=kinds)
 
     def people(self) -> list[dict[str, Any]]:
         return self._wrap(self._repo.list_people)
