@@ -298,6 +298,10 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
     groups = {g["kind"]: g for g in _json(out)["groups"]}
     assert groups["tasks"]["hits"] == [] and groups["tasks"]["configured"] is True
     assert groups["emails"]["skipped"] is True and groups["emails"]["configured"] is False
+    code, out, _ = run("search", "archiv", "--kind", "tasks")           # a prefix of "archive": exact, no label
+    assert code == 0 and "(similar)" not in out and "(partial)" not in out
+    code, out, _ = run("search", "projekt", "--kind", "tasks")          # a typo of "Project": found, labelled weaker
+    assert code == 0 and "#1  Project  (similar)" in out
     code, out, _ = run("people")
     assert code == 0 and out.strip() == "(no people)"
     code, out, err = run("add", "With person", "--person", "Nobody")

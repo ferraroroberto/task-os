@@ -35,6 +35,15 @@
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
 .search-hit:first-child { border-top: 0; }
+/* A weaker tier's sub-heading inside the task list: the overline role on the
+   list's hairline, like the Board's closing group. */
+.search-tier {
+  list-style: none;
+  padding: var(--space-md) var(--space-xs) var(--space-xs);
+  border-top: 1px solid var(--line-muted);
+}
+.search-tier:first-child { border-top: 0; padding-top: var(--space-sm); }
+.search-tier + .search-hit { border-top: 0; }
 .search-hit:hover, .search-hit.is-active { background: var(--card-2); }
 /* The title IS the link: plain text in the row's title style, no chip box, no glyph. */
 .search-hit-link .icon { display: none; }

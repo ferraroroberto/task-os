@@ -18,7 +18,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import db as dbmod
-from src import tasks_repo as repo
 from src.config import load_config
 from src.issue_sync import IssueSyncService
 from src.issues.base import IssueInfo
@@ -30,6 +29,7 @@ from src.search.folder_explorer import FolderExplorerClient, Unavailable
 from src.search.folders_adapter import FoldersAdapter
 from src.search.issues_adapter import IssuesAdapter
 from src.search.tasks_adapter import TasksAdapter
+from src.tasks.search import split_terms
 from tests.conftest import write_test_config
 from tests.fixtures.folder_explorer_fake import FakeFolderExplorer, fixture_mails, folders_under
 from tests.fixtures.seed import PINNED_ANCHOR, seed_db
@@ -91,9 +91,9 @@ def _issues(tmp_path: Path, extra: list[dict[str, Any]] | None = None) -> IssueS
 # ------------------------------------------------------------------- helpers
 
 
-def test_helpers_fts_query_and_marks() -> None:
-    assert repo._fts_query('kitchen "quo:tes" x') == '"kitchen"* "\"\"quo:tes\"\""* "x"*'
-    assert repo._fts_query("   ") == ""
+def test_helpers_split_terms_and_marks() -> None:
+    assert split_terms('kitchen "quo:tes" x') == ["kitchen", "quo", "tes", "x"]
+    assert split_terms("   ") == []
     assert mark_terms("The Kitchen kit", "kit kitchen") == "The [Kitchen] [kit]"     # longest first, no nesting
     assert mark_terms("plain", "") == "plain" and mark_terms("", "x") == ""
     assert parse_kinds(None) == list(KINDS) and parse_kinds("emails, tasks,bogus") == ["tasks", "emails"]
@@ -117,6 +117,9 @@ def test_tasks_adapter_hits_on_seed(seeded_db: Path) -> None:
     assert quotes["matched_in"] == "comment" and "[kitchen]" in quotes["snippet"]
     assert quotes["breadcrumb"][-1]["title"] == "Kitchen"
     assert a.search("nothing-like-this", 10) == []
+    assert top["match_kind"] == "exact" and "match_kind" not in top["task"]
+    similar = a.search("kitchne", 10)[0].to_dict()                  # a typo: found, labelled as weaker
+    assert similar["match_kind"] == "similar" and similar["title"] == "Kitchen"
 
 
 # ----------------------------------------------------------- folders adapter

@@ -35,6 +35,7 @@ from src.tasks.schema import (
     _validate_enum,
     install_owner,
 )
+from src.tasks.search import rank_tasks
 
 
 def list_blockers(conn: sqlite3.Connection, task_id: int) -> list[dict[str, Any]]:
@@ -409,7 +410,7 @@ def list_tasks(
     _stamp_window_clauses(done_on, done_from, done_to, updated_since, updated_before, where, args)
 
     if q:
-        hit_ids = [h["id"] for h in search(conn, q, limit=500)]
+        hit_ids = [h["id"] for h in search(conn, q, limit=500, exact_only=True)]
         if not hit_ids:
             return []
         where.append(f"t.id IN ({', '.join('?' * len(hit_ids))})")
@@ -644,68 +645,27 @@ def _person_task_ids(conn: sqlite3.Connection, person_id: int) -> list[int]:
     return [r["id"] for r in rows]
 
 
-def _fts_query(q: str) -> str:
-    """Turn free text into a safe FTS5 query: each word a prefix term, ANDed.
-
-    Quotes every token so punctuation (``#``, ``-``, ``:``) can't break the
-    MATCH grammar; a trailing ``*`` makes ``pass`` hit ``passport``.
-    """
-    tokens = [t.replace('"', '""') for t in q.split() if t.strip()]
-    return " ".join(f'"{t}"*' for t in tokens)
-
-
-def search(conn: sqlite3.Connection, q: str, *, limit: int = 50) -> list[dict[str, Any]]:
-    """Full-text hits over title / description / comment bodies.
+def search(
+    conn: sqlite3.Connection, q: str, *, limit: int = 50, exact_only: bool = False
+) -> list[dict[str, Any]]:
+    """Ranked hits over title / description / comment bodies, exact matches first.
 
     Returns task summaries with ``snippet`` (the matched text, ``[`` ``]``
-    marks) and ``matched_in`` (``title|description|comment``); a task that
-    hits in several places appears once with the best-ranked location.
+    marks), ``matched_in`` (``title|description|comment``) and ``match_kind``
+    (``exact|partial|similar``); a task appears once, at its best tier. The
+    ranking itself lives in :mod:`src.tasks.search`.
     """
-    q = (q or "").strip()
-    if not q:
-        return []
-    match = _fts_query(q)
-    hits: dict[int, dict[str, Any]] = {}
-    # The task text is free-form and may itself hold ``[`` (``[WIP] fix tap``),
-    # so "did the title match" is asked of a mark that cannot occur in text; the
-    # display ``[`` ``]`` are swapped in afterwards.
-    for r in conn.execute(
-        """
-        SELECT rowid AS id, bm25(tasks_fts) AS rank,
-               snippet(tasks_fts, 0, char(1), char(2), '…', 12) AS s_title,
-               snippet(tasks_fts, 1, char(1), char(2), '…', 12) AS s_desc,
-               highlight(tasks_fts, 0, char(1), char(2)) AS h_title
-          FROM tasks_fts WHERE tasks_fts MATCH ? ORDER BY rank LIMIT ?
-        """,
-        (match, limit),
-    ).fetchall():
-        matched_in = "title" if "\x01" in (r["h_title"] or "") else "description"
-        snippet = r["s_title"] if matched_in == "title" else r["s_desc"]
-        snippet = (snippet or "").replace("\x01", "[").replace("\x02", "]")
-        hits[r["id"]] = {"rank": r["rank"], "matched_in": matched_in, "snippet": snippet}
-    for r in conn.execute(
-        """
-        SELECT c.task_id AS id, bm25(comments_fts) AS rank,
-               snippet(comments_fts, 0, '[', ']', '…', 12) AS s_body
-          FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid
-         WHERE comments_fts MATCH ? ORDER BY rank LIMIT ?
-        """,
-        (match, limit),
-    ).fetchall():
-        prev = hits.get(r["id"])
-        if prev is None or r["rank"] < prev["rank"]:
-            hits[r["id"]] = {"rank": r["rank"], "matched_in": "comment", "snippet": r["s_body"]}
+    hits = rank_tasks(conn, (q or "").strip(), limit=limit, exact_only=exact_only)
     if not hits:
         return []
-    ordered = sorted(hits.items(), key=lambda kv: (kv[1]["rank"], kv[0]))[:limit]
-    ids = [tid for tid, _ in ordered]
+    ids = [h["id"] for h in hits]
     rows = {
         r["id"]: dict(r)
         for r in conn.execute(
             f"SELECT * FROM tasks WHERE id IN ({', '.join('?' * len(ids))})", ids
         ).fetchall()
     }
-    hit_meta = [(rows[tid], meta) for tid, meta in ordered if tid in rows]
+    hit_meta = [(rows[h["id"]], {k: v for k, v in h.items() if k != "id"}) for h in hits if h["id"] in rows]
     out = _summaries(conn, [row for row, _ in hit_meta])
     for item, (_, meta) in zip(out, hit_meta, strict=True):
         item.update(meta)

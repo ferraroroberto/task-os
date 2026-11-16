@@ -164,7 +164,8 @@ def fmt_search(result: dict[str, Any]) -> str:
         out.append(head)
         for h in g.get("hits") or []:
             if kind == "tasks":
-                lead = f"#{h['task_id']}  {h['title']}"
+                weaker = f"  ({h['match_kind']})" if h.get("match_kind") not in (None, "exact") else ""
+                lead = f"#{h['task_id']}  {h['title']}{weaker}"
             elif kind == "issues":
                 lead = f"{h['ref']}  {h['title']}"
             else:
