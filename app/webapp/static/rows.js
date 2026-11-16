@@ -148,19 +148,21 @@ const QUIET_STATUSES = { todo: 1, done: 1 };
 function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 /**
- * Build the meta line on its budget: one quiet line that never loses a part
- * to the ellipsis on a 390px phone —
+ * Build the meta line on its budget: one quiet line that never loses a figure
+ * to the ellipsis on a 390px phone. It is the vendored split meta
+ * (`_vendored/action-row/README.md`, "The split meta"):
  *
- *   due        relative, the repeat glyph beside it when the task recurs
- *   flags      exception chips only, in the status chip's tone map: Blocked or
- *              the day its start arrives (blocked wins), an Inbox / Standby
- *              status where the view does not already say it, and High. No
- *              mark for medium or low, and no danger tone: priority is a mode,
- *              not an alarm
- *   context    ONE name, the only part that ellipsizes: the project when the
- *              view does not group by it, else the issue code
- *   counts     at most two — child tasks and comments — kept outside the
- *              ellipsis
+ *   words      `.action-row-meta-text`, the only part that ellipsizes: ONE
+ *              name, the project when the view does not group by it, else the
+ *              issue code (or the pill standing for it, the assignee pill, a
+ *              quiet status word)
+ *   figures    `.action-row-meta-tail`, never cut: the due (relative, the
+ *              repeat glyph beside it when the task recurs), the exception
+ *              chips only, in the status chip's tone map (Blocked or the day
+ *              its start arrives, blocked wins; an Inbox / Standby status where
+ *              the view does not already say it; High; no mark for medium or
+ *              low, and no danger tone: priority is a mode, not an alarm), and
+ *              at most two counts, child tasks and comments
  *
  * The link glyphs (folder, AI conversation, issue) and the person are not on
  * the row: the row menu opens each link, the drawer shows all of them.
@@ -175,6 +177,13 @@ export function metaLine(t, opts) {
   const o = opts || {};
   const meta = document.createElement('span');
   meta.className = 'trow-meta action-row-meta';
+  // always present, even empty: the vendored stylesheet drops the tail's
+  // leading dot after an empty one
+  const words = document.createElement('span');
+  words.className = 'action-row-meta-text';
+  meta.appendChild(words);
+  const figures = document.createElement('span');
+  figures.className = 'action-row-meta-tail';
   const recur = t.recurrence ? recurrenceLabel(t.recurrence, t.recurrence_anchor, t.recurrence_interval) : '';
   if (t.due) {
     const rel = relDue(t.due);
@@ -182,48 +191,44 @@ export function metaLine(t, opts) {
     // The ISO date as a value — Today reads it for the row's overdue tint.
     due.dataset.due = t.due;
     if (recur) due.prepend(metaPart('recur', 'repeat', '', recur));
-    meta.appendChild(due);
+    figures.appendChild(due);
   } else if (recur) {
-    meta.appendChild(metaPart('recur', 'repeat', '', recur));
+    figures.appendChild(metaPart('recur', 'repeat', '', recur));
   }
   // the clock says "starts"; the words are on the tooltip, to keep the
   // budget at 390px
-  if (isBlocked(t)) meta.appendChild(flagChip('blocked', null, 'Blocked', 'neutral', blockedLabel(t)));
+  if (isBlocked(t)) figures.appendChild(flagChip('blocked', null, 'Blocked', 'neutral', blockedLabel(t)));
   else if (isDeferred(t)) {
-    meta.appendChild(flagChip('starts', 'clock', startsLabel(t.starts).replace(/^starts /, ''), 'neutral',
+    figures.appendChild(flagChip('starts', 'clock', startsLabel(t.starts).replace(/^starts /, ''), 'neutral',
       'Starts ' + fmtDay(t.starts)));
   }
   if (!o.hideStatus && STATUS_FLAGS[t.status]) {
-    meta.appendChild(flagChip('state', null, sentence(t.status), STATUS_FLAGS[t.status], 'Status ' + t.status));
+    figures.appendChild(flagChip('state', null, sentence(t.status), STATUS_FLAGS[t.status], 'Status ' + t.status));
   } else if (!o.hideStatus && !QUIET_STATUSES[t.status]) {
-    meta.appendChild(metaPart('state trow-ctx', null, t.status, 'Status ' + t.status));
+    words.appendChild(metaPart('state', null, t.status, 'Status ' + t.status));
   }
-  if (t.priority === 'high') meta.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
+  if (t.priority === 'high') figures.appendChild(flagChip('prio', null, 'High', 'neutral', 'Priority high'));
   const project = t.root && !o.pills ? t.root.title : '';
   // the part names the root; its tooltip is the whole path (a journal row
   // three levels down reads "Home renovation › Kitchen" on hover)
-  if (project) meta.appendChild(metaPart('project trow-ctx', null, project, breadcrumbText(t.breadcrumb) || project));
-  else if (t.code && !(o.pills && t.root)) meta.appendChild(metaPart('code trow-ctx', null, t.code, 'Code ' + t.code));
+  if (project) words.appendChild(metaPart('project', null, project, breadcrumbText(t.breadcrumb) || project));
+  else if (t.code && !(o.pills && t.root)) words.appendChild(metaPart('code', null, t.code, 'Code ' + t.code));
   // The project pill's twin: a lane too narrow to lead the title with it
-  // (styles/rows.css, `@container lane`) shows it here, in the context slot,
+  // (styles/rows.css, `@container lane`) shows it here, in the words slot,
   // where it can ellipsize without starving the title.
   if (o.pills && t.root) {
     const twin = projectPill(t);
     twin.classList.replace('trow-pill-project', 'trow-pill-project-compact');
-    twin.classList.add('trow-ctx');
-    meta.appendChild(twin);
+    words.appendChild(twin);
   }
   // who the task is assigned to, where the view shows everyone's (the Board's Everyone scope)
-  if (o.assignee) {
-    const who = pill('assignee', o.assignee, 'neutral', 'Assigned to ' + o.assignee);
-    who.classList.add('trow-ctx');
-    meta.appendChild(who);
-  }
-  if (t.child_count) meta.appendChild(metaPart('kids trow-count', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
+  if (o.assignee) words.appendChild(pill('assignee', o.assignee, 'neutral', 'Assigned to ' + o.assignee));
+  if (t.child_count) figures.appendChild(metaPart('kids trow-count', 'list-tree', String(t.child_count), t.child_count + (t.child_count === 1 ? ' child task' : ' child tasks')));
   if (t.comment_count) {
-    meta.appendChild(metaPart('comments trow-count', 'message-square', String(t.comment_count),
+    figures.appendChild(metaPart('comments trow-count', 'message-square', String(t.comment_count),
       t.last_comment ? t.last_comment.author + ': ' + (t.last_comment.body || '') : t.comment_count + (t.comment_count === 1 ? ' comment' : ' comments')));
   }
+  if (figures.firstChild) meta.appendChild(figures);
   return meta;
 }
 

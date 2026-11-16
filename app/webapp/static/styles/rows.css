@@ -73,20 +73,28 @@
 .trow-pill-project-compact { display: none; }
 @container lane (max-width: 279px) {
   .trow-head > .trow-pill-project { display: none; }
-  .trow-meta.action-row-meta > .trow-pill-project-compact { display: inline-flex; }
+  .trow-meta .trow-pill-project-compact { display: inline-flex; }
 }
 /* Below ~260px the row's main button is too narrow for the due, a count and a
    pill's minimum width at once, and the count would be squeezed out of the box:
    the figures win and the project is read in the drawer. */
 @container lane (max-width: 259px) {
-  .trow-meta.action-row-meta > .trow-pill-project-compact { display: none; }
+  .trow-meta .trow-pill-project-compact { display: none; }
   /* Even without the pill, a due + flag + count can be wider than the ~100px button a
-     desktop six-lane Board leaves: the parts wrap onto a second line instead of being
+     desktop six-lane Board leaves: the figures wrap onto a second line instead of being
      squeezed past the button's edge, so only the rows that need the room grow. */
   .trow .trow-meta.action-row-meta { flex-wrap: wrap; row-gap: 0; }
+  .trow .action-row-meta-tail { flex-wrap: wrap; }
+}
+/* While the twin is hidden the words slot holds nothing visible, so it takes no
+   room and the tail needs no leading dot (the vendored rule only knows `:empty`). */
+.action-row-meta-text:has(> .trow-pill-project-compact:only-child) { display: none; }
+.action-row-meta-text:has(> .trow-pill-project-compact:only-child) + .action-row-meta-tail::before { content: none; }
+@container lane (min-width: 260px) and (max-width: 279px) {
+  .action-row-meta-text:has(> .trow-pill-project-compact:only-child) { display: block; }
+  .action-row-meta-text:has(> .trow-pill-project-compact:only-child) + .action-row-meta-tail::before { content: "·"; content: "·" / ""; }
 }
 .trow-meta .trow-pill-project-compact { padding: 0 5px; font-size: inherit; line-height: 1.35; }
-.trow-meta.action-row-meta > .trow-pill-project-compact.trow-ctx:not(:first-child)::before { content: none; }
 .trow.is-closed .trow-title { color: var(--muted); text-decoration: line-through; }
 /* The meta line: quiet text, one line, its parts joined by a middle dot.
    Nothing on it is a target — the whole line belongs to the row's open. */
@@ -94,32 +102,26 @@
 .trow-meta > span { white-space: nowrap; }
 .trow-meta > span:not(:last-child)::after { content: "·"; margin: 0 6px; color: var(--muted); }
 .trow-meta .icon { width: var(--icon-inline); height: var(--icon-inline); vertical-align: -3px; }
-/* A task row's meta line on its budget (rows.js `metaLine`): due ·
-   exception chips · one context name · at most two counts, laid out so the
-   ellipsis takes the context name first, and on a 390px phone only that. The
-   due never shrinks. The chips and counts shrink only once the name is gone
-   (a column narrower than a phone row: the Board's, beside the drawer) — the
-   name's 10^6 weight keeps their share of the squeeze below one layout unit
-   until then, where a plain weight still shaved a fraction of a pixel off each
-   chip, and a fraction is an ellipsis. The Search tab's folder / email / issue
+/* A task row's meta line on its budget (rows.js `metaLine`) is the vendored
+   split meta: the words (one context name) truncate in `.action-row-meta-text`,
+   the figures (due, exception chips, at most two counts) sit whole in the
+   non-shrinking `.action-row-meta-tail`. The Search tab's folder / email / issue
    hits keep the plain dotted line above. */
-.trow .trow-meta.action-row-meta { display: flex; align-items: center; gap: 4px; text-overflow: clip; }
-.trow-meta.action-row-meta > * { flex: 0 1 auto; min-width: 0; overflow: hidden; }
-.trow-meta.action-row-meta > .trow-due { flex: none; }
 .trow-meta.action-row-meta > span::after { content: none; }
-.trow-meta.action-row-meta > .trow-ctx { flex: 0 1000000 auto; text-overflow: ellipsis; }
-.trow-meta.action-row-meta > .trow-ctx:not(:first-child)::before { content: "·"; margin: 0 4px 0 2px; }
+.action-row-meta-text > :not(:first-child)::before { content: "·"; margin: 0 4px 0 2px; }
+.action-row-meta-text > .trow-pill:not(:first-child)::before { content: none; }
+.action-row-meta-text > * + .trow-pill { margin-left: 4px; }
+/* the figures sit level on one centre line, so a chip's box never grows the line */
+.trow-meta .action-row-meta-tail { display: flex; align-items: center; }
+.action-row-meta-tail > * + * { margin-left: 4px; }
 /* The exception chips (the tone map): the meta line's own 14px, not the
    chip's caption size, and a tighter box so the 60px row keeps its height. */
 .trow-meta .trow-flag { padding: 0 5px; font-size: inherit; line-height: 1.35; gap: 2px; }
 .trow-meta .trow-flag .icon { flex: none; vertical-align: 0; }
-/* The assignee pill (the Everyone scope): the context slot, so it ellipsizes before any other part and takes no leading dot. */
+/* The assignee pill (the Everyone scope): the words slot, so it ellipsizes before any figure and takes no leading dot. */
 .trow-meta .trow-pill-assignee { padding: 0 5px; font-size: inherit; line-height: 1.35; }
 /* a squeezed pill keeps an initial and its ellipsis instead of shrinking to a blank chip */
-.trow-meta.action-row-meta > .trow-pill-project-compact, .trow-meta.action-row-meta > .trow-pill-assignee { min-width: 2.4em; }
-.trow-meta.action-row-meta > .trow-pill-assignee.trow-ctx:not(:first-child)::before { content: none; }
-/* a count is a figure an ellipsis must never cut (the vendored meta tail's rule): it keeps its width, the context name gives way */
-.trow-meta.action-row-meta > .trow-count { flex: none; }
+.action-row-meta-text > .trow-pill { max-width: 100%; min-width: 2.4em; vertical-align: baseline; }
 .trow-count { display: inline-flex; align-items: center; gap: 2px; }
 .trow-count .icon { vertical-align: 0; }
 .trow-recur { margin-right: 2px; }
