@@ -117,11 +117,12 @@ def _phone_context(pw: Playwright, viewport: dict, scheme: str = "light"):
 
 def _row_meta_and_menu(page: Page, shots: Path, meta, project, row):
     """The passive meta line and the row's menu."""
-    expect(meta.locator(".trow-ctx")).to_have_text(project["title"])
+    expect(meta.locator(".action-row-meta-text")).to_have_text(project["title"])
     expect(meta.locator(".trow-count")).to_have_text(["1", "1"])
     expect(meta.locator(".trow-folder, .trow-ai, .trow-issue, .trow-person")).to_have_count(0)
-    # ... and at 390px nothing but the project name loses a pixel to the
-    # ellipsis: every other part ends inside the line, its text whole.
+    # ... and at 390px nothing but the project name (the words) loses a pixel
+    # to the ellipsis: the tail and every figure in it end inside the line,
+    # their text whole.
     # Measured once the web font is in — the fallback is narrower and hid it.
     settle(page)
     cut = meta.evaluate("""m => { const edge = m.getBoundingClientRect().right;
@@ -137,8 +138,11 @@ def _row_meta_and_menu(page: Page, shots: Path, meta, project, row):
         const want = twin.getBoundingClientRect().width;
         twin.remove();
         return el.getBoundingClientRect().width < want - 0.01; };
-      return Array.from(m.children).filter(p => !p.classList.contains('trow-ctx'))
-        .filter(p => p.getBoundingClientRect().right > edge + 0.5 || narrow(p))
+      const tail = m.querySelector('.action-row-meta-tail');
+      return [tail, ...tail.children]
+        // (the tail's own width is not measured against a clone: its leading dot
+        // is drawn only beside the words, which the clone has no sibling to ask)
+        .filter(p => p.getBoundingClientRect().right > edge + 0.5 || (p !== tail && narrow(p)))
         .map(p => p.className + ' ' + p.textContent); }""")
     assert cut == [], cut
     expect(row.locator(".trow-move")).to_be_hidden()       # the verb is a fine pointer's; a phone swipes
