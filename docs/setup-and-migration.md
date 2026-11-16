@@ -22,7 +22,24 @@ py -m venv .venv
 copy config\config.sample.json config\config.json
 ```
 
-Edit `config\config.json` for this machine (the keys are in [Configuration](configuration.md)): `port`, `your_name`, `placeholders` (what `{onedrive}` and friends expand to here), `mirror.dir` and `mirror.backup_dir`, and any service address that is not on this machine. Without a `config.json` the app boots on the committed sample with the mirror and backup off, and Settings cannot save anything.
+Edit `config\config.json` **before the first run** (the keys are in [Configuration](configuration.md)). The sample carries the author's values, so each of these needs a decision on this machine:
+
+- `port`, `your_name`.
+- `placeholders` (what `{onedrive}` and friends expand to here), `mirror.dir` and `mirror.backup_dir`. The sample points them at a synced folder of the author's. The mirror and the daily backup switch on as soon as the folder's parent exists, so a folder that exists here and belongs to another install is written into on the first start.
+- `issues.owner`. The sample names the author's account, and Issue sync runs its first pass seconds after the first start: with `gh` or `glab` logged in, it turns the open issues it can see for that owner into tasks. Set your own account or group, or switch Issue sync off (below).
+- Any service address (`search.folder_explorer_url`, `voice`, `enrich`, `ai.base_url`, `calendar.ics_url`) that is not on this machine.
+
+Without a `config.json` the app boots on the committed sample with the mirror and backup off, and Settings cannot save anything.
+
+**Where the database goes.** The database defaults to `C:\sqlite\task-os\tasks.db` (see the table below for the full order), a per-machine folder, not the checkout. Two checkouts on one machine therefore open the same database. For a trial clone beside a running install, set `TASK_OS_DATA_DIR` (a folder) or `TASKOS_DB_PATH` (a file) for that clone's process; with `TASKOS_DB_PATH` set, the mirror and backup only run in the database's own folder.
+
+**Switch off what cannot run here, before the first start.** Nothing is detected automatically: a block is on until this machine's `config.json` says otherwise, and its background work (Issue sync, flagged-mail capture) starts within seconds of the first run. To keep a block from ever starting, add a `features` object to `config\config.json` now:
+
+```json
+"features": { "email": false, "ai": false, "calendar": false }
+```
+
+The keys are the blocks in [Available features](#available-features); only an explicit `false` switches one off. After the first run the same switches are in Settings → Available features, and the choice is made once per machine.
 
 **First run**
 
@@ -30,9 +47,7 @@ Edit `config\config.json` for this machine (the keys are in [Configuration](conf
 tray.bat                      # tray icon owning the webapp on the configured port
 ```
 
-Left-click the tray icon to open the app. A fresh install opens on an empty Today. `webapp.bat` runs the same server in the foreground instead.
-
-**Switch off what cannot run here.** Open Settings → Available features and switch off every block this machine has no dependency for (see [Available features](#available-features)). Nothing is detected automatically: the choice is explicit and made once per machine.
+Left-click the tray icon to open the app. A fresh install opens on an empty Today. `webapp.bat` runs the same server in the foreground instead. On a machine without the other fleet repos, `tray.bat` prints a note and starts the tray on its own; only `tray.bat --restart` needs the shared helper (see Update).
 
 **Optional, per machine**
 
@@ -48,6 +63,8 @@ tray.bat --restart            # reclaims the port, starts fresh, checks the serv
 ```
 
 `GET /api/version` reports the served `git_sha`; it must equal `git rev-parse --short HEAD` after a restart. A schema change migrates itself at startup.
+
+`tray.bat --restart` needs the shared tray helper that the author's other repos install under `%USERPROFILE%\.claude\tray`; without it the command stops with an error rather than start over a stale build. On a machine without it, choose Quit from the tray menu, run `git pull`, then `tray.bat`, and check `/api/version` the same way.
 
 ## Migrate from an existing machine
 
