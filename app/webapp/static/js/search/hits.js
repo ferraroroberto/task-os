@@ -102,6 +102,8 @@ export function hitRow(ctx, h, idx) {
   main.tabIndex = 0;
   const title = document.createElement('span');
   title.className = 'trow-title';
+  // a hit's title is the user's own words (or a file / email name), not the app's casing
+  title.dataset.userContent = '';
   const snippet = h.snippet || '';
   const snippetIsTitle = snippet && snippet.replace(/[\[\]]/g, '') === h.title;
   const link = hitLink(ctx, h, snippetIsTitle);

@@ -382,6 +382,8 @@ export function taskRow(t, handlers, opts) {
   title.className = 'trow-title action-row-title';
   title.textContent = t.title;
   title.title = t.title;
+  // the user's own words, no casing choice of the app: the casing measure skips them
+  title.dataset.userContent = '';
   const lead = o.pills ? projectPill(t) : null;
   if (lead) {
     // the project pill leads the title on one line; the title keeps the ellipsis

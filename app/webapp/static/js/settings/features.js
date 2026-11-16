@@ -39,12 +39,17 @@ function rowEl(f, onToggle) {
   const title = document.createElement('span');
   title.className = 'action-row-title';
   title.textContent = f.label;
+  // One secondary line: what the block covers, then its state when that is not the plain "on".
+  const meta = document.createElement('span');
+  meta.className = 'action-row-meta';
   const summary = document.createElement('span');
-  summary.className = 'action-row-meta';
+  summary.className = 'settings-feature-summary';
   summary.textContent = f.summary;
+  meta.append(summary);
   const state = document.createElement('span');
-  state.className = 'action-row-meta settings-feature-state';
-  main.append(title, summary, state);
+  state.className = 'settings-feature-state';
+  meta.append(state);
+  main.append(title, meta);
   const sw = switchEl(f.enabled, { label: f.label, onToggle: onToggle });
   sw.classList.add('action-row-trail');
   // dynamic-id-exempt: the id is the block key, a fixed set of six
@@ -53,17 +58,24 @@ function rowEl(f, onToggle) {
   return li;
 }
 
-/** The state line under a row: off, or on but unavailable here with the reason. */
+/** The state on a row's one meta line: off closes it after the summary; on but unavailable
+ *  here replaces the summary with the reason, the part to act on (the summary stays in the
+ *  tooltip); a block that is simply on says nothing more, the switch already shows it. */
 function paintState(li, f) {
   const state = li.querySelector('.settings-feature-state');
+  const meta = state.parentElement;
+  meta.title = '';
+  delete li.dataset.state;
   if (!f.enabled) {
     state.textContent = 'Off on this machine';
     delete state.dataset.tone;
   } else if (!f.available) {
     state.textContent = 'On, unavailable here: ' + f.reason;
     state.dataset.tone = 'attention';
+    li.dataset.state = 'unavailable';
+    meta.title = f.summary + ' ' + state.textContent;
   } else {
-    state.textContent = 'On';
+    state.textContent = '';
     delete state.dataset.tone;
   }
   setSwitch(li.querySelector('.toggle'), f.enabled);

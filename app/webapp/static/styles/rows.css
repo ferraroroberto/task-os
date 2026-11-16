@@ -84,7 +84,9 @@
      desktop six-lane Board leaves: the figures wrap onto a second line instead of being
      squeezed past the button's edge, so only the rows that need the room grow. */
   .trow .trow-meta.action-row-meta { flex-wrap: wrap; row-gap: 0; }
-  .trow .action-row-meta-tail { flex-wrap: wrap; }
+  /* The vendored tail never shrinks (`flex: none`), so its own wrap has no width to
+     break at: here it may shrink to the line, and the figures drop onto the next one. */
+  .trow .action-row-meta-tail { flex: 0 1 auto; min-width: 0; flex-wrap: wrap; }
 }
 /* While the twin is hidden the words slot holds nothing visible, so it takes no
    room and the tail needs no leading dot (the vendored rule only knows `:empty`). */
