@@ -7,10 +7,7 @@ isolated test: it leaves the page where the next one expects it.
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import Browser, BrowserContext, Page, expect
@@ -20,6 +17,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._port_pool import post_status
 from tests.e2e._ui import (
     assert_action_row_budget,
     board_mode,
@@ -113,15 +111,7 @@ class ArchiveInstance:
 
 def _post_status(base: str, path: str, body: dict) -> int:
     """POST and hand back the status code — including a 4xx, which is the point."""
-    req = urllib.request.Request(
-        f"{base}{path}", data=json.dumps(body).encode("utf-8"), method="POST"
-    )
-    req.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(req, timeout=15) as res:
-            return int(res.status)
-    except urllib.error.HTTPError as exc:
-        return int(exc.code)
+    return post_status(base, path, body)
 
 
 def _row(page: Page, message_id: str, items: list[dict]):

@@ -43,6 +43,10 @@ byte-identical files (#134); see the "deterministic capture" section below.
 
 ``pytest_sessionfinish`` runs the vendored leaked-browser sweep (#203) once
 every fixture — pytest-playwright's ``browser`` included — has torn down.
+
+Loopback discipline (``_port_pool.py``): the harness's own HTTP calls share one
+keep-alive session, and a failure on ``net::ERR_ADDRESS_IN_USE`` is reported as
+``PORT POOL EXHAUSTED`` — the host's port pool, not the page.
 """
 
 from __future__ import annotations
@@ -72,6 +76,12 @@ from tests.conftest import write_test_config
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
 from tests.e2e._host_identity import RENDERED_TEXT_JS, describe, leaks
+from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest looks for here
+    get_json,
+    post_json,
+    pytest_runtest_makereport,
+    pytest_terminal_summary,
+)
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
 from tests.e2e._work_root_lock import WorkRootBusy, boot_lock
 from tests.e2e._work_root_lock import acquire as acquire_work_root
@@ -345,25 +355,15 @@ def booted(work: Path, db_path: Path, config_path: Path | None = None,
 
 
 def _get(base: str, path: str) -> dict:
-    """GET a JSON endpoint on the instance under test.
-
-    ``urlopen`` already raises on 4xx/5xx; the assertion is what catches a 2xx
-    that is not the ``200`` every story here expects (a 201/204 answer would
-    otherwise be parsed as if it were the body asked for).
-    """
-    with urllib.request.urlopen(f"{base}{path}", timeout=5) as res:
-        assert res.status == 200
-        return json.loads(res.read().decode("utf-8"))
+    """GET a JSON endpoint on the instance under test (a 4xx/5xx raises)."""
+    return get_json(base, path)
 
 
 def _post(base: str, path: str) -> dict:
     """POST an empty JSON body — the reindex / sync triggers a story fires so it
     is deterministic instead of racing the startup thread. The long timeout is
     for a cold folder reindex."""
-    req = urllib.request.Request(f"{base}{path}", data=b"{}", method="POST")
-    req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(res.read().decode("utf-8"))
+    return post_json(base, path, timeout=60)
 
 
 # The stories that walk a `taskos://` folder link (09, 10) cannot let the OS

@@ -60,6 +60,24 @@ Check the capture with `& .\.venv\Scripts\python.exe -m scripts.shot_determinism
 
 Each story's full write-up (steps, expected, transcript/screenshots, result) lives in `docs/validation/story-NN-<slug>.md`; this file is the index. New stories: add a row here and a file there.
 
+## Keeping a run off the loopback port pool
+
+Every closed loopback connection leaves an (ephemeral port, server port) pair in TIME_WAIT for minutes, and on Windows a `connect()` that lands on a drained pool fails as `net::ERR_ADDRESS_IN_USE` (Playwright's own Node-side client words it `connect ENOBUFS`) on a page that is fine. A full e2e run opens the connections of two sources, and the harness controls only one of them:
+
+- **The harness's own HTTP calls** to the instance under test (reading `/api/...` to set up or confirm what the browser then shows). `tests/e2e/_port_pool.py` sends them over one pooled keep-alive session (`src/pooled_http.py`), so a run reuses one connection per instance where a bare `urlopen` opened and closed a socket per call (365 calls in a full run). A story calls `get_json` / `post_json` / `send_json` / `post_status` from there, never `urllib.request`.
+- **The browser's contexts.** A context opens its own sockets (a page load of the PWA is about 140 requests over 6 keep-alive connections, measured), so a full run's 74 contexts cost the most of what is left. A fresh context is kept where a case needs the isolation; folding two contexts of one viewport and one colour scheme into one is the way to cut it further.
+
+A failure whose text carries `ERR_ADDRESS_IN_USE` or `connect ENOBUFS` leads with `PORT POOL EXHAUSTED` and the run ends with a section of that name listing the tests, so the gate output names a host-capacity problem: wait a few minutes and re-run rather than debugging the page. The section is read from the failed reports the pytest controller holds, so it prints under `-n` too (`tests/runtime/test_e2e_port_pool.py`).
+
+**Measure before cutting.** Sample `netstat -ano -p tcp` every 200 ms on a thread while the suite runs, count the *distinct new* loopback pairs seen in TIME_WAIT (excluding the pairs present at the start) whose server end is a port that began listening during the run (the disposable instances and fakes), and leave out the host's own background traffic (an idle 90 s on this machine counted 737 new pairs, mostly other local apps). Never change the machine's dynamic port range or `TcpTimedWaitDelay` to make a suite pass; both are host-level settings.
+
+Measured on the full routed run (`-n 4 --dist loadfile`, 16 tests), the same probe on the same machine, two samples each:
+
+| New loopback TIME_WAIT pairs to the run's own servers | Before | After |
+| --- | --- | --- |
+| Sample 1 | 608 | 244 |
+| Sample 2 | 593 | 275 |
+
 ## UX rounds
 
 Owner-feedback polish rounds after a phase closes — story-level validation (adjusted story assertions + a headed phone walk), recorded like a story but numbered per round.

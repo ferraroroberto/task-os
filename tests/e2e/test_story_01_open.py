@@ -15,10 +15,8 @@ and dark, saving the numbered proof shots the validation record links to:
 
 from __future__ import annotations
 
-import json
 import re
 import tomllib
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -30,6 +28,7 @@ from tests.e2e._geometry import (
     assert_no_horizontal_overflow,
     assert_no_overlap,
 )
+from tests.e2e._port_pool import get_json
 from tests.e2e._surface import surface
 from tests.e2e._ui import assert_control_boundaries, close_settings_sheet, open_settings_sheet
 from tests.e2e._uniform import assert_code_off_canvas_subtle
@@ -49,9 +48,7 @@ MEASURED_VIEWS = ["time", "search", "settings"]
 
 
 def _version(base: str) -> dict:
-    with urllib.request.urlopen(f"{base}/api/version", timeout=5) as res:
-        assert res.status == 200
-        return json.loads(res.read().decode("utf-8"))
+    return get_json(base, "/api/version")
 
 
 def _assert_shell(page: Page, sha: str, landing: str = "today") -> None:
@@ -102,9 +99,7 @@ def test_story_01_open(
 # --------------------------------------------------------------- API leg
 
 def _api_leg(webapp: str) -> None:
-    with urllib.request.urlopen(f"{webapp}/healthz", timeout=5) as res:
-        assert res.status == 200
-        assert json.loads(res.read()) == {"ok": True}
+    assert get_json(webapp, "/healthz") == {"ok": True}
     body = _version(webapp)
     assert body["git_sha"] and body["git_sha"] != "unknown"
     assert body["asset_hash"] and body["asset_hash"] != "missing"

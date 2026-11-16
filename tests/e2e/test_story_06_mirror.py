@@ -25,15 +25,14 @@ The "editor" is the test writing the file — the headed walk in
 
 from __future__ import annotations
 
-import json
 import os
 import time
-import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
 from playwright.sync_api import Browser, expect
 
+from tests.e2e._port_pool import send_json
 from tests.e2e._ui import open_settings_sheet
 from tests.e2e.conftest import _get, shot
 
@@ -41,12 +40,7 @@ DESKTOP = {"width": 1440, "height": 900}
 
 
 def _send(base: str, method: str, path: str, body: dict | None = None, actor: str = "ui") -> dict:
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(f"{base}{path}", data=data, method=method)
-    req.add_header("Content-Type", "application/json")
-    req.add_header("X-Actor", actor)
-    with urllib.request.urlopen(req, timeout=5) as res:
-        return json.loads(res.read().decode("utf-8"))
+    return send_json(method, base, path, body, headers={"X-Actor": actor})
 
 
 def _wait(predicate: Callable[[], bool], timeout: float = 15.0, what: str = "condition") -> None:
