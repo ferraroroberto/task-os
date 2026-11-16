@@ -119,10 +119,15 @@
 
 /* Available features: the vendored action-row with a trailing switch. The text
    column is not a control (the switch is the one), so it keeps the default cursor
-   and no press tint; the state line is a second muted line, in the attention tone
-   when the block is on but its dependency is missing here. */
+   and no press tint; the state closes the one meta line after a drawn dot, in the
+   attention tone when the block is on but its dependency is missing here, and a
+   block that is simply on has no state text. An unavailable block shows its reason
+   in place of the summary, so the part to act on is the one that stays readable. */
 .action-row-main.settings-feature-main { cursor: default; }
 .action-row-main.settings-feature-main:active { background: transparent; }
+.settings-feature-state:not(:empty)::before { content: "·"; content: "·" / ""; margin: 0 6px; }
+.settings-feature[data-state="unavailable"] .settings-feature-summary { display: none; }
+.settings-feature[data-state="unavailable"] .settings-feature-state::before { content: none; }
 .settings-feature-state[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
 .settings-features-note { margin: calc(-1 * var(--space-xs)) 14px var(--gap); font-size: var(--font-body-sm); }
 .settings-features-note:empty { display: none; }
