@@ -31,7 +31,6 @@ from src.tasks.mutations import (
 )
 from src.tasks.queries import (
     BOARD_COLUMNS,
-    _fts_query,
     board,
     captured_keys,
     count_mirror_events,

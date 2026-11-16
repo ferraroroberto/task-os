@@ -9,7 +9,8 @@
     beside the results → a folder hit's title hands its ref to the opener →
     ↓ ↓ Enter walks the rows → Ctrl+K → type a word → Enter opens the task →
     `>` lists the commands, Today first as in the nav → "Go to Board" switches the tab. On the phone the
-    same box and the palette as a full-width sheet.
+    same box and the palette as a full-width sheet → a typo or a half-remembered query still finds the
+    task, under a *Similar matches* / *Partial matches* sub-heading.
 
 Walks the story against a **disposable seeded instance** whose four indexes
 are all fixtures: ``{onedrive}`` → a temp tree, ``search.folder_explorer_url`` →
@@ -342,7 +343,28 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
     p.locator("#paletteInput").fill("zebra")
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Zebra paperwork")
     p.keyboard.press("Escape")
+    _weaker_matches_sit_under_a_label(base, p)
     phone.close()
+
+
+def _weaker_matches_sit_under_a_label(base: str, p: Page) -> None:
+    """Step 10: a typo and a half-remembered query still find the task, under a label.
+
+    One word that is not spelled right, and a second word that is nowhere: each
+    answer sits under its tier's sub-heading, after any exact hit, and an exact
+    query carries none.
+    """
+    tasks = ".search-group[data-kind='tasks']"
+    p.goto(f"{base}/?q=worktp#search")                             # a one-letter typo of "worktop"
+    expect(p.locator(f"{tasks} .search-tier[data-tier='similar']")).to_have_text("Similar matches")
+    expect(_task_hit(p, "Choose worktop material")).to_be_visible()
+    expect(p.locator(f"{tasks} .search-tier[data-tier='partial']")).to_have_count(0)
+    p.goto(f"{base}/?q=worktop%20zzqxj#search")                    # one word of two is in the task
+    expect(p.locator(f"{tasks} .search-tier[data-tier='partial']")).to_have_text("Partial matches")
+    expect(_task_hit(p, "Choose worktop material")).to_be_visible()
+    p.goto(f"{base}/?q=worktop#search")                            # spelled right: no label
+    expect(_task_hit(p, "Choose worktop material")).to_be_visible()
+    expect(p.locator(f"{tasks} .search-tier")).to_have_count(0)
 
 
 def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: Path) -> None:

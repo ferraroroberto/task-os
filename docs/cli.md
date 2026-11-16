@@ -30,7 +30,7 @@ tasks move N --parent M    M = root for top level; cycles are refused
 tasks block N --on M       N is blocked by M — refused on a self-block or a cycle
 tasks unblock N M          remove M as a blocker of N
 tasks rm N [--yes]         delete N and its subtree — names what goes and asks [y/N] on stderr (a refusal is exit 1, so a script that forgot --yes fails loud); alias: delete
-tasks search "q" [--kind tasks|folders|emails|issues]   federated: one block per kind; unconfigured indexes say so
+tasks search "q" [--kind tasks|folders|emails|issues]   federated: one block per kind; unconfigured indexes say so; a task found by a partial or typo-tolerant match is marked `(partial)` / `(similar)` below the exact ones
 tasks people
 tasks mirror [export|import|status]   markdown mirror: full export · one watcher pass · status (default; also the backup, folder-index, capture and voice lines)
 tasks backup               copy the database to mirror.backup_dir now (tasks-YYYYMMDD.db)
