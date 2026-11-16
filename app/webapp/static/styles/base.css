@@ -106,7 +106,6 @@
   --toggle-track: var(--line);       /* switch.css */
   --toggle-knob: #ffffff;
   --on: var(--success);
-  color-scheme: light;
   /* --bottom-tabs-* geometry is deliberately undefined: nav-tabs.css's own
      var(..., fallback) defaults are the phone-validated fleet standard. */
 }
@@ -138,7 +137,6 @@
   --tabbar-shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.6);
   --input-bg: var(--line-muted);
   --toggle-knob: var(--ink);
-  color-scheme: dark;
 }
 
 /* P3 wide-gamut twins — the spec's exact oklch values; sRGB displays keep the hex. */
