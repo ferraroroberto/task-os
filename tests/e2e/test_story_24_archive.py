@@ -227,7 +227,7 @@ def test_story_24_archive(archive_webapp: ArchiveInstance, browser: Browser, sho
     #    has run: configured, the model named, where it lives and its threshold,
     #    the bound empty (= the whole Inbox), and no run to show.
     pane = _archive_sheet_before_run(page, inst, shots)
-    surface(page, "settings.archive-empty")
+    surface(page, "settings.archive")
 
     run_id, items = _run_archive(page, base, pane)
     filed_row, filed_item, long_row = _report_rows(page, pane, items)

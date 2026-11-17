@@ -9,7 +9,7 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| results | `search.results` | `tests/e2e/test_story_10_search.py::test_find_anything` |
+| pane | `search.pane` | `tests/e2e/test_story_10_search.py::test_find_anything` |
 
 **Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_10_search.py::test_find_anything -q --browser chromium` (the suite boots its own disposable instance).
 <!-- gen:end feature -->

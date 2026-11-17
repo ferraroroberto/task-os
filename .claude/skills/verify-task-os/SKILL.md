@@ -69,22 +69,23 @@ One feature file per view, each with the exact pytest node that drives it. Read 
 
 | Feature | File | Sub-features | Driving nodes |
 | --- | --- | --- | --- |
-| app | `features/app.md` | 3 | 2 |
-| board | `features/board.md` | 3 | 2 |
+| board | `features/board.md` | 1 | 1 |
 | board-status | `features/board-status.md` | 1 | 0 |
-| drawer | `features/drawer.md` | 1 | 0 |
+| drawer | `features/drawer.md` | 2 | 1 |
 | drawer-more | `features/drawer-more.md` | 1 | 0 |
 | filter-sheet | `features/filter-sheet.md` | 1 | 0 |
 | home | `features/home.md` | 1 | 0 |
-| login | `features/login.md` | 1 | 0 |
+| login | `features/login.md` | 1 | 1 |
+| row | `features/row.md` | 1 | 1 |
 | row-menu | `features/row-menu.md` | 1 | 0 |
 | search | `features/search.md` | 1 | 1 |
 | select | `features/select.md` | 1 | 0 |
 | settings | `features/settings.md` | 1 | 1 |
 | settings-archive | `features/settings-archive.md` | 1 | 0 |
 | settings-opener | `features/settings-opener.md` | 1 | 0 |
-| time | `features/time.md` | 4 | 1 |
-| today | `features/today.md` | 5 | 3 |
+| strip | `features/strip.md` | 2 | 2 |
+| time | `features/time.md` | 3 | 1 |
+| today | `features/today.md` | 2 | 3 |
 
 Drive every mapped node in one pass (the suite boots its own disposable instance; `TASKOS_E2E_LIVE` stays unset):
 
@@ -120,7 +121,7 @@ Run this last, and also after a failure.
 
 Keep the feature map true to the source and the live app. Run from the project-scaffolding checkout (`<scaffold>` below), which owns the generator:
 
-1. **Static half.** `& <scaffold>\.venv\Scripts\python.exe <scaffold>\scripts\gen_verify_skill.py --repo <this repo> --check`. The last line is `STATIC=clean`, `STATIC=changed` or `STATIC=blocked` (exit 0 / 1 / 2). It names new `surface()` names not in the map, mapped names whose test is gone, and changed selectors.
+1. **Static half.** `& <scaffold>\.venv\Scripts\python.exe <scaffold>\scripts\tools\gen_verify_skill.py --repo <this repo> --check`. The last line is `STATIC=clean`, `STATIC=changed` or `STATIC=blocked` (exit 0 / 1 / 2). It names new `surface()` names not in the map, mapped names whose test is gone, and changed selectors.
 2. **Live half.** Launch a disposable instance, then Drive all mapped nodes with `--junitxml <scratch>/maintain.xml`, then Cleanup.
 3. **Verdict.** Re-run the check with the evidence: `--check --live-url <base url of the disposable instance> --junit <scratch>/maintain.xml`. The last line is `MAINTAIN=clean`, `MAINTAIN=changed` or `MAINTAIN=blocked`.
 

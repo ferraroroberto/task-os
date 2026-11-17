@@ -93,7 +93,7 @@ The e2e suite boots its own disposable webapp on a free port with a temp DB; it 
 
 `.claude/skills/verify-task-os/` (scope: this repository) is the committed launch-and-drive skill: how to boot a disposable instance from an empty data directory, a read-only Doctor, one pytest node per feature, evidence rules and cleanup, plus `features/` with one file per view. Claude Code loads it natively from that path. For Codex or Pi, link it once per checkout (ignored, never committed): `New-Item -ItemType Junction -Path .agents\skills\verify-task-os -Target .claude\skills\verify-task-os` (after `New-Item -ItemType Directory -Force .agents\skills`).
 
-The skill is generated, not hand-written: run project-scaffolding's `scripts/gen_verify_skill.py --repo <this checkout>` after a `surface()` call, a `[[design.review.extra_steps]]` entry or `.fleet.toml [verify]` changes, and `--check` (add `--live-url` and `--junit` for the live half) reports `STATIC` / `MAINTAIN` `clean | changed | blocked`. Only the `## Gotchas` sections are hand-written.
+The skill is generated, not hand-written: run project-scaffolding's `scripts/tools/gen_verify_skill.py --repo <this checkout>` after a `surface()` call, a `[[design.review.extra_steps]]` entry or `.fleet.toml [verify]` changes, and `--check` (add `--live-url` and `--junit` for the live half) reports `STATIC` / `MAINTAIN` `clean | changed | blocked`. Only the `## Gotchas` sections are hand-written.
 
 ## Roadmap
 

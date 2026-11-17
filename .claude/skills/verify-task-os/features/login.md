@@ -1,7 +1,7 @@
 # login
 
 <!-- gen:begin feature -->
-**Seeded from:** key views
+**Seeded from:** surface() · key views
 
 **How a user reaches it**
 
@@ -9,9 +9,9 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| sign-in card: token or password → cookie | - | none: see Drive below |
+| name-picker | `login.name-picker` | `tests/e2e/test_story_27_team.py::test_teammate_signs_in_picks_a_name_and_comments` |
 
-**Drive:** no `surface()` name covers this view yet, so no test drives it. Launch an instance and reach it as described above; to make it testable, add a test that opens it and calls `surface()`.
+**Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_27_team.py::test_teammate_signs_in_picks_a_name_and_comments -q --browser chromium` (the suite boots its own disposable instance).
 <!-- gen:end feature -->
 
 ## Gotchas

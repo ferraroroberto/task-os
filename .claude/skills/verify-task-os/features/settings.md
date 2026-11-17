@@ -9,7 +9,7 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| archive-empty | `settings.archive-empty` | `tests/e2e/test_story_24_archive.py::test_story_24_archive` |
+| archive | `settings.archive` | `tests/e2e/test_story_24_archive.py::test_story_24_archive` |
 
 **Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_24_archive.py::test_story_24_archive -q --browser chromium` (the suite boots its own disposable instance).
 <!-- gen:end feature -->

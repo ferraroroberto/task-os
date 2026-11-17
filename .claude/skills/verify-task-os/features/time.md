@@ -9,9 +9,8 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| dialog-add | `time.dialog-add` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
-| dialog-running | `time.dialog-running` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
-| log-running | `time.log-running` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
+| dialog | `time.dialog` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
+| log | `time.log` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
 | totals | `time.totals` | `tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares` |
 
 **Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_32_time.py::test_track_time_and_compare_shares -q --browser chromium` (the suite boots its own disposable instance).

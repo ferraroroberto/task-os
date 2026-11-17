@@ -178,7 +178,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
-    surface(page, "app.keys-help")
+    surface(page, "keys.help")
     page.keyboard.press("Escape")
     expect(page.locator("#keysHelp")).to_be_hidden()
 
@@ -198,7 +198,7 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     expect(page.locator(".palette-item").first.locator("kbd")).to_have_text("P")
     scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-5-desktop.png")
-    surface(page, "app.palette")
+    surface(page, "search.palette")
     page.keyboard.press("Escape")
     expect(page.locator("#palette")).to_be_hidden()
 
@@ -274,7 +274,7 @@ def _journal_days_and_filters(page: Page, base: str, shots: Path) -> dict:
     _open_issue_from_menu(page, drift, "garden-bot/issues/12")   # a closed task's menu still carries the link
     expect(drift.locator(".trow-project")).to_have_text("Side project: garden-bot")
     shot(page, shots / "story-18-done-journal-1-desktop.png")
-    surface(page, "journal.done-days")
+    surface(page, "journal.pane")
 
     # 4. The cancelled switch drops the muted rows (and the count follows).
     page.click(".journal-toggle .toggle")

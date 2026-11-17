@@ -9,11 +9,9 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| columns | `board.columns` | `tests/e2e/test_story_05_board.py::test_desktop_board_day` |
-| drawer | `board.drawer` | `tests/e2e/test_story_04_triage.py::test_desktop_triage` |
-| select-bar | `board.select-bar` | `tests/e2e/test_story_05_board.py::test_desktop_board_day` |
+| status-columns | `board.status-columns` | `tests/e2e/test_story_05_board.py::test_desktop_board_day` |
 
-**Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_04_triage.py::test_desktop_triage tests/e2e/test_story_05_board.py::test_desktop_board_day -q --browser chromium` (the suite boots its own disposable instance).
+**Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_05_board.py::test_desktop_board_day -q --browser chromium` (the suite boots its own disposable instance).
 <!-- gen:end feature -->
 
 ## Gotchas

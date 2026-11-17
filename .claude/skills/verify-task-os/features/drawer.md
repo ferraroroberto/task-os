@@ -1,7 +1,7 @@
 # drawer
 
 <!-- gen:begin feature -->
-**Seeded from:** extra_steps
+**Seeded from:** surface() · extra_steps
 
 **How a user reaches it**
 
@@ -9,9 +9,10 @@
 
 | Sub-feature | Surface name | Driving test node(s) |
 | --- | --- | --- |
-| drawer | - | none: see Drive below |
+| panel | `drawer.panel` | `tests/e2e/test_story_04_triage.py::test_desktop_triage` |
+| parent-picker | `drawer.parent-picker` | `tests/e2e/test_story_04_triage.py::test_desktop_triage` |
 
-**Drive:** no `surface()` name covers this view yet, so no test drives it. Launch an instance and reach it as described above; to make it testable, add a test that opens it and calls `surface()`.
+**Drive:** `.\.venv\Scripts\python.exe -m pytest tests/e2e/test_story_04_triage.py::test_desktop_triage -q --browser chromium` (the suite boots its own disposable instance).
 <!-- gen:end feature -->
 
 ## Gotchas

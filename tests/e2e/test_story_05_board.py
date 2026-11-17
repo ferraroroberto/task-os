@@ -196,18 +196,18 @@ def test_desktop_board_day(
         _week_lanes(page, base)
         _week_lane_drag_and_clear(page, base, shots)
         api = _status_columns(page, base, shots)
-        surface(page, "board.columns")
+        surface(page, "board.status-columns")
         _top_strip(page, base)
         _project_filter(page, base, shots, api)
         _drag_row_and_open_drawer(page, base, shots, api)
         today, head, soon, school = _today_due_list(page, base, shots)
-        surface(page, "today.soon")
+        surface(page, "today.list")
         sheet, sid = _move_verb_sheet(page, base, shots, school)
-        surface(page, "today.date-popover")
+        surface(page, "row.date")
         _move_verb_apply(page, base, sheet, sid)
         _complete_recurring_then_done(page, base, shots, today, head, soon)
         ids = _select_three_cards(page, base, shots)
-        surface(page, "board.select-bar")
+        surface(page, "strip.bulk-bar")
         _bulk_status_and_owner(page, base, shots, ids)
         _bulk_move_and_partial_failure(page, base, shots, ids)
 
@@ -531,7 +531,7 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     expect(dialog.locator(".confirm-body")).to_contain_text("cannot be undone")
     expect(dialog.locator(".confirm-warn")).to_have_count(0)     # not a synced coding task
     shot(page, shots / "story-19-delete-task-1-desktop.png")
-    surface(page, "app.confirm-delete")
+    surface(page, "confirm.dialog")
 
     # 2. Escape is "no": the drawer stays, the task is still there.
     page.keyboard.press("Escape")
