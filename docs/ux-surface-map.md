@@ -120,7 +120,7 @@ Reading it: every list view feeds the one task row; the row feeds the one drawer
 
 ## Chrome
 
-**`chrome.header` Header** — *Root:* `data-surface`. *Reach:* always on screen, above every pane. *Holds:* a glyph and title naming the view on screen, a status line beside it, the theme toggle, the Settings gear. *Does:* the gear opens Settings (any tab press leaves it); the toggle flips light and dark. *States:* the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*, Settings what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*). On an install with no tasks every pane's status reads *No tasks yet*, Settings included, and *Server unreachable* replaces it when the server cannot be reached. *Why:* one persistent header row rather than a heading per pane.
+**`chrome.header` Header** — *Root:* `data-surface`. *Reach:* always on screen, above every pane. *Holds:* a glyph and title naming the view on screen, a status line beside it, the theme toggle, the Settings gear. *Does:* the gear opens Settings (any tab press leaves it); the toggle flips light and dark. *States:* the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*, Settings what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*). On an install with no tasks Today, Board and the Done journal read *No tasks yet*, while Settings, Time and Search keep their own line (so a failing service is still named), and *Server unreachable* replaces it when the server cannot be reached. *Why:* one persistent header row rather than a heading per pane.
 
 **`chrome.nav` Nav** — *Root:* `data-surface`. *Reach:* always. *Holds:* four tabs with a glyph and label; the active one is tinted. *Does:* switches the pane; Arrow keys move between tabs. A deep link beats the remembered tab; the last tab is remembered per browser. *States:* Time absent when its block is off. *Why:* the fleet nav contract caps the bar at five; Settings is the rarely-used destination, so it is the gear.
 
@@ -348,7 +348,7 @@ An old `#table`, `#tree` or stored `table` / `tree` tab lands on Today; an old A
 
 | Where | State | What shows |
 | --- | --- | --- |
-| Today, Board | no tasks at all | *Add your first task* with **Add a task**; every header reads *No tasks yet* |
+| Today, Board | no tasks at all | *Add your first task* with **Add a task**; the header reads *No tasks yet* (Settings, Time and Search keep their own line) |
 | Today (desktop) | nothing due or nothing selected | *Select a task to see its details* |
 | Today | nothing due | header *Nothing due today*; horizons still list |
 | Calendar lane | feed failing or partly unreadable | titled notice with cause and time; last good copy kept |
