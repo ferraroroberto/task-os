@@ -133,7 +133,7 @@ const state = {
   tab: 'today',
   todayCounts: null,  // Today's horizon counts as last drawn (today.js): the header's exceptions line
   boardCounts: null,  // …and the Board's (board.js): Inbox arrivals, overdue, due today
-  headNote: null,     // a state that overrides every view's header line: 'No tasks yet' / 'Server unreachable'
+  headNote: null,     // a state that overrides every view's header line: 'Server unreachable'
   issues: null,     // /api/issues/status → {provider, enabled, reason, last_sync, last_result, repos…}
   ai: { enabled: false, reason: 'Checking local AI…' },
   // /api/status's `archive` block — the Email archiving sheet renders it
@@ -371,7 +371,7 @@ async function refreshAll() {
       state.tree = [];
       state.projects = [];
       renderNoTasks();
-      state.headNote = 'No tasks yet';
+      state.headNote = null;
       app.renderHeadStatus();
       return;
     }

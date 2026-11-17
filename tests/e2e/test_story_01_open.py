@@ -194,7 +194,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         _assert_today_leads(page)
         page.goto(f"{webapp}/#search")
         expect(page.locator("nav.tabs")).to_have_attribute("data-active-tab", "search")
-        expect(page.locator("#paneSearch")).to_be_visible()
+        _assert_search_open(page)
     finally:
         context.close()
 
@@ -262,6 +262,12 @@ def _assert_widths(page: Page) -> None:
     close_settings_sheet(page)
 
 
+def _assert_search_open(page: Page) -> None:
+    """Search is up, and the empty install's *No tasks yet* is not its header line."""
+    expect(page.locator("#paneSearch")).to_be_visible()
+    expect(page.locator("#homeHeadStatus")).not_to_have_text("No tasks yet")
+
+
 def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     """Settings → Command palette opens the palette (#316): Ctrl+K has no phone
     equivalent since the header lost its palette button (#301). Escape closes
@@ -269,6 +275,9 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     it found them."""
     press = page.tap if tap else page.click
     expect(page.locator("#paneSettings")).to_be_visible()
+    # An empty install's *No tasks yet* belongs to the task views: Settings
+    # keeps its own line about the services.
+    expect(page.locator("#homeHeadStatus")).to_have_text(re.compile(r"\d+ of \d+ services on"))
     open_settings_sheet(page, "palette", tap=tap)
     expect(page.locator("#paletteOpen")).to_be_visible()
     if tap:

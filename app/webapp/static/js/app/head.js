@@ -45,7 +45,11 @@ export function renderHeadStatus(app) {
   let attention = false;
   let parts = null;
   const onPane = !app.state.settingsOpen && !app.state.journal.open;
+  // An empty install's note speaks for the task views only: Settings, Time and
+  // Search keep their own line, which is where a failing service is named.
+  const taskView = !app.state.settingsOpen && (app.state.journal.open || ['today', 'board'].includes(app.state.tab));
   if (app.state.headNote) text = app.state.headNote;
+  else if (app.state.total === 0 && taskView) text = 'No tasks yet';
   else if (app.state.tab === 'today' && onPane && app.state.todayCounts) {
     const line = headLine(app.state.todayCounts);
     text = line.text;
