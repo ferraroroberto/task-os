@@ -160,7 +160,8 @@
    drawer is wide enough that "This weekend" still fits one line (Today's
    split half; the 440px panel and the phone keep two). The fields block is
    the query container, so the drawer's own width decides, not the window's.
-   A labelled utility button on the button-surface recipe, 44px or taller. */
+   A labelled utility button on the button-surface recipe, 44px or taller, in
+   the date field's own fill and ring so the two read as one control family. */
 .drawer-fields-main { container-type: inline-size; }
 .quick-moves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 @container (min-width: 540px) {
@@ -172,13 +173,14 @@
   gap: 2px;
   min-width: 0;
   padding: var(--space-xs) 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-md);
-  background: var(--card-off);
+  background: var(--input-bg);
   text-align: center;
   white-space: normal;
 }
-.snooze-opt.quick-move:hover { background: var(--card-2); border-color: var(--control-border); }
+/* --card-2 equals the field fill in both themes, so the hover cue is the ring. */
+.snooze-opt.quick-move:hover { border-color: var(--accent); }
 .quick-move .snooze-opt-label { font-weight: 600; }
 .quick-move .snooze-opt-date { margin: 0; padding: 0; }
 .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
