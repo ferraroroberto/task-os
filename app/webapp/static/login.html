@@ -60,7 +60,7 @@
 </svg>
 
   <main class="login-main">
-    <form id="loginForm" class="card login-card" autocomplete="off" novalidate>
+    <form id="loginForm" data-surface="login.card" class="card login-card" autocomplete="off" novalidate>
       <div class="card-head">
         <h1 class="card-title">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-list-checks"></use></svg>
@@ -81,7 +81,7 @@
     </form>
     <!-- Team mode (Step 12): after the team password, or at ?step=name, the
          browser picks its name from team.people (GET /api/team). -->
-    <section id="pickCard" class="card login-card" aria-labelledby="pickTitle" hidden>
+    <section id="pickCard" data-surface="login.name-picker" class="card login-card" aria-labelledby="pickTitle" hidden>
       <div class="card-head">
         <h1 class="card-title" id="pickTitle">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>

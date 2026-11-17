@@ -57,6 +57,7 @@ export async function resolveFolderRef(value) {
 export function mountFolderPicker(host, opts) {
   if (host.dataset.mounted) return;
   host.dataset.mounted = '1';
+  host.dataset.surface = 'folder.picker';
   const q = document.createElement('input');
   q.type = 'search';
   q.className = 'input-native folder-picker-q';

@@ -59,6 +59,7 @@ export function calendarLane(cal) {
   if (cal && (!cal.configured || cal.state === 'off')) return null;
   const lane = el('aside', 'cal-lane');
   lane.setAttribute('aria-label', 'Calendar');
+  lane.dataset.surface = 'today.calendar-lane';
   const head = el('div', 'today-head');
   const h = el('h2', 'today-title');
   h.innerHTML = icon('calendar-days');

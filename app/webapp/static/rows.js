@@ -349,6 +349,7 @@ export function taskRow(t, handlers, opts) {
   li.className = 'trow action-row' + (CLOSED[t.status] ? ' is-closed' : '')
     + (o.selectable ? ' has-select' : '') + (o.selected ? ' is-selected' : '');
   li.dataset.id = String(t.id);
+  li.dataset.surface = 'row.item';
   li.dataset.status = t.status;
   if (o.depth != null) li.style.setProperty('--depth', String(o.depth));
   if (o.draggable) li.draggable = true;

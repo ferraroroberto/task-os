@@ -380,7 +380,7 @@
   <!-- Body-level nav, sibling of <main class="app"> — never nested inside it
        (_vendored/nav/README.md "Pinning the bar (iOS)"). Desktop: top
        segmented control; phone: the floating bottom pill. -->
-  <nav class="tabs" role="tablist" aria-label="Primary navigation" data-active-tab="today">
+  <nav class="tabs" data-surface="chrome.nav" role="tablist" aria-label="Primary navigation" data-active-tab="today">
     <!-- Today is the first destination and the one the app opens on. -->
     <button id="tabToday" type="button" class="tab active" data-tab="today"
             role="tab" aria-selected="true" aria-controls="paneToday">
@@ -418,7 +418,7 @@
          heading, the first thing read above each pane (app.js
          setHeadTitle). Both glyphs ship; CSS keyed on html[data-theme] shows
          the ACTION (moon in light, sun in dark). -->
-    <div class="card home-head">
+    <div class="card home-head" data-surface="chrome.header">
       <h1 class="home-title">
         <svg class="icon" aria-hidden="true" focusable="false"><use id="homeTitleIcon" href="#i-calendar-days"></use></svg>
         <span id="homeTitleText">Today</span>
@@ -443,7 +443,7 @@
     <!-- One <section class="pane"> per tab; every non-default pane starts
          hidden so nothing flashes before nav-tabs.js runs. Each pane body is
          a stack container pinned to minmax(0, 1fr) (design.md Layout). -->
-    <section id="paneBoard" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board" hidden>
+    <section id="paneBoard" data-surface="board.pane" class="pane" role="tabpanel" aria-labelledby="tabBoard" aria-label="Board" hidden>
       <div class="pane-body">
         <!-- Top strip: the live text filter with the filter
              button beside it (the active-filter count; it opens the filter
@@ -467,7 +467,7 @@
              js/app/owners.js) and Tasks · Issues · All (scope.js), then board.js's
              Week · Status segment and, in Status mode while the Inbox holds
              tasks, Triage. -->
-        <div class="board-bar" id="boardBar">
+        <div class="board-bar" id="boardBar" data-surface="board.mode-line">
           <div class="view-switches">
             <div class="owner-host" id="boardOwners" hidden></div>
             <div class="scope-host" id="boardScope" hidden></div>
@@ -478,7 +478,7 @@
         <div id="boardHost" data-empty="tasks"></div>
       </div>
     </section>
-    <section id="paneToday" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today">
+    <section id="paneToday" data-surface="today.list" class="pane" role="tabpanel" aria-labelledby="tabToday" aria-label="Today">
       <div class="pane-body">
         <!-- The pane's own heading, always at its top: the list starts with an
              unheaded group, so its first heading would be a section far down. -->
@@ -515,20 +515,20 @@
          measure. Nothing loads until the tab is first shown. On a first visit
          with two or more people configured, the person picker stands in for
          the views. -->
-    <section id="paneTime" class="pane" role="tabpanel" aria-labelledby="tabTime" aria-label="Time" data-feature="time" hidden>
+    <section id="paneTime" data-surface="time.pane" class="pane" role="tabpanel" aria-labelledby="tabTime" aria-label="Time" data-feature="time" hidden>
       <div class="pane-body">
         <div class="segmented time-views" id="timeViews" role="group" aria-label="Time view">
           <button type="button" class="segmented-item" aria-pressed="true" data-view="log" data-track="time-view.log">Log</button>
           <button type="button" class="segmented-item" aria-pressed="false" data-view="totals" data-track="time-view.totals">Totals</button>
           <button type="button" class="segmented-item" aria-pressed="false" data-view="history" data-track="time-view.history">History</button>
         </div>
-        <div id="timePicker" class="time-view" hidden></div>
-        <div id="timeLog" class="time-view"></div>
-        <div id="timeTotals" class="time-view" hidden></div>
-        <div id="timeHistory" class="time-view" hidden></div>
+        <div id="timePicker" data-surface="time.person-picker" class="time-view" hidden></div>
+        <div id="timeLog" data-surface="time.log" class="time-view"></div>
+        <div id="timeTotals" data-surface="time.totals" class="time-view" hidden></div>
+        <div id="timeHistory" data-surface="time.history" class="time-view" hidden></div>
       </div>
     </section>
-    <section id="paneSearch" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
+    <section id="paneSearch" data-surface="search.pane" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
         <!-- One box, four indexes (Step 10): tasks_fts · folder-explorer's
              folders · its emails · the issue cache. The box
@@ -551,7 +551,7 @@
          as #journal from the palette and the Board's Done column; any tab
          press leaves it (app.js). The shared text strip + filter sheet apply
          (project · person · text — status, due, modified and sort hidden). -->
-    <section id="paneJournal" class="pane" role="region" aria-label="Done journal" hidden>
+    <section id="paneJournal" data-surface="journal.pane" class="pane" role="region" aria-label="Done journal" hidden>
       <div class="pane-body">
         <div class="pane-top">
           <div class="filter-text" id="journalFilterText" hidden></div>
@@ -565,7 +565,7 @@
          glyph, its label, the current value muted and a chevron to its sheet
          (#settingsSheet below). Text size is the one setting changed in place.
          The value ids are the ones settings.js fills. -->
-    <section id="paneSettings" class="pane" role="region" aria-label="Settings" hidden>
+    <section id="paneSettings" data-surface="settings.pane" class="pane" role="region" aria-label="Settings" hidden>
       <div class="pane-body settings-groups">
         <h2 class="overline settings-overline" id="settingsGroupDevice">This device</h2>
         <section class="card action-list settings-group" aria-labelledby="settingsGroupDevice">
@@ -736,19 +736,19 @@
 
     <!-- Build identity: outside every card, last child of <main> (vendored
          page-foot). Text set from GET /api/version by app.js. -->
-    <footer class="page-foot">
+    <footer class="page-foot" data-surface="chrome.footer">
       <p id="buildReadout"></p>
     </footer>
 
     <!-- Task drawer: a right-hand side panel on desktop (>= 1024px, fixed,
          the content shrinks so it never covers the list); a full-screen sheet
          on the phone. Deep-linkable as #task/<id>. Body built by drawer.js. -->
-    <aside id="taskDrawer" class="drawer card" role="dialog" aria-modal="false"
+    <aside id="taskDrawer" data-surface="drawer.panel" class="drawer card" role="dialog" aria-modal="false"
            aria-labelledby="drawerTitle" hidden></aside>
     <!-- Today's split view: on desktop the right half is always the
          detail pane. While no task is open this is what sits there; styles/drawer.css
          shows it only on Today at >= 1024px with the drawer closed. -->
-    <aside id="todayDetailEmpty" class="drawer drawer-empty card" aria-label="Task details">
+    <aside id="todayDetailEmpty" data-surface="today.detail-split" class="drawer drawer-empty card" aria-label="Task details">
       <div class="empty-state">
         <svg class="icon empty-state-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
         <p class="empty-state-message">Select a task to see its details</p>
@@ -761,7 +761,7 @@
          body carries the same ids its row's card held, so settings.js needs no
          remapping. Instant model: a change applies as it is made; Done and the
          × close. -->
-    <aside id="settingsSheet" class="drawer settings-detail card" role="dialog" aria-modal="false"
+    <aside id="settingsSheet" data-surface="settings.sheet" class="drawer settings-detail card" role="dialog" aria-modal="false"
            aria-labelledby="settingsSheetTitle" hidden>
       <div class="settings-sheet-head">
         <h2 id="settingsSheetTitle"></h2>
@@ -771,7 +771,7 @@
       </div>
       <!-- The head stays put; this is what scrolls (a long archive report). -->
       <div class="settings-sheet-scroll">
-        <section class="settings-sheet" id="rowActionsCard" data-sheet="rows" hidden>
+        <section class="settings-sheet" id="rowActionsCard" data-sheet="rows" data-surface="settings.row-actions" hidden>
           <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
           <label class="row-actions-field">
             <span class="row-actions-label">Swipe right</span>
@@ -785,10 +785,10 @@
           <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
           <button data-track="row-actions.reset" type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
         </section>
-        <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" hidden>
+        <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" data-surface="settings.time-categories" hidden>
           <div id="timeCatsHost" class="time-admin"></div>
         </section>
-        <section class="settings-sheet" id="paletteCard" data-sheet="palette" hidden>
+        <section class="settings-sheet" id="paletteCard" data-sheet="palette" data-surface="settings.palette" hidden>
           <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
           <div class="card-actions">
             <button type="button" id="paletteOpen" data-track="palette.open" class="button-surface">
@@ -797,14 +797,14 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="accessCard" data-sheet="access" hidden>
+        <section class="settings-sheet" id="accessCard" data-sheet="access" data-surface="settings.access" hidden>
           <dl class="access-rows" id="accessRows"></dl>
           <p class="card-meta">Install: in iOS Safari, Share, then Add to Home Screen; in Android Chrome, Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
           <div class="access-actions">
             <button data-track="auth.sign-out" type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
           </div>
         </section>
-        <section class="settings-sheet" id="issuesCard" data-sheet="issues" hidden>
+        <section class="settings-sheet" id="issuesCard" data-sheet="issues" data-surface="settings.issues" hidden>
           <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
           <dl class="status-rows" id="issuesStatus" aria-live="polite">
             <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
@@ -817,7 +817,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="calendarCard" data-sheet="calendar" hidden>
+        <section class="settings-sheet" id="calendarCard" data-sheet="calendar" data-surface="settings.calendar" hidden>
           <p class="card-meta">Today shows your real calendar beside the task list, read-only, from a private ICS address in <code>calendar.ics_url</code> (Google's secret iCal address or Outlook's published calendar link). Nothing is ever written to the calendar. The copy is refreshed every few minutes; recurring events the app cannot expand are counted, never dropped.</p>
           <dl class="status-rows" id="calendarStatus" aria-live="polite">
             <div class="status-row"><dt>Calendar</dt><dd id="statusCalendar" class="muted">Loading…</dd></div>
@@ -831,7 +831,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="captureCard" data-sheet="capture" hidden>
+        <section class="settings-sheet" id="captureCard" data-sheet="capture" data-surface="settings.capture" hidden>
           <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over folder-explorer's flagged-mail list (<code>search.folder_explorer_url</code>) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
           <dl class="status-rows" id="captureStatus" aria-live="polite">
             <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
@@ -844,7 +844,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="archiveCard" data-sheet="archive" hidden>
+        <section class="settings-sheet" id="archiveCard" data-sheet="archive" data-surface="settings.archive" hidden>
           <p class="card-meta">What is left in the Inbox once the flagged mail is a task: folder-explorer's archiver (<code>search.folder_explorer_url</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
           <div class="archive-head">
             <div class="archive-actions">
@@ -877,9 +877,9 @@
             <select data-track="archive.run-pick" id="archiveRunPick" class="select-native archive-run-pick"></select>
             <button data-track="archive.accept-all" type="button" id="archiveAcceptAll" class="button-ghost" hidden>Accept all reviewed rows</button>
           </div>
-          <div id="archiveHost" class="archive-host"></div>
+          <div id="archiveHost" data-surface="archive.report" class="archive-host"></div>
         </section>
-        <section class="settings-sheet" id="searchCard" data-sheet="search" hidden>
+        <section class="settings-sheet" id="searchCard" data-sheet="search" data-surface="settings.search" hidden>
           <p class="card-meta">One box over four indexes: tasks (always), folders and emails through folder-explorer (<code>search.folder_explorer_url</code>) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
           <dl class="status-rows" id="searchStatus" aria-live="polite">
             <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
@@ -888,7 +888,7 @@
             <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="folderCard" data-sheet="opener" hidden>
+        <section class="settings-sheet" id="folderCard" data-sheet="opener" data-surface="settings.opener" hidden>
           <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
@@ -919,7 +919,7 @@
             </details>
           </div>
         </section>
-        <section class="settings-sheet" id="voiceCard" data-sheet="voice" hidden>
+        <section class="settings-sheet" id="voiceCard" data-sheet="voice" data-surface="settings.voice" hidden>
           <p class="card-meta">Click the mic on the add dialog and talk; the words appear on the line as they are heard and settle when you click again. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
           <dl class="status-rows" id="voiceStatus" aria-live="polite">
             <div class="status-row"><dt>Transcription</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
@@ -927,18 +927,18 @@
             <div class="status-row"><dt>Wording</dt><dd id="statusEnrich" class="muted">Loading…</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="aiCard" data-sheet="ai" hidden>
+        <section class="settings-sheet" id="aiCard" data-sheet="ai" data-surface="settings.ai-triage" hidden>
           <p class="card-meta">Triage sends Inbox task text, the project tree and people to the local LLM hub in one bounded request. Suggestions stay staged until you accept or reject each one; nothing is auto-applied.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Local AI</dt><dd id="statusAI" class="muted">Loading…</dd></div>
             <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="yourNameCard" data-sheet="yourname" hidden></section><!-- body built by js/settings/yourname.js -->
-        <section class="settings-sheet" id="installCard" data-sheet="install" hidden>
+        <section class="settings-sheet" id="yourNameCard" data-sheet="yourname" data-surface="settings.your-name" hidden></section><!-- body built by js/settings/yourname.js -->
+        <section class="settings-sheet" id="installCard" data-sheet="install" data-surface="settings.database" hidden>
           <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
         </section>
-        <section class="settings-sheet" id="mirrorCard" data-sheet="mirror" hidden>
+        <section class="settings-sheet" id="mirrorCard" data-sheet="mirror" data-surface="settings.mirror" hidden>
           <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
           <dl class="status-rows" id="mirrorStatus" aria-live="polite">
             <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
@@ -959,41 +959,41 @@
   <!-- Command palette (Step 10): the vendored editor-modal shell (native
        <dialog>, showModal / close, Esc), one input + a list built by palette.js.
        Full-width sheet on the phone (styles/overlays.css). -->
-  <dialog data-track-view="palette" class="detail-dialog palette-dialog" id="palette" aria-label="Command palette"></dialog>
+  <dialog data-track-view="palette" class="detail-dialog palette-dialog" id="palette" data-surface="search.palette" aria-label="Command palette"></dialog>
 
   <!-- Quick-add: the same vendored editor-modal shell as the palette, filled
        with its form and run by quickadd.js (js/quickadd/markup.js). -->
-  <dialog data-track-view="quick-add" class="detail-dialog quickadd-dialog" id="quickAdd" aria-labelledby="quickAddTitle"></dialog>
+  <dialog data-track-view="quick-add" class="detail-dialog quickadd-dialog" id="quickAdd" data-surface="strip.quick-add" aria-labelledby="quickAddTitle"></dialog>
 
   <!-- Keyboard shortcuts: the reference card behind `?` and the
        palette's "Keyboard shortcuts" command. The same vendored editor-modal
        shell, read-only (no fields, so no footer primary); the rows are built
        from actions.js's one ACTIONS table, never listed twice by hand. -->
-  <dialog data-track-view="keys-help" class="detail-dialog keys-dialog" id="keysHelp" aria-labelledby="keysHelpTitle"></dialog>
+  <dialog data-track-view="keys-help" class="detail-dialog keys-dialog" id="keysHelp" data-surface="keys.help" aria-labelledby="keysHelpTitle"></dialog>
 
   <!-- Confirmation: the one destructive-action dialog, built by
        confirm.js per ask (deleting a task from the drawer, a selection from
        the Select bar). Same vendored shell; its single primary restates the
        tint recipe on danger, and every other way out means "no". -->
-  <dialog data-track-view="confirm" class="detail-dialog confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"></dialog>
+  <dialog data-track-view="confirm" class="detail-dialog confirm-dialog" id="confirmDialog" data-surface="confirm.dialog" aria-labelledby="confirmTitle"></dialog>
   <!-- The Time tab's dialogs (time-dialogs.js): the entry editor, the
        Switch offer, names and moves for Settings → Time categories. -->
-  <dialog data-track-view="time-dialog" class="detail-dialog time-dialog" id="timeDialog" aria-labelledby="timeDialogTitle"></dialog>
-  <!-- The date picker a row action opens on a phone: Move… from the
-       row menu, a swipe or Select mode, built per ask by snooze.js. -->
-  <dialog data-track-view="date-dialog" class="detail-dialog date-dialog" id="dateDialog" aria-labelledby="dateDialogTitle"></dialog>
+  <dialog data-track-view="time-dialog" class="detail-dialog time-dialog" id="timeDialog" data-surface="time.dialog" aria-labelledby="timeDialogTitle"></dialog>
+  <!-- The phone's date picker (Move… from the row menu, a swipe or Select mode), built per ask by snooze.js.
+       duplicate-surface-exempt: the phone's rendering of the one date surface a mouse gets as snooze.js's popover -->
+  <dialog data-track-view="date-dialog" class="detail-dialog date-dialog" id="dateDialog" data-surface="row.date" aria-labelledby="dateDialogTitle"></dialog>
   <!-- The parent picker: what the drawer head's Change parent opens,
        built per ask by parentpick.js — a filter over every open task. -->
-  <dialog data-track-view="parent-picker" class="detail-dialog parent-dialog" id="parentDialog" aria-labelledby="parentDialogTitle"></dialog>
-  <dialog data-track-view="owners" class="detail-dialog parent-dialog owner-dialog" id="ownerDialog" aria-labelledby="ownerDialogTitle"></dialog>
+  <dialog data-track-view="parent-picker" class="detail-dialog parent-dialog" id="parentDialog" data-surface="drawer.parent-picker" aria-labelledby="parentDialogTitle"></dialog>
+  <dialog data-track-view="owners" class="detail-dialog parent-dialog owner-dialog" id="ownerDialog" data-surface="strip.people-sheet" aria-labelledby="ownerDialogTitle"></dialog>
   <!-- The filter sheet: what every strip's filter button opens —
        sort first, then status · project · person · due · modified, applied
        as they change. Built per open by filters.js for the tab that asked. -->
-  <dialog data-track-view="filters" class="detail-dialog filter-dialog" id="filterSheet" aria-labelledby="filterSheetTitle"></dialog>
+  <dialog data-track-view="filters" class="detail-dialog filter-dialog" id="filterSheet" data-surface="strip.filter-sheet" aria-labelledby="filterSheetTitle"></dialog>
 
   <!-- Toast: user-initiated command results / errors (design.md "Async data
        & feedback"), the vendored _vendored/toast skeleton. -->
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="toast" data-surface="chrome.toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="/static/app.js"></script>
 </body>

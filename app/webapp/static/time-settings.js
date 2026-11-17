@@ -22,6 +22,17 @@ import { confirmDialog } from './confirm.js';
 import { pickOption, promptCategory, promptText } from './time-dialogs.js';
 import { toast } from './toast.js';
 
+/** The vendored menu builds its own element, so the app stamps the surface id on what `attach` returns. */
+function surfaceMenu(ctl) {
+  const attach = ctl.attach;
+  ctl.attach = function (key, anchor, items, opts) {
+    const menu = attach(key, anchor, items, opts);
+    menu.dataset.surface = 'settings.time-menu';
+    return menu;
+  };
+  return ctl;
+}
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -130,7 +141,7 @@ export function mountTimeSettings(opts) {
     catsValue: document.getElementById('timeCatsValue'),
     catsHost: document.getElementById('timeCatsHost'),
   };
-  const menu = createRowMenu({ className: 'time-admin-menu' });
+  const menu = surfaceMenu(createRowMenu({ className: 'time-admin-menu' }));
 
   /** The row's value. */
   function render() {

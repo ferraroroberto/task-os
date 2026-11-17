@@ -219,6 +219,7 @@ function popEl() {
   pop.id = 'folderPop';
   pop.className = 'folder-pop card';
   pop.setAttribute('role', 'dialog');
+  pop.dataset.surface = 'chip.folder-popover';
   pop.setAttribute('aria-label', 'Folder');
   pop.hidden = true;
   document.body.appendChild(pop);

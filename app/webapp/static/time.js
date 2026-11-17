@@ -46,6 +46,17 @@ import { addEntry, discardTimer, startTimer, stopTimer } from './js/time/timer.j
 import { loadTotals } from './js/time/totals.js';
 import { mountTimeSettings } from './time-settings.js';
 
+/** The vendored menu builds its own element, so the app stamps the surface id on what `attach` returns. */
+function surfaceMenu(ctl) {
+  const attach = ctl.attach;
+  ctl.attach = function (key, anchor, items, opts) {
+    const menu = attach(key, anchor, items, opts);
+    menu.dataset.surface = 'time.history-menu';
+    return menu;
+  };
+  return ctl;
+}
+
 /**
  * @param {{onHead: () => void}} opts
  * @returns {{show: () => void, hide: () => void, headText: () => string,
@@ -81,7 +92,7 @@ export function mountTime(opts) {
       busy: false,
     },
     log: { glance: null, timer: null, start: null },
-    historyMenu: createRowMenu({ className: 'time-menu' }),
+    historyMenu: surfaceMenu(createRowMenu({ className: 'time-menu' })),
     filterTimer: null,
     settings: null,
     // the calls two parts would otherwise import from each other

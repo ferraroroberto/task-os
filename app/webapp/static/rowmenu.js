@@ -37,6 +37,17 @@ import { icon } from './_vendored/icons/icons.js';
 
 const CLOSED = { done: 1, cancelled: 1 };
 
+/** The vendored menu builds its own element, so the app stamps the surface id on what `attach` returns. */
+function surfaceMenu(ctl) {
+  const attach = ctl.attach;
+  ctl.attach = function (key, anchor, items, opts) {
+    const menu = attach(key, anchor, items, opts);
+    menu.dataset.surface = 'row.menu';
+    return menu;
+  };
+  return ctl;
+}
+
 /**
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          onOpen: (id:number) => void}} ctx
@@ -45,7 +56,7 @@ const CLOSED = { done: 1, cancelled: 1 };
  *            swipe: (t:object, li:HTMLElement) => void, endRender: () => void, close: () => void}}
  */
 export function createTaskMenu(ctx) {
-  const ctl = createRowMenu({ className: 'task-menu' });
+  const ctl = surfaceMenu(createRowMenu({ className: 'task-menu' }));
 
   /** After the write the list is rebuilt and the control that had focus (the
    *  kebab the menu handed it back to, the circle) is gone: put focus on the

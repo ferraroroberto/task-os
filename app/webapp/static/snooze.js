@@ -143,6 +143,8 @@ export function dateMenu(t, field, onPick) {
   // The shadcn Popover role (role="dialog"): a non-modal layer over the
   // rows, never part of them.
   menu.setAttribute('role', 'dialog');
+  // duplicate-surface-exempt: the mouse's popover for the one date surface a phone gets as #dateDialog in index.html
+  menu.dataset.surface = 'row.date';
   menu.setAttribute('aria-label', spec.name(t));
 
   menu.append(...phraseButtons(spec.options, onPick));

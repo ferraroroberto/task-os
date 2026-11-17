@@ -22,6 +22,7 @@ function mountSwitch(host, spec, onChange) {
   const group = document.createElement('div');
   group.className = 'segmented ' + spec.className;
   group.setAttribute('role', 'group');
+  group.dataset.surface = 'strip.scope';
   group.setAttribute('aria-label', spec.label);
   spec.options.forEach(function (o) {
     const b = document.createElement('button');
