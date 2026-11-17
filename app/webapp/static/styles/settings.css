@@ -80,9 +80,20 @@
 .your-name-form { display: grid; gap: var(--space-sm); }
 .your-name-field { display: grid; gap: var(--space-xs); }
 .settings-sheet .button-ghost, .settings-sheet .button-surface { font-size: var(--font-body-sm); }
-/* Instant model: Done only closes, so it ends the sheet in the flow rather
-   than pinned over its last controls (the filter sheet's lesson). */
-.settings-sheet-actions { margin-top: var(--space-md); padding-top: 12px; border-top: 1px solid var(--line); }
+/* Done only closes, and a tall sheet (Row actions, Time categories) pushed it
+   off a short phone at the end of the scroll: it is pinned to the bottom edge
+   of the scroller instead (its offset reaches over the scroller's own bottom
+   padding, so the home-indicator room sits inside the footer). */
+.settings-sheet-actions {
+  --sheet-pad-b: calc(env(safe-area-inset-bottom, 0px) + var(--space-md));
+  position: sticky;
+  bottom: calc(-1 * var(--sheet-pad-b));
+  z-index: 1;
+  margin: var(--space-md) 0 calc(-1 * var(--sheet-pad-b));
+  padding: 12px 0 var(--sheet-pad-b);
+  background: var(--card);
+  border-top: 1px solid var(--line);
+}
 .settings-sheet-actions .button-primary { width: 100%; }
 @media (max-width: 1023px) {
   body[data-settings-sheet] { overflow: hidden; }

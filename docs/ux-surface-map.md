@@ -877,7 +877,7 @@ flowchart LR
 - **Reach:** any Settings row that opens something · `#settings/<row>`.
 - **Holds:** a title, **×**, and the one sheet its row names (below).
 - **Does:** **Done**, **×** and Back close it.
-- **Phone:** full-screen.
+- **Phone:** full-screen, **Done** pinned at the bottom whatever the sheet's length.
 - **Desktop:** the detail pane beside the list.
 - **Leads to:**
   - [Email archiving report](#archivereport-email-archiving-report)
