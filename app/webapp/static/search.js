@@ -48,7 +48,7 @@ import { render, renderIdle } from './js/search/render.js';
 export { foldParts, markHtml } from './js/search/text.js';
 
 /**
- * @param {HTMLElement} box   the search card (holds #searchInput + #searchMeta)
+ * @param {HTMLElement} box   the search card (holds #searchInput, #searchClear + #searchMeta)
  * @param {HTMLElement} host  where the results render
  * @param {{onOpenTask: (id:number) => void, onQuery: (q:string) => void,
  *          filters: () => object, onStatus: (id:number, status:string) => Promise<any>,
@@ -60,6 +60,7 @@ export function mountSearch(box, host, opts) {
     host: host,
     opts: opts,
     input: box.querySelector('#searchInput'),
+    clear: box.querySelector('#searchClear'),
     meta: box.querySelector('#searchMeta'),
     timer: null,
     seq: 0,

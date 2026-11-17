@@ -12,6 +12,11 @@ import { note, render, renderIdle } from './render.js';
 const DEBOUNCE_MS = 200;
 const LIMIT = 20;
 
+// The clear button shows only while the box holds text.
+export function syncClear(ctx) {
+  ctx.clear.hidden = !ctx.input.value;
+}
+
 export function schedule(ctx) {
   clearTimeout(ctx.timer);
   ctx.timer = setTimeout(function () { run(ctx, ctx.input.value); }, DEBOUNCE_MS);
@@ -21,6 +26,7 @@ export function schedule(ctx) {
 // "searching…" flash, and a failure keeps the rows that are showing.
 export async function run(ctx, raw, quiet) {
   const q = String(raw || '').trim();
+  syncClear(ctx);
   if (!quiet) ctx.opts.onQuery(q);
   const my = ++ctx.seq;
   if (!q) { ctx.last = null; renderIdle(ctx); return; }
