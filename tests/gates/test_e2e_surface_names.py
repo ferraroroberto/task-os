@@ -1,0 +1,33 @@
+"""Every e2e ``surface()`` name is an id in the UX surface map.
+
+One id names a surface in ``docs/ux-surface-map.md``, in the markup's
+``data-surface`` and in the e2e capture, so the design inventory and the verify
+skill's feature map (generated from these names) speak the map's language. A
+name the map does not hold means the test walks a surface nobody documented, or
+the map renamed an id and the walk did not follow. Read-only.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SURFACE_MAP = REPO_ROOT / "docs" / "ux-surface-map.md"
+E2E_DIR = REPO_ROOT / "tests" / "e2e"
+_MAP_ID_RE = re.compile(r"^\*\*`([a-z0-9]+(?:[.-][a-z0-9]+)*)`", re.MULTILINE)
+_CALL_RE = re.compile(r"""(?<![\w.])surface\(\s*page\s*,\s*["']([^"']+)["']""")
+
+
+def test_every_e2e_surface_name_is_a_map_id() -> None:
+    map_ids = set(_MAP_ID_RE.findall(SURFACE_MAP.read_text(encoding="utf-8")))
+    assert map_ids, "no surface ids parsed from docs/ux-surface-map.md"
+
+    unknown: dict[str, list[str]] = {}
+    for path in sorted(E2E_DIR.glob("*.py")):
+        if path.name == "_surface.py":
+            continue  # the vendored hook's docstring shows an example name
+        for name in _CALL_RE.findall(path.read_text(encoding="utf-8")):
+            if name not in map_ids:
+                unknown.setdefault(name, []).append(path.name)
+
+    assert not unknown, f"e2e surface() names that are not ids in docs/ux-surface-map.md: {unknown}"

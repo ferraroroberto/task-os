@@ -397,7 +397,7 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     assert_control_boundaries(page.locator("#searchBox"))      # the card is the field's edge (#339)
     _empty_search_tab(page, box)
     g, kitchen_hit = _four_groups_for_a_word(page, shots, box)
-    surface(page, "search.results")
+    surface(page, "search.pane")
     drawer = _open_hits_from_the_results(page, base, shots, box, kitchen_hit)
     p, phone = _palette_and_commands(page, ctx, browser, base, shots, drawer, g)
     _long_hits_and_everyone(base, inst, p, phone)

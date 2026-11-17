@@ -224,15 +224,15 @@ def test_track_time_and_compare_shares(authed_webapp: str, browser: Browser, sho
         page.wait_for_load_state("networkidle")
         assert time_calls == [], "Today's load must not touch the time tracker"
         glance, timer = _first_visit_and_timer(page, base, shots)
-        surface(page, "time.log-running")
+        surface(page, "time.log")
 
         # ---- Switch: another category while one runs is one call
         _start_row(page, "Laundry and ironing").click()
         dialog = page.locator("#timeDialog")
         expect(dialog.locator("h2")).to_have_text("A timer is running")
-        surface(page, "time.dialog-running")
+        surface(page, "time.dialog")
         _switch_and_stop(page, base, dialog, glance, timer)
-        surface(page, "time.dialog-add")
+        surface(page, "time.dialog")
         _add_time_spent(page, base, shots, dialog)
         _totals_comparison(page, shots)
         surface(page, "time.totals")

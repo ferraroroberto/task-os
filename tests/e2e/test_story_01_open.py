@@ -89,7 +89,7 @@ def test_story_01_open(
         page = context.new_page()
         page.goto(webapp)
         _assert_shell(page, sha)
-        surface(page, "today.empty-install")
+        surface(page, "today.list")
     finally:
         context.close()
     _desktop_leg(webapp, browser, shots, sha)

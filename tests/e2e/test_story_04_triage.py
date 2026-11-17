@@ -134,13 +134,13 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         quotes = _filtered_board(page, base, shots)
         task_id, old_due, new_due = _change_due_from_row(page, base, shots, quotes)
         drawer = _open_drawer_with_activity(page, base, shots, task_id, old_due, new_due)
-        surface(page, "board.drawer")
+        surface(page, "drawer.panel")
         _drawer_quick_moves_and_comment(page, context, base, shots, drawer, task_id, new_due)
         quick_add, qa, friday = _quick_add_fill(page, shots)
-        surface(page, "app.quick-add")
+        surface(page, "strip.quick-add")
         new_row, new_id = _quick_add_create(page, base, shots, quick_add, qa, friday)
         family_id, picker = _change_parent_picker(page, base, shots, new_row, new_id, drawer)
-        surface(page, "app.parent-picker")
+        surface(page, "drawer.parent-picker")
         _parent_move_remove_and_cycle(page, base, shots, new_id, family_id, picker, drawer)
 
         # ------------------------------- closed tasks on demand (#309) ----
@@ -436,14 +436,14 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     pane = page.locator("#paneToday")
     drawer = page.locator("#taskDrawer")
     drawer_box, empty, first, list_box = _first_due_task_fills_the_right(page, base, shots, drawer, pane)
-    surface(page, "today.split-drawer")
+    surface(page, "today.detail-split")
     # The list scrolls in its own box beside the pane, bounded by the window: a row past its edge
     # takes no tap, so a long list never stacks every row's hit areas on one page.
     scroll_box = page.locator("#paneToday .today-main")
     expect(scroll_box).to_have_css("overflow-y", "auto")
     assert (scroll_box.bounding_box() or {"height": 1e9})["height"] <= page.viewport_size["height"] - 300
     _close_and_keymap_beside_it(page, base, shots, drawer, drawer_box, empty, first, list_box, pane)
-    surface(page, "today.drawer-empty")
+    surface(page, "today.detail-split")
     _cold_deep_link_and_other_tabs(page, base, shots, drawer, empty, pane)
     # 5. …and the task Today opened by itself stays on Today.
     page.click("nav.tabs .tab[data-tab='board']")
@@ -721,7 +721,7 @@ def _walk_starts_and_snooze(page: Page, base: str, shots: Path) -> None:
     snoozed = _deferred_is_visible(page, base, shots)
     menu, row, task_id, toast = _move_from_a_today_row(page, base, shots, snoozed, today)
     actions, menu, row = _row_menu_in_full(page, shots, menu, row)
-    surface(page, "today.row-menu")
+    surface(page, "row.menu")
     picker = _move_from_the_menu(page, base, menu, task_id, toast, today)
     _settings_row_actions(page, base, shots, actions, picker, row, task_id)
     _drawer_edits_starts(page, base, task_id, today)
@@ -961,7 +961,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         _phone_board_rows(page, shots, rows, watering)
         drawer = _phone_filter_sheet_and_drawer(page, shots)
         menu = _phone_snooze_target(page, base, shots)
-        surface(page, "today.date-sheet")
+        surface(page, "row.date")
         _phone_sleeping_marker(page, context, base, shots, drawer, menu)
     finally:
         wk.close()

@@ -220,7 +220,7 @@ def test_today_calendar_lane(
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         lane = _refused_address(page, base, shots)
-        surface(page, "today.calendar-unavailable")
+        surface(page, "today.calendar-lane")
         card, group = _not_a_calendar_and_hang(page, base, card, fake, lane)
         _dropped_then_real_feed(page, base, shots, card, fake, group, lane)
         surface(page, "today.calendar-lane")
