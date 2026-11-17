@@ -45,6 +45,7 @@ One line each; the full reference for a feature is the page it links to.
 
 | Feature | In short |
 | --- | --- |
+| [UX surface map](docs/ux-surface-map.md) | Every pane, menu, sheet, dialog, gesture and key in one checklist, with the surface graph and why each is shaped as it is |
 | [Views](docs/views.md) | Today, Board, Time, Search and Settings: the task row, filters, the drawer, quick-add; PC-first, with the phone as an adaptive second rendering |
 | [Task workflow](docs/task-workflow.md) | Start dates, blocked-by dependencies, the read-only calendar lane beside Today, keyboard triage |
 | [Inbox](docs/inbox.md) | New arrivals land in Inbox by themselves (flagged emails, marked messages); one-press AI triage through the local LLM hub |
