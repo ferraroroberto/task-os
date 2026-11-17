@@ -530,16 +530,16 @@
     </section>
     <section id="paneSearch" data-surface="search.pane" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>
       <div class="pane-body">
-        <!-- One box, four indexes (Step 10): tasks_fts · folder-explorer's
-             folders · its emails · the issue cache. The box
-             carries the filter button (the sheet applies to the task hits),
-             the scope switch is the line under it, and the results render
-             below: a group per kind that has hits, the rest folded into one
-             line (search.js); ?q= keeps the query. -->
+        <!-- One box, four indexes: tasks_fts · folder-explorer's folders · its
+             emails · the issue cache. The box carries the clear and filter
+             buttons, the scope switch is the line under it, and the results
+             render below: a group per kind that has hits, the rest folded into
+             one line (search.js); ?q= keeps the query. -->
         <div class="card search-box" id="searchBox">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
           <input id="searchInput" class="search-input" type="search" autocomplete="off" spellcheck="false"
                  placeholder="Search tasks, folders, emails, issues…" aria-label="Search everything">
+          <button id="searchClear" class="icon-button search-clear" type="button" data-track="search.clear" aria-label="Clear search" title="Clear search" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
           <span id="searchMeta" class="search-meta muted" aria-live="polite"></span>
         </div>
         <div class="scope-host" id="searchScope" hidden></div>

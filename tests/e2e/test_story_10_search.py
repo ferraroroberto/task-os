@@ -135,6 +135,20 @@ def _empty_search_tab(page: Page, box) -> None:
     expect(page.locator("#searchMeta")).to_have_text("0 hits")
     expect(page.locator(".search-group")).to_have_count(0)
     expect(page.locator(".search-fold")).to_have_text("No matches in tasks, folders, emails and issues")
+    # the clear button shows only while the box holds text, is a 44px target,
+    # and one tap empties the query and the count and keeps the caret in the box
+    clear = page.get_by_role("button", name="Clear search")
+    expect(clear).to_be_visible()
+    target = clear.bounding_box()
+    assert target and target["width"] >= 44 and target["height"] >= 44, target
+    clear.click()
+    expect(box).to_have_value("")
+    expect(box).to_be_focused()
+    expect(page.locator("#searchMeta")).to_have_text("")
+    expect(clear).to_be_hidden()
+    expect(page.locator(".search-hint")).to_be_visible()
+    box.fill("zzqxnothing")                                       # leave the box as the next steps expect it
+    expect(page.locator("#searchMeta")).to_have_text("0 hits")
     # the box carries the filter button (the sheet narrows the task hits), the
     # scope switch is the line under it; the sheet leads with the sort and
     # holds every filter (#395)

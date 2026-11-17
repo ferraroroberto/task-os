@@ -4,7 +4,7 @@
 
 'use strict';
 
-import { run, schedule } from './load.js';
+import { run, schedule, syncClear } from './load.js';
 
 function primary(ctx, li) {
   const h = ctx.hitByIdx.get(Number(li.dataset.idx));
@@ -24,7 +24,13 @@ function focusRow(li) {
 
 export function wireKeys(ctx) {
   const input = ctx.input;
-  input.addEventListener('input', function () { schedule(ctx); });
+  input.addEventListener('input', function () { syncClear(ctx); schedule(ctx); });
+  ctx.clear.addEventListener('click', function () {
+    clearTimeout(ctx.timer);
+    input.value = '';
+    run(ctx, '');
+    input.focus();
+  });
   input.addEventListener('keydown', function (ev) {
     if (ev.key === 'ArrowDown') {
       const r = rows(ctx);

@@ -23,7 +23,11 @@
   outline: none;
 }
 .search-input::placeholder { color: var(--muted); }
-.search-input::-webkit-search-cancel-button { cursor: pointer; }
+/* The browser's own cancel glyph is hidden: the box carries one 44px clear
+   button instead, so every engine shows the same control (the phone's Android
+   engine has no native one, and the native glyph is far below the target). */
+.search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.search-clear { --icon-btn-box: var(--hit-min, 44px); margin-inline: -8px -4px; }
 .search-meta { font-size: var(--font-label); white-space: nowrap; }
 /* The results: before a query, the hint and the folded line; with
    one, a flat section per kind that has hits (the overline header Today's
