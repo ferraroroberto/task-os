@@ -195,8 +195,24 @@
    touch, where the expansion resets (coarse block). */
 .filter-clear::before { content: ""; position: absolute; inset: -4px; }
 .filter-clear[hidden] { display: none; }
+/* Phone: the sheet is capped to the space under its top inset (the shared
+   modal's margin-top is the same inset), the title stays put, the rows scroll
+   in `.filter-body`, and the footer (Clear / Done) is pinned below them with
+   room for the home indicator. The `vh` line is the fallback for a browser
+   without `dvh`. */
 @media (max-width: 520px) {
   .filter-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detail-dialog.filter-dialog {
+    --filter-inset: calc(env(safe-area-inset-top, 0px) + var(--space-lg));
+    margin-top: var(--filter-inset);
+    max-height: calc(100vh - var(--filter-inset) - var(--space-sm));
+    max-height: calc(100dvh - var(--filter-inset) - var(--space-sm));
+  }
+  .detail-dialog.filter-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+  .filter-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .filter-card .detail-header { flex: none; }
+  .filter-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .filter-actions { flex: none; margin-top: var(--space-sm); padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 
 /* -------------------------------------------------- the date menu

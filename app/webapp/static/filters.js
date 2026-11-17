@@ -477,12 +477,12 @@ function sheetRow(name, label, control) {
 
 /** The sheet's controls in their order, each change through `set(name)`;
  *  a name in `hidden` is left out. */
-function sheetControls(card, f, options, hidden, set) {
+function sheetControls(body, f, options, hidden, set) {
   // 1. sort first: it orders every list, filtered or not
   if (!hidden.has('sort')) {
     const r = sheetRow('sort', 'Sort', segmentedEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], SORT_SEGMENT_LABELS[s[0]] || cap(s[1])]; }), f.sort, set('sort')));
     r.classList.add('is-stacked');
-    card.appendChild(r);
+    body.appendChild(r);
   }
   // 2. status — `deferred` and `blocked` ride the end: the one visible way
   //    to see the sleeping and the locked tasks the working views
@@ -491,25 +491,25 @@ function sheetControls(card, f, options, hidden, set) {
     const statusValues = STATUSES.concat([DEFERRED, BLOCKED]).map(function (s) { return [s, cap(s)]; });
     const r = sheetRow('status', 'Status', checkGroup('status', 'filterSheet-status', statusValues, f.status, set('status')));
     r.classList.add('is-stacked');
-    card.appendChild(r);
+    body.appendChild(r);
   }
   // 3. project · person
   if (!hidden.has('project')) {
     const projectValues = [['', 'All projects']].concat((options.projects || []).map(function (p) {
       return [p.id, (p.depth ? ' '.repeat(p.depth) : '') + p.title];
     }));
-    card.appendChild(sheetRow('project', 'Project', selectEl('project', 'Project', projectValues, f.project, set('project'))));
+    body.appendChild(sheetRow('project', 'Project', selectEl('project', 'Project', projectValues, f.project, set('project'))));
   }
   const people = options.people || [];
   if (!hidden.has('person') && (people.length || f.person.length)) {
     const r = sheetRow('person', 'Person', checkGroup('person', 'filterSheet-person',
       people.map(function (p) { return [String(p.id), p.name]; }), f.person, set('person')));
     r.classList.add('is-stacked');
-    card.appendChild(r);
+    body.appendChild(r);
   }
   // 4. due · modified
-  if (!hidden.has('due')) card.appendChild(sheetRow('due', 'Due', selectEl('due', 'Due window', DUE_WINDOWS, f.due, set('due'))));
-  if (!hidden.has('updated')) card.appendChild(sheetRow('updated', 'Modified', selectEl('updated', 'Modified window', UPDATED_WINDOWS, f.updated, set('updated'))));
+  if (!hidden.has('due')) body.appendChild(sheetRow('due', 'Due', selectEl('due', 'Due window', DUE_WINDOWS, f.due, set('due'))));
+  if (!hidden.has('updated')) body.appendChild(sheetRow('updated', 'Modified', selectEl('updated', 'Modified window', UPDATED_WINDOWS, f.updated, set('updated'))));
 }
 
 /** The sheet's footer → `{actions, clear}`: Clear (hidden while nothing is
@@ -600,6 +600,15 @@ function filterCard(dialog) {
     cardClass: 'filter-card', title: 'Filters', titleId: 'filterSheetTitle',
     closeLabel: 'Close filters', onClose: function () { dialog.close(); },
   }).card;
+}
+
+/** The card's rows region, appended to *card*: its own scroll area, so the
+ *  footer below it stays on screen on a phone. */
+function sheetBody(card) {
+  const body = document.createElement('div');
+  body.className = 'filter-body';
+  card.appendChild(body);
+  return body;
 }
 
 function focusClose(dialog) {
@@ -706,7 +715,7 @@ export function mountFilters(opts) {
     const f = drawn || current;
     drawn = f;
     const card = filterCard(dialog);
-    sheetControls(card, f, options, hidden, function (name) {
+    sheetControls(sheetBody(card), f, options, hidden, function (name) {
       return function (value) { const p = {}; p[name] = value; commit(p); };
     });
     const foot = sheetActions(!activeFilterCount(f, opts.hide), function () {
