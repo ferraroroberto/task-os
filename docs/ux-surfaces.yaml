@@ -965,7 +965,7 @@ surfaces:
       - "a title, **×**, and the one sheet its row names (below)."
     does:
       - "**Done**, **×** and Back close it."
-    phone: full-screen.
+    phone: full-screen, **Done** pinned at the bottom whatever the sheet's length.
     desktop: the detail pane beside the list.
     links:
       - to: archive.report
