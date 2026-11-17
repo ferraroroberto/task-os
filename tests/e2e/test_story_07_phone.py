@@ -55,6 +55,8 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-11-phone.png   the parent picker, full-screen (#468)
     docs/screenshots/story-07-phone-12-phone.png   Settings → Available features, every block on (light)
     docs/screenshots/story-07-phone-13-phone.png   the same group in dark with Time off
+    docs/screenshots/story-07-phone-14-phone.png   the Filters sheet at 390×664, light
+    docs/screenshots/story-07-phone-15-phone.png   the same sheet in dark
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -402,6 +404,8 @@ def test_phone_install_metadata_and_story(
     # Settings → Available features rides the same function, on the same
     # instance and after the phone story: folded in so the e2e suite does not grow.
     _available_features(seeded_webapp, playwright, shots)
+    # The Filters sheet on a short phone rides the same function too.
+    _filter_sheet_fits(seeded_webapp, playwright, shots)
     # The /login walk rides the same test function on its own token-configured
     # instance: folded in so the e2e suite stays within its node budget (#457,
     # the #96 / #279 precedent) — same steps, same shots.
@@ -484,6 +488,57 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         assert page.request.get(f"{base}/api/time/meta").status == 200
         # A reload aborts the fetch that was in flight; webkit reports that as a page error.
         errors = [e for e in errors if "access control checks" not in e]
+        assert errors == [], errors
+        context.close()
+    finally:
+        wk.close()
+
+
+def _filter_sheet_fits(base: str, playwright: Playwright, shots: Path) -> None:
+    """The Filters sheet on a short phone: at 390×664 and 390×844, light and dark,
+    the whole sheet is inside the viewport and Done is visible without scrolling
+    the sheet. One context and one page serve all four cells (viewport and colour
+    scheme change in place), so the walk opens no extra sockets."""
+    wk = playwright.webkit.launch(headless=HEADLESS)
+    try:
+        context = _phone_context(wk, PHONE)
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        for scheme, size in (
+            ("light", {"width": 390, "height": 664}),
+            ("dark", {"width": 390, "height": 664}),
+            ("light", PHONE),
+            ("dark", PHONE),
+        ):
+            page.set_viewport_size(size)
+            page.emulate_media(color_scheme=scheme)
+            page.goto(f"{base}/")
+            expect(page.locator("html")).to_have_attribute("data-theme", scheme)
+            sheet = page.locator("#filterSheet")
+            if not sheet.evaluate("el => el.open"):
+                page.locator("#paneToday .filter-open").tap()
+            expect(sheet).to_be_visible()
+            settle(page)
+            fit = page.evaluate("""() => {
+              const box = s => document.querySelector(s).getBoundingClientRect();
+              const sheet = box('#filterSheet'), done = box('#filterSheet .filter-done');
+              const body = document.querySelector('#filterSheet .filter-body');
+              return { top: sheet.top, bottom: sheet.bottom, doneTop: done.top, doneBottom: done.bottom,
+                       height: window.innerHeight,
+                       scrolls: body.scrollHeight > body.clientHeight + 1 };
+            }""")
+            cell = f"{scheme} {size['height']}: {fit}"
+            assert fit["top"] >= 0 and fit["bottom"] <= fit["height"], cell
+            assert fit["doneTop"] >= fit["top"] and fit["doneBottom"] <= fit["bottom"], cell
+            expect(sheet.locator(".filter-done")).to_be_in_viewport(ratio=1)
+            assert_no_horizontal_overflow(page)
+            if size["height"] == 664:
+                assert fit["scrolls"], f"the rows are what scrolls on a short phone — {cell}"
+            if size["height"] == 664:
+                shot(page, shots / ("story-07-phone-14-phone.png" if scheme == "light" else "story-07-phone-15-phone.png"))
+            sheet.locator(".filter-done").tap()
+            expect(sheet).to_be_hidden()
         assert errors == [], errors
         context.close()
     finally:
