@@ -256,15 +256,25 @@ def _under(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix + "/")
 
 
+def _is_source(path: str) -> bool:
+    """An HTML or JS file outside the test folders."""
+    return (path.lower().endswith(HTML_SUFFIXES + JS_SUFFIXES)
+            and not any(p in ("tests", "test") for p in PurePosixPath(path).parts[:-1]))
+
+
 def in_scope(path: str, cfg: Config, vendored: tuple[str, ...]) -> bool:
-    """Is `path` an HTML or JS file this stage scans? A vendored copy's surfaces are stamped by its callers."""
-    if not path.lower().endswith(HTML_SUFFIXES + JS_SUFFIXES):
-        return False
-    if any(p in ("tests", "test") for p in PurePosixPath(path).parts[:-1]):
+    """Is `path` an HTML or JS file this stage holds to its rules? A vendored copy's surfaces are stamped by its callers."""
+    if not _is_source(path):
         return False
     if any(_under(path, d) for d in vendored) or not matches_any(path, cfg.paths):
         return False
     return not matches_any(path, BUILTIN_EXCLUDES + cfg.exclude)
+
+
+def in_vendored_scope(path: str, vendored: tuple[str, ...]) -> bool:
+    """Is `path` a vendored HTML or JS file, read only for the surface ids it stamps itself?"""
+    return (_is_source(path) and any(_under(path, d) for d in vendored)
+            and not matches_any(path, BUILTIN_EXCLUDES))
 
 
 # ------------------------------------------------------------- code reader
@@ -503,11 +513,17 @@ def parse_map(text: str, path: str) -> tuple[list[Site], list[Hit]]:
 
 # ----------------------------------------------------------------- matching
 
-def cross_check(code: list[Site], entries: list[Site], rules: tuple[str, ...]) -> list[Hit]:
-    """The rules that compare the code's ids with the map's: unmapped, stale, duplicate."""
+def cross_check(code: list[Site], entries: list[Site], rules: tuple[str, ...],
+                vendored: tuple[Site, ...] = ()) -> list[Hit]:
+    """The rules that compare the code's ids with the map's: unmapped, stale, duplicate.
+
+    `vendored` are the ids a vendored component stamps itself. They keep a map
+    entry from being stale; they are not held to the other rules, since the
+    adopting app cannot edit a vendored copy to fix or except a hit there.
+    """
     hits: list[Hit] = []
     mapped = {s.id for s in entries}
-    declared = {s.id for s in code}
+    declared = {s.id for s in code} | {s.id for s in vendored}
     if "unmapped-surface" in rules:
         hits += [Hit(s.path, s.line, "unmapped-surface", f"`{s.id}` has no entry in the surface map")
                  for s in code if s.id not in mapped]
@@ -565,6 +581,7 @@ def scan_tree(root: Path, cfg: Config, vendored: tuple[str, ...], map_text: str)
     """Every rule's hits across the in-scope HTML/JS files and the map, exempt markers applied, by file."""
     hits: list[Hit] = []
     code: list[Site] = []
+    from_vendored: list[Site] = []
     for path in tracked_files(root):
         if in_scope(path, cfg, vendored):
             text = _read_text(root, path)
@@ -572,10 +589,14 @@ def scan_tree(root: Path, cfg: Config, vendored: tuple[str, ...], map_text: str)
                 file_hits, sites = scan_code(text, path, cfg.rules)
                 hits += file_hits
                 code += sites
+        elif in_vendored_scope(path, vendored):
+            text = _read_text(root, path)
+            if text is not None:
+                from_vendored += scan_code(text, path, ())[1]  # ids only: no rule applies to a vendored copy
     entries, bad = parse_map(map_text, cfg.map)
     hits += [h for h in bad if h.rule in cfg.rules]
     texts = {cfg.map: map_text.splitlines()}
-    for h in cross_check(code, entries, cfg.rules):
+    for h in cross_check(code, entries, cfg.rules, tuple(from_vendored)):
         lines = texts.setdefault(h.path, (_read_text(root, h.path) or "").splitlines())
         if not scan.is_exempt(h.rule, lines, h.line, h.line):
             hits.append(h)

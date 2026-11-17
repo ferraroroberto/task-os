@@ -128,7 +128,7 @@ Reading it: every list view feeds the one task row; the row feeds the one drawer
 
 **`chrome.toast` Toast** — *Root:* `data-surface`. *Reach:* after a user-initiated write or an error; passive status renders inline instead. *Holds:* one message at a time, pinned above the nav, with an optional **Undo (Z)** button. *Does:* Undo writes the inverse change; it and the `z` key expire together after ten seconds. Bulk results name any task that failed. *States:* neutral, or tinted for an error.
 
-**`chrome.update-notice` New-version notice** — *Root:* none — the vendored build-watch component builds the banner, so no call site can reach its element. *Holds:* a banner offering **Reload** when the server moved to a newer build while the page stayed open (an installed phone app in memory across a restart). It is dismissible and never reloads by itself, so a typed draft survives.
+**`app.update-banner` New-version notice** — *Root:* `data-surface` (stamped by the vendored build-watch component itself). *Holds:* a banner offering **Reload** when the server moved to a newer build while the page stayed open (an installed phone app in memory across a restart). It is dismissible and never reloads by itself, so a typed draft survives.
 
 **`chrome.install-shell` Install shell** — *Root:* none — the manifest and the standalone display, with no element of their own. *Holds:* the page is an installable app (manifest, standalone display); the installed app adds a strip above the status bar and keeps the nav at the bottom edge.
 
