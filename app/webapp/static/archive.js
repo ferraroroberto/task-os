@@ -51,6 +51,17 @@ import { refresh, refreshStatus, reload } from './js/archive/load.js';
 import { startPolling } from './js/archive/run.js';
 import { wireArchive } from './js/archive/wire.js';
 
+/** The vendored menu builds its own element, so the app stamps the surface id on what `attach` returns. */
+function surfaceMenu(ctl) {
+  const attach = ctl.attach;
+  ctl.attach = function (key, anchor, items, opts) {
+    const menu = attach(key, anchor, items, opts);
+    menu.dataset.surface = 'archive.row-menu';
+    return menu;
+  };
+  return ctl;
+}
+
 const PHONE_MQ = '(max-width: 767px)';
 //: Narrower than the grid→cards switch: the width at which the head's label
 //: column, the long status wording and a full absolute path stop fitting on a
@@ -104,7 +115,7 @@ export function mountArchive(opts) {
       busy: false,     // a run or a review action is in flight
     },
     // The desktop rows' ⋮ menus: one controller, at most one menu open.
-    rowMenu: createRowMenu({ className: 'archive-row-menu' }),
+    rowMenu: surfaceMenu(createRowMenu({ className: 'archive-row-menu' })),
     // the calls two parts would otherwise import from each other
     reload: function () { return reload(ctx); },
     startPolling: function () { startPolling(ctx); },

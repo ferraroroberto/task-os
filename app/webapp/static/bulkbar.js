@@ -132,6 +132,7 @@ export function mountBulkBar(host, handlers) {
   host.classList.add('bulk-bar');
   host.setAttribute('role', 'toolbar');
   host.setAttribute('aria-label', 'Bulk actions');
+  host.dataset.surface = 'strip.bulk-bar';
 
   // The number is the one thing that must survive a narrow phone — it is what
   // says how much this next click changes. Only the word "selected" is

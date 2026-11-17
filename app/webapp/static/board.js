@@ -328,6 +328,8 @@ function paintTriage(triage, o, hidden) {
 function mountLanes(kind, skeleton, handlers) {
   const columns = document.createElement('div');
   columns.className = 'board-columns board-' + kind;
+  if (kind === 'status') columns.dataset.surface = 'board.status-columns';
+  else columns.dataset.surface = 'board.week-lanes';
   const strip = document.createElement('div');
   strip.className = 'board-strip';
   strip.setAttribute('role', 'tablist');

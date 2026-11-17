@@ -581,6 +581,7 @@ def _row_menu_in_full(page: Page, shots: Path, menu, row):
     kebab.click()
     menu = page.locator(".row-menu")
     expect(menu).to_be_visible()
+    expect(menu).to_have_attribute("data-surface", "row.menu")   # stamped at the call site: the vendored menu builds its own element
     expect(kebab).to_have_attribute("aria-expanded", "true")
     actions = menu.locator(".row-menu-item").evaluate_all("els => els.map(e => e.dataset.action)")
     assert actions[:2] == ["complete", "change-date"] and "snooze" not in actions, actions
@@ -598,6 +599,7 @@ def _move_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
     expect(menu).to_be_hidden()
     picker = page.locator(".snooze-pop .snooze-menu")
     expect(picker).to_be_visible()
+    expect(picker).to_have_attribute("data-surface", "row.date")
     picker.get_by_text("Tomorrow", exact=True).click()
     tomorrow = (today + timedelta(days=1)).isoformat()
     toast = page.locator("#toast")

@@ -55,6 +55,7 @@ export function mountOwners(host, on) {
   group.className = 'segmented owner-switch';
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', 'Whose tasks');
+  group.dataset.surface = 'strip.person-row';
   host.replaceChildren(group);
   let drawnKey = '';
   let ordered = [];

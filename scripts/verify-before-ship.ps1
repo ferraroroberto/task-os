@@ -62,6 +62,13 @@
                              scripts/usage_track_ratchet_gate.py. Whole tree, never routed;
                              an exit 3 (a file that cannot be read or closed) is NOT
                              CONFIRMED and fails, never a pass or a skip.
+     10d. ux surface ratchet — no surface root without a constant data-surface id, no
+                             id without an entry in docs/ux-surface-map.md, no entry no
+                             element carries, and no id on two surfaces, beyond
+                             .ux-surface-ratchet-baseline.json, through
+                             scripts/ux_surface_ratchet_gate.py. Whole tree, never routed;
+                             an exit 3 (a file that cannot be read or closed) is NOT
+                             CONFIRMED and fails, never a pass or a skip.
      11. pytest (unit)     — hermetic suite, tests/e2e excluded; a runtime write
                              --snapshot is taken first
      12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
@@ -177,6 +184,9 @@ Invoke-Stage "runtime write ratchet"   { & $py -m scripts.runtime_write_ratchet_
 # Same wrapper shape: it maps the usage track script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_usage_track_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "usage track ratchet"     { & $py -m scripts.usage_track_ratchet_gate }
+# Same wrapper shape: it maps the UX surface script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_ux_surface_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "ux surface ratchet"      { & $py -m scripts.ux_surface_ratchet_gate }
 # Runtime write probe, first half: what already sits untracked or ignored under
 # the code folders, so the probe after the tests names only what they wrote.
 $runtimeSnapshot = Join-Path ([IO.Path]::GetTempPath()) "runtime-write-snapshot-$PID.json"
