@@ -11,8 +11,9 @@
  *   <button class="filter-open">      beside it: the filter glyph and how many
  *                                     settings are on
  *   <dialog id="filterSheet">         what the button opens — the vendored
- *                                     editor modal: sort first, then status ·
- *                                     project · person · due · modified;
+ *                                     editor modal, "Filters & sort": sort,
+ *                                     the view toggles a tab brings (`views`),
+ *                                     then status · project · person · due · modified;
  *                                     status and person are ticks in place
  *
  * Nothing about the state needs the sheet open to read: the count is on the
@@ -34,9 +35,10 @@ export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', u
  * · All, when "Mine" became the other axis (`WHOSE`). A task is an
  * issue when it carries an `issue_ref` — the coding task the sync made
  * (`coding` ⇔ issue_ref). One URL key, `scope`, absent for the default (its
- * id stays `mine`, so every saved `?scope=` link keeps working). It is not a
- * sheet control: the segmented switch under the strip owns it (scope.js), so
- * the sheet neither counts it nor resets it on Clear.
+ * id stays `mine`, so every saved `?scope=` link keeps working). On Today and
+ * Board it is a row of the sheet (the tab's `views`, js/app/viewrows.js), counted
+ * by `activeViewCount` and reset by Clear; on Search the segmented switch under
+ * the box owns it (scope.js) and the sheet there neither counts nor resets it.
  */
 export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
 /**
@@ -48,8 +50,9 @@ export const SCOPES = [['mine', 'Tasks'], ['issues', 'Issues'], ['all', 'All']];
  * several-allowed pick (made on the "+N more" sheet; the row itself is
  * single-choice): one URL key, `owner` (the contact filter owns
  * `person`), and while it is set it narrows the list in place of `whose`.
- * Like the scope the row is a switch's, never the sheet's, so Clear leaves
- * both alone. The Search tab ignores them: search covers everyone.
+ * Like the scope they are rows of the Today and Board sheet, counted by
+ * `activeViewCount` and reset by its Clear. The Search tab ignores them:
+ * search covers everyone.
  */
 export const WHOSE = [['mine', 'Mine'], ['everyone', 'Everyone']];
 /** The person row is one segmented control, which holds at most this many
@@ -344,10 +347,10 @@ export function describeFilters(f, options) {
   return bits;
 }
 
-/** How many settings the sheet's Clear would reset — the number on the filter
- *  button. Neither the text (the field beside the button shows it) nor
- *  the scope or whose (the switches') counts; a non-default sort does, since Clear
- *  resets it too. A hidden control's value is not applied, so not counted. */
+/** How many of the sheet's filter and sort settings Clear would reset. Not the
+ *  text (the field beside the button shows it) and not the view toggles
+ *  (`activeViewCount`); a non-default sort does count, since Clear resets it
+ *  too. A hidden control's value is not applied, so not counted. */
 export function activeFilterCount(f, hide) {
   const hidden = new Set(hide || []);
   let n = 0;
@@ -358,6 +361,39 @@ export function activeFilterCount(f, hide) {
   if (f.updated && !hidden.has('updated')) n += 1;
   if (f.sort && f.sort !== 'due' && !hidden.has('sort')) n += 1;
   return n;
+}
+
+/**
+ * How many of the view toggles a Today or Board sheet carries are off their
+ * default: the kind of task (anything but Tasks) and whose tasks (Everyone or
+ * picked people, only where two or more members exist and the row is drawn).
+ * Added to `activeFilterCount` for the badge on those tabs.
+ * @param {object} f  the filter state
+ * @param {number} members  how many members the install has
+ */
+export function activeViewCount(f, members) {
+  let n = 0;
+  if (f.scope && f.scope !== 'mine') n += 1;
+  if (members >= 2 && ((f.owners && f.owners.length) || f.whose === 'everyone')) n += 1;
+  return n;
+}
+
+/** The view toggles that are on, in words, for the filter button's name.
+ *  @param {Array<{id: string, name: string}>} members */
+export function describeViews(f, members) {
+  const bits = [];
+  if (f.scope && f.scope !== 'mine') {
+    bits.push((SCOPES.find(function (s) { return s[0] === f.scope; }) || [])[1].toLowerCase());
+  }
+  if (members.length >= 2) {
+    if (f.owners && f.owners.length) {
+      bits.push(f.owners.map(function (id) {
+        const m = members.find(function (x) { return x.id === id; });
+        return m ? m.name : id;
+      }).join(', '));
+    } else if (f.whose === 'everyone') bits.push('everyone');
+  }
+  return bits;
 }
 
 /** Do two states draw the same sheet? (the text, the scope and whose are not on it) */
@@ -464,7 +500,8 @@ function checkGroup(name, labelId, values, selected, onChange) {
   return group;
 }
 
-function sheetRow(name, label, control) {
+/** One labelled row of the sheet; `viewrows.js` builds its toggle rows with it. */
+export function sheetRow(name, label, control) {
   const r = document.createElement('div');
   r.className = 'row filter-sheet-row';
   r.dataset.name = name;
@@ -476,14 +513,16 @@ function sheetRow(name, label, control) {
 }
 
 /** The sheet's controls in their order, each change through `set(name)`;
- *  a name in `hidden` is left out. */
-function sheetControls(body, f, options, hidden, set) {
+ *  a name in `hidden` is left out. `afterSort` draws the tab's view toggles
+ *  between the sort and the filters. */
+function sheetControls(body, f, options, hidden, set, afterSort) {
   // 1. sort first: it orders every list, filtered or not
   if (!hidden.has('sort')) {
     const r = sheetRow('sort', 'Sort', segmentedEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], SORT_SEGMENT_LABELS[s[0]] || cap(s[1])]; }), f.sort, set('sort')));
     r.classList.add('is-stacked');
     body.appendChild(r);
   }
+  afterSort(body);
   // 2. status — `deferred` and `blocked` ride the end: the one visible way
   //    to see the sleeping and the locked tasks the working views
   //    leave out. None ticked = the open tasks.
@@ -556,12 +595,13 @@ function filterButton() {
 }
 
 /** The badge's number, and a name that spells out what is on. */
-function paintFilterButton(button, badge, filters, options, hide) {
-  const n = activeFilterCount(filters, hide);
+function paintFilterButton(button, badge, filters, options, hide, views) {
+  const n = activeFilterCount(filters, hide) + (views ? views.count(filters) : 0);
   badge.textContent = n ? String(n) : '';
   badge.hidden = !n;
   button.classList.toggle('has-value', n > 0);
-  const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: hide });
+  const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: hide })
+    .concat(views ? views.words(filters) : []);
   const name = n ? 'Filter, ' + n + ' on: ' + words.join(' · ') : 'Filter';
   button.setAttribute('aria-label', name);
   button.title = name;
@@ -582,10 +622,13 @@ function textInput(onValue) {
   return el;
 }
 
-/** What Clear leaves: the defaults, keeping the scope, whose, the picked people and — where this
- *  tab has no text field of its own (Search) — the query. */
-function clearedFilters(base, keepQuery) {
-  return Object.assign({}, DEFAULT_FILTERS, { q: keepQuery ? base.q : '', scope: base.scope, whose: base.whose, owners: base.owners });
+/** What Clear leaves: the defaults, keeping — where this tab has no text field
+ *  of its own (Search) — the query, and — where the scope, whose and the picked
+ *  people are not rows of its sheet (every tab but Today and Board) — those. */
+function clearedFilters(base, keepQuery, keepViews) {
+  const kept = { q: keepQuery ? base.q : '' };
+  if (keepViews) Object.assign(kept, { scope: base.scope, whose: base.whose, owners: base.owners });
+  return Object.assign({}, DEFAULT_FILTERS, kept);
 }
 
 /** The count's one home is the text field's placeholder. */
@@ -597,8 +640,8 @@ function textPlaceholder(count, countLabel) {
 /** The sheet's editor-modal card; its × closes the dialog. */
 function filterCard(dialog) {
   return modalCard({
-    cardClass: 'filter-card', title: 'Filters', titleId: 'filterSheetTitle',
-    closeLabel: 'Close filters', onClose: function () { dialog.close(); },
+    cardClass: 'filter-card', title: 'Filters & sort', titleId: 'filterSheetTitle',
+    closeLabel: 'Close filters & sort', onClose: function () { dialog.close(); },
   }).card;
 }
 
@@ -614,6 +657,53 @@ function sheetBody(card) {
 function focusClose(dialog) {
   const c = dialog.querySelector('.detail-close');
   if (c) c.focus();
+}
+
+/** Does the sheet hold anything Clear would reset — a filter or a view toggle?
+ *  The view toggles are read from the live state: `drawn` only holds what the sheet last drew. */
+function sheetHasValue(f, opts) {
+  const live = opts.views ? Object.assign({}, f, opts.views.live()) : f;
+  return !!(activeFilterCount(live, opts.hide) + (opts.views ? opts.views.count(live) : 0));
+}
+
+/**
+ * The pane strip's two controls, built once and updated in place: the live text
+ * field (when the tab has a `textHost`) and the filter button beside it.
+ * @param {object} opts  `mountFilters`' options
+ * @param {() => {current: object, options: object}} read  the state last rendered and its options
+ * @param {() => void} onOpen  opens the sheet
+ */
+function mountStrip(opts, read, onOpen) {
+  let textEl = null;
+  let button = null;
+  let badge = null;
+
+  function renderText(filters, options) {
+    if (!opts.textHost) return;
+    if (!textEl) {
+      textEl = textInput(function (value) { opts.onChange(Object.assign({}, read().current, { q: value })); });
+      opts.textHost.replaceChildren(textEl);
+    }
+    opts.textHost.hidden = false;
+    // Never yank the value out from under the typist: their keystrokes are
+    // already in the box and the debounce means `filters.q` trails them.
+    if (document.activeElement !== textEl && textEl.value !== filters.q) textEl.value = filters.q;
+    textEl.placeholder = textPlaceholder(options.count, opts.countLabel);
+  }
+
+  function renderButton(filters, options) {
+    const host = opts.buttonHost || opts.textHost;
+    if (!host) return;
+    if (!button) {
+      button = filterButton();
+      badge = button.querySelector('.filter-count');
+      button.addEventListener('click', onOpen);
+      host.appendChild(button);
+    }
+    paintFilterButton(button, badge, filters, options, opts.hide, opts.views);
+  }
+
+  return { render: function (filters) { const o = read().options; renderText(filters, o); renderButton(filters, o); } };
 }
 
 // ---------------------------------------------------------------- sheet
@@ -644,52 +734,29 @@ let sheetOwner = null;   // the mountFilters handle whose controls the one sheet
  *          `updated` · `sort` · `project` · `person`); the journal
  *          drops the four that say nothing about a closed task. A hidden
  *          control's value is neither drawn, counted nor described.
+ *          views — the view toggles this tab's sheet carries above sort
+ *          (Today and Board; js/app/viewrows.js): `count(f)` and `words(f)`
+ *          feed the button's badge and name, `draw(body)` builds the rows,
+ *          `sync(f)` brings an open sheet's rows up to date, `live()` is the
+ *          scope · whose · owners the app holds right now (a sheet change
+ *          never writes back a stale copy of them) and `clear()` resets what
+ *          the filter state does not hold (the Board's layout).
  * @returns {{render: (filters: object, options: {projects: Array, people: Array, count?: number}) => void,
  *            openSheet: () => void}}
  */
 export function mountFilters(opts) {
   const hidden = new Set(opts.hide || []);
-  let textEl = null;         // the strip's input — built once, never re-rendered
-  let button = null;         // the filter button — built once, updated in place
-  let badge = null;
+  const strip = mountStrip(opts, function () { return { current: current, options: options }; }, function () { openSheet(); });
   let current = DEFAULT_FILTERS;   // the state last rendered
   let options = {};
   let drawn = null;          // the state the open sheet's controls show; null while closed
   let sheetClear = null;     // the open sheet's Clear button
   const handle = { render: render, openSheet: openSheet };
 
-  /** The live text filter, in the pane's top strip. */
-  function renderText(filters) {
-    if (!opts.textHost) return;
-    if (!textEl) {
-      textEl = textInput(function (value) { opts.onChange(Object.assign({}, current, { q: value })); });
-      opts.textHost.replaceChildren(textEl);
-    }
-    opts.textHost.hidden = false;
-    // Never yank the value out from under the typist: their keystrokes are
-    // already in the box and the debounce means `filters.q` trails them.
-    if (document.activeElement !== textEl && textEl.value !== filters.q) textEl.value = filters.q;
-    textEl.placeholder = textPlaceholder(options.count, opts.countLabel);
-  }
-
-  /** The filter button: the glyph, plus how many settings are on. */
-  function renderButton(filters) {
-    const host = opts.buttonHost || opts.textHost;
-    if (!host) return;
-    if (!button) {
-      button = filterButton();
-      badge = button.querySelector('.filter-count');
-      button.addEventListener('click', openSheet);
-      host.appendChild(button);
-    }
-    paintFilterButton(button, badge, filters, options, opts.hide);
-  }
-
   function render(filters, o) {
     current = filters;
     options = o || {};
-    renderText(filters);
-    renderButton(filters);
+    strip.render(filters);
     // A change from outside the sheet (the palette's filter commands) redraws
     // an open sheet; one the sheet itself made already shows, so it is left
     // alone and the control the user is on keeps the focus.
@@ -699,6 +766,10 @@ export function mountFilters(opts) {
       drawn = filters;
       drawSheet(dialog);
       if (hadFocus) focusClose(dialog);
+    } else if (sheetOwner === handle && opts.views && dialog && dialog.open) {
+      // the view toggles are redrawn in place: the control just pressed keeps the focus
+      opts.views.sync(filters);
+      if (sheetClear) sheetClear.hidden = !sheetHasValue(drawn || filters, opts);
     }
   }
 
@@ -706,8 +777,8 @@ export function mountFilters(opts) {
    *  changes never lose the first to a render still on its way. The controls
    *  already show it; only Clear follows. */
   function commit(patch) {
-    drawn = Object.assign({}, drawn || current, patch);
-    if (sheetClear) sheetClear.hidden = !activeFilterCount(drawn, opts.hide);
+    drawn = Object.assign({}, drawn || current, patch, opts.views ? opts.views.live() : {});
+    if (sheetClear) sheetClear.hidden = !sheetHasValue(drawn, opts);
     opts.onChange(drawn);
   }
 
@@ -715,11 +786,13 @@ export function mountFilters(opts) {
     const f = drawn || current;
     drawn = f;
     const card = filterCard(dialog);
-    sheetControls(sheetBody(card), f, options, hidden, function (name) {
+    const body = sheetBody(card);
+    sheetControls(body, f, options, hidden, function (name) {
       return function (value) { const p = {}; p[name] = value; commit(p); };
-    });
-    const foot = sheetActions(!activeFilterCount(f, opts.hide), function () {
-      drawn = clearedFilters(drawn || f, !opts.textHost);
+    }, function (rows) { if (opts.views) opts.views.draw(rows, f); });
+    const foot = sheetActions(!sheetHasValue(f, opts), function () {
+      if (opts.views) opts.views.clear();
+      drawn = clearedFilters(drawn || f, !opts.textHost, !opts.views);
       opts.onChange(drawn);
       drawSheet(dialog);
       focusClose(dialog);

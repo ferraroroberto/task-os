@@ -92,6 +92,8 @@ from tests.e2e._ui import (
     assert_date_sheet,
     assert_on_crumb_line,
     board_mode,
+    close_filter_sheet,
+    open_filter_sheet,
     open_settings_sheet,
 )
 from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, E2E_TOKEN, dismiss_toasts, settle, shot
@@ -742,7 +744,9 @@ def _geometry_across_widths(page: Page, context, base: str, wk) -> None:
             assert_min_target(tabs)
         assert_no_overlap(tabs)
         page.locator("nav.tabs .tab[data-tab='board']").tap()
-        assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
+        layout = open_filter_sheet(page, "paneBoard").locator(".board-modes .segmented-item, .scope-switch .segmented-item")
+        assert_min_target(layout)
+        close_filter_sheet(page)
         assert_no_horizontal_overflow(page)
         board_mode(page, "status")
         expect(page.locator(".board-strip-btn").first).to_be_visible()

@@ -463,16 +463,6 @@
           </button>
           <div class="bulk-bar" id="boardBulk" hidden></div>
         </div>
-        <!-- The line under the strip: the person row (two or more members,
-             js/app/owners.js) and Tasks · Issues · All (scope.js), then board.js's
-             Week · Status segment and, in Status mode while the Inbox holds
-             tasks, Triage. -->
-        <div class="board-bar" id="boardBar" data-surface="board.mode-line">
-          <div class="view-switches">
-            <div class="owner-host" id="boardOwners" hidden></div>
-            <div class="scope-host" id="boardScope" hidden></div>
-          </div>
-        </div>
         <!-- Week lanes or the status columns (board.js): side by side on a
              wide screen; on the phone Week is one list, Status a carousel. -->
         <div id="boardHost" data-empty="tasks"></div>
@@ -484,8 +474,7 @@
              unheaded group, so its first heading would be a section far down. -->
         <h2 class="visually-hidden">Due today</h2>
         <!-- Top strip: the text filter with the filter button
-             beside it, the Select toggle and the +; the scope switch
-             is the line under it. -->
+             beside it, the Select toggle and the +. -->
         <div class="pane-top">
           <div class="filter-text" id="todayFilterText" hidden></div>
           <button type="button" class="button-surface select-toggle strip-square has-label hit-target" data-select-toggle data-track="select"
@@ -498,11 +487,6 @@
             <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
           </button>
           <div class="bulk-bar" id="todayBulk" hidden></div>
-        </div>
-        <!-- The person row (two or more members; js/app/owners.js) and Tasks · Issues · All (scope.js). -->
-        <div class="view-switches">
-          <div class="owner-host" id="todayOwners" hidden></div>
-          <div class="scope-host" id="todayScope" hidden></div>
         </div>
         <!-- Due ≤ today grouped by project, sorted by due within a group;
              "Later this week" collapsed below (today.js). The phone's

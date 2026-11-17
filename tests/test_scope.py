@@ -44,6 +44,8 @@ const out = JSON.parse(input).map(([fn, a, b]) => {
   }
   if (fn === 'labels') return mod.SCOPES.map((s) => s[1]).concat(mod.WHOSE.map((w) => w[1]));
   if (fn === 'activeFilterCount') return mod.activeFilterCount(mod.filtersFromSearch(a), b);
+  if (fn === 'viewCount') return mod.activeViewCount(mod.filtersFromSearch(a.search), a.members);
+  if (fn === 'viewWords') return mod.describeViews(mod.filtersFromSearch(a.search), a.members);
   return mod[fn](a, b);
 });
 process.stdout.write(JSON.stringify(out));
@@ -251,3 +253,33 @@ def test_the_recent_picks_keep_the_newest_first_and_survive_a_bad_store() -> Non
         ["bumpRecentOwner", ["p2", "p3"], "p3"], ["bumpRecentOwner", [], "p2"],
         ["bumpRecentOwner", ["a", "b", "c", "d", "e", "f", "g", "h"], "z"],
     ]) == [["p3", "p2"], ["p2"], ["z", "a", "b", "c", "d", "e", "f", "g"]]
+
+
+# ------------------------------- the Today and Board sheet's view toggles
+_TWO = [{"id": "me", "name": "Me"}, {"id": "p2", "name": "Sam"}]
+
+
+def _view_count(search: str, members: list[dict]) -> int:
+    return _call_js([["viewCount", {"search": "?" + search, "members": len(members)}]])[0]
+
+
+def _view_words(search: str, members: list[dict]) -> list[str]:
+    return _call_js([["viewWords", {"search": "?" + search, "members": members}]])[0]
+
+
+def test_the_view_toggles_count_when_off_their_default() -> None:
+    # the kind of task and whose tasks are one each; Tasks and Mine are the defaults
+    counts = [_view_count(s, _TWO) for s in ("", "scope=issues", "whose=everyone", "owner=p2", "scope=all&owner=p2")]
+    assert counts == [0, 1, 1, 1, 2]
+
+
+def test_the_people_toggle_counts_only_with_two_members() -> None:
+    # one member has no person row to be off its default
+    assert _view_count("whose=everyone&owner=p2", [{"id": "me", "name": "Me"}]) == 0
+    assert _view_count("whose=everyone", []) == 0
+
+
+def test_the_view_toggles_are_named_in_words() -> None:
+    assert _view_words("scope=issues&whose=everyone", _TWO) == ["issues", "everyone"]
+    assert _view_words("scope=all&owner=p2", _TWO) == ["all", "Sam"]
+    assert _view_words("", _TWO) == []

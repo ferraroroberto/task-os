@@ -10,7 +10,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
-from tests.e2e._ui import board_mode, open_settings_sheet
+from tests.e2e._ui import board_mode, close_filter_sheet, open_filter_sheet, open_settings_sheet
 from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, hold_toasts, shot
 from tests.fixtures.anthropic_fake import FakeAnthropic
 from tests.fixtures.seed import seed_db
@@ -59,15 +59,17 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     page.goto(base + "/")
     page.click("nav.tabs .tab[data-tab='board']")   # Today is the landing tab (#319)
     expect(page.locator("#paneBoard")).to_be_visible()
-    # Triage works on the Inbox column, so it is on the Status mode's line,
-    # never on the week planner nor in a column head (#396)
-    expect(page.locator("#paneBoard .board-triage")).to_be_hidden()
+    # Triage works on the Inbox column, so its row of the Filters & sort sheet
+    # shows in Status mode only, never on the week planner nor in a column head (#396)
+    expect(open_filter_sheet(page, "paneBoard").locator(".board-triage")).to_be_hidden()
+    close_filter_sheet(page)
     board_mode(page, "status")
 
-    triage = page.locator("#paneBoard .board-bar .board-triage")
+    triage = open_filter_sheet(page, "paneBoard").locator(".board-triage")
     expect(triage).to_be_enabled()
     hold_toasts(page)                  # shot 2 frames the triage toast and the accept toast
-    triage.click()
+    triage.click()                     # a started action leaves the sheet
+    expect(page.locator("#filterSheet")).to_be_hidden()
     suggestions = page.locator("#paneBoard .board-status .board-col[data-col='inbox'] .ai-suggestion")
     expect(suggestions.first).to_be_visible()
     assert suggestions.count() >= 1
@@ -95,7 +97,8 @@ def test_ai_inbox_triage(ai_webapp: AIInstance, browser: Browser, shots: Path) -
     mobile.get_by_role("tab", name="Board").click()
     board_mode(mobile, "status")
     mobile.locator(".board-strip-btn[data-col='inbox']").click()
-    expect(mobile.locator("#paneBoard .board-bar .board-triage")).to_be_visible()
+    expect(open_filter_sheet(mobile, "paneBoard").locator(".board-triage")).to_be_visible()
+    close_filter_sheet(mobile)
     expect(mobile.locator("#paneBoard .board-status .board-col[data-col='inbox'] .ai-suggestion").first).to_be_visible()
     shot(mobile, shots / "story-23-ai-triage-3-phone.png")
     phone.close()

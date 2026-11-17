@@ -7,20 +7,10 @@
 
 /* ------------------------------------------------------------- board */
 .board { display: flex; flex-direction: column; gap: var(--gap); }
-/* The line under the strip: Mine · Issues · All, then Week · Status —
-   two vendored segmented controls sharing the row by their segment counts,
-   so every segment is the same width — and, in Status mode while the Inbox
-   holds tasks, Triage at its own width. */
-.board-bar { display: flex; align-items: center; gap: var(--gap); }
-.board-bar[hidden] { display: none; }
-.board-bar .view-switches { flex: 3 1 0; }
-/* With the person row up, it and Tasks · Issues · All take the width of the
-   bar and Week · Status (+ Triage) the line under it. */
-.board-bar:has(.owner-host:not([hidden])) { flex-wrap: wrap; }
-.board-bar .view-switches:has(.owner-host:not([hidden])) { flex-basis: 100%; }
-.board-modes { flex: 2 1 0; min-width: 0; }
-.board-bar .board-triage { flex: none; }
-/* The dark lift the scope switch carries, for the same reason (see .scope-switch). */
+/* The Week · Status segment and the Triage button are rows of the Filters &
+   sort sheet. The segment fills its row like the sheet's other switches, and
+   the dark lift is the one the scope and person switches carry. */
+.board-modes { width: 100%; }
 [data-theme="dark"] .board-modes { --card: var(--line); }
 
 /* Phone strip (Status mode): column switcher + counts — a segmented control
@@ -120,7 +110,7 @@
 /* Every lane empty: one way forward instead of a row of bare headers. */
 .board-empty[hidden] { display: none; }
 
-/* AI Inbox triage: one quiet action on the mode line, then one staged
+/* AI Inbox triage: one quiet action in the Filters & sort sheet, then one staged
    strip inside the row. The two adjacent decision controls use real 44px
    geometry; invisible hit-area expansion would make them overlap. */
 .board-triage {
@@ -133,6 +123,8 @@
   font-size: var(--font-caption);
 }
 .board-triage[hidden] { display: none; }
+/* Its sheet row goes with it: nothing in the Inbox, or not the Status layout. */
+.filter-sheet-row:has(> .board-triage[hidden]) { display: none; }
 .board-triage .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .board-triage[data-state="loading"] { color: var(--accent); }
 .ai-suggestion {

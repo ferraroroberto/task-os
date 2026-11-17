@@ -155,7 +155,20 @@
 .search-box .filter-open { --icon-btn-box: var(--control-h); }
 @media (pointer: coarse) { .search-box .filter-open { --icon-btn-box: var(--row-sm); } }
 
-.detail-dialog.filter-dialog { width: min(520px, 94vw); margin-top: 8vh; }
+.detail-dialog.filter-dialog {
+  width: min(520px, 94vw);
+  margin-top: 8vh;
+  max-height: calc(100vh - 8vh - var(--space-lg));
+  max-height: calc(100dvh - 8vh - var(--space-lg));
+}
+/* Any width: the title stays put, the rows scroll in `.filter-body`, and the footer
+   (Clear / Done) stays on screen below them. The view toggles Today and the Board
+   add make the sheet taller than a 900px window. */
+.detail-dialog.filter-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+.filter-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.filter-card .detail-header { flex: none; }
+.filter-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.filter-actions { flex: none; }
 .filter-card .row .select-native { width: 55%; }
 /* Status and person: the label over a wrap of ticks. */
 .filter-card .row.is-stacked { flex-direction: column; align-items: stretch; gap: var(--space-xs); }
@@ -210,16 +223,10 @@
   }
   .quickadd-card .detail-actions { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
-/* Phone: under the shared inset and height cap above, the title
-   stays put, the rows scroll in `.filter-body`, and the footer (Clear / Done)
-   is pinned below them with room for the home indicator. */
+/* Phone: ticks two to a line, and room under the footer for the home indicator. */
 @media (max-width: 520px) {
   .filter-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .detail-dialog.filter-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
-  .filter-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-  .filter-card .detail-header { flex: none; }
-  .filter-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-  .filter-actions { flex: none; margin-top: var(--space-sm); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .filter-actions { margin-top: var(--space-sm); padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 
 /* -------------------------------------------------- the date menu

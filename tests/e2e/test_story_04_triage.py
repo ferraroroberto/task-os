@@ -99,6 +99,7 @@ from tests.e2e._ui import (
     open_filter_sheet,
     open_more_fields,
     open_settings_sheet,
+    press_in_sheet,
     text_contrast,
 )
 from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, scroll_to_top, shot
@@ -806,7 +807,7 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
     # ticks sit two per line, every one a 44px target, none overlapping
     sheet = open_filter_sheet(page, "paneBoard")
     names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
-    assert names == ["sort", "status", "project", "person", "due", "updated"], names
+    assert names == ["sort", "layout", "triage", "kind", "whose", "status", "project", "person", "due", "updated"], names
     # five peers are a segmented control, not a select: due is the raised one
     sort = sheet.locator(".filter-sheet-row[data-name='sort'] .segmented")
     expect(sort.locator(".segmented-item")).to_have_text(["Due", "Priority", "Modified", "Created", "Title"])
@@ -825,12 +826,16 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
         "els => els.map(e => Math.round(e.getBoundingClientRect().x))")))
     assert len(lefts) == 2, lefts                                   # two columns
     assert_min_target(sheet.locator(".filter-select, .detail-close, .filter-done"))
-    # a sheet that outgrows the phone scrolls: its footer ends the sheet
-    # rather than riding pinned over the last rows, where it overlapped a
-    # select's tap area (TOUCH-02, the live walk after #404 — the seed's
-    # sheet fits, so the cause is asserted, not the overlap)
+    # a sheet that outgrows the phone scrolls its rows above a pinned footer (the
+    # view toggles make this one outgrow it): what shows at the top of the scroll
+    # area never meets the footer's Done, which sits below it in the flow
     assert sheet.locator(".filter-actions").evaluate("el => getComputedStyle(el).position") == "static"
-    assert_no_overlap(sheet.locator(".filter-select, .filter-check, .filter-done"))
+    controls = sheet.locator(".filter-select, .filter-check")
+    shown = controls.evaluate_all(
+        """els => { const body = document.querySelector('#filterSheet .filter-body').getBoundingClientRect();
+                     return els.map((e, i) => [i, e.getBoundingClientRect().bottom <= body.bottom]).filter(x => x[1]).map(x => x[0]); }""")
+    assert shown, "no control shows at the top of the sheet"
+    assert_no_overlap([controls.nth(i) for i in shown] + [sheet.locator(".filter-done")])
     close_filter_sheet(page)
 
     # the drawer is a full-screen sheet; the pill is hidden while it is up
@@ -952,7 +957,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         page.locator("nav.tabs .tab[data-tab='board']").tap()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
         # every todo task, the synced issue's included (#391's All scope)
-        page.locator("#boardScope .segmented-item[data-scope='all']").tap()
+        press_in_sheet(page, "paneBoard", ".scope-switch [data-scope='all']", tap=True)
         rows = page.locator("#paneBoard .trow[data-id]")
         expect(rows).to_have_count(_get(base, "/api/tasks?status=todo")["count"])
         # the ONE shared row (circle + title, the one passive meta line with the

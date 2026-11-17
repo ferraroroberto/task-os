@@ -249,11 +249,10 @@ a.chip:hover { text-decoration: underline; }
 .section-count { color: var(--muted); font-size: var(--font-caption); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* The scope switch: the vendored segmented control, the full width of
-   its row on every width with the three segments sharing it equally (the
-   control's own equal columns; no 360px cap stops it
-   short of the row). The row under the strip on every width. */
+   its row (a row of the Filters & sort sheet, or the Search box's line) with
+   the three segments sharing it equally (the control's own equal columns). */
 .scope-switch, .owner-switch { width: 100%; }
-/* Dark only: the switch sits on the canvas, not in a card, and there the dark
+/* Dark only: the switch sits on the canvas or a sheet, not in a card, and there the dark
    `card` (#161b22) is DARKER than the neutral-soft track over the canvas, so
    the selected segment read sunk instead of raised; card-2 (#21262d) is
    still within a shade of the track. A token value scoped to this switch (the
@@ -262,16 +261,6 @@ a.chip:hover { text-decoration: underline; }
    when no choice is stored, so "follows the system" lands on this rule too. */
 [data-theme="dark"] .scope-switch,
 [data-theme="dark"] .owner-switch { --card: var(--line); }
-
-/* What sits under a strip: the person row on a line of its own, then Tasks ·
-   Issues · All. The person row is absent with one member, and the scope then
-   fills the row exactly as it did. */
-.view-switches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); min-width: 0; }
-.view-switches .scope-host { flex: 1 1 0; min-width: 0; }
-.view-switches .owner-host { flex: 1 1 100%; min-width: 0; }
-.view-switches .owner-host[hidden] { display: none; }
-/* Nothing in it (no tasks yet hides both): no empty flex box for the pane's gap to count. */
-.view-switches:not(:has(> :not([hidden]))) { display: none; }
 
 /* The person row is the same vendored segmented control as the scope switch
    (`.owner-switch` shares `.scope-switch`'s width and dark lift above). A

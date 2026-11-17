@@ -89,3 +89,17 @@
 **Test:** `tests/e2e/test_story_05_board.py` — `_walk_whose_switch` (one person at a time), `_walk_second_member_phone` (a person tap on the phone), `_walk_many_members` (the "+N more" sheet); folded into the existing test, no new test function. Every Board, Today, Search and keyboard-triage shot that shows the row is re-baselined.
 
 **Result:** the e2e legs pass on disposable seeded instances, synthetic data only; the phone shots were looked at in light and dark. **Not verified:** a headed walk by hand, a real phone. Date: 2026-11-15.
+
+## One Filters & sort sheet for Today and Board (#744)
+
+**Story:** the owner wants one filter field and then the content on Today and the Board: the Week · Status switch, Tasks · Issues · All, the person row and Triage no longer sit in rows above the list.
+
+**Steps:** Today and the Board on a 390px phone (844 and 664 tall), light and dark → one strip of controls above the list (the filter field, the filter button, Select, +) and nothing under it → the filter button opens **Filters & sort**: Sort, then on the Board Layout (Week · Status) and AI triage (Status layout, Inbox not empty), then Kind of task and Whose tasks, then the filters → Issues and Everyone each raise the filter button's count (2 with both), Clear resets them, Done closes → the Board's Layout is remembered per device and is neither counted nor cleared → AI triage closes the sheet when pressed.
+
+**Expected:** every control that was above the list is reachable in the sheet and keeps its state (the URL's `scope` / `whose` / `owner`, the device's `task-os.whose`, `task-os.board.mode`); the sheet fits the viewport at 390x664 and 390x844 with Clear and Done on screen; the count shows in both themes and shows nothing when no filter is on.
+
+**Screenshots:** [the Today sheet on the phone](../screenshots/story-05-board-8-phone.png) · [the second member's Board sheet, dark](../screenshots/story-05-board-19-phone-dark.png) · [the Board's person row on the desktop](../screenshots/story-05-board-20-desktop.png). The Today, Board and keyboard-triage shots that showed the rows above the list are re-baselined.
+
+**Test:** `tests/e2e/test_story_05_board.py` — `_walk_scope_switch` (the strip holds the strip only; the count and the key), `_walk_whose_switch`, `_second_member_sees_their_own`, `_owner_phone_is_unaffected` (the count and Clear in dark); `test_story_23_ai_triage.py` (the Triage row); `tests/test_scope.py` (the view-toggle count); folded into the existing tests, no new test function.
+
+**Result:** the unit and e2e legs pass on disposable seeded instances, synthetic data only; Today and the Board at 390x844 and 390x664 in light and dark were looked at, with the active-count state, and the sheet's height measured against the viewport (it fits, Done on screen, in all eight). **Not verified:** a real iPhone. Date: 2026-11-17.

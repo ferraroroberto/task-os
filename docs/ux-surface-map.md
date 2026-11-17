@@ -99,7 +99,7 @@ Walked 2026-11-17 against build `3de7b58`, at widths 390, 1440, themes not recor
 |---|---|
 | [Chrome](#chrome) | 6 |
 | [Today](#today) | 3 |
-| [Board](#board) | 6 |
+| [Board](#board) | 5 |
 | [Shared strip above every list](#shared-strip-above-every-list) | 7 |
 | [The task row](#the-task-row) | 6 |
 | [Task drawer](#task-drawer) | 14 |
@@ -120,16 +120,16 @@ flowchart LR
   s3["Toast"]
   s4["New-version notice"]
   s5["Install shell"]
-  s53(["Settings · Settings"])
+  s52(["Settings · Settings"])
   s6(["List · Today"])
   s9(["Board · Board"])
-  s42(["Time · Time"])
-  s49(["Search tab · Search and command palette"])
-  s0 --> s53
+  s41(["Time · Time"])
+  s48(["Search tab · Search and command palette"])
+  s0 --> s52
   s1 --> s6
   s1 --> s9
-  s1 --> s42
-  s1 --> s49
+  s1 --> s41
+  s1 --> s48
 ```
 
 ### `chrome.header` Header
@@ -191,36 +191,30 @@ flowchart LR
   s7["Detail split"]
   s8["Calendar lane"]
   s1(["Nav · Chrome"])
-  s15(["Top strip · Shared strip above every list"])
-  s17(["Scope switch · Shared strip above every list"])
-  s18(["Person row · Shared strip above every list"])
-  s22(["Row · The task row"])
-  s50(["Command palette · Search and command palette"])
-  s73(["Sign-in · Sign-in and team name"])
-  s74(["Name picker · Sign-in and team name"])
+  s14(["Top strip · Shared strip above every list"])
+  s21(["Row · The task row"])
+  s49(["Command palette · Search and command palette"])
+  s72(["Sign-in · Sign-in and team name"])
+  s73(["Name picker · Sign-in and team name"])
   s1 --> s6
-  s6 --> s15
-  s6 --> s17
-  s6 --> s18
+  s6 --> s14
   s6 --> s8
-  s6 --> s22
+  s6 --> s21
   s6 -->|"desktop"| s7
-  s50 --> s6
+  s49 --> s6
+  s72 --> s6
   s73 --> s6
-  s74 --> s6
 ```
 
 ### `today.list` List
 
 - **Root:** `data-surface`
-- **Holds:** the [top strip](#shared-strip-above-every-list), person row when there are two or more members, **Tasks · Issues · All**, then the calendar lane and four horizons.
+- **Holds:** the [top strip](#shared-strip-above-every-list), then the calendar lane and four horizons. Kind of task and whose tasks are rows of the strip's Filters & sort sheet.
 - **Does:** the horizons are **Due** (overdue first, then today; no heading, the header names it), **Soon** (tomorrow to a week out, open), **Later** and **No date** (folded until opened; a text filter opens them; each shows only when it holds something). Inside a horizon rows run by due day, no project first, project A–Z, title.
 - **States:** empty install shows *Add your first task* with an **Add a task** button; a filter with no match shows an empty line; counts sit on the disclosure headers.
 - **Desktop:** the list scrolls inside its own box under the strip at 1024px and up.
 - **Leads to:**
   - [Top strip](#striptop-top-strip)
-  - [Scope switch](#stripscope-scope-switch)
-  - [Person row](#stripperson-row-person-row)
   - [Calendar lane](#todaycalendar-lane-calendar-lane)
   - [Row](#rowitem-row)
   - [Detail split](#todaydetail-split-detail-split) (desktop)
@@ -245,49 +239,35 @@ flowchart LR
 ```mermaid
 flowchart LR
   s9["Board"]
-  s10["Mode line"]
-  s11["Week lanes"]
-  s12["Status columns"]
-  s13["AI suggestion strip"]
-  s14["Row panel"]
+  s10["Week lanes"]
+  s11["Status columns"]
+  s12["AI suggestion strip"]
+  s13["Row panel"]
   s1(["Nav · Chrome"])
-  s52(["Journal · Done journal"])
-  s15(["Top strip · Shared strip above every list"])
-  s17(["Scope switch · Shared strip above every list"])
-  s18(["Person row · Shared strip above every list"])
-  s22(["Row · The task row"])
+  s51(["Journal · Done journal"])
+  s14(["Top strip · Shared strip above every list"])
+  s21(["Row · The task row"])
   s1 --> s9
-  s9 -->|"Done column: journal"| s52
-  s9 --> s15
-  s9 --> s17
-  s9 --> s18
-  s9 --> s22
-  s9 --> s10
-  s9 -->|"Week mode"| s11
-  s9 -->|"Status mode"| s12
-  s12 -->|"open a task"| s14
-  s12 -->|"Inbox rows"| s13
+  s9 -->|"Done column: journal"| s51
+  s9 --> s14
+  s9 --> s21
+  s9 -->|"Week mode"| s10
+  s9 -->|"Status mode"| s11
+  s11 -->|"open a task"| s13
+  s11 -->|"Inbox rows"| s12
 ```
 
 ### `board.pane` Board
 
 - **Root:** `data-surface`
 - **Reach:** nav.
-- **Holds:** the top strip, the person row and scope switch, the mode line, then the week lanes or the status columns. Two-dimensional, so it spans the window on desktop.
+- **Holds:** the top strip, then the week lanes or the status columns. Two-dimensional, so it spans the window on desktop. The layout, the kind of task, whose tasks and Triage are rows of the strip's Filters & sort sheet.
 - **Leads to:**
   - [Journal](#journalpane-journal) (Done column: journal)
   - [Top strip](#striptop-top-strip)
-  - [Scope switch](#stripscope-scope-switch)
-  - [Person row](#stripperson-row-person-row)
   - [Row](#rowitem-row)
-  - [Mode line](#boardmode-line-mode-line)
   - [Week lanes](#boardweek-lanes-week-lanes) (Week mode)
   - [Status columns](#boardstatus-columns-status-columns) (Status mode)
-
-### `board.mode-line` Mode line
-
-- **Root:** `data-surface`
-- **Holds:** under the strip: person row, scope, then **Week · Status** (remembered per device), and in Status mode while the Inbox holds tasks, **Triage** (AI suggestions for every Inbox task; disabled with its reason on hover while Local AI is off or a run is in flight).
 
 ### `board.week-lanes` Week lanes
 
@@ -324,63 +304,60 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s15["Top strip"]
-  s16["Filter sheet"]
-  s17["Scope switch"]
-  s18["Person row"]
-  s19["People sheet"]
-  s20["Select mode and bulk bar"]
-  s21["Quick-add dialog"]
+  s14["Top strip"]
+  s15["Filters & sort sheet"]
+  s16["Scope switch"]
+  s17["Person row"]
+  s18["People sheet"]
+  s19["Select mode and bulk bar"]
+  s20["Quick-add dialog"]
   s6(["List · Today"])
   s9(["Board · Board"])
-  s26(["Date sheet / popover · The task row"])
-  s75(["Confirm dialog · Overlay catalog"])
-  s41(["Folder picker · Task drawer"])
-  s49(["Search tab · Search and command palette"])
-  s52(["Journal · Done journal"])
-  s6 --> s15
-  s6 --> s17
-  s6 --> s18
-  s9 --> s15
-  s9 --> s17
-  s9 --> s18
-  s15 --> s16
-  s15 --> s21
-  s15 --> s20
-  s18 -->|"+N more"| s19
-  s20 --> s26
-  s20 --> s75
-  s21 --> s41
-  s49 --> s17
-  s52 --> s15
+  s25(["Date sheet / popover · The task row"])
+  s74(["Confirm dialog · Overlay catalog"])
+  s40(["Folder picker · Task drawer"])
+  s48(["Search tab · Search and command palette"])
+  s51(["Journal · Done journal"])
+  s6 --> s14
+  s9 --> s14
+  s14 --> s15
+  s14 --> s20
+  s14 --> s19
+  s17 -->|"+N more"| s18
+  s19 --> s25
+  s19 --> s74
+  s20 --> s40
+  s48 --> s16
+  s51 --> s14
 ```
 
 ### `strip.top` Top strip
 
 - **Root:** none — one strip sits in each of Today, Board and the journal, so no single element carries it.
-- **Holds:** on one line: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
+- **Holds:** on one line, and nothing under it: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
 - **Leads to:**
-  - [Filter sheet](#stripfilter-sheet-filter-sheet)
+  - [Filters & sort sheet](#stripfilter-sheet-filters--sort-sheet)
   - [Quick-add dialog](#stripquick-add-quick-add-dialog)
   - [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar)
 
-### `strip.filter-sheet` Filter sheet
+### `strip.filter-sheet` Filters & sort sheet
 
 - **Root:** `data-surface`
 - **Reach:** filter button.
-- **Holds:** **sort** (Due · Priority · Modified · Created · Title), **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**.
-- **Does:** applies live; the state is the URL. Clear leaves the scope and person row alone.
+- **Holds:** **sort** (Due · Priority · Modified · Created · Title); on Today and Board the view toggles under it: **Layout** (Week · Status, Board only), **AI triage** (Board, Status layout, while the Inbox holds tasks; pressing it closes the sheet), **Kind of task** and **Whose tasks**; then **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**.
+- **Does:** applies live; the state is the URL. The filter button's count adds the kind of task and whose tasks when they are off their default, and Clear resets them. The layout hides nothing, so it is neither counted nor cleared. On Search and the journal the sheet has no view toggles and Clear leaves the scope and person row alone.
 - **Phone:** a full-screen sheet with ticks two to a line. In the journal, status, due, modified and sort are hidden.
 
 ### `strip.scope` Scope switch
 
 - **Root:** `data-surface`
-- **Holds:** **Tasks · Issues · All** under the strip on Today, Board and Search (`?scope=`). Tasks (default) leaves out issues the forge sync brings in.
+- **Reach:** the **Kind of task** row of the Today and Board Filters & sort sheet; under the box on Search.
+- **Holds:** **Tasks · Issues · All** (`?scope=`). Tasks (default) leaves out issues the forge sync brings in.
 
 ### `strip.person-row` Person row
 
 - **Root:** `data-surface`
-- **Reach:** two or more members.
+- **Reach:** two or more members; the **Whose tasks** row of the Today and Board Filters & sort sheet.
 - **Holds:** **Mine** · each member · **Everyone**; with more than three other members the row keeps the picked and recent ones and folds the rest into **+N more**.
 - **Does:** one tap picks one person; **+N more** opens **strip.people-sheet**. Mine and Everyone are per device (`?whose=everyone`); picked members ride `?owner=`. Search ignores the row and always covers everyone.
 - **Why:** each phone signs in as its own member, so Mine needs no picker step.
@@ -417,31 +394,31 @@ One row in Today, Board, Search task hits and the journal.
 
 ```mermaid
 flowchart LR
-  s22["Row"]
-  s23["Completion circle"]
-  s24["Move verb"]
-  s25["Row menu (⋯)"]
-  s26["Date sheet / popover"]
-  s27["Swipe"]
+  s21["Row"]
+  s22["Completion circle"]
+  s23["Move verb"]
+  s24["Row menu (⋯)"]
+  s25["Date sheet / popover"]
+  s26["Swipe"]
   s6(["List · Today"])
   s9(["Board · Board"])
-  s20(["Select mode and bulk bar · Shared strip above every list"])
-  s28(["Task drawer · Task drawer"])
-  s49(["Search tab · Search and command palette"])
-  s52(["Journal · Done journal"])
-  s6 --> s22
-  s9 --> s22
-  s20 --> s26
-  s22 --> s25
-  s22 --> s26
-  s22 -->|"tap / Enter"| s28
-  s22 -->|"mouse"| s23
-  s22 -->|"mouse"| s24
-  s22 -->|"touch"| s27
-  s25 --> s26
-  s25 --> s28
-  s49 --> s22
-  s52 --> s22
+  s19(["Select mode and bulk bar · Shared strip above every list"])
+  s27(["Task drawer · Task drawer"])
+  s48(["Search tab · Search and command palette"])
+  s51(["Journal · Done journal"])
+  s6 --> s21
+  s9 --> s21
+  s19 --> s25
+  s21 --> s24
+  s21 --> s25
+  s21 -->|"tap / Enter"| s27
+  s21 -->|"mouse"| s22
+  s21 -->|"mouse"| s23
+  s21 -->|"touch"| s26
+  s24 --> s25
+  s24 --> s27
+  s48 --> s21
+  s51 --> s21
 ```
 
 ### `row.item` Row
@@ -493,50 +470,50 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s28["Task drawer"]
-  s29["Head"]
-  s30["Title"]
-  s31["Due + quick moves"]
-  s32["Status, Priority, Owner"]
-  s33["Links"]
-  s34["Description"]
-  s35["Comments"]
-  s36["Activity"]
-  s37["Parent picker"]
-  s38["More fields"]
-  s39["Issue panel"]
-  s40["Delete task"]
-  s41["Folder picker"]
-  s21(["Quick-add dialog · Shared strip above every list"])
-  s22(["Row · The task row"])
-  s25(["Row menu (⋯) · The task row"])
-  s75(["Confirm dialog · Overlay catalog"])
-  s76(["Folder and conversation popover · Overlay catalog"])
-  s49(["Search tab · Search and command palette"])
-  s50(["Command palette · Search and command palette"])
-  s71(["Email archiving report · Settings"])
-  s21 --> s41
-  s22 -->|"tap / Enter"| s28
-  s25 --> s28
-  s28 --> s37
-  s28 --> s41
-  s28 --> s75
-  s28 -->|"a block inside the drawer"| s32
-  s28 -->|"a block inside the drawer"| s34
-  s28 -->|"a block inside the drawer"| s30
-  s28 -->|"a block inside the drawer"| s33
-  s28 -->|"a block inside the drawer"| s36
-  s28 -->|"a block inside the drawer"| s29
-  s28 -->|"a block inside the drawer"| s38
-  s28 -->|"a block inside the drawer"| s31
-  s28 -->|"a block inside the drawer"| s39
-  s28 -->|"a block inside the drawer"| s40
-  s28 -->|"a block inside the drawer"| s35
-  s29 -->|"Change parent"| s37
-  s33 -->|"a folder or conversation chip"| s76
-  s49 --> s28
-  s50 --> s28
-  s71 --> s41
+  s27["Task drawer"]
+  s28["Head"]
+  s29["Title"]
+  s30["Due + quick moves"]
+  s31["Status, Priority, Owner"]
+  s32["Links"]
+  s33["Description"]
+  s34["Comments"]
+  s35["Activity"]
+  s36["Parent picker"]
+  s37["More fields"]
+  s38["Issue panel"]
+  s39["Delete task"]
+  s40["Folder picker"]
+  s20(["Quick-add dialog · Shared strip above every list"])
+  s21(["Row · The task row"])
+  s24(["Row menu (⋯) · The task row"])
+  s74(["Confirm dialog · Overlay catalog"])
+  s75(["Folder and conversation popover · Overlay catalog"])
+  s48(["Search tab · Search and command palette"])
+  s49(["Command palette · Search and command palette"])
+  s70(["Email archiving report · Settings"])
+  s20 --> s40
+  s21 -->|"tap / Enter"| s27
+  s24 --> s27
+  s27 --> s36
+  s27 --> s40
+  s27 --> s74
+  s27 -->|"a block inside the drawer"| s31
+  s27 -->|"a block inside the drawer"| s33
+  s27 -->|"a block inside the drawer"| s29
+  s27 -->|"a block inside the drawer"| s32
+  s27 -->|"a block inside the drawer"| s35
+  s27 -->|"a block inside the drawer"| s28
+  s27 -->|"a block inside the drawer"| s37
+  s27 -->|"a block inside the drawer"| s30
+  s27 -->|"a block inside the drawer"| s38
+  s27 -->|"a block inside the drawer"| s39
+  s27 -->|"a block inside the drawer"| s34
+  s28 -->|"Change parent"| s36
+  s32 -->|"a folder or conversation chip"| s75
+  s48 --> s27
+  s49 --> s27
+  s70 --> s40
 ```
 
 ### `drawer.panel` Task drawer
@@ -634,24 +611,24 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s42["Time"]
-  s43["Log"]
-  s44["Totals"]
-  s45["History"]
-  s46["History row menu (⋮)"]
-  s47["Time dialogs"]
-  s48["Person picker"]
+  s41["Time"]
+  s42["Log"]
+  s43["Totals"]
+  s44["History"]
+  s45["History row menu (⋮)"]
+  s46["Time dialogs"]
+  s47["Person picker"]
   s1(["Nav · Chrome"])
-  s62(["Time categories sheet · Settings"])
-  s1 --> s42
-  s42 --> s43
-  s42 --> s44
-  s42 --> s45
-  s42 --> s48
-  s43 --> s47
-  s45 --> s47
-  s45 --> s46
-  s62 --> s47
+  s61(["Time categories sheet · Settings"])
+  s1 --> s41
+  s41 --> s42
+  s41 --> s43
+  s41 --> s44
+  s41 --> s47
+  s42 --> s46
+  s44 --> s46
+  s44 --> s45
+  s61 --> s46
 ```
 
 ### `time.pane` Time
@@ -706,27 +683,27 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s49["Search tab"]
-  s50["Command palette"]
-  s51["Keyboard shortcuts sheet"]
+  s48["Search tab"]
+  s49["Command palette"]
+  s50["Keyboard shortcuts sheet"]
   s1(["Nav · Chrome"])
-  s17(["Scope switch · Shared strip above every list"])
-  s22(["Row · The task row"])
-  s28(["Task drawer · Task drawer"])
-  s52(["Journal · Done journal"])
+  s16(["Scope switch · Shared strip above every list"])
+  s21(["Row · The task row"])
+  s27(["Task drawer · Task drawer"])
+  s51(["Journal · Done journal"])
   s6(["List · Today"])
-  s53(["Settings · Settings"])
-  s54(["Settings sheet · Settings"])
-  s1 --> s49
-  s49 --> s17
-  s49 --> s22
-  s49 --> s28
-  s49 --> s51
-  s50 -->|"Journal command"| s52
-  s50 --> s28
-  s50 --> s6
-  s50 --> s53
-  s54 --> s50
+  s52(["Settings · Settings"])
+  s53(["Settings sheet · Settings"])
+  s1 --> s48
+  s48 --> s16
+  s48 --> s21
+  s48 --> s27
+  s48 --> s50
+  s49 -->|"Journal command"| s51
+  s49 --> s27
+  s49 --> s6
+  s49 --> s52
+  s53 --> s49
 ```
 
 ### `search.pane` Search tab
@@ -763,15 +740,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s52["Journal"]
+  s51["Journal"]
   s9(["Board · Board"])
-  s50(["Command palette · Search and command palette"])
-  s15(["Top strip · Shared strip above every list"])
-  s22(["Row · The task row"])
-  s9 -->|"Done column: journal"| s52
-  s50 -->|"Journal command"| s52
-  s52 --> s15
-  s52 --> s22
+  s49(["Command palette · Search and command palette"])
+  s14(["Top strip · Shared strip above every list"])
+  s21(["Row · The task row"])
+  s9 -->|"Done column: journal"| s51
+  s49 -->|"Journal command"| s51
+  s51 --> s14
+  s51 --> s21
 ```
 
 ### `journal.pane` Journal
@@ -812,57 +789,57 @@ Each sheet is one entry named by the row that opens it; what it holds is the tab
 
 ```mermaid
 flowchart LR
-  s53["Settings"]
-  s54["Settings sheet"]
-  s55["Row actions sheet"]
-  s56["Command palette sheet"]
-  s57["Phone access sheet"]
-  s58["Issues as tasks sheet"]
-  s59["Calendar sheet"]
-  s60["Capture into Inbox sheet"]
-  s61["Email archiving sheet"]
-  s62["Time categories sheet"]
-  s63["Search sheet"]
-  s64["Folder opener sheet"]
-  s65["Voice quick-add sheet"]
-  s66["AI Inbox triage sheet"]
-  s67["Your name sheet"]
-  s68["Database sheet"]
-  s69["Mirror and backup sheet"]
-  s70["Time categories menu (⋮)"]
-  s71["Email archiving report"]
-  s72["Report row menu (⋮)"]
+  s52["Settings"]
+  s53["Settings sheet"]
+  s54["Row actions sheet"]
+  s55["Command palette sheet"]
+  s56["Phone access sheet"]
+  s57["Issues as tasks sheet"]
+  s58["Calendar sheet"]
+  s59["Capture into Inbox sheet"]
+  s60["Email archiving sheet"]
+  s61["Time categories sheet"]
+  s62["Search sheet"]
+  s63["Folder opener sheet"]
+  s64["Voice quick-add sheet"]
+  s65["AI Inbox triage sheet"]
+  s66["Your name sheet"]
+  s67["Database sheet"]
+  s68["Mirror and backup sheet"]
+  s69["Time categories menu (⋮)"]
+  s70["Email archiving report"]
+  s71["Report row menu (⋮)"]
   s0(["Header · Chrome"])
-  s50(["Command palette · Search and command palette"])
-  s47(["Time dialogs · Time"])
-  s41(["Folder picker · Task drawer"])
-  s75(["Confirm dialog · Overlay catalog"])
-  s0 --> s53
-  s50 --> s53
+  s49(["Command palette · Search and command palette"])
+  s46(["Time dialogs · Time"])
+  s40(["Folder picker · Task drawer"])
+  s74(["Confirm dialog · Overlay catalog"])
+  s0 --> s52
+  s49 --> s52
+  s52 --> s53
+  s53 --> s70
+  s53 --> s61
+  s53 --> s49
   s53 --> s54
-  s54 --> s71
-  s54 --> s62
-  s54 --> s50
-  s54 --> s55
-  s54 --> s67
-  s54 --> s64
-  s54 --> s59
-  s54 --> s56
-  s54 --> s57
-  s54 --> s66
-  s54 --> s68
-  s54 --> s65
-  s54 --> s58
-  s54 --> s63
-  s54 --> s69
-  s54 --> s61
-  s54 --> s60
-  s61 -->|"the report below"| s71
-  s62 --> s47
-  s62 -->|"the ⋮ beside an area or category"| s70
-  s71 --> s41
-  s71 --> s75
-  s71 -->|"the ⋮ on a desktop row"| s72
+  s53 --> s66
+  s53 --> s63
+  s53 --> s58
+  s53 --> s55
+  s53 --> s56
+  s53 --> s65
+  s53 --> s67
+  s53 --> s64
+  s53 --> s57
+  s53 --> s62
+  s53 --> s68
+  s53 --> s60
+  s53 --> s59
+  s60 -->|"the report below"| s70
+  s61 --> s46
+  s61 -->|"the ⋮ beside an area or category"| s69
+  s70 --> s40
+  s70 --> s74
+  s70 -->|"the ⋮ on a desktop row"| s71
 ```
 
 ### `settings.pane` Settings
@@ -1014,12 +991,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s73["Sign-in"]
-  s74["Name picker"]
+  s72["Sign-in"]
+  s73["Name picker"]
   s6(["List · Today"])
-  s73 --> s74
+  s72 --> s73
+  s72 --> s6
   s73 --> s6
-  s74 --> s6
 ```
 
 ### `login.card` Sign-in
@@ -1059,16 +1036,16 @@ A modal hides the phone's floating nav while it is open.
 
 ```mermaid
 flowchart LR
-  s75["Confirm dialog"]
-  s76["Folder and conversation popover"]
-  s20(["Select mode and bulk bar · Shared strip above every list"])
-  s28(["Task drawer · Task drawer"])
-  s33(["Links · Task drawer"])
-  s71(["Email archiving report · Settings"])
-  s20 --> s75
-  s28 --> s75
-  s33 -->|"a folder or conversation chip"| s76
-  s71 --> s75
+  s74["Confirm dialog"]
+  s75["Folder and conversation popover"]
+  s19(["Select mode and bulk bar · Shared strip above every list"])
+  s27(["Task drawer · Task drawer"])
+  s32(["Links · Task drawer"])
+  s70(["Email archiving report · Settings"])
+  s19 --> s74
+  s27 --> s74
+  s32 -->|"a folder or conversation chip"| s75
+  s70 --> s74
 ```
 
 ### `confirm.dialog` Confirm dialog
@@ -1096,22 +1073,17 @@ flowchart LR
 | [Nav](#chromenav-nav) |  | [Time](#timepane-time) |
 | [Nav](#chromenav-nav) |  | [Search tab](#searchpane-search-tab) |
 | [List](#todaylist-list) |  | [Top strip](#striptop-top-strip) |
-| [List](#todaylist-list) |  | [Scope switch](#stripscope-scope-switch) |
-| [List](#todaylist-list) |  | [Person row](#stripperson-row-person-row) |
 | [List](#todaylist-list) |  | [Calendar lane](#todaycalendar-lane-calendar-lane) |
 | [List](#todaylist-list) |  | [Row](#rowitem-row) |
 | [List](#todaylist-list) | desktop | [Detail split](#todaydetail-split-detail-split) |
 | [Board](#boardpane-board) | Done column: journal | [Journal](#journalpane-journal) |
 | [Board](#boardpane-board) |  | [Top strip](#striptop-top-strip) |
-| [Board](#boardpane-board) |  | [Scope switch](#stripscope-scope-switch) |
-| [Board](#boardpane-board) |  | [Person row](#stripperson-row-person-row) |
 | [Board](#boardpane-board) |  | [Row](#rowitem-row) |
-| [Board](#boardpane-board) |  | [Mode line](#boardmode-line-mode-line) |
 | [Board](#boardpane-board) | Week mode | [Week lanes](#boardweek-lanes-week-lanes) |
 | [Board](#boardpane-board) | Status mode | [Status columns](#boardstatus-columns-status-columns) |
 | [Status columns](#boardstatus-columns-status-columns) | open a task | [Row panel](#boardrow-panel-row-panel) |
 | [Status columns](#boardstatus-columns-status-columns) | Inbox rows | [AI suggestion strip](#boardai-suggestion-ai-suggestion-strip) |
-| [Top strip](#striptop-top-strip) |  | [Filter sheet](#stripfilter-sheet-filter-sheet) |
+| [Top strip](#striptop-top-strip) |  | [Filters & sort sheet](#stripfilter-sheet-filters--sort-sheet) |
 | [Top strip](#striptop-top-strip) |  | [Quick-add dialog](#stripquick-add-quick-add-dialog) |
 | [Top strip](#striptop-top-strip) |  | [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar) |
 | [Person row](#stripperson-row-person-row) | +N more | [People sheet](#strippeople-sheet-people-sheet) |

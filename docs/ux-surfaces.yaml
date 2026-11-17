@@ -271,8 +271,8 @@ surfaces:
     root: data-surface
     holds:
       - >-
-        the [top strip](#shared-strip-above-every-list), person row when there are two or more
-        members, **Tasks · Issues · All**, then the calendar lane and four horizons.
+        the [top strip](#shared-strip-above-every-list), then the calendar lane and four horizons.
+        Kind of task and whose tasks are rows of the strip's Filters & sort sheet.
     does:
       - >-
         the horizons are **Due** (overdue first, then today; no heading, the header names it),
@@ -286,8 +286,6 @@ surfaces:
     desktop: the list scrolls inside its own box under the strip at 1024px and up.
     links:
       - to: strip.top
-      - to: strip.scope
-      - to: strip.person-row
       - to: today.calendar-lane
       - to: row.item
       - to: today.detail-split
@@ -329,29 +327,18 @@ surfaces:
       - nav.
     holds:
       - >-
-        the top strip, the person row and scope switch, the mode line, then the week lanes or the
-        status columns. Two-dimensional, so it spans the window on desktop.
+        the top strip, then the week lanes or the status columns. Two-dimensional, so it spans the
+        window on desktop. The layout, the kind of task, whose tasks and Triage are rows of the
+        strip's Filters & sort sheet.
     links:
       - to: journal.pane
         via: "Done column: journal"
       - to: strip.top
-      - to: strip.scope
-      - to: strip.person-row
       - to: row.item
-      - to: board.mode-line
       - to: board.week-lanes
         via: Week mode
       - to: board.status-columns
         via: Status mode
-  - id: board.mode-line
-    area: board
-    title: Mode line
-    root: data-surface
-    holds:
-      - >-
-        under the strip: person row, scope, then **Week · Status** (remembered per device), and in
-        Status mode while the Inbox holds tasks, **Triage** (AI suggestions for every Inbox task;
-        disabled with its reason on hover while Local AI is off or a run is in flight).
   - id: board.week-lanes
     area: board
     title: Week lanes
@@ -417,9 +404,9 @@ surfaces:
         one strip sits in each of Today, Board and the journal, so no single element carries it.
     holds:
       - >-
-        on one line: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*),
-        the **filter button** (carries how many filters are on; its name spells them), **Select**,
-        and **+**. Today, Board and the Done journal carry it; Search carries its own box and the
+        on one line, and nothing under it: the live **text filter** (placeholder carries the
+        count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its
+        name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the
         filter button inside it.
     links:
       - to: strip.filter-sheet
@@ -427,18 +414,25 @@ surfaces:
       - to: strip.bulk-bar
   - id: strip.filter-sheet
     area: strip
-    title: Filter sheet
+    title: Filters & sort sheet
     root: data-surface
     reach:
       - filter button.
     holds:
       - >-
-        **sort** (Due · Priority · Modified · Created · Title), **status** ticks (including `done`
-        and `cancelled`), **project**, **person** ticks, **due window**, **modified window**
-        (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something
-        is on), **Done**.
+        **sort** (Due · Priority · Modified · Created · Title); on Today and Board the view
+        toggles under it: **Layout** (Week · Status, Board only), **AI triage** (Board, Status
+        layout, while the Inbox holds tasks; pressing it closes the sheet),
+        **Kind of task** and **Whose tasks**; then **status**
+        ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**,
+        **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear**
+        (only while something is on), **Done**.
     does:
-      - applies live; the state is the URL. Clear leaves the scope and person row alone.
+      - >-
+        applies live; the state is the URL. The filter button's count adds the kind of task and
+        whose tasks when they are off their default, and Clear resets them. The layout hides
+        nothing, so it is neither counted nor cleared. On Search and the journal the sheet has no
+        view toggles and Clear leaves the scope and person row alone.
     phone: >-
       a full-screen sheet with ticks two to a line. In the journal, status, due, modified and sort
       are hidden.
@@ -446,16 +440,18 @@ surfaces:
     area: strip
     title: Scope switch
     root: data-surface
+    reach:
+      - the **Kind of task** row of the Today and Board Filters & sort sheet; under the box on Search.
     holds:
       - >-
-        **Tasks · Issues · All** under the strip on Today, Board and Search (`?scope=`). Tasks
-        (default) leaves out issues the forge sync brings in.
+        **Tasks · Issues · All** (`?scope=`). Tasks (default) leaves out issues the forge sync
+        brings in.
   - id: strip.person-row
     area: strip
     title: Person row
     root: data-surface
     reach:
-      - two or more members.
+      - two or more members; the **Whose tasks** row of the Today and Board Filters & sort sheet.
     holds:
       - >-
         **Mine** · each member · **Everyone**; with more than three other members the row keeps the
