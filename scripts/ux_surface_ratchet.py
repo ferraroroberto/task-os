@@ -1,10 +1,11 @@
 """Ratchet on the UX surface map: every `data-surface` id in the code has a map entry, and back.
 
-A web app's `docs/ux-surface-map.md` lists every surface a person can reach,
-one entry per stable id; the code marks each surface root with the same id as
-`data-surface="<id>"`. This stage reads the app's HTML and JS and the map,
-counts each rule's hits per file against a committed baseline, and fails only
-when a count rises. Existing debt never blocks work, but it cannot grow.
+A web app's `docs/ux-surfaces.yaml` lists every surface a person can reach,
+one entry per stable id, and generates the readable `docs/ux-surface-map.md`;
+the code marks each surface root with the same id as `data-surface="<id>"`.
+This stage reads the app's HTML and JS and the map, counts each rule's hits per
+file against a committed baseline, and fails only when a count rises. Existing
+debt never blocks work, but it cannot grow.
 
 The rules (docs/ux-surface-ratchet.md quotes the convention each one holds):
 
@@ -20,10 +21,13 @@ The rules (docs/ux-surface-ratchet.md quotes the convention each one holds):
   * `stale-entry` -- a map entry no code declares, unless its *Root* says
     `none — <reason>`;
   * `duplicate-surface` -- an id declared on more than one element in the
-    code, or listed by more than one map entry (every site is a hit).
+    code, or listed by more than one map entry (every site is a hit);
+  * `dangling-link` -- a map entry's `links` `to:` id that no entry lists;
+  * `stale-generated` -- the committed page is not what `ux_surface_map.py`
+    generates from the map (line endings aside), or it is missing.
 
 A single hit keeps its exception with a `<rule>-exempt: <reason>` comment (`//`
-in JS, `<!-- -->` in HTML and in the map) on its own line or in the comment
+in JS, `<!-- -->` in HTML, `#` in the map) on its own line or in the comment
 block right above it; a marker with no reason exempts nothing.
 
 Opt-in, per adopter, in its own `.fleet.toml`:
@@ -31,13 +35,15 @@ Opt-in, per adopter, in its own `.fleet.toml`:
     [ux_surface_ratchet]
     enabled  = true
     baseline = ".ux-surface-ratchet-baseline.json"            # default
-    map      = "docs/ux-surface-map.md"                        # default
-    rules    = ["unmarked-surface", "invalid-surface-id", "unmapped-surface", "stale-entry", "duplicate-surface"]
+    map      = "docs/ux-surfaces.yaml"                         # default: the source
+    page     = "docs/ux-surface-map.md"                        # default: generated from it
+    rules    = ["unmarked-surface", "invalid-surface-id", "unmapped-surface", "stale-entry", "duplicate-surface",
+                "dangling-link", "stale-generated"]             # default: all
     paths    = ["app/webapp/static/**", "app/webapp/templates/**"]  # default
     exclude  = ["app/webapp/static/vendor/**"]                 # globs; never scanned
 
 Exit codes: 0 pass or not enabled; 1 a count rose, the map or the baseline is
-missing, or a mode was refused; 2 bad configuration, baseline or arguments; 3
+missing or invalid, or a mode was refused; 2 bad configuration, baseline or arguments; 3
 NOT CONFIRMED (`git` unusable, a file that cannot be read or decoded, a JS file
 whose strings, comments or braces do not close) -- the gate fails on it. Modes:
 `check`, `--init`, `--update-baseline` (shrink only),
@@ -45,7 +51,8 @@ whose strings, comments or braces do not close) -- the gate fails on it. Modes:
 
 Vendor-verbatim (manifest key `ux_surface_ratchet`), stdlib-only; it reads JS
 through the usage track ratchet's tokenizer, `usage_track_scan.py` (manifest key
-`usage_track_scan`). Procedure and limits: docs/ux-surface-ratchet.md.
+`usage_track_scan`), and the map through `ux_surface_map.py` (manifest key
+`ux_surface_map`). Procedure and limits: docs/ux-surface-ratchet.md.
 """
 
 from __future__ import annotations
@@ -78,40 +85,36 @@ def _load_sibling(name: str) -> ModuleType:
         spec.loader.exec_module(module)
         return module
     except (ImportError, OSError, SyntaxError):
-        print(f"ux surface ratchet: NOT CONFIRMED: {name}.py is missing beside this script -- vendor both "
-              "(manifest keys ux_surface_ratchet and usage_track_scan)")
+        print(f"ux surface ratchet: NOT CONFIRMED: {name}.py is missing beside this script -- vendor it with its "
+              "siblings (manifest keys ux_surface_ratchet, usage_track_scan, ux_surface_map)")
         sys.exit(3)
 
 
 scan = _load_sibling("usage_track_scan")
+smap = _load_sibling("ux_surface_map")
 NotConfirmed: type[RuntimeError] = scan.NotConfirmed
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 BASELINE_VERSION = 1
 DEFAULT_BASELINE = ".ux-surface-ratchet-baseline.json"
-DEFAULT_MAP = "docs/ux-surface-map.md"
+DEFAULT_MAP: str = smap.DEFAULT_MAP
+DEFAULT_PAGE: str = smap.DEFAULT_PAGE
 DEFAULT_PATHS = ("app/webapp/static/**", "app/webapp/templates/**")
 #: Always excluded, whatever the adopter's own `exclude` adds; a minified file is third-party output.
 BUILTIN_EXCLUDES = ("**/node_modules/**", "**/.venv/**", "**/venv/**", "**/*.min.js")
 GIT_TIMEOUT_S = 120
 
-RULES = ("unmarked-surface", "invalid-surface-id", "unmapped-surface", "stale-entry", "duplicate-surface")
+RULES = ("unmarked-surface", "invalid-surface-id", "unmapped-surface", "stale-entry", "duplicate-surface",
+         "dangling-link", "stale-generated")
 ATTR = "data-surface"
 #: The e2e capture hook's name form (tests/e2e/_surface.py), so one id names a surface in the map, the
 #: markup and the `surface(page, ...)` capture.
-SURFACE_ID = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*\Z")
+SURFACE_ID: re.Pattern[str] = smap.SURFACE_ID
 #: Roles that make an element a surface by its markup; screens and drill-ins are surfaces by declaration only.
 SURFACE_ROLES = frozenset({"dialog", "alertdialog", "menu", "tabpanel"})
 HTML_SUFFIXES: tuple[str, ...] = scan.HTML_SUFFIXES
 JS_SUFFIXES: tuple[str, ...] = scan.JS_SUFFIXES
-
-#: A map entry opens a line: optional list marker, then a bold backticked id.
-_ENTRY = re.compile(r"^\s*(?:[-*]\s+)?\*\*`(?P<id>[^`]*)`")
-_HEADING = re.compile(r"^#{1,6}\s")
-_FENCE = re.compile(r"^\s*(```|~~~)")
-#: `*Root:* none — <reason>`; the reason is what makes the entry root-less.
-_ROOT_NONE = re.compile(r"\*Root:?\*:?\s*none\b(?P<reason>[^.*]*)", re.IGNORECASE)
 
 EXIT_PASS, EXIT_RISE, EXIT_CONFIG, EXIT_NOT_CONFIRMED = 0, 1, 2, 3
 
@@ -119,7 +122,7 @@ EXIT_PASS, EXIT_RISE, EXIT_CONFIG, EXIT_NOT_CONFIRMED = 0, 1, 2, 3
 # would not resolve in a consumer tree), the documented exception.
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
-_CONFIG_KEYS = {"enabled", "baseline", "map", "rules", "paths", "exclude"}
+_CONFIG_KEYS = {"enabled", "baseline", "map", "page", "rules", "paths", "exclude"}
 
 
 class ConfigError(RuntimeError):
@@ -133,6 +136,7 @@ class Config:
     map: str = DEFAULT_MAP
     paths: tuple[str, ...] = DEFAULT_PATHS
     exclude: tuple[str, ...] = ()
+    page: str = DEFAULT_PAGE
 
 
 @dataclass(frozen=True)
@@ -150,7 +154,7 @@ class Site:
     id: str
     path: str
     line: int
-    rootless: bool = False  # a map entry whose *Root* is `none — <reason>`
+    rootless: bool = False  # a map entry whose `root` is `none: <reason>`
 
 
 # ----------------------------------------------------------------- config
@@ -199,8 +203,14 @@ def parse_config(toml_text: str) -> Config | None:
     paths = _str_list(table, "paths", DEFAULT_PATHS)
     if not paths:
         raise ConfigError("[ux_surface_ratchet] paths must name at least one glob")
+    source, page = _str(table, "map", DEFAULT_MAP).strip("/"), _str(table, "page", DEFAULT_PAGE).strip("/")
+    if source.lower().endswith(".md"):
+        raise ConfigError(f"[ux_surface_ratchet] map = {source!r}: the map is YAML now; move its entries into "
+                          f"{DEFAULT_MAP} (docs/ux-surface-map.md, \"Moving a Markdown map\") and drop `map`")
+    if source == page:
+        raise ConfigError("[ux_surface_ratchet] map and page must be different files")
     return Config(_str(table, "baseline", DEFAULT_BASELINE), tuple(r for r in RULES if r in rules),
-                  _str(table, "map", DEFAULT_MAP).strip("/"), paths, _str_list(table, "exclude", ()))
+                  source, paths, _str_list(table, "exclude", ()), page)
 
 
 def vendored_dests(toml_text: str) -> tuple[str, ...]:
@@ -469,46 +479,27 @@ def scan_code(text: str, path: str, rules: tuple[str, ...]) -> tuple[list[Hit], 
 
 # -------------------------------------------------------------- map reader
 
-def parse_map(text: str, path: str) -> tuple[list[Site], list[Hit]]:
-    """(the map's entries, as sites; `invalid-surface-id` hits for entries whose id is not one).
+def read_map(smap_obj: Any, path: str) -> tuple[list[Site], list[Hit]]:
+    """(the map's entries, as sites; its `invalid-surface-id` and `dangling-link` hits) from a loaded map."""
+    sites = [Site(s.id, path, s.line, s.rootless) for s in smap_obj.surfaces]
+    known = {s.id for s in smap_obj.surfaces}
+    hits = [Hit(path, s.line, "invalid-surface-id", f"map entry id {s.id!r} is not a valid surface id")
+            for s in smap_obj.surfaces if not is_surface_id(s.id)]
+    hits += [Hit(path, link.line, "dangling-link", f"`{s.id}` links to `{link.to}`, which no entry lists")
+             for s in smap_obj.surfaces for link in s.links if link.to not in known]
+    return sites, hits
 
-    An entry is a line opening with a bold backticked id, outside a fenced code
-    block; it runs until the next entry or heading. Its *Root* reads `none —
-    <reason>` when the surface has no element of its own.
-    """
-    sites: list[Site] = []
-    bad: list[Hit] = []
-    current: tuple[str, int, list[str]] | None = None
-    fenced = False
 
-    def close() -> None:
-        if current is None:
-            return
-        ident, line, body = current
-        match = _ROOT_NONE.search(" ".join(body))
-        rootless = match is not None and match.group("reason").strip(" \t—–-:(") != ""
-        sites.append(Site(ident, path, line, rootless))
-
-    for number, raw in enumerate(text.splitlines(), start=1):
-        if _FENCE.match(raw):
-            fenced = not fenced
-            continue
-        if fenced:
-            continue
-        entry = _ENTRY.match(raw)
-        if entry or _HEADING.match(raw):
-            close()
-            current = None
-        if entry:
-            if is_surface_id(entry.group("id")):
-                current = (entry.group("id"), number, [raw])
-            else:
-                bad.append(Hit(path, number, "invalid-surface-id",
-                               f"map entry id {entry.group('id')!r} is not a valid surface id"))
-        elif current is not None:
-            current[2].append(raw)
-    close()
-    return sites, bad
+def generated_hit(smap_obj: Any, cfg: Config, page_text: str | None) -> Hit | None:
+    """The `stale-generated` hit when the committed page is missing or not what the map generates."""
+    if page_text is None:
+        return Hit(cfg.page, 1, "stale-generated",
+                   f"the page is missing -- run `python scripts/ux_surface_map.py` to generate it from {cfg.map}")
+    line = smap.first_difference(smap.render(smap_obj, cfg.map), page_text)
+    if not line:
+        return None
+    return Hit(cfg.page, line, "stale-generated", f"the page is not what {cfg.map} generates from here on -- "
+               "edit the map, never the page, and run `python scripts/ux_surface_map.py`")
 
 
 # ----------------------------------------------------------------- matching
@@ -578,7 +569,10 @@ def _read_text(root: Path, path: str) -> str | None:
 
 
 def scan_tree(root: Path, cfg: Config, vendored: tuple[str, ...], map_text: str) -> dict[str, list[Hit]]:
-    """Every rule's hits across the in-scope HTML/JS files and the map, exempt markers applied, by file."""
+    """Every rule's hits across the in-scope HTML/JS files, the map and its page, exempt markers applied, by file.
+
+    Raises `smap.MapError` when the map is outside the YAML subset or the schema.
+    """
     hits: list[Hit] = []
     code: list[Site] = []
     from_vendored: list[Site] = []
@@ -593,13 +587,23 @@ def scan_tree(root: Path, cfg: Config, vendored: tuple[str, ...], map_text: str)
             text = _read_text(root, path)
             if text is not None:
                 from_vendored += scan_code(text, path, ())[1]  # ids only: no rule applies to a vendored copy
-    entries, bad = parse_map(map_text, cfg.map)
-    hits += [h for h in bad if h.rule in cfg.rules]
-    texts = {cfg.map: map_text.splitlines()}
-    for h in cross_check(code, entries, cfg.rules, tuple(from_vendored)):
-        lines = texts.setdefault(h.path, (_read_text(root, h.path) or "").splitlines())
-        if not scan.is_exempt(h.rule, lines, h.line, h.line):
+    loaded = smap.load(map_text, cfg.map)
+    entries, map_hits = read_map(loaded, cfg.map)
+    stale_page = generated_hit(loaded, cfg, _read_text(root, cfg.page))
+    map_lines = map_text.splitlines()
+    texts: dict[str, list[str]] = {}
+    for h in [*map_hits, *cross_check(code, entries, cfg.rules, tuple(from_vendored))]:
+        if h.rule not in cfg.rules:
+            continue
+        if h.path == cfg.map:
+            exempt = smap.is_exempt(h.rule, map_lines, h.line)
+        else:
+            lines = texts.setdefault(h.path, (_read_text(root, h.path) or "").splitlines())
+            exempt = scan.is_exempt(h.rule, lines, h.line, h.line)
+        if not exempt:
             hits.append(h)
+    if stale_page is not None and "stale-generated" in cfg.rules:
+        hits.append(stale_page)
     found: dict[str, list[Hit]] = defaultdict(list)
     for h in sorted(hits, key=lambda h: (h.path, h.line, h.rule)):
         found[h.path].append(h)
@@ -687,8 +691,8 @@ def _check(cfg: Config, found: dict[str, list[Hit]], current: Counts, baseline: 
     added, gone = diff(current, baseline)
     if added:
         _report_added(added, found, baseline)
-        print(f"  Give each surface root a constant {ATTR} id and one entry in {cfg.map} "
-              "(docs/ux-surface-map.md); remove an entry with its surface. A hit that must stay carries "
+        print(f"  Give each surface root a constant {ATTR} id and one entry in {cfg.map}, then regenerate "
+              f"{cfg.page} (docs/ux-surface-map.md); remove an entry with its surface. A hit that must stay carries "
               "`<rule>-exempt: <reason>`; or (reviewed) raise the baseline with `--update-baseline --allow-additions`.")
         return EXIT_RISE
     print(f"ux surface ratchet: PASS ({_total(current)} baselined hit(s) in {len(current)} file(s), none new; "
@@ -742,9 +746,13 @@ def run(root: Path, *, init: bool, update: bool, allow_additions: bool) -> int:
         map_text = _read_text(root, cfg.map)
         if map_text is None:
             print(f"ux surface ratchet: FAIL: the surface map {cfg.map} is missing -- copy "
-                  "docs/templates/ux-surface-map.md from project-scaffolding and fill it (docs/ux-surface-map.md)")
+                  "docs/templates/ux-surfaces.yaml from project-scaffolding and fill it (docs/ux-surface-map.md)")
             return EXIT_RISE
         found = scan_tree(root, cfg, vendored, map_text)
+    except smap.MapError as exc:
+        print(f"ux surface ratchet: FAIL: the surface map is invalid: {exc}")
+        print("  (fix the map: docs/ux-surface-map.md lists the schema, scripts/ux_surface_map.py the YAML subset)")
+        return EXIT_RISE
     except NotConfirmed as exc:
         print(f"ux surface ratchet: NOT CONFIRMED: {exc}")
         print("  (the tree could not be read through, so this is neither a pass nor a clean tree)")

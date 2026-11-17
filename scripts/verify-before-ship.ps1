@@ -63,8 +63,10 @@
                              an exit 3 (a file that cannot be read or closed) is NOT
                              CONFIRMED and fails, never a pass or a skip.
      10d. ux surface ratchet — no surface root without a constant data-surface id, no
-                             id without an entry in docs/ux-surface-map.md, no entry no
-                             element carries, and no id on two surfaces, beyond
+                             id without an entry in docs/ux-surfaces.yaml, no entry no
+                             element carries, no id on two surfaces, no link to an id
+                             with no entry, and a docs/ux-surface-map.md page that is
+                             what the map generates, beyond
                              .ux-surface-ratchet-baseline.json, through
                              scripts/ux_surface_ratchet_gate.py. Whole tree, never routed;
                              an exit 3 (a file that cannot be read or closed) is NOT

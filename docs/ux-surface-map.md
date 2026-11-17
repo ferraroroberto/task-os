@@ -1,20 +1,14 @@
-# UX surface map
+<!-- Generated from docs/ux-surfaces.yaml by scripts/ux_surface_map.py. Do not edit: change the map and re-run. -->
+
+# UX surface map: task-os
+
+Every surface a person can reach in this app, each under a stable id that its root element carries as `data-surface`. Each area has a diagram of how its surfaces connect; a rounded node is a surface in another area.
 
 The checklist of everything a person can see and do in task-os: every pane, drill-in, menu, sheet, dialog, gesture and key, with how it is reached, what is on it, what each control does and the decision behind it where one exists. [Views](views.md) tells the story of the main views in prose; this page is the exhaustive index, so a layout change can check every surface and not only the ones a reviewer happens to open. Behaviour that a surface only links to lives in its own doc (linked per entry).
 
-**Keeping it true.** A change that adds, removes, renames or reshapes a user-visible surface (a pane, tab, sheet, dialog, popover, menu, menu item, Settings row, gesture or key) updates this page in the same change, with the entry's *why* when the choice was deliberate. The rule is in `CLAUDE.md`.
+**Keeping it true.** A change that adds, removes, renames or reshapes a user-visible surface (a pane, tab, sheet, dialog, popover, menu, menu item, Settings row, gesture or key) updates its entry in `docs/ux-surfaces.yaml` in the same change, with the entry's *why* when the choice was deliberate, and regenerates this page with `python scripts/ux_surface_map.py`; this page is never edited by hand. The rule is in `CLAUDE.md`.
 
-**Entry shape.** An entry is a paragraph that opens with its id in backticks, in bold with its title, then labelled fields: *Root* (`data-surface` when an element carries the id, else `none — <reason>` for a gesture, a key or a block drawn inside another surface), *Reach* (how you get there), *Holds* (what is on it), *Does* (what its controls do), *States* (empty, error, loading, gated), *Why* (the decision). `Phone` and `Desktop` call out where the two renderings differ; a line without either holds for both.
-
-**Ids.** `<area>.<surface>`, lowercase words joined by `.` or `-`, the same form the e2e `surface(page, "<id>")` hook takes. An id never changes when a title is reworded or entries are reordered, and one id names one surface even when it is drawn two ways (the date popover and the phone's date sheet are both `row.date`). The surface's root element carries the same id as `data-surface`; the vendored row menu builds its own element, so its call sites stamp the id on what `attach` returns. `scripts/ux_surface_ratchet.py` fails a surface root without an id, an id without an entry, an entry no element carries and an id on two roots. It reads markup and JS, so the entries marked `none` and every screen or state with no root of its own are held by this page and the e2e walk alone.
-
-## Contents
-
-1. [Ground rules](#ground-rules) — input modes, layout bands, URL state, feature gating
-2. [Surface graph](#surface-graph)
-3. [Chrome](#chrome) · [Today](#today) · [Board](#board) · [Shared strip](#shared-strip-above-every-list) · [Row](#the-task-row) · [Drawer](#task-drawer) · [Time](#time) · [Search and palette](#search-and-command-palette) · [Journal](#done-journal) · [Settings](#settings) · [Sign-in](#sign-in-and-team-name)
-4. [Overlay catalog](#overlay-catalog) · [Keyboard map](#keyboard-map) · [Deep links](#deep-links-and-url-state) · [Empty, error and loading states](#empty-error-and-loading-states)
-5. [Where this map was checked](#where-this-map-was-checked)
+**Ids.** `<area>.<surface>`, lowercase words joined by `.` or `-`, the same form the e2e `surface(page, "<id>")` hook takes. An id never changes when a title is reworded or entries are reordered, and one id names one surface even when it is drawn two ways (the date popover and the phone's date sheet are both `row.date`). The surface's root element carries the same id as `data-surface`; the vendored row menu builds its own element, so its call sites stamp the id on what `attach` returns. `scripts/ux_surface_ratchet.py` fails a surface root without an id, an id without an entry, an entry no element carries, an id on two roots, a link to an id with no entry and a page that is not what the map generates. It reads markup and JS, so the entries marked `none` and every screen or state with no root of its own are held by this map and the e2e walk alone.
 
 ## Ground rules
 
@@ -38,277 +32,7 @@ The 1024px breakpoint (side panel, split, a list scrolling inside its own box) i
 
 **Where state lives.** The filter, scope, person pick and search query ride the URL (see [Deep links](#deep-links-and-url-state)). Per-device choices live in `localStorage`: theme, text size, last tab, Board mode, Mine/Everyone, row-action choices. Nothing about a person is stored in the browser except those labels.
 
-## Surface graph
-
-```mermaid
-flowchart LR
-  subgraph Chrome
-    NAV["Nav: Today / Board / Time / Search"]
-    HEAD["Header: title + status, theme, gear"]
-    TOAST["Toasts + Undo"]
-    BUILD["New-version notice"]
-  end
-
-  NAV --> TODAY["Today"]
-  NAV --> BOARD["Board"]
-  NAV --> TIME["Time"]
-  NAV --> SEARCH["Search"]
-  HEAD --> SETTINGS["Settings pane"]
-  BOARD -->|"Done column: journal"| JOURNAL["Done journal"]
-  PALETTE -->|"Journal command"| JOURNAL
-
-  TODAY --> STRIP["Top strip: text filter, filter, Select, +"]
-  BOARD --> STRIP
-  JOURNAL --> STRIP
-  STRIP --> FILTER["Filter sheet"]
-  STRIP --> QADD["Quick-add dialog"]
-  STRIP --> SELECT["Select mode + bulk bar"]
-  TODAY --> SCOPE["Tasks / Issues / All"]
-  BOARD --> SCOPE
-  SEARCH --> SCOPE
-  TODAY --> PERSON["Person row"]
-  BOARD --> PERSON
-  PERSON -->|"+N more"| OWNERS["People sheet"]
-
-  TODAY --> CAL["Calendar lane"]
-  TODAY --> ROW["Task row"]
-  BOARD --> ROW
-  SEARCH --> ROW
-  JOURNAL --> ROW
-  ROW --> KEBAB["Row menu"]
-  ROW --> DATE["Date sheet / popover"]
-  ROW -->|"tap / Enter"| DRAWER["Task drawer"]
-  KEBAB --> DATE
-  KEBAB --> DRAWER
-  SELECT --> DATE
-  SELECT --> CONFIRMD["Confirm dialog"]
-
-  DRAWER --> PARENT["Parent picker"]
-  DRAWER --> FOLDERPICK["Folder picker"]
-  DRAWER --> CONFIRMD
-  DRAWER --> DRAWER
-  QADD --> FOLDERPICK
-  QADD --> DICTATE["Dictation"]
-
-  TIME --> TLOG["Log"]
-  TIME --> TTOT["Totals"]
-  TIME --> THIST["History"]
-  TLOG --> TDLG["Time dialogs"]
-  THIST --> TDLG
-  TTOT --> TINFO["Comparison info dialog"]
-
-  SEARCH --> HITS["Result groups"]
-  HITS --> DRAWER
-  PALETTE["Command palette"] --> DRAWER
-  PALETTE --> TODAY
-  PALETTE --> SETTINGS
-
-  SETTINGS --> SHEET["Settings sheet (15 rows)"]
-  SHEET --> ARCH["Email archiving report"]
-  SHEET --> TCATS["Time categories"]
-  SHEET --> PALETTE
-  SHEET --> ROWACT["Row actions"]
-  ARCH --> TDLG2["Folder picker + confirms"]
-  TCATS --> TDLG
-
-  LOGIN["/login"] --> PICK["Name picker"]
-  PICK --> TODAY
-  LOGIN --> TODAY
-```
-
-Reading it: every list view feeds the one task row; the row feeds the one drawer; every picker that chooses a folder is the same folder picker; every date choice goes through the one date sheet (a popover next to the row on a mouse, a sheet on the phone).
-
-## Chrome
-
-**`chrome.header` Header** — *Root:* `data-surface`. *Reach:* always on screen, above every pane. *Holds:* a glyph and title naming the view on screen, a status line beside it, the theme toggle, the Settings gear. *Does:* the gear opens Settings (any tab press leaves it); the toggle flips light and dark. *States:* the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*, Settings what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*). On an install with no tasks Today, Board and the Done journal read *No tasks yet*, while Settings, Time and Search keep their own line (so a failing service is still named), and *Server unreachable* replaces it when the server cannot be reached. *Why:* one persistent header row rather than a heading per pane.
-
-**`chrome.nav` Nav** — *Root:* `data-surface`. *Reach:* always. *Holds:* four tabs with a glyph and label; the active one is tinted. *Does:* switches the pane; Arrow keys move between tabs. A deep link beats the remembered tab; the last tab is remembered per browser. *States:* Time absent when its block is off. *Why:* the fleet nav contract caps the bar at five; Settings is the rarely-used destination, so it is the gear.
-
-**`chrome.footer` Footer** — *Root:* `data-surface`. *Holds:* build line (identity of the running build), last child of the page, outside every card.
-
-**`chrome.toast` Toast** — *Root:* `data-surface`. *Reach:* after a user-initiated write or an error; passive status renders inline instead. *Holds:* one message at a time, pinned above the nav, with an optional **Undo (Z)** button. *Does:* Undo writes the inverse change; it and the `z` key expire together after ten seconds. Bulk results name any task that failed. *States:* neutral, or tinted for an error.
-
-**`app.update-banner` New-version notice** — *Root:* `data-surface` (stamped by the vendored build-watch component itself). *Holds:* a banner offering **Reload** when the server moved to a newer build while the page stayed open (an installed phone app in memory across a restart). It is dismissible and never reloads by itself, so a typed draft survives.
-
-**`chrome.install-shell` Install shell** — *Root:* none — the manifest and the standalone display, with no element of their own. *Holds:* the page is an installable app (manifest, standalone display); the installed app adds a strip above the status bar and keeps the nav at the bottom edge.
-
-## Today
-
-*Reach:* nav · first visit lands here on every pointer · `#` nothing. *Why it leads:* what is due is the question the app is opened for.
-
-**`today.list` List** — *Root:* `data-surface`. *Holds:* the [top strip](#shared-strip-above-every-list), person row when there are two or more members, **Tasks · Issues · All**, then the calendar lane and four horizons. *Does:* the horizons are **Due** (overdue first, then today; no heading, the header names it), **Soon** (tomorrow to a week out, open), **Later** and **No date** (folded until opened; a text filter opens them; each shows only when it holds something). Inside a horizon rows run by due day, no project first, project A–Z, title. *States:* empty install shows *Add your first task* with an **Add a task** button; a filter with no match shows an empty line; counts sit on the disclosure headers. *Desktop:* the list scrolls inside its own box under the strip at 1024px and up.
-
-**`today.detail-split` Detail split** — *Root:* `data-surface`. *Desktop (1024px and up):* the right half is the [drawer](#task-drawer), never empty while a task is due: arriving on Today shows the first due task without writing a `#task/` link. With nothing due, or after closing, it reads *Select a task to see its details*. Leaving Today closes it. *Phone:* the drawer is a full-screen sheet.
-
-**`today.calendar-lane` Calendar lane** — *Root:* `data-surface`. *Reach:* above the horizons when the calendar block and an ICS address are configured. *Holds:* an all-day band of chips, timed events with their span, an event count. *Does:* read-only; nothing is written back. *States:* a failing feed shows a notice titled by cause (*address refused*, *unreachable*, *did not answer in time*, *feed unreadable*) with the time it began failing and the last good copy kept; a feed that parses but has events it could not evaluate says how many (*N recurring event(s) could not be checked — open the calendar itself*). Settings → Calendar holds the status and a refresh. *Why:* your real calendar beside the task list, without any write path.
-
-## Board
-
-**`board.pane` Board** — *Root:* `data-surface`. *Reach:* nav. *Holds:* the top strip, the person row and scope switch, the mode line, then the week lanes or the status columns. Two-dimensional, so it spans the window on desktop.
-
-**`board.mode-line` Mode line** — *Root:* `data-surface`. *Holds:* under the strip: person row, scope, then **Week · Status** (remembered per device), and in Status mode while the Inbox holds tasks, **Triage** (AI suggestions for every Inbox task; disabled with its reason on hover while Local AI is off or a run is in flight).
-
-**`board.week-lanes` Week lanes** — *Root:* `data-surface`. *Holds:* **Today** (overdue included) · **Tomorrow** · **This week** · **This weekend** · **Next week** · **Later** (no-date tasks close it under a *No date* sub-heading). *Does:* drag a row onto a lane to re-date it to that lane's first day (toast and Undo, nothing but the due date changes). *Desktop:* lanes side by side, each scrolling under a sticky header with its count; an empty lane collapses to its header and stays a drop target. *Phone:* one list of lane sections, rows swipe, no drag. *Why:* every date belongs to exactly one lane, so *This week* and *This weekend* show only while they have days left after tomorrow.
-
-**`board.status-columns` Status columns** — *Root:* `data-surface`. **Inbox · Todo · Standby · Done today**; drag a row to change its status; ticking statuses in the filter sheet hides the other columns. The Done column head carries a **journal** link ([journal](#done-journal)). *Phone:* a one-column scroll-snap carousel whose count strip (*Inbox 4 · Todo 30 …*) is also the column switcher; no row swipe here because the columns already swipe sideways.
-
-**`board.ai-suggestion` AI suggestion strip** — *Root:* none — a line the row builder adds under an Inbox row. *Reach:* under an Inbox row after Triage staged a suggestion. *Holds:* a one-line summary (parent · priority · due · person) with its reason on hover and **Accept** and **Reject** icon buttons. *Why:* nothing is applied until accepted.
-
-**`board.row-panel` Row panel** — *Root:* none — the task drawer ([`drawer.panel`](#task-drawer)) placed beside the lanes. *Desktop:* opening a card shows the drawer as a 440px side panel beside the lanes. *Phone:* full-screen sheet.
-
-## Shared strip above every list
-
-**`strip.top` Top strip** — *Root:* none — one strip sits in each of Today, Board and the journal, so no single element carries it. *Holds:* on one line: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
-
-**`strip.filter-sheet` Filter sheet** — *Root:* `data-surface`. *Reach:* filter button. *Holds:* **sort** (Due · Priority · Modified · Created · Title), **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**. *Does:* applies live; the state is the URL. Clear leaves the scope and person row alone. *Phone:* a full-screen sheet with ticks two to a line. In the journal, status, due, modified and sort are hidden.
-
-**`strip.scope` Scope switch** — *Root:* `data-surface`. **Tasks · Issues · All** under the strip on Today, Board and Search (`?scope=`). Tasks (default) leaves out issues the forge sync brings in.
-
-**`strip.person-row` Person row** — *Root:* `data-surface`. *Reach:* two or more members. *Holds:* **Mine** · each member · **Everyone**; with more than three other members the row keeps the picked and recent ones and folds the rest into **+N more**. *Does:* one tap picks one person; **+N more** opens **strip.people-sheet**. Mine and Everyone are per device (`?whose=everyone`); picked members ride `?owner=`. Search ignores the row and always covers everyone. *Why:* each phone signs in as its own member, so Mine needs no picker step.
-
-**`strip.people-sheet` People sheet** — *Root:* `data-surface`. *Reach:* **+N more**. *Holds:* a name filter, one tick per member, **Done**. The only place several people are picked at once; an emptied set falls back to Mine.
-
-**`strip.bulk-bar` Select mode and bulk bar** — *Root:* `data-surface`. *Reach:* **Select**. *Does:* every row becomes a tick target (drag and phone swipe off; one selection shared across Today and Board). With one or more ticked the bar replaces the strip: *N selected* · **Move** (date sheet, [date sheet](#the-task-row)) · **Set status…** (native select: inbox, todo, standby, complete, done, cancelled) · **Set owner…** (two or more members) · **Delete** (confirm names the count, projects whose children go too, and synced issue tasks the next sync would bring back) · **Leave select mode**. Escape leaves. *States:* a task that fails in a bulk write is named in the toast.
-
-**`strip.quick-add` Quick-add dialog** — *Root:* `data-surface`. *Reach:* **+** · palette *New task* · no-tasks button. *Holds:* the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then description, due, starts, status, folder (typed or **Find in folder index**), one link (URL and label). The parsed parent shows as a chip, a parent that matches nothing as a red chip and nothing is created. *Does:* **Add** or Enter creates and focuses the row; Escape, the backdrop and × discard. *States:* dictation shows listening, settling and unreachable-service states. See [Views](views.md#views).
-
-## The task row
-
-One row in Today, Board, Search task hits and the journal.
-
-**`row.item` Row** — *Root:* `data-surface`. *Holds:* leading **project pill** (Today and Board) · one-line title · one meta line (context name, then due, exception chips, counts). Tapping anywhere opens the drawer. *Why:* nothing on the meta line is a target; 60px a row.
-
-**`row.complete` Completion circle** — *Root:* none — a control on the row. *Mouse only.* Completes an open task (a recurring one rolls) or reopens a closed one, with Undo.
-
-**`row.move` Move verb** — *Root:* none — a control on the row. *Mouse only, open rows outside Board lanes.* A calendar glyph button; opens the date popover. *Why:* re-dating is most of what is done to a task.
-
-**`row.menu` Row menu (⋯)** — *Root:* `data-surface`. *Reach:* kebab · right-click · `.` · the menu key on a focused row. *Holds:* the actions in the order set in Settings → Row actions: Complete or Reopen, **Move…**, Status (inbox, standby, cancelled, todo as it applies), **Cycle priority**, Due tomorrow, Due next week; then, when the task has them, **Open folder**, **Open AI conversation** (and **Resume in CLI** for a resumable session), **Open issue `repo#N`**; last **Open details**. *Why:* one table of actions (`actions.js`) feeds the menu, the keys, the palette and the swipes.
-
-**`row.date` Date sheet / popover** — *Root:* `data-surface`. *Reach:* the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move, the drawer's quick moves. *Holds:* **Tomorrow · This weekend · Next week · Today**, each with the date it lands on, then **Pick a date…** (a native date field) and **No date**. *Desktop:* a popover next to the row. *Phone:* a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
-
-**`row.swipe` Swipe** — *Root:* none — a gesture, with no element of its own. *Touch only, open rows in a vertical list.* Right completes, left opens the date sheet by default; both are configurable. *Holds:* Starts away from the screen edge, locks sideways, commits past 96px or a quick flick, never in the phone Board's Status carousel. Revealed label turns to *Release to …* when armed.
-
-## Task drawer
-
-**`drawer.panel` Task drawer** — *Root:* `data-surface`. *Reach:* a row tap or Enter · menu *Open details* · `#task/<id>` · Today's auto-opened first task. *Desktop:* side panel or split pane; *Phone:* full-screen. Escape or **Close** closes it (then leaves Select mode). *Holds:* the blocks below, in order.
-
-**`drawer.head` Head** — *Root:* none — a block inside the drawer panel. *Holds:* breadcrumb (clickable), **Change parent** (opens [parent picker](#task-drawer)), **Remove parent** (only with a parent; no confirm, no Undo), **Close**, and the task's number.
-**`drawer.title` Title** — *Root:* none — a block inside the drawer panel. *Holds:* an editable field with a visible boundary.
-**`drawer.due` Due + quick moves** — *Root:* none — a block inside the drawer panel. *Holds:* a date field with a calendar button, then *Tomorrow · This weekend · Next week · Today* with their dates. Due comes first because most edits push it out.
-**`drawer.fields` Status, Priority, Owner** — *Root:* none — a block inside the drawer panel. *Holds:* native selects; Owner only with two or more members (an `owner old → new` activity row names who).
-**`drawer.links` Links** — *Root:* none — a block inside the drawer panel. *Holds:* pills for the folder, the issue and every link; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy).
-**`drawer.description` Description** — *Root:* none — a block inside the drawer panel. *Holds:* markdown, a pencil toggles edit and preview.
-**`drawer.comments` Comments** — *Root:* none — a block inside the drawer panel. *Holds:* newest first, a composer (**Send**, Ctrl+Enter), per comment a **pencil** (edit in place, Ctrl+Enter saves, Escape cancels) and a **trash** (asks first, no undo); URLs, `{folder}` refs and `repo#N` render as chips.
-**`drawer.activity` Activity** — *Root:* none — a block inside the drawer panel. *Holds:* `field old → new · actor · time`; issue-sync rows fold behind *Show N sync updates*.
-**`drawer.parent-picker` Parent picker** — *Root:* `data-surface`. *Holds:* a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*) over every open task in tree order, indented, each with its path; the task itself, its descendants and closed tasks are not offered. Tap or Enter on the first match files it; a cycle is refused with a toast. The one way to re-parent.
-**`drawer.more` More fields** — *Root:* none — a block inside the drawer panel. *Holds:* a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder** (typed ref or **Find in folder index**), **Edit links** (label edit, remove, **Add link**), **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
-**`drawer.issue` Issue panel** — *Root:* none — a block inside the drawer panel. *Holds:* a linked issue shows its provider glyph, `repo#N`, state, labels, last-synced time, **Sync now** and **Unlink**; a plain task shows **Create issue** (repo from the last-seen list or typed) and **Link existing** (`owner/repo#N` or URL). Gone when Issue sync is off. See [Issues as tasks](issues-as-tasks.md#issues-as-tasks).
-**`drawer.delete` Delete task** — *Root:* none — it opens [`confirm.dialog`](#overlay-catalog). *Holds:* last and quiet. A confirm names the task and its subtree, says there is no trash and no undo, and for a synced task with an open issue warns the next sync recreates it. A toast says how much went.
-
-**`folder.picker` Folder picker** — *Root:* `data-surface`. *Holds:* a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel. *States:* the index not configured or unavailable says so instead of listing nothing.
-
-## Time
-
-**`time.pane` Time** — *Root:* `data-surface`. *Reach:* nav. *Holds:* the **Log · Totals · History** segment under the header and the view it picks. *States:* hidden when its block is off. One-dimensional (772px measure). See [Time tracking](time-tracking.md#time-tracking).
-
-**`time.log` Log** — *Root:* `data-surface`. *Holds:* *Today so far* (per person, with each person's running state), **Start a timer** (Recent first, then each area with its categories as large tiles, each with its subtitle), **Add time already spent**. *Does:* tapping a tile starts a timer; with one running, a **Stop and start …** choice replaces the timer in one call. A running timer's tile reads *Running now* and the card shows **Stop and save** and **Discard** (immediate, with a *Timer discarded* toast and no undo). Past the long-timer limit the card asks whether the timer was forgotten and lets you correct the minutes. A running timer is the server's: a reload or another device shows the same one.
-**`time.totals` Totals** — *Root:* `data-surface`. *Holds:* **Today · 7 days · 30 days · All**, an **Area** filter, **Me · Everyone** when there are several people, a total, per-category bars, and on the compare area with two or more people the head-to-head, the split bar, days logged per person, a **How the comparison works** info dialog and **Guess your share** (**Lock in**; the other guess stays hidden until yours is locked), **Download CSV**. People differ by initials and fill, never by colour.
-**`time.history` History** — *Root:* `data-surface`. *Holds:* every entry by day with its clock range or, for an imported entry, its duration; each row's **More actions** holds **Edit**, **Start again** and **Delete** (confirmed).
-**`time.history-menu` History row menu (⋮)** — *Root:* `data-surface`. *Reach:* a history row's **More actions**. *Holds:* **Edit**, **Start again**, **Delete** (confirmed).
-**`time.dialog` Time dialogs** — *Root:* `data-surface`. **Add time already spent / Edit entry** (person, category, day with Today and Yesterday, start, minutes with 15/30/45/60/90/120 chips, note), **A timer is running** (the switch choice), text prompts and option pickers for categories, and a plain info dialog. Closed by × or Escape.
-**`time.person-picker` Person picker** — *Root:* `data-surface`. *Holds:* on first visit when a team sign-in names nobody in the install, a one-time question of who is logging, kept in memory only.
-
-## Search and command palette
-
-**`search.pane` Search tab** — *Root:* `data-surface`. *Reach:* nav · `#search` · Go to Search. *Holds:* an auto-focused box (a **Clear search** button that shows only while the box holds text, a filter button, and the scope switch under it), a count, and results. *Clear search* is a 44px target; one tap empties the query, the count and the results, and keeps focus in the box (Escape in the box does the same). A group appears only for a kind with hits (Tasks, Folders, Emails, Issues), open, under an uppercase header with its count; every other kind folds into one line (*No matches in …*, *Not set up: …*). Task hits are the standard row plus the matched snippet, exact first, then *Partial matches*, then *Similar matches*; other hits are a title and one meta line whose single control opens them. *States:* folder-explorer answering badly is its own line per kind, never *No matches*: *unreachable*, *indexing*, *not set up*, *failed*, with the reason; a broken index is shown in the danger tone. *Keys:* Down from the box focuses the first row, Up and Down move, Enter opens, Escape or `/` returns to the box. *Why:* the 200ms debounce and the *`?q=`* URL make a search shareable.
-
-**`search.palette` Command palette** — *Root:* `data-surface`. *Reach:* Ctrl+K or Cmd+K from any tab · Settings → Command palette → **Open command palette** (the phone's only way; the header has no button). *Holds:* a box; plain text jumps to a task (top eight: title, breadcrumb, status); `>` lists commands. Commands: *New task* · the row actions for the focused or ticked task (first while one is targeted) · *Go to Today / Board / Time / Archive / Search / Settings* · *Journal* · *Filter: status inbox / todo / standby / done / cancelled* · *Filter: clear* · *Sync issues* · *Export mirror* · *Open folder of current task* · *Toggle theme* · *Sign out*. Commands of a switched-off block are omitted. Up/Down move, Enter runs, Escape closes. *Phone:* a full-width sheet.
-
-**`keys.help` Keyboard shortcuts sheet** — *Root:* `data-surface`. *Reach:* `?`. A list of every key (below), including the ones the palette shows with their key.
-
-## Done journal
-
-**`journal.pane` Journal** — *Root:* `data-surface`. *Reach:* the Board's Done column head (**journal**) · palette *Journal* · `#journal`, `#journal/task/<id>`. *Holds:* the shared text strip and filter sheet (project, person, text), a **Show cancelled** toggle, closed tasks newest day first under one heading per local day (*Yesterday · Tue 1 Sep · 2 done*), cancelled ones muted, **Show the week before** to widen by seven days. *Does:* the filled circle reopens a task in place; the row opens the drawer. *States:* it says it has reached the end only once the server confirms nothing closed earlier; an install with nothing closed says so. Any tab press leaves. *Why:* a reading surface (the answer to "what happened this week"), not a tab.
-
-## Settings
-
-**`settings.pane` Settings** — *Root:* `data-surface`. *Reach:* the header gear · palette *Go to Settings* · `#settings`. A pane with no tab. Six inset groups; each row shows its lead glyph, label, its current value (in the attention or danger tone when it is an exception) and a chevron. A row opens its **sheet**: *Desktop (1024px and up)* the detail pane beside the list at 1 : 1.5 with the row tinted (the Email archiving report spans the window); *Phone* full-screen with **×** and **Done**. `#settings/<row>` keeps a sheet across reload; Back closes it.
-
-| Group | Row | Value shown | Sheet holds |
-| --- | --- | --- | --- |
-| This device | **Text size** | Small / Default / Large (in place, no sheet) | a three-way control; scales rem-based type, not rows or icons |
-| | **Row actions** | *Default* | a select for **swipe right** and one for **swipe left** (any action or nothing), then every row action with **Show in the menu**, **Move up**, **Move down**, and **Reset to the defaults**; an action a swipe runs always stays in the menu |
-| | **Command palette** | *Ctrl+K* | a line of explanation and **Open command palette** |
-| | **Phone access** | the client (*this PC* or the member) | who you are signed in as, whether HTTPS is on, whether a token and a password are set (and the script that sets them), the team line *you are X · change name* with team mode, install hints for iOS and Android, **Sign out on this device** (only for a cookie session) |
-| Sync | **Issues as tasks** | on / off / failing | provider, repos, next and last pass and result, **Sync now** |
-| | **Calendar** | on / error / unknown | the feed host only (never the address), refresh cadence, last fetch, failure cause, **Refresh now** |
-| Email | **Capture into Inbox** | on / off | the last flagged-mail pass and its state, **Check now** |
-| | **Email archiving** | off / ready / running / *N need you* | **Archive Inbox now**, a first-N bound, the archiver state, the run picker, **Accept all (N)**, the run report (below) |
-| Tools | **Time categories** | *4 areas · 13 categories* | areas and their categories; **Add area**; per area **Rename · Add category · Move up/down · Archive**; per category **Edit · Move up/down · Move to another area · Archive** and **Delete** only while nothing points at it; dialogs carry the subtitle field |
-| | **Search** | indexed / not set up | the four indexes with their state and reason |
-| | **Folder opener** | on / not installed | the install command with **Copy command**, whether the opener is installed on this PC, and a disclosure *Uninstall · folder paths for each PC* with **Copy** |
-| | **Voice quick-add** | on / off | the transcription chain, its state and reason |
-| | **AI Inbox triage** | on / off | the local-AI state and reason, what triage sends and that suggestions stay staged |
-| Available features | one switch per block (Time tracker · Calendar lane · Issue sync · Email and folders · Local AI · Mirror and backups) | on / off, or *on, unavailable here: reason* | a switch that applies at once, no reload; a block whose dependency is missing says why |
-| This install | **Your name** | the saved name or *not set* | a field and **Save name**; blank clears it, the line under it shows the name an unsigned write uses |
-| | **Database** | schema version | where config and data live, the schema version |
-| | **Mirror and backup** | off / on | what is exported and backed up, import conflicts with **Clear import conflicts** |
-
-**`settings.sheet` Settings sheet** — *Root:* `data-surface`. *Reach:* any Settings row that opens something · `#settings/<row>`. *Holds:* a title, **×**, and the one sheet its row names (below). *Does:* **Done**, **×** and Back close it. *Desktop:* the detail pane beside the list. *Phone:* full-screen.
-
-Each sheet is one entry named by the row that opens it; what it holds is the table's *Sheet holds* column.
-
-**`settings.row-actions` Row actions sheet** — *Root:* `data-surface`. *Reach:* Settings → Row actions · `#settings/rows`.
-**`settings.palette` Command palette sheet** — *Root:* `data-surface`. *Reach:* Settings → Command palette · `#settings/palette`.
-**`settings.access` Phone access sheet** — *Root:* `data-surface`. *Reach:* Settings → Phone access · `#settings/access`.
-**`settings.issues` Issues as tasks sheet** — *Root:* `data-surface`. *Reach:* Settings → Issues as tasks · `#settings/issues`. *States:* gone when Issue sync is off.
-**`settings.calendar` Calendar sheet** — *Root:* `data-surface`. *Reach:* Settings → Calendar · `#settings/calendar`. *States:* gone when the Calendar lane is off.
-**`settings.capture` Capture into Inbox sheet** — *Root:* `data-surface`. *Reach:* Settings → Capture into Inbox · `#settings/capture`. *States:* gone when Email and folders is off.
-**`settings.archive` Email archiving sheet** — *Root:* `data-surface`. *Reach:* Settings → Email archiving · `#settings/archive`. *Holds:* the run controls and the report below. *Desktop:* spans the window.
-**`settings.time-categories` Time categories sheet** — *Root:* `data-surface`. *Reach:* Settings → Time categories · `#settings/timecats`. *States:* gone when Time is off.
-**`settings.search` Search sheet** — *Root:* `data-surface`. *Reach:* Settings → Search · `#settings/search`.
-**`settings.opener` Folder opener sheet** — *Root:* `data-surface`. *Reach:* Settings → Folder opener · `#settings/opener`.
-**`settings.voice` Voice quick-add sheet** — *Root:* `data-surface`. *Reach:* Settings → Voice quick-add · `#settings/voice`. *States:* gone when Local AI is off.
-**`settings.ai-triage` AI Inbox triage sheet** — *Root:* `data-surface`. *Reach:* Settings → AI Inbox triage · `#settings/ai`. *States:* gone when Local AI is off.
-**`settings.your-name` Your name sheet** — *Root:* `data-surface`. *Reach:* Settings → Your name · `#settings/yourname`.
-**`settings.database` Database sheet** — *Root:* `data-surface`. *Reach:* Settings → Database · `#settings/install`.
-**`settings.mirror` Mirror and backup sheet** — *Root:* `data-surface`. *Reach:* Settings → Mirror and backup · `#settings/mirror`. *States:* gone when Mirror and backups is off.
-
-**`settings.time-menu` Time categories menu (⋮)** — *Root:* `data-surface`. *Reach:* the ⋮ beside an area or a category in the Time categories sheet. *Holds:* Rename or Edit, Move up, Move down, Move to another area, Archive, and Delete only while nothing points at it.
-
-**`archive.report` Email archiving report** — *Root:* `data-surface`. *Reach:* Settings → Email archiving · palette *Go to Archive*. *Desktop:* a table (subject with who and when · destination as its last three components · files as chips, the first shown and *+N more* · confidence · why · state). *Phone:* cards, with the review levels behind **Review**. Each row's **⋮** offers exactly what its state allows: **Accept** (a mail that needed a human), **Move to… / File it…** (the ranked candidates or any folder through the folder picker, with an optional hint the next run remembers), **Retry** (the file was written before Outlook refused the move), **Revert** (files deleted, mail back to the Inbox; only a filed row). A run picker lists earlier runs and **Accept all (N)** clears a reviewed batch; anything touching files asks first. *States:* *No run yet*, running (the run button reads *Archiving…* and is disabled), not configured with the reason, a run that failed with its reason. See [Archive the Inbox](inbox-archive.md#archive-the-inbox).
-
-**`archive.row-menu` Report row menu (⋮)** — *Root:* `data-surface`. *Reach:* the ⋮ on a desktop report row. *Holds:* exactly the actions the row's state allows (see the report above).
-
-## Sign-in and team name
-
-**`login.card` Sign-in** (`/login`, public) — *Root:* `data-surface`. *Holds:* a card with one field (*Token or password*) and **Sign in**; a wrong secret says *wrong token or password*. A token or password sets a 90-day cookie. With team mode on, the team password signs in and leads to **login.name-picker**. Not reached on the install's own PC, which needs no credential.
-
-**`login.name-picker` Name picker** — *Root:* `data-surface`. *Who are you?* with one button per member (initials and name, the first focused). It sets a label recorded on comments and changes, never a credential; *change name* in Settings → Phone access returns here.
-
-## Overlay catalog
-
-**`confirm.dialog` Confirm dialog** — *Root:* `data-surface`. *Reach:* every delete (a task from the drawer, a selection from the bulk bar, a time entry), an archive file action. *Holds:* a title, a line naming what goes, **Cancel** and one danger-tinted action. *Does:* the action runs the write; **Cancel**, Escape and the backdrop mean no. *Why:* one destructive-action dialog, built per ask.
-
-**`chip.folder-popover` Folder and conversation popover** — *Root:* `data-surface`. *Reach:* a folder chip, or an AI-conversation chip, on a fine pointer; on a phone a folder with no web address shows the path to copy here. *Holds:* the resolved path with **Copy**, or **Open conversation** and, for a Claude Code session, **Resume in CLI on this PC**. *Does:* Escape or an outside click closes it without closing the drawer under it.
-
-| Overlay | Kind | Opened by | Closed by |
-| --- | --- | --- | --- |
-| Filter sheet | modal sheet | filter button | **Done**, ×, Escape |
-| People sheet | modal | **+N more** | **Done**, ×, Escape |
-| Quick-add | modal | **+**, palette, empty-state button | **Add**, ×, Escape |
-| Command palette | modal | Ctrl+K, Settings row | Escape, backdrop |
-| Keyboard shortcuts | modal | `?` | Escape, × |
-| Confirm | modal | every delete, bulk delete, archive file actions, time delete | **Cancel**, Escape |
-| Parent picker | modal card | **Change parent** | Escape, backdrop |
-| Time dialogs | modal | tiles, history menu, categories | ×, Escape |
-| Date sheet | sheet on touch, popover on mouse | Move paths | pick, Escape, outside tap |
-| Row menu | popover | kebab, right-click, `.` | Escape, outside tap, any pick |
-| Settings sheet | detail pane or full-screen | a Settings row | **Done**, ×, Back |
-| Task drawer | side panel, split or full-screen | a row | Close, Escape |
-| Toast | transient | a write | timer, ×, Undo |
-
-A modal hides the phone's floating nav while it is open.
+**Reading the diagrams.** Every list view feeds the one task row; the row feeds the one drawer; every picker that chooses a folder is the same folder picker; every date choice goes through the one date sheet (a popover next to the row on a mouse, a sheet on the phone).
 
 ## Keyboard map
 
@@ -366,3 +90,1099 @@ An old `#table`, `#tree` or stored `table` / `tree` tab lands on Today; an old A
 Every surface above was opened on a disposable instance seeded only from the synthetic fixture (`tests/fixtures/seed.py`), with local fakes for the calendar feed, the folder service and the archiver, plus a second instance with team mode and seven members, and a third with no data and failing services. Desktop was a 1440 to 1920px window with a mouse. The phone was a 390 by 844 touch-emulated page. The e2e suite's per-story walks (`tests/e2e/`) cover the same surfaces with screenshots.
 
 Not driven live in that walk, only read from the code and the docs: drag-and-drop between Board lanes (mouse only), the real feel of a swipe (the wiring was driven with synthetic touch events), voice dictation (needs a microphone and a transcription service), AI triage suggestions (needs the local model), creating and linking real forge issues, and a real mirror and backup folder (blanked on a disposable instance by construction).
+
+Walked 2026-11-17 against build `3de7b58`, at widths 390, 1440, themes not recorded.
+
+## Areas
+
+| Area | Surfaces |
+|---|---|
+| [Chrome](#chrome) | 6 |
+| [Today](#today) | 3 |
+| [Board](#board) | 6 |
+| [Shared strip above every list](#shared-strip-above-every-list) | 7 |
+| [The task row](#the-task-row) | 6 |
+| [Task drawer](#task-drawer) | 14 |
+| [Time](#time) | 7 |
+| [Search and command palette](#search-and-command-palette) | 3 |
+| [Done journal](#done-journal) | 1 |
+| [Settings](#settings) | 20 |
+| [Sign-in and team name](#sign-in-and-team-name) | 2 |
+| [Overlay catalog](#overlay-catalog) | 2 |
+
+## Chrome
+
+```mermaid
+flowchart LR
+  s0["Header"]
+  s1["Nav"]
+  s2["Footer"]
+  s3["Toast"]
+  s4["New-version notice"]
+  s5["Install shell"]
+  s53(["Settings · Settings"])
+  s6(["List · Today"])
+  s9(["Board · Board"])
+  s42(["Time · Time"])
+  s49(["Search tab · Search and command palette"])
+  s0 --> s53
+  s1 --> s6
+  s1 --> s9
+  s1 --> s42
+  s1 --> s49
+```
+
+### `chrome.header` Header
+
+- **Root:** `data-surface`
+- **Reach:** always on screen, above every pane.
+- **Holds:** a glyph and title naming the view on screen, a status line beside it, the theme toggle, the Settings gear.
+- **Does:** the gear opens Settings (any tab press leaves it); the toggle flips light and dark.
+- **States:** the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*, Settings what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*). On an install with no tasks Today, Board and the Done journal read *No tasks yet*, while Settings, Time and Search keep their own line (so a failing service is still named), and *Server unreachable* replaces it when the server cannot be reached.
+- **Why:** one persistent header row rather than a heading per pane.
+- **Leads to:** [Settings](#settingspane-settings)
+
+### `chrome.nav` Nav
+
+- **Root:** `data-surface`
+- **Reach:** always.
+- **Holds:** four tabs with a glyph and label; the active one is tinted.
+- **Does:** switches the pane; Arrow keys move between tabs. A deep link beats the remembered tab; the last tab is remembered per browser.
+- **States:** Time absent when its block is off.
+- **Why:** the fleet nav contract caps the bar at five; Settings is the rarely-used destination, so it is the gear.
+- **Leads to:**
+  - [List](#todaylist-list)
+  - [Board](#boardpane-board)
+  - [Time](#timepane-time)
+  - [Search tab](#searchpane-search-tab)
+
+### `chrome.footer` Footer
+
+- **Root:** `data-surface`
+- **Holds:** build line (identity of the running build), last child of the page, outside every card.
+
+### `chrome.toast` Toast
+
+- **Root:** `data-surface`
+- **Reach:** after a user-initiated write or an error; passive status renders inline instead.
+- **Holds:** one message at a time, pinned above the nav, with an optional **Undo (Z)** button.
+- **Does:** Undo writes the inverse change; it and the `z` key expire together after ten seconds. Bulk results name any task that failed.
+- **States:** neutral, or tinted for an error.
+
+### `app.update-banner` New-version notice
+
+- **Root:** `data-surface`
+- **Holds:**
+  - (stamped by the vendored build-watch component itself).
+  - a banner offering **Reload** when the server moved to a newer build while the page stayed open (an installed phone app in memory across a restart). It is dismissible and never reloads by itself, so a typed draft survives.
+
+### `chrome.install-shell` Install shell
+
+- **Root:** none — the manifest and the standalone display, with no element of their own.
+- **Holds:** the page is an installable app (manifest, standalone display); the installed app adds a strip above the status bar and keeps the nav at the bottom edge.
+
+## Today
+
+*Reach:* nav · first visit lands here on every pointer · `#` nothing. *Why it leads:* what is due is the question the app is opened for.
+
+```mermaid
+flowchart LR
+  s6["List"]
+  s7["Detail split"]
+  s8["Calendar lane"]
+  s1(["Nav · Chrome"])
+  s15(["Top strip · Shared strip above every list"])
+  s17(["Scope switch · Shared strip above every list"])
+  s18(["Person row · Shared strip above every list"])
+  s22(["Row · The task row"])
+  s50(["Command palette · Search and command palette"])
+  s73(["Sign-in · Sign-in and team name"])
+  s74(["Name picker · Sign-in and team name"])
+  s1 --> s6
+  s6 --> s15
+  s6 --> s17
+  s6 --> s18
+  s6 --> s8
+  s6 --> s22
+  s6 -->|"desktop"| s7
+  s50 --> s6
+  s73 --> s6
+  s74 --> s6
+```
+
+### `today.list` List
+
+- **Root:** `data-surface`
+- **Holds:** the [top strip](#shared-strip-above-every-list), person row when there are two or more members, **Tasks · Issues · All**, then the calendar lane and four horizons.
+- **Does:** the horizons are **Due** (overdue first, then today; no heading, the header names it), **Soon** (tomorrow to a week out, open), **Later** and **No date** (folded until opened; a text filter opens them; each shows only when it holds something). Inside a horizon rows run by due day, no project first, project A–Z, title.
+- **States:** empty install shows *Add your first task* with an **Add a task** button; a filter with no match shows an empty line; counts sit on the disclosure headers.
+- **Desktop:** the list scrolls inside its own box under the strip at 1024px and up.
+- **Leads to:**
+  - [Top strip](#striptop-top-strip)
+  - [Scope switch](#stripscope-scope-switch)
+  - [Person row](#stripperson-row-person-row)
+  - [Calendar lane](#todaycalendar-lane-calendar-lane)
+  - [Row](#rowitem-row)
+  - [Detail split](#todaydetail-split-detail-split) (desktop)
+
+### `today.detail-split` Detail split
+
+- **Root:** `data-surface`
+- **Phone:** the drawer is a full-screen sheet.
+- **Desktop:** (1024px and up): the right half is the [drawer](#task-drawer), never empty while a task is due: arriving on Today shows the first due task without writing a `#task/` link. With nothing due, or after closing, it reads *Select a task to see its details*. Leaving Today closes it.
+
+### `today.calendar-lane` Calendar lane
+
+- **Root:** `data-surface`
+- **Reach:** above the horizons when the calendar block and an ICS address are configured.
+- **Holds:** an all-day band of chips, timed events with their span, an event count.
+- **Does:** read-only; nothing is written back.
+- **States:** a failing feed shows a notice titled by cause (*address refused*, *unreachable*, *did not answer in time*, *feed unreadable*) with the time it began failing and the last good copy kept; a feed that parses but has events it could not evaluate says how many (*N recurring event(s) could not be checked — open the calendar itself*). Settings → Calendar holds the status and a refresh.
+- **Why:** your real calendar beside the task list, without any write path.
+
+## Board
+
+```mermaid
+flowchart LR
+  s9["Board"]
+  s10["Mode line"]
+  s11["Week lanes"]
+  s12["Status columns"]
+  s13["AI suggestion strip"]
+  s14["Row panel"]
+  s1(["Nav · Chrome"])
+  s52(["Journal · Done journal"])
+  s15(["Top strip · Shared strip above every list"])
+  s17(["Scope switch · Shared strip above every list"])
+  s18(["Person row · Shared strip above every list"])
+  s22(["Row · The task row"])
+  s1 --> s9
+  s9 -->|"Done column: journal"| s52
+  s9 --> s15
+  s9 --> s17
+  s9 --> s18
+  s9 --> s22
+  s9 --> s10
+  s9 -->|"Week mode"| s11
+  s9 -->|"Status mode"| s12
+  s12 -->|"open a task"| s14
+  s12 -->|"Inbox rows"| s13
+```
+
+### `board.pane` Board
+
+- **Root:** `data-surface`
+- **Reach:** nav.
+- **Holds:** the top strip, the person row and scope switch, the mode line, then the week lanes or the status columns. Two-dimensional, so it spans the window on desktop.
+- **Leads to:**
+  - [Journal](#journalpane-journal) (Done column: journal)
+  - [Top strip](#striptop-top-strip)
+  - [Scope switch](#stripscope-scope-switch)
+  - [Person row](#stripperson-row-person-row)
+  - [Row](#rowitem-row)
+  - [Mode line](#boardmode-line-mode-line)
+  - [Week lanes](#boardweek-lanes-week-lanes) (Week mode)
+  - [Status columns](#boardstatus-columns-status-columns) (Status mode)
+
+### `board.mode-line` Mode line
+
+- **Root:** `data-surface`
+- **Holds:** under the strip: person row, scope, then **Week · Status** (remembered per device), and in Status mode while the Inbox holds tasks, **Triage** (AI suggestions for every Inbox task; disabled with its reason on hover while Local AI is off or a run is in flight).
+
+### `board.week-lanes` Week lanes
+
+- **Root:** `data-surface`
+- **Holds:** **Today** (overdue included) · **Tomorrow** · **This week** · **This weekend** · **Next week** · **Later** (no-date tasks close it under a *No date* sub-heading).
+- **Does:** drag a row onto a lane to re-date it to that lane's first day (toast and Undo, nothing but the due date changes).
+- **Phone:** one list of lane sections, rows swipe, no drag.
+- **Desktop:** lanes side by side, each scrolling under a sticky header with its count; an empty lane collapses to its header and stays a drop target.
+- **Why:** every date belongs to exactly one lane, so *This week* and *This weekend* show only while they have days left after tomorrow.
+
+### `board.status-columns` Status columns
+
+- **Root:** `data-surface`
+- **Holds:** **Inbox · Todo · Standby · Done today**; drag a row to change its status; ticking statuses in the filter sheet hides the other columns. The Done column head carries a **journal** link ([journal](#done-journal)).
+- **Phone:** a one-column scroll-snap carousel whose count strip (*Inbox 4 · Todo 30 …*) is also the column switcher; no row swipe here because the columns already swipe sideways.
+- **Leads to:**
+  - [Row panel](#boardrow-panel-row-panel) (open a task)
+  - [AI suggestion strip](#boardai-suggestion-ai-suggestion-strip) (Inbox rows)
+
+### `board.ai-suggestion` AI suggestion strip
+
+- **Root:** none — a line the row builder adds under an Inbox row.
+- **Reach:** under an Inbox row after Triage staged a suggestion.
+- **Holds:** a one-line summary (parent · priority · due · person) with its reason on hover and **Accept** and **Reject** icon buttons.
+- **Why:** nothing is applied until accepted.
+
+### `board.row-panel` Row panel
+
+- **Root:** none — the task drawer ([`drawer.panel`](#task-drawer)) placed beside the lanes.
+- **Phone:** full-screen sheet.
+- **Desktop:** opening a card shows the drawer as a 440px side panel beside the lanes.
+
+## Shared strip above every list
+
+```mermaid
+flowchart LR
+  s15["Top strip"]
+  s16["Filter sheet"]
+  s17["Scope switch"]
+  s18["Person row"]
+  s19["People sheet"]
+  s20["Select mode and bulk bar"]
+  s21["Quick-add dialog"]
+  s6(["List · Today"])
+  s9(["Board · Board"])
+  s26(["Date sheet / popover · The task row"])
+  s75(["Confirm dialog · Overlay catalog"])
+  s41(["Folder picker · Task drawer"])
+  s49(["Search tab · Search and command palette"])
+  s52(["Journal · Done journal"])
+  s6 --> s15
+  s6 --> s17
+  s6 --> s18
+  s9 --> s15
+  s9 --> s17
+  s9 --> s18
+  s15 --> s16
+  s15 --> s21
+  s15 --> s20
+  s18 -->|"+N more"| s19
+  s20 --> s26
+  s20 --> s75
+  s21 --> s41
+  s49 --> s17
+  s52 --> s15
+```
+
+### `strip.top` Top strip
+
+- **Root:** none — one strip sits in each of Today, Board and the journal, so no single element carries it.
+- **Holds:** on one line: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
+- **Leads to:**
+  - [Filter sheet](#stripfilter-sheet-filter-sheet)
+  - [Quick-add dialog](#stripquick-add-quick-add-dialog)
+  - [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar)
+
+### `strip.filter-sheet` Filter sheet
+
+- **Root:** `data-surface`
+- **Reach:** filter button.
+- **Holds:** **sort** (Due · Priority · Modified · Created · Title), **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**.
+- **Does:** applies live; the state is the URL. Clear leaves the scope and person row alone.
+- **Phone:** a full-screen sheet with ticks two to a line. In the journal, status, due, modified and sort are hidden.
+
+### `strip.scope` Scope switch
+
+- **Root:** `data-surface`
+- **Holds:** **Tasks · Issues · All** under the strip on Today, Board and Search (`?scope=`). Tasks (default) leaves out issues the forge sync brings in.
+
+### `strip.person-row` Person row
+
+- **Root:** `data-surface`
+- **Reach:** two or more members.
+- **Holds:** **Mine** · each member · **Everyone**; with more than three other members the row keeps the picked and recent ones and folds the rest into **+N more**.
+- **Does:** one tap picks one person; **+N more** opens **strip.people-sheet**. Mine and Everyone are per device (`?whose=everyone`); picked members ride `?owner=`. Search ignores the row and always covers everyone.
+- **Why:** each phone signs in as its own member, so Mine needs no picker step.
+- **Leads to:** [People sheet](#strippeople-sheet-people-sheet) (+N more)
+
+### `strip.people-sheet` People sheet
+
+- **Root:** `data-surface`
+- **Reach:** **+N more**.
+- **Holds:** a name filter, one tick per member, **Done**. The only place several people are picked at once; an emptied set falls back to Mine.
+
+### `strip.bulk-bar` Select mode and bulk bar
+
+- **Root:** `data-surface`
+- **Reach:** **Select**.
+- **Does:** every row becomes a tick target (drag and phone swipe off; one selection shared across Today and Board). With one or more ticked the bar replaces the strip: *N selected* · **Move** (date sheet, [date sheet](#the-task-row)) · **Set status…** (native select: inbox, todo, standby, complete, done, cancelled) · **Set owner…** (two or more members) · **Delete** (confirm names the count, projects whose children go too, and synced issue tasks the next sync would bring back) · **Leave select mode**. Escape leaves.
+- **States:** a task that fails in a bulk write is named in the toast.
+- **Leads to:**
+  - [Date sheet / popover](#rowdate-date-sheet--popover)
+  - [Confirm dialog](#confirmdialog-confirm-dialog)
+
+### `strip.quick-add` Quick-add dialog
+
+- **Root:** `data-surface`
+- **Reach:** **+** · palette *New task* · no-tasks button.
+- **Holds:** the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then description, due, starts, status, folder (typed or **Find in folder index**), one link (URL and label). The parsed parent shows as a chip, a parent that matches nothing as a red chip and nothing is created.
+- **Does:** **Add** or Enter creates and focuses the row; Escape, the backdrop and × discard.
+- **States:** dictation shows listening, settling and unreachable-service states. See [Views](views.md#views).
+- **Leads to:** [Folder picker](#folderpicker-folder-picker)
+
+## The task row
+
+One row in Today, Board, Search task hits and the journal.
+
+```mermaid
+flowchart LR
+  s22["Row"]
+  s23["Completion circle"]
+  s24["Move verb"]
+  s25["Row menu (⋯)"]
+  s26["Date sheet / popover"]
+  s27["Swipe"]
+  s6(["List · Today"])
+  s9(["Board · Board"])
+  s20(["Select mode and bulk bar · Shared strip above every list"])
+  s28(["Task drawer · Task drawer"])
+  s49(["Search tab · Search and command palette"])
+  s52(["Journal · Done journal"])
+  s6 --> s22
+  s9 --> s22
+  s20 --> s26
+  s22 --> s25
+  s22 --> s26
+  s22 -->|"tap / Enter"| s28
+  s22 -->|"mouse"| s23
+  s22 -->|"mouse"| s24
+  s22 -->|"touch"| s27
+  s25 --> s26
+  s25 --> s28
+  s49 --> s22
+  s52 --> s22
+```
+
+### `row.item` Row
+
+- **Root:** `data-surface`
+- **Holds:** leading **project pill** (Today and Board) · one-line title · one meta line (context name, then due, exception chips, counts). Tapping anywhere opens the drawer.
+- **Why:** nothing on the meta line is a target; 60px a row.
+- **Leads to:**
+  - [Row menu (⋯)](#rowmenu-row-menu-)
+  - [Date sheet / popover](#rowdate-date-sheet--popover)
+  - [Task drawer](#drawerpanel-task-drawer) (tap / Enter)
+  - [Completion circle](#rowcomplete-completion-circle) (mouse)
+  - [Move verb](#rowmove-move-verb) (mouse)
+  - [Swipe](#rowswipe-swipe) (touch)
+
+### `row.complete` Completion circle
+
+- **Root:** none — a control on the row. *Mouse only.* Completes an open task (a recurring one rolls) or reopens a closed one, with Undo.
+
+### `row.move` Move verb
+
+- **Root:** none — a control on the row. *Mouse only, open rows outside Board lanes.* A calendar glyph button; opens the date popover.
+- **Why:** re-dating is most of what is done to a task.
+
+### `row.menu` Row menu (⋯)
+
+- **Root:** `data-surface`
+- **Reach:** kebab · right-click · `.` · the menu key on a focused row.
+- **Holds:** the actions in the order set in Settings → Row actions: Complete or Reopen, **Move…**, Status (inbox, standby, cancelled, todo as it applies), **Cycle priority**, Due tomorrow, Due next week; then, when the task has them, **Open folder**, **Open AI conversation** (and **Resume in CLI** for a resumable session), **Open issue `repo#N`**; last **Open details**.
+- **Why:** one table of actions (`actions.js`) feeds the menu, the keys, the palette and the swipes.
+- **Leads to:**
+  - [Date sheet / popover](#rowdate-date-sheet--popover)
+  - [Task drawer](#drawerpanel-task-drawer)
+
+### `row.date` Date sheet / popover
+
+- **Root:** `data-surface`
+- **Reach:** the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move, the drawer's quick moves.
+- **Holds:** **Tomorrow · This weekend · Next week · Today**, each with the date it lands on, then **Pick a date…** (a native date field) and **No date**.
+- **Phone:** a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
+- **Desktop:** a popover next to the row.
+
+### `row.swipe` Swipe
+
+- **Root:** none — a gesture, with no element of its own. *Touch only, open rows in a vertical list.* Right completes, left opens the date sheet by default; both are configurable.
+- **Holds:** Starts away from the screen edge, locks sideways, commits past 96px or a quick flick, never in the phone Board's Status carousel. Revealed label turns to *Release to …* when armed.
+
+## Task drawer
+
+```mermaid
+flowchart LR
+  s28["Task drawer"]
+  s29["Head"]
+  s30["Title"]
+  s31["Due + quick moves"]
+  s32["Status, Priority, Owner"]
+  s33["Links"]
+  s34["Description"]
+  s35["Comments"]
+  s36["Activity"]
+  s37["Parent picker"]
+  s38["More fields"]
+  s39["Issue panel"]
+  s40["Delete task"]
+  s41["Folder picker"]
+  s21(["Quick-add dialog · Shared strip above every list"])
+  s22(["Row · The task row"])
+  s25(["Row menu (⋯) · The task row"])
+  s75(["Confirm dialog · Overlay catalog"])
+  s76(["Folder and conversation popover · Overlay catalog"])
+  s49(["Search tab · Search and command palette"])
+  s50(["Command palette · Search and command palette"])
+  s71(["Email archiving report · Settings"])
+  s21 --> s41
+  s22 -->|"tap / Enter"| s28
+  s25 --> s28
+  s28 --> s37
+  s28 --> s41
+  s28 --> s75
+  s28 -->|"a block inside the drawer"| s32
+  s28 -->|"a block inside the drawer"| s34
+  s28 -->|"a block inside the drawer"| s30
+  s28 -->|"a block inside the drawer"| s33
+  s28 -->|"a block inside the drawer"| s36
+  s28 -->|"a block inside the drawer"| s29
+  s28 -->|"a block inside the drawer"| s38
+  s28 -->|"a block inside the drawer"| s31
+  s28 -->|"a block inside the drawer"| s39
+  s28 -->|"a block inside the drawer"| s40
+  s28 -->|"a block inside the drawer"| s35
+  s29 -->|"Change parent"| s37
+  s33 -->|"a folder or conversation chip"| s76
+  s49 --> s28
+  s50 --> s28
+  s71 --> s41
+```
+
+### `drawer.panel` Task drawer
+
+- **Root:** `data-surface`
+- **Reach:** a row tap or Enter · menu *Open details* · `#task/<id>` · Today's auto-opened first task.
+- **Holds:** the blocks below, in order.
+- **Phone:** full-screen. Escape or **Close** closes it (then leaves Select mode).
+- **Desktop:** side panel or split pane;
+- **Leads to:**
+  - [Parent picker](#drawerparent-picker-parent-picker)
+  - [Folder picker](#folderpicker-folder-picker)
+  - [Confirm dialog](#confirmdialog-confirm-dialog)
+  - [Status, Priority, Owner](#drawerfields-status-priority-owner) (a block inside the drawer)
+  - [Description](#drawerdescription-description) (a block inside the drawer)
+  - [Title](#drawertitle-title) (a block inside the drawer)
+  - [Links](#drawerlinks-links) (a block inside the drawer)
+  - [Activity](#draweractivity-activity) (a block inside the drawer)
+  - [Head](#drawerhead-head) (a block inside the drawer)
+  - [More fields](#drawermore-more-fields) (a block inside the drawer)
+  - [Due + quick moves](#drawerdue-due--quick-moves) (a block inside the drawer)
+  - [Issue panel](#drawerissue-issue-panel) (a block inside the drawer)
+  - [Delete task](#drawerdelete-delete-task) (a block inside the drawer)
+  - [Comments](#drawercomments-comments) (a block inside the drawer)
+
+### `drawer.head` Head
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** breadcrumb (clickable), **Change parent** (opens [parent picker](#task-drawer)), **Remove parent** (only with a parent; no confirm, no Undo), **Close**, and the task's number.
+- **Leads to:** [Parent picker](#drawerparent-picker-parent-picker) (Change parent)
+
+### `drawer.title` Title
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** an editable field with a visible boundary.
+
+### `drawer.due` Due + quick moves
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** a date field with a calendar button, then *Tomorrow · This weekend · Next week · Today* with their dates. Due comes first because most edits push it out.
+
+### `drawer.fields` Status, Priority, Owner
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** native selects; Owner only with two or more members (an `owner old → new` activity row names who).
+
+### `drawer.links` Links
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** pills for the folder, the issue and every link; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy).
+- **Leads to:** [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) (a folder or conversation chip)
+
+### `drawer.description` Description
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** markdown, a pencil toggles edit and preview.
+
+### `drawer.comments` Comments
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** newest first, a composer (**Send**, Ctrl+Enter), per comment a **pencil** (edit in place, Ctrl+Enter saves, Escape cancels) and a **trash** (asks first, no undo); URLs, `{folder}` refs and `repo#N` render as chips.
+
+### `drawer.activity` Activity
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** `field old → new · actor · time`; issue-sync rows fold behind *Show N sync updates*.
+
+### `drawer.parent-picker` Parent picker
+
+- **Root:** `data-surface`
+- **Holds:** a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*) over every open task in tree order, indented, each with its path; the task itself, its descendants and closed tasks are not offered. Tap or Enter on the first match files it; a cycle is refused with a toast. The one way to re-parent.
+
+### `drawer.more` More fields
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder** (typed ref or **Find in folder index**), **Edit links** (label edit, remove, **Add link**), **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
+
+### `drawer.issue` Issue panel
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** a linked issue shows its provider glyph, `repo#N`, state, labels, last-synced time, **Sync now** and **Unlink**; a plain task shows **Create issue** (repo from the last-seen list or typed) and **Link existing** (`owner/repo#N` or URL). Gone when Issue sync is off. See [Issues as tasks](issues-as-tasks.md#issues-as-tasks).
+
+### `drawer.delete` Delete task
+
+- **Root:** none — it opens [`confirm.dialog`](#overlay-catalog).
+- **Holds:** last and quiet. A confirm names the task and its subtree, says there is no trash and no undo, and for a synced task with an open issue warns the next sync recreates it. A toast says how much went.
+
+### `folder.picker` Folder picker
+
+- **Root:** `data-surface`
+- **Holds:** a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel.
+- **States:** the index not configured or unavailable says so instead of listing nothing.
+
+## Time
+
+```mermaid
+flowchart LR
+  s42["Time"]
+  s43["Log"]
+  s44["Totals"]
+  s45["History"]
+  s46["History row menu (⋮)"]
+  s47["Time dialogs"]
+  s48["Person picker"]
+  s1(["Nav · Chrome"])
+  s62(["Time categories sheet · Settings"])
+  s1 --> s42
+  s42 --> s43
+  s42 --> s44
+  s42 --> s45
+  s42 --> s48
+  s43 --> s47
+  s45 --> s47
+  s45 --> s46
+  s62 --> s47
+```
+
+### `time.pane` Time
+
+- **Root:** `data-surface`
+- **Reach:** nav.
+- **Holds:** the **Log · Totals · History** segment under the header and the view it picks.
+- **States:** hidden when its block is off. One-dimensional (772px measure). See [Time tracking](time-tracking.md#time-tracking).
+- **Leads to:**
+  - [Log](#timelog-log)
+  - [Totals](#timetotals-totals)
+  - [History](#timehistory-history)
+  - [Person picker](#timeperson-picker-person-picker)
+
+### `time.log` Log
+
+- **Root:** `data-surface`
+- **Holds:** *Today so far* (per person, with each person's running state), **Start a timer** (Recent first, then each area with its categories as large tiles, each with its subtitle), **Add time already spent**.
+- **Does:** tapping a tile starts a timer; with one running, a **Stop and start …** choice replaces the timer in one call. A running timer's tile reads *Running now* and the card shows **Stop and save** and **Discard** (immediate, with a *Timer discarded* toast and no undo). Past the long-timer limit the card asks whether the timer was forgotten and lets you correct the minutes. A running timer is the server's: a reload or another device shows the same one.
+- **Leads to:** [Time dialogs](#timedialog-time-dialogs)
+
+### `time.totals` Totals
+
+- **Root:** `data-surface`
+- **Holds:** **Today · 7 days · 30 days · All**, an **Area** filter, **Me · Everyone** when there are several people, a total, per-category bars, and on the compare area with two or more people the head-to-head, the split bar, days logged per person, a **How the comparison works** info dialog and **Guess your share** (**Lock in**; the other guess stays hidden until yours is locked), **Download CSV**. People differ by initials and fill, never by colour.
+
+### `time.history` History
+
+- **Root:** `data-surface`
+- **Holds:** every entry by day with its clock range or, for an imported entry, its duration; each row's **More actions** holds **Edit**, **Start again** and **Delete** (confirmed).
+- **Leads to:**
+  - [Time dialogs](#timedialog-time-dialogs)
+  - [History row menu (⋮)](#timehistory-menu-history-row-menu-)
+
+### `time.history-menu` History row menu (⋮)
+
+- **Root:** `data-surface`
+- **Reach:** a history row's **More actions**.
+- **Holds:** **Edit**, **Start again**, **Delete** (confirmed).
+
+### `time.dialog` Time dialogs
+
+- **Root:** `data-surface`
+- **Holds:** **Add time already spent / Edit entry** (person, category, day with Today and Yesterday, start, minutes with 15/30/45/60/90/120 chips, note), **A timer is running** (the switch choice), text prompts and option pickers for categories, and a plain info dialog. Closed by × or Escape.
+
+### `time.person-picker` Person picker
+
+- **Root:** `data-surface`
+- **Holds:** on first visit when a team sign-in names nobody in the install, a one-time question of who is logging, kept in memory only.
+
+## Search and command palette
+
+```mermaid
+flowchart LR
+  s49["Search tab"]
+  s50["Command palette"]
+  s51["Keyboard shortcuts sheet"]
+  s1(["Nav · Chrome"])
+  s17(["Scope switch · Shared strip above every list"])
+  s22(["Row · The task row"])
+  s28(["Task drawer · Task drawer"])
+  s52(["Journal · Done journal"])
+  s6(["List · Today"])
+  s53(["Settings · Settings"])
+  s54(["Settings sheet · Settings"])
+  s1 --> s49
+  s49 --> s17
+  s49 --> s22
+  s49 --> s28
+  s49 --> s51
+  s50 -->|"Journal command"| s52
+  s50 --> s28
+  s50 --> s6
+  s50 --> s53
+  s54 --> s50
+```
+
+### `search.pane` Search tab
+
+- **Root:** `data-surface`
+- **Reach:** nav · `#search` · Go to Search.
+- **Holds:** an auto-focused box (a **Clear search** button that shows only while the box holds text, a filter button, and the scope switch under it), a count, and results. *Clear search* is a 44px target; one tap empties the query, the count and the results, and keeps focus in the box (Escape in the box does the same). A group appears only for a kind with hits (Tasks, Folders, Emails, Issues), open, under an uppercase header with its count; every other kind folds into one line (*No matches in …*, *Not set up: …*). Task hits are the standard row plus the matched snippet, exact first, then *Partial matches*, then *Similar matches*; other hits are a title and one meta line whose single control opens them.
+- **States:** folder-explorer answering badly is its own line per kind, never *No matches*: *unreachable*, *indexing*, *not set up*, *failed*, with the reason; a broken index is shown in the danger tone. *Keys:* Down from the box focuses the first row, Up and Down move, Enter opens, Escape or `/` returns to the box.
+- **Why:** the 200ms debounce and the *`?q=`* URL make a search shareable.
+- **Leads to:**
+  - [Scope switch](#stripscope-scope-switch)
+  - [Row](#rowitem-row)
+  - [Task drawer](#drawerpanel-task-drawer)
+  - [Keyboard shortcuts sheet](#keyshelp-keyboard-shortcuts-sheet)
+
+### `search.palette` Command palette
+
+- **Root:** `data-surface`
+- **Reach:** Ctrl+K or Cmd+K from any tab · Settings → Command palette → **Open command palette** (the phone's only way; the header has no button).
+- **Holds:** a box; plain text jumps to a task (top eight: title, breadcrumb, status); `>` lists commands. Commands: *New task* · the row actions for the focused or ticked task (first while one is targeted) · *Go to Today / Board / Time / Archive / Search / Settings* · *Journal* · *Filter: status inbox / todo / standby / done / cancelled* · *Filter: clear* · *Sync issues* · *Export mirror* · *Open folder of current task* · *Toggle theme* · *Sign out*. Commands of a switched-off block are omitted. Up/Down move, Enter runs, Escape closes.
+- **Phone:** a full-width sheet.
+- **Leads to:**
+  - [Journal](#journalpane-journal) (Journal command)
+  - [Task drawer](#drawerpanel-task-drawer)
+  - [List](#todaylist-list)
+  - [Settings](#settingspane-settings)
+
+### `keys.help` Keyboard shortcuts sheet
+
+- **Root:** `data-surface`
+- **Reach:** `?`. A list of every key (below), including the ones the palette shows with their key.
+
+## Done journal
+
+```mermaid
+flowchart LR
+  s52["Journal"]
+  s9(["Board · Board"])
+  s50(["Command palette · Search and command palette"])
+  s15(["Top strip · Shared strip above every list"])
+  s22(["Row · The task row"])
+  s9 -->|"Done column: journal"| s52
+  s50 -->|"Journal command"| s52
+  s52 --> s15
+  s52 --> s22
+```
+
+### `journal.pane` Journal
+
+- **Root:** `data-surface`
+- **Reach:** the Board's Done column head (**journal**) · palette *Journal* · `#journal`, `#journal/task/<id>`.
+- **Holds:** the shared text strip and filter sheet (project, person, text), a **Show cancelled** toggle, closed tasks newest day first under one heading per local day (*Yesterday · Tue 1 Sep · 2 done*), cancelled ones muted, **Show the week before** to widen by seven days.
+- **Does:** the filled circle reopens a task in place; the row opens the drawer.
+- **States:** it says it has reached the end only once the server confirms nothing closed earlier; an install with nothing closed says so. Any tab press leaves.
+- **Why:** a reading surface (the answer to "what happened this week"), not a tab.
+- **Leads to:**
+  - [Top strip](#striptop-top-strip)
+  - [Row](#rowitem-row)
+
+## Settings
+
+| Group | Row | Value shown | Sheet holds |
+| --- | --- | --- | --- |
+| This device | **Text size** | Small / Default / Large (in place, no sheet) | a three-way control; scales rem-based type, not rows or icons |
+| | **Row actions** | *Default* | a select for **swipe right** and one for **swipe left** (any action or nothing), then every row action with **Show in the menu**, **Move up**, **Move down**, and **Reset to the defaults**; an action a swipe runs always stays in the menu |
+| | **Command palette** | *Ctrl+K* | a line of explanation and **Open command palette** |
+| | **Phone access** | the client (*this PC* or the member) | who you are signed in as, whether HTTPS is on, whether a token and a password are set (and the script that sets them), the team line *you are X · change name* with team mode, install hints for iOS and Android, **Sign out on this device** (only for a cookie session) |
+| Sync | **Issues as tasks** | on / off / failing | provider, repos, next and last pass and result, **Sync now** |
+| | **Calendar** | on / error / unknown | the feed host only (never the address), refresh cadence, last fetch, failure cause, **Refresh now** |
+| Email | **Capture into Inbox** | on / off | the last flagged-mail pass and its state, **Check now** |
+| | **Email archiving** | off / ready / running / *N need you* | **Archive Inbox now**, a first-N bound, the archiver state, the run picker, **Accept all (N)**, the run report (below) |
+| Tools | **Time categories** | *4 areas · 13 categories* | areas and their categories; **Add area**; per area **Rename · Add category · Move up/down · Archive**; per category **Edit · Move up/down · Move to another area · Archive** and **Delete** only while nothing points at it; dialogs carry the subtitle field |
+| | **Search** | indexed / not set up | the four indexes with their state and reason |
+| | **Folder opener** | on / not installed | the install command with **Copy command**, whether the opener is installed on this PC, and a disclosure *Uninstall · folder paths for each PC* with **Copy** |
+| | **Voice quick-add** | on / off | the transcription chain, its state and reason |
+| | **AI Inbox triage** | on / off | the local-AI state and reason, what triage sends and that suggestions stay staged |
+| Available features | one switch per block (Time tracker · Calendar lane · Issue sync · Email and folders · Local AI · Mirror and backups) | on / off, or *on, unavailable here: reason* | a switch that applies at once, no reload; a block whose dependency is missing says why |
+| This install | **Your name** | the saved name or *not set* | a field and **Save name**; blank clears it, the line under it shows the name an unsigned write uses |
+| | **Database** | schema version | where config and data live, the schema version |
+| | **Mirror and backup** | off / on | what is exported and backed up, import conflicts with **Clear import conflicts** |
+
+Each sheet is one entry named by the row that opens it; what it holds is the table's *Sheet holds* column.
+
+```mermaid
+flowchart LR
+  s53["Settings"]
+  s54["Settings sheet"]
+  s55["Row actions sheet"]
+  s56["Command palette sheet"]
+  s57["Phone access sheet"]
+  s58["Issues as tasks sheet"]
+  s59["Calendar sheet"]
+  s60["Capture into Inbox sheet"]
+  s61["Email archiving sheet"]
+  s62["Time categories sheet"]
+  s63["Search sheet"]
+  s64["Folder opener sheet"]
+  s65["Voice quick-add sheet"]
+  s66["AI Inbox triage sheet"]
+  s67["Your name sheet"]
+  s68["Database sheet"]
+  s69["Mirror and backup sheet"]
+  s70["Time categories menu (⋮)"]
+  s71["Email archiving report"]
+  s72["Report row menu (⋮)"]
+  s0(["Header · Chrome"])
+  s50(["Command palette · Search and command palette"])
+  s47(["Time dialogs · Time"])
+  s41(["Folder picker · Task drawer"])
+  s75(["Confirm dialog · Overlay catalog"])
+  s0 --> s53
+  s50 --> s53
+  s53 --> s54
+  s54 --> s71
+  s54 --> s62
+  s54 --> s50
+  s54 --> s55
+  s54 --> s67
+  s54 --> s64
+  s54 --> s59
+  s54 --> s56
+  s54 --> s57
+  s54 --> s66
+  s54 --> s68
+  s54 --> s65
+  s54 --> s58
+  s54 --> s63
+  s54 --> s69
+  s54 --> s61
+  s54 --> s60
+  s61 -->|"the report below"| s71
+  s62 --> s47
+  s62 -->|"the ⋮ beside an area or category"| s70
+  s71 --> s41
+  s71 --> s75
+  s71 -->|"the ⋮ on a desktop row"| s72
+```
+
+### `settings.pane` Settings
+
+- **Root:** `data-surface`
+- **Reach:** the header gear · palette *Go to Settings* · `#settings`. A pane with no tab. Six inset groups; each row shows its lead glyph, label, its current value (in the attention or danger tone when it is an exception) and a chevron. A row opens its **sheet**: *Desktop (1024px and up)* the detail pane beside the list at 1 : 1.5 with the row tinted (the Email archiving report spans the window); *Phone* full-screen with **×** and **Done**. `#settings/<row>` keeps a sheet across reload; Back closes it.
+- **Leads to:** [Settings sheet](#settingssheet-settings-sheet)
+
+### `settings.sheet` Settings sheet
+
+- **Root:** `data-surface`
+- **Reach:** any Settings row that opens something · `#settings/<row>`.
+- **Holds:** a title, **×**, and the one sheet its row names (below).
+- **Does:** **Done**, **×** and Back close it.
+- **Phone:** full-screen.
+- **Desktop:** the detail pane beside the list.
+- **Leads to:**
+  - [Email archiving report](#archivereport-email-archiving-report)
+  - [Time categories sheet](#settingstime-categories-time-categories-sheet)
+  - [Command palette](#searchpalette-command-palette)
+  - [Row actions sheet](#settingsrow-actions-row-actions-sheet)
+  - [Your name sheet](#settingsyour-name-your-name-sheet)
+  - [Folder opener sheet](#settingsopener-folder-opener-sheet)
+  - [Calendar sheet](#settingscalendar-calendar-sheet)
+  - [Command palette sheet](#settingspalette-command-palette-sheet)
+  - [Phone access sheet](#settingsaccess-phone-access-sheet)
+  - [AI Inbox triage sheet](#settingsai-triage-ai-inbox-triage-sheet)
+  - [Database sheet](#settingsdatabase-database-sheet)
+  - [Voice quick-add sheet](#settingsvoice-voice-quick-add-sheet)
+  - [Issues as tasks sheet](#settingsissues-issues-as-tasks-sheet)
+  - [Search sheet](#settingssearch-search-sheet)
+  - [Mirror and backup sheet](#settingsmirror-mirror-and-backup-sheet)
+  - [Email archiving sheet](#settingsarchive-email-archiving-sheet)
+  - [Capture into Inbox sheet](#settingscapture-capture-into-inbox-sheet)
+
+### `settings.row-actions` Row actions sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Row actions · `#settings/rows`.
+
+### `settings.palette` Command palette sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Command palette · `#settings/palette`.
+
+### `settings.access` Phone access sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Phone access · `#settings/access`.
+
+### `settings.issues` Issues as tasks sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Issues as tasks · `#settings/issues`.
+- **States:** gone when Issue sync is off.
+
+### `settings.calendar` Calendar sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Calendar · `#settings/calendar`.
+- **States:** gone when the Calendar lane is off.
+
+### `settings.capture` Capture into Inbox sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Capture into Inbox · `#settings/capture`.
+- **States:** gone when Email and folders is off.
+
+### `settings.archive` Email archiving sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Email archiving · `#settings/archive`.
+- **Holds:** the run controls and the report below.
+- **Desktop:** spans the window.
+- **Leads to:** [Email archiving report](#archivereport-email-archiving-report) (the report below)
+
+### `settings.time-categories` Time categories sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Time categories · `#settings/timecats`.
+- **States:** gone when Time is off.
+- **Leads to:**
+  - [Time dialogs](#timedialog-time-dialogs)
+  - [Time categories menu (⋮)](#settingstime-menu-time-categories-menu-) (the ⋮ beside an area or category)
+
+### `settings.search` Search sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Search · `#settings/search`.
+
+### `settings.opener` Folder opener sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Folder opener · `#settings/opener`.
+
+### `settings.voice` Voice quick-add sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Voice quick-add · `#settings/voice`.
+- **States:** gone when Local AI is off.
+
+### `settings.ai-triage` AI Inbox triage sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → AI Inbox triage · `#settings/ai`.
+- **States:** gone when Local AI is off.
+
+### `settings.your-name` Your name sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Your name · `#settings/yourname`.
+
+### `settings.database` Database sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Database · `#settings/install`.
+
+### `settings.mirror` Mirror and backup sheet
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Mirror and backup · `#settings/mirror`.
+- **States:** gone when Mirror and backups is off.
+
+### `settings.time-menu` Time categories menu (⋮)
+
+- **Root:** `data-surface`
+- **Reach:** the ⋮ beside an area or a category in the Time categories sheet.
+- **Holds:** Rename or Edit, Move up, Move down, Move to another area, Archive, and Delete only while nothing points at it.
+
+### `archive.report` Email archiving report
+
+- **Root:** `data-surface`
+- **Reach:** Settings → Email archiving · palette *Go to Archive*.
+- **States:** *No run yet*, running (the run button reads *Archiving…* and is disabled), not configured with the reason, a run that failed with its reason. See [Archive the Inbox](inbox-archive.md#archive-the-inbox).
+- **Phone:** cards, with the review levels behind **Review**. Each row's **⋮** offers exactly what its state allows: **Accept** (a mail that needed a human), **Move to… / File it…** (the ranked candidates or any folder through the folder picker, with an optional hint the next run remembers), **Retry** (the file was written before Outlook refused the move), **Revert** (files deleted, mail back to the Inbox; only a filed row). A run picker lists earlier runs and **Accept all (N)** clears a reviewed batch; anything touching files asks first.
+- **Desktop:** a table (subject with who and when · destination as its last three components · files as chips, the first shown and *+N more* · confidence · why · state).
+- **Leads to:**
+  - [Folder picker](#folderpicker-folder-picker)
+  - [Confirm dialog](#confirmdialog-confirm-dialog)
+  - [Report row menu (⋮)](#archiverow-menu-report-row-menu-) (the ⋮ on a desktop row)
+
+### `archive.row-menu` Report row menu (⋮)
+
+- **Root:** `data-surface`
+- **Reach:** the ⋮ on a desktop report row.
+- **Holds:** exactly the actions the row's state allows (see the report above).
+
+## Sign-in and team name
+
+```mermaid
+flowchart LR
+  s73["Sign-in"]
+  s74["Name picker"]
+  s6(["List · Today"])
+  s73 --> s74
+  s73 --> s6
+  s74 --> s6
+```
+
+### `login.card` Sign-in
+
+- **Root:** `data-surface`
+- **Reach:** (`/login`, public)
+- **Holds:** a card with one field (*Token or password*) and **Sign in**; a wrong secret says *wrong token or password*. A token or password sets a 90-day cookie. With team mode on, the team password signs in and leads to **login.name-picker**. Not reached on the install's own PC, which needs no credential.
+- **Leads to:**
+  - [Name picker](#loginname-picker-name-picker)
+  - [List](#todaylist-list)
+
+### `login.name-picker` Name picker
+
+- **Root:** `data-surface`
+- **Holds:** *Who are you?* with one button per member (initials and name, the first focused). It sets a label recorded on comments and changes, never a credential; *change name* in Settings → Phone access returns here.
+- **Leads to:** [List](#todaylist-list)
+
+## Overlay catalog
+
+| Overlay | Kind | Opened by | Closed by |
+| --- | --- | --- | --- |
+| Filter sheet | modal sheet | filter button | **Done**, ×, Escape |
+| People sheet | modal | **+N more** | **Done**, ×, Escape |
+| Quick-add | modal | **+**, palette, empty-state button | **Add**, ×, Escape |
+| Command palette | modal | Ctrl+K, Settings row | Escape, backdrop |
+| Keyboard shortcuts | modal | `?` | Escape, × |
+| Confirm | modal | every delete, bulk delete, archive file actions, time delete | **Cancel**, Escape |
+| Parent picker | modal card | **Change parent** | Escape, backdrop |
+| Time dialogs | modal | tiles, history menu, categories | ×, Escape |
+| Date sheet | sheet on touch, popover on mouse | Move paths | pick, Escape, outside tap |
+| Row menu | popover | kebab, right-click, `.` | Escape, outside tap, any pick |
+| Settings sheet | detail pane or full-screen | a Settings row | **Done**, ×, Back |
+| Task drawer | side panel, split or full-screen | a row | Close, Escape |
+| Toast | transient | a write | timer, ×, Undo |
+
+A modal hides the phone's floating nav while it is open.
+
+```mermaid
+flowchart LR
+  s75["Confirm dialog"]
+  s76["Folder and conversation popover"]
+  s20(["Select mode and bulk bar · Shared strip above every list"])
+  s28(["Task drawer · Task drawer"])
+  s33(["Links · Task drawer"])
+  s71(["Email archiving report · Settings"])
+  s20 --> s75
+  s28 --> s75
+  s33 -->|"a folder or conversation chip"| s76
+  s71 --> s75
+```
+
+### `confirm.dialog` Confirm dialog
+
+- **Root:** `data-surface`
+- **Reach:** every delete (a task from the drawer, a selection from the bulk bar, a time entry), an archive file action.
+- **Holds:** a title, a line naming what goes, **Cancel** and one danger-tinted action.
+- **Does:** the action runs the write; **Cancel**, Escape and the backdrop mean no.
+- **Why:** one destructive-action dialog, built per ask.
+
+### `chip.folder-popover` Folder and conversation popover
+
+- **Root:** `data-surface`
+- **Reach:** a folder chip, or an AI-conversation chip, on a fine pointer; on a phone a folder with no web address shows the path to copy here.
+- **Holds:** the resolved path with **Copy**, or **Open conversation** and, for a Claude Code session, **Resume in CLI on this PC**.
+- **Does:** Escape or an outside click closes it without closing the drawer under it.
+
+## Link index
+
+| From | Via | To |
+|---|---|---|
+| [Header](#chromeheader-header) |  | [Settings](#settingspane-settings) |
+| [Nav](#chromenav-nav) |  | [List](#todaylist-list) |
+| [Nav](#chromenav-nav) |  | [Board](#boardpane-board) |
+| [Nav](#chromenav-nav) |  | [Time](#timepane-time) |
+| [Nav](#chromenav-nav) |  | [Search tab](#searchpane-search-tab) |
+| [List](#todaylist-list) |  | [Top strip](#striptop-top-strip) |
+| [List](#todaylist-list) |  | [Scope switch](#stripscope-scope-switch) |
+| [List](#todaylist-list) |  | [Person row](#stripperson-row-person-row) |
+| [List](#todaylist-list) |  | [Calendar lane](#todaycalendar-lane-calendar-lane) |
+| [List](#todaylist-list) |  | [Row](#rowitem-row) |
+| [List](#todaylist-list) | desktop | [Detail split](#todaydetail-split-detail-split) |
+| [Board](#boardpane-board) | Done column: journal | [Journal](#journalpane-journal) |
+| [Board](#boardpane-board) |  | [Top strip](#striptop-top-strip) |
+| [Board](#boardpane-board) |  | [Scope switch](#stripscope-scope-switch) |
+| [Board](#boardpane-board) |  | [Person row](#stripperson-row-person-row) |
+| [Board](#boardpane-board) |  | [Row](#rowitem-row) |
+| [Board](#boardpane-board) |  | [Mode line](#boardmode-line-mode-line) |
+| [Board](#boardpane-board) | Week mode | [Week lanes](#boardweek-lanes-week-lanes) |
+| [Board](#boardpane-board) | Status mode | [Status columns](#boardstatus-columns-status-columns) |
+| [Status columns](#boardstatus-columns-status-columns) | open a task | [Row panel](#boardrow-panel-row-panel) |
+| [Status columns](#boardstatus-columns-status-columns) | Inbox rows | [AI suggestion strip](#boardai-suggestion-ai-suggestion-strip) |
+| [Top strip](#striptop-top-strip) |  | [Filter sheet](#stripfilter-sheet-filter-sheet) |
+| [Top strip](#striptop-top-strip) |  | [Quick-add dialog](#stripquick-add-quick-add-dialog) |
+| [Top strip](#striptop-top-strip) |  | [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar) |
+| [Person row](#stripperson-row-person-row) | +N more | [People sheet](#strippeople-sheet-people-sheet) |
+| [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar) |  | [Date sheet / popover](#rowdate-date-sheet--popover) |
+| [Select mode and bulk bar](#stripbulk-bar-select-mode-and-bulk-bar) |  | [Confirm dialog](#confirmdialog-confirm-dialog) |
+| [Quick-add dialog](#stripquick-add-quick-add-dialog) |  | [Folder picker](#folderpicker-folder-picker) |
+| [Row](#rowitem-row) |  | [Row menu (⋯)](#rowmenu-row-menu-) |
+| [Row](#rowitem-row) |  | [Date sheet / popover](#rowdate-date-sheet--popover) |
+| [Row](#rowitem-row) | tap / Enter | [Task drawer](#drawerpanel-task-drawer) |
+| [Row](#rowitem-row) | mouse | [Completion circle](#rowcomplete-completion-circle) |
+| [Row](#rowitem-row) | mouse | [Move verb](#rowmove-move-verb) |
+| [Row](#rowitem-row) | touch | [Swipe](#rowswipe-swipe) |
+| [Row menu (⋯)](#rowmenu-row-menu-) |  | [Date sheet / popover](#rowdate-date-sheet--popover) |
+| [Row menu (⋯)](#rowmenu-row-menu-) |  | [Task drawer](#drawerpanel-task-drawer) |
+| [Task drawer](#drawerpanel-task-drawer) |  | [Parent picker](#drawerparent-picker-parent-picker) |
+| [Task drawer](#drawerpanel-task-drawer) |  | [Folder picker](#folderpicker-folder-picker) |
+| [Task drawer](#drawerpanel-task-drawer) |  | [Confirm dialog](#confirmdialog-confirm-dialog) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Status, Priority, Owner](#drawerfields-status-priority-owner) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Description](#drawerdescription-description) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Title](#drawertitle-title) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Links](#drawerlinks-links) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Activity](#draweractivity-activity) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Head](#drawerhead-head) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [More fields](#drawermore-more-fields) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Due + quick moves](#drawerdue-due--quick-moves) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Issue panel](#drawerissue-issue-panel) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Delete task](#drawerdelete-delete-task) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Comments](#drawercomments-comments) |
+| [Head](#drawerhead-head) | Change parent | [Parent picker](#drawerparent-picker-parent-picker) |
+| [Links](#drawerlinks-links) | a folder or conversation chip | [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) |
+| [Time](#timepane-time) |  | [Log](#timelog-log) |
+| [Time](#timepane-time) |  | [Totals](#timetotals-totals) |
+| [Time](#timepane-time) |  | [History](#timehistory-history) |
+| [Time](#timepane-time) |  | [Person picker](#timeperson-picker-person-picker) |
+| [Log](#timelog-log) |  | [Time dialogs](#timedialog-time-dialogs) |
+| [History](#timehistory-history) |  | [Time dialogs](#timedialog-time-dialogs) |
+| [History](#timehistory-history) |  | [History row menu (⋮)](#timehistory-menu-history-row-menu-) |
+| [Search tab](#searchpane-search-tab) |  | [Scope switch](#stripscope-scope-switch) |
+| [Search tab](#searchpane-search-tab) |  | [Row](#rowitem-row) |
+| [Search tab](#searchpane-search-tab) |  | [Task drawer](#drawerpanel-task-drawer) |
+| [Search tab](#searchpane-search-tab) |  | [Keyboard shortcuts sheet](#keyshelp-keyboard-shortcuts-sheet) |
+| [Command palette](#searchpalette-command-palette) | Journal command | [Journal](#journalpane-journal) |
+| [Command palette](#searchpalette-command-palette) |  | [Task drawer](#drawerpanel-task-drawer) |
+| [Command palette](#searchpalette-command-palette) |  | [List](#todaylist-list) |
+| [Command palette](#searchpalette-command-palette) |  | [Settings](#settingspane-settings) |
+| [Journal](#journalpane-journal) |  | [Top strip](#striptop-top-strip) |
+| [Journal](#journalpane-journal) |  | [Row](#rowitem-row) |
+| [Settings](#settingspane-settings) |  | [Settings sheet](#settingssheet-settings-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Email archiving report](#archivereport-email-archiving-report) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Time categories sheet](#settingstime-categories-time-categories-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Command palette](#searchpalette-command-palette) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Row actions sheet](#settingsrow-actions-row-actions-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Your name sheet](#settingsyour-name-your-name-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Folder opener sheet](#settingsopener-folder-opener-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Calendar sheet](#settingscalendar-calendar-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Command palette sheet](#settingspalette-command-palette-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Phone access sheet](#settingsaccess-phone-access-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [AI Inbox triage sheet](#settingsai-triage-ai-inbox-triage-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Database sheet](#settingsdatabase-database-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Voice quick-add sheet](#settingsvoice-voice-quick-add-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Issues as tasks sheet](#settingsissues-issues-as-tasks-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Search sheet](#settingssearch-search-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Mirror and backup sheet](#settingsmirror-mirror-and-backup-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Email archiving sheet](#settingsarchive-email-archiving-sheet) |
+| [Settings sheet](#settingssheet-settings-sheet) |  | [Capture into Inbox sheet](#settingscapture-capture-into-inbox-sheet) |
+| [Email archiving sheet](#settingsarchive-email-archiving-sheet) | the report below | [Email archiving report](#archivereport-email-archiving-report) |
+| [Time categories sheet](#settingstime-categories-time-categories-sheet) |  | [Time dialogs](#timedialog-time-dialogs) |
+| [Time categories sheet](#settingstime-categories-time-categories-sheet) | the ⋮ beside an area or category | [Time categories menu (⋮)](#settingstime-menu-time-categories-menu-) |
+| [Email archiving report](#archivereport-email-archiving-report) |  | [Folder picker](#folderpicker-folder-picker) |
+| [Email archiving report](#archivereport-email-archiving-report) |  | [Confirm dialog](#confirmdialog-confirm-dialog) |
+| [Email archiving report](#archivereport-email-archiving-report) | the ⋮ on a desktop row | [Report row menu (⋮)](#archiverow-menu-report-row-menu-) |
+| [Sign-in](#logincard-sign-in) |  | [Name picker](#loginname-picker-name-picker) |
+| [Sign-in](#logincard-sign-in) |  | [List](#todaylist-list) |
+| [Name picker](#loginname-picker-name-picker) |  | [List](#todaylist-list) |
