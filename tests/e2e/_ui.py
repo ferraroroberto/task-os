@@ -137,16 +137,35 @@ def filter_button(page: Page, pane: str) -> Locator:
     return page.locator(f"#{pane} .filter-open")
 
 
+def press_in_sheet(page: Page, pane: str, selector: str, *, tap: bool = False) -> None:
+    """Open *pane*'s Filters & sort sheet, press one control in it, close it with Done.
+
+    The view toggles (the Board's Week · Status, Tasks · Issues · All, the person
+    row) are rows of the sheet, so a story reaches each of them the way a person
+    does: the filter button, the control, Done. *selector* is looked up inside
+    #filterSheet. *tap* presses with touch, for the phone legs.
+    """
+    sheet = open_filter_sheet(page, pane)
+    control = sheet.locator(selector)
+    if tap:
+        control.tap()
+    else:
+        control.click()
+    close_filter_sheet(page)
+
+
 def board_mode(page: Page, mode: str) -> None:
-    """Press the Board's Week · Status segment (#396), like a user would.
+    """Press the Board's Week · Status segment (#396) in its sheet, like a user would.
 
     Week is the default; the pick is remembered on the device, so one press per
     browser context holds across reloads and tab presses. The Board tab must be
     showing.
     """
-    seg = page.locator(f"#paneBoard .board-modes [data-mode='{mode}']")
+    sheet = open_filter_sheet(page, "paneBoard")
+    seg = sheet.locator(f".board-modes [data-mode='{mode}']")
     seg.click()
     expect(seg).to_have_attribute("aria-pressed", "true")
+    close_filter_sheet(page)
     expect(page.locator(f"#paneBoard .board-{mode}")).to_be_visible()
 
 

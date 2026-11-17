@@ -1,7 +1,8 @@
 /* task-os — the Board tab: a week planner, with the status columns behind a segment.
  *
  * Two modes over the one shared list, picked by the Week · Status segment
- * (the vendored segmented control) and remembered on this device:
+ * (the vendored segmented control, in the Filters & sort sheet) and remembered
+ * on this device:
  *
  *   Week    the default. Lanes by due date — Today (overdue included, as on
  *           the Today tab) · Tomorrow · This week · This weekend · Next week ·
@@ -32,11 +33,12 @@
  * rows, so the carousel position survives.
  *
  * Rows are the ONE task row (rows.js) — the same row Today and
- * Search render. The list arrives already narrowed to the scope switch's
- * Mine · Issues · All (app.js, scope.js).
+ * Search render. The list arrives already narrowed to the scope row's
+ * Tasks · Issues · All (app.js, js/app/viewrows.js).
  *
- * The AI triage action works on the Inbox column, so it sits on the
- * mode line in Status mode while the Inbox has tasks, never in a lane head.
+ * The Week · Status segment and the AI triage action are rows of the Filters
+ * & sort sheet, not a line above the lanes. Triage works on the Inbox column,
+ * so its row shows in Status mode while the Inbox has tasks, never in a lane head.
  * The pointer at the Archive tab that used to sit there is gone: the Settings
  * header and the palette's Go to Archive hint carry the last run's count.
  */
@@ -138,18 +140,20 @@ function readMode() {
  * @param {{onOpen: (id:number)=>void, onStatus: (id:number, status:string)=>Promise<any>,
  *          onDue: (id:number, due:?string)=>Promise<any>, onTriage: ()=>Promise<any>,
  *          onAdd?: ()=>void, onModeChange?: ()=>void}} handlers
- * @param {HTMLElement} barHost  the pane line under the strip, beside the
- *          scope switch: the Week · Status segment and Triage go there
  * @returns {{el: HTMLElement, render: (items: Array<object>, filters: object, opts?: object) =>
- *           {inbox: number, overdue: number, today: number}, show: () => void}}
+ *           {inbox: number, overdue: number, today: number}, show: () => void,
+ *           modes: HTMLElement, triage: HTMLElement}}
+ *          `modes` (the Week · Status segment) and `triage` (shown in Status
+ *          mode while the Inbox holds tasks) are the Board's own controls
+ *          for the Filters & sort sheet to hold: built once, moved into
+ *          the sheet whenever it opens, and kept painted while it is closed.
  */
-export function mountBoard(handlers, barHost) {
+export function mountBoard(handlers) {
   const el = document.createElement('div');
   el.className = 'board';
   let mode = readMode();
   let last = null;   // the last render's arguments, to redraw on a mode switch
 
-  // The mode line: Week · Status, then (Status mode, Inbox not empty) Triage.
   const modes = modesSegment();
   modes.addEventListener('click', function (ev) {
     const seg = ev.target.closest('.segmented-item');
@@ -161,7 +165,6 @@ export function mountBoard(handlers, barHost) {
     requestAnimationFrame(function () { status.place(false); });
   });
   const triage = triageButton(handlers);
-  barHost.append(modes, triage);
 
   const week = mountLanes('week', WEEK_KEYS.map(function (k) { return { key: k }; }), handlers);
   const status = mountLanes('status', BOARD_COLUMNS, handlers);
@@ -237,6 +240,8 @@ export function mountBoard(handlers, barHost) {
   return {
     el: el,
     render: render,
+    modes: modes,
+    triage: triage,
     // The pane was hidden until now — position the carousel on the remembered
     // column once it has layout (no animation on arrival).
     show: function () { requestAnimationFrame(function () { status.place(false); }); },

@@ -32,6 +32,9 @@
  * onto it. Each part lives in js/app/<part>.js and takes `app` as its first
  * argument: writes · journal · head · settings (the pane, not its cards) ·
  * issues · commands.
+ * viewrows.js is the one factory among them: the view toggles of the
+ * Filters & sort sheet (Layout · Kind of task · Whose tasks), built once
+ * and handed to each tab's `mountFilters`.
  *
  * ES module; the vendored components are imported by their static paths so
  * the server's fleet-hash stamping rewrites them (`?v=<hash>`) at serve time.
@@ -49,8 +52,8 @@ import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
-  RECENT_OWNERS_KEY, WHOSE_KEY, bumpRecentOwner, filtersFromSearch, filtersToSearch, listParams, matchesScope,
-  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose, pickOwner, toggleOwner,
+  filtersFromSearch, filtersToSearch, listParams, matchesScope,
+  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose,
 } from './filters.js';
 import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
@@ -59,7 +62,6 @@ import { createPalette } from './palette.js';
 import { createQuickAdd } from './quickadd.js';
 import { createTaskMenu } from './rowmenu.js';
 import { CLOSED } from './rows.js';
-import { mountScope } from './scope.js';
 import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
@@ -72,7 +74,7 @@ import * as commands from './js/app/commands.js';
 import * as head from './js/app/head.js';
 import * as issues from './js/app/issues.js';
 import * as journal from './js/app/journal.js';
-import { mountOwners, openOwnerSheet } from './js/app/owners.js';
+import { createViewRows } from './js/app/viewrows.js';
 import { JOURNAL_HASH } from './js/app/journal.js';
 import * as settingsPane from './js/app/settings.js';
 import { SETTINGS_HASH, SETTINGS_SHEET_HASH } from './js/app/settings.js';
@@ -103,12 +105,7 @@ const els = {
   boardBulk: document.getElementById('boardBulk'),
   todayBulk: document.getElementById('todayBulk'),
   boardHost: document.getElementById('boardHost'),
-  boardBar: document.getElementById('boardBar'),
-  boardScope: document.getElementById('boardScope'),
-  boardOwners: document.getElementById('boardOwners'),
   todayFilterText: document.getElementById('todayFilterText'),
-  todayScope: document.getElementById('todayScope'),
-  todayOwners: document.getElementById('todayOwners'),
   todayHost: document.getElementById('todayHost'),
   searchScope: document.getElementById('searchScope'),
   paneJournal: document.getElementById('paneJournal'),
@@ -172,8 +169,6 @@ let quickAdd = null;      // the one quick-add dialog, opened by every pane's +
 // /api/usage/events, never anywhere else. Views: the three tabs, `settings`,
 // `settings.<sheet>` and `journal`.
 const usage = initUsageLog();
-const scopes = {};        // tab → its Tasks · Issues · All switch (scope.js)
-const ownerRows = {};    // tab → its person row (Today · Board only, two or more members)
 const filterCards = {};   // tab → mountFilters() handle (the strip's filter button + the sheet)
 const bulkBars = [];      // one per pane strip (Board · Today), all over one selection
 
@@ -187,6 +182,7 @@ const app = {
   usage: usage,
   filterCards: filterCards,
   get nav() { return nav; },
+  get board() { return board; },
   get drawer() { return drawer; },
   get search() { return search; },
   get time() { return time; },
@@ -205,7 +201,11 @@ const app = {
   whoseOwner: whoseOwner,
   dropPreselected: dropPreselected,
   onFilterChange: onFilterChange,
+  syncUrl: syncUrl,
+  renderFilters: renderFilters,
+  renderTodayPane: renderTodayPane,
 };
+const views = createViewRows(app);
 [commands, head, issues, journal, settingsPane, writes].forEach(function (part) {
   Object.keys(part).forEach(function (name) {
     if (typeof part[name] === 'function') app[name] = part[name].bind(null, app);
@@ -236,7 +236,7 @@ function renderNoTasks() {
       onAction: function () { if (quickAdd) quickAdd.open(); },
     }));
   });
-  ['boardFilterText', 'boardBar', 'todayFilterText', 'todayScope', 'todayOwners', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
+  ['boardFilterText', 'todayFilterText', 'journalFilterText'].forEach(function (k) { if (els[k]) els[k].hidden = true; });
   // nothing to select either — the toggle would open an empty Select mode
   selection.setActive(false);
   document.querySelectorAll('[data-select-toggle]').forEach(function (btn) { btn.hidden = true; });
@@ -410,84 +410,6 @@ function boardItems() {
   return state.items.filter(function (t) { return matchesScope(t, state.filters.scope); });
 }
 
-/** The scope switch moved: the scope is applied in the browser, so the list
- *  the server sent stays; only the URL key and the views that read it change. */
-function onScopeChange(scope) {
-  state.filters = Object.assign({}, state.filters, { scope: scope });
-  syncUrl();
-  renderFilters();
-  renderBoardPane();
-  renderTodayPane();
-  renderSearchScope();
-  if (search) search.refilter();
-}
-
-/** One tab's scope switch, mounted on first use and kept in step with the
- *  shared state (the switches are the same key, so moving one moves all). */
-function renderScope(tab, host) {
-  if (!host) return;
-  if (!scopes[tab]) scopes[tab] = mountScope(host, onScopeChange);
-  scopes[tab].render(state.filters.scope);
-  host.hidden = false;
-}
-
-function renderSearchScope() { renderScope('search', els.searchScope); }
-
-/** The person row moved: the pick narrows the server's list, so the lists
- *  and the journal are read again under it. Search never follows. Mine and
- *  Everyone are also kept per device (`WHOSE_KEY`); a picked person goes to the
- *  front of the row's recents. */
-function applyOwners(next, picked) {
-  try {
-    if (!next.owners.length) localStorage.setItem(WHOSE_KEY, next.whose);
-    if (picked) {
-      state.recentOwners = bumpRecentOwner(state.recentOwners, picked);
-      localStorage.setItem(RECENT_OWNERS_KEY, JSON.stringify(state.recentOwners));
-    }
-  } catch (_) { /* private mode: this page only */ }
-  onFilterChange(Object.assign({}, state.filters, next));
-}
-
-/** A tap on a person segment: that person alone. */
-function onOwnerPick(id) {
-  applyOwners(pickOwner(id, state.viewer), id === state.viewer ? null : id);
-}
-
-/** A tick in the "+N more" sheet: toggle them in the set. */
-function onOwnerToggle(id) {
-  const next = toggleOwner(state.filters, id, state.viewer);
-  const added = next.owners.indexOf(id) >= 0 && state.filters.owners.indexOf(id) < 0;
-  applyOwners(next, added ? id : null);
-}
-
-function onEveryone() {
-  if (state.filters.whose === 'everyone' && !state.filters.owners.length) return;
-  applyOwners({ owners: [], whose: 'everyone' }, null);
-}
-
-function openMoreOwners() {
-  openOwnerSheet({
-    people: ownerRowOf().ordered(),
-    picked: function () { return state.filters.owners; },
-    onToggle: onOwnerToggle,
-  });
-}
-
-function ownerRowOf() { return ownerRows.board || ownerRows.today; }
-
-/** One tab's person row, only with two or more members (one member has
- *  nothing to switch between). Mounted on first use like the scope's. */
-function renderOwners(tab, host) {
-  if (!host) return;
-  const show = state.members.length >= 2;
-  host.hidden = !show;
-  if (!show) return;
-  if (!ownerRows[tab]) {
-    ownerRows[tab] = mountOwners(host, { onPick: onOwnerPick, onEveryone: onEveryone, onOpenMore: openMoreOwners });
-  }
-  ownerRows[tab].render(state.filters, { members: state.members, viewer: state.viewer, recent: state.recentOwners });
-}
-
 // --------------------------------------------------------------- render
 /** The one filter state changed (any tab's card, the palette, a "Clear"). */
 function onFilterChange(next) {
@@ -522,7 +444,7 @@ function renderFilters() {
           // closed task — only project · person · text apply
           ? { onChange: onFilterChange, textHost: pair[1], hide: JOURNAL_HIDES, countLabel: 'closed' }
           : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox }
-            : { onChange: onFilterChange, textHost: pair[1] });
+            : { onChange: onFilterChange, textHost: pair[1], views: views[pair[0]] });
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
         : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }
@@ -536,7 +458,7 @@ function renderAll() {
   renderSelectMode();
   renderBoardPane();
   renderTodayPane();
-  renderSearchScope();
+  views.renderSearchScope();
   if (search) search.refilter();
 }
 
@@ -605,11 +527,8 @@ function renderBoardPane() {
       onAdd: addTask,
       // Week · Status changes what the lanes hold, so the header line follows.
       onModeChange: function () { menus.board.endRender(); app.renderHeadStatus(); },
-    }, els.boardBar);
+    });
   }
-  els.boardBar.hidden = false;
-  renderOwners('board', els.boardOwners);
-  renderScope('board', els.boardScope);
   if (!els.boardHost.contains(board.el)) els.boardHost.replaceChildren(board.el);
   state.boardCounts = board.render(boardItems(), state.filters, Object.assign({
     ai: state.ai, suggestions: state.aiSuggestions, triaging: state.triaging,
@@ -620,8 +539,6 @@ function renderBoardPane() {
 }
 
 function renderTodayPane() {
-  renderOwners('today', els.todayOwners);
-  renderScope('today', els.todayScope);
   state.todayCounts = renderToday(els.todayHost, todayItems(), {
     onOpen: openTask, onStatus: app.setStatus,
     onToggleSelect: selectHandlers.onToggleSelect, menu: menus.today, onAdd: addTask,

@@ -429,12 +429,13 @@ def _phone_today_landing(wk: Browser, page: Page, base: str, shots: Path) -> Non
     first_today = rows.first
     assert_no_overlap([first_today.locator(c) for c in (".trow-main", ".trow-kebab")])
     assert_no_horizontal_overflow(page)
-    # #399: the scope switch is on the phone's Today, the row's full width,
-    # its segments real touch targets
+    # #399: the scope switch is a row of the phone Today's Filters & sort sheet,
+    # the row's full width, its segments real touch targets
     _assert_scope_switch_spans_row(page)
-    assert_min_target(page.locator("#todayScope .segmented-item"))
-    assert_no_overlap(page.locator("#todayScope .segmented-item"))
+    assert_min_target(page.locator("#filterSheet .scope-switch .segmented-item"))
+    assert_no_overlap(page.locator("#filterSheet .scope-switch .segmented-item"))
     shot(page, shots / "story-05-board-8-phone.png")
+    close_filter_sheet(page)
 
     # …and raised in dark when the theme follows the system: nothing is
     # stored, so the pre-paint stamp reads the OS scheme (#399)
@@ -454,7 +455,7 @@ def _phone_today_landing(wk: Browser, page: Page, base: str, shots: Path) -> Non
         # computed strings put a 0-1 track beside a 0-255 fill).
         lums = dpage.evaluate(
             """() => {
-              const sw = document.querySelector('#todayScope .scope-switch');
+              const sw = document.querySelector('#filterSheet .scope-switch');
               const picked = sw.querySelector('.segmented-item[aria-pressed="true"]');
               const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
               const paint = fills => {
@@ -495,8 +496,10 @@ def _phone_board_week(page: Page, shots: Path) -> None:
     assert all(abs(b["width"] - wbox["width"]) < 2 for b in sboxes), (wbox, sboxes)
     expect(sections.first.locator(".board-col-title")).to_be_visible()
     assert_min_target(week.locator(".trow"))
-    assert_min_target(page.locator("#paneBoard .board-bar .segmented-item"))
-    assert_no_overlap(page.locator("#paneBoard .board-bar .segmented-item"))
+    layout = open_filter_sheet(page, "paneBoard").locator(".board-modes .segmented-item, .scope-switch .segmented-item")
+    assert_min_target(layout)
+    assert_no_overlap(layout)
+    close_filter_sheet(page)
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-05-board-14-phone.png")
 
@@ -687,21 +690,26 @@ def _pick_one_person(page: Page, shots: Path, row, switch, stored: str) -> None:
     expect(pressed).to_have_text(["Person 2"])
     expect(row).to_be_visible()
     expect(page).to_have_url(re.compile(r"[?&]owner=p2"))
+    close_filter_sheet(page)
     expect(row.locator(".trow-pill-assignee")).to_have_count(0)      # one person alone: every row is theirs
     page.reload()
     page.click("nav.tabs .tab[data-tab='board']")
+    open_filter_sheet(page, "paneBoard")
     expect(pressed).to_have_text(["Person 2"])
     expect(row).to_be_visible()
     _clear_toasts(page)
     shot(page, shots / "story-05-board-20-desktop.png")
+    close_filter_sheet(page)
     # a link that names two people still lists both, with no segment raised
     page.goto(f"{page.url.split('?')[0]}?owner=p1,p2")
     page.click("nav.tabs .tab[data-tab='board']")
     expect(row).to_be_visible()
+    open_filter_sheet(page, "paneBoard")
     expect(pressed).to_have_count(0)
     item("p1").click()
     expect(pressed).to_have_text(["Mine"])      # the list form: a strict one-element match would fail mid-reload
     expect(page).not_to_have_url(re.compile(r"[?&]owner="))
+    close_filter_sheet(page)
     expect(row).to_have_count(0)
     assert page.evaluate(stored) == "mine"
 
@@ -728,7 +736,8 @@ def _walk_many_members(playwright: Playwright) -> None:
         try:
             page = browser.new_page(viewport=DESKTOP)
             page.goto(f"{base}/")
-            people = page.locator("#todayOwners .owner-switch")
+            people = page.locator("#filterSheet .owner-switch")
+            open_filter_sheet(page, "paneToday")
             expect(people.locator(".segmented-item")).to_have_text(
                 ["Mine", "Person 2", "Person 3", "+5 more", "Everyone"])
             people.locator(".segmented-item[data-kind='more']").click()
@@ -742,8 +751,10 @@ def _walk_many_members(playwright: Playwright) -> None:
             sheet.locator(".filter-done").click()
             expect(sheet).to_be_hidden()
             several = people.locator(".segmented-item[aria-pressed='true']")
-            expect(several).to_have_text("+5 more")
+            expect(several).to_have_text("+5 more")       # the Filters & sort sheet under it was redrawn in place
+            close_filter_sheet(page)
             page.reload()
+            open_filter_sheet(page, "paneToday")
             expect(several).to_have_text("+5 more")
             # the picked and the recently picked lead the row, the rest wait behind it
             expect(people.locator(".segmented-item")).to_have_text(

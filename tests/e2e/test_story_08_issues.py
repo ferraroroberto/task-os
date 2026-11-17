@@ -30,7 +30,13 @@ from pathlib import Path
 
 from playwright.sync_api import Browser, Page, expect
 
-from tests.e2e._ui import board_mode, close_settings_sheet, open_more_fields, open_settings_sheet
+from tests.e2e._ui import (
+    board_mode,
+    close_settings_sheet,
+    open_more_fields,
+    open_settings_sheet,
+    press_in_sheet,
+)
 from tests.e2e.conftest import _get, dismiss_toasts, scroll_to_bottom, shot
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -63,7 +69,7 @@ def _sync_now_lands_the_issue(page: Page, base: str, shots: Path, todo_before):
     # the status columns, every task in them: a synced issue's task is
     # behind the scope switch's Issues / All (#391, the Board's since #396)
     board_mode(page, "status")
-    page.locator("#boardScope .segmented-item[data-scope='all']").click()
+    press_in_sheet(page, "paneBoard", ".scope-switch [data-scope='all']")
     todo_col = page.locator("#paneBoard .board-status .board-col[data-col='todo']")
     # UX rounds 2+3 (#32/#46): a coding task's row names the issue as the
     # code on its meta line (the launcher's "repo#N" look) — no duplicate
@@ -209,7 +215,7 @@ def _create_issue_from_a_task(page: Page, base: str, shots: Path, drawer, inst, 
     # wherever it was seeded (inbox), not the sync-default todo column.
     page.keyboard.press("Escape")
     page.click("nav.tabs .tab[data-tab='board']")
-    page.locator("#boardScope .segmented-item[data-scope='all']").click()   # it is an issue's task now
+    press_in_sheet(page, "paneBoard", ".scope-switch [data-scope='all']")   # it is an issue's task now
     inbox_col = page.locator("#paneBoard .board-status .board-col[data-col='inbox']")
     expect(inbox_col.locator(f".trow[data-id='{plain['id']}'] .trow-code")).to_have_text("garden-bot#15")
 

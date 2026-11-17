@@ -164,6 +164,7 @@ from tests.e2e._geometry import (
     assert_no_overlap,
 )
 from tests.e2e._surface import surface
+from tests.e2e._ui import close_filter_sheet, filter_button, open_filter_sheet, press_in_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     E2E_P2_TOKEN,
@@ -248,15 +249,17 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     The journal follows the switch. Leaves the device on Mine, the task back
     with the owner, as the rest of the story expects.
     """
-    switch = page.locator("#boardOwners .owner-switch")
+    switch = page.locator("#filterSheet .owner-switch")      # a row of the Board's Filters & sort sheet
     item = lambda who: switch.locator(f".segmented-item[data-owner='{who}']")  # noqa: E731
     pressed = switch.locator(".segmented-item[aria-pressed='true']")
     row = page.locator(f"#paneBoard .trow[data-id='{handed}']")
     stored = "() => localStorage.getItem('task-os.whose')"
 
     def board(url: str) -> None:
+        """Load *url*, press the Board tab and open its sheet: the person row lives there."""
         page.goto(f"{base}{url}")
         page.click("nav.tabs .tab[data-tab='board']")
+        open_filter_sheet(page, "paneBoard")
 
     def hand(task_id: int, owner: str) -> None:
         res = page.request.post(f"{base}/api/tasks/bulk", data=json.dumps({"ids": [task_id], "owner": owner}),
@@ -264,6 +267,7 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
         assert res.ok, res.status
 
     # 1. Everyone, from step 11c: on the URL, on the device, the row on the Board
+    open_filter_sheet(page, "paneBoard")
     expect(pressed).to_have_text("Everyone")
     expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
     assert page.evaluate(stored) == "everyone"
@@ -274,7 +278,7 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     _clear_toasts(page)
     shot(page, shots / "story-05-board-16-desktop.png")
     # 2. the scope beside it reads Tasks · Issues · All and is its own axis
-    expect(page.locator("#boardScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+    expect(page.locator("#filterSheet .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
     # 3. a reload keeps Everyone even with the key gone from the address
     board("/")
     expect(pressed).to_have_text("Everyone")
@@ -315,6 +319,7 @@ def _walk_whose_switch(page: Page, base: str, shots: Path, handed: int) -> None:
     hand(handed, "p1")
     board("/")
     expect(pressed).to_have_text("Mine")
+    close_filter_sheet(page)
     expect(row).to_be_visible()
 
 
@@ -340,18 +345,21 @@ def _second_member_sees_their_own(context, base: str, shots: Path, owners, title
         assert page.request.get(f"{base}/api/me").json()["id"] == "p2"
         # 1. no picker: Today opens on their own tasks, the switch says Mine
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
-        people = page.locator("#todayOwners .owner-switch")
+        # the person row and the scope are rows of the Today tab's Filters & sort sheet
+        open_filter_sheet(page, "paneToday")
+        people = page.locator("#filterSheet .owner-switch")
         pressed = people.locator(".segmented-item[aria-pressed='true']")
         expect(pressed).to_have_text("Mine")
-        expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+        expect(page.locator("#filterSheet .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
         for title in ("Water the ferns", "Order paint samples"):
             expect(_today_row(page, title)).to_be_visible()
         assert owners(page) == {"p2"}
         expect(page).not_to_have_url(re.compile(r"[?&]whose="))
         expect(people.locator(".segmented-item")).to_have_text(["Mine", "Person 1", "Everyone"])
-        assert_min_target(page.locator("#todayOwners .segmented-item, #todayScope .segmented-item"))
-        assert_no_overlap(page.locator("#todayOwners .segmented-item, #todayScope .segmented-item"))
-        _assert_labels_fit(page, "#todayOwners .segmented-item, #todayScope .segmented-item")
+        switches = "#filterSheet .owner-switch .segmented-item, #filterSheet .scope-switch .segmented-item"
+        assert_min_target(page.locator(switches))
+        assert_no_overlap(page.locator(switches))
+        _assert_labels_fit(page, switches)
         assert_no_horizontal_overflow(page)
         shot(page, shots / "story-05-board-17-phone.png")
         # 2. one tap on Everyone: both members' tasks, the choice in the URL and on the device
@@ -360,8 +368,10 @@ def _second_member_sees_their_own(context, base: str, shots: Path, owners, title
         expect(page).to_have_url(re.compile(r"[?&]whose=everyone"))
         page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
         assert owners(page) == {"p1", "p2"}
+        close_filter_sheet(page)
         shot(page, shots / "story-05-board-18-phone.png")
         # a person is one tap too: Person 1 alone, then Everyone again for the steps below
+        open_filter_sheet(page, "paneToday")
         people.locator(".segmented-item[data-owner='p1']").tap()
         expect(pressed).to_have_text("Person 1")
         expect(page).to_have_url(re.compile(r"[?&]owner=p1"))
@@ -371,14 +381,18 @@ def _second_member_sees_their_own(context, base: str, shots: Path, owners, title
         expect(pressed).to_have_text("Everyone")
         page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
         # 3. the pick follows to the Board (one filter state) and survives a reload
+        close_filter_sheet(page)
         page.click("nav.tabs .tab[data-tab='board']")
-        expect(page.locator("#boardOwners .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
-        assert_min_target(page.locator("#boardOwners .segmented-item, #boardScope .segmented-item"))
-        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .segmented-item")
+        open_filter_sheet(page, "paneBoard")
+        expect(page.locator("#filterSheet .owner-switch .segmented-item[aria-pressed='true']")).to_have_text("Everyone")
+        assert_min_target(page.locator(switches))
+        _assert_labels_fit(page, switches)
         assert_no_horizontal_overflow(page)
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='today']")
+        open_filter_sheet(page, "paneToday")
         expect(pressed).to_have_text("Everyone")
+        close_filter_sheet(page)
         page.wait_for_function("() => document.querySelectorAll('#paneToday .trow[data-id]').length > 2")
         assert owners(page) == {"p1", "p2"}
     finally:
@@ -395,7 +409,9 @@ def _owner_phone_is_unaffected(page: Page, base: str, shots: Path, owners, phone
         page = other.new_page()
         page.goto(f"{base}/")
         assert page.request.get(f"{base}/api/me").json()["id"] == "p1"
-        expect(page.locator("#todayOwners .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+        open_filter_sheet(page, "paneToday")
+        expect(page.locator("#filterSheet .owner-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+        close_filter_sheet(page)
         expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
         assert owners(page) == {"p1"}
         expect(_today_row(page, "Water the ferns")).to_have_count(0)
@@ -408,10 +424,17 @@ def _owner_phone_is_unaffected(page: Page, base: str, shots: Path, owners, phone
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='board']")
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-        expect(page.locator("#boardOwners .owner-switch")).to_be_visible()
-        assert_min_target(page.locator("#boardOwners .segmented-item, #boardScope .segmented-item"))
-        _assert_labels_fit(page, "#boardBar .segmented-item, #boardOwners .segmented-item")
+        open_filter_sheet(page, "paneBoard")
+        expect(page.locator("#filterSheet .owner-switch")).to_be_visible()
+        switches = "#filterSheet .owner-switch .segmented-item, #filterSheet .scope-switch .segmented-item"
+        assert_min_target(page.locator(switches))
+        _assert_labels_fit(page, switches)
         assert_no_horizontal_overflow(page)
+        # the badge counts a narrowing toggle in the dark theme too, and Clear resets it
+        page.locator("#filterSheet .scope-switch [data-scope='issues']").tap()
+        expect(page.locator("#paneBoard .filter-open .filter-count")).to_have_text("1")
+        page.locator("#filterSheet .filter-clear").tap()
+        expect(page.locator("#paneBoard .filter-open .filter-count")).to_be_hidden()
         shot(page, shots / "story-05-board-19-phone-dark.png")
     finally:
         dark.close()
@@ -476,13 +499,16 @@ def _walk_one_member(playwright: Playwright) -> None:
         try:
             page = browser.new_page(viewport=DESKTOP)
             page.goto(f"{base}/")
-            expect(page.locator("#todayScope .scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
+            sheet = open_filter_sheet(page, "paneToday")
+            expect(sheet.locator(".scope-switch .segmented-item")).to_have_text(["Tasks", "Issues", "All"])
             expect(page.locator("#paneToday .trow[data-id]").first).to_be_visible()
             expect(page.locator(".owner-switch")).to_have_count(0)
-            expect(page.locator("#todayOwners")).to_be_hidden()
+            expect(sheet.locator(".filter-sheet-row[data-name='whose']")).to_have_count(0)   # no row to switch with one member
+            close_filter_sheet(page)
             page.click("nav.tabs .tab[data-tab='board']")
-            expect(page.locator("#boardScope .scope-switch")).to_be_visible()
+            expect(open_filter_sheet(page, "paneBoard").locator(".scope-switch")).to_be_visible()
             expect(page.locator(".owner-switch")).to_have_count(0)
+            close_filter_sheet(page)
             expect(page.locator("#paneBoard .trow[data-id]").first).to_be_visible()
         finally:
             browser.close()
@@ -631,8 +657,8 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
             assert n == horizon.locator(".trow[data-id]").count() and n >= 1
             horizon.locator(".collapse-summary").click()
             expect(horizon).to_have_js_property("open", True)
-        page.locator("#paneToday .scope-switch .segmented-item").nth(2).click()   # All: a re-render
-        page.locator("#paneToday .scope-switch .segmented-item").nth(0).click()   # back to Mine
+        press_in_sheet(page, "paneToday", ".scope-switch [data-scope='all']")    # All: a re-render
+        press_in_sheet(page, "paneToday", ".scope-switch [data-scope='mine']")   # back to Tasks
         expect(later).to_have_js_property("open", True)
         expect(nodate).to_have_js_property("open", True)
         far_row = later.locator(f".trow[data-id='{far}']")
@@ -690,27 +716,40 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     sub-header, the project as the row's leading pill.
     """
     pane = page.locator("#paneToday")
-    switch = page.locator("#todayScope .segmented.scope-switch")
+    # one row of controls above the list: the kind of task is a row of the sheet (#744)
+    kids = pane.locator(".pane-body > *").evaluate_all("els => els.map(e => e.id || e.className)")
+    assert kids == ["visually-hidden", "pane-top", "todayHost"], kids
+    badge = filter_button(page, "paneToday").locator(".filter-count")
+    switch = page.locator("#filterSheet .segmented.scope-switch")     # a row of Today's Filters & sort sheet
     pressed = switch.locator(".segmented-item[aria-pressed='true']")
     rows = pane.locator(".today-list .trow[data-id]")
     open_items = _get(base, "/api/tasks")["items"]
     issue_ids = sorted(t["id"] for t in open_items if t.get("issue_ref"))
     assert issue_ids, "the seed carries one synced coding task"
     # 1. Mine is the default: on screen, and absent from the URL
+    _assert_scope_switch_spans_row(page)   # #399: the row's full width on desktop (opens the sheet)
     expect(pressed).to_have_text("Tasks")
+    close_filter_sheet(page)
+    expect(badge).to_be_hidden()
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
-    _assert_scope_switch_spans_row(page)   # #399: the row's full width on desktop
     for tid in issue_ids:
         expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(0)
     # 2. Issues: only the synced tasks, the pick written to the URL
+    expect(badge).to_be_hidden()                  # Tasks is the default: nothing on the button
+    open_filter_sheet(page, "paneToday")
     switch.locator(".segmented-item[data-scope='issues']").click()
     expect(pressed).to_have_text("Issues")
+    expect(badge).to_have_text("1")               # …and Issues is one setting on
+    expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filter, 1 on: issues")
+    close_filter_sheet(page)
     expect(page).to_have_url(re.compile(r"[?&]scope=issues"))
     expect(rows).to_have_count(len(issue_ids))
     assert sorted(int(i) for i in rows.evaluate_all("els => els.map(e => e.dataset.id)")) == issue_ids
     # 3. …and kept across a reload
     page.reload()
+    open_filter_sheet(page, "paneToday")
     expect(pressed).to_have_text("Issues")
+    close_filter_sheet(page)
     expect(rows).to_have_count(len(issue_ids))
     # no sub-header anywhere on Today: the row leads with its project's pill
     expect(pane.locator(".today-group-title")).to_have_count(0)
@@ -718,12 +757,14 @@ def _walk_scope_switch(page: Page, base: str, shots: Path) -> None:
     _clear_toasts(page)
     shot(page, shots / "story-31-today-horizons-3-desktop.png")
     # 4. All, then back to Mine, which drops the key again
-    switch.locator(".segmented-item[data-scope='all']").click()
+    press_in_sheet(page, "paneToday", ".scope-switch [data-scope='all']")
     expect(page).to_have_url(re.compile(r"[?&]scope=all"))
     for tid in issue_ids:
         expect(pane.locator(f".trow[data-id='{tid}']")).to_have_count(1)
+    open_filter_sheet(page, "paneToday")
     switch.locator(".segmented-item[data-scope='mine']").click()
     expect(pressed).to_have_text("Tasks")
+    close_filter_sheet(page)
     expect(page).not_to_have_url(re.compile(r"[?&]scope="))
 
 

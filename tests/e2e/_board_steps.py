@@ -21,6 +21,7 @@ from tests.e2e._ui import (
     close_filter_sheet,
     filter_button,
     open_filter_sheet,
+    press_in_sheet,
 )
 from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
@@ -136,7 +137,7 @@ def _walk_drawer_owner(page: Page, base: str, task_id: int, to: str) -> None:
 
 _SWITCH_BOXES_JS = """() => {
   const box = e => { const r = e.getBoundingClientRect(); return {x: r.x, w: r.width, h: r.height}; };
-  const host = document.getElementById('todayScope');
+  const host = document.querySelector('#filterSheet .filter-sheet-row[data-name="kind"] > div');
   const group = host.querySelector('.scope-switch');
   return {host: box(host), group: box(group),
           items: [...group.querySelectorAll('.segmented-item')].map(box)};
@@ -144,13 +145,15 @@ _SWITCH_BOXES_JS = """() => {
 
 
 def _assert_scope_switch_spans_row(page: Page) -> None:
-    """§ #399 — the switch is on screen and spans the width of its row.
+    """§ #399 — the Today sheet's kind-of-task switch spans the width of its row.
 
-    The row is the switch's host (the pane's own width); the three segments
-    share the track equally. Pixel tolerance 1 (sub-pixel layout), never the
-    360px the switch used to stop at.
+    Opens Today's Filters & sort sheet and leaves it open for the caller. The
+    row is the switch's host (the sheet's own width); the three segments share
+    the track equally. Pixel tolerance 1 (sub-pixel layout), never the 360px
+    the switch used to stop at.
     """
-    switch = page.locator("#todayScope .segmented.scope-switch")
+    open_filter_sheet(page, "paneToday")
+    switch = page.locator("#filterSheet .segmented.scope-switch")
     expect(switch).to_be_visible()
     expect(switch.locator(".segmented-item")).to_have_count(3)
     b = page.evaluate(_SWITCH_BOXES_JS)
@@ -175,9 +178,10 @@ def _week_lanes(page: Page, base: str) -> None:
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "today")
     page.click("nav.tabs .tab[data-tab='board']")
     expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
-    modes = page.locator("#paneBoard .board-modes .segmented-item")
+    modes = open_filter_sheet(page, "paneBoard").locator(".board-modes .segmented-item")
     expect(modes).to_have_text(["Week", "Status"])
     expect(modes.first).to_have_attribute("aria-pressed", "true")       # Week is the default
+    close_filter_sheet(page)
     lanes = page.locator("#paneBoard .board-week .board-col:not([hidden])")
     assert lanes.evaluate_all("els => els.map(e => e.dataset.col)") == LANES
     expect(lanes.locator(".board-col-label")).to_have_text(
@@ -223,7 +227,8 @@ def _week_lanes(page: Page, base: str) -> None:
     expect(head.locator('[data-tone="accent"]')).to_have_text(f"{inbox_n} in Inbox")
     expect(head.locator('[data-tone="attention"]')).to_have_text(f"{overdue_n} overdue")
     # Triage works on the Inbox column: it is not on the week planner.
-    expect(page.locator("#paneBoard .board-triage")).to_be_hidden()
+    expect(open_filter_sheet(page, "paneBoard").locator(".board-triage")).to_be_hidden()
+    close_filter_sheet(page)
 
 
 
@@ -299,8 +304,10 @@ def _status_columns(page: Page, base: str, shots: Path) -> dict:
     link = _col(page, "done").locator(".board-col-link").bounding_box()
     title = _col(page, "done").locator(".board-col-title").bounding_box()
     assert link and title and link["x"] + link["width"] <= title["x"] + title["width"] + 0.5, (link, title)
-    # Status mode with Inbox tasks: Triage sits on the mode line, not in a column head
-    expect(page.locator("#paneBoard .board-bar .board-triage")).to_be_visible()
+    # Status mode with Inbox tasks: Triage is a row of the Filters & sort sheet, not in a column head
+    open_filter_sheet(page, "paneBoard")
+    expect(page.locator("#filterSheet .board-triage")).to_be_visible()
+    close_filter_sheet(page)
     expect(page.locator("#paneBoard .board-col .board-triage")).to_have_count(0)
     # a row = circle · title · kebab, with one passive meta line under the
     # title on #392's budget: due · exception chips · project · the child
@@ -323,12 +330,12 @@ def _status_columns(page: Page, base: str, shots: Path) -> dict:
     expect(page.locator(".row-menu")).to_have_count(0)
     # a synced issue's task is behind the Issues scope (#391)
     expect(_card(page, "Fix watering schedule drift")).to_have_count(0)
-    page.locator("#boardScope .segmented-item[data-scope='issues']").click()
+    press_in_sheet(page, "paneBoard", ".scope-switch [data-scope='issues']")
     watering = _card(page, "Fix watering schedule drift")
     expect(watering.locator(".trow-meta .trow-issue")).to_have_count(0)
     _open_issue_from_menu(page, watering, "garden-bot/issues/12")
     expect(watering.locator(".trow-comments")).to_have_text("1")
-    page.locator("#boardScope .segmented-item[data-scope='mine']").click()
+    press_in_sheet(page, "paneBoard", ".scope-switch [data-scope='mine']")
     expect(page).to_have_url(f"{base}/")
     expect(page.locator("#paneBoard .trow-comments").first).to_have_text(re.compile(r"^\d+$"))
     expect(page.locator("#paneBoard .t-comment")).to_have_count(0)   # the body bloated the cards
@@ -350,6 +357,10 @@ def _top_strip(page: Page, base: str) -> None:
     #    quick-add dialog, whose Escape discards the draft.
     q = page.locator("#boardFilterText .filter-q")
     expect(q).to_be_visible()
+    # nothing sits between the strip and the lanes: the Week · Status switch, the
+    # kind of task and the person row are rows of the Filters & sort sheet (#744)
+    kids = page.locator("#paneBoard .pane-body > *").evaluate_all("els => els.map(e => e.id || e.className)")
+    assert kids == ["pane-top", "boardHost"], kids
     sheet = page.locator("#filterSheet")
     expect(sheet).to_be_hidden()                             # the sheet is not up
     q.fill("passport")
@@ -722,8 +733,9 @@ def _bulk_status_and_owner(page: Page, base: str, shots: Path, ids: list[int]) -
     #      away, brings them back — the rest of the walk goes on under it.
     for i in (ids[0], ids[2]):
         expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(0)
-    expect(page.locator("#boardOwners .segmented-item[aria-pressed='true']")).to_have_text("Mine")
-    page.locator("#boardOwners .segmented-item[data-owner='everyone']").click()
+    expect(open_filter_sheet(page, "paneBoard").locator(".owner-switch .segmented-item[aria-pressed='true']")).to_have_text("Mine")
+    page.locator("#filterSheet .owner-switch .segmented-item[data-owner='everyone']").click()
+    close_filter_sheet(page)
     for i in (ids[0], ids[2]):
         expect(page.locator(f"#paneBoard .trow[data-id='{i}']")).to_have_count(1)
 
