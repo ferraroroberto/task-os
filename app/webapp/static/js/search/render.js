@@ -17,7 +17,7 @@
 'use strict';
 
 import { collapsibleCard } from '../../collapsible.js';
-import { matchesFilters, matchesScope } from '../../filters.js';
+import { matchesFilters, matchesScope, statusCoverage } from '../../filters.js';
 import { sortItems } from '../../rows.js';
 import { hitRow, taskHitRow } from './hits.js';
 import { HINT, KINDS, foldParts, hitWord } from './text.js';
@@ -128,6 +128,8 @@ export function render(ctx, res) {
   const groups = [];
   const errors = [];
   const fold = { none: [], hidden: 0, off: [] };
+  const filters = ctx.opts.filters ? ctx.opts.filters() : null;
+  const coverage = filters ? statusCoverage(filters) : '';
   KINDS.forEach(function (k) {
     const g = res.groups.find(function (x) { return x.kind === k.kind; }) || { kind: k.kind, configured: false, reason: 'no answer', hits: [] };
     if (!g.configured) { fold.off.push(k.label); return; }
@@ -138,7 +140,7 @@ export function render(ctx, res) {
     const rows = k.kind === 'tasks' ? taskHits(ctx, g) : all;
     if (k.kind === 'tasks' && !rows.length) fold.hidden = all.length;   // a partial cut shows as "3 of 5" on the group
     if (!rows.length) {
-      if (k.kind !== 'tasks' || !all.length) fold.none.push(g.note ? k.label + ' (' + g.note + ')' : k.label);
+      if (k.kind !== 'tasks' || !all.length) fold.none.push(g.note ? k.label + ' (' + g.note + ')' : (k.kind === 'tasks' && coverage ? k.label + ' (' + coverage + ')' : k.label));
       return;
     }
     const n = k.kind === 'tasks' ? rows.length : (g.count || rows.length);
@@ -158,7 +160,8 @@ export function render(ctx, res) {
     if (g.deep_link) parts.body.appendChild(deepLink(g.deep_link));
     groups.push(parts.card);
   });
-  ctx.meta.textContent = hitWord(total);
+  // the statuses the task hits cover ride beside the count, so "0 hits" never leaves open whether done and cancelled were looked at
+  ctx.meta.textContent = hitWord(total) + (coverage ? ' · ' + coverage : '');
   const nodes = groups.slice();
   const line = foldLine(fold);
   if (line) nodes.push(line);

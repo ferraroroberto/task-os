@@ -445,7 +445,7 @@ function renderFilters() {
           // closing time, and a due / modified window says nothing about a
           // closed task — only project · person · text apply
           ? { onChange: onFilterChange, textHost: pair[1], hide: JOURNAL_HIDES, countLabel: 'closed' }
-          : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox }
+          : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox, searchStatus: true }
             : { onChange: onFilterChange, textHost: pair[1], views: views[pair[0]] });
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }

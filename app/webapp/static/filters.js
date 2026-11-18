@@ -28,7 +28,15 @@ import { addDays, isBlocked, isDeferred, STATUSES, todayISO } from './format.js'
 import { modalCard, onceClosed } from './modal.js';
 import { CLOSED, SORTS, sortLabel } from './rows.js';
 
-export const DEFAULT_FILTERS = { status: [], project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine', owners: [] };
+export const DEFAULT_FILTERS = { status: [], everyStatus: false, project: '', person: [], due: '', updated: '', q: '', sort: 'due', scope: 'mine', whose: 'mine', owners: [] };
+/**
+ * The Search tab's second status state. Search shows the open statuses ticked
+ * by default (`status` empty), and clearing every tick there means every
+ * status, done and cancelled included — a state `status: []` cannot also be, so
+ * it is its own flag, written to the URL as the word `all`. Only Search reads
+ * it: Today, Board and the journal keep reading "none ticked" as the open tasks.
+ */
+export const EVERY_STATUS = 'all';
 /**
  * Which kind of task a list shows: the ones you
  * make, the issues the forge sync brings in, or both — labelled Tasks · Issues
@@ -101,7 +109,9 @@ export function storedWhose(storage) {
 export function filtersFromSearch(search, stored) {
   const p = new URLSearchParams(search || '');
   const f = Object.assign({}, DEFAULT_FILTERS);
-  f.status = csv(p.get('status')).filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED || s === BLOCKED; });
+  const statusWords = csv(p.get('status'));
+  f.status = statusWords.filter(function (s) { return STATUSES.indexOf(s) >= 0 || s === DEFERRED || s === BLOCKED; });
+  f.everyStatus = statusWords.indexOf(EVERY_STATUS) >= 0;
   f.project = p.get('project') || '';
   f.person = csv(p.get('person')).filter(function (s) { return /^\d+$/.test(s); });
   f.due = DUE_WINDOWS.some(function (w) { return w[0] === p.get('due'); }) ? p.get('due') : '';
@@ -117,7 +127,8 @@ export function filtersFromSearch(search, stored) {
 
 export function filtersToSearch(f) {
   const p = new URLSearchParams();
-  if (f.status.length) p.set('status', f.status.join(','));
+  const statusWords = f.everyStatus ? f.status.concat([EVERY_STATUS]) : f.status;
+  if (statusWords.length) p.set('status', statusWords.join(','));
   if (f.project) p.set('project', f.project);
   if (f.person.length) p.set('person', f.person.join(','));
   if (f.due) p.set('due', f.due);
@@ -272,6 +283,41 @@ export function listParams(f, owner) {
 }
 
 // -------------------------------------------------- client-side predicate
+/** The real statuses among the ticks (not `deferred` / `blocked`). */
+function realStatuses(ticks) {
+  return ticks.filter(function (s) { return s !== DEFERRED && s !== BLOCKED; });
+}
+
+const OPEN_STATUSES = STATUSES.filter(function (s) { return !CLOSED[s]; });
+
+/** What the Search sheet's status ticks show: the open statuses while the filter
+ *  is at its default, nothing once every status is asked for, else the picks. */
+export function searchStatusTicks(f) {
+  const modifiers = f.status.filter(function (s) { return s === DEFERRED || s === BLOCKED; });
+  if (f.everyStatus) return modifiers;
+  const real = realStatuses(f.status);
+  return modifiers.concat(real.length ? real : OPEN_STATUSES);
+}
+
+/** The filter-state patch for the ticks the Search sheet now shows: the open
+ *  statuses ticked is the default (nothing stored), none ticked is every status. */
+export function searchStatusPatch(ticks) {
+  const modifiers = ticks.filter(function (s) { return s === DEFERRED || s === BLOCKED; });
+  const real = realStatuses(ticks);
+  if (!real.length) return { status: modifiers, everyStatus: true };
+  const isOpenSet = real.length === OPEN_STATUSES.length && OPEN_STATUSES.every(function (s) { return real.indexOf(s) >= 0; });
+  return { status: isOpenSet ? modifiers : ticks, everyStatus: false };
+}
+
+/** Which statuses the Search task hits cover, in words — the count line and the
+ *  "no matches" line carry it, so an empty result never leaves it open whether
+ *  done and cancelled tasks were looked at. */
+export function statusCoverage(f) {
+  const real = realStatuses(f.status);
+  if (real.length) return real.length === STATUSES.length ? 'every status' : real.join(', ');
+  return f.everyStatus ? 'every status' : 'open only';
+}
+
 /**
  * The same filter applied in the browser — for rows that did not come through
  * /api/tasks (the Search tab's hits). Text (`q`) is not applied here: the
@@ -291,9 +337,9 @@ export function matchesFilters(t, f, today) {
   // open blocker; not ticking it hides nothing (a blocked task stays findable
   // wherever this predicate runs — the Search tab).
   if (f.status.indexOf(BLOCKED) >= 0 && !isBlocked(t)) return false;
-  const statuses = f.status.filter(function (s) { return s !== DEFERRED && s !== BLOCKED; });
+  const statuses = realStatuses(f.status);
   if (statuses.length) { if (statuses.indexOf(t.status) < 0) return false; }
-  else if (CLOSED[t.status]) return false;
+  else if (!f.everyStatus && CLOSED[t.status]) return false;
   if (f.project) {
     const pid = String(f.project);
     const inCrumb = (t.breadcrumb || []).some(function (c) { return String(c.id) === pid; });
@@ -331,6 +377,7 @@ export function describeFilters(f, options) {
   const hidden = new Set(o.hide || []);
   const bits = [];
   if (f.status.length && !hidden.has('status')) bits.push(f.status.join(', '));
+  if (o.searchStatus && f.everyStatus && !hidden.has('status')) bits.push('every status');
   if (f.project && !hidden.has('project')) {
     const p = (o.projects || []).find(function (x) { return String(x.id) === String(f.project); });
     bits.push(p ? p.title : 'project #' + f.project);
@@ -351,10 +398,10 @@ export function describeFilters(f, options) {
  *  text (the field beside the button shows it) and not the view toggles
  *  (`activeViewCount`); a non-default sort does count, since Clear resets it
  *  too. A hidden control's value is not applied, so not counted. */
-export function activeFilterCount(f, hide) {
+export function activeFilterCount(f, hide, searchStatus) {
   const hidden = new Set(hide || []);
   let n = 0;
-  if (f.status.length && !hidden.has('status')) n += 1;
+  if ((f.status.length || (searchStatus && f.everyStatus)) && !hidden.has('status')) n += 1;
   if (f.project && !hidden.has('project')) n += 1;
   if (f.person.length && !hidden.has('person')) n += 1;
   if (f.due && !hidden.has('due')) n += 1;
@@ -512,10 +559,11 @@ export function sheetRow(name, label, control) {
   return r;
 }
 
-/** The sheet's controls in their order, each change through `set(name)`;
+/** The sheet's controls in their order, each change through `set(name)` (the
+ *  Search status ticks pass `true` after the value: they commit through `searchStatusPatch`);
  *  a name in `hidden` is left out. `afterSort` draws the tab's view toggles
  *  between the sort and the filters. */
-function sheetControls(body, f, options, hidden, set, afterSort) {
+function sheetControls(body, f, options, hidden, set, afterSort, searchStatus) {
   // 1. sort first: it orders every list, filtered or not
   if (!hidden.has('sort')) {
     const r = sheetRow('sort', 'Sort', segmentedEl('sort', 'Sort', SORTS.map(function (s) { return [s[0], SORT_SEGMENT_LABELS[s[0]] || cap(s[1])]; }), f.sort, set('sort')));
@@ -525,10 +573,13 @@ function sheetControls(body, f, options, hidden, set, afterSort) {
   afterSort(body);
   // 2. status — `deferred` and `blocked` ride the end: the one visible way
   //    to see the sleeping and the locked tasks the working views
-  //    leave out. None ticked = the open tasks.
+  //    leave out. None ticked = the open tasks (on Search, every status).
   if (!hidden.has('status')) {
     const statusValues = STATUSES.concat([DEFERRED, BLOCKED]).map(function (s) { return [s, cap(s)]; });
-    const r = sheetRow('status', 'Status', checkGroup('status', 'filterSheet-status', statusValues, f.status, set('status')));
+    // Search draws the open statuses ticked and takes "none ticked" as every status
+    const r = sheetRow('status', 'Status', searchStatus
+      ? checkGroup('status', 'filterSheet-status', statusValues, searchStatusTicks(f), function (ticks) { set('status')(ticks, true); })
+      : checkGroup('status', 'filterSheet-status', statusValues, f.status, set('status')));
     r.classList.add('is-stacked');
     body.appendChild(r);
   }
@@ -595,12 +646,13 @@ function filterButton() {
 }
 
 /** The badge's number, and a name that spells out what is on. */
-function paintFilterButton(button, badge, filters, options, hide, views) {
-  const n = activeFilterCount(filters, hide) + (views ? views.count(filters) : 0);
+function paintFilterButton(button, badge, filters, options, opts) {
+  const views = opts.views;
+  const n = activeFilterCount(filters, opts.hide, opts.searchStatus) + (views ? views.count(filters) : 0);
   badge.textContent = n ? String(n) : '';
   badge.hidden = !n;
   button.classList.toggle('has-value', n > 0);
-  const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: hide })
+  const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: opts.hide, searchStatus: opts.searchStatus })
     .concat(views ? views.words(filters) : []);
   const name = n ? 'Filter, ' + n + ' on: ' + words.join(' · ') : 'Filter';
   button.setAttribute('aria-label', name);
@@ -663,7 +715,7 @@ function focusClose(dialog) {
  *  The view toggles are read from the live state: `drawn` only holds what the sheet last drew. */
 function sheetHasValue(f, opts) {
   const live = opts.views ? Object.assign({}, f, opts.views.live()) : f;
-  return !!(activeFilterCount(live, opts.hide) + (opts.views ? opts.views.count(live) : 0));
+  return !!(activeFilterCount(live, opts.hide, opts.searchStatus) + (opts.views ? opts.views.count(live) : 0));
 }
 
 /**
@@ -700,7 +752,7 @@ function mountStrip(opts, read, onOpen) {
       button.addEventListener('click', onOpen);
       host.appendChild(button);
     }
-    paintFilterButton(button, badge, filters, options, opts.hide, opts.views);
+    paintFilterButton(button, badge, filters, options, opts);
   }
 
   return { render: function (filters) { const o = read().options; renderText(filters, o); renderButton(filters, o); } };
@@ -721,7 +773,7 @@ let sheetOwner = null;   // the mountFilters handle whose controls the one sheet
  * change. The tabs share the one `<dialog>`; whichever instance opened it
  * draws its controls.
  * @param {{onChange: (f: object) => void, textHost?: HTMLElement, buttonHost?: HTMLElement,
- *          hide?: string[], countLabel?: string}} opts
+ *          hide?: string[], countLabel?: string, searchStatus?: boolean}} opts
  *          textHost — where the always-visible text input goes (the pane's top
  *          strip). Omitted on the Search tab: its own box owns the text,
  *          so there is no second text field and Clear leaves the query alone.
@@ -730,6 +782,8 @@ let sheetOwner = null;   // the mountFilters handle whose controls the one sheet
  *          countLabel — the word before "tasks" in the text field's
  *          placeholder, which carries the list's count ("Filter 12 closed
  *          tasks…")
+ *          searchStatus — the Search tab: its status row draws the open statuses
+ *          ticked, and none ticked means every status (`everyStatus`)
  *          hide — control names this tab leaves out (`status` · `due` ·
  *          `updated` · `sort` · `project` · `person`); the journal
  *          drops the four that say nothing about a closed task. A hidden
@@ -788,8 +842,8 @@ export function mountFilters(opts) {
     const card = filterCard(dialog);
     const body = sheetBody(card);
     sheetControls(body, f, options, hidden, function (name) {
-      return function (value) { const p = {}; p[name] = value; commit(p); };
-    }, function (rows) { if (opts.views) opts.views.draw(rows, f); });
+      return function (value, searchTicks) { const p = {}; p[name] = value; commit(searchTicks ? searchStatusPatch(value) : p); };
+    }, function (rows) { if (opts.views) opts.views.draw(rows, f); }, !!opts.searchStatus);
     const foot = sheetActions(!sheetHasValue(f, opts), function () {
       if (opts.views) opts.views.clear();
       drawn = clearedFilters(drawn || f, !opts.textHost, !opts.views);
