@@ -6,10 +6,9 @@
  * Later (further out) and No date. The tab opens on what is due: those
  * rows come first with no header of their own, because the page header above
  * already names them ("2 overdue · 1 due today") — one header, one count. The
- * three after it are flat disclosures headed by an `overline` with their count;
- * Soon sits open, Later and No date start closed with their counts and keep
- * whatever the user toggled across re-renders.
- * Under a text filter all three open, so a match is never folded away. Inside a horizon
+ * three after it are plain sections under the Board's own group header (an
+ * `overline` name with its count): all open, always, nothing to fold, so the
+ * whole list reads without a tap. Inside a horizon
  * the tasks are ONE flat list in the Board's order (rows.js `sortBoardItems`:
  * due day, then no project, then project A–Z, then title), so an earlier date
  * always sits above a later one whatever its project, recurring or not. The
@@ -33,14 +32,8 @@
 
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { calendarLane } from './calendar.js';
-import { collapsibleCard } from './collapsible.js';
 import { addDays, relDue, todayISO } from './format.js';
 import { rowList, sortBoardItems } from './rows.js';
-
-/** Later and No date's open state as the user left it: closed until
- *  toggled, kept across the re-renders a refresh or a filter change makes,
- *  reset by a reload. Soon is always drawn open. */
-const horizonOpen = { 'today-far': false, 'today-nodate': false };
 
 /** Split the list into the four horizons {due, week, later, nodate, counts}
  *  — exported for tests. Every task lands in exactly one. */
@@ -149,35 +142,37 @@ export function renderToday(host, items, handlers, opts) {
 
   // Soon always shows, with its way forward when it is empty; Later and No
   // date only when they hold something — an empty far horizon says nothing.
-  main.appendChild(horizon('today-soon', 'Soon', data.week, counts.week, handlers, o, null,
+  main.appendChild(horizon('today-soon', 'Soon', data.week, counts.week, handlers, o,
     q ? emptyStateEl('search', noMatch('due in the next seven days'))
       : emptyStateEl('calendar-days', 'Nothing due in the next seven days', handlers.onAdd ? {
         actionLabel: 'Add a task', onAction: function () { handlers.onAdd(); },
       } : undefined)));
-  if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o, !!q));
-  if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o, !!q));
+  if (counts.later) main.appendChild(horizon('today-far', 'Later', data.later, counts.later, handlers, o));
+  if (counts.nodate) main.appendChild(horizon('today-nodate', 'No date', data.nodate, counts.nodate, handlers, o));
   if (scrolled) main.scrollTop = scrolled;
   return counts;
 }
 
-/** One horizon after the due rows — a flat disclosure (vendored markup,
- *  hairline instead of a card box). `forceOpen` null = always open (Soon);
- *  otherwise the horizon keeps the user's toggle (`horizonOpen`), and `true`
- *  (a text filter is on) opens it without recording that as their choice. */
-function horizon(cls, title, items, n, handlers, o, forceOpen, empty) {
-  const card = collapsibleCard({
-    className: 'disclosure-flat today-horizon ' + cls, title: title, titleClass: 'overline',
-    count: String(n), countClass: 'section-count',
-  });
-  card.count.setAttribute('aria-label', n + (n === 1 ? ' task' : ' tasks'));
-  if (forceOpen === null) card.card.open = true;
-  else {
-    card.card.open = forceOpen || horizonOpen[cls];
-    if (!forceOpen) card.card.addEventListener('toggle', function () { horizonOpen[cls] = card.card.open; });
-  }
-  if (!items.length && empty) card.body.appendChild(empty);
-  appendRows(card.body, items, handlers, o);
-  return card.card;
+/** One horizon after the due rows: a section under the Board's group header
+ *  (an `overline` name and its count, no rule, no chevron), always open. */
+function horizon(cls, title, items, n, handlers, o, empty) {
+  const section = document.createElement('section');
+  section.className = 'today-horizon ' + cls;
+  section.setAttribute('aria-label', title);
+  const head = document.createElement('h3');
+  head.className = 'today-horizon-head';
+  const label = document.createElement('span');
+  label.className = 'overline';
+  label.textContent = title;
+  const count = document.createElement('span');
+  count.className = 'section-count';
+  count.textContent = String(n);
+  count.setAttribute('aria-label', n + (n === 1 ? ' task' : ' tasks'));
+  head.append(label, count);
+  section.appendChild(head);
+  if (!items.length && empty) section.appendChild(empty);
+  appendRows(section, items, handlers, o);
+  return section;
 }
 
 /** One horizon's rows as one flat list. The project and (Everyone view) the

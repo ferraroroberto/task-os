@@ -276,13 +276,14 @@ surfaces:
     does:
       - >-
         the horizons are **Due** (overdue first, then today; no heading, the header names it),
-        **Soon** (tomorrow to a week out, open), **Later** and **No date** (folded until opened; a
-        text filter opens them; each shows only when it holds something). Inside a horizon rows run
-        by due day, no project first, project A–Z, title.
+        **Soon** (tomorrow to a week out), **Later** and **No date** (each shows only when it holds
+        something). Soon, Later and No date sit under the Board's group header (name and count,
+        no rule, no chevron) and are always open: nothing folds. Inside a horizon rows run by due
+        day, no project first, project A–Z, title.
     states:
       - >-
         empty install shows *Add your first task* with an **Add a task** button; a filter with no
-        match shows an empty line; counts sit on the disclosure headers.
+        match shows an empty line; counts sit on the group headers.
     desktop: the list scrolls inside its own box under the strip at 1024px and up.
     links:
       - to: strip.top

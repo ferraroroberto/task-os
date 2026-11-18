@@ -7,6 +7,21 @@
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); padding: 2px var(--space-xs) var(--space-sm); }
 .today-title { margin: 0; }
 .today-counts { color: var(--muted); font-size: var(--font-label); }
+/* The horizons after the due rows wear the Board's group header: the overline name
+   and its count on one line, no hairline above or below and nothing to fold. They
+   are spaced like the Board's stacked lanes (`.board-week`). */
+.today-main { display: flex; flex-direction: column; gap: var(--space-md); }
+.today-horizon-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: var(--row-sm);
+}
+/* Beside the detail pane the rows are not cards, so the name lines up with the Board's lane header. */
+@media (min-width: 1024px) {
+  .today-horizon-head { padding-inline: var(--space-xs); }
+}
 .today-group { padding: 0; border-top: 1px solid var(--line); }
 .today-group-title {
   display: flex;

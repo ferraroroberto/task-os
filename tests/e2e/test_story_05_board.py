@@ -643,24 +643,23 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         page.goto(f"{base}/")
         page.click("nav.tabs .tab[data-tab='today']")
         pane = page.locator("#paneToday")
-        # 1. Later and No date start closed with their counts (#393, decision 6
-        #    of #390); one tap opens each, and a re-render keeps it open.
+        # 1. Every horizon is open from the first paint, with its count and no
+        #    control to fold it: its rows are all there without a tap, and a
+        #    re-render changes nothing about that.
         later = pane.locator(".today-far")
         nodate = pane.locator(".today-nodate")
-        assert later.evaluate("el => el.open") is False and nodate.evaluate("el => el.open") is False
-        expect(pane.locator(".today-soon")).to_have_js_property("open", True)
+        expect(pane.locator("summary, details, .collapse-chevron")).to_have_count(0)
         _clear_toasts(page)
         nodate.scroll_into_view_if_needed()
-        shot(page, shots / "story-31-today-horizons-4-desktop.png")      # folded, counts showing
+        shot(page, shots / "story-31-today-horizons-4-desktop.png")      # every group open, counts showing
         for horizon in (later, nodate):
             n = int(horizon.locator(".section-count").inner_text())
             assert n == horizon.locator(".trow[data-id]").count() and n >= 1
-            horizon.locator(".collapse-summary").click()
-            expect(horizon).to_have_js_property("open", True)
+            expect(horizon.locator(".trow[data-id]").first).to_be_visible()
         press_in_sheet(page, "paneToday", ".scope-switch [data-scope='all']")    # All: a re-render
         press_in_sheet(page, "paneToday", ".scope-switch [data-scope='mine']")   # back to Tasks
-        expect(later).to_have_js_property("open", True)
-        expect(nodate).to_have_js_property("open", True)
+        expect(later.locator(".trow[data-id]").first).to_be_visible()
+        expect(nodate.locator(".trow[data-id]").first).to_be_visible()
         far_row = later.locator(f".trow[data-id='{far}']")
         loose_row = nodate.locator(f".trow[data-id='{loose}']")
         far_row.scroll_into_view_if_needed()
@@ -673,11 +672,14 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         # filter shows is in exactly one of them; each header is the overline
         # role (caps from CSS, so the text itself stays sentence case) with its
         # count beside it (#391)
-        heads = pane.locator(".today-horizon .collapse-title")
+        heads = pane.locator(".today-horizon-head .overline")
         order = heads.evaluate_all("els => els.map(e => e.textContent)")
         assert order == ["Soon", "Later", "No date"], order
-        assert heads.evaluate_all("els => els.every(e => e.classList.contains('overline') "
-                                  "&& getComputedStyle(e).textTransform === 'uppercase')")
+        assert heads.evaluate_all("els => els.every(e => getComputedStyle(e).textTransform === 'uppercase')")
+        # the Board's group header: no rule above or below it
+        assert pane.locator(".today-horizon-head").evaluate_all(
+            "els => els.every(e => getComputedStyle(e).borderTopWidth === '0px' "
+            "&& getComputedStyle(e).borderBottomWidth === '0px')")
         expect(later.locator(".section-count")).to_have_text(re.compile(r"^\d+$"))
         _clear_toasts(page)
         nodate.scroll_into_view_if_needed()

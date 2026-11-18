@@ -2,8 +2,7 @@
  *
  * `_vendored/disclosure` ships the CSS and a markup skeleton, no JS, so a card
  * a view creates at runtime has to build that DOM itself: the Search tab's
- * per-kind groups (search.js) and Today's
- * Soon / Later / No date (today.js). This is that builder — the skeleton's element
+ * per-kind groups (search.js) and the drawer's More fields. This is that builder — the skeleton's element
  * order and class names exactly, so the vendored rules keep matching. The
  * cards written straight into index.html (Settings) are the static twin.
  */

@@ -330,7 +330,7 @@ html, body {
 }
 
 /* A flat disclosure: the vendored details/summary without the card box —
-   a hairline above, no radius, no border (Today's Soon / Later / No date). */
+   a hairline above, no radius, no border (the Search groups, the drawer's More fields). */
 .card.disclosure-flat {
   border: 0;
   border-top: 1px solid var(--line);
