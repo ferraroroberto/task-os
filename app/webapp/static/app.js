@@ -52,7 +52,7 @@ import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
-  filtersFromSearch, filtersToSearch, listParams, matchesScope,
+  filtersFromSearch, filtersToSearch, listParams, matchesScope, showsClosed,
   mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose,
 } from './filters.js';
 import { todayISO } from './format.js';
@@ -335,7 +335,7 @@ async function loadItems(seq) {
   // No view reads a description off the list (the drawer fetches its own task).
   const slim = { descriptions: false };
   const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
-  if (!f.status.length) {
+  if (!showsClosed(f)) {
     calls.push(api('/api/tasks' + qs(Object.assign({}, params, slim, { status: ['done'], done_on: todayISO() }))));
   }
   const results = await Promise.all(calls);
@@ -397,7 +397,7 @@ async function refreshAll() {
  *  ride along for the Board's "Done today" column when no status pill is
  *  ticked (Today defaults to open tasks, as the filter sheet says). */
 function viewItems() {
-  if (state.filters.status.length) return state.items;
+  if (showsClosed(state.filters)) return state.items;
   return state.items.filter(function (t) { return !CLOSED[t.status]; });
 }
 
@@ -429,7 +429,7 @@ function renderFilters() {
   // Today and the Board count what they show: their lists are narrowed by the scope switch.
   const todayOptions = Object.assign({}, options, { count: todayItems().length });
   const boardOptions = Object.assign({}, options, {
-    count: boardItems().filter(function (t) { return state.filters.status.length || !CLOSED[t.status]; }).length,
+    count: boardItems().filter(function (t) { return showsClosed(state.filters) || !CLOSED[t.status]; }).length,
   });
   // [tab, the top strip that holds the text input and the filter button
   // Search has no text strip: its own box owns the text and holds

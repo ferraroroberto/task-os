@@ -429,7 +429,8 @@ surfaces:
         ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**,
         **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear**
         (only while something is on), **Done**. On Search the status ticks are drawn with the open
-        statuses ticked, and un-ticking them all means every status.
+        statuses ticked, and un-ticking them all means every status; on Today and Board no ticks means
+        open tasks until the text field holds a query, then every status, named at the end of the header line.
     does:
       - >-
         applies live; the state is the URL. The filter button's count adds the kind of task and

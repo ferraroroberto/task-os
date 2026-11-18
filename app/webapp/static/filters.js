@@ -273,6 +273,7 @@ export function listParams(f, owner) {
   return {
     owner: owner || undefined,
     status: f.status.length ? f.status : undefined,
+    include_closed: queryCoversEveryStatus(f) || undefined,
     project: f.project || undefined,
     person: f.person.length ? f.person : undefined,
     due: f.due || undefined,
@@ -309,13 +310,27 @@ export function searchStatusPatch(ticks) {
   return { status: isOpenSet ? modifiers : ticks, everyStatus: false };
 }
 
-/** Which statuses the Search task hits cover, in words — the count line and the
+/** Is a typed query searching every status on Today or Board? — a text filter
+ *  with no real status ticked. Without text the empty ticks mean the open
+ *  tasks, so the working lists stay free of finished work. (Search keeps its
+ *  text in its own box, never in `f.q`, and reads `everyStatus` instead.) */
+export function queryCoversEveryStatus(f) {
+  return !!(f.q && f.q.trim()) && !realStatuses(f.status).length;
+}
+
+/** Do Today and Board list closed tasks? — a status is picked (a closed one
+ *  shows only when ticked) or a typed query covers every status. */
+export function showsClosed(f) {
+  return f.status.length > 0 || queryCoversEveryStatus(f);
+}
+
+/** Which statuses a search covers, in words — the count line and the
  *  "no matches" line carry it, so an empty result never leaves it open whether
  *  done and cancelled tasks were looked at. */
 export function statusCoverage(f) {
   const real = realStatuses(f.status);
   if (real.length) return real.length === STATUSES.length ? 'every status' : real.join(', ');
-  return f.everyStatus ? 'every status' : 'open only';
+  return f.everyStatus || queryCoversEveryStatus(f) ? 'every status' : 'open only';
 }
 
 /**
