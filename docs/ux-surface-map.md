@@ -575,7 +575,7 @@ flowchart LR
 ### `drawer.comments` Comments
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** newest first, a composer (**Send**, Ctrl+Enter), per comment a **pencil** (edit in place, Ctrl+Enter saves, Escape cancels) and a **trash** (asks first, no undo); URLs, `{folder}` refs and `repo#N` render as chips.
+- **Holds:** newest first, a composer (**Send**, Ctrl+Enter), then one compact row per comment: a time column (time today, *Yest.*, a short date), the text clamped to two lines (tap the row to open the rest), the author after the text only when it is somebody else, and one **···** menu with **Edit** (in place, Ctrl+Enter saves, Escape cancels) and **Delete** (asks first, no undo). A comment with exactly one web link is that link: its text opens the URL in a new window (the raw URL is not shown); a URL-only comment, several targets, a folder, an issue ref or an AI conversation keep chips.
 
 ### `drawer.activity` Activity
 

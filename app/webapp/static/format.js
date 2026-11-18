@@ -125,6 +125,20 @@ export function fmtTs(iso) {
   return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + hh + ':' + mm;
 }
 
+/** A comment's narrow time column: the time today, "Yest." for yesterday,
+ *  else a short date ("17 Aug", with the year once it is not this year's). */
+export function fmtCommentWhen(iso, now) {
+  const d = new Date(iso);
+  if (!iso || isNaN(d.getTime())) return iso || '';
+  const ref = now || new Date();
+  const day = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+  const apart = Math.round((day(ref) - day(d)) / 86400000);
+  if (apart === 0) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (apart === 1) return 'Yest.';
+  const short = d.getDate() + ' ' + MONTHS[d.getMonth()];
+  return d.getFullYear() === ref.getFullYear() ? short : short + ' ' + String(d.getFullYear()).slice(2);
+}
+
 /** The locale's short date + time from an ISO timestamp — the status-line
  *  stamp the Settings cards and the header ↻ tooltip use. */
 export function fmtTsShort(iso) {
@@ -525,6 +539,22 @@ export function linkify(text) {
   });
   if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
   return frag;
+}
+
+/** A text that holds exactly one target, a plain web link, → `{url, rest}`
+ *  (`rest` is the text with the URL cut out, whitespace tidied); else null.
+ *  A folder ref, an issue ref, a mailto or an AI-conversation link is never
+ *  the single link: each keeps its chip, whose own behaviour a bare link
+ *  would lose. */
+export function singleLink(text) {
+  const s = String(text == null ? '' : text);
+  const found = s.match(TOKEN_RE) || [];
+  if (found.length !== 1 || !/^https?:\/\//i.test(found[0])) return null;
+  const core = found[0].replace(/[.,;:!?]+$/, '');
+  if (AI_URL_RE.test(core)) return null;
+  const at = s.indexOf(found[0]);
+  const rest = (s.slice(0, at) + s.slice(at + core.length)).replace(/[ \t]+/g, ' ').replace(/ +([,;:.!?])/g, '$1').trim();
+  return { url: core, rest: rest };
 }
 
 // --------------------------------------------------------------- markdown

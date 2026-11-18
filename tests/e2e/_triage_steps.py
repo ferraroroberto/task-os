@@ -158,7 +158,7 @@ def _drawer_quick_moves_and_comment(
     expect(drawer.locator("details.drawer-more")).not_to_have_attribute("open", "")
     expect(drawer.locator("input[data-field='starts']")).to_be_hidden()
 
-    # 4. Add a comment containing a link → chip with href, newest first.
+    # 4. Add a comment containing a link → the comment's words are the link, newest first.
     # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
     # hint, Send is the vendored primary (a commit), Description's Edit the pencil icon button.
     expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment… (Ctrl+Enter to send)")
@@ -168,15 +168,20 @@ def _drawer_quick_moves_and_comment(
     drawer.locator(".comment-input").press("Control+Enter")
     newest = drawer.locator(".comment").first
     expect(newest.locator(".comment-body")).to_contain_text("Office booked")
-    chip = newest.locator("a.chip")
+    # a comment with exactly one link IS that link (#768): the words around the URL
+    # are the anchor, the raw URL is never shown, and nothing is signed with our own name
+    chip = newest.locator("a.comment-link")
     expect(chip).to_have_attribute("href", LINK)
     expect(chip).to_have_attribute("target", "_blank")
     expect(chip).to_have_attribute("rel", "noopener")
-    expect(newest.locator(".comment-origin")).to_have_text("ui")
+    expect(newest.locator(".comment-body")).not_to_contain_text("https://")
+    expect(newest.locator(".comment-author")).to_have_count(0)
+    expect(newest.locator("a.chip")).to_have_count(0)
+    expect(newest.locator(".comment-when")).to_have_attribute("title", re.compile(r"· ui$"))
     comments = _get(base, f"/api/tasks/{task_id}/comments")["items"]
     assert comments[-1]["origin"] == "ui" and LINK in comments[-1]["body"]
     shot(page, shots / "story-04-triage-4-desktop.png")
-    # click the chip: opens the link in a new tab (the target is stubbed —
+    # click the link: opens the new tab (the target is stubbed —
     # the suite never depends on the network)
     context.route(LINK, lambda route: route.fulfill(status=200, content_type="text/html", body="<title>stub</title>ok"))
     with context.expect_page() as popup_info:

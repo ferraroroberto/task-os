@@ -473,6 +473,7 @@ def test_a_members_token_passes_the_gate_and_names_them(make_app) -> None:
         me = c.get("/api/me", headers={"Authorization": f"Bearer {P2_TOKEN}"}).json()
         assert (me["id"], me["name"], me["via"]) == ("p2", "Person 2", "token")
         assert me["people"] == [{"id": "p1", "name": "Person 1"}, {"id": "p2", "name": "Person 2"}]
+        assert me["author"] == "Person 2"                                        # what their unnamed writes are signed with
         owner = c.get("/api/me", headers={"Authorization": f"Bearer {TOKEN}"}).json()
         assert (owner["id"], owner["name"], owner["via"]) == ("p1", "Person 1", "token")
         st = c.get("/api/status", headers={"Authorization": f"Bearer {P2_TOKEN}"}).json()
@@ -535,7 +536,7 @@ def test_the_team_cookie_is_still_keyed_on_the_owners_token_alone(make_app) -> N
         me = c.get("/api/me").json()
         assert (me["id"], me["name"], me["via"]) == (None, None, "team")     # no name picked yet
         c.post("/api/team/name", json={"name": "Sam Rivera"})
-        assert c.get("/api/me").json() == {**me, "name": "Sam Rivera"}       # a team name, not a member
+        assert c.get("/api/me").json() == {**me, "name": "Sam Rivera", "author": "Sam Rivera"}   # a team name, not a member
 
 
 def test_loopback_is_the_owner_unless_it_presents_a_members_cookie(make_app) -> None:

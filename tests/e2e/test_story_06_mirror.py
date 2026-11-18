@@ -26,6 +26,7 @@ The "editor" is the test writing the file — the headed walk in
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -98,7 +99,7 @@ def _settings_then_file_edit_imported(page, base: str, shots: Path, inst, n_task
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     newest = drawer.locator(".comment").first
-    expect(newest.locator(".comment-origin")).to_have_text("md")
+    expect(newest.locator(".comment-when")).to_have_attribute("title", re.compile(r"· md$"))
     expect(newest.locator(".comment-body")).to_contain_text("checked the tiles supplier")
     shot(page, shots / "story-06-mirror-2-desktop.png")
     due_row = drawer.locator(".activity-row[data-field='due']").first

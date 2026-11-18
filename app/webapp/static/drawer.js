@@ -40,6 +40,15 @@ import { api } from './api.js';
 import { toast } from './toast.js';
 import { renderDrawer } from './js/drawer/render.js';
 
+/** The task payload and who is looking. The author is read on every open and
+ *  every refresh, not once at start, because Settings' "Your name" changes it
+ *  live under a drawer that stays open; a failed read is an unknown author,
+ *  never a failed load. */
+async function loadTask(id) {
+  const [task, me] = await Promise.all([api('/api/tasks/' + id), api('/api/me').catch(function () { return null; })]);
+  return { task: task, author: me && me.author ? me.author : null };
+}
+
 /**
  * @param {HTMLElement} el     the <aside id="taskDrawer">
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
@@ -68,6 +77,7 @@ export function createDrawer(el, opts) {
     el: el,
     opts: opts,
     current: null,             // the detail payload
+    author: null,              // /api/me's author: the name this device's comments are signed with
     descEditing: false,
     pickerOpen: false,         // the folder-index picker under the Folder field
     editingLinkId: null,
@@ -96,8 +106,8 @@ export function createDrawer(el, opts) {
     const id = ctx.current.id;
     const seq = ++loads;
     try {
-      const data = await api('/api/tasks/' + id);
-      if (seq === loads && ctx.current && ctx.current.id === id) { ctx.current = data; ctx.render(); }
+      const loaded = await loadTask(id);
+      if (seq === loads && ctx.current && ctx.current.id === id) { ctx.current = loaded.task; ctx.author = loaded.author; ctx.render(); }
     } catch (err) {
       toast(err.message || 'Could not load the task', 'error');
     }
@@ -114,9 +124,9 @@ export function createDrawer(el, opts) {
       ctx.editingCommentId = null;
       ctx.syncShown = false;
       try {
-        const data = await api('/api/tasks/' + id);
+        const loaded = await loadTask(id);
         if (seq !== loads) return;   // a newer open, or a close, took over meanwhile
-        ctx.current = data;
+        ctx.current = loaded.task; ctx.author = loaded.author;
         ctx.render();
         el.hidden = false;
         document.body.dataset.drawer = 'open';
