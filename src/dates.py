@@ -9,7 +9,11 @@ machine's calendar.
 
     today · tomorrow · yesterday
     fri · friday               → the coming Friday (today if today is Friday)
+    this fri · this friday     → the same coming Friday (today if today is Friday)
     next fri · next friday     → the Friday after that (+7 days)
+    upcoming mon · upcoming monday → the first Monday strictly after today
+                                    (any weekday works; today is never the answer)
+    end of month · eom         → the last day of this month (today if it is the last)
     this weekend · weekend     → the coming Saturday (today if today is Saturday)
     next week / next month / next year
     in 3 days · in 2 weeks · in 1 month · in 1 year   (also "3d", "2w", "+2w")
@@ -505,8 +509,17 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
     if s == "next year":
         return add_months(today, 12)
 
+    if s in ("end of month", "eom"):
+        return date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+
     if s in _WEEKDAYS:
         return _coming_weekday(today, _WEEKDAYS[s])
+    if s.startswith("this ") and s[5:] in _WEEKDAYS:
+        return _coming_weekday(today, _WEEKDAYS[s[5:]])
+    if s.startswith("upcoming ") and s[9:] in _WEEKDAYS:
+        # Strictly after today: "next monday" keeps its +7 meaning, and a
+        # menu that moves a task to "Monday" never answers with today.
+        return _coming_weekday(today + timedelta(days=1), _WEEKDAYS[s[9:]])
     if s.startswith("next ") and s[5:] in _WEEKDAYS:
         return _coming_weekday(today, _WEEKDAYS[s[5:]]) + timedelta(days=7)
 
@@ -524,5 +537,5 @@ def parse_date(text: str | None, today: date | None = None) -> date | None:
 
     raise DateParseError(
         f"cannot parse date {text!r} — try today, tomorrow, fri, next friday, "
-        f"this weekend, in 2 weeks, oct 15, or YYYY-MM-DD"
+        f"this weekend, end of month, in 2 weeks, oct 15, or YYYY-MM-DD"
     )

@@ -38,8 +38,11 @@ import { modalCard, onceClosed } from './modal.js';
  *  most re-dates push a task out, then "do it today". */
 export const DUE_OPTIONS = [
   ['tomorrow', 'Tomorrow'],
+  ['this friday', 'This Friday'],
   ['this weekend', 'This weekend'],
   ['next week', 'Next week'],
+  ['upcoming monday', 'Next Monday'],
+  ['end of month', 'End of month'],
   ['today', 'Today'],
 ];
 

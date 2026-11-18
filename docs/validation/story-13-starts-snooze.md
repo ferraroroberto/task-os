@@ -68,3 +68,17 @@ Result: **verified** (e2e desktop + phone legs · unit across repo, API, CLI, mi
 **Why:** with the pointer over a Today row, the two chips made five controls beside the row's own button, past the action-row budget of a toggle, one extra and the kebab, and their boxes lay over the row's main button, so the design review failed the row for control count and for overlapping tap areas. The hover-only design kept a resting row inside the budget but not the row under the pointer or the keyboard's target.
 
 **Now:** a row carries the circle, the Move verb and the ⋯ menu. One-tap snooze stays available where it costs no row width: Settings → Row actions can set a swipe or a ⋯ menu entry to *Snooze until tomorrow* / *Snooze until next week* (the same actions, toast and Undo), and the ⋯ menu's *Snooze…* and the `S` key are unchanged. The chip walk and `story-13-starts-snooze-3-desktop.png` are gone; the unit test of the two actions and the phone swipe leg remain.
+
+## Date menu: This Friday, Next Monday, End of month (2026-11-18)
+
+**Story:** the date menu offers three more shortcuts beside the four it had, so the common "by Friday", "Monday" and "this month" moves are one tap.
+
+**Steps:** Today → a row's ⋯ → *Move…* (or the drawer's Due quick moves) → the menu lists *Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today*, each with the date it resolves to, then *Pick a date…* and *No date*.
+
+**Expected:** each phrase resolves server-side through `src/dates.py` (`this friday` = the coming Friday, today if Friday; `upcoming monday` = the first Monday strictly after today; `end of month` / `eom` = the last day of this month); `next monday` keeps its +7 meaning in quick-add and the CLI. On a 390×664 phone the sheet, *No date* included, stays inside the screen.
+
+**Screenshots:** the date sheet and the drawer's quick moves in the re-baselined gallery (`story-13-starts-snooze-6-phone`, `story-04-triage-10-phone`, `story-04-triage-3-desktop` and the drawer shots that share the panel).
+
+**Test:** `tests/test_dates.py::test_menu_shortcuts_on_edge_days` (Monday, Friday, Saturday, Sunday, month end, leap and common February, year end; red against the old parser) and the label and date assertion in `tests/e2e/_ui.py::assert_date_sheet`, walked by `test_desktop_triage`.
+
+**Result:** verified — unit tests, the full e2e suite on the disposable instance, and a WebKit walk of the sheet at 390×844 and 390×664 in light and dark (last row's bottom edge 528 px of 664). Not verified: a real phone, which stays the owner's check.

@@ -586,7 +586,7 @@ surfaces:
         moves.
     holds:
       - >-
-        **Tomorrow · This weekend · Next week · Today**, each with the date it lands on, then **Pick
+        **Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today**, each with the date it lands on, then **Pick
         a date…** (a native date field) and **No date**.
     phone: >-
       a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
@@ -667,7 +667,7 @@ surfaces:
       none: a block inside the drawer panel.
     holds:
       - >-
-        a date field with a calendar button, then *Tomorrow · This weekend · Next week · Today* with
+        a date field with a calendar button, then *Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today* with
         their dates. Due comes first because most edits push it out.
   - id: drawer.fields
     area: drawer
