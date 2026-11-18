@@ -305,6 +305,11 @@ def _status_columns(page: Page, base: str, shots: Path) -> dict:
     for a, b in zip(boxes, boxes[1:], strict=False):
         assert a["x"] + a["width"] <= b["x"] + 1, (a, b)   # left to right, no overlap
     assert abs(boxes[0]["y"] - boxes[3]["y"]) < 2                # one row
+    # the columns run to the window's bottom, above the slim build line only, and the page is one window tall
+    window_h = page.viewport_size["height"]
+    assert window_h - 60 <= boxes[0]["y"] + boxes[0]["height"] <= window_h, boxes[0]
+    assert page.evaluate("document.documentElement.scrollHeight") <= window_h
+    expect(cols.first).to_have_css("overflow-y", "auto")
     assert boxes[3]["x"] + boxes[3]["width"] > DESKTOP["width"] - 40  # uses the full width
     api = _mine(_get(base, "/api/board")["columns"])
     counts = _counts(page)

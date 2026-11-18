@@ -167,9 +167,11 @@
     overflow-x: visible;
     scroll-snap-type: none;
   }
+  /* The lanes take the height the page chain (today.css) leaves under the header and filters, so
+     they end at the window's bottom; each scrolls inside its own box. */
+  .board-columns, .board-status { flex: 1 1 0; min-height: 0; }
   .board-col, .board-status .board-col {
     flex: 1 1 0;
-    max-height: calc(100vh - 300px);
     min-height: 240px;
     overflow-y: auto;
     overscroll-behavior: contain;
