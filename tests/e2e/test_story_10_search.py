@@ -132,9 +132,9 @@ def _empty_search_tab(page: Page, box) -> None:
     # a word that matches nothing: no group at all, every kind named on the one
     # folded line instead of four cards each saying "nothing"
     box.fill("zzqxnothing")
-    expect(page.locator("#searchMeta")).to_have_text("0 hits")
+    expect(page.locator("#searchMeta")).to_have_text("0 hits · open only")
     expect(page.locator(".search-group")).to_have_count(0)
-    expect(page.locator(".search-fold")).to_have_text("No matches in tasks, folders, emails and issues")
+    expect(page.locator(".search-fold")).to_have_text("No matches in tasks (open only), folders, emails and issues")
     # the clear button shows only while the box holds text, is a 44px target,
     # and one tap empties the query and the count and keeps the caret in the box
     clear = page.get_by_role("button", name="Clear search")
@@ -148,7 +148,7 @@ def _empty_search_tab(page: Page, box) -> None:
     expect(clear).to_be_hidden()
     expect(page.locator(".search-hint")).to_be_visible()
     box.fill("zzqxnothing")                                       # leave the box as the next steps expect it
-    expect(page.locator("#searchMeta")).to_have_text("0 hits")
+    expect(page.locator("#searchMeta")).to_have_text("0 hits · open only")
     # the box carries the filter button (the sheet narrows the task hits), the
     # scope switch is the line under it; the sheet leads with the sort and
     # holds every filter (#395)
@@ -173,7 +173,7 @@ def _four_groups_for_a_word(page: Page, shots: Path, box):
         expect(g.locator(".search-group-count")).to_have_text(re.compile(r"^\d+( of \d+)?$"))
         expect(g.locator(".search-group-count")).to_have_attribute("aria-label", re.compile(r"^\d+ hits?$"))
         expect(g.locator(".search-hit").first).to_be_visible()
-    expect(page.locator("#searchMeta")).to_have_text(re.compile(r"^\d+ hits$"))   # no milliseconds anywhere
+    expect(page.locator("#searchMeta")).to_have_text(re.compile(r"^\d+ hits · open only$"))   # no milliseconds anywhere
     expect(page.locator(".search-fold")).to_have_count(0)            # every kind has hits
     issue_task = _task_hit(page, "Kitchen lights automation")
     expect(issue_task).to_have_count(0)
@@ -359,6 +359,7 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Zebra paperwork")
     p.keyboard.press("Escape")
     _weaker_matches_sit_under_a_label(base, p)
+    _cleared_status_searches_every_task(base, p)
     phone.close()
 
 
@@ -380,6 +381,37 @@ def _weaker_matches_sit_under_a_label(base: str, p: Page) -> None:
     p.goto(f"{base}/?q=worktop#search")                            # spelled right: no label
     expect(_task_hit(p, "Choose worktop material")).to_be_visible()
     expect(p.locator(f"{tasks} .search-tier")).to_have_count(0)
+
+
+def _cleared_status_searches_every_task(base: str, p: Page) -> None:
+    """Step 11: open by default; clear the status ticks and done and cancelled tasks are found too."""
+    bikes = ".search-group[data-kind='tasks']"
+    p.goto(f"{base}/?q=bikes#search")                              # "Sell the old bikes" is cancelled in the seed
+    expect(p.locator("#searchMeta")).to_have_text("0 hits · open only")
+    expect(p.locator(f"{bikes} .search-hit")).to_have_count(0)
+    expect(p.locator(".search-fold")).to_contain_text("1 task hit hidden by the filters")
+    sheet = open_filter_sheet(p, "paneSearch")
+    status = sheet.locator(".filter-checks[data-name='status']")
+    # the default is drawn as the open statuses ticked, so clearing them is a visible act
+    ticked = status.locator("input:checked").evaluate_all("els => els.map(e => e.value)")
+    assert ticked == ["inbox", "todo", "standby"], ticked
+    for value in ticked:
+        status.locator(f"input[value='{value}']").uncheck()
+    close_filter_sheet(p)
+    expect(p.locator("#searchMeta")).to_have_text("1 hit · every status")
+    expect(_task_hit(p, "Sell the old bikes")).to_have_attribute("data-status", "cancelled")
+    expect(p.locator("#paneSearch .filter-open .filter-count")).to_have_text("1")
+    # done tasks too
+    p.locator("#searchInput").fill("gift")
+    expect(_task_hit(p, "Buy a birthday gift")).to_have_attribute("data-status", "done")
+    # Today does not read the flag: it still lists open tasks, with no filter count
+    p.click("nav.tabs .tab[data-tab='today']")
+    expect(p.locator("#paneToday .filter-open .filter-count")).to_be_hidden()
+    # Clear puts the default back
+    p.click("nav.tabs .tab[data-tab='search']")
+    open_filter_sheet(p, "paneSearch").get_by_role("button", name="Clear").click()
+    close_filter_sheet(p)
+    expect(p.locator("#searchMeta")).to_have_text("0 hits · open only")
 
 
 def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: Path) -> None:

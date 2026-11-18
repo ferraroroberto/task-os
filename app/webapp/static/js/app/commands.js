@@ -66,7 +66,7 @@ export function paletteCommands(app) {
   ];
   STATUSES.forEach(function (st) {
     cmds.push({ id: 'filter-' + st, label: 'Filter: status ' + st, hint: 'every view', icon: 'list-filter', run: function () {
-      app.onFilterChange(Object.assign({}, app.state.filters, { status: [st] }));
+      app.onFilterChange(Object.assign({}, app.state.filters, { status: [st], everyStatus: false }));
     } });
   });
   cmds.push({ id: 'filter-clear', label: 'Filter: clear', hint: 'back to open tasks', icon: 'list-filter', run: function () {

@@ -427,7 +427,8 @@ surfaces:
         **Kind of task** and **Whose tasks**; then **status**
         ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**,
         **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear**
-        (only while something is on), **Done**.
+        (only while something is on), **Done**. On Search the status ticks are drawn with the open
+        statuses ticked, and un-ticking them all means every status.
     does:
       - >-
         applies live; the state is the URL. The filter button's count adds the kind of task and
@@ -871,7 +872,9 @@ surfaces:
         Folders, Emails, Issues), open, under an uppercase header with its count; every other kind
         folds into one line (*No matches in …*, *Not set up: …*). Task hits are the standard row
         plus the matched snippet, exact first, then *Partial matches*, then *Similar matches*; other
-        hits are a title and one meta line whose single control opens them.
+        hits are a title and one meta line whose single control opens them. The count line ends with
+        the statuses the task hits cover (*open only*, *every status*, or the ticked ones), and the
+        *No matches* line names them after Tasks.
     states:
       - >-
         folder-explorer answering badly is its own line per kind, never *No matches*: *unreachable*,
