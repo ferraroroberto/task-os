@@ -862,6 +862,7 @@ def _login_page_and_token_sign_in(base: str, playwright: Playwright, browser: Br
     for payload in ("/\\host.invalid", "/\t/host.invalid", "/\n/host.invalid",
                     "/\r/host.invalid", "//host.invalid", "https://host.invalid/x",
                     "/..//host.invalid", "/%2e//host.invalid", "/./\\host.invalid"):
+        # browser-per-iteration-exempt: each payload signs in on its own, so it must start with no session cookie
         context = browser.new_context(viewport=DESKTOP, color_scheme="light")
         try:
             page = context.new_page()
