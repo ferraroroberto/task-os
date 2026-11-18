@@ -6,6 +6,9 @@
  *   e  complete   1-3 status   t/w due tomorrow / next week
  *   d  move       p   priority cycle          z undo     ? this list
  *
+ * and, with a task open in the drawer (which owns the row keys), `e` opens
+ * that task's folder — the key folder-explorer uses for the same thing.
+ *
  * and with tasks ticked (Select mode) the same key does it to the whole
  * selection.
  *
@@ -148,6 +151,7 @@ function buildHelp(helpDialog) {
   acts.className = 'keys-rows';
   ACTIONS.forEach(function (a) { if (a.kbd) acts.appendChild(keyRow(a.kbd, a.label, a.hint)); });
   acts.appendChild(keyRow('.', 'The row menu (⋯)', 'every action for the focused row; also the menu key or Shift F10'));
+  acts.appendChild(keyRow('E', 'Open the folder of the open task', 'with a task open in the drawer; on a focused row E completes it'));
   acts.appendChild(keyRow('Z', 'Undo the last change', 'one level, while its toast is up'));
   acts.appendChild(keyRow('?', 'This list', null));
   card.appendChild(acts);
@@ -219,9 +223,11 @@ function keyCommands(tgt, actions, perform, runUndo, openHelp) {
  * @param {HTMLDialogElement} helpDialog   the (empty) shortcuts sheet shell
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          resolveTask: (id:number) => Promise<object|null>,
- *          isBlocked: () => boolean}} handlers
+ *          isBlocked: () => boolean,
+ *          openFolder: () => void}} handlers
  *        `actions` is the app's one runner (actions.js); `isBlocked` is true
- *        while something else owns the keyboard (the drawer).
+ *        while something else owns the keyboard (the drawer); `openFolder`
+ *        opens the folder of the task open in the drawer (the `e` key there).
  * @returns {{commands: () => Array<object>, openHelp: () => void}}
  */
 export function mountKeys(helpDialog, handlers) {
@@ -299,7 +305,10 @@ export function mountKeys(helpDialog, handlers) {
     if (ev.target.closest && ev.target.closest(OWNS_ITS_KEYS)) return;
     if (helpDialog.open) return;
     if (document.querySelector('dialog[open]')) return;   // the palette, quick-add
-    if (handlers.isBlocked()) return;                     // the drawer owns the keys
+    if (handlers.isBlocked()) {                           // the drawer owns the keys
+      if (ev.key === 'e' || ev.key === 'E') { ev.preventDefault(); handlers.openFolder(); }
+      return;
+    }
     if (ev.key === '?') { ev.preventDefault(); openHelp(); return; }
     if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); runUndo(); return; }
     if (ev.key === '.') { openRowMenu(ev); return; }

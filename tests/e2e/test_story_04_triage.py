@@ -158,6 +158,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
         # ------------------------------ one task load per hash open (#236) ----
         _walk_hash_open_loads_once(page, base)
 
+        # ---------------------------------- `e` opens the folder (#766) ----
+        _walk_drawer_e_opens_folder(page, base)
+
         # -------------------------------------- today split view (#336) ----
         _walk_today_split(page, base, shots)
 
@@ -328,6 +331,55 @@ def _walk_hash_open_loads_once(page: Page, base: str) -> None:
     # API read below race the write.
     expect(drawer.locator(".field-starts .field-label")).to_have_text("Starts")
     assert _get(base, f"/api/tasks/{lib_id}")["starts"] is None
+
+
+# A click on the folder chip is observed and cancelled before the browser follows
+# its `taskos://` link, so no File Explorer window opens during the test.
+_RECORD_FOLDER_OPENS = """
+window.__folderOpens = [];
+document.addEventListener('click', function (ev) {
+  const a = ev.target.closest && ev.target.closest('a.chip-folder');
+  if (!a) return;
+  window.__folderOpens.push(a.getAttribute('href'));
+  ev.preventDefault();
+}, true);
+"""
+
+
+def _walk_drawer_e_opens_folder(page: Page, base: str) -> None:
+    """`e` with a task open in the drawer opens its folder; typed in a field it is a letter."""
+    kitchen_id = next(int(t["id"]) for t in _get(base, "/api/tasks?q=Kitchen")["items"] if t["title"] == "Kitchen")
+    page.goto(f"{base}/#task/{kitchen_id}")
+    drawer = page.locator("#taskDrawer")
+    expect(drawer.locator("#drawerTitle")).to_have_value("Kitchen")
+    expect(drawer.locator(".drawer-folder a.chip-folder")).to_be_visible()
+    page.evaluate(_RECORD_FOLDER_OPENS)
+
+    # typing in a field types the letter and opens nothing
+    comment = drawer.locator(".comment-input")
+    comment.click()
+    page.keyboard.press("e")
+    expect(comment).to_have_value("e")
+    assert page.evaluate("window.__folderOpens") == []
+    comment.fill("")
+
+    # focus on the drawer itself (not a field): `e` follows the folder chip's opener link
+    drawer.locator(".drawer-close").focus()
+    page.keyboard.press("e")
+    page.wait_for_function("window.__folderOpens.length === 1")
+    assert page.evaluate("window.__folderOpens")[0].startswith("taskos://open?ref=")
+
+    # the key is discoverable: the palette's command carries it, and the sheet lists it
+    page.keyboard.press("Control+k")
+    palette = page.locator("#palette")
+    palette.locator("input").fill("open folder")
+    expect(palette.locator("li", has_text="Open folder of current task").locator("kbd")).to_have_text("E")
+    page.keyboard.press("Escape")
+    drawer.locator(".drawer-close").click()
+    page.locator("body").press("?")
+    expect(page.locator("#keysHelp")).to_contain_text("Open the folder of the open task")
+    page.keyboard.press("Escape")
+    expect(page.locator("#keysHelp")).to_be_hidden()
 
 
 # ------------------------------------------- story 30 — Today split (#336)

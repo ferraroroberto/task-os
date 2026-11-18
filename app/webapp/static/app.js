@@ -742,6 +742,7 @@ function wireKeys() {
   keys = mountKeys(els.keysHelp, {
     actions: actions,
     resolveTask: app.resolveTask,
+    openFolder: function () { app.openFolderOfCurrentTask(); },
     // A task you opened owns the keys. The one desktop Today opened by
     // itself does not, unless the focus is in it: else the keymap would be off
     // on the landing tab from the first paint.
