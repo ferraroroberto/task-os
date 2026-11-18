@@ -458,7 +458,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move, the drawer's quick moves.
-- **Holds:** **Tomorrow · This weekend · Next week · Today**, each with the date it lands on, then **Pick a date…** (a native date field) and **No date**.
+- **Holds:** **Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today**, each with the date it lands on, then **Pick a date…** (a native date field) and **No date**.
 - **Phone:** a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
 - **Desktop:** a popover next to the row.
 
@@ -554,7 +554,7 @@ flowchart LR
 ### `drawer.due` Due + quick moves
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** a date field with a calendar button, then *Tomorrow · This weekend · Next week · Today* with their dates. Due comes first because most edits push it out.
+- **Holds:** a date field with a calendar button, then *Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today* with their dates. Due comes first because most edits push it out.
 
 ### `drawer.fields` Status, Priority, Owner
 

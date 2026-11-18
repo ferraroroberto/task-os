@@ -428,3 +428,35 @@ def test_days_ago_reads_the_process_clock() -> None:
     with clock.use_clock(lambda: pinned):
         assert days_ago(7) == date(2026, 8, 10)
         assert parse_days_ago("30d") == date(2026, 7, 18)
+
+
+@pytest.mark.parametrize(
+    ("today", "this_friday", "upcoming_monday", "end_of_month"),
+    [
+        (date(2026, 8, 17), date(2026, 8, 21), date(2026, 8, 24), date(2026, 8, 31)),   # Monday
+        (date(2026, 8, 21), date(2026, 8, 21), date(2026, 8, 24), date(2026, 8, 31)),   # Friday: itself
+        (date(2026, 8, 22), date(2026, 8, 28), date(2026, 8, 24), date(2026, 8, 31)),   # Saturday
+        (date(2026, 8, 23), date(2026, 8, 28), date(2026, 8, 24), date(2026, 8, 31)),   # Sunday
+        (date(2026, 8, 31), date(2026, 9, 4), date(2026, 9, 7), date(2026, 8, 31)),     # last day, a Monday
+        (date(2028, 2, 10), date(2028, 2, 11), date(2028, 2, 14), date(2028, 2, 29)),   # leap February
+        (date(2027, 2, 10), date(2027, 2, 12), date(2027, 2, 15), date(2027, 2, 28)),   # common February
+        (date(2026, 12, 31), date(2027, 1, 1), date(2027, 1, 4), date(2026, 12, 31)),   # year end
+    ],
+)
+def test_menu_shortcuts_on_edge_days(
+    today: date, this_friday: date, upcoming_monday: date, end_of_month: date
+) -> None:
+    """The date menu's three newer phrases, resolved by the parser a write uses."""
+    assert parse_date("this friday", today=today) == this_friday
+    assert parse_date("this fri", today=today) == this_friday
+    assert parse_date("upcoming monday", today=today) == upcoming_monday
+    assert parse_date("end of month", today=today) == end_of_month
+    assert parse_date("EOM", today=today) == end_of_month
+
+
+def test_upcoming_monday_leaves_next_monday_alone() -> None:
+    """`next monday` keeps its +7-from-the-coming-one meaning for quick-add and
+    the CLI; the menu's "first Monday after today" is its own phrase."""
+    saturday = date(2026, 8, 22)
+    assert parse_date("next monday", today=saturday) == date(2026, 8, 31)
+    assert parse_date("upcoming monday", today=saturday) == date(2026, 8, 24)

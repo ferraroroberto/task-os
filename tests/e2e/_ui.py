@@ -249,7 +249,11 @@ def assert_control_boundaries(scope: Locator) -> list[float]:
 
 
 #: The date sheet's re-date phrases, push-outs first (#391) — snooze.js DUE_OPTIONS.
-DUE_SHEET = [("tomorrow", "Tomorrow"), ("this weekend", "This weekend"), ("next week", "Next week"), ("today", "Today")]
+DUE_SHEET = [
+    ("tomorrow", "Tomorrow"), ("this friday", "This Friday"), ("this weekend", "This weekend"),
+    ("next week", "Next week"), ("upcoming monday", "Next Monday"), ("end of month", "End of month"),
+    ("today", "Today"),
+]
 
 
 def assert_date_sheet(menu: Locator, base: str) -> None:
