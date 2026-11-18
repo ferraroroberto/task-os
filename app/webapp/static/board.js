@@ -202,13 +202,7 @@ export function mountBoard(handlers) {
     // What the lanes hold: the open tasks — and, in Status mode, today's done
     // ones too, for the Done column. A ticked status shows what it picked.
     const open = showsClosed(f) ? all : all.filter(function (x) { return !CLOSED[x.status]; });
-    // A finished task a query brings in is never overdue or due today.
-    const live = open.filter(function (x) { return !CLOSED[x.status]; });
-    const counts = {
-      inbox: live.filter(function (x) { return x.status === 'inbox'; }).length,
-      overdue: live.filter(function (x) { return x.due && x.due < t; }).length,
-      today: live.filter(function (x) { return x.due === t; }).length,
-    };
+    const counts = laneCounts(open, t);
 
     const rowOpts = {
       selectable: !!o.selectable, isSelected: o.isSelected, suggestions: o.suggestions, mode: mode,
@@ -286,6 +280,17 @@ function weekEntries(open, t) {
     if (k === 'later') entry.tail = { label: NO_DATE_LABEL, rows: undated };
     return entry;
   });
+}
+
+/** The header's counts over the open tasks drawn. A finished task a query brings in
+ *  is never overdue or due today. */
+function laneCounts(open, t) {
+  const live = open.filter(function (x) { return !CLOSED[x.status]; });
+  return {
+    inbox: live.filter(function (x) { return x.status === 'inbox'; }).length,
+    overdue: live.filter(function (x) { return x.due && x.due < t; }).length,
+    today: live.filter(function (x) { return x.due === t; }).length,
+  };
 }
 
 /** Status mode's columns → `{entries, shown}`: one entry per column (null = a
