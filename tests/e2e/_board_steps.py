@@ -192,6 +192,19 @@ def _week_lanes(page: Page, base: str) -> None:
         got = _lane(page, k).locator(".trow").evaluate_all("els => els.map(e => Number(e.dataset.id))")
         assert sorted(got) == want, (k, got, want)
         expect(_lane(page, k).locator(".board-col-count")).to_have_text(str(len(want)))
+    # A lane's name and its count share one text baseline (a 1px lift of the name is a defect).
+    offsets = page.locator("#paneBoard .board-week .board-col-title").evaluate_all("""heads => heads.map(h => {
+        const at = el => {
+            const probe = document.createElement('span');
+            probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+            el.appendChild(probe);
+            const y = probe.getBoundingClientRect().bottom;
+            el.removeChild(probe);
+            return y;
+        };
+        return at(h.querySelector('.board-col-count')) - at(h.querySelector('.board-col-label'));
+    })""")
+    assert len(offsets) == len(LANES) and all(abs(o) < 0.5 for o in offsets), offsets
     lane_boxes = [_lane(page, k).bounding_box() for k in LANES]
     for a, b in zip(lane_boxes, lane_boxes[1:], strict=False):
         assert abs(a["y"] - b["y"]) < 2 and a["x"] + a["width"] <= b["x"] + 1, (a, b)   # one row, left to right
