@@ -13,7 +13,7 @@
 import { setSwitch, switchEl } from '../../_vendored/switch/switch.js';
 import { api } from '../../api.js';
 import { toast } from '../../toast.js';
-import { setFeaturesOff } from '../features.js';
+import { featureOn, setFeaturesOff } from '../features.js';
 
 //: The Settings rows each block owns, by their `data-settings-sheet` key.
 const SHEET_OWNER = {
@@ -26,6 +26,23 @@ function tagOwnedRows(pane) {
   Object.keys(SHEET_OWNER).forEach(function (sheet) {
     const row = pane.querySelector('[data-settings-sheet="' + sheet + '"]');
     if (row) row.dataset.feature = SHEET_OWNER[sheet];
+  });
+}
+
+/** Hide a group, and its label above it, while every one of its rows belongs to a block that
+ *  is off; `data-empty` is what the CSS keys on, so a switch coming back restores both. */
+function syncEmptyGroups(pane) {
+  pane.querySelectorAll('.settings-group').forEach(function (group) {
+    const rows = Array.from(group.querySelectorAll('.settings-row'));
+    const empty = rows.length > 0 && rows.every(function (row) {
+      return row.dataset.feature && !featureOn(row.dataset.feature);
+    });
+    const label = group.previousElementSibling;
+    [group, label && label.classList.contains('settings-group-label') ? label : null].forEach(function (el) {
+      if (!el) return;
+      if (empty) el.dataset.empty = '';
+      else delete el.dataset.empty;
+    });
   });
 }
 
@@ -97,6 +114,7 @@ export function mountFeatures(ctx) {
   note.setAttribute('role', 'status');
   anchor.before(heading, list, note);
   tagOwnedRows(ctx.els.pane);
+  syncEmptyGroups(ctx.els.pane);
 
   let busy = false;
   let current = [];
@@ -110,6 +128,7 @@ export function mountFeatures(ctx) {
       paintState(row, f);
     });
     setFeaturesOff(features.filter(function (f) { return !f.enabled; }).map(function (f) { return f.key; }));
+    syncEmptyGroups(ctx.els.pane);
   }
 
   async function toggle(f, next) {

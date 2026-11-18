@@ -32,7 +32,7 @@ notes: |
 
   **Input modes.** A mouse or trackpad gets the completion circle and the **Move** verb on each row and right-click on a row. A touch screen has neither: a row swipes (right completes, left opens the date sheet) and the kebab holds everything else. The keyboard reaches every row action through keys and the palette, so no action is gesture-only. Drag-and-drop on the Board is mouse only.
 
-  **Gating.** Surfaces tagged for a feature block disappear when the block is off: Time (tab and Time categories row), Calendar lane (and Calendar row), Issue sync (and Issues row, drawer panel, issues scope), Email and folders (Capture, Email archiving, folder and email search), Local AI (Voice, AI Inbox triage, Triage), Mirror and backups. `Available features` is itself a Settings group.
+  **Gating.** Surfaces tagged for a feature block disappear when the block is off: Time (tab and Time categories row), Calendar lane (and Calendar row), Issue sync (and Issues row, drawer panel, issues scope), Email and folders (Capture, Email archiving, folder and email search), Local AI (Voice, AI Inbox triage, Triage), Mirror and backups. A Settings group whose every row is gated (Sync, Email) leaves with its label, and returns with the first row. `Available features` is itself a Settings group.
 
   **Who the viewer is.** On the install's own PC (loopback) the viewer is the install owner with no credential. Any other device signs in at `/login` with a token or password and is the member that credential names; with team mode on, a team password plus a picked name signs in instead. A request with no credential from another device is refused. Surfaces that depend on this: the person row, Owner select, Mine/Everyone, Sign out, the name picker.
 
