@@ -351,3 +351,6 @@ html, body {
 :root[data-features-off~="email"] [data-feature="email"],
 :root[data-features-off~="ai"] [data-feature="ai"],
 :root[data-features-off~="mirror"] [data-feature="mirror"] { display: none !important; }
+/* A Settings group whose every row is one of those leaves with its label (settings/features.js). */
+.settings-group[data-empty],
+.settings-group-label[data-empty] { display: none !important; }

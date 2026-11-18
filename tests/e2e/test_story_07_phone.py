@@ -79,6 +79,7 @@ from urllib.parse import quote
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
+from tests.e2e._features_steps import assert_empty_groups_follow_switches, assert_group_labels_back
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -504,12 +505,14 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         )
         assert {k for k, _ in tagged} == {"time", "calendar", "issues", "email", "ai", "mirror"}, tagged
         assert all(display == "none" for _, display in tagged), tagged
+        assert_empty_groups_follow_switches(page)
 
         # On again: the tab and its routes are back, with no restart.
         for key in ("calendar", "issues", "email", "ai", "mirror"):
             assert page.request.put(f"{base}/api/features/{key}", data={"enabled": True}).status == 200
         page.reload()
         expect(page.locator("#paneSettings")).to_be_visible()      # `#settings` reopens it on a reload
+        assert_group_labels_back(page)
         group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
         group.locator("[data-feature-key='time'] .toggle").tap()
         expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
