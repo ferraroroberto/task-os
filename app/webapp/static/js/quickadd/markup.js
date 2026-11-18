@@ -34,6 +34,17 @@ export function fillQuickAdd(dialog) {
     <p class="quick-add-voice-hint" aria-live="polite" hidden></p>
     <div class="quick-add-chips" aria-live="polite"></div>
 
+    <!-- Where the task lives and whose it is: the two fields almost every new
+         task needs, one pick each on this first screen. Owner has no control
+         for a single-member install (form.js::fillPeople shows it from two). -->
+    <div class="row">
+      <span><label for="quickAddProject">Project</label></span>
+      <select data-track="quick-add.project" id="quickAddProject" class="select-native quick-add-project"></select>
+    </div>
+    <div class="row quick-add-owner-row" hidden>
+      <span><label for="quickAddOwner">Owner</label></span>
+      <select data-track="quick-add.owner" id="quickAddOwner" class="select-native quick-add-owner"></select>
+    </div>
     <div class="row row--stack">
       <span><label for="quickAddDesc">Description</label></span>
       <textarea id="quickAddDesc" class="input-native quick-add-desc" rows="2"

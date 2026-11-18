@@ -10,7 +10,8 @@
  * server-side (so the CLI and the UI agree on what "next friday" means) and
  * the result lands where it can still be changed — the dates it finds fill the
  * **Due** and **Starts** fields, the parent shows as a chip. Under it, the
- * fields that used to force a second trip through the drawer:
+ * fields that used to force a second trip through the drawer: the project it
+ * goes under and its owner (js/quickadd/placement.js),
  * description, due, starts, status, folder (with the shared
  * folder-index picker) and one link.
  * Everything but the title is optional and sensible by default — no date,
@@ -41,6 +42,7 @@ import { STATUSES } from './format.js';
 import { mountDictation } from './js/quickadd/dictate.js';
 import { resetForm, wireSubmit } from './js/quickadd/form.js';
 import { fillQuickAdd } from './js/quickadd/markup.js';
+import { fillPlacement } from './js/quickadd/placement.js';
 import { showDate } from './js/quickadd/preview.js';
 import { wireQuickAdd } from './js/quickadd/wire.js';
 
@@ -53,7 +55,8 @@ const DEFAULT_STATUS = 'todo';
 
 /**
  * @param {HTMLDialogElement} dialog  the `#quickAdd` shell (index.html)
- * @param {{onCreated: (task: object) => void}} opts
+ * @param {{onCreated: (task: object) => void, projects: () => Array, members: () => Array,
+ *          viewer: () => (string|null), defaultProject: () => string}} opts
  * @returns {{open: (preset?: {status?: string, due?: string}) => void, close: () => void}}
  */
 export function createQuickAdd(dialog, opts) {
@@ -72,6 +75,9 @@ export function createQuickAdd(dialog, opts) {
       due: q('.quick-add-due'),
       starts: q('.quick-add-starts'),
       status: q('.quick-add-status'),
+      project: q('.quick-add-project'),
+      owner: q('.quick-add-owner'),
+      ownerRow: q('.quick-add-owner-row'),
       folder: q('.quick-add-folder'),
       pick: q('.quick-add-pick'),
       picker: q('.quick-add-picker'),
@@ -117,6 +123,7 @@ export function createQuickAdd(dialog, opts) {
     const p = preset || {};
     if (p.status && STATUSES.indexOf(p.status) >= 0) els.status.value = p.status;
     if (p.due) { showDate(els.due, p.due, ''); ctx.st.touched.due = true; }
+    fillPlacement(ctx);
     if (!dialog.open) dialog.showModal();
     ctx.voice.refresh();
     els.input.focus();

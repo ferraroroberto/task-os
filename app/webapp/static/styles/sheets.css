@@ -14,7 +14,10 @@
 .quickadd-card .row--stack { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
 .quickadd-card .row--stack > span { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .quickadd-card .row label { cursor: pointer; }
-.quickadd-card .quick-add-due, .quickadd-card .quick-add-status { min-width: 55%; }
+.quickadd-card .quick-add-due, .quickadd-card .quick-add-status,
+.quickadd-card .quick-add-project, .quickadd-card .quick-add-owner { min-width: 55%; }
+/* A project title can be long: the select keeps the column the other fields share and clips the title. */
+.quickadd-card .quick-add-project { width: 55%; }
 .quick-add-desc {
   min-height: calc(var(--control-h) * 2);
   padding: var(--space-sm) 10px;
