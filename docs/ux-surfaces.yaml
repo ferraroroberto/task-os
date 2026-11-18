@@ -24,7 +24,7 @@ notes: |
 
   | Band | Condition | Nav | Lists | Task detail |
   | --- | --- | --- | --- | --- |
-  | Phone | touch pointer, up to 520px | floating bottom pill, hidden under a modal | one column; rows run edge to edge | full-screen sheet |
+  | Phone | touch pointer, up to 520px | floating bottom pill, hidden under a modal | one column; task lists are inset rounded cards at the page gutter | full-screen sheet |
   | Narrow or mid window | a mouse below 1100px, or a touch device wider than 520px | an inline tab bar pinned at the top | one column | full-screen sheet below 1024px, side panel or split from 1024px |
   | Wide | 1100px and up with a mouse | left rail | Board and Today span the window; Time, Search and Settings keep a 772px measure | side panel (Board), split pane (Today), detail pane beside the list (Settings) |
 

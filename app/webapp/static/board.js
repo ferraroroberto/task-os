@@ -389,7 +389,9 @@ function mountLanes(kind, skeleton, handlers) {
       // Scroll only the carousel container — scrollIntoView would also yank
       // the page vertically (launcher phone-verify lesson).
       const box = columns.getBoundingClientRect();
-      const left = parts[current].section.getBoundingClientRect().left - box.left + columns.scrollLeft;
+      // minus the box's own padding: a page snaps to that inset, not to the box's edge
+      const inset = parseFloat(getComputedStyle(columns).paddingLeft) || 0;
+      const left = parts[current].section.getBoundingClientRect().left - box.left + columns.scrollLeft - inset;
       columns.scrollTo({ left: left, behavior: smooth ? 'smooth' : 'auto' });
       // Only count it as placed when the container could actually scroll —
       // an empty or unlaid-out carousel silently clamps to column one.

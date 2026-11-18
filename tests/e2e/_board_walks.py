@@ -520,7 +520,9 @@ def _phone_board_status(page: Page, shots: Path) -> None:
     assert columns.evaluate("el => getComputedStyle(el).scrollSnapType").startswith("x")
     wrap = columns.bounding_box()
     first = _col(page, "inbox").bounding_box()
-    assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
+    # a page is the box's width less its gutter padding, which puts the card inside the page gutter
+    pad = columns.evaluate("el => parseFloat(getComputedStyle(el).paddingLeft)")
+    assert wrap and first and abs(first["width"] - (wrap["width"] - 2 * pad)) < 2, (wrap, first, pad)
     # exactly one column inside the viewport at a time
     visible = _in_view(page)
     assert len(visible) == 1, visible
@@ -529,7 +531,8 @@ def _phone_board_status(page: Page, shots: Path) -> None:
     expect(page.locator(".board-strip-btn[data-col='standby']")).to_have_class(re.compile(r"\bactive\b"))
     page.wait_for_function(
         "() => Math.abs(document.querySelector(\".board-status .board-col[data-col='standby']\").getBoundingClientRect().left"
-        " - document.querySelector('.board-status').getBoundingClientRect().left) < 2"
+        " - document.querySelector('.board-status').getBoundingClientRect().left"
+        " - parseFloat(getComputedStyle(document.querySelector('.board-status')).paddingLeft)) < 2"
     )
     # the row budget (UX round 2, issue #32; slimmed to 60px + the hairline
     # with a meta line by #311): every seeded row in the active column stays
@@ -562,8 +565,11 @@ def _phone_board_status(page: Page, shots: Path) -> None:
     expect(menu.locator("[data-action='status-standby']")).to_have_count(0)   # the column it is already in
     page.keyboard.press("Escape")
     expect(menu).to_have_count(0)
-    # flat list, not a card: no rounded box on the column's list
-    assert _col(page, "standby").locator(".board-list").evaluate("el => getComputedStyle(el).borderRadius") == "0px"
+    # an inset card: the column's list is a rounded box inside the page gutter, clipping its rows
+    inset = _col(page, "standby").locator(".board-list").evaluate(
+        "el => { const s = getComputedStyle(el), r = el.getBoundingClientRect();"
+        " return [s.borderTopLeftRadius, s.overflow, Math.round(r.left), Math.round(innerWidth - r.right)]; }")
+    assert inset == ["16px", "hidden", 12, 12], inset
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-05-board-9-phone.png")
 
@@ -583,7 +589,7 @@ def _phone_board_reload(page: Page) -> None:
         "        const w = document.querySelector('.board-status');"
         "        if (!a || !w) return false;"
         "        const c = w.querySelector(\".board-col[data-col='\" + a.dataset.col + \"']\");"
-        "        return c && Math.abs(c.getBoundingClientRect().left - w.getBoundingClientRect().left) < 2; }"
+        "        return c && Math.abs(c.getBoundingClientRect().left - w.getBoundingClientRect().left - parseFloat(getComputedStyle(w).paddingLeft)) < 2; }"
     )
     # and the column on screen really is the one the strip names
     in_view = _in_view(page)

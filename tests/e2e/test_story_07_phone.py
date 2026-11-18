@@ -25,7 +25,7 @@ allowed on screen). What a browser can prove of the story:
   edge, the whole row ≤ 61px — while its meta line, on #392's budget (no part but
   the project name cut at 390px; links in the menu), is passive; the date moves through the
   kebab's "Move…" sheet (``dialog#dateDialog`` on a coarse pointer, #107);
-  rows run edge to edge;
+  rows inset in a rounded card at the page gutter;
 - the drawer's parent tools (#468): Change parent opens the picker as a
   full-screen sheet (no sideways scroll, 44px controls), the filter narrows it
   to open tasks that are not the task or its children, a tap files the task
@@ -178,9 +178,11 @@ def _row_meta_and_menu(page: Page, shots: Path, meta, project, row):
         assert t.effective.bottom <= box["y"] + box["height"] + 0.5, (t, box)
     # one title line + one meta line and a hairline (<= 61px), the kebab at the right edge
     assert box["height"] <= 61, box
-    # full-bleed on the phone (#311): the row's hairline runs edge to edge
+    # inset on the phone: the row sits in a rounded card at the page gutter,
+    # the same 12px the Time tab's cards keep, never touching the screen edge
     vw = page.viewport_size["width"]
-    assert box["x"] <= 0.5 and box["x"] + box["width"] >= vw - 0.5, (box, vw)
+    assert abs(box["x"] - 12) <= 1.5 and abs((vw - box["x"] - box["width"]) - 12) <= 1.5, (box, vw)
+    assert row.evaluate("el => getComputedStyle(el.parentElement).borderTopLeftRadius") == "16px"
     kebab_box = row.locator(".trow-kebab").bounding_box()
     assert kebab_box and abs((box["x"] + box["width"]) - (kebab_box["x"] + kebab_box["width"])) <= 8, (kebab_box, box)
     shot(page, shots / "story-07-phone-9-phone.png")
@@ -715,7 +717,8 @@ def _dark_theme_persists(page: Page, context, base: str, shots: Path, errors, vi
     board_mode(page, "status")
     wrap = page.locator("#paneBoard .board-status").bounding_box()
     first = _col(page, "inbox").bounding_box()
-    assert wrap and first and abs(first["width"] - wrap["width"]) < 2, (wrap, first)
+    pad = page.locator("#paneBoard .board-status").evaluate("el => parseFloat(getComputedStyle(el).paddingLeft)")
+    assert wrap and first and abs(first["width"] - (wrap["width"] - 2 * pad)) < 2, (wrap, first, pad)
     visible = _in_view(page, PHONE_LG["width"])
     assert len(visible) == 1, visible
     assert_no_horizontal_overflow(page)
