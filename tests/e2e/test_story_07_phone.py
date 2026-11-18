@@ -421,6 +421,23 @@ def test_phone_install_metadata_and_story(
     _login_page_and_token_sign_in(authed_webapp, playwright, browser, shots)
 
 
+def _assert_features_note_clear_of_card(page: Page) -> None:
+    """The status line under the features group sits below the card, on the
+    heading's left edge: a negative top margin pulls it into the card."""
+    note = page.locator("#paneSettings .settings-features-note")
+    expect(note).not_to_be_empty()
+    rects = page.evaluate(
+        "() => {"
+        " const r = s => document.querySelector(s).getBoundingClientRect();"
+        " const card = r(\"#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']\");"
+        " const note = r('#paneSettings .settings-features-note');"
+        " return {gap: note.top - card.bottom, noteLeft: note.left, headingLeft: r('#settingsGroupFeatures').left};"
+        "}"
+    )
+    assert rects["gap"] >= 6, rects
+    assert abs(rects["noteLeft"] - rects["headingLeft"]) <= 1, rects
+
+
 def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
     """Settings → Available features at 390 wide: a block switched off leaves the
     app (its tab, its rows, its routes) and the choice survives a reload; switched
@@ -448,6 +465,7 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         switch.tap()
         expect(switch).to_have_attribute("aria-checked", "false")
         expect(page.locator("html")).to_have_attribute("data-features-off", "time")
+        _assert_features_note_clear_of_card(page)
         expect(page.locator("#paneSettings [data-settings-sheet='timecats']")).to_be_hidden()
         assert page.request.get(f"{base}/api/time/meta").status == 409
         assert page.request.get(f"{base}/api/board").status == 200
@@ -495,6 +513,7 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
         group.locator("[data-feature-key='time'] .toggle").tap()
         expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
+        _assert_features_note_clear_of_card(page)
         leave_settings(page, tap=True)
         expect(page.locator("nav.tabs .tab[data-tab='time']")).to_be_visible()
         assert page.request.get(f"{base}/api/time/meta").status == 200
