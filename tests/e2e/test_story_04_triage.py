@@ -444,11 +444,15 @@ def _walk_today_split(page: Page, base: str, shots: Path) -> None:
     drawer = page.locator("#taskDrawer")
     drawer_box, empty, first, list_box = _first_due_task_fills_the_right(page, base, shots, drawer, pane)
     surface(page, "today.detail-split")
-    # The list scrolls in its own box beside the pane, bounded by the window: a row past its edge
-    # takes no tap, so a long list never stacks every row's hit areas on one page.
+    # The list scrolls in its own box beside the pane and the box runs to the window's bottom, above
+    # the slim build line only: a row past its edge takes no tap, so a long list never stacks every
+    # row's hit areas on one page, and no empty band is left under the box.
     scroll_box = page.locator("#paneToday .today-main")
     expect(scroll_box).to_have_css("overflow-y", "auto")
-    assert (scroll_box.bounding_box() or {"height": 1e9})["height"] <= page.viewport_size["height"] - 300
+    box = scroll_box.bounding_box() or {"y": 0, "height": 0}
+    window_h = page.viewport_size["height"]
+    assert window_h - 60 <= box["y"] + box["height"] <= window_h
+    assert page.evaluate("document.documentElement.scrollHeight") <= window_h
     _close_and_keymap_beside_it(page, base, shots, drawer, drawer_box, empty, first, list_box, pane)
     surface(page, "today.detail-split")
     _cold_deep_link_and_other_tabs(page, base, shots, drawer, empty, pane)

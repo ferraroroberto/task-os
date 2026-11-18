@@ -95,11 +95,36 @@
 
 
 /* Beside the detail pane the list scrolls inside its own box, under the header, filters and
-   scope tabs that stay put, like a Board column (board.css). Rows below the box's edge take no
-   tap, so a long list never stacks its hit areas under one another across the whole page. */
+   scope tabs that stay put, like a Board column (board.css). The page is one window tall and
+   each wrapper down to the box takes the room the one above leaves, so the box ends at the
+   window's bottom (above the slim build line) whatever the header and the top nav measure. A
+   window shorter than the floor scrolls the page instead of squeezing the list away. Rows below the box's
+   edge take no tap, so a long list never stacks its hit areas under one another. */
 @media (min-width: 1024px) {
+  body:has(> .app > #paneToday:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  .app:has(> #paneToday:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 520px;
+    padding-bottom: var(--gap);
+  }
+  .app:has(> #paneToday:not([hidden])) > .page-foot { margin-block: var(--space-xs) 0; }
+  #paneToday:not([hidden]), #paneToday > .pane-body, #todayHost, #todayHost > .today-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  /* The calendar layout's `align-items: start` is for its grid; a stacked flex column fills the width. */
+  #todayHost > .today-layout { align-items: stretch; }
   .today-main {
-    max-height: calc(100vh - 300px);
+    flex: 1 1 0;
     min-height: 240px;
     overflow-y: auto;
     overscroll-behavior: contain;
