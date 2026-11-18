@@ -523,12 +523,13 @@ def _today_due_list(page: Page, base: str, shots: Path) -> tuple:
     expect(page.locator("#paneToday .trow-project")).to_have_count(0)
     expect(school.locator(".trow-pill-assignee")).to_have_count(0)   # Mine: the assignee varies nowhere
     soon = page.locator(".today-soon")
-    assert soon.evaluate("el => el.open") is True                 # open by default (#253)
+    expect(soon.locator(".today-horizon-head")).to_be_visible()   # always open: a plain section, nothing to fold
+    expect(page.locator("#paneToday summary, #paneToday details")).to_have_count(0)
     # Today opens on Mine (#391): the synced issues are behind the switch,
     # so Soon counts the week's tasks that are not issues
     mine_week = sum(1 for g in today["week"] for t in g["items"] if not t.get("issue_ref"))
     assert mine_week < today["counts"]["week"]                    # the seed has an issue due this week
-    expect(soon.locator(".collapse-count")).to_have_text(str(mine_week))
+    expect(soon.locator(".section-count")).to_have_text(str(mine_week))
     shot(page, shots / "story-05-board-5-desktop.png")
     return today, head, soon, school
 

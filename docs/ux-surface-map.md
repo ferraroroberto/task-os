@@ -210,8 +210,8 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Holds:** the [top strip](#shared-strip-above-every-list), then the calendar lane and four horizons. Kind of task and whose tasks are rows of the strip's Filters & sort sheet.
-- **Does:** the horizons are **Due** (overdue first, then today; no heading, the header names it), **Soon** (tomorrow to a week out, open), **Later** and **No date** (folded until opened; a text filter opens them; each shows only when it holds something). Inside a horizon rows run by due day, no project first, project A–Z, title.
-- **States:** empty install shows *Add your first task* with an **Add a task** button; a filter with no match shows an empty line; counts sit on the disclosure headers.
+- **Does:** the horizons are **Due** (overdue first, then today; no heading, the header names it), **Soon** (tomorrow to a week out), **Later** and **No date** (each shows only when it holds something). Soon, Later and No date sit under the Board's group header (name and count, no rule, no chevron) and are always open: nothing folds. Inside a horizon rows run by due day, no project first, project A–Z, title.
+- **States:** empty install shows *Add your first task* with an **Add a task** button; a filter with no match shows an empty line; counts sit on the group headers.
 - **Desktop:** the list scrolls inside its own box under the strip at 1024px and up.
 - **Leads to:**
   - [Top strip](#striptop-top-strip)
