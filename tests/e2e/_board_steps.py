@@ -417,6 +417,11 @@ def _project_filter(page: Page, base: str, shots: Path, api: dict) -> None:
     allowed = {t["id"] for col in filtered.values() for t in col}
     assert shown and set(shown) <= allowed
     shot(page, shots / "story-05-board-2-desktop.png")
+    # a task added from a filtered view starts under that project
+    page.locator("#paneBoard .quick-add-btn").click()
+    expect(page.locator("#quickAdd .quick-add-project")).to_have_value(str(home["id"]))
+    page.keyboard.press("Escape")
+    expect(page.locator("#quickAdd")).to_be_hidden()
     page.click("nav.tabs .tab[data-tab='today']")
     expect(filter_button(page, "paneToday")).to_have_attribute("aria-label", "Filter, 1 on: Home renovation")
     expect(open_filter_sheet(page, "paneToday").locator("select[name='project']")).to_have_value(str(home["id"]))

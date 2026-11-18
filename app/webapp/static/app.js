@@ -687,6 +687,10 @@ function wireSelectMode() {
 function wireQuickAdd() {
   quickAdd = createQuickAdd(els.quickAdd, {
     onCreated: function (task) { refreshAll().then(function () { focusRow(task); }); },
+    projects: function () { return state.projects; },
+    members: function () { return state.members; },
+    viewer: function () { return state.viewer; },
+    defaultProject: function () { return state.filters.project; },
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) {
     btn.addEventListener('click', function () { quickAdd.open(); });

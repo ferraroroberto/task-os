@@ -383,7 +383,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** **+** · palette *New task* · no-tasks button.
-- **Holds:** the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then description, due, starts, status, folder (typed or **Find in folder index**), one link (URL and label). The parsed parent shows as a chip, a parent that matches nothing as a red chip and nothing is created.
+- **Holds:** the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then **Project** (a select of the open projects, opening on the project the list is filtered to) and **Owner** (the members, opening on the viewer; absent for one member), description, due, starts, status, folder (typed or **Find in folder index**), one link (URL and label). The parsed parent shows as a chip and wins over the picked project, a parent that matches nothing as a red chip and nothing is created.
 - **Does:** **Add** or Enter creates and focuses the row; Escape, the backdrop and × discard.
 - **States:** dictation shows listening, settling and unreachable-service states. See [Views](views.md#views).
 - **Leads to:** [Folder picker](#folderpicker-folder-picker)

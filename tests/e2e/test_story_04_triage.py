@@ -475,6 +475,16 @@ def _quick_add_with_both_dates(page: Page, base: str, shots: Path, due, starts) 
     expect(quick_add.locator(".quick-add-due")).to_have_value(due)
     expect(quick_add.locator(".quick-add-starts")).to_have_value(starts)
     quick_add.locator(".quick-add-status").select_option("todo")
+    # The project and the owner are on the first screen: Owner opens on the
+    # person this device is (the loopback viewer), Project on none, and a
+    # project picked there lands on the task with no second edit. (The owner
+    # stays the default here: a task handed to the other member would leave
+    # this device's Mine views the later steps read.)
+    project, owner = quick_add.locator(".quick-add-project"), quick_add.locator(".quick-add-owner")
+    expect(project).to_have_value("")
+    expect(owner).to_have_value("p1")
+    family_id = next(p["id"] for p in _get(base, "/api/projects")["items"] if p["title"] == "Family admin")
+    project.select_option(str(family_id))
     shot(page, shots / "story-13-starts-snooze-1-desktop.png")
     quick_add.locator(".quick-add-input").press("Enter")
     expect(quick_add).to_be_hidden()
@@ -483,6 +493,7 @@ def _quick_add_with_both_dates(page: Page, base: str, shots: Path, due, starts) 
     created = next(t for t in _get(base, "/api/tasks?status=deferred")["items"]
                    if t["title"] == "renew insurance")
     assert (created["due"], created["starts"]) == (due, starts)
+    assert (created["parent_id"], created["owner"]) == (family_id, "p1")
 
     # 2. It is nowhere in the working views — Today, the Board.
     expect(_trow(page, "renew insurance", "#paneToday")).to_have_count(0)

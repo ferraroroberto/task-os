@@ -8,6 +8,7 @@ import { api } from '../../api.js';
 import { resolveFolderRef } from '../../folderpick.js';
 import { toast } from '../../toast.js';
 import { setPicker } from './folder.js';
+import { placementBody } from './placement.js';
 import { renderChips, showDate } from './preview.js';
 
 export function resetForm(ctx) {
@@ -51,6 +52,8 @@ export function wireSubmit(ctx) {
     if (due.value) body.due = due.value;
     if (starts.value) body.starts = starts.value;
     if (desc.value.trim()) body.description = desc.value.trim();
+    // A parent typed on line 1 is the more specific word and replaces the picked project below.
+    Object.assign(body, placementBody(ctx));
     if (parsed && parsed.parent_ref) {
       if (!parsed.parent) {
         toast('No task matches that parent — nothing created', 'error');
