@@ -71,6 +71,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
+from tests.e2e._drawer_key_steps import walk_drawer_e_opens_folder
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -157,6 +158,9 @@ def test_desktop_triage(seeded_webapp: str, browser: Browser, playwright: Playwr
 
         # ------------------------------ one task load per hash open (#236) ----
         _walk_hash_open_loads_once(page, base)
+
+        # ---------------------------------- `e` opens the folder (#766) ----
+        walk_drawer_e_opens_folder(page, base)
 
         # -------------------------------------- today split view (#336) ----
         _walk_today_split(page, base, shots)

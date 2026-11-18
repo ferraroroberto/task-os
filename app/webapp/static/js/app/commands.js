@@ -77,7 +77,7 @@ export function paletteCommands(app) {
     try { const r = await api('/api/mirror/export', { method: 'POST', body: {} }); toast('Mirror: ' + r.written + ' written, ' + r.removed + ' removed', 'success'); }
     catch (err) { toast(err.message || 'Export failed', 'error'); }
   } });
-  cmds.push({ id: 'open-folder', label: 'Open folder of current task', hint: app.drawer.currentId() != null ? 'task #' + app.drawer.currentId() : 'no task open', icon: 'folder', run: app.openFolderOfCurrentTask });
+  cmds.push({ id: 'open-folder', label: 'Open folder of current task', hint: app.drawer.currentId() != null ? 'task #' + app.drawer.currentId() : 'no task open', icon: 'folder', kbd: 'E', run: app.openFolderOfCurrentTask });
   cmds.push({ id: 'toggle-theme', label: 'Toggle theme', hint: document.documentElement.dataset.theme === 'dark' ? 'to light' : 'to dark', icon: 'sun', run: function () { app.els.themeToggle.click(); } });
   cmds.push({ id: 'sign-out', label: 'Sign out', hint: 'this device (token cookie)', icon: 'x', run: async function () {
     try { await api('/api/logout', { method: 'POST', body: {} }); } catch (err) { toast(err.message, 'error'); return; }

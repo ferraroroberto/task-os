@@ -77,7 +77,7 @@ Every row action is one key, so a triage pass is keys instead of mouse trips. `T
 | `Z` | undo the last change |
 | `?` | the shortcuts sheet |
 
-With tasks ticked ([Select several tasks at once](views.md#views)) the same key applies to the set, and the ticks stay — keys come in runs (a status, then a due date, then a priority) over one picked set. The keys are inert wherever text is being typed and while the drawer, the palette or the quick-add dialog is open.
+With tasks ticked ([Select several tasks at once](views.md#views)) the same key applies to the set, and the ticks stay — keys come in runs (a status, then a due date, then a priority) over one picked set. The keys are inert wherever text is being typed and while the drawer, the palette or the quick-add dialog is open. The one exception is `E` with a task open in the drawer: there it opens that task's folder, the key folder-explorer uses for the same thing (a task with no folder says so in a toast).
 
 **Undo** is a real write, not a client-side rollback: the inverse goes back through the API, so the reversal gets its own `new → old` activity row and survives a reload. It is single-level and lives exactly as long as its toast — over a selection it puts each task's own prior value back, one call per group of tasks that shared one. Completing a recurring task undoes to the *pre-roll* due date.
 

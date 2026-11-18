@@ -48,6 +48,7 @@ The 1024px breakpoint (side panel, split, a list scrolling inside its own box) i
 | `t` `w` | due tomorrow, due next week |
 | `d` | the date sheet (Move…) |
 | `p` | cycles priority |
+| `e` with a task open in the drawer | opens that task's folder (the same key folder-explorer uses); in a text field it types the letter |
 | `z` | undo the last row action |
 | `.` or the menu key | the row menu |
 | `?` | the shortcuts sheet |
