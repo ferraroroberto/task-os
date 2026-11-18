@@ -18,6 +18,9 @@
   margin: 0;
   min-height: var(--row-sm);
 }
+/* The vendored `.overline` carries an uneven 4px / 6px block margin that
+   centring turns into a 1px lift of the name above its count. */
+.today-horizon-head .overline { margin: 0; }
 /* Beside the detail pane the rows are not cards, so the name lines up with the Board's lane header. */
 @media (min-width: 1024px) {
   .today-horizon-head { padding-inline: var(--space-xs); }
