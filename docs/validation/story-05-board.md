@@ -115,3 +115,15 @@
 **Test:** `tests/e2e/test_story_04_triage.py` — `_phone_board_rows` (strip without Select, entering from the sheet, the Done label's contrast, leaving); `tests/e2e/test_story_05_board.py` — `_phone_select_and_owner` (entering from the sheet, then the bulk bar); folded into the existing tests, no new test function. The sheet-fit walk of `test_story_07_phone.py` covers the sheet's size.
 
 **Result:** the e2e legs above pass (full suite, 16 tests, 2026-11-18). Walked in headless WebKit (a scripted run, not a headed walk) at the four phone cells against the synthetic seed: the sheet fits with Done visible in all eight cells, the row enters Select mode and closes the sheet, Done leaves.
+
+## Board columns run to the window bottom
+
+**Story:** the owner wants the Board's columns on the web to run to the bottom of the window and scroll all the way, not stop 300px above it with an empty band under them.
+
+**Steps:** the Board at 1280×800, 1440×900 and 1440×600, Week and Status, light and dark → the header and filters stay put, every column ends 33px above the window edge with only the slim build line under it, the page does not scroll, and each column scrolls inside its own box to its last card. The phone (390×844) is unchanged.
+
+**Expected:** column bottom = window height − 33px at every size and in both modes; the document is exactly one window tall; `overflow-y: auto` on each column.
+
+**Test:** `tests/e2e/test_story_05_board.py` — `_status_columns` in `tests/e2e/_board_steps.py` (the columns reach the window bottom, the page is one window tall); it fails on the old fixed cap and passes with the shared page-high layout. No new test function.
+
+**Result:** **verified** (full e2e, 16 tests, and a headless Chromium measurement against the synthetic seed, 2026-11-18); the 50 desktop shots that show the Board are re-baselined; owner's check on desktop not yet done.
