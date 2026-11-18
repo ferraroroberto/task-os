@@ -224,6 +224,7 @@ def test_email_off_covers_search_picker_capture_and_archiving(make_client: Calla
         before = len(fake.requests)
         for res in (
             client.get("/api/folders/search", params={"q": "A"}),
+            client.post("/api/folders/explorer-window"),
             client.post("/api/capture/email/run"),
             client.get("/api/archive/runs"),
             client.post("/api/archive/run", json={}),

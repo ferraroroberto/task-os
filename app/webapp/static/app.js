@@ -121,6 +121,7 @@ const state = {
   people: [],
   members: [],      // [{id, name}] — /api/me's people: the install's members, the owner first
   viewer: null,     // /api/me's id — who this request is; null = not established
+  onPc: false,      // /api/me's pc — this browser is on the PC itself, so its File Explorer windows can be read
   recentOwners: storedRecentOwners(safeStorage()),   // member ids this device picked, newest first
   projects: [],     // [{id, title, depth, status}] — /api/projects: every task with children, closed ones too, tree order
   taskIndex: [],    // [{id, title, depth}] — every OPEN task, tree order (the blocker picker; a closed blocker gates nothing)
@@ -257,7 +258,8 @@ async function loadMembers() {
     const me = await api('/api/me');
     state.members = me.people || [];
     state.viewer = me.id || null;
-  } catch (_) { state.members = []; state.viewer = null; }
+    state.onPc = me.pc === true;
+  } catch (_) { state.members = []; state.viewer = null; state.onPc = false; }
   // a shared link can name a member this install no longer has: it narrows nothing
   const known = new Set(state.members.map(function (m) { return m.id; }));
   const owners = state.members.length < 2 ? [] : state.filters.owners.filter(function (id) { return known.has(id); });
@@ -771,6 +773,7 @@ function wireDrawer() {
     onClose: closeTask,
     people: function () { return state.people; },
     members: function () { return state.members; },
+    onPc: function () { return state.onPc; },
     parentTargets: function (id) { return parentTargets(state.tree, id); },
     allTasks: function () { return state.taskIndex; },
     onMove: app.moveTask,

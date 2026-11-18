@@ -8,7 +8,10 @@
     leads to Settings → Folder opener, the one-line install command with this
     address filled in → in the drawer the Folder field takes an absolute path
     and stores it as {onedrive}/… → "Find in folder index…" attaches a
-    folder folder-explorer found → on the phone the chip shows the resolved path to
+    folder folder-explorer found → "From Explorer window" fills the field with the
+    front File Explorer window's folder (a fake folder-explorer answers, no real
+    window is read) and saves only on Set folder; no window open says so and
+    leaves the field → on the phone the chip shows the resolved path to
     copy instead of navigating.
 
 Walks the story against a **disposable seeded instance whose {onedrive} points
@@ -25,6 +28,7 @@ record links to:
     docs/screenshots/story-09-folders-5-desktop.png   drawer: folder-index picker with hits
     docs/screenshots/story-09-folders-6-desktop.png   drawer after the pick (dark)
     docs/screenshots/story-09-folders-7-phone.png     phone: copy popover with the resolved path
+    docs/screenshots/story-09-folders-10-desktop.png  drawer: the folder of the front Explorer window, in the field before saving
 
 Issue #77 rides this walk (same surface: a chip that opens things through the
 per-PC opener, kept inside the <15-test budget): the AI-conversation chip —
@@ -76,9 +80,10 @@ PHONE = {"width": 390, "height": 844}
 
 
 class FolderInstance:
-    def __init__(self, base: str, od: Path) -> None:
+    def __init__(self, base: str, od: Path, fe: FakeFolderExplorer) -> None:
         self.base = base
         self.od = od
+        self.fe = fe
         self.od_fwd = str(od).replace("\\", "/")
 
 
@@ -100,7 +105,7 @@ def folder_webapp() -> Iterator[FolderInstance]:
     )
     try:
         with booted(work, work / "tasks.db", cfg) as base:
-            yield FolderInstance(base, od)
+            yield FolderInstance(base, od, fe)
     finally:
         fe.stop()
 
@@ -221,17 +226,18 @@ def _drawer_folder_editor(page: Page, base: str, shots: Path, inst, kitchen):
     _centers_align(
         drawer.locator("#drawerFolder"),
         drawer.locator(".folder-form .button-surface"),
-        drawer.locator("button.folder-pick"),
+        drawer.locator("button.folder-pick:not(.folder-explorer-pick)"),
+        drawer.locator("button.folder-explorer-pick"),
     )
-    # Line 1 starts on the input's left edge and ends on the picker's right
-    # edge. The chip is the reference pill every other reference wears (#357,
+    # Line 1 starts on the input's left edge and ends on the last button's right
+    # edge (the File Explorer pick, on the PC). The chip is the reference pill every other reference wears (#357,
     # the AI pill's look, compared in step 8), never a control-height box, and
     # a long ref still ellipsizes on one line rather than wrapping.
     align = drawer.locator("div.drawer-folder").evaluate(
         "el => { const q = s => { const r = el.querySelector(s).getBoundingClientRect();"
         " return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; };"
         " return { chip: q('a.chip-folder'), trash: q('.folder-current .icon-button'),"
-        "  input: q('#drawerFolder'), pick: q('button.folder-pick') }; }")
+        "  input: q('#drawerFolder'), pick: q('button.folder-explorer-pick') }; }")
     assert align["chip"][0] == align["input"][0], align
     assert align["trash"][1] == align["pick"][1], align
     assert align["chip"][2] < align["input"][2], align
@@ -275,7 +281,7 @@ def _unknown_placeholder_and_picker(page: Page, base: str, shots: Path, drawer, 
     assert "chip-missing" not in (back.get_attribute("class") or "")
 
     # 5. the folder-index picker: search-as-you-type, Enter attaches the first hit
-    pick = drawer.locator("button.folder-pick")
+    pick = drawer.locator("button.folder-pick:not(.folder-explorer-pick)")
     expect(pick).to_have_attribute("aria-label", "Find in folder index")   # #424: Find is the mapped verb
     expect(pick).to_have_attribute("title", "Find in folder index")
     pick.click()
@@ -291,6 +297,41 @@ def _unknown_placeholder_and_picker(page: Page, base: str, shots: Path, drawer, 
     assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/house/kitchen/plans"
     activity = _get(base, f"/api/tasks/{kitchen['id']}")["activity"]
     assert activity[0]["field"] == "folder_ref" and activity[0]["new_value"] == "{onedrive}/house/kitchen/plans"
+    _explorer_window_pick(page, base, shots, drawer, inst, kitchen)
+
+
+def _explorer_window_pick(page: Page, base: str, shots: Path, drawer, inst, kitchen) -> None:
+    """The Folder field's From Explorer window: fills the field in full, saves only on Set folder, says why when it can't."""
+    plans = "{onedrive}/house/kitchen/plans"
+    win = drawer.locator("button.folder-explorer-pick")
+    expect(win).to_have_attribute("aria-label", "From Explorer window")
+    field = drawer.locator("#drawerFolder")
+    # a window in front: its folder fills the field, shown in full, and nothing is saved yet
+    garden = str(inst.od / "house" / "garden")
+    inst.fe.explorer = ("ok", garden)
+    win.click()
+    expect(field).to_have_value(garden)
+    expect(drawer.locator(".folder-explorer-note")).to_contain_text(garden)          # shown in full, not saved yet
+    assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == plans
+    shot(page, shots / "story-09-folders-10-desktop.png")
+    field.press("Enter")
+    expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("data-ref", "{onedrive}/house/garden")
+    assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/house/garden"
+    # no window open: a message that says so, the field and the task untouched
+    inst.fe.explorer = ("none", None)
+    field = drawer.locator("#drawerFolder")
+    typed = field.input_value()
+    win.click()
+    expect(page.locator("#toast")).to_contain_text("No Explorer folder is open")
+    assert field.input_value() == typed
+    assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == "{onedrive}/house/garden"
+    # back to the folder the later steps expect, through the same pick
+    back = str(inst.od / "house" / "kitchen" / "plans")
+    inst.fe.explorer = ("ok", back)
+    drawer.locator("button.folder-explorer-pick").click()
+    expect(drawer.locator("#drawerFolder")).to_have_value(back)
+    drawer.locator("#drawerFolder").press("Enter")
+    expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("data-ref", plans)
 
 
 def _ai_chip_from_the_board(page: Page, base: str, shots: Path, drawer, pop):
@@ -400,7 +441,9 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     # #74: still exactly two lines at 390 - the picker button drops to its
     # glyph so [ref + Change + Pick] stays on one line without side-scroll.
     expect(d.locator("div.drawer-folder > *:not([hidden])")).to_have_count(2)
-    expect(d.locator(".folder-pick-label")).to_be_hidden()
+    for label in d.locator(".folder-pick-label").all():
+        expect(label).to_be_hidden()
+    expect(d.locator("button.folder-explorer-pick")).to_be_visible()        # the glyph stays reachable at 390
     assert_no_horizontal_overflow(p)
     assert p.evaluate("document.querySelector('#taskDrawer a.chip-folder').getAttribute('href')").startswith("taskos://open?ref=")
     shot(p, shots / "story-09-folders-7-phone.png")

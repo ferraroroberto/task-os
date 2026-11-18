@@ -45,6 +45,7 @@ import { renderDrawer } from './js/drawer/render.js';
  * @param {{onChanged: () => void, onOpen: (id:number) => void, onClose: () => void,
  *          people: () => Array<{id:number,name:string}>,
  *          members: () => Array<{id:string,name:string}>,
+ *          onPc: () => boolean,
  *          parentTargets: (id:number) => Array<{id:number,title:string,depth:number,path:string}>,
  *          allTasks: () => Array<{id:number,title:string,depth?:number}>,
  *          onMove: (id:number, parentId:number|null) => Promise<any>,

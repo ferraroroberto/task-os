@@ -13,6 +13,11 @@ picks a failure the client has to tell apart:
 ``v2``        an envelope claiming ``schema_version`` 2
 ``mystery``   an envelope with a state the contract does not name
 
+``explorer`` is what ``GET /api/v1/explorer/folder`` (the front File Explorer
+window's folder) answers: ``("ok", path)`` · ``("none", None)`` no folder window
+open · ``("unavailable", None)`` Windows could not be asked · ``("not_this_pc",
+None)`` · ``("absent", None)`` a build with no such route. The window is never real.
+
 ``stop()`` closes the connections it still serves (like :mod:`.loopback_fake`),
 so a stopped fake reads as folder-explorer *down* to a pooled client.
 
@@ -68,6 +73,7 @@ class FakeFolderExplorer:
         self.flagged = list(flagged or [])
         self.state = {"folders": ("ok", None), "emails": ("ok", None), "flagged": ("ok", None)}
         self.mode = "ok"
+        self.explorer: tuple[str, str | None] = ("none", None)
         #: seconds every answer waits first — a hung folder-explorer, for the client's timeout
         self.delay = 0.0
         self.requests: list[str] = []
@@ -134,6 +140,8 @@ class FakeFolderExplorer:
         parts = urlsplit(raw)
         q = {k: v[-1] for k, v in parse_qs(parts.query).items()}
         route = parts.path.rsplit("/", 1)[-1]
+        if parts.path == "/api/v1/explorer/folder":
+            return self._explorer_answer()
         if route == "status":
             return 200, self._envelope("ok", None, folders=self._part("folders"), emails=self._part("emails"))
         if route not in ("folders", "emails", "flagged"):
@@ -156,6 +164,19 @@ class FakeFolderExplorer:
         hits.sort(key=lambda h: 0 if any(w in h["subject"].replace(MARK_START, "").lower() for w in words) else 1)
         return 200, self._envelope("ok", None, query=q.get("q", ""), hits=hits[:limit], total=len(hits), notes=[],
                                    facets=None, marks={"start": MARK_START, "end": MARK_END}, page="/#search?mode=emails")
+
+    def _explorer_answer(self) -> tuple[int, Any]:
+        kind, path = self.explorer
+        if kind == "ok":
+            return 200, {"schema_version": 1, "state": "ok", "folder_path": path}
+        if kind == "absent":
+            return 404, {"detail": "Not Found"}
+        code, status, reason = {
+            "none": ("no_explorer_folder", 404, "No Explorer folder is open."),
+            "unavailable": ("explorer_unavailable", 502, "Windows did not say which folders are open."),
+            "not_this_pc": ("not_this_pc", 403, "Not this PC."),
+        }[kind]
+        return status, {"schema_version": 1, "state": "error", "code": code, "reason": reason}
 
     def _envelope(self, state: str, reason: str | None, **fields: Any) -> dict[str, Any]:
         if self.mode == "mystery":

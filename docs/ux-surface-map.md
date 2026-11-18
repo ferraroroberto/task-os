@@ -590,7 +590,7 @@ flowchart LR
 ### `drawer.more` More fields
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder** (typed ref or **Find in folder index**), **Edit links** (label edit, remove, **Add link**), **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
+- **Holds:** a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder** (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**, which fills the field with the front File Explorer window's folder for you to save), **Edit links** (label edit, remove, **Add link**), **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
 
 ### `drawer.issue` Issue panel
 
@@ -606,7 +606,9 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Holds:** a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel.
-- **States:** the index not configured or unavailable says so instead of listing nothing.
+- **States:**
+  - the index not configured or unavailable says so instead of listing nothing.
+  - the drawer's Folder field also carries **From Explorer window**, a folder glyph beside the opener, on the PC itself only; it fills the field, shows the path in full in a note under the line, and saves nothing until **Set folder**, and says which when it cannot (no folder window open, Windows could not say, folder-explorer down or too old).
 
 ## Time
 

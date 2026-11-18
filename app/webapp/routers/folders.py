@@ -14,6 +14,13 @@
           with ``detail: {state, reason}`` when folder-explorer cannot answer
           (``not-configured`` · ``indexing`` · ``failed`` · ``unreachable``) —
           never an empty ``items`` that would read as "no folder matches".
+    POST /api/folders/explorer-window
+        → {path}  the folder of the front File Explorer window, read by folder-explorer
+          (src/explorer_window.py); answers a caller on this PC only. Each failure has its
+          own code (``not_this_pc`` 403 · ``no_explorer_window`` 404 · ``explorer_unavailable``,
+          ``folder_explorer_unreachable``, ``folder_explorer_outdated`` 502 ·
+          ``folders_unavailable`` 503), never an empty ``path``. A POST so a cache never
+          answers for the window that is in front now.
 
 ``/api/resolve`` is a POST although it only reads: ``ref`` is a *query
 parameter name on every tracking-parameter blocklist*, so a URL-cleaning
@@ -33,11 +40,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response, require_feature
 from src import placeholders
+from src.explorer_window import ExplorerWindowError, front_explorer_folder
 from src.search.folder_explorer import Unavailable
 from src.search.folders_adapter import folder_item
+from src.this_pc import is_this_pc
 
 router = APIRouter(prefix="/api", tags=["folders"])
 
@@ -73,3 +83,15 @@ def folders_search(
                               detail={"state": exc.state, "reason": exc.reason})
     items = [folder_item(r, request.app.state.config.placeholders) for r in body.get("results") or []]
     return {"q": q, "items": items, "count": len(items)}
+
+
+@router.post("/folders/explorer-window", dependencies=[Depends(require_feature("email"))])
+async def folders_explorer_window(request: Request) -> Any:
+    host = request.client.host if request.client else ""
+    if not is_this_pc(host):
+        return error_response(403, "not_this_pc", "The Explorer window can only be read from the PC itself")
+    try:
+        path = await run_in_threadpool(front_explorer_folder, getattr(request.app.state, "folder_explorer", None))
+    except ExplorerWindowError as exc:
+        return error_response(exc.http_status, exc.code, str(exc))
+    return {"path": path}
