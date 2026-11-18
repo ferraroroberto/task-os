@@ -161,16 +161,22 @@
   .trow-check { width: 20px; height: 20px; margin: 0 12px; }
   .trow-check::after { inset: -12px; }
 }
-/* Full-bleed on the phone: a list's hairlines run edge to edge, the
-   layout swipe gestures expect, while headings, the filter strip and cards
-   keep the page gutter. The row keeps its own inset — 4px of padding plus the
-   circle's and the kebab's 44px squares put both glyphs 18px from the edge.
-   Two lists stay inside their box: the Search tab's hits live in cards, and a
-   Board column is one page of a sideways carousel, so the carousel bleeds as
-   a whole instead (a column's own list would be clipped by it). */
+/* Inset on the phone: a task list is a rounded card inside the page gutter,
+   the same gutter and radius as the Time tab's cards, never rows that run to
+   the screen edge. The card clips (`overflow: hidden`), so a swiped row's
+   reveal pane follows the card's corners on the first and last row. The
+   Search tab's hits keep their own section (search.css). */
 @media (max-width: 520px) {
-  .trows:not(.search-hits):not(.board-list),
-  .board-columns { margin-inline: calc(-1 * var(--gap)); }
+  .trows:not(.search-hits) {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  /* The card takes 26px of the line the meta budget was drawn on (rows.js
+     `metaLine`: the figures stay whole at 390px); the open target gives back 8 of
+     them so the widest row's figures still end inside the line. */
+  .trows:not(.search-hits) .trow-main { padding-inline: 6px; }
 }
 /* Swipe (swipe.js). On touch the browser keeps the vertical scroll
    (pan-y) and hands sideways travel to the script; a hold neither selects
