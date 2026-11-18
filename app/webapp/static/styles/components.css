@@ -247,6 +247,10 @@ a.chip:hover { text-decoration: underline; }
   color: var(--muted);
 }
 .section-count { color: var(--muted); font-size: var(--font-caption); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* The vendored `.overline` carries an uneven 4px / 6px block margin that centring in
+   a group header turns into a 1px lift of the name above its count: Today's horizons
+   and the Board's lanes share one header, so they share this one rule. */
+.today-horizon-head .overline, .board-col-title .overline { margin-block: 0; }
 
 /* The scope switch: the vendored segmented control, the full width of
    its row (a row of the Filters & sort sheet, or the Search box's line) with
