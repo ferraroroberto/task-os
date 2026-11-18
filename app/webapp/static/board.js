@@ -48,6 +48,7 @@
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { HEAD_MAX_PARTS } from './_vendored/home-head/home-head.js';
 import { icon } from './_vendored/icons/icons.js';
+import { queryCoversEveryStatus, showsClosed } from './filters.js';
 import { addDays, fmtDay, parseISO, todayISO } from './format.js';
 import { CLOSED, sortBoardItems, taskRow } from './rows.js';
 
@@ -200,11 +201,13 @@ export function mountBoard(handlers) {
     const all = items || [];
     // What the lanes hold: the open tasks — and, in Status mode, today's done
     // ones too, for the Done column. A ticked status shows what it picked.
-    const open = f.status.length ? all : all.filter(function (x) { return !CLOSED[x.status]; });
+    const open = showsClosed(f) ? all : all.filter(function (x) { return !CLOSED[x.status]; });
+    // A finished task a query brings in is never overdue or due today.
+    const live = open.filter(function (x) { return !CLOSED[x.status]; });
     const counts = {
-      inbox: open.filter(function (x) { return x.status === 'inbox'; }).length,
-      overdue: open.filter(function (x) { return x.due && x.due < t; }).length,
-      today: open.filter(function (x) { return x.due === t; }).length,
+      inbox: live.filter(function (x) { return x.status === 'inbox'; }).length,
+      overdue: live.filter(function (x) { return x.due && x.due < t; }).length,
+      today: live.filter(function (x) { return x.due === t; }).length,
     };
 
     const rowOpts = {
@@ -219,7 +222,7 @@ export function mountBoard(handlers) {
       week.fill(weekEntries(open, t), f.sort, rowOpts);
       shown = open.length;
     } else {
-      const cols = statusEntries(all, f.status);
+      const cols = statusEntries(all, f);
       status.fill(cols.entries, f.sort, rowOpts);
       shown = cols.shown;
     }
@@ -287,11 +290,12 @@ function weekEntries(open, t) {
 
 /** Status mode's columns → `{entries, shown}`: one entry per column (null = a
  *  column the status filter leaves out) and every task with a column. */
-function statusEntries(all, picked) {
+function statusEntries(all, f) {
+  const picked = f.status;
   const byStatus = {};
   BOARD_COLUMNS.forEach(function (c) { byStatus[c.key] = []; });
   all.forEach(function (x) { if (byStatus[x.status]) byStatus[x.status].push(x); });
-  const wantsDone = picked.indexOf('done') >= 0;
+  const wantsDone = picked.indexOf('done') >= 0 || queryCoversEveryStatus(f);
   // Only a REAL status pill narrows which columns show — a pseudo-value
   // ticked alone (`deferred`, `blocked`) is not a column key, so
   // treating it as one hid every column instead of leaving all four up and

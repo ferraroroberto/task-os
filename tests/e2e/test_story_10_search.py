@@ -404,9 +404,18 @@ def _cleared_status_searches_every_task(base: str, p: Page) -> None:
     # done tasks too
     p.locator("#searchInput").fill("gift")
     expect(_task_hit(p, "Buy a birthday gift")).to_have_attribute("data-status", "done")
-    # Today does not read the flag: it still lists open tasks, with no filter count
+    # Today lists open tasks, with no filter count, until its own search field has text: then
+    # the cleared status ticks mean every status there too, and the header line says so
     p.click("nav.tabs .tab[data-tab='today']")
     expect(p.locator("#paneToday .filter-open .filter-count")).to_be_hidden()
+    bikes_row = p.locator("#paneToday .trow", has_text="Sell the old bikes")
+    expect(bikes_row).to_have_count(0)
+    p.locator("#todayFilterText .filter-q").fill("bikes")
+    expect(bikes_row).to_have_count(1)
+    expect(p.locator("#homeHeadStatus")).to_contain_text("every status")
+    p.locator("#todayFilterText .filter-q").fill("")
+    expect(bikes_row).to_have_count(0)
+    expect(p.locator("#homeHeadStatus")).not_to_contain_text("every status")
     # Clear puts the default back
     p.click("nav.tabs .tab[data-tab='search']")
     open_filter_sheet(p, "paneSearch").get_by_role("button", name="Clear").click()

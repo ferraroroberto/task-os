@@ -33,7 +33,7 @@
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { calendarLane } from './calendar.js';
 import { addDays, relDue, todayISO } from './format.js';
-import { rowList, sortBoardItems } from './rows.js';
+import { CLOSED, rowList, sortBoardItems } from './rows.js';
 
 /** Split the list into the four horizons {due, week, later, nodate, counts}
  *  — exported for tests. Every task lands in exactly one. */
@@ -57,8 +57,9 @@ export function bucketToday(items, today, sort) {
     later: sortBoardItems(later, sort),
     nodate: sortBoardItems(nodate, sort),
     counts: {
-      overdue: due.filter(function (it) { return it.due < t; }).length,
-      today: due.filter(function (it) { return it.due === t; }).length,
+      // A finished task a query brings in is never overdue or due today.
+      overdue: due.filter(function (it) { return it.due < t && !CLOSED[it.status]; }).length,
+      today: due.filter(function (it) { return it.due === t && !CLOSED[it.status]; }).length,
       week: week.length,
       later: later.length,
       nodate: nodate.length,

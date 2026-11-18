@@ -6,6 +6,7 @@
 
 import { HEAD_MAX_PARTS } from '../../_vendored/home-head/home-head.js';
 import { boardHeadParts } from '../../board.js';
+import { statusCoverage } from '../../filters.js';
 import { headLine } from '../../today.js';
 
 // ------------------------------------------------------------ the header
@@ -47,6 +48,7 @@ export function renderHeadStatus(app) {
   const onPane = !app.state.journal.open;
   // An empty install's note speaks for the task views only: Time and
   // Search keep their own line (Settings names a failing service on its page).
+  const queried = !!app.state.filters.q.trim();
   const taskView = app.state.journal.open || ['today', 'board'].includes(app.state.tab);
   if (app.state.headNote) text = app.state.headNote;
   else if (app.state.total === 0 && taskView) text = 'No tasks yet';
@@ -54,8 +56,15 @@ export function renderHeadStatus(app) {
     const line = headLine(app.state.todayCounts);
     text = line.text;
     attention = line.attention;
+    // A typed query names the statuses it covers, as the Search count line does — first, so a
+    // phone's ellipsis never takes it, and with no "nothing due" filler beside it.
+    if (queried) text = line.attention ? statusCoverage(app.state.filters) + ' · ' + text : statusCoverage(app.state.filters);
   } else if (app.state.tab === 'board' && onPane && app.state.boardCounts) {
     parts = boardHeadParts(app.state.boardCounts);
+    if (queried) {
+      const cover = { text: statusCoverage(app.state.filters), tone: 'muted' };
+      parts = [cover].concat(parts.filter(function (x) { return x.tone !== 'muted'; })).slice(0, HEAD_MAX_PARTS);
+    }
   } else if (app.state.tab === 'time' && onPane && app.time) {
     text = app.time.headText();
   }
