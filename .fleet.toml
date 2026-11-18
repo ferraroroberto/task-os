@@ -429,6 +429,7 @@ theme_storage_key = "task-os.theme"
 tab = "board"
 id = "settings"
 click = "#settingsBtn"
+overlay = true
 
 # The task drawer, its row menu and Select mode (#394): read-only clicks on the
 # Today list's first row. Opening a drawer or a menu writes nothing; the walk
@@ -439,16 +440,19 @@ click = "#settingsBtn"
 tab = "today"
 id = "drawer"
 click = "#paneToday .trow .trow-main"
+overlay = true
 
 [[design.review.extra_steps]]
 tab = "today"
 id = "drawer-more"
 clicks = ["#paneToday .trow .trow-main", "#taskDrawer details.drawer-more > summary"]
+overlay = true
 
 [[design.review.extra_steps]]
 tab = "today"
 id = "row-menu"
 click = "#paneToday .trow .trow-kebab"
+overlay = true
 
 [[design.review.extra_steps]]
 tab = "today"
@@ -461,6 +465,8 @@ click = "#paneToday [data-select-toggle]"
 tab = "today"
 id = "filter-sheet"
 click = "#paneToday .filter-open"
+overlay = true
+primary = "#filterSheet .filter-done"
 
 # The Board's Status mode (#396): Week is the default layout, so the walk
 # presses the Week · Status segment to measure the status columns too. The
@@ -477,11 +483,168 @@ click = "#paneBoard .board-modes [data-mode='status']"
 tab = "today"
 id = "settings-archive"
 clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='archive']"]
+overlay = true
 
 [[design.review.extra_steps]]
 tab = "today"
 id = "settings-opener"
 clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='opener']"]
+overlay = true
+
+# Every sheet and dialog the app opens, each by read-only clicks and declared
+# `overlay = true` so the walk holds it to the phone screen (390x664 and 390x844) and
+# reports a target that never attaches as not confirmed, never as a pass. The walk
+# types and submits nothing: a sheet is opened, measured and left. Settings is one
+# dialog whose row sheets share its box, so each row's sheet is its own step. A sheet
+# opened from another overlay (a Settings row, the drawer, the filter sheet, the palette)
+# is read together with the layer under it, whose button the sheet covers: read the
+# sheet's own root, and leave `primary` undeclared there, since a declared selector is
+# looked up in every open layer.
+
+# Add task, then with its folder picker open (the tallest state it reaches).
+[[design.review.extra_steps]]
+tab = "today"
+id = "quick-add"
+click = "#paneToday .quick-add-btn"
+overlay = true
+primary = "#quickAdd .quick-add-submit"
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "quick-add-picker"
+clicks = ["#paneToday .quick-add-btn", "#quickAdd .quick-add-pick"]
+overlay = true
+primary = "#quickAdd .quick-add-submit"
+
+# The person sheet behind "+N more": the Whose-tasks row lives in the filter sheet, and
+# "+N more" exists only on an install with more members than the row's segments, so
+# a smaller install leaves this step not confirmed.
+[[design.review.extra_steps]]
+tab = "today"
+id = "owners-sheet"
+clicks = ["#paneToday .filter-open", "#filterSheet [data-track='owners.more']"]
+overlay = true
+
+# A task's Change parent picker and its Delete confirmation, from the drawer.
+[[design.review.extra_steps]]
+tab = "today"
+id = "parent-picker"
+clicks = ["#paneToday .trow .trow-main", "#taskDrawer .drawer-change-parent"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "confirm"
+clicks = ["#paneToday .trow .trow-main", "#taskDrawer .drawer-delete"]
+overlay = true
+
+# The date sheet from a row's menu.
+[[design.review.extra_steps]]
+tab = "today"
+id = "date-sheet"
+clicks = ["#paneToday .trow .trow-kebab", ".row-menu [data-action='change-date']"]
+overlay = true
+
+# The Time tab's Add time already spent dialog.
+[[design.review.extra_steps]]
+tab = "time"
+id = "time-dialog"
+click = "#paneTime .time-add"
+overlay = true
+
+# The command palette (Settings > Command palette > Open) and, through its
+# Keyboard shortcuts command, the shortcuts sheet. The palette lists its commands in a
+# fixed order and Keyboard shortcuts is the 20th; a list that shifts opens a different
+# command, which opens no sheet and so reads not confirmed.
+[[design.review.extra_steps]]
+tab = "today"
+id = "palette"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='palette']", "#paletteOpen"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "keys-help"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='palette']", "#paletteOpen", "#palette .palette-item:nth-child(20)"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-rows"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='rows']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-palette"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='palette']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-access"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='access']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-issues"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='issues']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-calendar"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='calendar']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-capture"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='capture']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-timecats"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='timecats']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-search"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='search']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-voice"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='voice']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-ai"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='ai']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-yourname"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='yourname']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-install"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='install']"]
+overlay = true
+
+[[design.review.extra_steps]]
+tab = "today"
+id = "settings-mirror"
+clicks = ["#settingsBtn", "#paneSettings [data-settings-sheet='mirror']"]
+overlay = true
 
 # Declared implicit-state machines: the one module that owns each, so the state rules stop reporting
 # it. The archive lifecycle is two machines in one Python module and a JS mirror of both tables;
