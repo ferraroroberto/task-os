@@ -309,6 +309,10 @@ a.chip:hover { text-decoration: underline; }
    field: there the word stays and the glyph goes (iOS's own
    "Select" is a text button). */
 @media (max-width: 520px) { .strip-square.has-label .icon { display: none; } }
+/* The phone's Select lives in the Filters & sort sheet (a "Select tasks" row);
+   the strip's toggle only appears while Select mode is on, as Done: the way out
+   while nothing is ticked yet and the bulk bar is not up. */
+@media (max-width: 520px) { .pane-top > .select-toggle:not(.is-on) { display: none; } }
 
 /* ------------------------------------------------- select mode */
 /* The Select toggle sits beside the +, same geometry. Once tasks are ticked

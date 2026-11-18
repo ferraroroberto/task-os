@@ -154,6 +154,23 @@ def press_in_sheet(page: Page, pane: str, selector: str, *, tap: bool = False) -
     close_filter_sheet(page)
 
 
+def enter_select_from_sheet(page: Page, pane: str, *, tap: bool = False) -> None:
+    """Enter Select mode from *pane*'s Filters & sort sheet: the "Select tasks" row, like a user would.
+
+    The row's button turns Select mode on and closes the sheet itself, so there is
+    no Done to press; the strip's toggle then reads Done.
+    """
+    sheet = open_filter_sheet(page, pane)
+    button = sheet.locator(".filter-sheet-row[data-name='select'] button")
+    expect(button).to_have_text("Select")
+    if tap:
+        button.tap()
+    else:
+        button.click()
+    expect(sheet).to_be_hidden()
+    expect(page.locator(f"#{pane} [data-select-toggle]")).to_have_attribute("aria-pressed", "true")
+
+
 def board_mode(page: Page, mode: str) -> None:
     """Press the Board's Week · Status segment (#396) in its sheet, like a user would.
 

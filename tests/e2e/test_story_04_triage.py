@@ -95,6 +95,7 @@ from tests.e2e._ui import (
     assert_date_sheet,
     board_mode,
     close_filter_sheet,
+    enter_select_from_sheet,
     filter_button,
     leave_settings,
     open_filter_sheet,
@@ -740,22 +741,23 @@ def _phone_board_rows(page: Page, shots: Path, rows, watering) -> None:
     expect(watering).to_have_attribute("data-status", "todo")
     expect(rows.locator(".trow-status")).to_have_count(0)
     assert_no_horizontal_overflow(page)
-    # the top strip (#80, #395): the text filter, the filter button, the
-    # Select toggle and the + sit side by side on one line, all at the
-    # touch floor, with effective rectangles that never overlap; pressed,
-    # the toggle says its name in accent-text on the accent tint, 4.5:1
-    # (WCAG 1.4.3): a word, not a glyph's 3:1 (#339)
-    strip = page.locator("#paneBoard .filter-q, #paneBoard .filter-open, #paneBoard [data-select-toggle], #paneBoard .quick-add-btn")
+    # the top strip: the text filter, the filter button and the + sit side by
+    # side on one line, all at the touch floor, with effective rectangles that
+    # never overlap; Select is no longer on it, it is a row of the Filters & sort
+    # sheet, and once on the toggle reappears as Done, in accent-text on the
+    # accent tint, 4.5:1 (WCAG 1.4.3): a word, not a glyph's 3:1
+    expect(page.locator("#paneBoard [data-select-toggle]")).to_be_hidden()
+    strip = page.locator("#paneBoard .filter-q, #paneBoard .filter-open, #paneBoard .quick-add-btn")
     tops = strip.evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2))")
     assert max(tops) - min(tops) <= 2, tops                         # one line
     assert_min_target(strip)
     assert_no_overlap(strip)
-    page.locator("#paneBoard [data-select-toggle]").tap()
+    enter_select_from_sheet(page, "paneBoard", tap=True)
     pressed = page.locator("#paneBoard [data-select-toggle][aria-pressed='true'] .strip-label")
-    expect(pressed).to_be_visible()
+    expect(pressed).to_have_text("Done")
     assert text_contrast(pressed) >= 4.5, text_contrast(pressed)
     page.locator("#paneBoard [data-select-toggle]").tap()
-    expect(page.locator("#paneBoard [data-select-toggle]")).to_have_attribute("aria-pressed", "false")
+    expect(page.locator("#paneBoard [data-select-toggle]")).to_be_hidden()
     page.locator("#paneBoard .quick-add-btn").tap()
     expect(page.locator("#quickAdd")).to_be_visible()
     assert_min_target(page.locator("#quickAdd .quick-add-input"))
@@ -810,7 +812,7 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
     # ticks sit two per line, every one a 44px target, none overlapping
     sheet = open_filter_sheet(page, "paneBoard")
     names = sheet.locator(".filter-sheet-row").evaluate_all("els => els.map(e => e.dataset.name)")
-    assert names == ["sort", "layout", "triage", "kind", "whose", "status", "project", "person", "due", "updated"], names
+    assert names == ["sort", "select", "layout", "triage", "kind", "whose", "status", "project", "person", "due", "updated"], names
     # five peers are a segmented control, not a select: due is the raised one
     sort = sheet.locator(".filter-sheet-row[data-name='sort'] .segmented")
     expect(sort.locator(".segmented-item")).to_have_text(["Due", "Priority", "Modified", "Created", "Title"])

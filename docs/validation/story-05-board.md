@@ -103,3 +103,15 @@
 **Test:** `tests/e2e/test_story_05_board.py` — `_walk_scope_switch` (the strip holds the strip only; the count and the key), `_walk_whose_switch`, `_second_member_sees_their_own`, `_owner_phone_is_unaffected` (the count and Clear in dark); `test_story_23_ai_triage.py` (the Triage row); `tests/test_scope.py` (the view-toggle count); folded into the existing tests, no new test function.
 
 **Result:** the unit and e2e legs pass on disposable seeded instances, synthetic data only; Today and the Board at 390x844 and 390x664 in light and dark were looked at, with the active-count state, and the sheet's height measured against the viewport (it fits, Done on screen, in all eight). **Not verified:** a real iPhone. Date: 2026-11-17.
+
+## Select tasks is a row of the Filters & sort sheet
+
+**Story:** the owner wants the phone strip to read filter field, filter button and `+`, with Select tucked into the sheet that already holds the other view toggles.
+
+**Steps:** Today and the Board on a 390px phone (844 and 664 tall), light and dark → the strip shows no Select → the filter button opens **Filters & sort** with a **Select tasks** row under Sort → pressing it closes the sheet and turns Select mode on: the rows become tick targets and the strip shows **Done** → ticking a task brings up the bulk bar, whose ✕ leaves → with nothing ticked, **Done** leaves and the strip returns to its three controls. On a wide screen the strip keeps its Select toggle.
+
+**Expected:** the sheet still fits 390x664 and 390x844 with Done on screen in both themes; Select is never on the phone strip outside Select mode; **Done** is 44px tall like the `+`, and its label holds 4.5:1 on its tint.
+
+**Test:** `tests/e2e/test_story_04_triage.py` — `_phone_board_rows` (strip without Select, entering from the sheet, the Done label's contrast, leaving); `tests/e2e/test_story_05_board.py` — `_phone_select_and_owner` (entering from the sheet, then the bulk bar); folded into the existing tests, no new test function. The sheet-fit walk of `test_story_07_phone.py` covers the sheet's size.
+
+**Result:** the e2e legs above pass (full suite, 16 tests, 2026-11-18). Walked in headless WebKit (a scripted run, not a headed walk) at the four phone cells against the synthetic seed: the sheet fits with Done visible in all eight cells, the row enters Select mode and closes the sheet, Done leaves.
