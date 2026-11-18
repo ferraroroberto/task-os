@@ -9,20 +9,42 @@ The step-by-step user stories this map sits beside, with their screenshots, test
 | --- | --- | --- | --- |
 | [board](board.md) | 1 | 1 | surface() |
 | [board-status](board-status.md) | 1 | 0 | extra_steps |
+| [confirm](confirm.md) | 1 | 0 | extra_steps |
+| [date-sheet](date-sheet.md) | 1 | 0 | extra_steps |
 | [drawer](drawer.md) | 2 | 1 | surface() · extra_steps |
 | [drawer-more](drawer-more.md) | 1 | 0 | extra_steps |
 | [filter-sheet](filter-sheet.md) | 1 | 0 | extra_steps |
 | [home](home.md) | 1 | 0 | key views |
+| [keys-help](keys-help.md) | 1 | 0 | extra_steps |
 | [login](login.md) | 1 | 1 | surface() · key views |
+| [owners-sheet](owners-sheet.md) | 1 | 0 | extra_steps |
+| [palette](palette.md) | 1 | 0 | extra_steps |
+| [parent-picker](parent-picker.md) | 1 | 0 | extra_steps |
+| [quick-add](quick-add.md) | 1 | 0 | extra_steps |
+| [quick-add-picker](quick-add-picker.md) | 1 | 0 | extra_steps |
 | [row](row.md) | 1 | 1 | surface() |
 | [row-menu](row-menu.md) | 1 | 0 | extra_steps |
 | [search](search.md) | 1 | 1 | surface() |
 | [select](select.md) | 1 | 0 | extra_steps |
 | [settings](settings.md) | 1 | 1 | surface() · extra_steps |
+| [settings-access](settings-access.md) | 1 | 0 | extra_steps |
+| [settings-ai](settings-ai.md) | 1 | 0 | extra_steps |
 | [settings-archive](settings-archive.md) | 1 | 0 | extra_steps |
+| [settings-calendar](settings-calendar.md) | 1 | 0 | extra_steps |
+| [settings-capture](settings-capture.md) | 1 | 0 | extra_steps |
+| [settings-install](settings-install.md) | 1 | 0 | extra_steps |
+| [settings-issues](settings-issues.md) | 1 | 0 | extra_steps |
+| [settings-mirror](settings-mirror.md) | 1 | 0 | extra_steps |
 | [settings-opener](settings-opener.md) | 1 | 0 | extra_steps |
+| [settings-palette](settings-palette.md) | 1 | 0 | extra_steps |
+| [settings-rows](settings-rows.md) | 1 | 0 | extra_steps |
+| [settings-search](settings-search.md) | 1 | 0 | extra_steps |
+| [settings-timecats](settings-timecats.md) | 1 | 0 | extra_steps |
+| [settings-voice](settings-voice.md) | 1 | 0 | extra_steps |
+| [settings-yourname](settings-yourname.md) | 1 | 0 | extra_steps |
 | [strip](strip.md) | 2 | 2 | surface() |
 | [time](time.md) | 3 | 1 | surface() |
+| [time-dialog](time-dialog.md) | 1 | 0 | extra_steps |
 | [today](today.md) | 2 | 3 | surface() |
 
 **Not mapped** (a `surface()` call the generator cannot turn into a driving node):
