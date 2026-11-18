@@ -475,6 +475,12 @@ function renderSelectMode() {
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     btn.classList.toggle('is-on', active);
     btn.hidden = busy;
+    // on a phone the toggle shows only while Select mode is on, and then it is the way out
+    const label = active ? 'Done selecting' : 'Select tasks';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    const text = btn.querySelector('.strip-label');
+    if (text) text.textContent = active ? 'Done' : 'Select';
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) { btn.hidden = busy; });
   [els.boardFilterText, els.todayFilterText].forEach(function (host) {

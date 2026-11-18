@@ -407,7 +407,7 @@ surfaces:
       - >-
         on one line, and nothing under it: the live **text filter** (placeholder carries the
         count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its
-        name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the
+        name spells them), **+**, and on a wide screen **Select** (on a phone Select is a row of the filter sheet, and the strip shows it only while Select mode is on, as **Done**). Today, Board and the Done journal carry it; Search carries its own box and the
         filter button inside it.
     links:
       - to: strip.filter-sheet
@@ -422,7 +422,7 @@ surfaces:
     holds:
       - >-
         **sort** (Due · Priority · Modified · Created · Title); on Today and Board the view
-        toggles under it: **Layout** (Week · Status, Board only), **AI triage** (Board, Status
+        toggles under it: **Select tasks** (enters Select mode and closes the sheet), **Layout** (Week · Status, Board only), **AI triage** (Board, Status
         layout, while the Inbox holds tasks; pressing it closes the sheet),
         **Kind of task** and **Whose tasks**; then **status**
         ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**,
@@ -481,7 +481,7 @@ surfaces:
     title: Select mode and bulk bar
     root: data-surface
     reach:
-      - "**Select**."
+      - "**Select tasks** in the Filters & sort sheet; on a wide screen **Select** on the strip."
     does:
       - >-
         every row becomes a tick target (drag and phone swipe off; one selection shared across Today
@@ -489,7 +489,7 @@ surfaces:
         (date sheet, [date sheet](#the-task-row)) · **Set status…** (native select: inbox, todo,
         standby, complete, done, cancelled) · **Set owner…** (two or more members) · **Delete**
         (confirm names the count, projects whose children go too, and synced issue tasks the next
-        sync would bring back) · **Leave select mode**. Escape leaves.
+        sync would bring back) · **Leave select mode**. Escape leaves. On a phone, before anything is ticked, the strip's **Done** leaves.
     states:
       - a task that fails in a bulk write is named in the toast.
     links:

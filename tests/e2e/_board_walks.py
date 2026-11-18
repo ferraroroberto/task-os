@@ -32,7 +32,13 @@ from tests.e2e._geometry import (
     assert_no_overlap,
 )
 from tests.e2e._surface import surface
-from tests.e2e._ui import board_mode, close_filter_sheet, filter_button, open_filter_sheet
+from tests.e2e._ui import (
+    board_mode,
+    close_filter_sheet,
+    enter_select_from_sheet,
+    filter_button,
+    open_filter_sheet,
+)
 from tests.e2e.conftest import E2E_ANCHOR, _get, booted, e2e_workdir, scroll_to_top, shot
 
 #: Each Board column is a scroller of its own; story 16 frames them from their tops.
@@ -602,11 +608,13 @@ def _phone_select_and_owner(page: Page, base: str, shots: Path) -> None:
     # 11. § #81 on the phone: the same Select toggle, tap-to-select (no
     #     gesture — the horizontal swipe still belongs to the carousel),
     #     and the bulk bar sized for the strip, clear of the nav pill.
-    # the strip's two buttons are one pair: the same height, 44px on touch
-    # (the toggle used to keep the 36px control height here); the toggle
-    # says "Select" in words, so it is as wide as its label (#339)
+    # Select is a row of the Filters & sort sheet: the strip carries no toggle
+    # until Select mode is on, and then it says "Done" in words. Its two
+    # buttons are one pair: the same height, 44px on touch
+    expect(page.locator("#paneBoard [data-select-toggle]")).to_be_hidden()
+    enter_select_from_sheet(page, "paneBoard", tap=True)
     toggle = page.locator("#paneBoard [data-select-toggle]")
-    expect(toggle).to_have_text("Select")
+    expect(toggle).to_have_text("Done")
     tog_box = toggle.bounding_box()
     add_box = page.locator("#paneBoard [data-quick-add]").bounding_box()
     assert tog_box and add_box
@@ -614,7 +622,6 @@ def _phone_select_and_owner(page: Page, base: str, shots: Path) -> None:
     assert tog_box["width"] >= 44, tog_box
     assert_no_overlap(page.locator("#paneBoard .pane-top button"))
 
-    page.locator("#paneBoard [data-select-toggle]").tap()
     checks = _col(page, "standby").locator(".trow-check")
     expect(checks.first).to_be_visible()
     assert_min_target(_col(page, "standby").locator(".trow"))

@@ -4,6 +4,8 @@
  * so the pane shows only the filter field and the add button and every other
  * toggle is a row of the one sheet the filter button opens:
  *
+ *   Select tasks  enters Select mode and closes the sheet (on a phone the strip's own
+ *                 toggle only reappears, as Done, while Select mode is on)
  *   Layout      Week · Status                (Board; remembered per device)
  *   AI triage   the Inbox action             (Board, Status layout, Inbox not empty)
  *   Kind        Tasks · Issues · All         (`scope`, scope.js)
@@ -25,6 +27,7 @@ import {
   RECENT_OWNERS_KEY, WHOSE_KEY, activeViewCount, bumpRecentOwner, describeViews, pickOwner, sheetRow, toggleOwner,
 } from '../../filters.js';
 import { mountScope } from '../../scope.js';
+import * as selection from '../../selection.js';
 import { mountOwners, openOwnerSheet } from './owners.js';
 
 /** A row whose control is a segmented group: the label above it. */
@@ -32,6 +35,22 @@ function stackedRow(name, label, control) {
   const row = sheetRow(name, label, control);
   row.classList.add('is-stacked');
   return row;
+}
+
+/** The "Select tasks" row: one press toggles Select mode and steps the sheet aside. */
+function selectRow() {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'button-surface filter-select-tasks';
+  button.dataset.track = 'select';
+  button.setAttribute('aria-pressed', String(selection.isActive()));
+  button.textContent = selection.isActive() ? 'Stop selecting' : 'Select';
+  button.addEventListener('click', function () {
+    selection.setActive(!selection.isActive());
+    const dialog = document.getElementById('filterSheet');
+    if (dialog && dialog.open) dialog.close();
+  });
+  return sheetRow('select', 'Select tasks', button);
 }
 
 /**
@@ -131,6 +150,7 @@ export function createViewRows(app) {
     let triageWired = false;
 
     function draw(body) {
+      body.appendChild(selectRow());
       if (board && app.board) {
         if (!triageWired) {
           // Triage starts a run rather than setting a filter: the sheet steps aside for the board

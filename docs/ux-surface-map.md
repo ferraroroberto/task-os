@@ -334,7 +334,7 @@ flowchart LR
 ### `strip.top` Top strip
 
 - **Root:** none — one strip sits in each of Today, Board and the journal, so no single element carries it.
-- **Holds:** on one line, and nothing under it: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **Select**, and **+**. Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
+- **Holds:** on one line, and nothing under it: the live **text filter** (placeholder carries the count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its name spells them), **+**, and on a wide screen **Select** (on a phone Select is a row of the filter sheet, and the strip shows it only while Select mode is on, as **Done**). Today, Board and the Done journal carry it; Search carries its own box and the filter button inside it.
 - **Leads to:**
   - [Filters & sort sheet](#stripfilter-sheet-filters--sort-sheet)
   - [Quick-add dialog](#stripquick-add-quick-add-dialog)
@@ -344,7 +344,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** filter button.
-- **Holds:** **sort** (Due · Priority · Modified · Created · Title); on Today and Board the view toggles under it: **Layout** (Week · Status, Board only), **AI triage** (Board, Status layout, while the Inbox holds tasks; pressing it closes the sheet), **Kind of task** and **Whose tasks**; then **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**.
+- **Holds:** **sort** (Due · Priority · Modified · Created · Title); on Today and Board the view toggles under it: **Select tasks** (enters Select mode and closes the sheet), **Layout** (Week · Status, Board only), **AI triage** (Board, Status layout, while the Inbox holds tasks; pressing it closes the sheet), **Kind of task** and **Whose tasks**; then **status** ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**, **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear** (only while something is on), **Done**.
 - **Does:** applies live; the state is the URL. The filter button's count adds the kind of task and whose tasks when they are off their default, and Clear resets them. The layout hides nothing, so it is neither counted nor cleared. On Search and the journal the sheet has no view toggles and Clear leaves the scope and person row alone.
 - **Phone:** a full-screen sheet with ticks two to a line. In the journal, status, due, modified and sort are hidden.
 
@@ -372,8 +372,8 @@ flowchart LR
 ### `strip.bulk-bar` Select mode and bulk bar
 
 - **Root:** `data-surface`
-- **Reach:** **Select**.
-- **Does:** every row becomes a tick target (drag and phone swipe off; one selection shared across Today and Board). With one or more ticked the bar replaces the strip: *N selected* · **Move** (date sheet, [date sheet](#the-task-row)) · **Set status…** (native select: inbox, todo, standby, complete, done, cancelled) · **Set owner…** (two or more members) · **Delete** (confirm names the count, projects whose children go too, and synced issue tasks the next sync would bring back) · **Leave select mode**. Escape leaves.
+- **Reach:** **Select tasks** in the Filters & sort sheet; on a wide screen **Select** on the strip.
+- **Does:** every row becomes a tick target (drag and phone swipe off; one selection shared across Today and Board). With one or more ticked the bar replaces the strip: *N selected* · **Move** (date sheet, [date sheet](#the-task-row)) · **Set status…** (native select: inbox, todo, standby, complete, done, cancelled) · **Set owner…** (two or more members) · **Delete** (confirm names the count, projects whose children go too, and synced issue tasks the next sync would bring back) · **Leave select mode**. Escape leaves. On a phone, before anything is ticked, the strip's **Done** leaves.
 - **States:** a task that fails in a bulk write is named in the toast.
 - **Leads to:**
   - [Date sheet / popover](#rowdate-date-sheet--popover)
