@@ -167,11 +167,8 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         # wide_views`), which fleet-config's design review reads, so this pins the
         # declaration to the rendered widths. Last, because it moves the stored tab.
         _assert_widths(page)
-        # The gear opens Settings over the tab it covers (#281): no tab lit while
-        # it is up, and a tab press leaves it, as for the journal.
         gear = page.locator("#settingsBtn")
-        expect(gear).to_have_attribute("aria-current", "page")
-        expect(page.locator("nav.tabs .tab.active")).to_have_count(0)
+        _walk_settings_over_tab(page, gear)
         _open_palette_from_settings(page, tap=False)
         _walk_text_size(page, tap=False)
         _walk_tab_during_boot(page, webapp)
@@ -199,6 +196,19 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         context.close()
 
 
+def _walk_settings_over_tab(page: Page, gear) -> None:
+    """The gear opens the Settings page over the tab it covers: a modal dialog,
+    so the tab under it stays lit, and its close returns to that tab."""
+    expect(gear).to_have_attribute("aria-current", "page")
+    expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "search")
+    page.locator("#paneSettings .settings-page-close").click()
+    expect(page.locator("#paneSettings")).to_be_hidden()
+    expect(page.locator("#paneSearch")).to_be_visible()
+    expect(gear).not_to_have_attribute("aria-current", "page")
+    gear.click()
+    expect(page.locator("#paneSettings")).to_be_visible()
+
+
 def _assert_today_leads(page: Page) -> None:
     """Today is the first nav item whichever shape the nav takes — the left rail
     (top-most) or the bottom pill (left-most)."""
@@ -209,13 +219,17 @@ def _assert_today_leads(page: Page) -> None:
 
 def _pane_width(page: Page, tab: str) -> float:
     if tab == "settings":                 # no tab since #281: the header gear opens it
-        page.locator("#settingsBtn").click()
+        if not page.locator("#paneSettings").is_visible():
+            page.locator("#settingsBtn").click()
         pane = page.locator("#paneSettings")
         pane.wait_for()
-        expect(page.locator(".home-head h1.home-title")).to_have_text("Settings")
+        # the page names itself in its own header, over the tab's
+        expect(page.locator("#settingsTitle")).to_have_text("Settings")
         # the Database row's value says what it is in words, not "schema v17" (#339)
         expect(page.locator("#settingsSite")).to_have_text(re.compile(r"^version \d+$"))
-        return pane.evaluate("el => el.getBoundingClientRect().width")
+        # The page is a full-window dialog; its column is the measure, the
+        # cards sitting 20px inside it on each side (settings-group.pageInset).
+        return pane.locator(".card.settings-group").first.evaluate("el => el.getBoundingClientRect().width") + 40
     page.locator(f"nav.tabs .tab[data-tab='{tab}']").click()
     pane = page.locator("[role=tabpanel]:not([hidden])")
     pane.wait_for()
@@ -241,17 +255,15 @@ def _assert_widths(page: Page) -> None:
     for tab in MEASURED_VIEWS:
         width = _pane_width(page, tab)
         assert MEASURE - 1 <= width <= MEASURE + 1, f"{tab} is one-dimensional and must hold the {MEASURE}px measure, got {width}px"
-    # Master-detail (#397, design.md Layout): a Settings sheet is the detail pane
-    # beside the list, list : detail = 1 : 1.5, side by side and never over it…
+    # A Settings sheet is the vendored modal over the page (settings-group's
+    # detail sheet): centred, narrower than the page's column, never beside it…
     open_settings_sheet(page, "issues")
-    list_box = page.locator("#paneSettings").bounding_box()
     sheet_box = page.locator("#settingsSheet").bounding_box()
-    assert list_box and sheet_box
-    assert list_box["x"] + list_box["width"] <= sheet_box["x"], (list_box, sheet_box)
-    assert 1.3 <= sheet_box["width"] / list_box["width"] <= 1.7, (list_box, sheet_box)
-    expect(page.locator("#paneSettings [data-settings-sheet='issues']")).to_have_attribute("aria-current", "true")
+    assert sheet_box
+    assert sheet_box["width"] < MEASURE, sheet_box
+    assert abs(sheet_box["x"] + sheet_box["width"] / 2 - DESKTOP["width"] / 2) <= 10, sheet_box
     close_settings_sheet(page)
-    assert MEASURE - 1 <= page.locator("#paneSettings").bounding_box()["width"] <= MEASURE + 1
+    assert MEASURE - 1 <= _pane_width(page, "settings") <= MEASURE + 1
     # …but the Email archiving report (the Archive tab until then) is a
     # nine-column table: two-dimensional, so its sheet spans the content width.
     open_settings_sheet(page, "archive")
@@ -275,9 +287,9 @@ def _open_palette_from_settings(page: Page, *, tap: bool) -> None:
     it found them."""
     press = page.tap if tap else page.click
     expect(page.locator("#paneSettings")).to_be_visible()
-    # An empty install's *No tasks yet* belongs to the task views: Settings
-    # keeps its own line about the services.
-    expect(page.locator("#homeHeadStatus")).to_have_text(re.compile(r"\d+ of \d+ services on"))
+    # An empty install's *No tasks yet* belongs to the task views: the
+    # Settings page keeps its own line about the services.
+    expect(page.locator("#settingsHeadStatus")).to_have_text(re.compile(r"\d+ of \d+ services on"))
     open_settings_sheet(page, "palette", tap=tap)
     expect(page.locator("#paletteOpen")).to_be_visible()
     if tap:

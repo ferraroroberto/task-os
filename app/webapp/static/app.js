@@ -92,6 +92,7 @@ const els = {
   themeToggle: document.getElementById('themeToggle'),
   settingsBtn: document.getElementById('settingsBtn'),
   paneSettings: document.getElementById('paneSettings'),
+  settingsHeadStatus: document.getElementById('settingsHeadStatus'),
   buildReadout: document.getElementById('buildReadout'),
   homeHeadStatus: document.getElementById('homeHeadStatus'),
   homeTitleText: document.getElementById('homeTitleText'),
@@ -144,7 +145,8 @@ const state = {
   // weeks ending today, newest closing first), never merged into `items`.
   // `older` is null until the probe answered — unknown, not "no".
   journal: { open: false, weeks: 1, items: [], older: null, cancelled: true },
-  settingsOpen: false,  // the Settings pane is up over the nav's tab
+  settingsOpen: false,  // the Settings page is up over the nav's tab
+  settingsReturnHash: '',  // the URL hash under the Settings page, put back when it closes
 };
 
 let nav = null;
@@ -563,8 +565,8 @@ function hashTaskId() {
 }
 
 function openTask(id) {
-  // The task panel takes the sheet's place beside the Settings list.
-  if (settings.currentSheet()) app.closeSettingsSheet();
+  // A task picked from over Settings (the palette): the page gives way to it.
+  if (state.settingsOpen) app.hideSettings();
   if (hashTaskId() !== id) {
     // inside the journal the hash keeps saying so, or a reload would land on a tab
     const prefix = state.journal.open ? '#journal/task/' : '#task/';
@@ -614,6 +616,8 @@ function onHashChange() {
     return;
   }
   if (location.hash === SETTINGS_HASH) { app.openSettings(); settings.hideSheet(); return; }
+  // Back past `#settings`: the page closes, the tab under it is the view again.
+  if (state.settingsOpen) app.hideSettings();
   if (location.hash === '#search') {
     // Deep link to the Search tab (?q= carries the query — see boot()).
     nav.setTab('search');
@@ -882,9 +886,9 @@ async function boot() {
   if (storedTab === 'settings' && !location.hash) history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
   // …and one last left on the retired Archive tab on its sheet.
   if (storedTab === 'archive' && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#settings/archive');
-  // Pressed while Settings is up, it re-reads the cards — what tapping the
-  // Settings tab used to do.
+  // The header gear opens the Settings page; its × and Escape close it.
   els.settingsBtn.addEventListener('click', app.openSettings);
+  app.wireSettingsPage();
   wireQuickAdd();
   wireSelectMode();
   search = mountSearch(els.searchBox, els.searchHost, {

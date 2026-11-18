@@ -19,6 +19,7 @@
 /app/webapp/static/_vendored/row-menu
 /app/webapp/static/_vendored/segmented
 /app/webapp/static/_vendored/select-native
+/app/webapp/static/_vendored/settings-group
 /app/webapp/static/_vendored/switch
 /app/webapp/static/_vendored/text-size
 /app/webapp/static/_vendored/toast
@@ -43,6 +44,7 @@
 /scripts/structure_ratchet.py
 /scripts/usage_track_ratchet.py
 /scripts/usage_track_scan.py
+/scripts/ux_surface_map.py
 /scripts/ux_surface_ratchet.py
 /src/compression.py
 /src/login_alert.py

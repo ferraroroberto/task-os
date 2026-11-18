@@ -1,11 +1,11 @@
-/* task-os — the Settings pane: what this install is and what it can reach.
+/* task-os — the Settings page: what this install is and what it can reach.
  *
  * One module per view, like Board · Today · Search:
- * `mountSettings(opts)` looks up the pane's rows and sheets once, wires their
+ * `mountSettings(opts)` looks up the page's rows and sheets once, wires their
  * controls and returns the handle the bootstrap calls when something it owns
- * changes. The pane is five inset groups (design.md `settings group`):
+ * changes. The page (a modal dialog) is the vendored settings-group's inset groups:
  * each row carries its state word — on · synced · indexed · off, in its tone
- * when it is an exception — and a chevron to its sheet (#settingsSheet), which
+ * when it is an exception — and a chevron to its sheet (the #settingsSheet modal), which
  * holds the card the row replaced, under the same ids. One sheet is up at a
  * time and the URL says which (`#settings/<key>`), so the bootstrap opens and
  * closes it (`showSheet` / `hideSheet`) and this module only asks

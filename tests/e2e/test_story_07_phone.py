@@ -93,6 +93,7 @@ from tests.e2e._ui import (
     assert_on_crumb_line,
     board_mode,
     close_filter_sheet,
+    leave_settings,
     open_filter_sheet,
     open_settings_sheet,
 )
@@ -447,11 +448,13 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         switch.tap()
         expect(switch).to_have_attribute("aria-checked", "false")
         expect(page.locator("html")).to_have_attribute("data-features-off", "time")
-        expect(time_tab).to_be_hidden()
-        expect(page.locator("nav.tabs .tab:visible")).to_have_count(3)
         expect(page.locator("#paneSettings [data-settings-sheet='timecats']")).to_be_hidden()
         assert page.request.get(f"{base}/api/time/meta").status == 409
         assert page.request.get(f"{base}/api/board").status == 200
+        # The modal page hides the phone's pill: the tabs are read once it closes.
+        leave_settings(page, tap=True)
+        expect(time_tab).to_be_hidden()
+        expect(page.locator("nav.tabs .tab:visible")).to_have_count(3)
         # Off is the machine's, kept across a reload and served on the page itself.
         page.reload()
         expect(page.locator("html")).to_have_attribute("data-features-off", "time")
@@ -488,10 +491,11 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         for key in ("calendar", "issues", "email", "ai", "mirror"):
             assert page.request.put(f"{base}/api/features/{key}", data={"enabled": True}).status == 200
         page.reload()
-        page.locator("#settingsBtn").tap()
+        expect(page.locator("#paneSettings")).to_be_visible()      # `#settings` reopens it on a reload
         group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
         group.locator("[data-feature-key='time'] .toggle").tap()
         expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
+        leave_settings(page, tap=True)
         expect(page.locator("nav.tabs .tab[data-tab='time']")).to_be_visible()
         assert page.request.get(f"{base}/api/time/meta").status == 200
         # A reload aborts the fetch that was in flight; webkit reports that as a page error.

@@ -1,5 +1,5 @@
-/* task-os — the Settings pane over the nav's tab, and the one row's sheet
- * `#settings/<sheet>` keeps open over it. settings.js owns the pane's DOM;
+/* task-os — the Settings page over the nav's tab, and the one row's sheet
+ * `#settings/<sheet>` keeps open over it. settings.js owns the page's rows;
  * each function here takes the app composer's `app` first.
  */
 
@@ -8,38 +8,37 @@
 import { featureOn } from '../features.js';
 import { JOURNAL_HASH } from './journal.js';
 
-// Settings is a pane with no tab: the header gear opens it, `#settings`
-// keeps it across a reload, and `#settings/<sheet>` has one row's sheet open
-// over it — a row press pushes it, so Back closes the sheet.
+// Settings is no tab: the header gear opens it, `#settings` keeps it across a
+// reload, and `#settings/<sheet>` has one row's sheet open over it — a row
+// press pushes it, so Back closes the sheet.
 export const SETTINGS_HASH = '#settings';
 export const SETTINGS_SHEET_HASH = /^#settings\/([a-z]+)$/;
 
+function isSettingsHash(h) {
+  return h === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(h);
+}
+
 // ------------------------------------------------------------- settings
-/** Show the Settings pane over whichever pane the nav has up. Settings
- *  is no tab — five destinations is the pill's ceiling (design.md) — but the
- *  header gear, in the journal's shape: the pill's lit tab comes off, any tab
- *  press leaves (the nav re-shows its own pane, onChange hides this one), and
- *  `#settings` keeps it across a reload. */
+/** Open the Settings page (a modal dialog) over whichever tab the nav has up.
+ *  Settings is no tab — five destinations is the pill's ceiling (design.md) —
+ *  but the header gear: the tab, its lit pill button and any open task stay
+ *  as they are under it, and closing the page returns to them. The usage log
+ *  records the page as its view when the dialog opens. */
 export function openSettings(app) {
   app.hideJournal();
-  // One detail beside the list at a time: Settings has its own.
-  if (app.drawer.currentId() != null) app.closeTask();
+  const page = app.els.paneSettings;
   if (!app.state.settingsOpen) {
     app.state.settingsOpen = true;
-    if (app.nav) app.nav.setTab(null);
-    document.querySelectorAll('main.app > .pane').forEach(function (p) { p.hidden = p !== app.els.paneSettings; });
+    // The URL under the page, put back when it closes (an open task's hash).
+    app.state.settingsReturnHash = isSettingsHash(location.hash) ? '' : location.hash;
     app.els.settingsBtn.setAttribute('aria-current', 'page');
-    app.setHeadTitle('Settings', 'i-settings');
-    app.usage.trackView('settings');
-    app.dropPreselected();
     // Its poll stops under Settings, and its two Settings rows read its meta.
     if (app.time) { app.time.hide(); if (featureOn('time')) app.time.settingsShown(); }
+    if (!page.open) page.showModal();
+    page.scrollTop = 0;
     app.renderHeadStatus();
-    const scroller = document.querySelector('.app');
-    if (scroller) scroller.scrollTop = 0;
-    window.scrollTo(0, 0);
   }
-  if (location.hash !== SETTINGS_HASH && !SETTINGS_SHEET_HASH.test(location.hash)) {
+  if (!isSettingsHash(location.hash)) {
     history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
   }
   app.settings.refreshStatus();
@@ -52,20 +51,36 @@ export function openSettings(app) {
  *  yet: boot opens it at its end, unless a tab press came first. */
 export function dropPendingPaneHash(app) {
   const h = location.hash;
-  if (h === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(h) || JOURNAL_HASH.test(h)) {
+  if (isSettingsHash(h) || JOURNAL_HASH.test(h)) {
     history.replaceState(null, '', location.pathname + location.search);
   }
 }
 
+/** Close the Settings page (its ×, Escape, a tab the palette switched to):
+ *  back to the tab under it, its poll and its URL. */
 export function hideSettings(app) {
   if (!app.state.settingsOpen) return;
   app.state.settingsOpen = false;
   app.settings.hideSheet();
-  app.els.paneSettings.hidden = true;
+  if (app.els.paneSettings.open) app.els.paneSettings.close();
   app.els.settingsBtn.removeAttribute('aria-current');
-  if (location.hash === SETTINGS_HASH || SETTINGS_SHEET_HASH.test(location.hash)) {
-    history.replaceState(null, '', location.pathname + location.search);
+  if (isSettingsHash(location.hash)) {
+    history.replaceState(null, '', location.pathname + location.search + (app.state.settingsReturnHash || ''));
   }
+  app.state.settingsReturnHash = '';
+  // Under the page the Time tab may have been switched off: leave it now.
+  if (app.state.tab === 'time' && app.nav) {
+    if (featureOn('time')) app.time.show();
+    else app.nav.setTab('today');
+  }
+  app.renderHeadStatus();
+}
+
+/** The page's close button, and Escape (a modal closes itself natively). */
+export function wireSettingsPage(app) {
+  const page = app.els.paneSettings;
+  page.querySelector('.settings-page-close').addEventListener('click', function () { app.hideSettings(); });
+  page.addEventListener('close', function () { if (app.state.settingsOpen && !page.open) app.hideSettings(); });
 }
 
 /** A Settings row was pressed (or the palette asked): Settings with that
@@ -82,15 +97,12 @@ export function showSettingsSheet(app, key) {
   app.openSettings();
   const fresh = app.settings.currentSheet() !== key;
   if (!app.settings.showSheet(key)) return;
-  // dynamic-id-exempt: key is one of the settings sheet names, a fixed set
-  if (fresh) app.usage.trackView('settings.' + key);
   if (fresh && key === 'archive') app.archive.refresh();
   if (fresh && key === 'timecats') app.time.openSheet(key);
 }
 
 /** The sheet's × / Done / Escape: back to the Settings list. */
 export function closeSettingsSheet(app) {
-  if (app.settings.currentSheet()) app.usage.trackView('settings');
   app.settings.hideSheet();
   if (SETTINGS_SHEET_HASH.test(location.hash)) {
     history.replaceState(null, '', location.pathname + location.search + SETTINGS_HASH);
@@ -100,7 +112,8 @@ export function closeSettingsSheet(app) {
 /** A feature block was switched (Settings → Available features): leave a tab that
  *  just went away, then re-read everything its UI and the Settings rows were built from. */
 export function featuresChanged(app, key, on) {
-  if (key === 'time' && !on && app.nav && app.nav.getTab() === 'time') app.nav.setTab('today');
+  // Under the open Settings page the tab stays until the page closes (hideSettings).
+  if (key === 'time' && !on && !app.state.settingsOpen && app.nav && app.nav.getTab() === 'time') app.nav.setTab('today');
   app.settings.refreshStatus();
   app.settings.refreshSearchStatus();
   if (app.search) app.search.reloadStatus();

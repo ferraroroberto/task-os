@@ -96,6 +96,7 @@ from tests.e2e._ui import (
     board_mode,
     close_filter_sheet,
     filter_button,
+    leave_settings,
     open_filter_sheet,
     open_more_fields,
     open_settings_sheet,
@@ -656,6 +657,7 @@ def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, r
     assert stored["left"] == "change-date" and stored["menu"][0] == "change-date" and "priority" not in stored["menu"], stored
     card.scroll_into_view_if_needed()
     shot(page, shots / "story-29-row-actions-2-desktop.png")
+    leave_settings(page)
     page.click("nav.tabs .tab[data-tab='today']")
     row = _trow(page, "School enrolment forms", "#paneToday")
     row.locator(".trow-kebab").click()
@@ -673,6 +675,7 @@ def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, r
     page.click("#rowActionsReset")
     expect(meta).to_have_text("Default")
     assert page.evaluate("localStorage.getItem('task-os.rowactions')") is None
+    leave_settings(page)
     page.click("nav.tabs .tab[data-tab='today']")
 
 
