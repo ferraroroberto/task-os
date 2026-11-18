@@ -22,6 +22,7 @@ from tests.e2e._ui import (
     assert_action_row_budget,
     board_mode,
     close_settings_sheet,
+    leave_settings,
     open_settings_sheet,
 )
 from tests.e2e.conftest import INTERCEPT, _get, dismiss_toasts
@@ -269,6 +270,7 @@ def _capture_into_inbox(page: Page, base: str, shots: Path) -> None:
     shot(page, shots / "story-24-archive-1-desktop.png")
 
     # 2. …as Inbox tasks the capture made, each carrying the .msg its chip opens
+    leave_settings(page)
     page.get_by_role("tab", name="Board").click()
     board_mode(page, "status")                      # the status columns (#396)
     inbox = page.locator("#paneBoard .board-status .board-col[data-col='inbox']")
@@ -556,6 +558,7 @@ def _palette_and_settings_header(page: Page, shots: Path) -> None:
     #    mail tools left the task columns (#396).
     page.emulate_media(color_scheme="light")
     page.evaluate("document.documentElement.dataset.theme = 'light'")
+    leave_settings(page)              # the report's sheet and the page are modal over the tabs
     page.get_by_role("tab", name="Board").click()
     expect(page.locator("#paneBoard .board-archive-link")).to_have_count(0)
     page.keyboard.press("Control+K")
@@ -568,12 +571,12 @@ def _palette_and_settings_header(page: Page, shots: Path) -> None:
 
     # 9b. Settings gives the archiver the picture every other service has
     #     (#167, #397): the row's word, read from the very block the sheet
-    #     renders, and the header naming what the last run left for a human.
-    #     The sheet's Done goes back to the list.
+    #     renders, and the page's own line naming what the last run left for
+    #     a human. The sheet's Done goes back to the list.
     close_settings_sheet(page)
     expect(page.locator("#paneSettings")).to_be_visible()
     expect(page.locator("#archiveCardMeta")).to_have_text("on")
-    expect(page.locator("#homeHeadStatus")).to_contain_text("3 mails need you")
+    expect(page.locator("#settingsHeadStatus")).to_contain_text("3 mails need you")
     dismiss_toasts(page)
     shot(page, shots / "story-24-archive-9-desktop.png")
 
@@ -802,18 +805,17 @@ def _phone_retry_stuck(
 def _phone_back_to_settings(p: Page, phone: BrowserContext, shots: Path) -> None:
     """Done goes back to the Settings list at 390; the phone context closes."""
     # 10g. Done goes back to the Settings list at 390 (#397): the row's word
-    #      and the header's "needs you", the sheet's five readings behind it.
+    #      and the page's "needs you" line, the sheet's five readings behind it.
     expect(p.locator("#archiveCard .status-row")).to_have_count(5)
     p.locator("#settingsSheet .settings-sheet-done").tap()
     expect(p.locator("#settingsSheet")).to_be_hidden()
     expect(p.locator("#archiveCardMeta")).to_have_text("on")
-    expect(p.locator("#homeHeadStatus")).to_contain_text("3 mails need you")
+    expect(p.locator("#settingsHeadStatus")).to_contain_text("3 mails need you")
     assert_min_target(p.locator("#paneSettings [data-settings-sheet='archive']"))
     assert_no_horizontal_overflow(p)
     dismiss_toasts(p)
-    # Full page, as story 09's Settings shot is: the list is taller than 844 px
-    # and the floating pill sits over its last rows.
-    shot(p, shots / "story-24-archive-9-phone.png", full_page=True)
+    # The page is a modal that scrolls itself: the shot is its first screen.
+    shot(p, shots / "story-24-archive-9-phone.png")
     phone.close()
 
 def _second_run(page: Page, ctx: BrowserContext, base: str) -> None:

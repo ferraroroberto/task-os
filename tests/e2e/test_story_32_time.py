@@ -37,7 +37,7 @@ from playwright.sync_api import Browser, expect
 
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface
-from tests.e2e._ui import close_settings_sheet, open_settings_sheet
+from tests.e2e._ui import close_settings_sheet, leave_settings, open_settings_sheet
 from tests.e2e.conftest import E2E_ANCHOR, E2E_P2_TOKEN, dismiss_toasts, shot
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -180,7 +180,7 @@ def _time_categories(page, dialog):
     dialog.get_by_role("button", name="Add").click()
     made = cats.locator(".action-row", has=page.locator(".action-row-title", has_text="Made by mistake"))
     expect(made.locator(".action-row-meta")).to_have_text("one to delete")
-    close_settings_sheet(page)
+    leave_settings(page)
     page.locator("nav.tabs .tab[data-tab='time']").click()
     page.locator("#timeViews [data-view='log']").click()
     expect(_start_row(page, "Made by mistake").locator(".action-row-meta")).to_have_text("one to delete")

@@ -47,6 +47,7 @@
   <link rel="stylesheet" href="/static/_vendored/empty-state/empty-state.css">
   <link rel="stylesheet" href="/static/_vendored/select-native/select-native.css">
   <link rel="stylesheet" href="/static/_vendored/switch/switch.css">
+  <link rel="stylesheet" href="/static/_vendored/settings-group/settings-group.css">
   <link rel="stylesheet" href="/static/_vendored/text-size/text-size.css">
   <link rel="stylesheet" href="/static/_vendored/page-foot/page-foot.css">
   <link rel="stylesheet" href="/static/_vendored/action-row/action-row.css">
@@ -432,8 +433,8 @@
         <svg class="icon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
         <svg class="icon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg>
       </button>
-      <!-- Settings: the header gear, not a sixth tab. aria-current
-           while its pane is up; any tab press leaves it, as for the journal. -->
+      <!-- Settings: the header gear, not a sixth tab; it opens the Settings
+           page (a modal dialog) over the tab, which its close returns to. -->
       <button type="button" id="settingsBtn" data-track="settings" class="icon-button home-toggle hit-target"
               title="Settings" aria-label="Settings" aria-controls="paneSettings">
         <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
@@ -543,181 +544,6 @@
         <div id="journalHost" data-empty="tasks"></div>
       </div>
     </section>
-    <!-- Settings: a pane with no tab, like the journal — the header
-         gear opens it over the current tab, any tab press leaves it.
-         Inset groups (design.md `settings group`): each row is a lead
-         glyph, its label, the current value muted and a chevron to its sheet
-         (#settingsSheet below). Text size is the one setting changed in place.
-         The value ids are the ones settings.js fills. -->
-    <section id="paneSettings" data-surface="settings.pane" class="pane" role="region" aria-label="Settings" hidden>
-      <div class="pane-body settings-groups">
-        <h2 class="overline settings-overline" id="settingsGroupDevice">This device</h2>
-        <section class="card action-list settings-group" aria-labelledby="settingsGroupDevice">
-          <ul class="action-rows">
-            <!-- Text size: the escape from the viewport zoom lock (WCAG 1.4.4),
-                 inline because it is changed in place. The vendored text-size control
-                 as a vendored segmented group; text-size.js persists the step to
-                 task-os.textsize and stamps html[data-textsize]. -->
-            <li class="action-row settings-text-size" id="textSizeCard">
-              <span class="settings-link-label" id="textSizeLabel">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
-                <span class="action-row-title">Text size</span>
-              </span>
-              <div class="segmented" id="textSizeControl" role="group" aria-labelledby="textSizeLabel">
-                <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.small" data-textsize="small">Small</button>
-                <button type="button" class="segmented-item" aria-pressed="true" data-track="text-size.default" data-textsize="default">Default</button>
-                <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.large" data-textsize="large">Large</button>
-              </div>
-              <p class="settings-text-size-hint muted">On this device. Rows, buttons and icons keep their size.</p>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.rows" type="button" class="action-row-main settings-link" data-settings-sheet="rows" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg>
-                <span class="action-row-title">Row actions</span>
-                <span class="settings-link-value" id="rowActionsMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.palette" type="button" class="action-row-main settings-link" data-settings-sheet="palette" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg>
-                <span class="action-row-title">Command palette</span>
-                <span class="settings-link-value">Ctrl+K</span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.access" type="button" class="action-row-main settings-link" data-settings-sheet="access" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg>
-                <span class="action-row-title">Phone access</span>
-                <span class="settings-link-value" id="accessClient"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <h2 class="overline settings-overline" id="settingsGroupSync">Sync</h2>
-        <section class="card action-list settings-group" aria-labelledby="settingsGroupSync">
-          <ul class="action-rows">
-            <li class="action-row">
-              <button data-track="settings-link.issues" type="button" class="action-row-main settings-link" data-settings-sheet="issues" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg>
-                <span class="action-row-title">Issues as tasks</span>
-                <span class="settings-link-value" id="issuesCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.calendar" type="button" class="action-row-main settings-link" data-settings-sheet="calendar" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg>
-                <span class="action-row-title">Calendar</span>
-                <span class="settings-link-value" id="calendarCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <h2 class="overline settings-overline" id="settingsGroupEmail">Email</h2>
-        <section class="card action-list settings-group" aria-labelledby="settingsGroupEmail">
-          <ul class="action-rows">
-            <li class="action-row">
-              <button data-track="settings-link.capture" type="button" class="action-row-main settings-link" data-settings-sheet="capture" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg>
-                <span class="action-row-title">Capture into Inbox</span>
-                <span class="settings-link-value" id="captureCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <!-- Email archiving: the run, its report and every review
-                 action, as this row's sheet rather than a dedicated tab. -->
-            <li class="action-row">
-              <button data-track="settings-link.archive" type="button" class="action-row-main settings-link" data-settings-sheet="archive" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg>
-                <span class="action-row-title">Email archiving</span>
-                <span class="settings-link-value" id="archiveCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <h2 class="overline settings-overline" id="settingsGroupTools">Tools</h2>
-        <section class="card action-list settings-group" aria-labelledby="settingsGroupTools">
-          <ul class="action-rows">
-            <li class="action-row">
-              <button data-track="settings-link.timecats" type="button" class="action-row-main settings-link" data-settings-sheet="timecats" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
-                <span class="action-row-title">Time categories</span>
-                <span class="settings-link-value" id="timeCatsValue"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.search" type="button" class="action-row-main settings-link" data-settings-sheet="search" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-                <span class="action-row-title">Search</span>
-                <span class="settings-link-value" id="searchCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.opener" type="button" class="action-row-main settings-link" data-settings-sheet="opener" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
-                <span class="action-row-title">Folder opener</span>
-                <span class="settings-link-value" id="folderCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.voice" type="button" class="action-row-main settings-link" data-settings-sheet="voice" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg>
-                <span class="action-row-title">Voice quick-add</span>
-                <span class="settings-link-value" id="voiceCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.ai" type="button" class="action-row-main settings-link" data-settings-sheet="ai" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg>
-                <span class="action-row-title">AI Inbox triage</span>
-                <span class="settings-link-value" id="aiCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <h2 class="overline settings-overline" id="settingsGroupInstall">This install</h2>
-        <section class="card action-list settings-group" aria-labelledby="settingsGroupInstall">
-          <ul class="action-rows">
-            <li class="action-row">
-              <button data-track="settings-link.yourname" type="button" class="action-row-main settings-link" data-settings-sheet="yourname" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg><span class="action-row-title">Your name</span><span class="settings-link-value" id="yourNameMeta"></span><svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.install" type="button" class="action-row-main settings-link" data-settings-sheet="install" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
-                <span class="action-row-title">Database</span>
-                <span class="settings-link-value" id="settingsSite"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-            <li class="action-row">
-              <button data-track="settings-link.mirror" type="button" class="action-row-main settings-link" data-settings-sheet="mirror" aria-haspopup="dialog">
-                <svg class="icon settings-link-icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
-                <span class="action-row-title">Mirror and backup</span>
-                <span class="settings-link-value" id="mirrorCardMeta"></span>
-                <svg class="icon settings-link-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-              </button>
-            </li>
-          </ul>
-        </section>
-      </div>
-    </section>
-
     <!-- Build identity: outside every card, last child of <main> (vendored
          page-foot). Text set from GET /api/version by app.js. -->
     <footer class="page-foot" data-surface="chrome.footer">
@@ -738,24 +564,81 @@
         <p class="empty-state-message">Select a task to see its details</p>
       </div>
     </aside>
-    <!-- Settings sheets (design.md `settings group` + the detail sheet):
-         one row's sheet at a time, built from the markup below by settings.js.
-         The task drawer's own geometry (the .drawer class): a full-screen sheet
-         on the phone, the detail pane beside the Settings list from 1024px. Each
-         body carries the same ids its row's card held, so settings.js needs no
-         remapping. Instant model: a change applies as it is made; Done and the
-         × close. -->
-    <aside id="settingsSheet" data-surface="settings.sheet" class="drawer settings-detail card" role="dialog" aria-modal="false"
-           aria-labelledby="settingsSheetTitle" hidden>
-      <div class="settings-sheet-head">
-        <h2 id="settingsSheetTitle"></h2>
-        <button data-track="settings-sheet.close" type="button" class="icon-button settings-sheet-close hit-target" aria-label="Close">
+  </main>
+
+  <!-- Settings (vendored settings-group): the full page the header gear opens with
+       showModal() over the current tab; its close button or Escape returns to it.
+       Inset groups, each row a lead glyph, its label, the current value muted (in its
+       tone when it is an exception) and a chevron to its sheet (#settingsSheet below);
+       Text size is changed in place. The value ids are the ones settings.js fills. -->
+  <dialog id="paneSettings" class="settings-page" data-surface="settings.pane" data-track-view="settings" aria-labelledby="settingsTitle">
+    <header class="settings-page-head">
+      <h2 class="settings-page-title" id="settingsTitle" tabindex="-1" autofocus>Settings</h2>
+      <button type="button" class="icon-button settings-page-close" aria-label="Close settings" data-track="settings.close">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
+      </button>
+    </header>
+    <div class="settings-page-body">
+      <!-- What needs a hand: the archive run's leftovers, then any failing service (head.js). -->
+      <p class="settings-footnote settings-page-status" id="settingsHeadStatus" aria-live="polite"></p>
+      <h3 class="settings-group-label" id="settingsGroupDevice">This device</h3>
+      <section class="card settings-group" aria-labelledby="settingsGroupDevice">
+        <!-- Text size: the escape from the viewport zoom lock (WCAG 1.4.4), changed in place;
+             text-size.js persists the step to task-os.textsize and stamps html[data-textsize]. -->
+        <div class="settings-row settings-text-size" id="textSizeCard">
+          <svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-file-text"></use></svg>
+          <span class="settings-row-label" id="textSizeLabel">Text size</span>
+          <div class="segmented" id="textSizeControl" role="group" aria-labelledby="textSizeLabel">
+            <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.small" data-textsize="small">Small</button>
+            <button type="button" class="segmented-item" aria-pressed="true" data-track="text-size.default" data-textsize="default">Default</button>
+            <button type="button" class="segmented-item" aria-pressed="false" data-track="text-size.large" data-textsize="large">Large</button>
+          </div>
+        </div>
+        <button data-track="settings-link.rows" type="button" class="settings-row" data-settings-sheet="rows" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-ellipsis-vertical"></use></svg><span class="settings-row-label">Row actions</span><span class="settings-row-value" id="rowActionsMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.palette" type="button" class="settings-row" data-settings-sheet="palette" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg><span class="settings-row-label">Command palette</span><span class="settings-row-value">Ctrl+K</span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.access" type="button" class="settings-row" data-settings-sheet="access" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-smartphone"></use></svg><span class="settings-row-label">Phone access</span><span class="settings-row-value" id="accessClient"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+      </section>
+      <p class="settings-footnote settings-text-size-hint">Text size is on this device. Rows, buttons and icons keep their size.</p>
+      <h3 class="settings-group-label" id="settingsGroupSync">Sync</h3>
+      <section class="card settings-group" aria-labelledby="settingsGroupSync">
+        <button data-track="settings-link.issues" type="button" class="settings-row" data-settings-sheet="issues" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-github"></use></svg><span class="settings-row-label">Issues as tasks</span><span class="settings-row-value" id="issuesCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.calendar" type="button" class="settings-row" data-settings-sheet="calendar" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-calendar-days"></use></svg><span class="settings-row-label">Calendar</span><span class="settings-row-value" id="calendarCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+      </section>
+      <h3 class="settings-group-label" id="settingsGroupEmail">Email</h3>
+      <section class="card settings-group" aria-labelledby="settingsGroupEmail">
+        <button data-track="settings-link.capture" type="button" class="settings-row" data-settings-sheet="capture" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-mail"></use></svg><span class="settings-row-label">Capture into Inbox</span><span class="settings-row-value" id="captureCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.archive" type="button" class="settings-row" data-settings-sheet="archive" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-archive"></use></svg><span class="settings-row-label">Email archiving</span><span class="settings-row-value" id="archiveCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+      </section>
+      <h3 class="settings-group-label" id="settingsGroupTools">Tools</h3>
+      <section class="card settings-group" aria-labelledby="settingsGroupTools">
+        <button data-track="settings-link.timecats" type="button" class="settings-row" data-settings-sheet="timecats" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg><span class="settings-row-label">Time categories</span><span class="settings-row-value" id="timeCatsValue"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.search" type="button" class="settings-row" data-settings-sheet="search" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span class="settings-row-label">Search</span><span class="settings-row-value" id="searchCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.opener" type="button" class="settings-row" data-settings-sheet="opener" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg><span class="settings-row-label">Folder opener</span><span class="settings-row-value" id="folderCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.voice" type="button" class="settings-row" data-settings-sheet="voice" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span class="settings-row-label">Voice quick-add</span><span class="settings-row-value" id="voiceCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.ai" type="button" class="settings-row" data-settings-sheet="ai" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="settings-row-label">AI Inbox triage</span><span class="settings-row-value" id="aiCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+      </section>
+      <h3 class="settings-group-label" id="settingsGroupInstall">This install</h3>
+      <section class="card settings-group" aria-labelledby="settingsGroupInstall">
+        <button data-track="settings-link.yourname" type="button" class="settings-row" data-settings-sheet="yourname" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg><span class="settings-row-label">Your name</span><span class="settings-row-value" id="yourNameMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.install" type="button" class="settings-row" data-settings-sheet="install" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg><span class="settings-row-label">Database</span><span class="settings-row-value" id="settingsSite"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+        <button data-track="settings-link.mirror" type="button" class="settings-row" data-settings-sheet="mirror" aria-haspopup="dialog"><svg class="icon settings-row-icon" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span class="settings-row-label">Mirror and backup</span><span class="settings-row-value" id="mirrorCardMeta"></span><svg class="icon settings-row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg></button>
+      </section>
+    </div>
+  </dialog>
+
+  <!-- A Settings row's detail sheet (vendored modal + settings-sheet): one row's section
+       at a time, shown by settings.js; each section carries the ids its row's card held.
+       Instant model: a change applies as it is made; Done, the x and Escape close. -->
+  <dialog id="settingsSheet" class="detail-dialog settings-sheet" data-surface="settings.sheet" data-track-view="settings.sheet" aria-labelledby="settingsSheetTitle">
+    <div class="detail-card">
+      <div class="detail-header">
+        <h2 id="settingsSheetTitle" tabindex="-1" autofocus></h2>
+        <button data-track="settings-sheet.close" type="button" class="icon-button detail-close" aria-label="Close">
           <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
         </button>
       </div>
-      <!-- The head stays put; this is what scrolls (a long archive report). -->
-      <div class="settings-sheet-scroll">
-        <section class="settings-sheet" id="rowActionsCard" data-sheet="rows" data-surface="settings.row-actions" hidden>
+      <div class="settings-sheet-body">
+        <section class="settings-sheet-section" id="rowActionsCard" data-sheet="rows" data-surface="settings.row-actions" hidden>
           <p class="card-meta">What a swipe on a task row does on a touch screen, and what the row's ⋯ menu lists, in order. On this device. An action a swipe runs always stays in the menu, and every action keeps its key and its palette entry. The task's own links and Open details always follow.</p>
           <label class="row-actions-field">
             <span class="row-actions-label">Swipe right</span>
@@ -769,10 +652,10 @@
           <ul class="row-actions-list" id="rowMenuList" aria-label="Actions in the row menu"></ul>
           <button data-track="row-actions.reset" type="button" class="button-ghost row-actions-reset" id="rowActionsReset">Reset to the defaults</button>
         </section>
-        <section class="settings-sheet" id="timeCatsCard" data-sheet="timecats" data-surface="settings.time-categories" hidden>
+        <section class="settings-sheet-section" id="timeCatsCard" data-sheet="timecats" data-surface="settings.time-categories" hidden>
           <div id="timeCatsHost" class="time-admin"></div>
         </section>
-        <section class="settings-sheet" id="paletteCard" data-sheet="palette" data-surface="settings.palette" hidden>
+        <section class="settings-sheet-section" id="paletteCard" data-sheet="palette" data-surface="settings.palette" hidden>
           <p class="card-meta">One box for tasks and commands: switch tabs, filter, sync issues, jump to a task. <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd aria-label="Command"><svg class="icon" aria-hidden="true"><use href="#i-command"></use></svg></kbd>+<kbd>K</kbd>) opens it anywhere; on a phone this is the way in.</p>
           <div class="card-actions">
             <button type="button" id="paletteOpen" data-track="palette.open" class="button-surface">
@@ -781,14 +664,14 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="accessCard" data-sheet="access" data-surface="settings.access" hidden>
+        <section class="settings-sheet-section" id="accessCard" data-sheet="access" data-surface="settings.access" hidden>
           <dl class="access-rows" id="accessRows"></dl>
           <p class="card-meta">Install: in iOS Safari, Share, then Add to Home Screen; in Android Chrome, Install app. Sign-in lasts 90 days per device; <code>scripts/gen_token.py --force</code> signs every device out.</p>
           <div class="access-actions">
             <button data-track="auth.sign-out" type="button" id="signOutBtn" class="button-ghost" hidden>Sign out on this device</button>
           </div>
         </section>
-        <section class="settings-sheet" id="issuesCard" data-sheet="issues" data-surface="settings.issues" hidden>
+        <section class="settings-sheet-section" id="issuesCard" data-sheet="issues" data-surface="settings.issues" hidden>
           <p class="card-meta">Open issues assigned to you (<code>issues.provider</code> / <code>issues.owner</code>) become <em>coding</em> tasks in Inbox; a closed issue marks its task done (actor <code>sync</code>). Nothing is ever written back except <em>Create issue</em>.</p>
           <dl class="status-rows" id="issuesStatus" aria-live="polite">
             <div class="status-row"><dt>Provider</dt><dd id="statusIssues" class="muted">Loading…</dd></div>
@@ -801,7 +684,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="calendarCard" data-sheet="calendar" data-surface="settings.calendar" hidden>
+        <section class="settings-sheet-section" id="calendarCard" data-sheet="calendar" data-surface="settings.calendar" hidden>
           <p class="card-meta">Today shows your real calendar beside the task list, read-only, from a private ICS address in <code>calendar.ics_url</code> (Google's secret iCal address or Outlook's published calendar link). Nothing is ever written to the calendar. The copy is refreshed every few minutes; recurring events the app cannot expand are counted, never dropped.</p>
           <dl class="status-rows" id="calendarStatus" aria-live="polite">
             <div class="status-row"><dt>Calendar</dt><dd id="statusCalendar" class="muted">Loading…</dd></div>
@@ -815,7 +698,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="captureCard" data-sheet="capture" data-surface="settings.capture" hidden>
+        <section class="settings-sheet-section" id="captureCard" data-sheet="capture" data-surface="settings.capture" hidden>
           <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over folder-explorer's flagged-mail list (<code>search.folder_explorer_url</code>) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
           <dl class="status-rows" id="captureStatus" aria-live="polite">
             <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
@@ -828,7 +711,7 @@
             </button>
           </div>
         </section>
-        <section class="settings-sheet" id="archiveCard" data-sheet="archive" data-surface="settings.archive" hidden>
+        <section class="settings-sheet-section" id="archiveCard" data-sheet="archive" data-surface="settings.archive" hidden>
           <p class="card-meta">What is left in the Inbox once the flagged mail is a task: folder-explorer's archiver (<code>search.folder_explorer_url</code>) ranks the folders each mail looks like, the local model picks one, and everything above the threshold is filed. Whatever it was not sure about waits for you in the report below, where every run can also be undone.</p>
           <div class="archive-head">
             <div class="archive-actions">
@@ -863,7 +746,7 @@
           </div>
           <div id="archiveHost" data-surface="archive.report" class="archive-host"></div>
         </section>
-        <section class="settings-sheet" id="searchCard" data-sheet="search" data-surface="settings.search" hidden>
+        <section class="settings-sheet-section" id="searchCard" data-sheet="search" data-surface="settings.search" hidden>
           <p class="card-meta">One box over four indexes: tasks (always), folders and emails through folder-explorer (<code>search.folder_explorer_url</code>) and the issue cache (<code>issues.provider</code>). <kbd>Ctrl</kbd>+<kbd>K</kbd> opens the command palette anywhere.</p>
           <dl class="status-rows" id="searchStatus" aria-live="polite">
             <div class="status-row"><dt>Tasks</dt><dd id="statusSearchTasks" class="muted">Loading…</dd></div>
@@ -872,7 +755,7 @@
             <div class="status-row"><dt>Issues</dt><dd id="statusSearchIssues" class="muted">Loading…</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="folderCard" data-sheet="opener" data-surface="settings.opener" hidden>
+        <section class="settings-sheet-section" id="folderCard" data-sheet="opener" data-surface="settings.opener" hidden>
           <p class="card-meta">Folder refs stay portable (<code>{onedrive}/…</code>, <code>{user}/…</code>, <code>{sharepoint:name}/…</code>); the chip is a <code>taskos://</code> link a tiny per-PC handler turns into an Explorer window on <em>that</em> PC. On a phone the chip shows the path to copy.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Opener</dt><dd id="statusOpener" class="muted">Loading…</dd></div>
@@ -903,7 +786,7 @@
             </details>
           </div>
         </section>
-        <section class="settings-sheet" id="voiceCard" data-sheet="voice" data-surface="settings.voice" hidden>
+        <section class="settings-sheet-section" id="voiceCard" data-sheet="voice" data-surface="settings.voice" hidden>
           <p class="card-meta">Click the mic on the add dialog and talk; the words appear on the line as they are heard and settle when you click again. The recording is converted to 16 kHz WAV in the browser, posted to this app, and forwarded to the local LLM hub (<code>voice.transcribe_url</code>), which picks the fleet's transcription model — so the phone needs nothing but this app, and the audio never leaves the house. If the hub is down, the local whisper server (<code>voice.fallback_url</code>) takes over.</p>
           <dl class="status-rows" id="voiceStatus" aria-live="polite">
             <div class="status-row"><dt>Transcription</dt><dd id="statusVoice" class="muted">Loading…</dd></div>
@@ -911,18 +794,18 @@
             <div class="status-row"><dt>Wording</dt><dd id="statusEnrich" class="muted">Loading…</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="aiCard" data-sheet="ai" data-surface="settings.ai-triage" hidden>
+        <section class="settings-sheet-section" id="aiCard" data-sheet="ai" data-surface="settings.ai-triage" hidden>
           <p class="card-meta">Triage sends Inbox task text, the project tree and people to the local LLM hub in one bounded request. Suggestions stay staged until you accept or reject each one; nothing is auto-applied.</p>
           <dl class="status-rows" aria-live="polite">
             <div class="status-row"><dt>Local AI</dt><dd id="statusAI" class="muted">Loading…</dd></div>
             <div class="status-row"><dt>Model</dt><dd id="statusAIModel" class="muted">–</dd></div>
           </dl>
         </section>
-        <section class="settings-sheet" id="yourNameCard" data-sheet="yourname" data-surface="settings.your-name" hidden></section><!-- body built by js/settings/yourname.js -->
-        <section class="settings-sheet" id="installCard" data-sheet="install" data-surface="settings.database" hidden>
+        <section class="settings-sheet-section" id="yourNameCard" data-sheet="yourname" data-surface="settings.your-name" hidden></section><!-- body built by js/settings/yourname.js -->
+        <section class="settings-sheet-section" id="installCard" data-sheet="install" data-surface="settings.database" hidden>
           <p class="card-meta">Config lives in <code>config/config.json</code> (gitignored; sample committed).</p>
         </section>
-        <section class="settings-sheet" id="mirrorCard" data-sheet="mirror" data-surface="settings.mirror" hidden>
+        <section class="settings-sheet-section" id="mirrorCard" data-sheet="mirror" data-surface="settings.mirror" hidden>
           <p class="card-meta">One <code>.md</code> per task in <code>mirror.dir</code>; edits there flow back with actor <code>md</code>. A dated <code>.db</code> copy lands in <code>mirror.backup_dir</code> daily at 03:00.</p>
           <dl class="status-rows" id="mirrorStatus" aria-live="polite">
             <div class="status-row"><dt>Mirror</dt><dd id="statusMirror" class="muted">Loading…</dd></div>
@@ -933,12 +816,12 @@
             <button data-track="mirror.clear-conflicts" type="button" id="mirrorEventsClear" class="button-ghost" hidden>Clear import conflicts</button>
           </div>
         </section>
-        <div class="settings-sheet-actions">
-          <button data-track="settings-sheet.done" type="button" class="button-primary settings-sheet-done">Done</button>
-        </div>
       </div>
-    </aside>
-  </main>
+      <div class="detail-actions">
+        <button data-track="settings-sheet.done" type="button" class="button-primary detail-save-btn settings-sheet-done">Done</button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- Command palette (Step 10): the vendored editor-modal shell (native
        <dialog>, showModal / close, Esc), one input + a list built by palette.js.

@@ -53,7 +53,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e._ui import open_more_fields
+from tests.e2e._ui import leave_settings, open_more_fields
 from tests.e2e._uniform import (
     assert_code_off_canvas_subtle,
     assert_focus_ring,
@@ -191,15 +191,15 @@ def _opener_card_in_settings(page: Page, base: str, shots: Path, chip, pop) -> N
                  [base.removeprefix("http://"), "127.0.0.1:8448"])
     # The Folder search row names the fake folder-explorer's ephemeral port; frame it on the real one's.
     card.locator("#statusIndex code").evaluate("el => { el.textContent = el.textContent.replace(/:\\d+$/, ':8453'); }")
-    shot(page, shots / "story-09-folders-3-desktop.png", full_page=True)
+    shot(page, shots / "story-09-folders-3-desktop.png")   # the sheet scrolls itself, a modal over the page
 
 
 def _drawer_folder_editor(page: Page, base: str, shots: Path, inst, kitchen):
     """Step 4: the drawer's Folder editor folds a path onto the placeholder."""
     # 4. drawer: the Folder editor folds an absolute path onto the placeholder.
-    #    Leave Settings first: from `/#settings/opener` the goto below is only a
-    #    hash change, and the install command (this run's port) would stay
-    #    behind the drawer in every shot.
+    #    Leave Settings first (Done, then the page's close), as a user would
+    #    before pressing a tab under the modal page.
+    leave_settings(page)
     page.click("nav.tabs .tab[data-tab='board']")
     page.goto(base + "/#task/" + str(kitchen["id"]))
     drawer = page.locator("#taskDrawer")

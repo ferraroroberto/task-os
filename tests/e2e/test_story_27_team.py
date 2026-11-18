@@ -50,7 +50,7 @@ from src.password import hash_password
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._surface import surface
-from tests.e2e._ui import close_settings_sheet, open_settings_sheet
+from tests.e2e._ui import leave_settings, open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     INTERCEPT,
@@ -113,8 +113,8 @@ def _save_your_name(page: Page, name: str, *, fallback: str, base: str | None = 
 
 
 def _back_to_the_task(page: Page, base: str, task_id: int) -> None:
-    """Leave Settings (its sheet, then the pane for a tab) and open the task's drawer."""
-    close_settings_sheet(page)
+    """Leave Settings (its sheet, then the page's close) and open the task's drawer."""
+    leave_settings(page)
     page.locator("nav.tabs .tab[data-tab='board']").click()
     page.goto(f"{base}/#task/{task_id}")
     expect(page.locator("#taskDrawer")).to_be_visible()

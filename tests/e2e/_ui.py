@@ -188,7 +188,7 @@ def open_settings_sheet(page: Page, key: str, *, tap: bool = False) -> Locator:
         press(page.locator("#settingsBtn"))
         expect(page.locator("#paneSettings")).to_be_visible()
     press(page.locator(f"#paneSettings [data-settings-sheet='{key}']"))
-    body = page.locator(f"#settingsSheet .settings-sheet[data-sheet='{key}']")
+    body = page.locator(f"#settingsSheet .settings-sheet-section[data-sheet='{key}']")
     expect(body).to_be_visible()
     return body
 
@@ -199,6 +199,23 @@ def close_settings_sheet(page: Page) -> None:
     if sheet.is_visible():
         sheet.locator(".settings-sheet-done").click()
     expect(sheet).to_be_hidden()
+
+
+def leave_settings(page: Page, *, tap: bool = False) -> None:
+    """Close the Settings page (and its sheet first) back to the tab under it.
+
+    The page is a modal dialog: while it is up the tab bar is inert, so a story
+    leaves it the way a user does, Done then the page's close, before it
+    presses a tab."""
+    press = (lambda loc: loc.tap()) if tap else (lambda loc: loc.click())
+    sheet = page.locator("#settingsSheet")
+    if sheet.is_visible():
+        press(sheet.locator(".settings-sheet-done"))
+        expect(sheet).to_be_hidden()
+    settings = page.locator("#paneSettings")
+    if settings.is_visible():
+        press(settings.locator(".settings-page-close"))
+    expect(settings).to_be_hidden()
 
 
 def assert_control_boundaries(scope: Locator) -> list[float]:

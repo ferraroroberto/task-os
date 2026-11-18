@@ -20,7 +20,7 @@ The checklist of everything a person can see and do in task-os: every pane, dril
 | --- | --- | --- | --- | --- |
 | Phone | touch pointer, up to 520px | floating bottom pill, hidden under a modal | one column; rows run edge to edge | full-screen sheet |
 | Narrow or mid window | a mouse below 1100px, or a touch device wider than 520px | an inline tab bar pinned at the top | one column | full-screen sheet below 1024px, side panel or split from 1024px |
-| Wide | 1100px and up with a mouse | left rail | Board and Today span the window; Time, Search and Settings keep a 772px measure | side panel (Board), split pane (Today), detail pane beside the list (Settings) |
+| Wide | 1100px and up with a mouse | left rail | Board and Today span the window; Time, Search and Settings keep a 772px measure | side panel (Board), split pane (Today) |
 
 The 1024px breakpoint (side panel, split, a list scrolling inside its own box) is separate from the 1100px rail breakpoint, so a 1024 to 1099px window has the top bar and the split.
 
@@ -72,7 +72,7 @@ An old `#table`, `#tree` or stored `table` / `tree` tab lands on Today; an old A
 
 | Where | State | What shows |
 | --- | --- | --- |
-| Today, Board | no tasks at all | *Add your first task* with **Add a task**; the header reads *No tasks yet* (Settings, Time and Search keep their own line) |
+| Today, Board | no tasks at all | *Add your first task* with **Add a task**; the header reads *No tasks yet* (Time and Search keep their own line, Settings its page's) |
 | Today (desktop) | nothing due or nothing selected | *Select a task to see its details* |
 | Today | nothing due | header *Nothing due today*; horizons still list |
 | Calendar lane | feed failing or partly unreadable | titled notice with cause and time; last good copy kept |
@@ -80,7 +80,7 @@ An old `#table`, `#tree` or stored `table` / `tree` tab lands on Today; an old A
 | Journal | nothing closed | says so and that nothing closed before the window |
 | Time | nothing logged yet | the start list still works; Totals keep the comparison and guess card and show an empty state for the per-category bars |
 | Search | an index off or failing | named, folded or in the danger tone, never an empty result |
-| Settings | a service failing | its row value in the danger tone and the header line names it |
+| Settings | a service failing | its row value in the danger tone and the line under the page's title names it |
 | Email archiving | no run, running, failed, not configured | the empty line, *Archiving…* with the button disabled, the reason |
 | Any page | server unreachable | the header line and toasts report it |
 | Sign-in | wrong secret | *wrong token or password*, nothing stored |
@@ -136,9 +136,9 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** always on screen, above every pane.
-- **Holds:** a glyph and title naming the view on screen, a status line beside it, the theme toggle, the Settings gear.
-- **Does:** the gear opens Settings (any tab press leaves it); the toggle flips light and dark.
-- **States:** the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*, Settings what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*). On an install with no tasks Today, Board and the Done journal read *No tasks yet*, while Settings, Time and Search keep their own line (so a failing service is still named), and *Server unreachable* replaces it when the server cannot be reached.
+- **Holds:** a glyph and title naming the tab on screen, a status line beside it, the theme toggle, the Settings gear.
+- **Does:** the gear opens the Settings page over the tab; the toggle flips light and dark.
+- **States:** the status line names exceptions per view: Today *2 overdue · 3 due today* (or a muted *Nothing due today*), Board *4 in Inbox · 3 overdue*. On an install with no tasks Today, Board and the Done journal read *No tasks yet*, while Time and Search keep their own line, and *Server unreachable* replaces it when the server cannot be reached. The Settings page carries its own line (see Settings).
 - **Why:** one persistent header row rather than a heading per pane.
 - **Leads to:** [Settings](#settingspane-settings)
 
@@ -845,7 +845,7 @@ flowchart LR
 ### `settings.pane` Settings
 
 - **Root:** `data-surface`
-- **Reach:** the header gear · palette *Go to Settings* · `#settings`. A pane with no tab. Six inset groups; each row shows its lead glyph, label, its current value (in the attention or danger tone when it is an exception) and a chevron. A row opens its **sheet**: *Desktop (1024px and up)* the detail pane beside the list at 1 : 1.5 with the row tinted (the Email archiving report spans the window); *Phone* full-screen with **×** and **Done**. `#settings/<row>` keeps a sheet across reload; Back closes it.
+- **Reach:** the header gear · palette *Go to Settings* · `#settings`. The fleet's full Settings page (vendored settings-group): a modal dialog over the current tab, full screen on a phone and a centred 772px column on desktop, its title and **×** in a sticky header; **×** or Escape returns to the tab, which stays as it was under it. Under the header a line names what needs attention (*3 mails need you*, *Issue sync failing*, else *6 of 9 services on*), then six inset groups with sentence-case labels; each row shows its lead glyph, label, its current value (in the attention or danger tone when it is an exception) and a chevron. A row opens its **sheet**, a modal over the page on every width (the Email archiving report's sheet spans the window). `#settings/<row>` keeps a sheet across reload; Back closes it.
 - **Leads to:** [Settings sheet](#settingssheet-settings-sheet)
 
 ### `settings.sheet` Settings sheet
@@ -853,9 +853,9 @@ flowchart LR
 - **Root:** `data-surface`
 - **Reach:** any Settings row that opens something · `#settings/<row>`.
 - **Holds:** a title, **×**, and the one sheet its row names (below).
-- **Does:** **Done**, **×** and Back close it.
-- **Phone:** full-screen, **Done** pinned at the bottom whatever the sheet's length.
-- **Desktop:** the detail pane beside the list.
+- **Does:** **Done**, **×**, Escape and Back close it.
+- **Phone:** a modal sheet that fits the screen, **Done** pinned at the bottom whatever the sheet's length.
+- **Desktop:** a centred modal sheet over the Settings page; Email archiving's spans the window.
 - **Leads to:**
   - [Email archiving report](#archivereport-email-archiving-report)
   - [Time categories sheet](#settingstime-categories-time-categories-sheet)
@@ -1028,7 +1028,8 @@ flowchart LR
 | Time dialogs | modal | tiles, history menu, categories | ×, Escape |
 | Date sheet | sheet on touch, popover on mouse | Move paths | pick, Escape, outside tap |
 | Row menu | popover | kebab, right-click, `.` | Escape, outside tap, any pick |
-| Settings sheet | detail pane or full-screen | a Settings row | **Done**, ×, Back |
+| Settings page | full-window modal | the header gear, palette, `#settings` | ×, Escape |
+| Settings sheet | modal sheet over the Settings page | a Settings row | **Done**, ×, Escape, Back |
 | Task drawer | side panel, split or full-screen | a row | Close, Escape |
 | Toast | transient | a write | timer, ×, Undo |
 

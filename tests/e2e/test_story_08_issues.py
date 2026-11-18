@@ -32,7 +32,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e._ui import (
     board_mode,
-    close_settings_sheet,
+    leave_settings,
     open_more_fields,
     open_settings_sheet,
     press_in_sheet,
@@ -46,14 +46,14 @@ DESKTOP = {"width": 1440, "height": 900}
 def _sync_now(page: Page) -> None:
     """Settings → Issues as tasks → *Sync now* (the app's one sync control since #301).
 
-    The sheet is opened for the press and closed again with Done (#397), so the
-    step that reads the row's word (6) finds the Settings list as a user would.
+    The sheet is opened for the press, then closed with Done and the Settings
+    page with its close, back to the tab under it, as a user would.
     """
     card = open_settings_sheet(page, "issues")
     sync = card.locator("#issuesSyncNow")
     expect(sync).to_be_enabled()
     sync.click()
-    close_settings_sheet(page)
+    leave_settings(page)
 
 def _sync_now_lands_the_issue(page: Page, base: str, shots: Path, todo_before):
     """Step 1: Settings → Sync now lands the open issue as a coding task."""

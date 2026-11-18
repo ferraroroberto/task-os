@@ -33,7 +33,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._port_pool import send_json
-from tests.e2e._ui import open_settings_sheet
+from tests.e2e._ui import close_settings_sheet, open_settings_sheet
 from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -175,7 +175,9 @@ def _backup_copy_and_events(page, base: str, shots: Path, card, inst) -> None:
     assert st["backup"]["last_file"] == backup.name
     assert _get(base, "/healthz")["ok"] is True
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    page.click("#settingsBtn")
+    # Reopening the sheet re-reads the status, as the gear did under the old pane.
+    close_settings_sheet(page)
+    open_settings_sheet(page, "mirror")
     expect(card.locator("#statusMirror .status-warn")).to_have_text("enabled · 1 file(s) skipped")
     expect(card.locator("#statusMirror")).to_contain_text(broken.name)
     expect(card.locator("#statusBackup")).to_contain_text(backup.name)

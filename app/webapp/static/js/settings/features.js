@@ -25,23 +25,24 @@ const SHEET_OWNER = {
 function tagOwnedRows(pane) {
   Object.keys(SHEET_OWNER).forEach(function (sheet) {
     const row = pane.querySelector('[data-settings-sheet="' + sheet + '"]');
-    const item = row && row.closest('li');
-    if (item) item.dataset.feature = SHEET_OWNER[sheet];
+    if (row) row.dataset.feature = SHEET_OWNER[sheet];
   });
 }
 
+/** One block's row (the settings-group switch row): its name, one hint line
+ *  under it, the switch trailing; a tap anywhere on the row toggles it. */
 function rowEl(f, onToggle) {
-  const li = document.createElement('li');
-  li.className = 'action-row settings-feature';
-  li.dataset.featureKey = f.key;
-  const main = document.createElement('div');
-  main.className = 'action-row-main settings-feature-main';
+  const row = document.createElement('label');
+  row.className = 'settings-row settings-feature';
+  row.dataset.featureKey = f.key;
+  const text = document.createElement('span');
+  text.className = 'settings-row-text';
   const title = document.createElement('span');
-  title.className = 'action-row-title';
+  title.className = 'settings-row-label';
   title.textContent = f.label;
-  // One secondary line: what the block covers, then its state when that is not the plain "on".
+  // One hint line: what the block covers, then its state when that is not the plain "on".
   const meta = document.createElement('span');
-  meta.className = 'action-row-meta';
+  meta.className = 'settings-row-hint';
   const summary = document.createElement('span');
   summary.className = 'settings-feature-summary';
   summary.textContent = f.summary;
@@ -49,56 +50,52 @@ function rowEl(f, onToggle) {
   const state = document.createElement('span');
   state.className = 'settings-feature-state';
   meta.append(state);
-  main.append(title, meta);
+  text.append(title, meta);
   const sw = switchEl(f.enabled, { label: f.label, onToggle: onToggle });
-  sw.classList.add('action-row-trail');
   // dynamic-id-exempt: the id is the block key, a fixed set of six
   sw.dataset.track = 'settings.feature-' + f.key;
-  li.append(main, sw);
-  return li;
+  row.append(text, sw);
+  return row;
 }
 
 /** The state on a row's one meta line: off closes it after the summary; on but unavailable
  *  here replaces the summary with the reason, the part to act on (the summary stays in the
  *  tooltip); a block that is simply on says nothing more, the switch already shows it. */
-function paintState(li, f) {
-  const state = li.querySelector('.settings-feature-state');
+function paintState(row, f) {
+  const state = row.querySelector('.settings-feature-state');
   const meta = state.parentElement;
   meta.title = '';
-  delete li.dataset.state;
+  delete row.dataset.state;
   if (!f.enabled) {
     state.textContent = 'Off on this machine';
     delete state.dataset.tone;
   } else if (!f.available) {
     state.textContent = 'On, unavailable here: ' + f.reason;
     state.dataset.tone = 'attention';
-    li.dataset.state = 'unavailable';
+    row.dataset.state = 'unavailable';
     meta.title = f.summary + ' ' + state.textContent;
   } else {
     state.textContent = '';
     delete state.dataset.tone;
   }
-  setSwitch(li.querySelector('.toggle'), f.enabled);
+  setSwitch(row.querySelector('.toggle'), f.enabled);
 }
 
 /** Build the group before "This install", tag the owned rows, load the state.
  *  Returns `{refresh}` for the bootstrap to call when Settings opens. */
 export function mountFeatures(ctx) {
   const anchor = document.getElementById('settingsGroupInstall');
-  const heading = document.createElement('h2');
-  heading.className = 'overline settings-overline';
+  const heading = document.createElement('h3');
+  heading.className = 'settings-group-label';
   heading.id = 'settingsGroupFeatures';
   heading.textContent = 'Available features';
-  const group = document.createElement('section');
-  group.className = 'card action-list settings-group';
-  group.setAttribute('aria-labelledby', heading.id);
-  const list = document.createElement('ul');
-  list.className = 'action-rows';
+  const list = document.createElement('section');
+  list.className = 'card settings-group';
+  list.setAttribute('aria-labelledby', heading.id);
   const note = document.createElement('p');
-  note.className = 'card-meta settings-features-note';
+  note.className = 'settings-footnote settings-features-note';
   note.setAttribute('role', 'status');
-  group.append(list);
-  anchor.before(heading, group, note);
+  anchor.before(heading, list, note);
   tagOwnedRows(ctx.els.pane);
 
   let busy = false;
@@ -108,9 +105,9 @@ export function mountFeatures(ctx) {
     current = features;
     list.replaceChildren();
     features.forEach(function (f) {
-      const li = rowEl(f, function (next) { toggle(f, next); });
-      list.appendChild(li);
-      paintState(li, f);
+      const row = rowEl(f, function (next) { toggle(f, next); });
+      list.appendChild(row);
+      paintState(row, f);
     });
     setFeaturesOff(features.filter(function (f) { return !f.enabled; }).map(function (f) { return f.key; }));
   }

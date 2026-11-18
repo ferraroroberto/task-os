@@ -45,7 +45,7 @@ from playwright.sync_api import Browser, Page, expect
 from tests.conftest import write_test_config
 from tests.e2e._port_pool import post_json
 from tests.e2e._surface import surface
-from tests.e2e._ui import open_settings_sheet
+from tests.e2e._ui import leave_settings, open_settings_sheet
 from tests.e2e.conftest import (
     E2E_ANCHOR,
     _get,
@@ -129,6 +129,7 @@ def _not_a_calendar_and_hang(page: Page, base: str, card, fake, lane):
     card.locator("#calendarRefresh").click()
     expect(card.locator("#statusCalendar .status-warn")).to_have_text("not a calendar")
     expect(page.locator("#calendarCardMeta")).to_have_text("error")
+    leave_settings(page)
     page.click("nav.tabs .tab[data-tab='today']")
     expect(lane).to_have_attribute("data-state", "parse_error")
     expect(lane.locator(".cal-notice-title")).to_contain_text("Calendar feed unreadable")
@@ -168,6 +169,7 @@ def _dropped_then_real_feed(page: Page, base: str, shots: Path, card, fake, grou
     dismiss_toasts(page)
     shot(page, shots / "story-28-calendar-3-desktop.png")
 
+    leave_settings(page)
     page.click("nav.tabs .tab[data-tab='today']")
     expect(lane).to_have_attribute("data-state", "ok")
     expect(lane.locator(".cal-chip")).to_have_text(["School holiday", "Team offsite"])
