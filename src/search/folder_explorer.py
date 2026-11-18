@@ -115,6 +115,10 @@ class FolderExplorerClient:
         """
         return pooled_request("POST", self.base_url + path, timeout=timeout_s, json=body, verify=self._verify)
 
+    def get(self, path: str, timeout_s: float) -> requests.Response:
+        """One JSON GET over the shared pool; the caller interprets the answer, transport errors propagate."""
+        return pooled_request("GET", self.base_url + path, timeout=timeout_s, verify=self._verify)
+
     def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         if not self.configured:
             raise Unavailable(NOT_CONFIGURED, "search.folder_explorer_url is not set")

@@ -105,3 +105,20 @@ The story is unchanged (click a folder chip → Explorer opens **this** PC's syn
 
 - [x] Automated: `tests/e2e/test_story_09_folders.py` green, the picker still attaching `{onedrive}/house/kitchen/plans` on Enter.
 - [ ] **Not verified — a headed walk with the picker against the real folder-explorer.**
+
+**Added 2026-11-18 (#767): the Folder field's From Explorer window.** On the PC itself the drawer's Folder field offers a button that fills the field with the folder of the front File Explorer window. task-os asks folder-explorer for it (`POST /api/folders/explorer-window` → folder-explorer's `GET /api/v1/explorer/folder`), so the Windows window read stays in one place.
+
+**Steps → expected** (continuing step 5's drawer)
+
+9. With no File Explorer folder window open (the fake folder-explorer answers `no_explorer_folder`), click **From Explorer window** → a toast says *No Explorer folder is open…*, the field and the task's `folder_ref` are unchanged.
+10. With a window in front (the fake answers a folder path) → the field fills with that path and a note under the line shows it in full (*not saved yet*), `folder_ref` is still the previous one (nothing saved), then **Set folder** (Enter) stores `{onedrive}/house/garden`. The same pick back to `kitchen/plans` restores the ref the later steps expect.
+11. Phone width (390, still the PC's own browser here): the button is a glyph at every width (its name and tooltip say *From Explorer window*), reachable, and the line stays one line with no side-scroll.
+
+| Step | Shot |
+| --- | --- |
+| 10 the front Explorer window's folder in the Folder field, before saving | [story-09-folders-10-desktop.png](../screenshots/story-09-folders-10-desktop.png) |
+
+**Result — 2026-11-18: automated legs pass; the real window read is not verified.**
+
+- [x] Automated: `tests/search/test_explorer_window.py` (the route's every outcome and code against a fake folder-explorer, the PC-only refusal that never reaches folder-explorer, `/api/me`'s `pc`, `is_this_pc`) and `tests/e2e/test_story_09_folders.py` steps 9–11 above; the gallery shots whose drawer line gained the button (4, 5, 7 and story 11's 3) were re-baselined.
+- [ ] **Not verified — the real window read.** folder-explorer's existing `POST /api/archive/explorer` answers only for a folder inside the email folders (`outside_email_folders` otherwise), so a general `GET /api/v1/explorer/folder` is filed as ferraroroberto/folder-explorer#274. Until that ships, the button on a real PC says *This folder-explorer can't report the Explorer window yet: update it and try again* (`folder_explorer_outdated`), never an empty field. To check on the PC once it has: open any folder in File Explorer, open a task's drawer → More fields → **From Explorer window** → the field shows that folder → **Set folder**.

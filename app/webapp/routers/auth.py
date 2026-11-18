@@ -15,8 +15,10 @@ and the access status.
                          "team"``); 401 on refusal, 503 when no token is
                          configured (nothing to hand back)
     POST /api/logout   → clears the cookie (and, in team mode, the team + name cookies)
-    GET  /api/me       → {id, name, via, people: [{id, name}]} — who this request
-                         is (``src.auth.resolve_viewer``) and the install's members
+    GET  /api/me       → {id, name, via, pc, people: [{id, name}]} — who this request
+                         is (``src.auth.resolve_viewer``), whether it comes from this
+                         PC itself (``src.this_pc``; the Explorer-window pick is offered
+                         only there) and the install's members
     GET  /api/team     → {enabled, people: [{name, avatar}], you} — who can be
                          picked and who this browser is
     POST /api/team/name → {name} → sets the ``taskos_name`` cookie (an
@@ -63,6 +65,7 @@ from src.config import AuthConfig, TeamConfig, can_write_config, clean_your_name
 from src.login_lockout import retry_after_header
 from src.tasks_repo import DEFAULT_ACTOR
 from src.team import NAME_COOKIE, author_status, avatar_file, encode_name, member_from_cookie
+from src.this_pc import is_this_pc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -167,6 +170,7 @@ async def me(request: Request) -> dict[str, Any]:
         "id": viewer.id if viewer else None,
         "name": viewer.name if viewer else None,
         "via": viewer.via if viewer else "unknown",
+        "pc": is_this_pc(request.client.host if request.client else ""),
         "people": [{"id": p.id, "name": p.name} for p in request.app.state.config.people],
     }
 

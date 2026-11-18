@@ -3,7 +3,9 @@
 'use strict';
 
 import { icon } from '../../_vendored/icons/icons.js';
+import { api } from '../../api.js';
 import { mountFolderPicker, resolveFolderRef } from '../../folderpick.js';
+import { toast } from '../../toast.js';
 import { formButton, section } from './dom.js';
 import { folderChip } from './links.js';
 
@@ -16,7 +18,29 @@ async function commitFolder(ctx, value) {
   await ctx.patch({ folder_ref: ref });
 }
 
-/** Line 2's ref form: the input, Change / Set folder, and the picker toggle. */
+/** Fill the input with the folder of the front File Explorer window, and show
+ *  it in full in the note under the form (the input is narrow in the drawer),
+ *  for the person to read and save; it never saves on its own. A failure says
+ *  which it was (the server's own message) and leaves the input as it was. */
+async function takeExplorerFolder(input, button, note) {
+  button.disabled = true;
+  try {
+    const r = await api('/api/folders/explorer-window', { method: 'POST' });
+    input.value = r.path;
+    input.title = r.path;
+    note.textContent = 'From the Explorer window, not saved yet: ' + r.path;
+    note.hidden = false;
+    input.focus();
+    input.select();
+  } catch (err) {
+    toast(err.message || 'Could not read the File Explorer window', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/** Line 2's ref form: the input, Change / Set folder, the picker toggle and,
+ *  on the PC itself, the pick from the front File Explorer window. */
 function folderForm(ctx, t) {
   const form = document.createElement('form');
   form.className = 'folder-form';
@@ -39,6 +63,20 @@ function folderForm(ctx, t) {
   pick.title = 'Find in folder index';
   pick.setAttribute('aria-expanded', String(ctx.pickerOpen));
   form.append(input, save, pick);
+  if (ctx.opts.onPc && ctx.opts.onPc()) {
+    const win = document.createElement('button');
+    win.dataset.track = 'drawer.folder-explorer';
+    win.type = 'button';
+    win.className = 'button-ghost folder-pick folder-explorer-pick';
+    win.innerHTML = icon('folder') + '<span class="folder-pick-label">From Explorer window</span>';
+    win.setAttribute('aria-label', 'From Explorer window');
+    win.title = 'Use the folder open in the front File Explorer window';
+    const note = document.createElement('p');
+    note.className = 'muted folder-explorer-note';
+    note.hidden = true;
+    win.addEventListener('click', function () { takeExplorerFolder(input, win, note); });
+    form.append(win, note);
+  }
   form.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const v = input.value.trim();
