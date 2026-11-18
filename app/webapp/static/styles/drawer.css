@@ -275,18 +275,27 @@
 .comment-send { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
 .comment-edit-wrap .comment-send { min-height: 28px; padding: 2px var(--space-sm); }
 .comment-list { display: flex; flex-direction: column; }
-/* Repeating entries = flat list rows on a hairline (design.md list-row). */
-.comment { padding: var(--space-sm) 0; border-top: 1px solid var(--line-muted); }
+/* One comment = one flat list row on a hairline (design.md list-row): a narrow
+   time column, the text, and the "···" at the end. Time and text share one
+   line-height so their first lines sit on one baseline. */
+.comment {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  column-gap: var(--space-sm);
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid var(--line-muted);
+  font-size: var(--font-label);
+  line-height: 1.4;
+}
 .comment:first-child { border-top: 0; }
-.comment-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--muted); font-size: var(--font-body-sm); margin-bottom: 2px; }
-.comment-meta strong { color: var(--fg); }
-/* Pencil + trash park at the right end of the meta line — the Links
-   row's pair of icon buttons; `margin-left: auto` is the only thing it adds. */
-.comment-actions { display: flex; align-items: center; gap: var(--icon-btn-gap); flex: none; margin-left: auto; }
+.comment-when { color: var(--muted); font-size: var(--font-body-sm); white-space: nowrap; }
+.comment-author { color: var(--muted); }
+/* 28px box, 44px target: the vendored icon-button grows it with ::before. */
+.comment-more { --icon-btn-box: 28px; margin: -2px 0; }
 /* The inline editor is the composer, re-pointed at an existing body: it wears
    `.comment-composer` + `.comment-input` + `.comment-send` and adds only what
-   the composer has no need for — a hairline of air under the meta line, and a
-   textarea allowed to shrink now that TWO buttons share its row (without
+   the composer has no need for — a textarea allowed to shrink now that TWO buttons share its row (without
    `min-width: 0` a flex item never goes below its intrinsic width, and a
    textarea's is ~20 columns, which overflows a 390px phone). Save is the
    composer's Send button in the accent tint — colour only, never
@@ -299,8 +308,25 @@
   color: var(--accent);
   border-color: var(--accent-border-soft);
 }
-.comment-body { font-size: var(--font-label); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Two lines, then a tap on the row opens the rest. The editor takes the text's
+   two columns and sits on the same row as the time. */
+.comment-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.comment.is-open .comment-body { display: block; -webkit-line-clamp: unset; }
 .comment-body .chip { white-space: nowrap; margin: 1px 0; }
+/* A one-link comment: its words are the link, the open-in-new mark follows. */
+.comment-link { color: var(--accent-text); text-decoration: none; }
+.comment-link:hover { text-decoration: underline; }
+.comment-link-tail { white-space: nowrap; }
+.comment-link .icon { width: 0.9em; height: 0.9em; margin-left: 0.3em; vertical-align: -0.1em; }
+.comment.is-editing .comment-edit-wrap { grid-column: 2 / -1; margin: 0; }
 .activity-list { display: flex; flex-direction: column; }
 .activity-row {
   display: flex;

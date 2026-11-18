@@ -1,8 +1,9 @@
 """Story 27 — A teammate comments (Step 12/13, issue #13).
 
     A second person opens the URL → team password → picks their name →
-    comments on a task with a link → the row shows their name → the folder
-    chip hands the ref to their own opener.
+    comments on a task with a link → the owner's view names them (a person's
+    own comments carry no name) → the folder chip hands the ref to their own
+    opener.
 
 Two browser contexts against one seeded disposable instance whose config has
 team mode on (``team.enabled``, three synthetic people, a team password and a
@@ -184,7 +185,9 @@ def test_teammate_signs_in_picks_a_name_and_comments(team_webapp: str, browser: 
         drawer.locator(".comment-send").click()
         newest = _newest_comment(page)
         expect(newest.locator(".comment-body")).to_contain_text("Second quote is in")
-        expect(newest.locator(".comment-meta strong")).to_have_text("Sam Rivera")
+        # their own comment carries no name on their own screen; the thread holds who wrote it
+        expect(newest.locator(".comment-author")).to_have_count(0)
+        assert _get(base, f"/api/tasks/{quotes}")["comments"][-1]["author"] == "Sam Rivera"
         expect(newest.locator("a.chip-web")).to_have_attribute("href", "https://example.com/quotes/2")
         folder = newest.locator("a.chip-folder")
         expect(folder).to_have_attribute("href", FOLDER_HREF)
@@ -235,7 +238,7 @@ def _owner_names_themselves(browser: Browser, base: str, quotes: int, shots: Pat
         page.goto(f"{base}/#task/{quotes}")
         drawer = page.locator("#taskDrawer")
         expect(drawer).to_be_visible()
-        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Sam Rivera")
+        expect(_newest_comment(page).locator(".comment-author")).to_have_text("Sam Rivera")
 
         # Settings -> Your name: unset, the row and the field show the fallback
         _save_your_name(page, "Ada Example", fallback="Alex Chen")
@@ -248,7 +251,7 @@ def _owner_names_themselves(browser: Browser, base: str, quotes: int, shots: Pat
         drawer.locator(".comment-input").fill("Thanks — booking the first one.")
         drawer.locator(".comment-send").click()
         expect(_newest_comment(page).locator(".comment-body")).to_have_text("Thanks — booking the first one.")
-        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Ada Example")
+        expect(_newest_comment(page).locator(".comment-author")).to_have_count(0)   # their own, under the saved name
         _park_on_comments(page)
         shot(page, shots / "story-27-team-3-desktop.png")
 
@@ -258,7 +261,7 @@ def _owner_names_themselves(browser: Browser, base: str, quotes: int, shots: Pat
         drawer.locator(".comment-input").fill("Noted.")
         drawer.locator(".comment-send").click()
         expect(_newest_comment(page).locator(".comment-body")).to_have_text("Noted.")
-        expect(_newest_comment(page).locator(".comment-meta strong")).to_have_text("Alex Chen")
+        expect(_newest_comment(page).locator(".comment-author")).to_have_count(0)   # their own, under the fallback
     finally:
         owner.close()
 

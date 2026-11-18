@@ -1,14 +1,18 @@
-/* task-os — the drawer's comments: newest first, the composer, and the
- * pencil / trash on each row. */
+/* task-os — the drawer's comments: newest first, the composer, and one
+ * compact row per comment with a "···" menu for edit and delete. */
 
 'use strict';
 
 import { api } from '../../api.js';
 import { icon } from '../../_vendored/icons/icons.js';
 import { confirmDialog } from '../../confirm.js';
-import { fmtTs, linkify } from '../../format.js';
+import { createRowMenu } from '../../_vendored/row-menu/row-menu.js';
+import { fmtCommentWhen, fmtTs, linkify, singleLink } from '../../format.js';
 import { toast } from '../../toast.js';
 import { formButton, section } from './dom.js';
+
+// One menu for the whole thread: at most one comment's menu is open at a time.
+const menu = createRowMenu({ className: 'comment-menu' });
 
 /** The new-comment form: Ctrl+Enter sends, origin=ui. */
 function commentComposer(ctx, t) {
@@ -45,7 +49,7 @@ function commentComposer(ctx, t) {
   return composer;
 }
 
-/** The pencil's inline editor.
+/** The "···" menu's inline editor.
  *
  *  It IS the composer, re-pointed at an existing body: same `.comment-composer`
  *  row, same `.comment-input` textarea, same `.comment-send` buttons on the
@@ -110,7 +114,7 @@ function commentEditor(ctx, t, c) {
   return wrap;
 }
 
-/** The trash: asks first, as Delete task does — there is no undo. */
+/** Delete: asks first, as Delete task does — there is no undo. */
 async function deleteComment(ctx, t, c) {
   const preview = c.body.length > 80 ? c.body.slice(0, 80).trim() + '…' : c.body;
   const ok = await confirmDialog({
@@ -130,55 +134,87 @@ async function deleteComment(ctx, t, c) {
   }
 }
 
-/** One comment: author · time · origin, the pencil and the trash, then the
- *  body (links as chips) or the inline editor. */
+/** The comment's text as its row shows it. A comment holding exactly one web
+ *  link IS that link: the text around the URL, opening it in a new window with a
+ *  small open-in-new mark, and the raw URL never shown. A comment that is only
+ *  a URL, or holds several targets, keeps its chips. */
+function commentText(c) {
+  const wrap = document.createDocumentFragment();
+  const one = singleLink(c.body);
+  if (one && one.rest) {
+    const a = document.createElement('a');
+    a.className = 'comment-link';
+    a.href = one.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.title = one.url;
+    // the last word and the mark share one nowrap span, so the mark never
+    // wraps onto a line of its own
+    const cut = one.rest.lastIndexOf(' ') + 1;
+    const tail = document.createElement('span');
+    tail.className = 'comment-link-tail';
+    tail.append(one.rest.slice(cut));
+    tail.insertAdjacentHTML('beforeend', icon('external-link'));
+    a.append(one.rest.slice(0, cut), tail);
+    wrap.appendChild(a);
+  } else {
+    wrap.appendChild(linkify(c.body));
+  }
+  return wrap;
+}
+
+/** The "···" menu's two actions on one comment: the inline editor and the
+ *  delete confirm, each as the pencil and the trash were. */
+function commentMenuItems(ctx, t, c) {
+  return [
+    { label: 'Edit', glyph: 'pencil', dataset: { action: 'edit', track: 'drawer.comment-edit' },
+      onTap: function () { ctx.editingCommentId = c.id; ctx.render(); } },
+    { label: 'Delete', glyph: 'trash-2', danger: true, dataset: { action: 'delete', track: 'drawer.comment-delete' },
+      onTap: function () { deleteComment(ctx, t, c); } },
+  ];
+}
+
+/** One comment as one row: the time in a narrow column, the text beside it
+ *  (two lines, a tap on the row opens the rest), the author after it only when
+ *  it is somebody else, and one "···" for edit and delete. An edit swaps the
+ *  text for the inline editor; author, time and origin never change under it. */
 function commentRow(ctx, t, c) {
   const row = document.createElement('article');
   row.className = 'comment';
   row.dataset.commentId = String(c.id);
-  const meta = document.createElement('div');
-  meta.className = 'comment-meta';
-  const who = document.createElement('strong');
-  who.textContent = c.author;
   const when = document.createElement('time');
+  when.className = 'comment-when';
   when.dateTime = c.ts;
-  when.textContent = fmtTs(c.ts);
-  const origin = document.createElement('span');
-  origin.className = 'chip comment-origin';   // the one pill
-  origin.textContent = c.origin;
-  meta.append(who, when, origin);
-  // Two icons and no more — the Links row's pair, the one icon
-  // button. An edit rewrites the text only: author, time and
-  // origin stay, so the meta line above never changes under it.
-  const actions = document.createElement('div');
-  actions.className = 'comment-actions';
-  const edit = document.createElement('button');
-  edit.dataset.track = 'drawer.comment-edit';
-  edit.type = 'button';
-  edit.className = 'icon-button';
-  edit.setAttribute('aria-label', 'Edit comment by ' + c.author);
-  edit.title = 'Edit';
-  edit.innerHTML = icon('pencil');
-  edit.addEventListener('click', function () { ctx.editingCommentId = c.id; ctx.render(); });
-  const rm = document.createElement('button');
-  rm.dataset.track = 'drawer.comment-delete';
-  rm.type = 'button';
-  rm.className = 'icon-button danger';
-  rm.setAttribute('aria-label', 'Delete comment by ' + c.author);
-  rm.title = 'Delete';
-  rm.innerHTML = icon('trash-2');
-  rm.addEventListener('click', function () { deleteComment(ctx, t, c); });
-  actions.append(edit, rm);
-  meta.appendChild(actions);
-  row.appendChild(meta);
+  when.textContent = fmtCommentWhen(c.ts);
+  when.title = fmtTs(c.ts) + ' · ' + c.origin;
+  row.appendChild(when);
   if (ctx.editingCommentId === c.id) {
+    row.classList.add('is-editing');
     row.appendChild(commentEditor(ctx, t, c));
-  } else {
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'comment-body';
-    bodyEl.appendChild(linkify(c.body));
-    row.appendChild(bodyEl);
+    return row;
   }
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'comment-body';
+  bodyEl.appendChild(commentText(c));
+  if (!ctx.author || c.author !== ctx.author) {
+    const who = document.createElement('span');
+    who.className = 'comment-author';
+    who.textContent = c.author;
+    bodyEl.append(' ', who);
+  }
+  bodyEl.addEventListener('click', function (ev) {
+    if (ev.target.closest('a')) return;
+    row.classList.toggle('is-open');
+  });
+  row.appendChild(bodyEl);
+  const more = document.createElement('button');
+  more.dataset.track = 'drawer.comment-more';
+  more.type = 'button';
+  more.className = 'icon-button comment-more';
+  more.setAttribute('aria-label', 'Comment actions');
+  more.innerHTML = icon('ellipsis');
+  row.appendChild(more);
+  menu.attach('comment-' + c.id, more, commentMenuItems(ctx, t, c));
   return row;
 }
 
@@ -189,6 +225,7 @@ export function commentsSection(ctx, t) {
   clist.className = 'comment-list';
   const ordered = (t.comments || []).slice().reverse();
   ordered.forEach(function (c) { clist.appendChild(commentRow(ctx, t, c)); });
+  menu.endRender();
   if (!ordered.length) {
     const none = document.createElement('p');
     none.className = 'muted drawer-none';

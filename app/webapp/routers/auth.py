@@ -15,8 +15,10 @@ and the access status.
                          "team"``); 401 on refusal, 503 when no token is
                          configured (nothing to hand back)
     POST /api/logout   → clears the cookie (and, in team mode, the team + name cookies)
-    GET  /api/me       → {id, name, via, pc, people: [{id, name}]} — who this request
-                         is (``src.auth.resolve_viewer``), whether it comes from this
+    GET  /api/me       → {id, name, via, author, pc, people: [{id, name}]} — who this request
+                         is (``src.auth.resolve_viewer``), the name an unnamed write from
+                         it is signed with (``author``: how the drawer tells a person's own
+                         comments from the rest), whether it comes from this
                          PC itself (``src.this_pc``; the Explorer-window pick is offered
                          only there) and the install's members
     GET  /api/team     → {enabled, people: [{name, avatar}], you} — who can be
@@ -51,7 +53,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response, resolve_actor
 from src.auth import (
     COOKIE_MAX_AGE,
     COOKIE_NAME,
@@ -170,6 +172,7 @@ async def me(request: Request) -> dict[str, Any]:
         "id": viewer.id if viewer else None,
         "name": viewer.name if viewer else None,
         "via": viewer.via if viewer else "unknown",
+        "author": resolve_actor(request),
         "pc": is_this_pc(request.client.host if request.client else ""),
         "people": [{"id": p.id, "name": p.name} for p in request.app.state.config.people],
     }
