@@ -9,6 +9,9 @@ import { boardHeadParts } from '../../board.js';
 import { statusCoverage } from '../../filters.js';
 import { headLine } from '../../today.js';
 
+// What a typed query covers while the status pill is untouched: the to-do tasks.
+const RESTING_COVERAGE = 'todo';
+
 // ------------------------------------------------------------ the header
 /** The header names the view on screen: the vendored home-head's
  *  title is each pane's heading, so every tab opens with one. */
@@ -58,11 +61,11 @@ export function renderHeadStatus(app) {
     attention = line.attention;
     // A typed query names the statuses it covers, as the Search count line does — first, so a
     // phone's ellipsis never takes it, and with no "nothing due" filler beside it.
-    if (queried) text = line.attention ? statusCoverage(app.state.filters) + ' · ' + text : statusCoverage(app.state.filters);
+    if (queried) text = line.attention ? statusCoverage(app.state.filters, RESTING_COVERAGE) + ' · ' + text : statusCoverage(app.state.filters, RESTING_COVERAGE);
   } else if (app.state.tab === 'board' && onPane && app.state.boardCounts) {
     parts = boardHeadParts(app.state.boardCounts);
     if (queried) {
-      const cover = { text: statusCoverage(app.state.filters), tone: 'muted' };
+      const cover = { text: statusCoverage(app.state.filters, RESTING_COVERAGE), tone: 'muted' };
       parts = [cover].concat(parts.filter(function (x) { return x.tone !== 'muted'; })).slice(0, HEAD_MAX_PARTS);
     }
   } else if (app.state.tab === 'time' && onPane && app.time) {

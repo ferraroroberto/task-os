@@ -141,6 +141,74 @@
    rows of the modal contract, status and person as ticks in place. */
 .filter-text { display: flex; align-items: center; gap: var(--space-sm); }
 .filter-q { flex: 1 1 auto; min-width: 0; width: 100%; }
+/* Today and Board: the status filter shows as removable pills inside the text
+   field, the fleet chip with its × (the same look as app-launcher's in-field
+   scope chip). The wrapper draws the field's one boundary as a real 1px border
+   (the boundary checks read a wrapper's border); the input inside is bare. On a
+   mouse the 36px field sits in the 44px strip band like the native input does.
+   One line always: the pills scroll sideways, never wrap, and never squeeze the
+   input below a typing width. */
+.filter-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  height: var(--control-h);
+  margin: var(--control-inset) 0;
+  padding: 0 0 0 6px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+}
+@media (pointer: coarse) { .filter-field { height: var(--hit-min); } }
+.filter-field:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filter-field input.filter-q {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 72px;
+  /* the 44px target is the input's own box, centred over the field's border (the field is
+     36px on a mouse, 44px on touch): the invisible overflow keeps the floor without a band */
+  height: var(--hit-min);
+  min-height: 0;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.filter-field input.filter-q:focus-visible { outline: none; }
+.filter-pills {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  max-width: 62%;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-pills::-webkit-scrollbar { display: none; }
+.filter-pills[hidden] { display: none; }
+/* The button is the field's height so the × is a real target; the chip is only its look. */
+.filter-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.filter-pill .chip { gap: var(--space-xs); padding-inline: 8px 6px; }
+/* On a mouse the 36px button reaches the 44px floor with invisible expansion; on touch it is 44px real. */
+@media (pointer: fine) {
+  .filter-pill { position: relative; }
+  .filter-pill::before { content: ""; position: absolute; inset: -4px 0; }
+}
 /* The filter button is the one icon button (vendored): a glyph on
    nothing at rest, on the strip's box like the + beside it. With filters on
    it is a selected state, which may draw itself: the count beside the glyph

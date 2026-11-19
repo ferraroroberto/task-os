@@ -24,6 +24,8 @@
 | 5 `Ctrl+K`: `>` commands (dark) | [story-10-search-5-desktop.png](../screenshots/story-10-search-5-desktop.png) |
 | 6 phone: results (390×844) | [story-10-search-6-phone.png](../screenshots/story-10-search-6-phone.png) |
 | 7 phone: the palette sheet | [story-10-search-7-phone.png](../screenshots/story-10-search-7-phone.png) |
+| 10 phone: Today's search field with its *Todo* pill, a search covering to-do tasks only (light) | [story-10-search-10-phone.png](../screenshots/story-10-search-10-phone.png) |
+| 11 phone: the pill removed, *every status* in the header and the filter count (dark) | [story-10-search-11-phone.png](../screenshots/story-10-search-11-phone.png) |
 | 8 **real Chrome**: Issues *not configured — reason · Settings* under three populated groups | [story-10-search-8-desktop.png](../screenshots/story-10-search-8-desktop.png) |
 | 9 **real Chrome**: Settings → Search card, 3 of 4 indexes | [story-10-search-9-desktop.png](../screenshots/story-10-search-9-desktop.png) |
 
@@ -64,3 +66,9 @@
 - [x] Automated: the new cases in `tests/search/test_search_status_filter.py` and the Today leg of `tests/e2e/test_story_10_search.py`, each proven red on the pre-change `app/` and green after.
 - [x] Walked on a seeded disposable instance on a private port, Chromium touch context at 390×844 and 390×664, light and dark: Today and Board with `bikes` (cancelled) and `gift` (done) list the closed task with *every status* in the header; with no query the lists hold the 38 open rows and the header keeps its counts. No new committed shot: the legs are assertions.
 - [ ] **Not verified — the owner's phone check on the real install**, Today and Board, a query with every Status box cleared. Board's Status layout has no Cancelled column, so a cancelled match shows there only in the Week layout.
+
+**2026-11-19 (#789, Part of — the owner validates on the phone).** Today and Board show the status filter as removable pills inside the text field, a *Todo* pill by default. Step 10, folded into the phone leg (no new test function; 390×844 touch, light then dark): the Todo pill is there on a fresh Today and Board, the strip (field, filter button, +) stays one line inside the screen with no sideways scroll, a search for `pillprobe` finds only the to-do task and the header says *todo*, × on the pill searches every status (all three tasks, header *every status*, the filter button counts 1), the sheet then shows no status ticked, ticking Todo and Done in it draws two pills, and × on *Done* drops just that status and un-ticks it in the sheet. Unit: `tests/search/test_search_status_filter.py` (resting scope, pill ticks and patches). The Today leg above changed its hand-off assertion: clearing the Search tab's statuses now also removes Today's pill and counts one filter there.
+
+- [x] Automated: the new and rewritten cases in `tests/search/test_search_status_filter.py` and the pill leg of `tests/e2e/test_story_10_search.py`.
+- [x] Seen in the two phone shots above (light, dark): the pill and its × inside the field, one line with the filter button and +.
+- [ ] **Not verified — the owner's phone check on the real install (iPhone):** the pill's look and tap target, and whether the pill's label should read *To do* (the sheet and Board say *Todo*).
