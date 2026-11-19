@@ -461,6 +461,11 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     assert popup.url == ai_url, popup.url
     popup.close()
     expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
+    # The tapped chip keeps the pointer's hover and the focus for as long as the
+    # popup round-trip took, which a loaded box varies: take both off it first,
+    # so the shot never catches its underline.
+    p.mouse.move(0, 0)
+    p.evaluate("document.activeElement && document.activeElement.blur()")
     shot(p, shots / "story-11-ai-links-4-phone.png")
     phone.close()
 
