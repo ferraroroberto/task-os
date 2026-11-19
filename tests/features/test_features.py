@@ -75,13 +75,16 @@ def _alive(thread_owner: object) -> bool:
 # ------------------------------------------------------------------ config
 
 
-def test_every_block_is_on_by_default(make_client: Callable[..., TestClient]) -> None:
+def test_every_default_on_block_is_on_by_default(make_client: Callable[..., TestClient]) -> None:
     client = make_client()
     rows = client.get("/api/features").json()["features"]
     assert [r["key"] for r in rows] == list(KEYS)
-    assert all(r["enabled"] for r in rows)
+    # The one opt-in block (it writes outside this install) is the only row that starts off.
+    assert [r["key"] for r in rows if not r["enabled"]] == ["publish_address"]
+    assert all(r["enabled"] for r in rows if not r["opt_in"])
     assert all(r["summary"] for r in rows)
     assert client.app.state.config.features_off == frozenset()
+    assert client.app.state.config.features_on == frozenset()
 
 
 def test_only_an_explicit_false_switches_a_block_off() -> None:
@@ -155,7 +158,8 @@ def test_the_page_carries_the_off_blocks_from_first_paint(make_client: Callable[
 
 def test_every_off_attribute_has_a_css_rule() -> None:
     css = (Path(__file__).resolve().parents[2] / "app/webapp/static/styles/base.css").read_text(encoding="utf-8")
-    for f in FEATURES:
+    # The opt-in block owns no screen: it never rides the page's off list.
+    for f in (f for f in FEATURES if f.default_on):
         assert f':root[data-features-off~="{f.key}"] [data-feature="{f.key}"]' in css
 
 

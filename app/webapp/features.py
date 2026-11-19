@@ -20,7 +20,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from src.features import FEATURES, OFF_REASON
+from src.features import FEATURES, OFF_REASON, PUBLISH_ADDRESS
+from src.sharing.publisher import path_problem
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,8 @@ def unavailable_reason(app: FastAPI, key: str) -> str | None:
         return _problem(state.folder_explorer.summary())
     if key == "ai":
         return _problem(state.ai.status(), state.voice.status())
+    if key == PUBLISH_ADDRESS:
+        return path_problem(app.state.config.network_sharing.host_ip_file)
     if key == "mirror":
         return _problem(
             {"enabled": state.mirror.enabled, "reason": state.mirror.reason},
@@ -93,14 +96,21 @@ def unavailable_reason(app: FastAPI, key: str) -> str | None:
 
 
 def feature_rows(app: FastAPI) -> list[dict[str, Any]]:
-    """Every block, in order: ``{key, label, summary, enabled, available, reason}``."""
-    off = app.state.config.features_off
+    """Every block, in order: ``{key, label, summary, enabled, opt_in, available, reason}``.
+
+    An opt-in block that is on also carries ``detail`` (the last publish outcome),
+    ``attention`` and ``pending``: an enabled switch never reads as success on its own."""
+    config = app.state.config
     rows: list[dict[str, Any]] = []
     for f in FEATURES:
+        enabled = f.key not in config.features_off if f.default_on else f.key in config.features_on
         # A block that is off is not asked: the answer would touch its service.
-        reason = None if f.key in off else unavailable_reason(app, f.key)
-        rows.append({
-            "key": f.key, "label": f.label, "summary": f.summary,
-            "enabled": f.key not in off, "available": reason is None, "reason": reason,
-        })
+        reason = unavailable_reason(app, f.key) if enabled else None
+        row: dict[str, Any] = {
+            "key": f.key, "label": f.label, "summary": f.summary, "enabled": enabled,
+            "opt_in": not f.default_on, "available": reason is None, "reason": reason,
+        }
+        if f.key == PUBLISH_ADDRESS and enabled and reason is None:
+            row.update(app.state.publisher.row_fields())
+        rows.append(row)
     return rows

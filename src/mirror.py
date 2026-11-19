@@ -104,10 +104,11 @@ from pathlib import Path
 from typing import Any
 
 from src import tasks_repo as repo
-from src.config import AppConfig, resolve_placeholders, unresolved_placeholders
+from src.config import AppConfig
 from src.dates import DateParseError, IntervalError, parse_date, parse_interval
 from src.db import DB_PATH_ENV, connect
 from src.mirror_format import FILE_RE, MirrorParseError, ParsedFile, file_name, parse_file, render
+from src.placeholders import resolve_placeholders, unresolved_placeholders
 from src.runtime import files as runtime_files
 
 logger = logging.getLogger(__name__)

@@ -36,11 +36,25 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from urllib.parse import quote
 
-from src.config import resolve_placeholders, unresolved_placeholders
-
 OPENER_SCHEME = "taskos"
 _TOKEN_START = "{"
+_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
 _LEADING_TOKEN_RE = re.compile(r"^\{([A-Za-z0-9_:.-]+)\}(?:/(.*))?$")
+
+
+def resolve_placeholders(value: str, placeholders: Mapping[str, str]) -> str:
+    """Expand ``{onedrive}``-style tokens from ``config.placeholders``.
+
+    Unknown tokens are left verbatim so the caller can see (and report) what
+    is missing — see :func:`unresolved_placeholders`. Used for the mirror /
+    backup dirs and for every folder ref.
+    """
+    return _PLACEHOLDER_RE.sub(lambda m: str(placeholders.get(m.group(1), m.group(0))), value or "")
+
+
+def unresolved_placeholders(value: str) -> list[str]:
+    """The ``{tokens}`` still present after :func:`resolve_placeholders`."""
+    return _PLACEHOLDER_RE.findall(value or "")
 
 
 def normalize_path(path: str) -> str:

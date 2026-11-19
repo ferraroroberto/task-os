@@ -69,7 +69,7 @@ function rowEl(f, onToggle) {
   meta.append(state);
   text.append(title, meta);
   const sw = switchEl(f.enabled, { label: f.label, onToggle: onToggle });
-  // dynamic-id-exempt: the id is the block key, a fixed set of six
+  // dynamic-id-exempt: the id is the block key, a fixed set of seven
   sw.dataset.track = 'settings.feature-' + f.key;
   row.append(text, sw);
   return row;
@@ -86,6 +86,12 @@ function paintState(row, f) {
   if (!f.enabled) {
     state.textContent = 'Off on this machine';
     delete state.dataset.tone;
+  } else if (f.available && f.detail) {
+    // An opt-in block that is on: the last outcome, never a bare "on".
+    state.textContent = f.detail;
+    if (f.attention) state.dataset.tone = 'attention';
+    else delete state.dataset.tone;
+    if (f.attention) row.dataset.state = 'unavailable';
   } else if (!f.available) {
     state.textContent = 'On, unavailable here: ' + f.reason;
     state.dataset.tone = 'attention';
@@ -117,6 +123,7 @@ export function mountFeatures(ctx) {
   syncEmptyGroups(ctx.els.pane);
 
   let busy = false;
+  let pollsLeft = 0;
   let current = [];
 
   function paint(features) {
@@ -127,13 +134,20 @@ export function mountFeatures(ctx) {
       list.appendChild(row);
       paintState(row, f);
     });
-    setFeaturesOff(features.filter(function (f) { return !f.enabled; }).map(function (f) { return f.key; }));
+    // The page attribute names the blocks whose screens hide; an opt-in block owns none.
+    setFeaturesOff(features.filter(function (f) { return !f.enabled && !f.opt_in; }).map(function (f) { return f.key; }));
+    // A first publish still in flight is read again a few times, then left as it says.
+    if (pollsLeft > 0 && features.some(function (f) { return f.pending; })) {
+      pollsLeft -= 1;
+      setTimeout(refresh, 1500);
+    }
     syncEmptyGroups(ctx.els.pane);
   }
 
   async function toggle(f, next) {
     if (busy) return;
     busy = true;
+    pollsLeft = 6;
     note.textContent = '';
     try {
       const res = await api('/api/features/' + f.key, { method: 'PUT', body: { enabled: next } });
@@ -141,7 +155,9 @@ export function mountFeatures(ctx) {
       // The rows were redrawn: keep the keyboard where it was.
       const again = list.querySelector('[data-feature-key="' + f.key + '"] .toggle');
       if (again) again.focus({ preventScroll: true });
-      note.textContent = f.label + (next ? ' is on.' : ' is off: its screens are hidden and its background work has stopped.');
+      note.textContent = f.label + (next ? ' is on.' : f.opt_in
+        ? ' is off: the shared file is left as it is.'
+        : ' is off: its screens are hidden and its background work has stopped.');
       ctx.opts.onFeatures(f.key, next);
     } catch (err) {
       note.textContent = err.message || 'Could not save the switch';

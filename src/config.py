@@ -18,15 +18,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from src import password
-from src.features import features_block, off_keys
+from src.features import features_block, off_keys, on_keys
 from src.runtime import files as runtime_files
+from src.sharing.settings import NetworkSharingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -41,24 +40,6 @@ DEFAULT_PORT = 8448
 #: when ``search.folder_explorer_url`` is absent; an explicit blank turns search off.
 DEFAULT_FOLDER_EXPLORER_URL = "https://127.0.0.1:8453"
 SERVERS = ("hypercorn", "uvicorn")
-
-_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_:.-]+)\}")
-
-
-def resolve_placeholders(value: str, placeholders: Mapping[str, str]) -> str:
-    """Expand ``{onedrive}``-style tokens from ``config.placeholders``.
-
-    Unknown tokens are left verbatim so the caller can see (and report) what
-    is missing — see :func:`unresolved_placeholders`. Used for the mirror /
-    backup dirs here; folder refs go through ``src.placeholders`` (Step 9),
-    which builds on this.
-    """
-    return _PLACEHOLDER_RE.sub(lambda m: str(placeholders.get(m.group(1), m.group(0))), value or "")
-
-
-def unresolved_placeholders(value: str) -> list[str]:
-    """The ``{tokens}`` still present after :func:`resolve_placeholders`."""
-    return _PLACEHOLDER_RE.findall(value or "")
 
 
 @dataclass(frozen=True)
@@ -416,6 +397,8 @@ class AppConfig:
     # no one else is named. Blank = the first team member, else none.
     your_name: str = ""
     features_off: frozenset[str] = frozenset()
+    features_on: frozenset[str] = frozenset()
+    network_sharing: NetworkSharingConfig = field(default_factory=NetworkSharingConfig)
     source_path: Path | None = None
 
     @property
@@ -514,7 +497,7 @@ def _flatten_placeholders(raw: dict[str, Any]) -> dict[str, str]:
 
     A nested map becomes ``<group>:<name>`` keys (``sharepoint:docs``), which
     is exactly the token spelled inside a folder ref (``{sharepoint:docs}``),
-    so :func:`resolve_placeholders` needs no special case. Scalars stay as
+    so ``src.placeholders.resolve_placeholders`` needs no special case. Scalars stay as
     they are.
     """
     flat: dict[str, str] = {}
@@ -758,6 +741,8 @@ def load_config(path: Path | None = None) -> AppConfig:
         people=people,
         your_name=str(raw.get("your_name", "") or "").strip(),
         features_off=off_keys(raw.get("features")),
+        features_on=on_keys(raw.get("features")),
+        network_sharing=NetworkSharingConfig.from_raw(raw.get("network_sharing")),
         source_path=src,
     )
 
@@ -873,13 +858,14 @@ def save_your_name(name: str, *, path: Path | None = None) -> Path:
     return _write_secret_config(target, raw)
 
 
-def save_features(off: frozenset[str], *, path: Path | None = None) -> Path:
-    """Write the ``features`` block (only the switched-off blocks, as ``false``) into the
-    **real** config, as :func:`save_your_name` does; all on removes the key."""
+def save_features(off: frozenset[str], *, on: frozenset[str] = frozenset(), path: Path | None = None) -> Path:
+    """Write the ``features`` block (the switched-off blocks as ``false``, the opted-in
+    ones as ``true``) into the **real** config, as :func:`save_your_name` does; every
+    block at its default removes the key."""
     target, raw = _read_for_secret_write(path)
     raw.pop("features", None)
-    if off:
-        raw["features"] = features_block(off)
+    if block := features_block(off, on):
+        raw["features"] = block
     return _write_secret_config(target, raw)
 
 

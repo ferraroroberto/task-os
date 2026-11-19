@@ -7,7 +7,9 @@ the page where it leaves it (Settings open, every block off, or every block back
 
 from __future__ import annotations
 
-from playwright.sync_api import Page, expect
+import re
+
+from playwright.sync_api import Locator, Page, expect
 
 _FEATURES_GROUP = "#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']"
 
@@ -41,3 +43,24 @@ def assert_group_labels_back(page: Page) -> None:
     """Every block on again: Sync and Email are back with their labels."""
     for el in (*_group(page, "Sync"), *_group(page, "Email")):
         expect(el).to_be_visible()
+
+
+def assert_default_feature_rows(group: Locator) -> None:
+    """Seven rows; every block is on by default but the opt-in one, which writes outside this install."""
+    expect(group.locator(".settings-feature")).to_have_count(7)
+    expect(group.locator(".toggle[aria-checked='true']")).to_have_count(6)
+    publish = group.locator("[data-feature-key='publish_address']")
+    expect(publish.locator(".toggle")).to_have_attribute("aria-checked", "false")
+    expect(publish.locator(".settings-feature-state")).to_have_text("Off on this machine")
+
+
+def walk_opt_in_row(page: Page, group: Locator) -> None:
+    """Opting in with no file configured says so on the row, never a bare "on", and owns no
+    screen: the page's off list is untouched either way. Switched off again at the end."""
+    publish = group.locator("[data-feature-key='publish_address']")
+    publish.locator(".toggle").tap()
+    expect(publish.locator(".settings-feature-state")).to_have_text(
+        "On, unavailable here: network_sharing.host_ip_file is blank — no file to publish to")
+    expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
+    publish.locator(".toggle").tap()
+    expect(publish.locator(".settings-feature-state")).to_have_text("Off on this machine")
