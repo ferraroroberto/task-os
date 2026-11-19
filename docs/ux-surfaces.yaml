@@ -407,7 +407,9 @@ surfaces:
     holds:
       - >-
         on one line, and nothing under it: the live **text filter** (placeholder carries the
-        count, *Filter 12 tasks…*), the **filter button** (carries how many filters are on; its
+        count, *Filter 12 tasks…*; on Today and Board the status filter sits inside it as removable
+        **status pills**, a *Todo* pill by default, each a chip with a × that widens the search),
+        the **filter button** (carries how many filters are on; its
         name spells them), **+**, and on a wide screen **Select** (on a phone Select is a row of the filter sheet, and the strip shows it only while Select mode is on, as **Done**). Today, Board and the Done journal carry it; Search carries its own box and the
         filter button inside it.
     links:
@@ -429,8 +431,9 @@ surfaces:
         ticks (including `done` and `cancelled`), **project**, **person** ticks, **due window**,
         **modified window** (including *untouched over 30/60/90 days*, the stale pass), **Clear**
         (only while something is on), **Done**. On Search the status ticks are drawn with the open
-        statuses ticked, and un-ticking them all means every status; on Today and Board no ticks means
-        open tasks until the text field holds a query, then every status, named at the end of the header line.
+        statuses ticked, and un-ticking them all means every status; on Today and Board the status ticks are drawn with
+        Todo ticked and are the strip's status pills (one state): none ticked means every status
+        for a typed query, named at the end of the header line.
     does:
       - >-
         applies live; the state is the URL. The filter button's count adds the kind of task and

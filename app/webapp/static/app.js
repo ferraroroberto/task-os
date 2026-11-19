@@ -53,7 +53,7 @@ import { mountBulkBar } from './bulkbar.js';
 import { createDrawer } from './drawer.js';
 import {
   filtersFromSearch, filtersToSearch, listParams, matchesScope, showsClosed,
-  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose,
+  mountFilters, ownerOf, showsAssignees, storedRecentOwners, storedWhose, TODO_ONLY,
 } from './filters.js';
 import { todayISO } from './format.js';
 import { mountKeys } from './keys.js';
@@ -337,7 +337,9 @@ async function loadItems(seq) {
   // No view reads a description off the list (the drawer fetches its own task).
   const slim = { descriptions: false };
   const calls = [api('/api/tasks' + qs(Object.assign({}, params, slim)))];
-  if (!showsClosed(f)) {
+  // Done-today rides along only while no text narrows the list: a typed search
+  // covers the pills' statuses, never a finished task they leave out.
+  if (!showsClosed(f) && !f.q.trim()) {
     calls.push(api('/api/tasks' + qs(Object.assign({}, params, slim, { status: ['done'], done_on: todayISO() }))));
   }
   const results = await Promise.all(calls);
@@ -448,7 +450,7 @@ function renderFilters() {
           // closed task — only project · person · text apply
           ? { onChange: onFilterChange, textHost: pair[1], hide: JOURNAL_HIDES, countLabel: 'closed' }
           : pair[0] === 'search' ? { onChange: onFilterChange, buttonHost: els.searchBox, searchStatus: true }
-            : { onChange: onFilterChange, textHost: pair[1], views: views[pair[0]] });
+            : { onChange: onFilterChange, textHost: pair[1], views: views[pair[0]], searchStatus: true, statusDefaults: TODO_ONLY });
       }
       const opts = pair[0] === 'search' ? { projects: state.projects, people: state.people }
         : pair[0] === 'journal' ? { projects: state.projects, people: state.people, count: state.journal.items.length }

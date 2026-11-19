@@ -230,7 +230,9 @@ def _quick_add_create(page: Page, base: str, shots: Path, quick_add, qa, friday:
     # the todo filter hides a standby task — clear to see it, as a user would
     open_filter_sheet(page, "paneBoard").locator(".filter-clear").click()
     expect(page).to_have_url(f"{base}/")
-    expect(page.locator("#filterSheet .filter-checks[data-name='status'] input:checked")).to_have_count(0)
+    # Clear is the resting filter: the sheet draws only Todo ticked (the strip's Todo pill), nothing counted
+    expect(page.locator("#filterSheet .filter-checks[data-name='status'] input:checked")).to_have_count(1)
+    expect(page.locator("#filterSheet .filter-checks[data-name='status'] input[value='todo']")).to_be_checked()
     close_filter_sheet(page)
     expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
     new_row = _trow(page, "renew passport", "#paneBoard .board-status section.board-col[data-col='standby']")

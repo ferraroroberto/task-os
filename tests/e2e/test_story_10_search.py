@@ -26,6 +26,8 @@ validation record links to:
     docs/screenshots/story-10-search-5-desktop.png   Ctrl+K: > commands (dark)
     docs/screenshots/story-10-search-6-phone.png     phone: results
     docs/screenshots/story-10-search-7-phone.png     phone: the palette sheet
+    docs/screenshots/story-10-search-10-phone.png    phone: Today's search field with its Todo pill (light)
+    docs/screenshots/story-10-search-11-phone.png    phone: the same, widened to every status (dark)
 
 A shot number is the step it belongs to, so the set skips 3: that step used
 to be "New task on a folder hit", which #48 removed along with the per-hit
@@ -404,10 +406,11 @@ def _cleared_status_searches_every_task(base: str, p: Page) -> None:
     # done tasks too
     p.locator("#searchInput").fill("gift")
     expect(_task_hit(p, "Buy a birthday gift")).to_have_attribute("data-status", "done")
-    # Today lists open tasks, with no filter count, until its own search field has text: then
-    # the cleared status ticks mean every status there too, and the header line says so
+    # Today shares the state: its Todo pill is gone and the button counts the widening. Its list is
+    # still the open tasks until its own search field has text; then every status, said in the header
     p.click("nav.tabs .tab[data-tab='today']")
-    expect(p.locator("#paneToday .filter-open .filter-count")).to_be_hidden()
+    expect(p.locator("#todayFilterText .filter-pill")).to_have_count(0)
+    expect(p.locator("#paneToday .filter-open .filter-count")).to_have_text("1")
     bikes_row = p.locator("#paneToday .trow", has_text="Sell the old bikes")
     expect(bikes_row).to_have_count(0)
     p.locator("#todayFilterText .filter-q").fill("bikes")
@@ -421,6 +424,85 @@ def _cleared_status_searches_every_task(base: str, p: Page) -> None:
     open_filter_sheet(p, "paneSearch").get_by_role("button", name="Clear").click()
     close_filter_sheet(p)
     expect(p.locator("#searchMeta")).to_have_text("0 hits · open only")
+
+
+def _on_one_line(page: Page, pane: str) -> None:
+    """The pane's strip is one line: field, filter button and + share a row, inside the screen (#789)."""
+    boxes = [page.locator(f"#{pane} {sel}").bounding_box() for sel in (".filter-field", ".filter-open", ".quick-add-btn")]
+    field, button, plus = boxes
+    assert field and button and plus, boxes
+    centres = [b["y"] + b["height"] / 2 for b in boxes]
+    assert max(centres) - min(centres) < 6, f"the strip wrapped onto two lines: {boxes}"
+    assert plus["x"] + plus["width"] <= PHONE["width"] and field["x"] >= 0, boxes
+    assert field["x"] + field["width"] <= button["x"] + 1, f"the field runs under the filter button: {boxes}"
+    widths = page.evaluate("({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth})")
+    assert widths["scroll"] <= widths["client"], f"the page scrolls sideways: {widths}"
+
+
+def _status_pills_in_the_search_field(base: str, browser: Browser, shots: Path) -> None:
+    """#789: Today and Board open with a Todo pill in the search field; × widens the search; the sheet and the pills are one state."""
+    for title, status in (("Pillprobe todo", "todo"), ("Pillprobe inbox", "inbox"), ("Pillprobe done", "done")):
+        _task_post(base, {"title": title, "status": status})
+    light = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="light")
+    dark = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="dark")
+    try:
+        _pill_walk(base, shots, light.new_page(), "light")
+        _pill_walk(base, shots, dark.new_page(), "dark")
+    finally:
+        light.close()
+        dark.close()
+
+
+def _pill_walk(base: str, shots: Path, p: Page, scheme: str) -> None:
+    """One theme's phone walk of the status pills (a fresh context, so the default state)."""
+    p.goto(base + "/")
+    assert p.evaluate("document.documentElement.dataset.theme") == scheme
+    pill = p.locator("#todayFilterText .filter-pill")
+    rows = p.locator("#paneToday .trow", has=p.locator(".trow-title", has_text="Pillprobe"))
+    # default: one Todo pill; the strip stays one line; nothing is filtered yet (no count on the button)
+    expect(pill).to_have_count(1)
+    expect(pill).to_have_text("Todo")
+    expect(p.locator("#paneToday .filter-open .filter-count")).to_be_hidden()
+    _on_one_line(p, "paneToday")
+    p.click("nav.tabs .tab[data-tab='board']")
+    expect(p.locator("#boardFilterText .filter-pill")).to_have_text("Todo")
+    _on_one_line(p, "paneBoard")
+    p.click("nav.tabs .tab[data-tab='today']")
+    # a search covers the to-do tasks only, and the header line says so
+    p.locator("#todayFilterText .filter-q").fill("pillprobe")
+    expect(rows).to_have_count(1)
+    expect(rows.first).to_contain_text("Pillprobe todo")
+    expect(p.locator("#homeHeadStatus")).to_contain_text("todo")
+    if scheme == "light":
+        shot(p, shots / "story-10-search-10-phone.png")
+    # × on the last pill: every status
+    pill.click()
+    expect(pill).to_have_count(0)
+    expect(rows).to_have_count(3)
+    expect(p.locator("#homeHeadStatus")).to_contain_text("every status")
+    expect(p.locator("#paneToday .filter-open .filter-count")).to_have_text("1")
+    _on_one_line(p, "paneToday")
+    if scheme == "dark":
+        shot(p, shots / "story-10-search-11-phone.png")
+    # the sheet draws the pills' state: nothing ticked; ticking Todo brings the resting pill back
+    sheet = open_filter_sheet(p, "paneToday")
+    status = sheet.locator(".filter-checks[data-name='status']")
+    expect(status.locator("input:checked")).to_have_count(0)
+    status.locator("input[value='todo']").check()
+    status.locator("input[value='done']").check()
+    close_filter_sheet(p)
+    expect(pill).to_have_count(2)
+    expect(rows).to_have_count(2)                              # Pillprobe todo + Pillprobe done
+    # × on one of several drops only that status, and un-ticks it in the sheet
+    p.locator("#todayFilterText .filter-pill[data-status='done']").click()
+    expect(pill).to_have_count(1)
+    expect(pill).to_have_text("Todo")
+    expect(rows).to_have_count(1)
+    status = open_filter_sheet(p, "paneToday").locator(".filter-checks[data-name='status']")
+    expect(status.locator("input:checked")).to_have_count(1)
+    expect(status.locator("input[value='todo']")).to_be_checked()
+    expect(status.locator("input[value='done']")).not_to_be_checked()
+    close_filter_sheet(p)
 
 
 def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: Path) -> None:
@@ -443,3 +525,4 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     drawer = _open_hits_from_the_results(page, base, shots, box, kitchen_hit)
     p, phone = _palette_and_commands(page, ctx, browser, base, shots, drawer, g)
     _long_hits_and_everyone(base, inst, p, phone)
+    _status_pills_in_the_search_field(base, browser, shots)

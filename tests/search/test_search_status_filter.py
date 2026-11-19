@@ -108,21 +108,42 @@ def _f(q: str = "", status: list[str] | None = None, every: bool = False) -> dic
     return {"status": status or [], "everyStatus": every, "person": [], "project": "", "due": "", "q": q, "updated": ""}
 
 
-def test_a_typed_query_with_no_status_ticked_reads_every_status_on_today_and_board() -> None:
+def test_a_typed_query_reads_the_todo_tasks_until_the_pill_is_removed() -> None:
     out = _today_board([["listParams", [_f("bikes"), None]], ["listParams", [_f(""), None]],
                         ["listParams", [_f("bikes", ["done"]), None]], ["listParams", [_f("bikes", ["deferred"]), None]],
-                        ["listParams", [_f("   "), None]]])
-    assert [o.get("include_closed") for o in out] == [True, None, None, True, None]
-    assert out[2]["status"] == ["done"]
+                        ["listParams", [_f("   "), None]], ["listParams", [_f("bikes", every=True), None]]])
+    assert [o.get("status") for o in out] == [["todo"], None, ["done"], ["deferred", "todo"], None, None]
+    assert [o.get("include_closed") for o in out] == [None, None, None, None, None, True]
 
 
-def test_the_working_lists_show_closed_tasks_only_for_a_picked_status_or_a_query() -> None:
+def test_the_working_lists_show_closed_tasks_only_for_a_picked_status_or_every_status() -> None:
     out = _today_board([["showsClosed", [_f("")]], ["showsClosed", [_f("x")]], ["showsClosed", [_f("", ["todo"])]],
-                        ["showsClosed", [_f("x", ["todo"])]]])
-    assert out == [False, True, True, True]
+                        ["showsClosed", [_f("x", ["todo"])]], ["showsClosed", [_f("x", every=True)]],
+                        ["showsClosed", [_f("", every=True)]]])
+    assert out == [False, False, True, True, True, False]
 
 
-def test_the_coverage_words_follow_a_query_on_today_and_board() -> None:
-    out = _today_board([["statusCoverage", [_f("x")]], ["statusCoverage", [_f("")]],
-                        ["statusCoverage", [_f("x", ["cancelled"])]]])
-    assert out == ["every status", "open only", "cancelled"]
+def test_the_coverage_words_follow_the_pills_on_today_and_board() -> None:
+    out = _today_board([["statusCoverage", [_f("x"), "todo"]], ["statusCoverage", [_f("x", every=True), "todo"]],
+                        ["statusCoverage", [_f("x", ["cancelled"]), "todo"]], ["statusCoverage", [_f("x")]]])
+    assert out == ["todo", "every status", "cancelled", "open only"]
+
+
+def test_the_pills_are_the_todo_default_until_the_filter_is_touched() -> None:
+    out = _today_board([["searchStatusTicks", [_f(), ["todo"]]], ["searchStatusTicks", [_f(every=True), ["todo"]]],
+                        ["searchStatusTicks", [_f(status=["inbox", "done"]), ["todo"]]],
+                        ["searchStatusTicks", [_f(status=["blocked"]), ["todo"]]]])
+    assert out == [["todo"], [], ["inbox", "done"], ["blocked", "todo"]]
+
+
+def test_removing_pills_widens_one_status_at_a_time() -> None:
+    out = _today_board([["searchStatusPatch", [[], ["todo"]]], ["searchStatusPatch", [["todo"], ["todo"]]],
+                        ["searchStatusPatch", [["todo", "done"], ["todo"]]], ["searchStatusPatch", [["done"], ["todo"]]],
+                        ["searchStatusPatch", [["blocked"], ["todo"]]]])
+    assert out == [
+        {"status": [], "everyStatus": True},
+        {"status": [], "everyStatus": False},
+        {"status": ["todo", "done"], "everyStatus": False},
+        {"status": ["done"], "everyStatus": False},
+        {"status": ["blocked"], "everyStatus": True},
+    ]
