@@ -53,23 +53,23 @@ function rowKey(row, glyph, label, key) {
  * @param {*} value          the current value
  * @param {(v:*) => string} name
  * @param {(v:*) => void} onPick
- * @param {{key?: string, low?: boolean}} [o]
+ * @param {{track: string, key?: string, low?: boolean}} o  `track` the row's usage id
  */
 function menuRow(ctx, field, glyph, label, values, value, name, onPick, o) {
   const row = document.createElement('button');
   row.type = 'button';
-  row.className = 'prop-row prop-pick' + (o && o.low ? ' prop-low' : '');
+  row.className = 'prop-row prop-pick' + (o.low ? ' prop-low' : '');
   row.dataset.field = field;
   row.dataset.value = value == null ? '' : String(value);
-  row.dataset.track = 'drawer.prop-' + field;
-  rowKey(row, glyph, label, o && o.key);
+  row.dataset.track = o.track;
+  rowKey(row, glyph, label, o.key);
   const v = document.createElement('span');
   v.className = 'prop-val';
   v.textContent = name(value);
   row.appendChild(v);
   row.insertAdjacentHTML('beforeend', icon('chevron-down'));
   row.setAttribute('aria-label', label + ': ' + name(value));
-  if (o && o.key) row.setAttribute('aria-keyshortcuts', o.key);
+  if (o.key) row.setAttribute('aria-keyshortcuts', o.key);
   const same = function (a) { return String(a == null ? '' : a) === String(value == null ? '' : value); };
   propMenu.attach('prop-' + field, row, values.map(function (x) {
     return {
@@ -218,7 +218,8 @@ export function propsSection(ctx, t) {
   if (members.length > 1) {
     list.appendChild(menuRow(ctx, 'owner', 'user', 'Owner', members.map(function (m) { return m.id; }), t.owner,
       function (id) { return memberName(ctx, id); },
-      function (id) { ctx.patch({ owner: id }); }));
+      function (id) { ctx.patch({ owner: id }); },
+      { track: 'drawer.prop-owner' }));
   }
   const people = ctx.opts.people() || [];
   list.appendChild(menuRow(ctx, 'person_id', 'user', 'Person', [null].concat(people.map(function (p) { return p.id; })), t.person_id,
@@ -226,7 +227,8 @@ export function propsSection(ctx, t) {
       const p = people.find(function (x) { return x.id === id; });
       return p ? p.name : '—';
     },
-    function (id) { ctx.patch({ person_id: id }); }));
+    function (id) { ctx.patch({ person_id: id }); },
+    { track: 'drawer.prop-person' }));
   const parent = document.createElement('button');
   parent.type = 'button';
   parent.className = 'prop-row prop-pick';
@@ -245,12 +247,13 @@ export function propsSection(ctx, t) {
   list.appendChild(parent);
   list.appendChild(menuRow(ctx, 'recurrence', 'repeat', 'Repeat', RECURRENCES, t.recurrence || '',
     function (v) { return v || 'never'; },
-    function (v) { ctx.patch({ recurrence: v || null }); }));
+    function (v) { ctx.patch({ recurrence: v || null }); },
+    { track: 'drawer.prop-repeat' }));
   repeatDetail(ctx, t).forEach(function (row) { list.appendChild(row); });
   list.appendChild(menuRow(ctx, 'priority', 'activity', 'Priority', PRIORITIES.slice().reverse(), t.priority || 'none',
     function (v) { return v.charAt(0).toUpperCase() + v.slice(1); },
     function (v) { ctx.patch({ priority: v }); },
-    { key: 'P', low: true }));
+    { track: 'drawer.prop-priority', key: 'P', low: true }));
   propMenu.endRender();
   wrap.appendChild(list);
   if (ctx.linksEditing) {

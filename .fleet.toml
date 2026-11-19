@@ -234,6 +234,7 @@ builders = [
   "app/webapp/static/js/archive/actions.js:verbButton",
   "app/webapp/static/js/archive/actions.js:actionButton",
   "app/webapp/static/js/drawer/dom.js:formButton",
+  "app/webapp/static/js/drawer/props.js:menuRow",
 ]
 
 # [ux_surface_ratchet] -- scripts/ux_surface_ratchet.py fails when the web app's HTML or JS gains a
