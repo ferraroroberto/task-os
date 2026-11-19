@@ -30,7 +30,7 @@
 
 import { icon } from './_vendored/icons/icons.js';
 import {
-  STATUSES, blockedLabel, breadcrumbText, fmtDay, isBlocked, isDeferred, relDue, startsLabel, toneChip,
+  blockedLabel, breadcrumbText, fmtDay, isBlocked, isDeferred, relDue, startsLabel, toneChip,
 } from './format.js';
 import { recurrenceLabel } from './recurrence.js';
 
@@ -94,25 +94,6 @@ export function sortBoardItems(items, sort) {
 export function sortLabel(sort) {
   const s = SORTS.find(function (x) { return x[0] === sort; });
   return s ? s[1] : 'due date';
-}
-
-// --------------------------------------------------------- status select
-/**
- * The status options for a task: the plain statuses, plus a `complete`
- * pseudo-action spliced in right before `done` when the task recurs — never
- * a persisted status, just a trigger for the roll-forward
- * `POST /tasks/{id}/done`. `done` itself always means closed for good, for
- * a recurring task too.
- * @param {object} t
- * @returns {Array<[string,string]>} [value, label]
- */
-export function statusOptions(t) {
-  const opts = [];
-  STATUSES.forEach(function (s) {
-    if (s === 'done' && t.recurrence) opts.push(['complete', 'complete']);
-    opts.push([s, s]);
-  });
-  return opts;
 }
 
 // ------------------------------------------------------------------- row

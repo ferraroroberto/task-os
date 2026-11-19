@@ -74,9 +74,9 @@ export async function patchTask(app, id, changes) {
   if (app.drawer.currentId() === id) app.drawer.refresh();
 }
 
-/** The row's status select (and the drawer's). Completing goes through the
+/** The drawer's status segment and the row menu's statuses. Completing goes through the
  *  one action runner — the same write, toast and Undo as the `e` key:
- *  "complete" (recurring tasks only — see rows.js::statusOptions) rolls the
+ *  "complete" (the roll-forward a recurring task's Done sends) rolls the
  *  due one cadence forward instead of closing, and "done" on a task that does
  *  not recur is the same close. "done" on a recurring task stays a plain
  *  PATCH — closed for good, off the series — as does every other

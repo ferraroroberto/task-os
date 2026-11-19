@@ -9,6 +9,7 @@ disposable instances stay in `conftest.py`.
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 from datetime import date
 
@@ -248,50 +249,80 @@ def assert_control_boundaries(scope: Locator) -> list[float]:
     return [f["ratio"] for f in found]
 
 
-#: The date sheet's re-date phrases, push-outs first (#391) — snooze.js DUE_OPTIONS.
+#: The date chips, nearest first — snooze.js DUE_OPTIONS.
 DUE_SHEET = [
-    ("tomorrow", "Tomorrow"), ("this friday", "This Friday"), ("this weekend", "This weekend"),
-    ("next week", "Next week"), ("upcoming monday", "Next Monday"), ("end of month", "End of month"),
-    ("today", "Today"),
+    ("today", "Today"), ("tomorrow", "Tomorrow"), ("this friday", "This Fri"), ("this weekend", "Weekend"),
+    ("next week", "Next week"), ("upcoming monday", "Next Mon"), ("end of month", "Month end"),
 ]
 
 
 def assert_date_sheet(menu: Locator, base: str) -> None:
-    """The re-date sheet lists its phrases push-outs first, each beside the
-    date the server resolves it to today (#391) — the date a pick writes."""
+    """The date chips (the row's date sheet and the drawer's Due block are one
+    grid): each phrase over the date the server resolves it to today — the date
+    a pick writes — then Pick…, four across."""
     phrases = ",".join(p for p, _ in DUE_SHEET)
     resolved = _get(base, "/api/dates?phrases=" + urllib.parse.quote(phrases))["dates"]
     days = [date.fromisoformat(resolved[p]) for p, _ in DUE_SHEET]
     opts = menu.locator(".snooze-opt[data-phrase]")
     expect(opts.locator(".snooze-opt-label")).to_have_text([label for _, label in DUE_SHEET])
     expect(opts.locator(".snooze-opt-date")).to_have_text([f"{d:%a} {d.day} {d:%b}" for d in days])
+    chips = menu.locator(".date-chips > .date-chip")
+    expect(chips).to_have_count(len(DUE_SHEET) + 1)
+    tops = [round(chips.nth(i).bounding_box()["y"]) for i in range(len(DUE_SHEET) + 1)]
+    assert len(set(tops)) == 2 and tops[:4] == [tops[0]] * 4, f"the chips are not a 4 x 2 grid: {tops}"
+    cut = opts.locator(".snooze-opt-label").evaluate_all(
+        "els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    assert not cut, f"chip labels cut short: {cut}"
 
 
-def assert_on_crumb_line(drawer: Locator, *, may_wrap: bool = False) -> None:
-    """The drawer head's parent tools sit on the breadcrumb's line (#486), inside
-    the drawer, clear of the crumbs. `may_wrap`: a phone, where a long trail
-    pushes the tools under it — still clear of the crumbs and still inside."""
-    crumbs = drawer.locator(".drawer-crumbs").bounding_box()
-    box = drawer.bounding_box()
-    tools = drawer.locator(".drawer-parent-tools button")
-    assert crumbs and box and tools.count(), (crumbs, box)
-    first = tools.first.bounding_box()
-    for i in range(tools.count()):
-        b = tools.nth(i).bounding_box()
-        assert b["x"] >= box["x"] - 0.5 and b["x"] + b["width"] <= box["x"] + box["width"] + 0.5, (i, b, box)
-    same_line = abs((first["y"] + first["height"] / 2) - (crumbs["y"] + crumbs["height"] / 2)) <= 4
-    beside = first["x"] >= crumbs["x"] + crumbs["width"] - 0.5
-    below = first["y"] >= crumbs["y"] + crumbs["height"] - 0.5
-    assert (same_line and beside) or (may_wrap and below), ("crumbs", crumbs, "tools", first)
+def assert_crumb_trail(drawer: Locator) -> None:
+    """The breadcrumb is one button on the head's line, inside the drawer, and
+    it is the parent picker's: its name says so."""
+    crumbs = drawer.locator(".drawer-crumbs")
+    expect(crumbs).to_have_attribute("aria-label", re.compile(r"^Change parent of "))
+    b, box = crumbs.bounding_box(), drawer.bounding_box()
+    close = drawer.locator(".drawer-close").bounding_box()
+    assert b and box and close
+    assert b["x"] >= box["x"] - 0.5 and b["x"] + b["width"] <= close["x"] + 0.5, (b, close)
+    assert abs((b["y"] + b["height"] / 2) - (close["y"] + close["height"] / 2)) <= 4, (b, close)
+
+
+def open_links_editor(drawer: Locator) -> Locator:
+    """Unfold the folder and link editors under the drawer's Links row and
+    return them; on a drawer that already shows them this only checks."""
+    toggle = drawer.locator(".prop-links-edit")
+    if toggle.get_attribute("aria-expanded") != "true":
+        toggle.click()
+    editor = drawer.locator(".drawer-links-editor")
+    expect(editor).to_be_visible()
+    return editor
+
+
+def pick_prop(page: Page, drawer: Locator, field: str, label: str) -> None:
+    """Set a property-list row (Owner, Person, Repeat, Priority) through its
+    row menu: the row, then the value's item."""
+    drawer.locator(f".prop-row[data-field='{field}']").click()
+    page.locator(".prop-menu .row-menu-item", has_text=re.compile(rf"^{re.escape(label)}$")).click()
+
+
+def open_activity(drawer: Locator) -> Locator:
+    """Unfold the drawer's **Activity** and return the disclosure; it stays
+    open for the page's life, so on a page that opened it this only checks."""
+    activity = drawer.locator("details.drawer-activity")
+    expect(activity).to_be_attached()
+    if activity.get_attribute("open") is None:
+        activity.locator("summary").first.click()
+    expect(activity).to_have_attribute("open", "")
+    return activity
 
 
 def open_more_fields(drawer: Locator) -> Locator:
-    """Open the drawer's **More fields** (#394) and return the disclosure.
+    """Open the drawer's **More fields** and return the disclosure.
 
-    The rare fields and the editors (starts, repeat, person, code,
-    folder, link editor, blockers, children, issue panel) live there, closed
-    by default. It stays open for the page's life once opened, so on a page
-    that already opened it this only checks; a fresh load closes it again.
+    The rare fields and editors (starts, code, blockers, children, the issue
+    panel) live there, closed by default. It stays open for the page's life
+    once opened, so on a page that already opened it this only checks; a
+    fresh load closes it again.
     """
     more = drawer.locator("details.drawer-more")
     expect(more).to_be_attached()

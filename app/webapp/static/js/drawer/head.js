@@ -1,75 +1,93 @@
-/* task-os — the drawer's head: breadcrumb, parent tools, close, and the
- * editable title row. */
+/* task-os — the drawer's head: the breadcrumb (which is the parent control),
+ * the Inbox tag, the task menu, close, and the editable title. */
 
 'use strict';
 
 import { icon } from '../../_vendored/icons/icons.js';
-import { openParentPicker } from '../../parentpick.js';
+import { createRowMenu } from '../../_vendored/row-menu/row-menu.js';
+import { CLOSED_STATUSES, Status } from '../tasks/status.js';
+import { deleteCurrent } from './foot.js';
+import { pickParent } from './props.js';
 
-/** The breadcrumb trail, one button per ancestor, or "top level". */
+// One menu for the head's ⋯: only one drawer is ever open.
+const taskMenu = createRowMenu({ className: 'drawer-task-menu' });
+
+/** The breadcrumb as one button: where the task lives is where the owner
+ *  looks to move it, so a tap on the trail opens the parent picker. Each
+ *  ancestor stays its own span, so the trail still reads as the path. */
 function breadcrumbs(ctx, t) {
-  const crumbs = document.createElement('nav');
-  crumbs.className = 'drawer-crumbs';
-  crumbs.setAttribute('aria-label', 'Breadcrumb');
+  const crumbs = document.createElement('button');
+  crumbs.type = 'button';
+  crumbs.dataset.track = 'drawer.parent-change';
+  crumbs.className = 'drawer-crumbs drawer-change-parent';
+  crumbs.setAttribute('aria-label', 'Change parent of ' + t.title);
+  crumbs.title = 'Change parent';
+  crumbs.insertAdjacentHTML('beforeend', icon('corner-down-right'));
+  const trail = document.createElement('span');
+  trail.className = 'crumb-trail';
   (t.breadcrumb || []).forEach(function (c, i) {
     if (i) {
       const sep = document.createElement('span');
       sep.className = 'crumb-sep';
       sep.textContent = '›';
-      crumbs.appendChild(sep);
+      trail.appendChild(sep);
     }
-    const b = document.createElement('button');
-    b.dataset.track = 'drawer.crumb';
-    b.type = 'button';
-    b.className = 'crumb';
-    b.textContent = c.title;
-    b.addEventListener('click', function () { ctx.opts.onOpen(c.id); });
-    crumbs.appendChild(b);
+    const s = document.createElement('span');
+    s.className = 'crumb';
+    s.textContent = c.title;
+    trail.appendChild(s);
   });
   if (!(t.breadcrumb || []).length) {
     const top = document.createElement('span');
     top.className = 'crumb crumb-root';
-    top.textContent = 'top level';
-    crumbs.appendChild(top);
+    top.textContent = 'Top level';
+    trail.appendChild(top);
   }
+  crumbs.appendChild(trail);
+  crumbs.insertAdjacentHTML('beforeend', icon('chevron-down'));
+  crumbs.addEventListener('click', function () { pickParent(ctx, t); });
   return crumbs;
 }
 
-/** Parent tools: the breadcrumb is where the owner looks for the
- *  parent, so they sit on its line and wrap under it when it is long. */
-function parentTools(ctx, t) {
-  const opts = ctx.opts;
-  const tools = document.createElement('div');
-  tools.className = 'drawer-parent-tools';
-  const change = document.createElement('button');
-  change.dataset.track = 'drawer.parent-change';
-  change.type = 'button';
-  change.className = 'button-ghost drawer-change-parent';
-  change.setAttribute('aria-label', 'Change parent of ' + t.title);
-  change.innerHTML = icon('corner-down-right') + '<span>Change parent</span>';
-  change.addEventListener('click', function () {
-    openParentPicker(t, opts.parentTargets ? opts.parentTargets(t.id) : [], function (parentId) {
-      opts.onMove(t.id, parentId);   // toasts + refreshes; a cycle comes back as a toast
-    });
-  });
-  tools.appendChild(change);
-  if (t.parent_id != null) {
-    const remove = document.createElement('button');
-    remove.dataset.track = 'drawer.parent-remove';
-    remove.type = 'button';
-    remove.className = 'button-ghost drawer-remove-parent';
-    remove.setAttribute('aria-label', 'Remove parent of ' + t.title);
-    remove.innerHTML = icon('x') + '<span>Remove parent</span>';
-    remove.addEventListener('click', function () { opts.onMove(t.id, null); });
-    tools.appendChild(remove);
-  }
-  return tools;
+/** The ⋯ menu: what the drawer does to the task as a whole. Its header names
+ *  the task's code, which no longer takes a line of its own. */
+function taskMenuButton(ctx, t) {
+  const more = document.createElement('button');
+  more.dataset.track = 'drawer.task-more';
+  more.type = 'button';
+  more.className = 'icon-button drawer-task-more';
+  more.setAttribute('aria-label', 'Task actions');
+  more.innerHTML = icon('ellipsis');
+  const parent = (t.breadcrumb || []).slice(-1)[0];
+  const closed = CLOSED_STATUSES.indexOf(t.status) >= 0;
+  taskMenu.attach('task-' + t.id, more, [
+    { label: parent ? 'Open ' + parent.title : 'Open parent', glyph: 'corner-down-right',
+      hidden: !parent, dataset: { action: 'open-parent', track: 'drawer.crumb' },
+      onTap: function () { if (parent) ctx.opts.onOpen(parent.id); } },
+    // Done rolls a recurring task to its next date; this closes it for good.
+    { label: 'Done, end the series', glyph: 'circle-check',
+      hidden: !t.recurrence || closed, dataset: { action: 'end-series', track: 'drawer.end-series' },
+      onTap: function () { ctx.setStatus(Status.DONE, { endSeries: true }); } },
+    { label: 'Delete task', glyph: 'trash-2', danger: true,
+      dataset: { action: 'delete', track: 'drawer.delete' },
+      onTap: function () { deleteCurrent(ctx, t); } },
+  ], { header: t.code || ('#' + t.id) });
+  taskMenu.endRender();
+  return more;
 }
 
 export function renderHead(ctx, t) {
   const head = document.createElement('div');
   head.className = 'drawer-head';
-  const crumbs = breadcrumbs(ctx, t);
+  head.appendChild(breadcrumbs(ctx, t));
+  // Inbox is not a segment (it is where a task waits to be filed, not a
+  // state to pick), so an Inbox task says so here, with no segment raised.
+  if (t.status === Status.INBOX) {
+    const tag = document.createElement('span');
+    tag.className = 'chip drawer-inbox-tag';
+    tag.textContent = 'Inbox';
+    head.appendChild(tag);
+  }
   const close = document.createElement('button');
   close.dataset.track = 'drawer.close';
   close.type = 'button';
@@ -77,19 +95,13 @@ export function renderHead(ctx, t) {
   close.setAttribute('aria-label', 'Close');
   close.innerHTML = icon('x');
   close.addEventListener('click', function () { ctx.opts.onClose(); });
-  const trail = document.createElement('div');
-  trail.className = 'drawer-trail';
-  trail.append(crumbs, parentTools(ctx, t));
-  head.append(trail, close);
+  head.append(taskMenuButton(ctx, t), close);
   return head;
 }
 
 export function renderTitleRow(ctx, t) {
   const titleRow = document.createElement('div');
   titleRow.className = 'drawer-title-row';
-  const code = document.createElement('span');
-  code.className = 'drawer-code';
-  code.textContent = t.code || ('#' + t.id);
   // A textarea, not an input: a long title wraps to 2–3 lines instead of
   // clipping off-screen on the phone. Enter still commits (below),
   // never a newline; the height follows the content.
@@ -114,7 +126,7 @@ export function renderTitleRow(ctx, t) {
     if (v && v !== t.title) ctx.patch({ title: v });
     else title.value = t.title;
   });
-  titleRow.append(code, title);
+  titleRow.appendChild(title);
   if (t.is_project) {
     const chip = document.createElement('span');
     chip.className = 'chip chip-project';

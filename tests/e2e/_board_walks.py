@@ -117,13 +117,22 @@ def _keys_row_actions(page: Page, base: str, shots: Path) -> int:
     assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
     page.fill("#boardFilterText input", "")
 
-    # 19. …and while the drawer is open, which owns the keyboard.
-    _card(page, "Write README").locator(".trow-main").click()
-    expect(page.locator("#taskDrawer")).to_be_visible()
+    # 19. With a task open in the drawer, the keys act on that task: `1` sends
+    #     it to Inbox (the head says so, no segment raised), `2` files it back.
+    readme = _card(page, "Write README")
+    readme_id = int(readme.get_attribute("data-id"))
+    readme.locator(".trow-main").click()
+    drawer = page.locator("#taskDrawer")
+    expect(drawer.locator("#drawerTitle")).to_have_value("Write README")
     page.keyboard.press("1")
+    expect(drawer.locator(".drawer-inbox-tag")).to_have_text("Inbox")
+    expect(drawer.locator(".drawer-status [aria-pressed='true']")).to_have_count(0)
+    assert _get(base, f"/api/tasks/{readme_id}")["status"] == "inbox"
+    page.keyboard.press("2")
+    expect(drawer.locator(".drawer-status [data-status='todo']")).to_have_attribute("aria-pressed", "true")
     page.keyboard.press("Escape")
-    expect(page.locator("#taskDrawer")).to_be_hidden()
-    assert _get(base, f"/api/tasks/{rid}")["status"] == "todo"
+    expect(drawer).to_be_hidden()
+    assert _get(base, f"/api/tasks/{readme_id}")["status"] == "todo"
     return rid
 
 
@@ -177,10 +186,14 @@ def _keys_set_search_and_help(page: Page, base: str, shots: Path, rid: int) -> N
     #     palette lists the same keys, which is where they are discovered.
     page.keyboard.press("?")
     expect(page.locator("#keysHelp")).to_be_visible()
-    # 8 keyed actions + the row menu's . + the drawer's E + Z + ?, then the five "getting around"
-    # keys; the keyless actions (reopen, cancelled) live in the row menu (#311)
-    expect(page.locator("#keysHelp .keys-rows").first.locator(".keys-row")).to_have_count(12)
-    expect(page.locator("#keysHelp .keys-rows").first).to_contain_text("Complete task")
+    # 8 keyed actions + the row menu's . + Z + ?, then the eight keys with a
+    # task open and the five "getting around" keys; the keyless actions
+    # (reopen, cancelled) live in the row menu (#311)
+    groups = page.locator("#keysHelp .keys-rows")
+    expect(groups.first.locator(".keys-row")).to_have_count(11)
+    expect(groups.first).to_contain_text("Complete task")
+    expect(page.locator("#keysHelp")).to_contain_text("With a task open")
+    expect(groups.nth(1).locator(".keys-row")).to_have_count(8)
     expect(page.locator("#keysHelp")).to_contain_text("Getting around")
     scroll_to_top(page, BOARD_COLUMNS)
     shot(page, shots / "story-16-keyboard-triage-3-desktop.png")
@@ -653,14 +666,14 @@ def _phone_select_and_owner(page: Page, base: str, shots: Path) -> None:
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-05-board-10-phone.png")
 
-    # 11b. #476 on the phone: the full-screen drawer's head carries the
-    #      Owner too, and a pick there hands the task over and holds.
+    # 11b. #476 on the phone: the full-screen drawer's property list carries
+    #      the Owner too, and a pick there hands the task over and holds.
     bar.locator(".bulk-exit").tap()                  # the bar holds the strip: its ✕ leaves
     expect(bar).to_be_hidden()
     picked = int(_col(page, "standby").locator(".trow").first.get_attribute("data-id"))
     current = _get(base, f"/api/tasks/{picked}")["owner"]
     _walk_drawer_owner(page, base, picked, "p1" if current == "p2" else "p2")
-    assert_min_target(page.locator("#taskDrawer select[data-field='owner']"))
+    assert_min_target(page.locator("#taskDrawer .prop-row[data-field='owner']"))
     assert_no_horizontal_overflow(page)
     shot(page, shots / "story-05-board-15-phone.png")
 

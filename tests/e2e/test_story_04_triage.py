@@ -71,7 +71,11 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
-from tests.e2e._drawer_key_steps import walk_drawer_e_opens_folder
+from tests.e2e._drawer_key_steps import (
+    walk_drawer_e_opens_folder,
+    walk_phone_drawer_rows,
+    walk_phone_drawer_top,
+)
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -820,7 +824,7 @@ def _phone_board_rows(page: Page, shots: Path, rows, watering) -> None:
     shot(page, shots / "story-04-triage-9-phone.png")
 
 
-def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
+def _phone_filter_sheet_and_drawer(page: Page, base: str, shots: Path):
     """The filter sheet, and the drawer as a full-screen sheet."""
     # (after the shot: the pill hides while a dialog is up, and a capture
     # right after one closes can catch the frosted bar mid-repaint)
@@ -870,24 +874,9 @@ def _phone_filter_sheet_and_drawer(page: Page, shots: Path):
     assert box and box["width"] >= PHONE["width"] - 1 and box["height"] >= PHONE["height"] - 1, box
     assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "hidden"
     assert_min_target(drawer.locator(".drawer-close"))
-    assert_min_target(drawer.locator(".field-control:visible"))
-    assert_min_target(drawer.locator(".comment-send"))
-    # the quick moves are two by two on the phone, each a whole target (#394)
-    assert_min_target(drawer.locator(".quick-move"))
-    assert_no_overlap(drawer.locator(".quick-move"))
-    # the composer keeps the Ctrl+Enter hint; Send is the vendored primary
-    # (48px) and Description's Edit the icon button, a whole target too.
-    expect(drawer.locator(".comment-input")).to_have_attribute(
-        "placeholder", "Add a comment… (Ctrl+Enter to send)")
-    send_box = drawer.locator(".comment-send").bounding_box()
-    assert send_box and abs(send_box["height"] - 48) <= 1, send_box
-    assert_min_target(drawer.locator(".drawer-tools .icon-button").first)
-    assert_no_horizontal_overflow(page)
+    walk_phone_drawer_top(page, base, drawer)
     shot(page, shots / "story-04-triage-10-phone.png")
-    # …and every field under More fields is a whole target too, once opened
-    open_more_fields(drawer)
-    assert_min_target(drawer.locator(".field-control"))
-    assert_no_horizontal_overflow(page)
+    walk_phone_drawer_rows(page, drawer)
     drawer.locator(".drawer-close").tap()
     expect(drawer).to_be_hidden()
     assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
@@ -947,13 +936,12 @@ def _phone_sleeping_marker(page: Page, context, base: str, shots: Path, drawer, 
     page.goto(f"{base}/#task/{review['id']}")
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
-    open_more_fields(drawer)
     every = drawer.locator("input[data-field='recurrence_interval']")
     expect(every).to_have_value("7")
     expect(every).to_have_attribute("inputmode", "numeric")
     expect(drawer.locator(".field-unit")).to_have_text("weeks")
     assert_min_target(every)
-    assert_no_overlap(drawer.locator("select[data-field='recurrence'], "
+    assert_no_overlap(drawer.locator(".prop-row[data-field='recurrence'], "
                                      "input[data-field='recurrence_interval'], "
                                      "select[data-field='recurrence_anchor']"))
     every.scroll_into_view_if_needed()
@@ -988,7 +976,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         # project in it, the ⋯ menu — no status select on the row since #311)
         watering = _trow(page, "Fix watering schedule drift", "#paneBoard")
         _phone_board_rows(page, shots, rows, watering)
-        drawer = _phone_filter_sheet_and_drawer(page, shots)
+        drawer = _phone_filter_sheet_and_drawer(page, base, shots)
         menu = _phone_snooze_target(page, base, shots)
         surface(page, "row.date")
         _phone_sleeping_marker(page, context, base, shots, drawer, menu)

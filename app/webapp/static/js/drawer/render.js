@@ -1,49 +1,39 @@
-/* task-os — one paint of the drawer body, top to bottom (the order is
- * explained in drawer.js). */
+/* task-os — one paint of the drawer body (the order is explained in
+ * drawer.js). The blocks are siblings in one grid, so the stylesheet can lay
+ * them out as one column (phone, the 440px panel) or as content beside
+ * properties (a wide drawer) without a second renderer. */
 
 'use strict';
 
-import { PRIORITIES, relDue } from '../../format.js';
 import { activitySection } from './activity.js';
-import { commentsSection } from './comments.js';
+import { commentComposer, commentsSection } from './comments.js';
 import { descriptionSection } from './description.js';
-import { dateField, memberName, quickMoves, selectField, statusField } from './fields.js';
-import { deleteFoot } from './foot.js';
+import { dueBlock, statusSegment } from './fields.js';
 import { renderHead, renderTitleRow } from './head.js';
-import { linkPills } from './links.js';
 import { moreSection } from './more.js';
+import { propsSection } from './props.js';
 
-/** Due first, with its quick moves, then status and priority (and owner). */
-function mainFields(ctx, t) {
-  const fields = document.createElement('div');
-  fields.className = 'drawer-fields drawer-fields-main';
-  fields.appendChild(dateField(ctx, t, 'due', 'Due', relDue(t.due).text));
-  fields.appendChild(quickMoves(ctx));
-  fields.appendChild(statusField(ctx, t));
-  fields.appendChild(selectField(ctx, 'Priority', 'priority', PRIORITIES, t.priority));
-  // Whose task it is — beside status and priority, never under More
-  // fields, so handing a task over is one pick on the phone too. One member
-  // has nobody to hand it to, so there is no control.
-  const members = ctx.opts.members() || [];
-  if (members.length > 1) {
-    fields.classList.add('has-owner');
-    fields.appendChild(selectField(ctx, 'Owner', 'owner', members.map(function (m) { return m.id; }), t.owner, function (id) { return memberName(ctx, id); }));
-  }
-  return fields;
-}
+/** The drawer is a full-screen sheet below this width (styles/drawer.css),
+ *  and there the comment field is pinned to its foot. */
+export const SHEET_QUERY = '(max-width: 1023px)';
 
 export function renderDrawer(ctx) {
   const t = ctx.current;
   ctx.el.innerHTML = '';
   if (!t) return;
-  ctx.el.append(
-    renderHead(ctx, t),
-    renderTitleRow(ctx, t),
-    mainFields(ctx, t),
-    linkPills(t),
+  const pinned = window.matchMedia(SHEET_QUERY).matches;
+  const body = document.createElement('div');
+  body.className = 'drawer-body';
+  body.append(
+    statusSegment(ctx, t),
+    dueBlock(ctx, t),
+    commentsSection(ctx, t, pinned),
+    propsSection(ctx, t),
     descriptionSection(ctx, t),
-    commentsSection(ctx, t),
-    activitySection(ctx, t),
     moreSection(ctx, t),
-    deleteFoot(ctx, t));
+    activitySection(ctx, t));
+  // Last in the grid, so `position: sticky` holds it to the sheet's foot.
+  if (pinned) body.appendChild(commentComposer(ctx, t, true));
+  ctx.el.classList.toggle('has-pinned-composer', pinned);
+  ctx.el.append(renderHead(ctx, t), renderTitleRow(ctx, t), body);
 }

@@ -17,10 +17,10 @@ export function section(name, title, iconName) {
   return s;
 }
 
-/** A sub-form's labelled button: Add link, Set folder, Add blocker, Add
- *  child, Create issue, Link, Send. The class is the caller's: the commits
- *  (Send, Add blocker, Add child, Add link) are the vendored `button-primary`,
- *  the rest utilities on `button-surface`. None is a submit button — the
+/** A sub-form's button: Add link, Set folder, Add blocker, Add child, Create
+ *  issue, Link, Send. The class is the caller's: Send is the drawer's one
+ *  vendored `button-primary`, the rest are utilities on `button-surface`, so
+ *  the drawer has a single primary. None is a submit button — the
  *  design measure reads every `button[type=submit]` as the view's primary
  *  and holds it to button-primary's 48px. The click and Enter in any of the form's inputs both submit
  *  the form, so its one submit handler stays the one write path; a disabled

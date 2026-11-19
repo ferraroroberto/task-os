@@ -49,6 +49,8 @@ The 1024px breakpoint (side panel, split, a list scrolling inside its own box) i
 | `d` | the date sheet (Move…) |
 | `p` | cycles priority |
 | `e` with a task open in the drawer | opens that task's folder (the same key folder-explorer uses); in a text field it types the letter |
+| `1` `2` `3` `t` `w` `p` with a task open | act on the open task, with Undo, as on a focused row |
+| `x` · `d` · `c` · `l` with a task open | Done (closes the drawer, with Undo) · the calendar · the comment field · the folder and link editors |
 | `z` | undo the last row action |
 | `.` or the menu key | the row menu |
 | `?` | the shortcuts sheet |
@@ -457,8 +459,8 @@ flowchart LR
 ### `row.date` Date sheet / popover
 
 - **Root:** `data-surface`
-- **Reach:** the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move, the drawer's quick moves.
-- **Holds:** **Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today**, each with the date it lands on, then **Pick a date…** (a native date field) and **No date**.
+- **Reach:** the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move. The drawer's Due block is the same chip grid.
+- **Holds:** one 4 × 2 grid of 44px chips, **Today · Tomorrow · This Fri · Weekend · Next week · Next Mon · Month end**, each over the date it lands on (the task's own day tinted), and **Pick…** (a native date field) as the eighth; **No date** as a row under the grid.
 - **Phone:** a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
 - **Desktop:** a popover next to the row.
 
@@ -474,10 +476,10 @@ flowchart LR
   s27["Task drawer"]
   s28["Head"]
   s29["Title"]
-  s30["Due + quick moves"]
-  s31["Status, Priority, Owner"]
+  s30["Due chips"]
+  s31["Status and the property list"]
   s32["Links"]
-  s33["Description"]
+  s33["Notes"]
   s34["Comments"]
   s35["Activity"]
   s36["Parent picker"]
@@ -510,8 +512,11 @@ flowchart LR
   s27 -->|"a block inside the drawer"| s38
   s27 -->|"a block inside the drawer"| s39
   s27 -->|"a block inside the drawer"| s34
-  s28 -->|"Change parent"| s36
+  s28 -->|"the breadcrumb"| s36
+  s28 -->|"···"| s39
+  s31 -->|"the Parent row"| s36
   s32 -->|"a folder or conversation chip"| s75
+  s32 -->|"Find in folder index"| s40
   s48 --> s27
   s49 --> s27
   s70 --> s40
@@ -521,21 +526,22 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** a row tap or Enter · menu *Open details* · `#task/<id>` · Today's auto-opened first task.
-- **Holds:** the blocks below, in order.
-- **Phone:** full-screen. Escape or **Close** closes it (then leaves Select mode).
-- **Desktop:** side panel or split pane;
+- **Holds:** the blocks below, in the order of the usual flow on a task: head, title, status, due chips, comments, the property list, notes, more fields, activity. With a task open the row keys act on it (see the keyboard map).
+- **Phone:** full-screen, one column, the comment field pinned to the foot. Escape or **Close** closes it (then leaves Select mode).
+- **Desktop:** side panel or split pane; one column, and from 720px of drawer width the content beside the property list. Each control shows its key, and a line under the property list lists them.
+- **Why:** the common edits take the fewest taps: status and the due moves are one tap, Owner, Person, Repeat and Priority two, a comment is always one tap away; Send is the only primary button.
 - **Leads to:**
   - [Parent picker](#drawerparent-picker-parent-picker)
   - [Folder picker](#folderpicker-folder-picker)
   - [Confirm dialog](#confirmdialog-confirm-dialog)
-  - [Status, Priority, Owner](#drawerfields-status-priority-owner) (a block inside the drawer)
-  - [Description](#drawerdescription-description) (a block inside the drawer)
+  - [Status and the property list](#drawerfields-status-and-the-property-list) (a block inside the drawer)
+  - [Notes](#drawerdescription-notes) (a block inside the drawer)
   - [Title](#drawertitle-title) (a block inside the drawer)
   - [Links](#drawerlinks-links) (a block inside the drawer)
   - [Activity](#draweractivity-activity) (a block inside the drawer)
   - [Head](#drawerhead-head) (a block inside the drawer)
   - [More fields](#drawermore-more-fields) (a block inside the drawer)
-  - [Due + quick moves](#drawerdue-due--quick-moves) (a block inside the drawer)
+  - [Due chips](#drawerdue-due-chips) (a block inside the drawer)
   - [Issue panel](#drawerissue-issue-panel) (a block inside the drawer)
   - [Delete task](#drawerdelete-delete-task) (a block inside the drawer)
   - [Comments](#drawercomments-comments) (a block inside the drawer)
@@ -543,54 +549,59 @@ flowchart LR
 ### `drawer.head` Head
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** breadcrumb (clickable), **Change parent** (opens [parent picker](#task-drawer)), **Remove parent** (only with a parent; no confirm, no Undo), **Close**, and the task's number.
-- **Leads to:** [Parent picker](#drawerparent-picker-parent-picker) (Change parent)
+- **Holds:** the breadcrumb as one button (opens the [parent picker](#task-drawer)), an *Inbox* tag on a task still in Inbox, **···** (*Open <parent>*; **Delete task** last after a divider; its header is the task's code) and **Close**.
+- **Leads to:**
+  - [Parent picker](#drawerparent-picker-parent-picker) (the breadcrumb)
+  - [Delete task](#drawerdelete-delete-task) (···)
 
 ### `drawer.title` Title
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** an editable field with a visible boundary.
+- **Holds:** an editable field in heading-md with a visible underline; Enter saves, Escape reverts.
 
-### `drawer.due` Due + quick moves
-
-- **Root:** none — a block inside the drawer panel.
-- **Holds:** a date field with a calendar button, then *Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today* with their dates. Due comes first because most edits push it out.
-
-### `drawer.fields` Status, Priority, Owner
+### `drawer.due` Due chips
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** native selects; Owner only with two or more members (an `owner old → new` activity row names who).
+- **Holds:** the date sheet's chip grid — *Today · Tomorrow · This Fri · Weekend · Next week · Next Mon · Month end · Pick…* — each over its date, the task's own day tinted. One tap moves the due date; `t`, `w` and `d` reach the same moves.
+
+### `drawer.fields` Status and the property list
+
+- **Root:** none — a block inside the drawer panel.
+- **Holds:** **Status** as a segmented control (*To do · Standby · Cancelled · Done*; an Inbox task raises none). **Done closes the drawer** with an Undo toast; a recurring task's Done rolls it. Then one inset group of 44px rows: **Links** (see below), **Due** typed in place (× clears it), **Owner** (only with two or more members; an `owner old → new` activity row names who), **Person**, **Parent** (the parent picker), **Repeat** (with *Every N* and the fixed day once there is a cadence) and, last and smaller, **Priority**. Owner, Person, Repeat and Priority each open a row menu of their values.
+- **Leads to:** [Parent picker](#drawerparent-picker-parent-picker) (the Parent row)
 
 ### `drawer.links` Links
 
-- **Root:** none — a block inside the drawer panel.
-- **Holds:** pills for the folder, the issue and every link; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy).
-- **Leads to:** [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) (a folder or conversation chip)
+- **Root:** none — a row of the drawer's property list.
+- **Holds:** pills for the folder, the issue and every link, each opening on one click; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy). **+** (or `l`) unfolds the **Folder** editor (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**) and the link editor (label edit, remove, **Add link**) under the group.
+- **Leads to:**
+  - [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) (a folder or conversation chip)
+  - [Folder picker](#folderpicker-folder-picker) (Find in folder index)
 
-### `drawer.description` Description
+### `drawer.description` Notes
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** markdown, a pencil toggles edit and preview.
+- **Holds:** the task's markdown description. A tap on the text edits it in place; leaving the field saves, Escape cancels.
 
 ### `drawer.comments` Comments
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** newest first, a composer (**Send**, Ctrl+Enter), then one compact row per comment: a time column (time today, *Yest.*, a short date), the text clamped to two lines (tap the row to open the rest), the author after the text only when it is somebody else, and one **···** menu with **Edit** (in place, Ctrl+Enter saves, Escape cancels) and **Delete** (asks first, no undo). A comment with exactly one web link is that link: its text opens the URL in a new window (the raw URL is not shown); a URL-only comment, several targets, a folder, an issue ref or an AI conversation keep chips.
+- **Holds:** newest first, the latest three then *Show N older*. The comment field and **Send** (the drawer's one primary button, Ctrl+Enter) head the list on a desktop (`c` focuses it) and are pinned to the sheet's foot on the phone. One compact row per comment: a time column (time today, *Yest.*, a short date), the text clamped to two lines (tap the row to open the rest), the author after the text only when it is somebody else, and one **···** menu with **Edit** (in place, Ctrl+Enter saves, Escape cancels) and **Delete** (asks first, no undo). A comment with exactly one web link is that link: its text opens the URL in a new window (the raw URL is not shown); a URL-only comment, several targets, a folder, an issue ref or an AI conversation keep chips.
 
 ### `drawer.activity` Activity
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** `field old → new · actor · time`; issue-sync rows fold behind *Show N sync updates*.
+- **Holds:** a disclosure closed by default, its count in the summary (*6 changes*), open or closed for the page's life: `field old → new · actor · time`; issue-sync rows fold behind *Show N sync updates*.
 
 ### `drawer.parent-picker` Parent picker
 
 - **Root:** `data-surface`
-- **Holds:** a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*) over every open task in tree order, indented, each with its path; the task itself, its descendants and closed tasks are not offered. Tap or Enter on the first match files it; a cycle is refused with a toast. The one way to re-parent.
+- **Holds:** a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*), then **Recent** (the parents this device used last) and **No parent (top level)**, hidden while a filter is typed, then every open task in tree order, indented, each with its path; the task itself, its descendants and closed tasks are not offered. Tap or Enter on the first match files it; No parent moves it to the top level (no confirm, no Undo); a cycle is refused with a toast. Reached from the breadcrumb or the Parent row; the one way to re-parent.
 
 ### `drawer.more` More fields
 
 - **Root:** none — a block inside the drawer panel.
-- **Holds:** a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder** (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**, which fills the field with the front File Explorer window's folder for you to save), **Edit links** (label edit, remove, **Add link**), **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
+- **Holds:** a disclosure closed by default whose summary names what is set (*starts in 3d · CODE-1 · 1 blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the only place the start date is edited), **Code**, **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the **Issue panel**.
 
 ### `drawer.issue` Issue panel
 
@@ -600,7 +611,7 @@ flowchart LR
 ### `drawer.delete` Delete task
 
 - **Root:** none — it opens [`confirm.dialog`](#overlay-catalog).
-- **Holds:** last and quiet. A confirm names the task and its subtree, says there is no trash and no undo, and for a synced task with an open issue warns the next sync recreates it. A toast says how much went.
+- **Holds:** the last item of the head's **···**, after a divider. A confirm names the task and its subtree, says there is no trash and no undo, and for a synced task with an open issue warns the next sync recreates it. A toast says how much went.
 
 ### `folder.picker` Folder picker
 
@@ -1105,19 +1116,22 @@ flowchart LR
 | [Task drawer](#drawerpanel-task-drawer) |  | [Parent picker](#drawerparent-picker-parent-picker) |
 | [Task drawer](#drawerpanel-task-drawer) |  | [Folder picker](#folderpicker-folder-picker) |
 | [Task drawer](#drawerpanel-task-drawer) |  | [Confirm dialog](#confirmdialog-confirm-dialog) |
-| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Status, Priority, Owner](#drawerfields-status-priority-owner) |
-| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Description](#drawerdescription-description) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Status and the property list](#drawerfields-status-and-the-property-list) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Notes](#drawerdescription-notes) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Title](#drawertitle-title) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Links](#drawerlinks-links) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Activity](#draweractivity-activity) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Head](#drawerhead-head) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [More fields](#drawermore-more-fields) |
-| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Due + quick moves](#drawerdue-due--quick-moves) |
+| [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Due chips](#drawerdue-due-chips) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Issue panel](#drawerissue-issue-panel) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Delete task](#drawerdelete-delete-task) |
 | [Task drawer](#drawerpanel-task-drawer) | a block inside the drawer | [Comments](#drawercomments-comments) |
-| [Head](#drawerhead-head) | Change parent | [Parent picker](#drawerparent-picker-parent-picker) |
+| [Head](#drawerhead-head) | the breadcrumb | [Parent picker](#drawerparent-picker-parent-picker) |
+| [Head](#drawerhead-head) | ··· | [Delete task](#drawerdelete-delete-task) |
+| [Status and the property list](#drawerfields-status-and-the-property-list) | the Parent row | [Parent picker](#drawerparent-picker-parent-picker) |
 | [Links](#drawerlinks-links) | a folder or conversation chip | [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) |
+| [Links](#drawerlinks-links) | Find in folder index | [Folder picker](#folderpicker-folder-picker) |
 | [Time](#timepane-time) |  | [Log](#timelog-log) |
 | [Time](#timepane-time) |  | [Totals](#timetotals-totals) |
 | [Time](#timepane-time) |  | [History](#timehistory-history) |

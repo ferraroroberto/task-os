@@ -57,7 +57,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
-from tests.e2e._ui import leave_settings, open_more_fields
+from tests.e2e._ui import leave_settings, open_links_editor
 from tests.e2e._uniform import (
     assert_code_off_canvas_subtle,
     assert_focus_ring,
@@ -209,7 +209,7 @@ def _drawer_folder_editor(page: Page, base: str, shots: Path, inst, kitchen):
     page.goto(base + "/#task/" + str(kitchen["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
-    open_more_fields(drawer)          # the Folder editor is under More fields (#394)
+    open_links_editor(drawer)         # the Folder editor unfolds under the Links row
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("href", "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen")
     # #74: the section is exactly TWO lines - [chip + delete] then
     # [ref + Change + Pick]. The resolved path is the chip's own tooltip, not a
@@ -389,7 +389,7 @@ def _ai_chip_from_the_board(page: Page, base: str, shots: Path, drawer, pop):
     page.goto(base + "/#task/" + str(watering["id"]))
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
-    open_more_fields(drawer)          # the link editor is under More fields (#394)
+    open_links_editor(drawer)         # the link editor unfolds under the Links row
     ai_row = drawer.locator(".link-row", has=page.locator("a.chip-ai"))
     expect(ai_row).to_have_count(1)
     expect(ai_row.locator("button.icon-button")).to_have_count(2)
@@ -405,7 +405,7 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     assert pill_style(ai_row.locator("a.chip-ai")) == folder_pill
     # pasting an AI conversation URL infers kind=ai — no manual kind anywhere
     drawer.locator(".link-form .input-native").first.fill("https://chatgpt.com/c/synthetic-e2e")
-    drawer.locator(".link-form .button-primary").click()
+    drawer.locator(".link-form .button-surface").click()
     expect(drawer.locator(".link-row a.chip-ai")).to_have_count(2)
     links = _get(base, f"/api/tasks/{watering['id']}/links")["items"]
     assert next(x for x in links if x["url"].startswith("https://chatgpt.com/"))["kind"] == "ai"
@@ -427,7 +427,7 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     p.goto(base + "/#task/" + str(kitchen["id"]))
     d = p.locator("#taskDrawer")
     expect(d).to_be_visible()
-    open_more_fields(d)
+    open_links_editor(d)
     # #357 on the phone: the glyph-only picker and every other icon button are
     # unshaded too, and the folder pill keeps the desktop's look
     assert_icon_buttons_uniform(p, "#taskDrawer", min_count=5)
@@ -461,6 +461,11 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     assert popup.url == ai_url, popup.url
     popup.close()
     expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
+    # The tapped chip keeps the pointer's hover and the focus for as long as the
+    # popup round-trip took, which a loaded box varies: take both off it first,
+    # so the shot never catches its underline.
+    p.mouse.move(0, 0)
+    p.evaluate("document.activeElement && document.activeElement.blur()")
     shot(p, shots / "story-11-ai-links-4-phone.png")
     phone.close()
 
