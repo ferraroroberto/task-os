@@ -25,7 +25,12 @@ GATE = REPO_ROOT / "scripts" / "verify-before-ship.ps1"
 BOX_LOCK = REPO_ROOT / "scripts" / "box_lock_gate.ps1"
 POWERSHELL = Path(os.environ.get("SystemRoot", "")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
 
-windows_only = pytest.mark.skipif(sys.platform != "win32", reason="the gate is a Windows PowerShell script")
+_not_windows = pytest.mark.skipif(sys.platform != "win32", reason="the gate is a Windows PowerShell script")
+
+
+def windows_only(test):
+    """Skip off Windows and carry the marker the Mac nightly deselects on."""
+    return pytest.mark.windows_only(_not_windows(test))
 
 
 def _verdict_block() -> str:
