@@ -79,7 +79,12 @@ from urllib.parse import quote
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
-from tests.e2e._features_steps import assert_empty_groups_follow_switches, assert_group_labels_back
+from tests.e2e._features_steps import (
+    assert_default_feature_rows,
+    assert_empty_groups_follow_switches,
+    assert_group_labels_back,
+    walk_opt_in_row,
+)
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -454,12 +459,13 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         expect(time_tab).to_be_visible()
         page.locator("#settingsBtn").tap()
         group = page.locator("#paneSettings .settings-group[aria-labelledby='settingsGroupFeatures']")
-        expect(group.locator(".settings-feature")).to_have_count(6)
-        expect(group.locator(".toggle[aria-checked='true']")).to_have_count(6)   # every block is on by default
+        assert_default_feature_rows(group)
         assert_min_target(group.locator(".toggle"))
         assert_no_horizontal_overflow(page)
         page.locator("#settingsGroupFeatures").scroll_into_view_if_needed()
         shot(page, shots / "story-07-phone-12-phone.png")
+
+        walk_opt_in_row(page, group)
 
         # Off: the tab, the Time Settings row and the routes go; nothing else does.
         switch = group.locator("[data-feature-key='time'] .toggle")

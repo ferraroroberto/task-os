@@ -140,6 +140,7 @@ from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
 from src.search import build_federated
 from src.search.folder_explorer import FolderExplorerClient
+from src.sharing.publisher import AddressPublisher
 from src.static_versioning import IMMUTABLE_CACHE_CONTROL, SHEET_BUNDLE_NAME
 from src.tasks_repo import RepoError
 from src.usage_log import usage_router
@@ -272,6 +273,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # finds the copy expired, and runs in one short-lived worker bounded by
     # `calendar.timeout_seconds`.
     app.state.calendar = CalendarService(config)
+    # A daemon thread per attempt, so a slow share never holds startup; off by default.
+    app.state.publisher = AddressPublisher(lambda: app.state.config)
     app.state.search = build_federated(
         config, folder_explorer=app.state.folder_explorer, issues=app.state.issues,
         switched_off=lambda kind: search_kind_off_reason(app.state.config.features_off, kind),
@@ -283,6 +286,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     repo.set_members([p.id for p in config.people])
     # Starts the pollers of every block that is on; a switched-off block's stay down.
     apply_features(app)
+    app.state.publisher.run()
     try:
         yield
     finally:

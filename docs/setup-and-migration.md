@@ -106,7 +106,7 @@ Stop the app on the old machine first (tray menu → Quit), so the database is c
 
 ## Available features
 
-Settings → Available features lists the coarse blocks of the app that sit on one source or primitive. Every block is on by default. Switching one off hides its screens, stops its background work and polling, and makes its backend routes answer `409 feature_off`; switching it on restores all three with no restart. A block that is on but has nothing to run on here (no address configured, the CLI missing) says why on its row instead of failing silently.
+Settings → Available features lists the coarse blocks of the app that sit on one source or primitive. Every block is on by default except one opt-in block (below). Switching one off hides its screens, stops its background work and polling, and makes its backend routes answer `409 feature_off`; switching it on restores all three with no restart. A block that is on but has nothing to run on here (no address configured, the CLI missing) says why on its row instead of failing silently.
 
 | Block | Covers |
 | --- | --- |
@@ -116,5 +116,15 @@ Settings → Available features lists the coarse blocks of the app that sit on o
 | Email and folders | Everything that reads through folder-explorer: the folders and emails groups of Search, the folder picker's search, the flagged-mail capture poller and Inbox archiving. |
 | Local AI | Everything that reads through the local model hub: voice quick-add, spoken-line enrichment and AI Inbox triage. |
 | Mirror and backups | The markdown mirror and its watcher, and the daily database copy. |
+| Publish host address | **Off by default.** Writes this PC's address to a shared-folder file at startup; see below. It owns no screen and no route. |
 
-The state is the `features` block of `config/config.json`, one `false` per switched-off block, so it is machine-local, gitignored and survives a restart. It is written by Settings only: a hand edit is read at startup. The app writes it only to a real `config.json`, never to the committed sample.
+The state is the `features` block of `config/config.json`, one `false` per switched-off block (and `true` for the opt-in block when it is on), so it is machine-local, gitignored and survives a restart. It is written by Settings only: a hand edit is read at startup. The app writes it only to a real `config.json`, never to the committed sample.
+
+### Publishing the host address
+
+Another computer can reach this install through a small launcher kept in a shared folder: the launcher reads the host's address from a text file next to it. The host's address changes from time to time, so the **Publish host address** switch keeps that file current. It only writes the file: no port is opened, no login or firewall rule changes, and the password and bearer gate stays the only way in.
+
+1. Set `network_sharing.host_ip_file` in `config\config.json` to the file's path (a UNC path, or a drive letter mapped to the share).
+2. Turn the switch on in Settings → Available features. It publishes once at once; after that, at every start, through both the tray and `webapp.bat`.
+
+The row shows the last outcome: *Published* (the address was written), *Unchanged* (the file already held it, and was left alone), *Unavailable* with the reason (a blank or unusable path, a file that is not on a share, an ambiguous route, a server that is this computer) or *Failed* with the reason (the share could not be read or written). Turning the switch off stops future writes and leaves the file as it is. There is no watcher: an address that changes while the app is running is published at the next start. A slow or missing share never delays startup: the write runs on its own thread.

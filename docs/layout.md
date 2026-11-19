@@ -52,6 +52,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           calendar_lane.py (the Today calendar lane: bounded ICS fetch, last good copy kept) · ics.py (just enough iCalendar
                           to say what is on today) · pooled_http.py (keep-alive outbound HTTP client, vendored verbatim)
                           imports/ (one-shot importers over an export file: sharepoint.py — `python -m src.imports.sharepoint`, `scripts\import_sharepoint.bat`)
+                          sharing/ (the host address, published to a shared-folder file: address.py — the source address of the route to the share's server · publisher.py — write only on change, last outcome, off-thread)
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md

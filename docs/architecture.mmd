@@ -33,7 +33,7 @@ flowchart LR
     archiver["routers/archive (#157)<br/>POST /api/archive/run {limit?} → 202<br/>GET /api/archive/runs · /runs/{id}<br/>POST /api/archive/items/{id}/revert|move|accept|retry<br/>move also files a needs_review mail (#159)<br/>retry re-sends a refused move, files on disk (#174)"]
     voicer["routers/voice (#92, #146)<br/>POST /api/transcribe → {text, parse}<br/>POST /api/transcribe?parse=0 → {text}<br/>(the rolling partial pass; raw audio body)"]
     timer["routers/time_tracker (#457)<br/>/api/time/meta · timers (start · switch · stop · discard)<br/>entries · entries.csv · recent · summary · guesses<br/>areas · categories (admin)<br/>hands it config.time.people — no rule here"]
-    featuresr["routers/features<br/>GET /api/features · PUT /api/features/{key}<br/>the machine-local switches: config.features → src/features.py (the six blocks)<br/>off = 409 feature_off on the block's routes · its pollers stopped (app/webapp/features.py) · its UI hidden (html data-features-off)"]
+    featuresr["routers/features<br/>GET /api/features · PUT /api/features/{key}<br/>the machine-local switches: config.features → src/features.py (the six blocks + the opt-in publish_address)<br/>off = 409 feature_off on the block's routes · its pollers stopped (app/webapp/features.py) · its UI hidden (html data-features-off)"]
     errors["JSON error envelope<br/>{error:{code,message,detail?}}"]
     lifespan["lifespan → Mirror.start() · BackupScheduler.start()<br/>· IssueSyncService.start()<br/>· EmailCaptureService.start()<br/>· build_federated() → app.state.search<br/>· repo.set_folder_resolver() · set_folder_web_resolver()"]
   end

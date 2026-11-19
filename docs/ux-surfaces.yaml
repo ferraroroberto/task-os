@@ -145,7 +145,7 @@ areas:
       | | **Folder opener** | on / not installed | the install command with **Copy command**, whether the opener is installed on this PC, and a disclosure *Uninstall · folder paths for each PC* with **Copy** |
       | | **Voice quick-add** | on / off | the transcription chain, its state and reason |
       | | **AI Inbox triage** | on / off | the local-AI state and reason, what triage sends and that suggestions stay staged |
-      | Available features | one switch per block (Time tracker · Calendar lane · Issue sync · Email and folders · Local AI · Mirror and backups) | on / off, or *on, unavailable here: reason* | a switch that applies at once, no reload; a block whose dependency is missing says why |
+      | Available features | one switch per block (Time tracker · Calendar lane · Issue sync · Email and folders · Local AI · Mirror and backups · Publish host address, off until opted in) | on / off, or *on, unavailable here: reason*; the opt-in row reads its last outcome (*Published* · *Unchanged* · *Unavailable* · *Failed*, with the reason) | a switch that applies at once, no reload; a block whose dependency is missing says why; turning the opt-in row on publishes once |
       | This install | **Your name** | the saved name or *not set* | a field and **Save name**; blank clears it, the line under it shows the name an unsigned write uses |
       | | **Database** | schema version | where config and data live, the schema version |
       | | **Mirror and backup** | off / on | what is exported and backed up, import conflicts with **Clear import conflicts** |
