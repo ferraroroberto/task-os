@@ -101,6 +101,31 @@ function optionButton(p, currentId, onChoose) {
   return b;
 }
 
+/** Recent: the parents this device filed tasks under last, then the top
+ *  level (when the task has a parent): the usual answers one tap away. */
+function recentGroup(targets, currentId, choose) {
+  const recent = document.createElement('div');
+  recent.className = 'parent-recent';
+  const label = document.createElement('div');
+  label.className = 'parent-group-label';
+  label.textContent = 'Recent';
+  const list = document.createElement('div');
+  list.className = 'parent-list parent-recent-list';
+  list.setAttribute('role', 'list');
+  readRecent().forEach(function (id) {
+    const p = targets.find(function (x) { return x.id === id; });
+    if (p) list.appendChild(optionButton({ id: p.id, title: p.title, path: p.path, depth: 0 }, currentId, choose));
+  });
+  if (currentId != null) {
+    const none = optionButton({ id: null, title: 'No parent (top level)', path: '', depth: 0 }, currentId, choose);
+    none.classList.add('parent-none');
+    list.appendChild(none);
+  }
+  recent.append(label, list);
+  recent.hidden = !list.childElementCount;
+  return recent;
+}
+
 /**
  * @param {{id:number, title:string, parent_id?:number|null}} t   the task being moved
  * @param {Array<{id:number, title:string, depth:number, path:string}>} targets  from parentTargets()
@@ -138,27 +163,8 @@ export function openParentPicker(t, targets, onPick) {
   const choose = function (id) { picked = id; dialog.close(); };
   const currentId = t.parent_id == null ? null : t.parent_id;
 
-  // Recent: the parents this device filed under last, then the top level —
-  // the usual answers one tap away. They hide while a filter is typed.
-  const recent = document.createElement('div');
-  recent.className = 'parent-recent';
-  const recentLabel = document.createElement('div');
-  recentLabel.className = 'parent-group-label';
-  recentLabel.textContent = 'Recent';
-  const recentList = document.createElement('div');
-  recentList.className = 'parent-list parent-recent-list';
-  recentList.setAttribute('role', 'list');
-  readRecent().forEach(function (id) {
-    const p = targets.find(function (x) { return x.id === id; });
-    if (p) recentList.appendChild(optionButton({ id: p.id, title: p.title, path: p.path, depth: 0 }, currentId, choose));
-  });
-  if (currentId != null) {
-    const none = optionButton({ id: null, title: 'No parent (top level)', path: '', depth: 0 }, currentId, choose);
-    none.classList.add('parent-none');
-    recentList.appendChild(none);
-  }
-  recent.append(recentLabel, recentList);
-  recent.hidden = !recentList.childElementCount;
+  const recent = recentGroup(targets, currentId, choose);
+  const recentList = recent.querySelector('.parent-recent-list');
   const allLabel = document.createElement('div');
   allLabel.className = 'parent-group-label';
   allLabel.textContent = 'All open tasks';

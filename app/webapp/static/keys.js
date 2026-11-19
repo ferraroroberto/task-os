@@ -249,6 +249,35 @@ function keyCommands(tgt, actions, perform, runUndo, openHelp) {
   }]);
 }
 
+// ---------------------------------------------------------- open task
+let openResolving = false;   // an open-task key's task is being looked up; a held key must not double-post
+
+/** A key while a task is open in the drawer: `e` its folder, the drawer's
+ *  own keys, then the row keys that write, as the row's action with its Undo
+ *  (the runner's refresh repaints the drawer). */
+async function openTaskKey(ev, handlers) {
+  const k = ev.key.toLowerCase();
+  if (k === 'e') { ev.preventDefault(); handlers.openFolder(); return; }
+  if (handlers.drawerKey(k)) { ev.preventDefault(); return; }
+  const action = ACTIONS.find(function (a) { return a.key === k && OPEN_TASK_ACTIONS[a.id]; });
+  if (!action) return;
+  ev.preventDefault();
+  const id = handlers.openTaskId();
+  if (id == null || openResolving || handlers.actions.isBusy()) return;
+  openResolving = true;
+  let task;
+  try {
+    task = await handlers.resolveTask(id);
+  } finally {
+    openResolving = false;
+  }
+  if (!task) {
+    toast('That task is no longer on the list', 'error');
+    return;
+  }
+  await handlers.actions.run(action, [task]);
+}
+
 // ---------------------------------------------------------------- mount
 /**
  * @param {HTMLDialogElement} helpDialog   the (empty) shortcuts sheet shell
@@ -313,25 +342,6 @@ export function mountKeys(helpDialog, handlers) {
     await actions.run(action, tasks, undefined, refocus(rec));
   }
 
-  /** A row key on the task open in the drawer: the same action and Undo as on
-   *  a focused row; the runner's refresh repaints the drawer. */
-  async function performOnOpenTask(action) {
-    const id = handlers.openTaskId();
-    if (id == null || resolving || actions.isBusy()) return;
-    resolving = true;
-    let task;
-    try {
-      task = await handlers.resolveTask(id);
-    } finally {
-      resolving = false;
-    }
-    if (!task) {
-      toast('That task is no longer on the list', 'error');
-      return;
-    }
-    await actions.run(action, [task]);
-  }
-
   function openHelp() {
     if (helpDialog.open) return;
     if (!helpDialog.firstElementChild) buildHelp(helpDialog);
@@ -360,14 +370,7 @@ export function mountKeys(helpDialog, handlers) {
     if (document.querySelector('dialog[open]')) return;   // the palette, quick-add
     if (ev.key === '?') { ev.preventDefault(); openHelp(); return; }
     if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); runUndo(); return; }
-    if (handlers.isBlocked()) {                           // the keys act on the open task
-      const k = ev.key.toLowerCase();
-      if (k === 'e') { ev.preventDefault(); handlers.openFolder(); return; }
-      if (handlers.drawerKey(k)) { ev.preventDefault(); return; }
-      const write = ACTIONS.find(function (a) { return a.key === k && OPEN_TASK_ACTIONS[a.id]; });
-      if (write) { ev.preventDefault(); performOnOpenTask(write); }
-      return;
-    }
+    if (handlers.isBlocked()) { openTaskKey(ev, handlers); return; }   // the keys act on the open task
     if (ev.key === '.') { openRowMenu(ev); return; }
     const action = ACTIONS.find(function (a) { return a.key === ev.key.toLowerCase(); });
     if (!action) return;

@@ -71,7 +71,11 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, expect
 
-from tests.e2e._drawer_key_steps import walk_drawer_e_opens_folder
+from tests.e2e._drawer_key_steps import (
+    walk_drawer_e_opens_folder,
+    walk_phone_drawer_rows,
+    walk_phone_drawer_top,
+)
 from tests.e2e._geometry import (
     assert_min_target,
     assert_no_horizontal_overflow,
@@ -870,41 +874,9 @@ def _phone_filter_sheet_and_drawer(page: Page, base: str, shots: Path):
     assert box and box["width"] >= PHONE["width"] - 1 and box["height"] >= PHONE["height"] - 1, box
     assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "hidden"
     assert_min_target(drawer.locator(".drawer-close"))
-    assert_min_target(drawer.locator(".drawer-crumbs"))
-    # Status is one segmented control, every segment a whole target; Due is the
-    # date sheet's chip grid, four across on the phone too, 44px chips
-    assert_min_target(drawer.locator(".drawer-status .segmented-item"))
-    assert_no_overlap(drawer.locator(".drawer-status .segmented-item"))
-    assert_date_sheet(drawer.locator(".drawer-due"), base)
-    assert_min_target(drawer.locator(".drawer-due .date-chip"))
-    assert_no_overlap(drawer.locator(".drawer-due .date-chip"))
-    # the comment field is pinned to the sheet's foot, one tap away before any
-    # scroll; Send, the one primary, sits at the field's own height
-    composer = drawer.locator(".comment-composer-pinned")
-    expect(composer).to_be_visible()
-    foot = composer.bounding_box()
-    assert foot and PHONE["height"] - 120 <= foot["y"] and foot["y"] + foot["height"] <= PHONE["height"] + 1, foot
-    expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Comment or paste a link…")
-    send_box = drawer.locator(".comment-send").bounding_box()
-    field_box = drawer.locator(".comment-input").bounding_box()
-    assert send_box and field_box and abs(send_box["height"] - 44) <= 1, send_box
-    expect(drawer.locator(".comment-send")).to_have_text(re.compile(r"Send"))
-    assert abs((send_box["y"] + send_box["height"]) - (field_box["y"] + field_box["height"])) <= 1, (send_box, field_box)
-    assert_min_target(drawer.locator(".comment-send"))
-    expect(drawer.locator(".button-primary")).to_have_count(1)
-    assert_no_horizontal_overflow(page)
+    walk_phone_drawer_top(page, base, drawer)
     shot(page, shots / "story-04-triage-10-phone.png")
-    # …the property rows are whole targets, still clear of the pinned field once
-    # scrolled to, and every field under More fields is a whole target too
-    rows = drawer.locator(".prop-list > .prop-row")
-    rows.last.scroll_into_view_if_needed()
-    assert_min_target(rows)
-    assert_no_overlap(drawer.locator(".prop-pick"))
-    last = rows.last.bounding_box()
-    assert last and last["y"] + last["height"] <= composer.bounding_box()["y"] + 0.5, (last, composer.bounding_box())
-    open_more_fields(drawer)
-    assert_min_target(drawer.locator(".field-control"))
-    assert_no_horizontal_overflow(page)
+    walk_phone_drawer_rows(page, drawer)
     drawer.locator(".drawer-close").tap()
     expect(drawer).to_be_hidden()
     assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"

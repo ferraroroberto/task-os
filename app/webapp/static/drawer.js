@@ -37,6 +37,7 @@
 
 import { api } from './api.js';
 import { toast } from './toast.js';
+import { handleKey, setStatus, toggleLinks } from './js/drawer/flow.js';
 import { SHEET_QUERY, renderDrawer } from './js/drawer/render.js';
 
 /** The task payload and who is looking. The author is read on every open and
@@ -46,6 +47,24 @@ import { SHEET_QUERY, renderDrawer } from './js/drawer/render.js';
 async function loadTask(id) {
   const [task, me] = await Promise.all([api('/api/tasks/' + id), api('/api/me').catch(function () { return null; })]);
   return { task: task, author: me && me.author ? me.author : null };
+}
+
+/** A fresh task starts with every piece of view state folded.
+ *
+ *  Why the drawer numbers its loads: one hash navigation fires `popstate`
+ *  *and* `hashchange`, so an open could run twice for one click and fetch
+ *  twice; the slower answer, read before an edit, then painted over the
+ *  edit's own refresh and showed a value the server had already changed. So
+ *  every load takes a number and only the newest renders, and `opening` (the
+ *  id an open is still fetching) drops the navigation's second arrival. */
+function resetView(ctx) {
+  ctx.descEditing = false;
+  ctx.pickerOpen = false;
+  ctx.editingLinkId = null;
+  ctx.editingCommentId = null;
+  ctx.syncShown = false;
+  ctx.linksEditing = false;
+  ctx.commentsAll = false;
 }
 
 /**
@@ -62,13 +81,8 @@ async function loadTask(id) {
  *          onSyncIssues: () => Promise<any>}} opts
  */
 export function createDrawer(el, opts) {
-  // Every load of the payload takes a number, and only the newest may render.
-  // One hash navigation fires `popstate` *and* `hashchange`, so
-  // `open()` used to run twice for one click and fetch twice: the slower
-  // answer, read before an edit, then painted over the edit's own refresh and
-  // the drawer showed the old value of a field the server had already
-  // changed. `opening` is the id an open is still fetching, so the second
-  // arrival of the same navigation is dropped outright.
+  // Only the newest load may render, and a second arrival of one navigation
+  // is dropped (resetView says why).
   let loads = 0;
   let opening = null;
 
@@ -87,40 +101,9 @@ export function createDrawer(el, opts) {
     render: function () { renderDrawer(ctx); },
     refresh: refresh,
     patch: patch,
-    setStatus: setStatus,
-    toggleLinks: toggleLinks,
+    setStatus: function (status, o) { return setStatus(ctx, status, o); },
+    toggleLinks: function () { toggleLinks(ctx); },
   };
-
-  /** A status segment (or its key). Done is the end of the owner's flow on a
-   *  task, so it closes the drawer; the action runner's toast offers Undo. A
-   *  recurring task's Done is the roll to its next date (`complete`), unless
-   *  `endSeries` closes it for good (the ⋯ menu). Every other status stays on
-   *  the open task.
-   *  @param {string} status
-   *  @param {{endSeries?: boolean}} [o] */
-  async function setStatus(status, o) {
-    const t = ctx.current;
-    if (!t || t.status === status) return;
-    const value = status === 'done' && t.recurrence && !(o && o.endSeries) ? 'complete' : status;
-    try {
-      await opts.onStatus(t.id, value);
-    } catch (_) {
-      return;   // the write already said why
-    }
-    if (status === 'done' && ctx.current && ctx.current.id === t.id) opts.onClose();
-  }
-
-  function toggleLinks() {
-    if (!ctx.current) return;
-    ctx.linksEditing = !ctx.linksEditing;
-    ctx.render();
-    if (ctx.linksEditing) {
-      const editor = el.querySelector('.drawer-links-editor');
-      if (editor) editor.scrollIntoView({ block: 'nearest' });
-      const first = el.querySelector('.drawer-links-editor input');
-      if (first) first.focus();
-    }
-  }
 
   // The comment field moves between the list and the sheet's foot as the
   // window crosses the sheet breakpoint.
@@ -156,13 +139,7 @@ export function createDrawer(el, opts) {
       if (opening === id) return;
       opening = id;
       const seq = ++loads;
-      ctx.descEditing = false;
-      ctx.pickerOpen = false;
-      ctx.editingLinkId = null;
-      ctx.editingCommentId = null;
-      ctx.syncShown = false;
-      ctx.linksEditing = false;
-      ctx.commentsAll = false;
+      resetView(ctx);
       try {
         const loaded = await loadTask(id);
         if (seq !== loads) return;   // a newer open, or a close, took over meanwhile
@@ -189,28 +166,6 @@ export function createDrawer(el, opts) {
     },
     refresh: refresh,
     currentId() { return ctx.current ? ctx.current.id : null; },
-    /**
-     * The drawer's own keys while a task is open: X done, C the comment field,
-     * L the folder and link editors, D the calendar. The row keys that write
-     * (1-3, T, W, P) go through keys.js's action runner instead, for the Undo.
-     * @param {string} key  lower-cased
-     * @returns {boolean} whether the key was the drawer's
-     */
-    handleKey(key) {
-      if (!ctx.current) return false;
-      if (key === 'x') { setStatus('done'); return true; }
-      if (key === 'l') { toggleLinks(); return true; }
-      if (key === 'c') {
-        const field = el.querySelector('.comment-input');
-        if (field) { field.focus(); field.scrollIntoView({ block: 'nearest' }); }
-        return true;
-      }
-      if (key === 'd') {
-        const pick = el.querySelector('.drawer-due .snooze-pick');
-        if (pick) pick.click();
-        return true;
-      }
-      return false;
-    },
+    handleKey(key) { return handleKey(ctx, key); },
   };
 }
