@@ -270,6 +270,9 @@ def assert_date_sheet(menu: Locator, base: str) -> None:
     expect(chips).to_have_count(len(DUE_SHEET) + 1)
     tops = [round(chips.nth(i).bounding_box()["y"]) for i in range(len(DUE_SHEET) + 1)]
     assert len(set(tops)) == 2 and tops[:4] == [tops[0]] * 4, f"the chips are not a 4 x 2 grid: {tops}"
+    cut = opts.locator(".snooze-opt-label").evaluate_all(
+        "els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    assert not cut, f"chip labels cut short: {cut}"
 
 
 def assert_crumb_trail(drawer: Locator) -> None:

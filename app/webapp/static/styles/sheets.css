@@ -383,6 +383,12 @@
 .snooze-opt.date-chip[aria-current] { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border-soft); }
 .date-chip[aria-current] .snooze-opt-label { color: var(--accent-text); }
 .date-sheet .snooze-opt.date-chip { font-size: var(--font-body-sm); }
+/* The phone's sheet is the narrowest home of the grid: the chips take the
+   card's width with a tighter gap and inset, so "Next week" and "Month end"
+   stay whole at 390px rather than ellipsize. */
+.date-card { padding-left: 12px; padding-right: 12px; }
+.date-sheet .date-chips { gap: var(--space-xs); }
+.date-sheet .snooze-opt.date-chip { padding-left: 2px; padding-right: 2px; }
 .snooze-menu > .date-chips { margin-bottom: var(--space-xs); }
 /* A shortcut key on a control: only where a keyboard is likely. */
 .key-hint {
