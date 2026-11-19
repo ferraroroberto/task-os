@@ -4,6 +4,8 @@
 
 'use strict';
 
+import { Status } from '../tasks/status.js';
+
 /** A status segment (or its key). Done is the end of the owner's flow on a
  *  task, so it closes the drawer; the action runner's toast offers Undo. A
  *  recurring task's Done is the roll to its next date (`complete`), unless
@@ -15,13 +17,13 @@
 export async function setStatus(ctx, status, o) {
   const t = ctx.current;
   if (!t || t.status === status) return;
-  const value = status === 'done' && t.recurrence && !(o && o.endSeries) ? 'complete' : status;
+  const value = status === Status.DONE && t.recurrence && !(o && o.endSeries) ? 'complete' : status;
   try {
     await ctx.opts.onStatus(t.id, value);
   } catch (_) {
     return;   // the write already said why
   }
-  if (status === 'done' && ctx.current && ctx.current.id === t.id) ctx.opts.onClose();
+  if (status === Status.DONE && ctx.current && ctx.current.id === t.id) ctx.opts.onClose();
 }
 
 /** Fold or unfold the folder and link editors under the Links row; unfolded,
@@ -47,7 +49,7 @@ export function toggleLinks(ctx) {
  */
 export function handleKey(ctx, key) {
   if (!ctx.current) return false;
-  if (key === 'x') { setStatus(ctx, 'done'); return true; }
+  if (key === 'x') { setStatus(ctx, Status.DONE); return true; }
   if (key === 'l') { toggleLinks(ctx); return true; }
   if (key === 'c') {
     const field = ctx.el.querySelector('.comment-input');

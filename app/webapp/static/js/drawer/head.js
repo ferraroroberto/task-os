@@ -5,6 +5,7 @@
 
 import { icon } from '../../_vendored/icons/icons.js';
 import { createRowMenu } from '../../_vendored/row-menu/row-menu.js';
+import { CLOSED_STATUSES, Status } from '../tasks/status.js';
 import { deleteCurrent } from './foot.js';
 import { pickParent } from './props.js';
 
@@ -58,7 +59,7 @@ function taskMenuButton(ctx, t) {
   more.setAttribute('aria-label', 'Task actions');
   more.innerHTML = icon('ellipsis');
   const parent = (t.breadcrumb || []).slice(-1)[0];
-  const closed = t.status === 'done' || t.status === 'cancelled';
+  const closed = CLOSED_STATUSES.indexOf(t.status) >= 0;
   taskMenu.attach('task-' + t.id, more, [
     { label: parent ? 'Open ' + parent.title : 'Open parent', glyph: 'corner-down-right',
       hidden: !parent, dataset: { action: 'open-parent', track: 'drawer.crumb' },
@@ -66,7 +67,7 @@ function taskMenuButton(ctx, t) {
     // Done rolls a recurring task to its next date; this closes it for good.
     { label: 'Done, end the series', glyph: 'circle-check',
       hidden: !t.recurrence || closed, dataset: { action: 'end-series', track: 'drawer.end-series' },
-      onTap: function () { ctx.setStatus('done', { endSeries: true }); } },
+      onTap: function () { ctx.setStatus(Status.DONE, { endSeries: true }); } },
     { label: 'Delete task', glyph: 'trash-2', danger: true,
       dataset: { action: 'delete', track: 'drawer.delete' },
       onTap: function () { deleteCurrent(ctx, t); } },
@@ -81,7 +82,7 @@ export function renderHead(ctx, t) {
   head.appendChild(breadcrumbs(ctx, t));
   // Inbox is not a segment (it is where a task waits to be filed, not a
   // state to pick), so an Inbox task says so here, with no segment raised.
-  if (t.status === 'inbox') {
+  if (t.status === Status.INBOX) {
     const tag = document.createElement('span');
     tag.className = 'chip drawer-inbox-tag';
     tag.textContent = 'Inbox';

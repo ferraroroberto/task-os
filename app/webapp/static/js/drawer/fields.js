@@ -10,6 +10,7 @@ import { icon } from '../../_vendored/icons/icons.js';
 import { duePicker } from '../../dueinput.js';
 import { intervalUnit } from '../../recurrence.js';
 import { DUE_OPTIONS, dateChips, keyHint } from '../../snooze.js';
+import { Status } from '../tasks/status.js';
 
 /** The statuses a task is moved between by hand, with the key each answers
  *  to while the task is open. Inbox is where a task waits to be filed, not a
@@ -17,10 +18,10 @@ import { DUE_OPTIONS, dateChips, keyHint } from '../../snooze.js';
  *  `1` key still sends one back); Cancelled is rare and has no key, so a stray
  *  key never closes a task. */
 const STATUS_SEGMENTS = [
-  ['todo', 'To do', '2'],
-  ['standby', 'Standby', '3'],
-  ['cancelled', 'Cancelled', null],
-  ['done', 'Done', 'X'],
+  [Status.TODO, 'To do', '2'],
+  [Status.STANDBY, 'Standby', '3'],
+  [Status.CANCELLED, 'Cancelled', null],
+  [Status.DONE, 'Done', 'X'],
 ];
 
 /** Status as the vendored segmented control: the raised segment is the
@@ -38,7 +39,7 @@ export function statusSegment(ctx, t) {
     b.dataset.track = 'drawer.status';
     b.dataset.status = s[0];
     b.setAttribute('aria-pressed', String(t.status === s[0]));
-    if (s[0] === 'done') b.innerHTML = icon('check');
+    if (s[0] === Status.DONE) b.innerHTML = icon('check');
     b.appendChild(document.createTextNode(s[1]));
     if (s[2]) {
       b.setAttribute('aria-keyshortcuts', s[2]);
