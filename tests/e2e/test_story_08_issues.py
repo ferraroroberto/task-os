@@ -33,6 +33,7 @@ from playwright.sync_api import Browser, Page, expect
 from tests.e2e._ui import (
     board_mode,
     leave_settings,
+    open_activity,
     open_more_fields,
     open_settings_sheet,
     press_in_sheet,
@@ -97,10 +98,10 @@ def _drawer_issue_panel(page: Page, shots: Path, sensor, todo_col):
     card.click()
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
-    expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
-    # the issue is one of the drawer's link pills (#394); its panel, with
-    # Unlink and the sync, is under More fields
+    # the issue is one of the Links row's pills; the code heads More fields'
+    # summary, and the panel, with Unlink and the sync, is under it
     expect(drawer.locator(".drawer-pill-row .chip-issue")).to_have_text("garden-bot#14")
+    expect(drawer.locator(".drawer-more-hint")).to_contain_text("garden-bot#14")
     open_more_fields(drawer)
     panel = drawer.locator(".drawer-issue")
     expect(panel.locator(".chip-issue")).to_have_text("garden-bot#14")
@@ -136,7 +137,7 @@ def _file_under_the_project(page: Page, base: str, shots: Path, drawer, sensor):
     moved = _get(base, f"/api/tasks/{sensor['id']}")
     assert moved["parent_id"] == bot_id and moved["activity"][0]["field"] == "parent"
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Side project: garden-bot"])
-    expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#14")
+    expect(drawer.locator(".drawer-more-hint")).to_contain_text("garden-bot#14")
     expect(row.locator(".trow-pill-project")).to_have_text("Side project: garden-bot")
     # one context name per row (#392): the project now, the code is the drawer's
     expect(row.locator(".trow-code")).to_have_count(0)
@@ -160,7 +161,8 @@ def _closed_issue_closes_the_task(page: Page, base: str, shots: Path, drawer, in
     page.goto(f"{base}/#task/{sensor['id']}")
     expect(drawer).to_be_visible()
     open_more_fields(drawer)
-    expect(drawer.locator(".drawer-fields select[data-field='status']")).to_have_value("done")
+    expect(drawer.locator(".drawer-status [data-status='done']")).to_have_attribute("aria-pressed", "true")
+    open_activity(drawer)
     expect(panel.locator(".issue-state")).to_have_text("closed")
     expect(panel.locator(".chip-issue-closed")).to_be_visible()
     # the sync's rows fold behind one toggle (#394, decision 7): the
@@ -201,7 +203,7 @@ def _create_issue_from_a_task(page: Page, base: str, shots: Path, drawer, inst, 
     expect(page.locator("#toast")).to_contain_text("Created example/garden-bot#15")
     expect(panel.locator(".chip-issue")).to_have_text("garden-bot#15")
     expect(panel.locator(".issue-state")).to_have_text("open")
-    expect(drawer.locator(".drawer-code")).to_have_text("garden-bot#15")
+    expect(drawer.locator(".drawer-more-hint")).to_contain_text("garden-bot#15")
     linked = _get(base, f"/api/tasks/{plain['id']}")
     assert linked["type"] == "coding" and linked["issue_ref"]["number"] == 15
     assert [link["kind"] for link in linked["links"]] == ["issue"]

@@ -4,26 +4,25 @@
  * list stays visible), a full-screen sheet on the phone. Deep-linkable as
  * #task/<id> (app.js owns the hash).
  *
- * Ordered by how often each part is used: most
- * edits are a due date pushed out, so Due comes first with its quick moves.
- * Top to bottom: breadcrumb → its parent tools (Change parent, and Remove
- * parent when there is one) → editable title → Due (the field, then the date
- * sheet's phrases as one-tap moves, push-outs first, each with its date) →
- * status and priority (and owner, with two or more members) → links as pills (the folder, the linked issue, every
- * link: open-only, the editors are under More fields) → description
- * (markdown, edit/preview) → comments newest-first with URLs as clickable
- * chips + composer (Ctrl+Enter sends, origin=ui) — each row carries a pencil
- * (edit the body in place; the author, time and origin stay) and a trash
- * (asks first) → activity log (field old → new · actor · time; the issue
- * sync's rows fold behind one toggle) → **More fields**, closed until opened
- * and then kept open for the page's life: starts, recurrence + its every-N
- * interval + its fixed-day anchor when the cadence takes one, person, code,
- * folder (the ref as an opener chip, an editor that folds a pasted absolute path onto the
- * placeholders, a picker over folder-explorer's folder search — Step 9) → link editor
- * (label edit, remove, add) → blocked by → children (click to
- * navigate, add child) → issue panel: the linked issue (provider glyph,
- * repo#N link, state, labels from the last sync, last synced, unlink) or —
- * for a plain task — "Create issue…" and "Link existing" → delete.
+ * Ordered by the owner's usual flow on a task: set its status, re-plan its
+ * due date, read and add a comment, close it. Top to bottom: the head (the
+ * breadcrumb, which is the parent picker's button; an "Inbox" tag on an Inbox
+ * task; ⋯ with Open parent and Delete; close) → the editable title → Status
+ * as a segmented control (To do · Standby · Cancelled · Done; Done closes the
+ * drawer with an Undo toast) → Due as the date chips the row menu shows too →
+ * Comments, newest three then "Show N older" (the composer heads them, or on
+ * the phone is pinned to the drawer's foot; Send is the drawer's one primary
+ * button) → the property list (Links as one-click pills with + for the folder
+ * and link editors, Due typed in place, Owner, Person, Parent, Repeat with
+ * its every-N and fixed day, then Priority) → Notes (a tap edits, leaving
+ * saves) → **More fields**, closed until opened and then kept open for the
+ * page's life: starts, code, blocked by, children, the issue panel →
+ * Activity, folded behind its count. A wide drawer lays the content and the
+ * properties side by side (styles/drawer.css).
+ *
+ * With a task open, the row keys act on it (keys.js asks `handleKey`): 1 · 2
+ * · 3 status, X done, T · W due, D a picked date, P priority, C comment, E
+ * the folder, L the folder and link editors.
  *
  * Every write goes through the API and then `refresh()`, and the caller's
  * `onChanged` re-renders the lists so the surfaces never drift.
@@ -38,7 +37,7 @@
 
 import { api } from './api.js';
 import { toast } from './toast.js';
-import { renderDrawer } from './js/drawer/render.js';
+import { SHEET_QUERY, renderDrawer } from './js/drawer/render.js';
 
 /** The task payload and who is looking. The author is read on every open and
  *  every refresh, not once at start, because Settings' "Your name" changes it
@@ -83,10 +82,49 @@ export function createDrawer(el, opts) {
     editingLinkId: null,
     editingCommentId: null,    // the comment whose body sits in the inline editor
     syncShown: false,          // the issue sync's activity rows, unfolded
+    linksEditing: false,       // the folder and link editors under the Links row
+    commentsAll: false,        // every comment, not only the latest three
     render: function () { renderDrawer(ctx); },
     refresh: refresh,
     patch: patch,
+    setStatus: setStatus,
+    toggleLinks: toggleLinks,
   };
+
+  /** A status segment (or its key). Done is the end of the owner's flow on a
+   *  task, so it closes the drawer; the action runner's toast offers Undo. A
+   *  recurring task's Done is the roll to its next date (`complete`), unless
+   *  `endSeries` closes it for good (the ⋯ menu). Every other status stays on
+   *  the open task.
+   *  @param {string} status
+   *  @param {{endSeries?: boolean}} [o] */
+  async function setStatus(status, o) {
+    const t = ctx.current;
+    if (!t || t.status === status) return;
+    const value = status === 'done' && t.recurrence && !(o && o.endSeries) ? 'complete' : status;
+    try {
+      await opts.onStatus(t.id, value);
+    } catch (_) {
+      return;   // the write already said why
+    }
+    if (status === 'done' && ctx.current && ctx.current.id === t.id) opts.onClose();
+  }
+
+  function toggleLinks() {
+    if (!ctx.current) return;
+    ctx.linksEditing = !ctx.linksEditing;
+    ctx.render();
+    if (ctx.linksEditing) {
+      const editor = el.querySelector('.drawer-links-editor');
+      if (editor) editor.scrollIntoView({ block: 'nearest' });
+      const first = el.querySelector('.drawer-links-editor input');
+      if (first) first.focus();
+    }
+  }
+
+  // The comment field moves between the list and the sheet's foot as the
+  // window crosses the sheet breakpoint.
+  window.matchMedia(SHEET_QUERY).addEventListener('change', function () { if (ctx.current) ctx.render(); });
 
   async function patch(changes) {
     if (!ctx.current) return;
@@ -123,6 +161,8 @@ export function createDrawer(el, opts) {
       ctx.editingLinkId = null;
       ctx.editingCommentId = null;
       ctx.syncShown = false;
+      ctx.linksEditing = false;
+      ctx.commentsAll = false;
       try {
         const loaded = await loadTask(id);
         if (seq !== loads) return;   // a newer open, or a close, took over meanwhile
@@ -149,5 +189,28 @@ export function createDrawer(el, opts) {
     },
     refresh: refresh,
     currentId() { return ctx.current ? ctx.current.id : null; },
+    /**
+     * The drawer's own keys while a task is open: X done, C the comment field,
+     * L the folder and link editors, D the calendar. The row keys that write
+     * (1-3, T, W, P) go through keys.js's action runner instead, for the Undo.
+     * @param {string} key  lower-cased
+     * @returns {boolean} whether the key was the drawer's
+     */
+    handleKey(key) {
+      if (!ctx.current) return false;
+      if (key === 'x') { setStatus('done'); return true; }
+      if (key === 'l') { toggleLinks(); return true; }
+      if (key === 'c') {
+        const field = el.querySelector('.comment-input');
+        if (field) { field.focus(); field.scrollIntoView({ block: 'nearest' }); }
+        return true;
+      }
+      if (key === 'd') {
+        const pick = el.querySelector('.drawer-due .snooze-pick');
+        if (pick) pick.click();
+        return true;
+      }
+      return false;
+    },
   };
 }

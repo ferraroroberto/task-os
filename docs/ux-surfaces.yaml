@@ -55,6 +55,8 @@ notes: |
   | `d` | the date sheet (Move…) |
   | `p` | cycles priority |
   | `e` with a task open in the drawer | opens that task's folder (the same key folder-explorer uses); in a text field it types the letter |
+  | `1` `2` `3` `t` `w` `p` with a task open | act on the open task, with Undo, as on a focused row |
+  | `x` · `d` · `c` · `l` with a task open | Done (closes the drawer, with Undo) · the calendar · the comment field · the folder and link editors |
   | `z` | undo the last row action |
   | `.` or the menu key | the row menu |
   | `?` | the shortcuts sheet |
@@ -585,12 +587,13 @@ surfaces:
     root: data-surface
     reach:
       - >-
-        the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move, the drawer's quick
-        moves.
+        the Move verb, a swipe left, the menu's Move…, `d`, Select mode's Move. The drawer's Due
+        block is the same chip grid.
     holds:
       - >-
-        **Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today**, each with the date it lands on, then **Pick
-        a date…** (a native date field) and **No date**.
+        one 4 × 2 grid of 44px chips, **Today · Tomorrow · This Fri · Weekend · Next week · Next
+        Mon · Month end**, each over the date it lands on (the task's own day tinted), and **Pick…**
+        (a native date field) as the eighth; **No date** as a row under the grid.
     phone: >-
       a bottom sheet (a dialog). One pick moves the task and leaves it on the list, with Undo.
     desktop: a popover next to the row.
@@ -615,9 +618,19 @@ surfaces:
       - >-
         a row tap or Enter · menu *Open details* · `#task/<id>` · Today's auto-opened first task.
     holds:
-      - "the blocks below, in order."
-    phone: "full-screen. Escape or **Close** closes it (then leaves Select mode)."
-    desktop: side panel or split pane;
+      - >-
+        the blocks below, in the order of the usual flow on a task: head, title, status, due chips,
+        comments, the property list, notes, more fields, activity. With a task open the row keys
+        act on it (see the keyboard map).
+    phone: >-
+      full-screen, one column, the comment field pinned to the foot. Escape or **Close** closes it
+      (then leaves Select mode).
+    desktop: >-
+      side panel or split pane; one column, and from 720px of drawer width the content beside the
+      property list. Each control shows its key, and a line under the property list lists them.
+    why: >-
+      the common edits take the fewest taps: status and the due moves are one tap, Owner, Person,
+      Repeat and Priority two, a comment is always one tap away; Send is the only primary button.
     links:
       - to: drawer.parent-picker
       - to: folder.picker
@@ -651,56 +664,74 @@ surfaces:
       none: a block inside the drawer panel.
     holds:
       - >-
-        breadcrumb (clickable), **Change parent** (opens [parent picker](#task-drawer)), **Remove
-        parent** (only with a parent; no confirm, no Undo), **Close**, and the task's number.
+        the breadcrumb as one button (opens the [parent picker](#task-drawer)), an *Inbox* tag on a
+        task still in Inbox, **···** (*Open <parent>*; **Delete task** last after a divider; its
+        header is the task's code) and **Close**.
     links:
       - to: drawer.parent-picker
-        via: Change parent
+        via: the breadcrumb
+      - to: drawer.delete
+        via: "···"
   - id: drawer.title
     area: drawer
     title: Title
     root:
       none: a block inside the drawer panel.
     holds:
-      - an editable field with a visible boundary.
+      - an editable field in heading-md with a visible underline; Enter saves, Escape reverts.
   - id: drawer.due
     area: drawer
-    title: Due + quick moves
+    title: Due chips
     root:
       none: a block inside the drawer panel.
     holds:
       - >-
-        a date field with a calendar button, then *Tomorrow · This Friday · This weekend · Next week · Next Monday · End of month · Today* with
-        their dates. Due comes first because most edits push it out.
+        the date sheet's chip grid — *Today · Tomorrow · This Fri · Weekend · Next week ·
+        Next Mon · Month end · Pick…* — each over its date, the task's own day tinted. One tap moves
+        the due date; `t`, `w` and `d` reach the same moves.
   - id: drawer.fields
     area: drawer
-    title: "Status, Priority, Owner"
+    title: Status and the property list
     root:
       none: a block inside the drawer panel.
     holds:
       - >-
-        native selects; Owner only with two or more members (an `owner old → new` activity row names
-        who).
+        **Status** as a segmented control (*To do · Standby · Cancelled · Done*; an Inbox task
+        raises none). **Done closes the drawer** with an Undo toast; a recurring task's Done rolls
+        it. Then one inset group of 44px rows: **Links** (see below), **Due** typed in place (× clears
+        it), **Owner** (only with two or more members; an `owner old → new` activity row names who),
+        **Person**, **Parent** (the parent picker), **Repeat** (with *Every N* and the fixed day once
+        there is a cadence) and, last and smaller, **Priority**. Owner, Person, Repeat and Priority
+        each open a row menu of their values.
+    links:
+      - to: drawer.parent-picker
+        via: the Parent row
   - id: drawer.links
     area: drawer
     title: Links
     root:
-      none: a block inside the drawer panel.
+      none: a row of the drawer's property list.
     holds:
       - >-
-        pills for the folder, the issue and every link; an AI-conversation URL wears the bot chip; a
-        folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to
-        copy).
+        pills for the folder, the issue and every link, each opening on one click; an
+        AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the
+        per-PC opener (the phone shows the path to copy). **+** (or `l`) unfolds the **Folder**
+        editor (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**)
+        and the link editor (label edit, remove, **Add link**) under the group.
     links:
       - to: chip.folder-popover
         via: a folder or conversation chip
+      - to: folder.picker
+        via: Find in folder index
   - id: drawer.description
     area: drawer
-    title: Description
+    title: Notes
     root:
       none: a block inside the drawer panel.
     holds:
-      - "markdown, a pencil toggles edit and preview."
+      - >-
+        the task's markdown description. A tap on the text edits it in place; leaving the field
+        saves, Escape cancels.
   - id: drawer.comments
     area: drawer
     title: Comments
@@ -708,7 +739,9 @@ surfaces:
       none: a block inside the drawer panel.
     holds:
       - >-
-        newest first, a composer (**Send**, Ctrl+Enter), then one compact row per comment: a time
+        newest first, the latest three then *Show N older*. The comment field and **Send** (the
+        drawer's one primary button, Ctrl+Enter) head the list on a desktop (`c` focuses it) and are
+        pinned to the sheet's foot on the phone. One compact row per comment: a time
         column (time today, *Yest.*, a short date), the text clamped to two lines (tap the row to
         open the rest), the author after the text only when it is somebody else, and one **···**
         menu with **Edit** (in place, Ctrl+Enter saves, Escape cancels) and **Delete** (asks first,
@@ -722,17 +755,22 @@ surfaces:
       none: a block inside the drawer panel.
     holds:
       - >-
-        `field old → new · actor · time`; issue-sync rows fold behind *Show N sync updates*.
+        a disclosure closed by default, its count in the summary (*6 changes*), open or closed for the
+        page's life: `field old → new · actor · time`; issue-sync rows fold behind *Show N sync
+        updates*.
   - id: drawer.parent-picker
     area: drawer
     title: Parent picker
     root: data-surface
     holds:
       - >-
-        a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*)
-        over every open task in tree order, indented, each with its path; the task itself, its
-        descendants and closed tasks are not offered. Tap or Enter on the first match files it; a
-        cycle is refused with a toast. The one way to re-parent.
+        a centred card on desktop, full screen on the phone: a filter field (*Filter N open tasks*),
+        then **Recent** (the parents this device used last) and **No parent (top level)**, hidden
+        while a filter is typed, then every open task in tree order, indented, each with its path;
+        the task itself, its descendants and closed tasks are not offered. Tap or Enter on the first
+        match files it; No parent moves it to the top level (no confirm, no Undo); a cycle is
+        refused with a toast. Reached from the breadcrumb or the Parent row; the one way to
+        re-parent.
   - id: drawer.more
     area: drawer
     title: More fields
@@ -740,14 +778,10 @@ surfaces:
       none: a block inside the drawer panel.
     holds:
       - >-
-        a disclosure closed by default whose summary names what is set (*starts in 3d · repeats · 1
+        a disclosure closed by default whose summary names what is set (*starts in 3d · CODE-1 · 1
         blocker*); once opened it stays open for the page's life. Inside: **Starts** (a date; the
-        only place the start date is edited), **Repeat** (never/daily/weekly/monthly, every N, the
-        fixed day), **Person** (the contact a task is about, not the owner), **Code**, **Folder**
-        (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**, which fills the field with the
-        front File Explorer window's folder for you to save), **Edit links** (label edit, remove, **Add link**),
-        **Blocked by** (**Add blocker**), **Children** (click to navigate, **Add child**), and the
-        **Issue panel**.
+        only place the start date is edited), **Code**, **Blocked by** (**Add blocker**),
+        **Children** (click to navigate, **Add child**), and the **Issue panel**.
   - id: drawer.issue
     area: drawer
     title: Issue panel
@@ -766,9 +800,9 @@ surfaces:
       none: "it opens [`confirm.dialog`](#overlay-catalog)."
     holds:
       - >-
-        last and quiet. A confirm names the task and its subtree, says there is no trash and no
-        undo, and for a synced task with an open issue warns the next sync recreates it. A toast
-        says how much went.
+        the last item of the head's **···**, after a divider. A confirm names the task and its
+        subtree, says there is no trash and no undo, and for a synced task with an open issue warns
+        the next sync recreates it. A toast says how much went.
   - id: folder.picker
     area: drawer
     title: Folder picker

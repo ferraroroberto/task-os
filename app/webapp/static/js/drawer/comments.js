@@ -8,26 +8,33 @@ import { icon } from '../../_vendored/icons/icons.js';
 import { confirmDialog } from '../../confirm.js';
 import { createRowMenu } from '../../_vendored/row-menu/row-menu.js';
 import { fmtCommentWhen, fmtTs, linkify, singleLink } from '../../format.js';
+import { keyHint } from '../../snooze.js';
 import { toast } from '../../toast.js';
 import { formButton, section } from './dom.js';
 
 // One menu for the whole thread: at most one comment's menu is open at a time.
 const menu = createRowMenu({ className: 'comment-menu' });
 
-/** The new-comment form: Ctrl+Enter sends, origin=ui. */
-function commentComposer(ctx, t) {
+/** How many comments show before "Show N older": the latest few are what
+ *  a glance at a task needs. */
+const RECENT_COMMENTS = 3;
+
+/** The new-comment form: Ctrl+Enter sends, origin=ui. Send is the drawer's
+ *  one primary button, labelled, at the field's own 44px height.
+ *  @param {boolean} pinned  the phone's: pinned to the drawer's foot */
+export function commentComposer(ctx, t, pinned) {
   const composer = document.createElement('form');
-  composer.className = 'comment-composer';
+  composer.className = 'comment-composer' + (pinned ? ' comment-composer-pinned' : '');
   const ta = document.createElement('textarea');
   ta.className = 'input-native comment-input';
-  ta.rows = 2;
-  ta.placeholder = 'Add a comment… (Ctrl+Enter to send)';
+  ta.rows = 1;
+  ta.placeholder = 'Comment or paste a link…';
   ta.setAttribute('aria-label', 'New comment');
+  ta.setAttribute('aria-keyshortcuts', 'Control+Enter');
   ta.title = 'Ctrl+Enter to send; links become chips';
-  // Same tier and metrics as the Description "Edit" button — quiet, not a
-  // full-height primary block.
   const send = formButton(composer, 'button-primary comment-send', icon('send-horizontal') + ' Send', { track: 'drawer.comment-send' });
   send.setAttribute('aria-label', 'Send comment');
+  send.title = 'Send (Ctrl+Enter)';
   composer.append(ta, send);
   composer.addEventListener('submit', async function (ev) {
     ev.preventDefault();
@@ -218,13 +225,29 @@ function commentRow(ctx, t, c) {
   return row;
 }
 
-export function commentsSection(ctx, t) {
+/** Comments, newest first: the latest three, then "Show N older". The
+ *  composer heads the list unless the phone pins it to the drawer's foot
+ *  (`pinned`: the caller places it there).
+ *  @param {boolean} pinned */
+export function commentsSection(ctx, t, pinned) {
   const comments = section('comments', 'Comments', 'message-square');
-  comments.appendChild(commentComposer(ctx, t));
+  const ordered = (t.comments || []).slice().reverse();
+  const title = comments.querySelector('h3');
+  if (ordered.length) {
+    const n = document.createElement('span');
+    n.className = 'drawer-section-count';
+    n.textContent = String(ordered.length);
+    title.appendChild(n);
+  }
+  const hint = document.createElement('span');
+  hint.className = 'drawer-section-hint';
+  hint.append(keyHint('C'), ' to comment');
+  title.appendChild(hint);
+  if (!pinned) comments.appendChild(commentComposer(ctx, t, false));
   const clist = document.createElement('div');
   clist.className = 'comment-list';
-  const ordered = (t.comments || []).slice().reverse();
-  ordered.forEach(function (c) { clist.appendChild(commentRow(ctx, t, c)); });
+  const shown = ctx.commentsAll ? ordered : ordered.slice(0, RECENT_COMMENTS);
+  shown.forEach(function (c) { clist.appendChild(commentRow(ctx, t, c)); });
   menu.endRender();
   if (!ordered.length) {
     const none = document.createElement('p');
@@ -233,5 +256,16 @@ export function commentsSection(ctx, t) {
     clist.appendChild(none);
   }
   comments.appendChild(clist);
+  const older = ordered.length - RECENT_COMMENTS;
+  if (older > 0) {
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.dataset.track = 'drawer.comments-older';
+    toggle.className = 'drawer-more-link comments-older';
+    toggle.setAttribute('aria-expanded', String(!!ctx.commentsAll));
+    toggle.textContent = ctx.commentsAll ? 'Show the latest ' + RECENT_COMMENTS : 'Show ' + older + ' older';
+    toggle.addEventListener('click', function () { ctx.commentsAll = !ctx.commentsAll; ctx.render(); });
+    comments.appendChild(toggle);
+  }
   return comments;
 }

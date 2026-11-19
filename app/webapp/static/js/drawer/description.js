@@ -1,60 +1,60 @@
-/* task-os — the drawer's description: markdown, edit / preview. */
+/* task-os — the drawer's notes (the task's markdown description): a tap on
+ * the text edits it in place, and leaving the field saves it. */
 
 'use strict';
 
-import { icon } from '../../_vendored/icons/icons.js';
 import { renderMarkdown } from '../../format.js';
 import { section } from './dom.js';
 
+function notesEditor(ctx, t) {
+  const ta = document.createElement('textarea');
+  ta.className = 'input-native drawer-desc-edit';
+  ta.value = t.description || '';
+  ta.rows = 6;
+  ta.placeholder = 'Markdown: **bold**, - lists, `code`, links…';
+  ta.setAttribute('aria-label', 'Notes');
+  let cancelled = false;
+  ta.addEventListener('keydown', function (ev) {
+    // stopPropagation: the re-render detaches this field, and app.js's
+    // document-level Escape would then close the drawer on top of the cancel.
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancelled = true; ta.blur(); }
+    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); ta.blur(); }
+  });
+  ta.addEventListener('blur', function () {
+    if (!ta.isConnected) return;   // a re-render took the field away, not the owner
+    ctx.descEditing = false;
+    if (!cancelled && ta.value !== (t.description || '')) ctx.patch({ description: ta.value });
+    else ctx.render();
+  });
+  requestAnimationFrame(function () { ta.focus(); });
+  return ta;
+}
+
 export function descriptionSection(ctx, t) {
-  const desc = section('description', 'Description', 'file-text');
-  const descTools = document.createElement('div');
-  descTools.className = 'drawer-tools';
-  const toggle = document.createElement('button');
-  toggle.dataset.track = 'drawer.desc-toggle';
-  toggle.type = 'button';
-  toggle.className = 'icon-button';
-  const toggleLabel = ctx.descEditing ? 'Preview description' : 'Edit description';
-  toggle.setAttribute('aria-label', toggleLabel);
-  toggle.title = toggleLabel;
-  toggle.innerHTML = icon(ctx.descEditing ? 'eye' : 'pencil');
-  desc.querySelector('h3').appendChild(descTools);
-  descTools.appendChild(toggle);
+  const desc = section('description', 'Notes', 'file-text');
+  const hint = document.createElement('span');
+  hint.className = 'drawer-section-hint';
+  hint.textContent = ctx.descEditing ? 'saves when you leave the field' : 'tap to edit';
+  desc.querySelector('h3').appendChild(hint);
   const body = document.createElement('div');
   body.className = 'drawer-desc';
   if (ctx.descEditing) {
-    const ta = document.createElement('textarea');
-    ta.className = 'input-native drawer-desc-edit';
-    ta.value = t.description || '';
-    ta.rows = 6;
-    ta.placeholder = 'Markdown: **bold**, - lists, `code`, links…';
-    ta.setAttribute('aria-label', 'Description');
-    body.appendChild(ta);
-    const save = document.createElement('button');
-    save.dataset.track = 'drawer.desc-save';
-    save.type = 'button';
-    save.className = 'button-tint drawer-desc-save';
-    save.textContent = 'Save';
-    save.addEventListener('click', function () {
-      ctx.descEditing = false;
-      ctx.patch({ description: ta.value });
-    });
-    ta.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save.click(); }
-    });
-    body.appendChild(save);
-    toggle.addEventListener('click', function () { ctx.descEditing = false; ctx.render(); });
+    body.appendChild(notesEditor(ctx, t));
   } else {
     const view = document.createElement('div');
-    view.className = 'markdown';
+    view.className = 'markdown drawer-desc-view';
+    view.tabIndex = 0;
+    view.setAttribute('role', 'button');
+    view.setAttribute('aria-label', 'Edit notes');
+    view.dataset.track = 'drawer.desc-edit';
     if ((t.description || '').trim()) view.innerHTML = renderMarkdown(t.description);
-    else { view.classList.add('muted'); view.textContent = 'No description yet.'; }
-    body.appendChild(view);
-    toggle.addEventListener('click', function () {
-      ctx.descEditing = true;
-      ctx.render();
-      ctx.el.querySelector('.drawer-desc-edit').focus();
+    else { view.classList.add('muted'); view.textContent = 'No notes yet.'; }
+    const edit = function () { ctx.descEditing = true; ctx.render(); };
+    view.addEventListener('click', function (ev) { if (!ev.target.closest('a')) edit(); });
+    view.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); edit(); }
     });
+    body.appendChild(view);
   }
   desc.appendChild(body);
   return desc;

@@ -16,7 +16,7 @@ import { toast } from '../../toast.js';
 export function openFolderOfCurrentTask(app) {
   const id = app.drawer.currentId();
   if (id == null) { toast('Open a task first', 'error'); return; }
-  const chip = app.els.drawer.querySelector('.drawer-folder a.chip-folder');
+  const chip = app.els.drawer.querySelector('a.drawer-folder-chip');
   if (!chip) { toast('The open task has no folder', 'error'); return; }
   chip.click();
 }

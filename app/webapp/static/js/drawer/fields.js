@@ -6,35 +6,66 @@
 
 'use strict';
 
+import { icon } from '../../_vendored/icons/icons.js';
 import { duePicker } from '../../dueinput.js';
 import { intervalUnit } from '../../recurrence.js';
-import { statusOptions } from '../../rows.js';
-import { DUE_OPTIONS, phraseButtons } from '../../snooze.js';
+import { DUE_OPTIONS, dateChips, keyHint } from '../../snooze.js';
 
-export function selectField(ctx, label, name, values, value, format) {
-  const wrap = document.createElement('label');
-  wrap.className = 'field';
-  const l = document.createElement('span');
-  l.className = 'field-label';
-  l.textContent = label;
-  const sel = document.createElement('select');
-  sel.dataset.track = 'drawer.field';
-  sel.className = 'select-native field-control';
-  sel.dataset.field = name;
-  values.forEach(function (v) {
-    const o = document.createElement('option');
-    o.value = v == null ? '' : String(v);
-    o.textContent = format ? format(v) : (v || '—');
-    if (String(v == null ? '' : v) === String(value == null ? '' : value)) o.selected = true;
-    sel.appendChild(o);
+/** The statuses a task is moved between by hand, with the key each answers
+ *  to while the task is open. Inbox is where a task waits to be filed, not a
+ *  state to pick, so it has no segment (the head tags an Inbox task, and the
+ *  `1` key still sends one back); Cancelled is rare and has no key, so a stray
+ *  key never closes a task. */
+const STATUS_SEGMENTS = [
+  ['todo', 'To do', '2'],
+  ['standby', 'Standby', '3'],
+  ['cancelled', 'Cancelled', null],
+  ['done', 'Done', 'X'],
+];
+
+/** Status as the vendored segmented control: the raised segment is the
+ *  state, one tap moves it. Done closes the drawer (ctx.setStatus). */
+export function statusSegment(ctx, t) {
+  const group = document.createElement('div');
+  group.className = 'segmented segmented--verbs drawer-status';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Status');
+  group.dataset.field = 'status';
+  STATUS_SEGMENTS.forEach(function (s) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'segmented-item';
+    b.dataset.track = 'drawer.status';
+    b.dataset.status = s[0];
+    b.setAttribute('aria-pressed', String(t.status === s[0]));
+    if (s[0] === 'done') b.innerHTML = icon('check');
+    b.appendChild(document.createTextNode(s[1]));
+    if (s[2]) {
+      b.setAttribute('aria-keyshortcuts', s[2]);
+      b.appendChild(keyHint(s[2]));
+    }
+    b.addEventListener('click', function () { ctx.setStatus(s[0]); });
+    group.appendChild(b);
   });
-  sel.addEventListener('change', function () {
-    const v = sel.value === '' ? null : (name === 'person_id' ? Number(sel.value) : sel.value);
-    const body = {};
-    body[name] = v;
-    ctx.patch(body);
+  return group;
+}
+
+/** Due's one-tap moves: the date chips the row's date menu shows too, each
+ *  over the day it lands on, the task's own day marked. */
+export function dueBlock(ctx, t) {
+  const wrap = document.createElement('div');
+  wrap.className = 'drawer-due';
+  const label = document.createElement('div');
+  label.className = 'drawer-label';
+  label.textContent = 'Due';
+  const chips = dateChips(DUE_OPTIONS, {
+    onPick: function (phrase) { ctx.patch({ due: phrase }); },
+    current: t.due,
+    pickLabel: 'Pick a due date',
+    keys: true,
   });
-  wrap.append(l, sel);
+  chips.grid.setAttribute('aria-label', 'Move the due date');
+  wrap.append(label, chips.grid, chips.picker);
   return wrap;
 }
 
@@ -117,34 +148,6 @@ export function anchorField(ctx, t, groups) {
   return wrap;
 }
 
-/** Status: the shared options (a recurring task also gets `complete`,
- *  the roll-forward action) through `opts.onStatus`, same
- *  handler every other view uses, instead of a plain field PATCH. */
-export function statusField(ctx, t) {
-  const wrap = document.createElement('label');
-  wrap.className = 'field';
-  const l = document.createElement('span');
-  l.className = 'field-label';
-  l.textContent = 'Status';
-  const sel = document.createElement('select');
-  sel.dataset.track = 'drawer.status';
-  sel.className = 'select-native field-control';
-  sel.dataset.field = 'status';
-  statusOptions(t).forEach(function (v) {
-    const o = document.createElement('option');
-    o.value = v[0]; o.textContent = v[1]; o.selected = v[0] === t.status;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', function () {
-    sel.disabled = true;
-    Promise.resolve(ctx.opts.onStatus(t.id, sel.value))
-      .catch(function () { sel.value = t.status; })
-      .finally(function () { sel.disabled = false; });
-  });
-  wrap.append(l, sel);
-  return wrap;
-}
-
 export function textField(ctx, label, name, value, placeholder) {
   const wrap = document.createElement('label');
   wrap.className = 'field';
@@ -174,11 +177,9 @@ export function textField(ctx, label, name, value, placeholder) {
 }
 
 /** A date field: a picker by default (the calendar button opens the native
- *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO.
- *  Both dates the drawer edits go through this one builder —
- *  **Due** and, beside it, **Starts** — so they cannot drift into
- *  behaving differently — and the calendar is `duePicker()`'s, so the
- *  coarse-pointer branch lives once for the whole app.
+ *  one), typing still works — `tomorrow`, `fri`, `in 2 weeks`, ISO. **Starts**
+ *  uses it; the calendar is `duePicker()`'s, so the coarse-pointer branch
+ *  lives once for the whole app.
  * @param {object} ctx
  * @param {object} t
  * @param {string} field   the task field this edits ('due' | 'starts')
@@ -227,19 +228,4 @@ export function dateField(ctx, t, field, label, caption) {
 export function memberName(ctx, id) {
   const m = (ctx.opts.members() || []).find(function (x) { return x.id === id; });
   return m ? m.name : (id || '—');
-}
-
-/** The date sheet's phrases as one-tap moves under Due: push-outs
- *  first, each with the date it resolves to, sent as the phrase so
- *  `src/dates.py` stays the one date vocabulary. */
-export function quickMoves(ctx) {
-  const row = document.createElement('div');
-  row.className = 'quick-moves';
-  row.setAttribute('role', 'group');
-  row.setAttribute('aria-label', 'Move the due date');
-  phraseButtons(DUE_OPTIONS, function (phrase) { ctx.patch({ due: phrase }); }).forEach(function (b) {
-    b.classList.add('quick-move');
-    row.appendChild(b);
-  });
-  return row;
 }

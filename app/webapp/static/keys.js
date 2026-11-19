@@ -6,8 +6,10 @@
  *   e  complete   1-3 status   t/w due tomorrow / next week
  *   d  move       p   priority cycle          z undo     ? this list
  *
- * and, with a task open in the drawer (which owns the row keys), `e` opens
- * that task's folder — the key folder-explorer uses for the same thing.
+ * and, with a task open in the drawer, the row keys act on that task (1-3,
+ * t, w, p), `e` opens its folder — the key folder-explorer uses for the same
+ * thing — and the drawer's own keys (x done, d a picked date, c comment, l
+ * links) go to it through `drawerKey`.
  *
  * and with tasks ticked (Select mode) the same key does it to the whole
  * selection.
@@ -33,6 +35,14 @@ const ROW = '.trow[data-id]';
 /** Focus inside one of these belongs to the widget, not to the keymap. */
 const OWNS_ITS_KEYS = '.snooze-pop, .row-menu, .folder-picker, .toast, .bulk-bar';
 
+/** The row actions a key runs on the task open in the drawer: status (1-3),
+ *  the two due moves and the priority cycle. E opens the folder there, and D
+ *  the drawer's own calendar, so complete and change-date stay row-only. */
+const OPEN_TASK_ACTIONS = {
+  'status-inbox': 1, 'status-todo': 1, 'status-standby': 1,
+  'due-tomorrow': 1, 'due-next-week': 1, priority: 1,
+};
+
 
 /** The keys that are not row actions — shown in the sheet, handled elsewhere. */
 const GETTING_AROUND = [
@@ -41,6 +51,19 @@ const GETTING_AROUND = [
   ['Space', 'tick the row while Select mode is on'],
   ['Ctrl K', 'the command palette (Cmd K on a Mac)'],
   ['Esc', 'close the drawer, then leave Select mode'],
+];
+
+/** The keys with a task open in the drawer, for the sheet: the row keys act
+ *  on that task, plus the drawer's own. */
+const OPEN_TASK_KEYS = [
+  ['1 2 3', 'Status: inbox, todo, standby', null],
+  ['X', 'Done', 'closes the task, with Undo'],
+  ['T W', 'Due tomorrow, due next week', null],
+  ['D', 'Pick a due date', null],
+  ['P', 'Cycle priority', null],
+  ['C', 'Write a comment', null],
+  ['E', 'Open the folder', 'on a focused row E completes it instead'],
+  ['L', 'Edit the folder and links', null],
 ];
 
 // ------------------------------------------------------------ targets
@@ -151,10 +174,18 @@ function buildHelp(helpDialog) {
   acts.className = 'keys-rows';
   ACTIONS.forEach(function (a) { if (a.kbd) acts.appendChild(keyRow(a.kbd, a.label, a.hint)); });
   acts.appendChild(keyRow('.', 'The row menu (⋯)', 'every action for the focused row; also the menu key or Shift F10'));
-  acts.appendChild(keyRow('E', 'Open the folder of the open task', 'with a task open in the drawer; on a focused row E completes it'));
   acts.appendChild(keyRow('Z', 'Undo the last change', 'one level, while its toast is up'));
   acts.appendChild(keyRow('?', 'This list', null));
   card.appendChild(acts);
+
+  const inTask = document.createElement('h3');
+  inTask.className = 'keys-sub';
+  inTask.textContent = 'With a task open';
+  card.appendChild(inTask);
+  const open = document.createElement('div');
+  open.className = 'keys-rows';
+  OPEN_TASK_KEYS.forEach(function (p) { open.appendChild(keyRow(p[0], p[1], p[2])); });
+  card.appendChild(open);
 
   const nav = document.createElement('h3');
   nav.className = 'keys-sub';
@@ -224,10 +255,13 @@ function keyCommands(tgt, actions, perform, runUndo, openHelp) {
  * @param {{actions: ReturnType<import('./actions.js').createActions>,
  *          resolveTask: (id:number) => Promise<object|null>,
  *          isBlocked: () => boolean,
- *          openFolder: () => void}} handlers
+ *          openFolder: () => void,
+ *          openTaskId: () => (number|null),
+ *          drawerKey: (key:string) => boolean}} handlers
  *        `actions` is the app's one runner (actions.js); `isBlocked` is true
- *        while something else owns the keyboard (the drawer); `openFolder`
- *        opens the folder of the task open in the drawer (the `e` key there).
+ *        while the keys belong to the task open in the drawer (`openTaskId`);
+ *        `openFolder` opens its folder (the `e` key there); `drawerKey`
+ *        hands the drawer its own keys and says whether it took one.
  * @returns {{commands: () => Array<object>, openHelp: () => void}}
  */
 export function mountKeys(helpDialog, handlers) {
@@ -279,6 +313,25 @@ export function mountKeys(helpDialog, handlers) {
     await actions.run(action, tasks, undefined, refocus(rec));
   }
 
+  /** A row key on the task open in the drawer: the same action and Undo as on
+   *  a focused row; the runner's refresh repaints the drawer. */
+  async function performOnOpenTask(action) {
+    const id = handlers.openTaskId();
+    if (id == null || resolving || actions.isBusy()) return;
+    resolving = true;
+    let task;
+    try {
+      task = await handlers.resolveTask(id);
+    } finally {
+      resolving = false;
+    }
+    if (!task) {
+      toast('That task is no longer on the list', 'error');
+      return;
+    }
+    await actions.run(action, [task]);
+  }
+
   function openHelp() {
     if (helpDialog.open) return;
     if (!helpDialog.firstElementChild) buildHelp(helpDialog);
@@ -305,12 +358,16 @@ export function mountKeys(helpDialog, handlers) {
     if (ev.target.closest && ev.target.closest(OWNS_ITS_KEYS)) return;
     if (helpDialog.open) return;
     if (document.querySelector('dialog[open]')) return;   // the palette, quick-add
-    if (handlers.isBlocked()) {                           // the drawer owns the keys
-      if (ev.key === 'e' || ev.key === 'E') { ev.preventDefault(); handlers.openFolder(); }
-      return;
-    }
     if (ev.key === '?') { ev.preventDefault(); openHelp(); return; }
     if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); runUndo(); return; }
+    if (handlers.isBlocked()) {                           // the keys act on the open task
+      const k = ev.key.toLowerCase();
+      if (k === 'e') { ev.preventDefault(); handlers.openFolder(); return; }
+      if (handlers.drawerKey(k)) { ev.preventDefault(); return; }
+      const write = ACTIONS.find(function (a) { return a.key === k && OPEN_TASK_ACTIONS[a.id]; });
+      if (write) { ev.preventDefault(); performOnOpenTask(write); }
+      return;
+    }
     if (ev.key === '.') { openRowMenu(ev); return; }
     const action = ACTIONS.find(function (a) { return a.key === ev.key.toLowerCase(); });
     if (!action) return;

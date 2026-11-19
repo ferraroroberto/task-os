@@ -1,13 +1,17 @@
-/* task-os — the drawer's foot: the one destructive control. */
+/* task-os — the drawer's one destructive action, reached from the head's ⋯
+ * menu (last, after a divider, as every row menu puts Delete). */
 
 'use strict';
 
 import { api } from '../../api.js';
-import { icon } from '../../_vendored/icons/icons.js';
 import { confirmDialog } from '../../confirm.js';
 import { toast } from '../../toast.js';
 
-async function deleteCurrent(ctx, t) {
+/** Delete the open task. The dialog names the task, the subtree that goes
+ *  with it, and — for a synced coding task whose issue is still open — that
+ *  the next sync brings it back (Roberto's call, never a silent
+ *  resurrection). */
+export async function deleteCurrent(ctx, t) {
   const n = Number(t.descendant_count) || 0;
   const ref = t.issue_ref;
   const ok = await confirmDialog({
@@ -31,23 +35,4 @@ async function deleteCurrent(ctx, t) {
   } catch (err) {
     toast(err.message || 'Delete failed', 'error');
   }
-}
-
-/** A `Delete task` at the foot, away from the status select. The dialog
- *  names the task, the subtree that goes with it, and — for a synced coding
- *  task whose issue is still open — that the next sync brings it back
- *  (Roberto's call, never a silent resurrection). The one destructive
- *  control, last and quiet. */
-export function deleteFoot(ctx, t) {
-  const foot = document.createElement('div');
-  foot.className = 'drawer-section drawer-danger';
-  const del = document.createElement('button');
-  del.dataset.track = 'drawer.delete';
-  del.type = 'button';
-  del.className = 'button-ghost drawer-delete';
-  del.innerHTML = icon('trash-2') + ' Delete task';
-  del.title = 'Delete this task' + (t.descendant_count ? ' and its ' + t.descendant_count + ' child task' + (t.descendant_count === 1 ? '' : 's') : '') + ' — asks first';
-  del.addEventListener('click', function () { deleteCurrent(ctx, t); });
-  foot.appendChild(del);
-  return foot;
 }

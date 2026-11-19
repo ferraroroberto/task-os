@@ -111,7 +111,7 @@ export const ACTIONS = [
   },
   {
     id: 'change-date', key: 'd', kbd: 'D', icon: 'calendar-days', menu: 'due',
-    label: 'Move…', hint: 'to another date: tomorrow · this Friday · this weekend · next week · next Monday · end of month · today · a date · no date',
+    label: 'Move…', hint: 'to another date: today · tomorrow · this Friday · the weekend · next week · next Monday · month end · a date · no date',
     plan: function (tasks, phrase) { return oneGroup(tasks, { due: phrase }); },
     invert: function (tasks) { return groupByCurrent(tasks, ['due']); },
     applies: isOpen,

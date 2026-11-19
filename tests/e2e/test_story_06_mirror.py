@@ -34,7 +34,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, expect
 
 from tests.e2e._port_pool import send_json
-from tests.e2e._ui import close_settings_sheet, open_settings_sheet
+from tests.e2e._ui import close_settings_sheet, open_activity, open_settings_sheet
 from tests.e2e.conftest import _get, shot
 
 DESKTOP = {"width": 1440, "height": 900}
@@ -102,6 +102,7 @@ def _settings_then_file_edit_imported(page, base: str, shots: Path, inst, n_task
     expect(newest.locator(".comment-when")).to_have_attribute("title", re.compile(r"· md$"))
     expect(newest.locator(".comment-body")).to_contain_text("checked the tiles supplier")
     shot(page, shots / "story-06-mirror-2-desktop.png")
+    open_activity(drawer)
     due_row = drawer.locator(".activity-row[data-field='due']").first
     expect(due_row.locator(".activity-old")).to_have_text(old_due)
     expect(due_row.locator(".activity-new")).to_have_text("2026-12-24")

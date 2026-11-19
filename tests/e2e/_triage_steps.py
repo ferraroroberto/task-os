@@ -15,13 +15,13 @@ from playwright.sync_api import BrowserContext, Page, expect
 
 from tests.e2e._geometry import assert_no_horizontal_overflow
 from tests.e2e._ui import (
+    assert_crumb_trail,
     assert_date_sheet,
-    assert_on_crumb_line,
     board_mode,
     close_filter_sheet,
     filter_button,
     open_filter_sheet,
-    open_more_fields,
+    pick_prop,
 )
 from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
@@ -134,36 +134,37 @@ def _open_drawer_with_activity(page: Page, base: str, shots: Path, task_id: int,
 def _drawer_quick_moves_and_comment(
     page: Page, context: BrowserContext, base: str, shots: Path, drawer, task_id: int, new_due: str
 ) -> None:
-    """The drawer's due quick-moves re-date, then a comment's link is a chip that opens a new tab."""
-    # 3b. Due leads the drawer with the date sheet's phrases as one-tap
-    #     moves (#394): push-outs first, each with the date it resolves to;
-    #     one tap re-dates, then the typed field puts the date back.
+    """The drawer's due chips re-date, then a comment's link is a chip that opens a new tab."""
+    # 3b. Due sits under Status as the date sheet's own chip grid: each
+    #     phrase over the date it resolves to; one tap re-dates and marks
+    #     that chip, then the Due row's typed field puts the date back.
     due_input = drawer.locator(".field-due input[data-field='due']")
-    moves = drawer.locator(".quick-moves")
+    moves = drawer.locator(".drawer-due")
     assert_date_sheet(moves, base)
     next_week = moves.locator(".snooze-opt[data-phrase='next week']")
     pushed = next_week.locator(".snooze-opt-date").get_attribute("data-date")
     next_week.click()
-    expect(due_input).to_have_value(pushed)
+    expect(due_input).to_have_attribute("data-date", pushed)
+    expect(moves.locator(".snooze-opt[data-phrase='next week']")).to_have_attribute("aria-current", "date")
     assert _get(base, f"/api/tasks/{task_id}")["due"] == pushed
     expect(drawer.locator(".activity-row").first.locator(".activity-new")).to_have_text(pushed)
     due_input.fill(new_due)
     due_input.press("Enter")
-    expect(due_input).to_have_value(new_due)
-    # fill() already set the field, so the value check above waits for nothing:
-    # the activity row is what appears once the write has landed (#411).
+    expect(due_input).to_have_attribute("data-date", new_due)
     expect(drawer.locator(".activity-row").first.locator(".activity-new")).to_have_text(new_due)
     assert _get(base, f"/api/tasks/{task_id}")["due"] == new_due
-    # the rare fields wait behind More fields, closed on a fresh load
+    # the rare fields wait behind More fields, the log behind Activity, both
+    # closed on a fresh load
     expect(drawer.locator("details.drawer-more")).not_to_have_attribute("open", "")
+    expect(drawer.locator("details.drawer-activity")).not_to_have_attribute("open", "")
     expect(drawer.locator("input[data-field='starts']")).to_be_hidden()
 
     # 4. Add a comment containing a link → the comment's words are the link, newest first.
-    # UX rounds 1+2 (issues #27/#32): placeholder keeps the Ctrl+Enter
-    # hint, Send is the vendored primary (a commit), Description's Edit the pencil icon button.
-    expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Add a comment… (Ctrl+Enter to send)")
+    # Send is the drawer's one primary button; Notes edit in place on a tap.
+    expect(drawer.locator(".comment-input")).to_have_attribute("placeholder", "Comment or paste a link…")
     expect(drawer.locator(".comment-send")).to_have_class(re.compile(r"\bbutton-primary\b"))
-    expect(drawer.locator(".drawer-tools .icon-button").first).to_have_attribute("aria-label", "Edit description")
+    expect(drawer.locator(".button-primary")).to_have_count(1)
+    expect(drawer.locator(".drawer-desc-view")).to_have_attribute("aria-label", "Edit notes")
     drawer.locator(".comment-input").fill(f"Office booked, details at {LINK} — bring photos")
     drawer.locator(".comment-input").press("Control+Enter")
     newest = drawer.locator(".comment").first
@@ -262,13 +263,13 @@ def _change_parent_picker(page: Page, base: str, shots: Path, new_row, new_id: i
     new_row.locator(".trow-main").click()
     expect(drawer).to_be_visible()
     expect(drawer.locator("#drawerTitle")).to_have_value("renew passport")
-    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
-    expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)   # nothing to remove yet
-    assert_on_crumb_line(drawer)                                       # #486: on the breadcrumb's line
+    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("Top level")
+    assert_crumb_trail(drawer)                                         # the trail is the picker's button
     expect(drawer.locator("select[data-field='parent']")).to_have_count(0)   # one way, not two
     drawer.locator(".drawer-change-parent").click()
     picker = page.locator("#parentDialog")
     expect(picker).to_be_visible()
+    expect(picker.locator(".parent-none")).to_have_count(0)            # nothing to remove yet
     offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
     assert "renew passport" not in offered and "Family admin" in offered, offered   # never itself
     picker.locator(".parent-filter").fill("family")
@@ -291,11 +292,14 @@ def _parent_move_remove_and_cycle(
     # …and the row says where it lives now (the project pill before the title)
     expect(_trow(page, "renew passport", "#paneBoard").locator(".trow-pill-project")).to_have_text("Family admin")
     shot(page, shots / "story-04-triage-7-desktop.png")
-    # Remove parent: one tap from the head, no confirmation, back to the top level
-    drawer.locator(".drawer-remove-parent").click()
+    # The Parent row opens the same picker, the parent just used under Recent and
+    # No parent beside it: back to the top level in one tap, no confirmation
+    expect(drawer.locator(".prop-row[data-field='parent'] .prop-val")).to_have_text("Family admin")
+    drawer.locator(".prop-row[data-field='parent']").click()
+    expect(picker.locator(".parent-recent .parent-opt-title")).to_have_text(["Family admin", "No parent (top level)"])
+    picker.locator(".parent-none").click()
     expect(page.locator("#toast")).to_contain_text("to the top level")
-    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
-    expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
+    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("Top level")
     assert _get(base, f"/api/tasks/{new_id}")["parent_id"] is None
     # …and back under the project from the keyboard: filter, Enter picks the first match
     drawer.locator(".drawer-change-parent").click()
@@ -339,21 +343,31 @@ def _parent_move_remove_and_cycle(
     shot(page, shots / "story-04-triage-8-desktop.png")
 
 
-# Where story 25's first shot frames the open drawer: its "More fields" row 784 px
-# below the drawer's top edge, whatever the drawer was scrolled to getting there.
-_FRAME_MORE_FIELDS_JS = """() => {
+# Where story 25's first shot frames the open drawer: its Repeat row 300 px below
+# the drawer's top edge, whatever the drawer was scrolled to getting there.
+_FRAME_REPEAT_JS = """() => {
   const d = document.querySelector('#taskDrawer');
-  const row = d.querySelector('details.drawer-more > summary');
+  const row = d.querySelector(".prop-row[data-field='recurrence']");
   const top = row.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
-  d.scrollTop = Math.round(top) - 784;
+  d.scrollTop = Math.round(top) - 300;
 }"""
+
+
+def _done_rolls(page: Page, base: str, task_id: int) -> date:
+    """Done on a recurring task: the drawer closes, the toast names the next
+    date and offers Undo; returns the due it rolled to."""
+    drawer = page.locator("#taskDrawer")
+    drawer.locator(".drawer-status [data-status='done']").click()
+    expect(drawer).to_be_hidden()
+    expect(page.locator("#toast")).to_contain_text("Completed — next:")
+    return date.fromisoformat(_get(base, f"/api/tasks/{task_id}")["due"])
 
 
 def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     """#112 — Repeat is a cadence *and* the fixed day it lands on.
 
-    The seed's "Weekly review" repeats every Friday. The drawer shows both
-    selects; completing it from the status select rolls the due to a Friday
+    The seed's "Weekly review" repeats every Friday. The drawer's Repeat row
+    shows the cadence with its On row under it; Done rolls the due to a Friday
     rather than one flat week on, and switching the cadence to one that
     cannot carry a weekday clears the anchor rather than keeping a stale day.
 
@@ -361,29 +375,26 @@ def _walk_recurrence_anchor(page: Page, base: str, shots: Path) -> None:
     """
     review = page.request.get(f"{base}/api/tasks?q=Weekly review").json()["items"][0]
     page.goto(f"{base}/#task/{review['id']}")
-    open_more_fields(page.locator("#taskDrawer"))   # Repeat is a rare field (#394)
-    cadence = page.locator("#taskDrawer select[data-field='recurrence']")
-    anchor = page.locator("#taskDrawer select[data-field='recurrence_anchor']")
-    expect(cadence).to_have_value("weekly")
+    drawer = page.locator("#taskDrawer")
+    cadence = drawer.locator(".prop-row[data-field='recurrence']")
+    anchor = drawer.locator("select[data-field='recurrence_anchor']")
+    expect(cadence).to_have_attribute("data-value", "weekly")
     expect(anchor).to_have_value("fri")
     page.evaluate("document.getElementById('toast').hidden = true")
     shot(page, shots / "story-17-recurrence-anchor-1-desktop.png")
 
-    # Complete it: the same task stays open and its new due is a Friday,
-    # strictly after both the due it had and today.
+    # Done: its new due is a Friday, strictly after both the due it had and today.
     old_due = date.fromisoformat(review["due"])
-    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
-    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
-    rolled = date.fromisoformat(
-        page.locator("#taskDrawer input[data-field='due']").input_value()
-    )
+    rolled = _done_rolls(page, base, review["id"])
     assert rolled.weekday() == 4, f"rolled to {rolled} ({rolled:%A}), expected a Friday"
     assert rolled > old_due and rolled > E2E_ANCHOR
 
-    # A cadence that takes no fixed day drops the anchor — and the picker with
-    # it. The picker vanishing is the re-render signal: the drawer only redraws
+    # A cadence that takes no fixed day drops the anchor — and its row with
+    # it. The row vanishing is the re-render signal: the drawer only redraws
     # once the PATCH has come back, so the stored value is safe to read here.
-    cadence.select_option("quarterly")
+    page.goto(f"{base}/#task/{review['id']}")
+    expect(anchor).to_have_value("fri")
+    pick_prop(page, drawer, "recurrence", "quarterly")
     expect(anchor).to_have_count(0)
     assert page.request.get(
         f"{base}/api/tasks/{review['id']}"
@@ -412,7 +423,6 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     page.goto(f"{base}/")
     page.goto(f"{base}/#task/{review['id']}")
     drawer = page.locator("#taskDrawer")
-    open_more_fields(drawer)
     every = drawer.locator("input[data-field='recurrence_interval']")
     expect(every).to_have_value("")
     expect(drawer.locator(".field-unit")).to_have_text("weeks")
@@ -440,16 +450,14 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
     # up is whatever Playwright's scroll-into-view and the redraws between them
     # left, against a layout that was still moving (the drawer's content grows by
     # tens of pixels as each redraw lands), so one capture sat 46 px off the
-    # baseline with every pixel of content identical. Park the "More fields" row at
+    # baseline with every pixel of content identical. Park the Repeat row at
     # the offset the baseline shows it, in the settled layout.
-    page.evaluate(_FRAME_MORE_FIELDS_JS)
+    page.evaluate(_FRAME_REPEAT_JS)
     shot(page, shots / "story-25-recurrence-interval-1-desktop.png")
 
     old_due = date.fromisoformat(review["due"])
     assert old_due.weekday() == 5, f"the seed's review is due {old_due:%A}, the walk expects a Saturday"
-    page.locator("#taskDrawer select[data-field='status']").select_option("complete")
-    expect(page.locator("#taskDrawer input[data-field='due']")).not_to_have_value(review["due"])
-    rolled = date.fromisoformat(page.locator("#taskDrawer input[data-field='due']").input_value())
+    rolled = _done_rolls(page, base, review["id"])
     assert rolled == old_due + timedelta(weeks=7), f"rolled to {rolled}, expected 7 weeks after {old_due}"
     assert page.request.get(task_url).json()["recurrence_interval"] == 7
 

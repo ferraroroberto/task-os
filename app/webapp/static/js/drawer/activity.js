@@ -3,8 +3,8 @@
 'use strict';
 
 import { icon } from '../../_vendored/icons/icons.js';
+import { collapsibleCard } from '../../collapsible.js';
 import { fmtTs } from '../../format.js';
-import { section } from './dom.js';
 import { memberName } from './fields.js';
 
 /** The issue sync's actor (src/issue_sync.py SYNC_ACTOR): its activity rows fold. */
@@ -60,11 +60,22 @@ function activityRow(ctx, a) {
   return row;
 }
 
-/** The log, newest first. The issue sync writes most of it on a synced task
- *  (85% of all activity), so its rows fold behind one toggle and the
- *  owner's own changes lead. */
+// Open or closed for the page's life, as More fields: a reload folds it again.
+let activityOpen = false;
+
+/** The log, newest first, folded behind its count: a long history must never
+ *  push the fields out of reach. The issue sync writes most of it on a synced
+ *  task (85% of all activity), so its rows fold behind one more toggle and
+ *  the owner's own changes lead. */
 export function activitySection(ctx, t) {
-  const activity = section('activity', 'Activity', 'activity');
+  const n = (t.activity || []).length;
+  const card = collapsibleCard({
+    className: 'disclosure-flat drawer-activity', icon: 'activity', title: 'Activity',
+    count: n ? n + (n === 1 ? ' change' : ' changes') : 'none yet', countClass: 'drawer-activity-hint',
+  });
+  card.card.open = activityOpen;
+  card.card.addEventListener('toggle', function () { activityOpen = card.card.open; });
+  const activity = card.body;
   const alist = document.createElement('div');
   alist.className = 'activity-list';
   const all = t.activity || [];
@@ -86,5 +97,5 @@ export function activitySection(ctx, t) {
     toggle.addEventListener('click', function () { ctx.syncShown = !ctx.syncShown; ctx.render(); });
     activity.appendChild(toggle);
   }
-  return activity;
+  return card.card;
 }

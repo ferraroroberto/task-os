@@ -1,12 +1,15 @@
-/* task-os — the parent picker: where the drawer's "Change parent" lands a task.
+/* task-os — the parent picker: where the drawer's breadcrumb and Parent row
+ * land a task.
  *
  * `openParentPicker(t, targets, onPick)` builds one modal sheet per ask into
  * the `<dialog id="parentDialog">` shell in index.html — the same vendored
  * editor modal confirm.js and snooze.js use (native showModal / close, Esc, the
- * × and a backdrop click all mean "cancel"). A filter field over every open
- * task in tree order, each indented by depth with its path as muted text under
- * the title; a tap commits. Nothing is written here: `onPick` gets the new
- * parent id and the drawer's `onMove` (the one `moveTask`) does the write.
+ * × and a backdrop click all mean "cancel"). A filter field, then the recent
+ * parents this device used and "No parent (top level)", then every open task
+ * in tree order, each indented by depth with its path as muted text under the
+ * title; a tap commits. Nothing is written here: `onPick` gets the new parent
+ * id (null for the top level) and the drawer's `onMove` (the one `moveTask`)
+ * does the write.
  *
  * The picker narrows what it offers — never the task itself or anything under
  * it, never a closed task — but the server stays the authority:
@@ -54,16 +57,61 @@ export function flattenOpen(forest) {
   return out;
 }
 
+// ------------------------------------------------------- recent parents
+/** Where the parents this device filed tasks under last are kept: a
+ *  per-device convenience, so a missing or blocked store is an empty list. */
+const RECENT_KEY = 'task-os.recentParents';
+const RECENT_MAX = 4;
+
+function readRecent() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(ids) ? ids.filter(function (id) { return typeof id === 'number'; }) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function rememberParent(id) {
+  const ids = [id].concat(readRecent().filter(function (x) { return x !== id; })).slice(0, RECENT_MAX);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(ids)); } catch (_) { /* a convenience only */ }
+}
+
+/** One option row: the title, its path muted under it. */
+function optionButton(p, currentId, onChoose) {
+  const b = document.createElement('button');
+  b.dataset.track = 'parent-picker.option';
+  b.type = 'button';
+  b.className = 'parent-opt';
+  b.dataset.id = p.id == null ? '' : String(p.id);
+  b.style.setProperty('--depth', String(p.depth || 0));
+  b.setAttribute('role', 'listitem');
+  const title = document.createElement('span');
+  title.className = 'parent-opt-title';
+  title.textContent = p.title;
+  b.appendChild(title);
+  if (p.path) {
+    const path = document.createElement('span');
+    path.className = 'parent-opt-path muted';
+    path.textContent = p.path;
+    b.appendChild(path);
+  }
+  if (p.id === currentId) b.setAttribute('aria-current', 'true');
+  b.addEventListener('click', function () { onChoose(p.id); });
+  return b;
+}
+
 /**
  * @param {{id:number, title:string, parent_id?:number|null}} t   the task being moved
  * @param {Array<{id:number, title:string, depth:number, path:string}>} targets  from parentTargets()
- * @param {(parentId:number) => void} onPick   runs on a pick only, never on a cancel
+ * @param {(parentId:number|null) => void} onPick   runs on a pick only, never on a
+ *        cancel; null is "No parent (top level)"
  */
 export function openParentPicker(t, targets, onPick) {
   const dialog = document.getElementById('parentDialog');
   if (!dialog) return;
   const shell = modalCard({
-    cardClass: 'parent-card', title: 'Change parent', titleId: 'parentDialogTitle',
+    cardClass: 'parent-card', title: 'Parent', titleId: 'parentDialogTitle',
     closeLabel: 'Cancel', onClose: function () { dialog.close(); },
   });
   const card = shell.card;
@@ -86,32 +134,45 @@ export function openParentPicker(t, targets, onPick) {
   empty.className = 'parent-empty muted';
   empty.hidden = true;
 
-  let picked = null;
+  let picked;   // undefined = nothing picked; null is a pick (the top level)
+  const choose = function (id) { picked = id; dialog.close(); };
+  const currentId = t.parent_id == null ? null : t.parent_id;
+
+  // Recent: the parents this device filed under last, then the top level —
+  // the usual answers one tap away. They hide while a filter is typed.
+  const recent = document.createElement('div');
+  recent.className = 'parent-recent';
+  const recentLabel = document.createElement('div');
+  recentLabel.className = 'parent-group-label';
+  recentLabel.textContent = 'Recent';
+  const recentList = document.createElement('div');
+  recentList.className = 'parent-list parent-recent-list';
+  recentList.setAttribute('role', 'list');
+  readRecent().forEach(function (id) {
+    const p = targets.find(function (x) { return x.id === id; });
+    if (p) recentList.appendChild(optionButton({ id: p.id, title: p.title, path: p.path, depth: 0 }, currentId, choose));
+  });
+  if (currentId != null) {
+    const none = optionButton({ id: null, title: 'No parent (top level)', path: '', depth: 0 }, currentId, choose);
+    none.classList.add('parent-none');
+    recentList.appendChild(none);
+  }
+  recent.append(recentLabel, recentList);
+  recent.hidden = !recentList.childElementCount;
+  const allLabel = document.createElement('div');
+  allLabel.className = 'parent-group-label';
+  allLabel.textContent = 'All open tasks';
+
   const rows = targets.map(function (p) {
-    const b = document.createElement('button');
-    b.dataset.track = 'parent-picker.option';
-    b.type = 'button';
-    b.className = 'parent-opt';
-    b.dataset.id = String(p.id);
-    b.style.setProperty('--depth', String(p.depth));
-    b.setAttribute('role', 'listitem');
-    const title = document.createElement('span');
-    title.className = 'parent-opt-title';
-    title.textContent = p.title;
-    b.appendChild(title);
-    if (p.path) {
-      const path = document.createElement('span');
-      path.className = 'parent-opt-path muted';
-      path.textContent = p.path;
-      b.appendChild(path);
-    }
-    if (p.id === t.parent_id) b.setAttribute('aria-current', 'true');
-    b.addEventListener('click', function () { picked = p.id; dialog.close(); });
+    const b = optionButton(p, currentId, choose);
     list.appendChild(b);
     return { el: b, hay: (p.title + ' ' + p.path).toLowerCase() };
   });
 
   function refilter() {
+    const typed = filter.value.trim() !== '';
+    recent.hidden = typed || !recentList.childElementCount;
+    allLabel.hidden = typed || recent.hidden;
     const words = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
     let shown = 0;
     rows.forEach(function (r) {
@@ -131,10 +192,12 @@ export function openParentPicker(t, targets, onPick) {
   });
   refilter();
 
-  card.append(name, filter, list, empty);
+  card.append(name, filter, recent, allLabel, list, empty);
 
   onceClosed(dialog, function () {
-    if (picked !== null && picked !== t.parent_id) onPick(picked);
+    if (picked === undefined || picked === currentId) return;
+    if (picked != null) rememberParent(picked);
+    onPick(picked);
   });
   dialog.replaceChildren(card);
   dialog.showModal();

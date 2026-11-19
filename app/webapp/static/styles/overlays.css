@@ -172,6 +172,13 @@
 .parent-opt-title { font-size: var(--font-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parent-opt-path { font-size: var(--font-body-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parent-empty { margin: 0; padding: var(--space-sm) 10px; font-size: var(--font-body-sm); }
+/* Recent parents and the top level, one tap away above the full tree; the
+   group hides while a filter is typed. */
+.parent-group-label { padding: 0 10px; color: var(--muted); font-size: var(--font-label); font-weight: 600; }
+.parent-group-label[hidden], .parent-recent[hidden] { display: none; }
+.parent-recent { display: flex; flex-direction: column; gap: var(--space-xs); }
+.parent-recent-list { max-height: none; padding-bottom: var(--space-sm); border-bottom: 1px solid var(--line-muted); }
+.parent-recent .parent-list { flex: none; }
 /* The person row's "+N more": the parent picker's shell holding ticks. */
 .owner-list { max-height: min(52vh, 480px); overflow-y: auto; overscroll-behavior: contain; }
 @media (max-width: 520px) {

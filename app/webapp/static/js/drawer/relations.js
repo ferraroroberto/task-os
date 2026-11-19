@@ -58,7 +58,7 @@ function blockerForm(ctx, t, blockers) {
     o.textContent = (p.depth ? ' '.repeat(p.depth) : '') + p.title;
     sel.appendChild(o);
   });
-  form.append(sel, formButton(form, 'button-primary', 'Add blocker', { track: 'drawer.blocker-submit' }));
+  form.append(sel, formButton(form, 'button-surface', 'Add blocker', { track: 'drawer.blocker-submit' }));
   form.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const v = sel.value;
@@ -124,7 +124,7 @@ export function childrenSection(ctx, t) {
   ci.className = 'input-native';
   ci.placeholder = 'Add child task…';
   ci.setAttribute('aria-label', 'Add child task');
-  addChild.append(ci, formButton(addChild, 'button-primary', 'Add child', { track: 'drawer.child-add' }));
+  addChild.append(ci, formButton(addChild, 'button-surface', 'Add child', { track: 'drawer.child-add' }));
   addChild.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const v = ci.value.trim();

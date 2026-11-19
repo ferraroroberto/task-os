@@ -747,6 +747,8 @@ function wireKeys() {
     actions: actions,
     resolveTask: app.resolveTask,
     openFolder: function () { app.openFolderOfCurrentTask(); },
+    openTaskId: function () { return drawer.currentId(); },
+    drawerKey: function (key) { return drawer.handleKey(key); },
     // A task you opened owns the keys. The one desktop Today opened by
     // itself does not, unless the focus is in it: else the keymap would be off
     // on the landing tab from the first paint.

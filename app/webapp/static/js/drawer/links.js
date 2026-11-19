@@ -1,11 +1,11 @@
-/* task-os — the drawer's links: the open-only pill row near the top and the
- * link editor under More fields. */
+/* task-os — the drawer's links: the chips the Links row shows (props.js) and
+ * the link editor its + unfolds. */
 
 'use strict';
 
 import { api } from '../../api.js';
 import { icon } from '../../_vendored/icons/icons.js';
-import { aiChip, chipFor, issueChip } from '../../format.js';
+import { aiChip, chipFor } from '../../format.js';
 import { toast } from '../../toast.js';
 import { formButton, section } from './dom.js';
 
@@ -24,43 +24,12 @@ export function folderChip(t) {
   return chip;
 }
 
-function linkChip(l) {
+export function linkChip(l) {
   // an email link is a .msg ref the opener opens as a file — same chip, mail glyph;
   // an ai link keeps the bot chip + open/resume popover regardless of URL shape
   return l.kind === 'ai'
     ? aiChip(l.url, l.label || null)
     : chipFor(l.url, l.label || null, l.kind === 'email' ? { icon: 'mail' } : undefined);
-}
-
-/** Everything the task points at, one row of pills that only open: the
- *  folder, the linked issue, then every link (one home per fact).
- *  Changing any of them is under More fields. */
-export function linkPills(t) {
-  const sec = section('pills', 'Links', 'link');
-  const pills = document.createElement('div');
-  pills.className = 'drawer-pill-row folder-chips';
-  if (t.folder_ref) pills.appendChild(folderChip(t));
-  let issueHref = null;
-  if (t.issue_ref) {
-    const ic = issueChip(t.issue_ref);
-    issueHref = ic.href;
-    pills.appendChild(ic);
-  }
-  (t.links || []).forEach(function (l) {
-    // linking an issue also stores it as an `issue` link; the issue chip
-    // above already is that link, with its state
-    if (l.kind === 'issue' && issueHref && new URL(l.url, location.href).href === issueHref) return;
-    pills.appendChild(linkChip(l));
-  });
-  if (!pills.childElementCount) {
-    const none = document.createElement('p');
-    none.className = 'muted drawer-none';
-    none.textContent = 'No links. Add one under More fields.';
-    sec.appendChild(none);
-  } else {
-    sec.appendChild(pills);
-  }
-  return sec;
 }
 
 /** The inline label editor of one link row. */
@@ -147,7 +116,7 @@ function linkAddForm(ctx, t) {
   label.className = 'input-native';
   label.placeholder = 'label (optional)';
   label.setAttribute('aria-label', 'Link label');
-  linkForm.append(url, label, formButton(linkForm, 'button-primary', 'Add link', { track: 'drawer.link-add' }));
+  linkForm.append(url, label, formButton(linkForm, 'button-surface', 'Add link', { track: 'drawer.link-add' }));
   linkForm.addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const u = url.value.trim();
@@ -161,8 +130,8 @@ function linkAddForm(ctx, t) {
   return linkForm;
 }
 
-/** The link editor under More fields: each link with its label edit and
- *  remove, then the add form. The pills at the top only open them. */
+/** The link editor the Links row's + unfolds: each link with its label edit
+ *  and remove, then the add form. The row's pills only open them. */
 export function linksSection(ctx, t) {
   const links = section('links', 'Edit links', 'link');
   const linkList = document.createElement('div');

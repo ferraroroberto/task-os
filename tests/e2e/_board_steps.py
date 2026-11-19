@@ -21,6 +21,7 @@ from tests.e2e._ui import (
     close_filter_sheet,
     filter_button,
     open_filter_sheet,
+    pick_prop,
     press_in_sheet,
 )
 from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
@@ -114,17 +115,17 @@ def _walk_drawer_owner(page: Page, base: str, task_id: int, to: str) -> None:
     page.goto(f"{base}/#task/{task_id}")
     drawer = page.locator("#taskDrawer")
     expect(drawer.locator("#drawerTitle")).to_have_value(before["title"])
-    head = drawer.locator(".drawer-fields-main")
-    owner = head.locator("select[data-field='owner']")
+    # a row of the property list, beside Person: one tap opens its menu, one picks
+    owner = drawer.locator(".prop-row[data-field='owner']")
     expect(owner).to_be_visible()
-    expect(owner).to_have_value(before["owner"])
-    # one row with status and priority, never under More fields
-    ys = head.locator("select").evaluate_all("els => els.map(e => Math.round(e.getBoundingClientRect().y))")
-    assert len(ys) == 3 and len(set(ys)) == 1, ys
+    expect(owner).to_have_attribute("data-value", before["owner"])
+    expect(owner.locator(".prop-val")).to_have_text(names[before["owner"]])
+    rows = drawer.locator(".prop-list > .prop-row").evaluate_all("els => els.map(e => e.dataset.field || '')")
+    assert rows[rows.index("owner") + 1] == "person_id", rows
     with page.expect_response(
         lambda r: r.request.method == "PATCH" and r.url.endswith(f"/api/tasks/{task_id}")
     ) as written:
-        owner.select_option(to)
+        pick_prop(page, drawer, "owner", names[to])
     assert written.value.ok, f"the owner write answered {written.value.status}"
     row = drawer.locator(".activity-row[data-field='owner']").first
     expect(row.locator(".activity-old")).to_have_text(names[before["owner"]])
@@ -132,7 +133,7 @@ def _walk_drawer_owner(page: Page, base: str, task_id: int, to: str) -> None:
     assert _get(base, f"/api/tasks/{task_id}")["owner"] == to
     page.reload()
     expect(drawer.locator("#drawerTitle")).to_have_value(before["title"])
-    expect(drawer.locator("select[data-field='owner']")).to_have_value(to)
+    expect(drawer.locator(".prop-row[data-field='owner']")).to_have_attribute("data-value", to)
 
 
 _SWITCH_BOXES_JS = """() => {
@@ -638,16 +639,16 @@ def _complete_recurring_then_done(page: Page, base: str, shots: Path, today: dic
     rolled_row.scroll_into_view_if_needed()
     shot(page, shots / "story-05-board-6-desktop.png")
 
-    # 7b. The same recurring task, set "done" instead of completed: closes
-    #     for good — no further roll, off the recurring series from here
-    #     (issue #54's other half). The row's circle only rolls it, so the
-    #     close-for-good lives in the drawer's status select (#311).
+    # 7b. The same recurring task, closed for good instead of completed — no
+    #     further roll, off the recurring series from here. The row's circle
+    #     and the drawer's Done segment roll it, so the close-for-good is the
+    #     drawer's ⋯ "Done, end the series"; like Done, it closes the drawer.
     rolled_row.locator(".trow-main").click()
     drawer = page.locator("#taskDrawer")
     # the pane already shows Today's first due task (#393): wait for this one
     expect(drawer.locator("#drawerTitle")).to_have_value("Vocabulary review")
-    drawer.locator("select[data-field='status']").select_option("done")
-    page.keyboard.press("Escape")
+    drawer.locator(".drawer-task-more").click()
+    page.locator(".drawer-task-menu [data-action='end-series']").click()
     expect(drawer).to_be_hidden()
     expect(soon.locator(f".trow[data-id='{vid}']")).to_have_count(0)
     closed = _get(base, f"/api/tasks/{vid}")

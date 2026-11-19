@@ -73,6 +73,7 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-heading-xl: 2rem;
   --font-heading-lg: 1.5rem;
+  --font-heading-md: 1.25rem; /* typography.heading-md — the drawer's task title */
   --font-body: 1rem;
   --font-body-sm: 0.875rem;   /* typography.body-sm — a row's meta line (the vendored action-row) */
   --font-label: 0.875rem;

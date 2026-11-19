@@ -171,7 +171,6 @@ from tests.e2e.conftest import (
     _get,
     booted,
     e2e_workdir,
-    scroll_to_bottom,
     settle,
     shot,
 )
@@ -542,14 +541,12 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     drawer = page.locator("#taskDrawer")
     expect(drawer).to_be_visible()
     expect(drawer.locator("#drawerTitle")).to_have_value("Repaint the garden fence")
-    # The drawer is its own scroller and Delete sits at its foot, so the click
-    # would scroll the panel by however much the layout happened to need at
-    # that instant — and the Issue section below it arrives on a fetch. The
-    # shot behind the dialog was then a coin toss between two offsets: 163,962
-    # px apart between two runs of one commit (#225). Park it at the end first
-    # and prove it stayed there (#166), so the click scrolls nothing.
-    scroll_to_bottom(page, drawer)
-    drawer.locator(".drawer-delete").click()
+    # Delete is the last item of the head's ···, after a divider, with the
+    # task's code as the menu's header.
+    drawer.locator(".drawer-task-more").click()
+    task_menu = page.locator(".drawer-task-menu")
+    expect(task_menu.locator(".row-menu-item").last).to_have_attribute("data-action", "delete")
+    task_menu.locator("[data-action='delete']").click()
     dialog = page.locator("#confirmDialog")
     expect(dialog).to_be_visible()
     expect(dialog.locator("#confirmTitle")).to_have_text('Delete "Repaint the garden fence"?')
@@ -566,7 +563,8 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
     assert _status(page, base, f"/api/tasks/{fence}") == 200
 
     # 3. Confirm: the subtree is gone, the drawer closes, the hash clears, a toast says how much.
-    drawer.locator(".drawer-delete").click()
+    drawer.locator(".drawer-task-more").click()
+    task_menu.locator("[data-action='delete']").click()
     expect(dialog).to_be_visible()
     dialog.locator(".button-tint.danger").click()
     expect(dialog).to_be_hidden()

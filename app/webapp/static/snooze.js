@@ -19,8 +19,10 @@
  * `openDatePicker()`: anchored beside the row on a fine pointer, in the
  * vendored editor modal on a phone.
  *
- * The date sheet: every phrase shows the date it resolves to today,
- * and the push-out phrases come first — most re-dates push a task out. The
+ * The date sheet: every phrase shows the date it resolves to today, in one
+ * compact grid of chips (`dateChips()`, four across and two rows, with "Pick a
+ * date…" as the eighth cell). The drawer's Due block lays out the same grid,
+ * so a phrase looks and means the same wherever it is offered. The
  * dates come from the server (`GET /api/dates`, the same `parse_date` the
  * write runs), read once per local day into a cache the app primes at every
  * refresh, so the sheet opens with them already filled in.
@@ -34,17 +36,22 @@ import { duePicker } from './dueinput.js';
 import { fmtDay, todayISO } from './format.js';
 import { modalCard, onceClosed } from './modal.js';
 
-/** [phrase sent to the API, what the button says]: the push-outs first, since
- *  most re-dates push a task out, then "do it today". */
+/** [phrase sent to the API, what the chip says]: nearest first, read along
+ *  the grid's two rows like a calendar. The labels are short so four fit
+ *  across a phone; the date under each says exactly which day it is. */
 export const DUE_OPTIONS = [
-  ['tomorrow', 'Tomorrow'],
-  ['this friday', 'This Friday'],
-  ['this weekend', 'This weekend'],
-  ['next week', 'Next week'],
-  ['upcoming monday', 'Next Monday'],
-  ['end of month', 'End of month'],
   ['today', 'Today'],
+  ['tomorrow', 'Tomorrow'],
+  ['this friday', 'This Fri'],
+  ['this weekend', 'Weekend'],
+  ['next week', 'Next week'],
+  ['upcoming monday', 'Next Mon'],
+  ['end of month', 'Month end'],
 ];
+
+/** The single key a chip answers to while a task is open (keys.js routes
+ *  them), shown on the chip as a hint on a fine pointer. */
+const CHIP_KEYS = { tomorrow: 'T', 'next week': 'W' };
 
 // ------------------------------------------------- what each phrase means
 const PHRASES = DUE_OPTIONS.map(function (opt) { return opt[0]; });
@@ -71,35 +78,55 @@ export function loadPhraseDates() {
   return phraseLoad;
 }
 
-/** Fill each option's date, now if today's answer is cached, else when it lands. */
-function fillDates(buttons) {
+/** Fill each option's date, now if today's answer is cached, else when it
+ *  lands; the chip whose date is `current` is marked as the one in force. */
+function fillDates(buttons, current) {
   const fill = function (dates) {
     if (!dates) return;
     buttons.forEach(function (b) {
       const iso = dates[b.dataset.phrase];
       const slot = b.querySelector('.snooze-opt-date');
       if (iso && slot) { slot.textContent = fmtDay(iso); slot.dataset.date = iso; }
+      if (current && iso === current) b.setAttribute('aria-current', 'date');
+      else b.removeAttribute('aria-current');
     });
   };
   if (phraseDates && phraseDates.day === todayISO()) fill(phraseDates.dates);
   else loadPhraseDates().then(fill);
 }
 
+/** A key hint on a control: drawn on a fine pointer only (CSS) and kept out
+ *  of the accessible name, which the control's `aria-keyshortcuts` carries. */
+export function keyHint(key) {
+  const k = document.createElement('kbd');
+  k.className = 'key-hint';
+  k.setAttribute('aria-hidden', 'true');
+  k.textContent = key;
+  return k;
+}
+
 /**
- * The phrases as buttons: each one's label, and the date it resolves to today
- * once that is known. The sheet below lists them; the drawer lays the same
- * buttons out as its quick moves under Due, so a phrase means one date
- * wherever it is offered.
+ * The date chips: every phrase over the date it resolves to today, then "Pick…"
+ * as the last cell, in one 4×2 grid of 44px chips. The row's date menu and the
+ * drawer's Due block both build it here, so the two never drift.
  * @param {Array<[string,string]>} options   [phrase, label] pairs
- * @param {(phrase:string) => void} onPick
- * @returns {HTMLButtonElement[]}
+ * @param {{onPick: (phrase:string) => void, current?: string|null,
+ *          pickLabel: string, keys?: boolean}} o
+ *        `current` is the task's due date (its chip is marked); `pickLabel`
+ *        the calendar chip's accessible name; `keys` adds the shortcut hints.
+ * @returns {{grid: HTMLElement, picker: HTMLInputElement, pick: HTMLButtonElement}}
+ *        the native date input stays outside the grid, since on a phone it
+ *        shows inline under it
  */
-export function phraseButtons(options, onPick) {
+export function dateChips(options, o) {
+  const grid = document.createElement('div');
+  grid.className = 'date-chips';
+  grid.setAttribute('role', 'group');
   const buttons = options.map(function (opt) {
     const b = document.createElement('button');
     b.dataset.track = 'snooze.option';
     b.type = 'button';
-    b.className = 'snooze-opt';
+    b.className = 'snooze-opt date-chip';
     b.dataset.phrase = opt[0];
     const label = document.createElement('span');
     label.className = 'snooze-opt-label';
@@ -107,11 +134,33 @@ export function phraseButtons(options, onPick) {
     const when = document.createElement('span');
     when.className = 'snooze-opt-date';
     b.append(label, when);
-    b.addEventListener('click', function () { onPick(opt[0]); });
+    if (o.keys && CHIP_KEYS[opt[0]]) {
+      b.setAttribute('aria-keyshortcuts', CHIP_KEYS[opt[0]]);
+      b.appendChild(keyHint(CHIP_KEYS[opt[0]]));
+    }
+    b.addEventListener('click', function () { o.onPick(opt[0]); });
     return b;
   });
-  fillDates(buttons);
-  return buttons;
+  fillDates(buttons, o.current || null);
+  // "Pick…": the same calendar button every other date control opens.
+  const pick = duePicker({
+    className: 'snooze-opt date-chip snooze-pick',
+    track: 'snooze.pick-date',
+    title: 'Pick a date',
+    ariaLabel: o.pickLabel,
+    value: o.current || null,
+    onPick: function (iso) { if (iso) o.onPick(iso); },
+  });
+  const pickLabel = document.createElement('span');
+  pickLabel.className = 'snooze-opt-label';
+  pickLabel.textContent = 'Pick…';
+  pick.button.appendChild(pickLabel);
+  if (o.keys) {
+    pick.button.setAttribute('aria-keyshortcuts', 'D');
+    pick.button.appendChild(keyHint('D'));
+  }
+  grid.append(...buttons, pick.button);
+  return { grid: grid, picker: pick.picker, pick: pick.button };
 }
 
 /** What each date field's menu says about itself. */
@@ -150,20 +199,10 @@ export function dateMenu(t, field, onPick) {
   menu.dataset.surface = 'row.date';
   menu.setAttribute('aria-label', spec.name(t));
 
-  menu.append(...phraseButtons(spec.options, onPick));
-
-  // "Pick a date…" — the same calendar button every other date control opens.
-  const pick = duePicker({
-    className: 'snooze-opt snooze-pick',
-    track: 'snooze.pick-date',
-    title: 'Pick a date',
-    ariaLabel: spec.pickName(t),
-    value: field === 'due' ? t.due : null,
-    onPick: function (iso) { if (iso) onPick(iso); },
+  const chips = dateChips(spec.options, {
+    onPick: onPick, current: field === 'due' ? t.due : null, pickLabel: spec.pickName(t),
   });
-  pick.button.innerHTML = icon('calendar-days');
-  pick.button.appendChild(document.createTextNode('Pick a date…'));
-  menu.append(pick.button, pick.picker);
+  menu.append(chips.grid, chips.picker);
 
   // `clearable`: a selection — its tasks' dates are not known here,
   // so "No date" is always offered; clearing an undated task changes nothing
@@ -226,7 +265,7 @@ function openPopover(t, field, anchor, onPick) {
     window.addEventListener('scroll', close, true);
   }, 0);
   open = handle;
-  const first = pop.querySelector('.snooze-opt');
+  const first = pop.querySelector('.snooze-opt[aria-current]') || pop.querySelector('.snooze-opt');
   if (first) first.focus();
 }
 

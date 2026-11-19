@@ -95,8 +95,8 @@ from tests.e2e._sheet_fit import walk_sheets_fit
 from tests.e2e._ui import (
     SWIPE_JS,
     assert_control_boundaries,
+    assert_crumb_trail,
     assert_date_sheet,
-    assert_on_crumb_line,
     board_mode,
     close_filter_sheet,
     leave_settings,
@@ -294,30 +294,30 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
 
 
 def _drawer_parent_tools_on_phone(page: Page, base: str, shots: Path, blocker, box, project, row, task) -> None:
-    """The drawer's parent tools as a full-screen sheet."""
-    # The drawer's parent tools (#468) on the phone: Change parent opens the
-    # picker as a full-screen sheet over the full-screen drawer.
+    """The drawer's parent picker as a full-screen sheet."""
+    # The breadcrumb is the parent picker's button on the phone too: one tap
+    # opens it as a full-screen sheet over the full-screen drawer.
     row.locator(".trow-main").tap()
     drawer = page.locator("#taskDrawer")
     expect(drawer.locator("#drawerTitle")).to_have_value("Wire the moisture sensor")
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text([project["title"]])
-    tools = drawer.locator(".drawer-parent-tools button")
-    expect(tools).to_have_text(["Change parent", "Remove parent"])
-    assert_min_target(tools)
-    assert_on_crumb_line(drawer, may_wrap=True)   # #486: on the crumb's line, or cleanly under it
+    assert_min_target(drawer.locator(".drawer-crumbs"))
+    assert_crumb_trail(drawer)
     drawer.locator(".drawer-change-parent").tap()
     picker = page.locator("dialog#parentDialog")
     expect(picker).to_be_visible()
-    expect(picker.locator("h2")).to_have_text("Change parent")
+    expect(picker.locator("h2")).to_have_text("Parent")
     vp = page.viewport_size
     box = picker.bounding_box()
     assert box and box["width"] >= vp["width"] - 0.5 and box["height"] >= vp["height"] - 0.5, (box, vp)
     filt = picker.locator(".parent-filter")
     assert filt.bounding_box()["height"] >= 44
-    assert_min_target(picker.locator(".parent-opt"))
+    assert_min_target(picker.locator(".parent-opt:visible"))
     assert_no_horizontal_overflow(page)
-    # the task itself and its child are not offered; the placeholder counts
-    offered = picker.locator(".parent-opt .parent-opt-title").all_inner_texts()
+    # with a parent, No parent heads the picker, one tap away
+    expect(picker.locator(".parent-recent .parent-none")).to_be_visible()
+    # the task itself and its child are not offered; the placeholder counts the tree
+    offered = picker.locator(".parent-card > .parent-list .parent-opt-title").all_inner_texts()
     assert "Wire the moisture sensor" not in offered and "Solder the header pins" not in offered, offered
     assert "Order the sensor cable" in offered and project["title"] in offered, offered
     expect(filt).to_have_attribute("placeholder", f"Filter {len(offered)} open tasks")
@@ -328,10 +328,10 @@ def _drawer_parent_tools_on_phone(page: Page, base: str, shots: Path, blocker, b
     expect(picker).to_be_hidden()
     expect(drawer.locator(".drawer-crumbs .crumb")).to_have_text(["Order the sensor cable"])
     assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] == blocker["id"]
-    # Remove parent: one tap, no confirmation
-    drawer.locator(".drawer-remove-parent").tap()
-    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("top level")
-    expect(drawer.locator(".drawer-remove-parent")).to_have_count(0)
+    # No parent, from the Parent row: two taps, no confirmation
+    drawer.locator(".prop-row[data-field='parent']").tap()
+    picker.locator(".parent-none").tap()
+    expect(drawer.locator(".drawer-crumbs .crumb-root")).to_have_text("Top level")
     assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["parent_id"] is None
     drawer.locator(".drawer-close").tap()
     expect(drawer).to_be_hidden()
@@ -681,14 +681,14 @@ def _board_status_carousel(page: Page, shots: Path, sizes):
 
 
 def _code_line_and_drawer(page: Page, shots: Path, drawer) -> None:
-    """The code line above the title, and the full-screen drawer."""
-    # UX round 2 (#32): on the phone the code line sits ABOVE the title
-    # (never inline pushing it off-screen) and a long title wraps to more
-    # lines instead of clipping sideways (textarea + fit, no ellipsis).
+    """The title under the head, and the full-screen drawer."""
+    # On the phone the head (the breadcrumb, ⋯ and close) sits ABOVE the
+    # title, which spans the sheet, and a long title wraps to more lines
+    # instead of clipping sideways (textarea + fit, no ellipsis).
     title_el = drawer.locator("#drawerTitle")
-    code_box = drawer.locator(".drawer-code").bounding_box()
+    head_box = drawer.locator(".drawer-head").bounding_box()
     t_box = title_el.bounding_box()
-    assert code_box and t_box and code_box["y"] + code_box["height"] <= t_box["y"] + 1, (code_box, t_box)
+    assert head_box and t_box and head_box["y"] + head_box["height"] <= t_box["y"] + 1, (head_box, t_box)
     one_line_h = title_el.evaluate("el => el.clientHeight")
     wrapped = title_el.evaluate(
         "el => { const v = el.value;"

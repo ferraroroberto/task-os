@@ -43,6 +43,9 @@
   }
   body[data-drawer="open"] { overflow: hidden; }
   body[data-drawer="open"] nav.tabs { visibility: hidden; }
+  /* …and the page fade the pill sits on goes with it: over the sheet it would
+     wash out the comment field pinned to the foot. */
+  body[data-drawer="open"]::before { content: none; }
   /* The sheet covers the whole screen, so the page under it is not a tap target: its
      headers and rows are dropped from hit-testing and the accessibility tree (a layout
      and scroll position keep, nothing reflows when the sheet closes). */
@@ -78,7 +81,7 @@
 @media (min-width: 1100px) and (pointer: fine) {
   .app { --split-rail: var(--layout-rail, 80px); }
 }
-.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm); margin-bottom: 6px; }
+.drawer-head { display: flex; align-items: center; gap: var(--space-xs); min-height: var(--row-sm); margin-bottom: var(--space-xs); }
 /* The drawer's secondary text — crumbs, field labels, comment and activity
    meta, the empty lines — is the 14px body-sm role, not the 12px caption: on
    a task with a history the caption runs were over half the text on screen
@@ -86,103 +89,158 @@
    names another (COMP-02: a bare `.icon` is 1em, 12px in a caption button). */
 .drawer .icon { width: var(--icon-inline); height: var(--icon-inline); }
 .drawer .button-ghost { font-size: var(--font-body-sm); }
-.drawer-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-xs); min-height: 34px; font-size: var(--font-body-sm); }
-.crumb {
+/* The breadcrumb is one button, the parent picker's: the path in the accent
+   text, the chevron saying it opens a choice. One line; a long path ellipsizes
+   from its end, and the Parent row below spells it out. */
+.drawer-crumbs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--row-sm);
+  padding: 0 var(--space-sm) 0 0;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--accent);
+  color: var(--muted);
   font: inherit;
   font-size: var(--font-body-sm);
-  padding: var(--space-xs) var(--space-xs);
-  min-height: 28px;
-  border-radius: var(--radius-sm);
+  text-align: left;
   cursor: pointer;
 }
-.crumb:hover { background: var(--accent-soft); }
-.crumb-root { color: var(--muted); cursor: default; }
-.crumb-sep { color: var(--muted); }
-.drawer-trail { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-xs); }
-/* The tools' wrapper adds no box of its own: each button joins the crumbs' line
-   and wraps on its own, so Change parent stays inline when Remove parent cannot. */
-.drawer-parent-tools { display: contents; }
-.drawer-parent-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: var(--hit-min); padding: 0 var(--space-sm); border-color: transparent; background: transparent; color: var(--muted); }
-.drawer-parent-tools .button-ghost:hover { color: var(--fg); }
-/* painted 44px already (min-height above), so the invisible band would reach into the crumb line above when the tools wrap */
-.drawer-parent-tools .button-ghost::before { inset: 0; }
-.drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 10px; }
-.drawer-code { color: var(--muted); font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: var(--font-body-sm); white-space: nowrap; }
-/* A one-row textarea that grows with its content (fit via drawer.js): a long
-   title wraps to 2–3 lines, never an ellipsis and never a sideways clip.
-   It is a field, so it draws a field's boundary at rest (COLOR-03 —
-   WCAG 1.4.11): a border that only appeared on hover hid that the title is
-   editable, and a phone has no hover at all. */
+.drawer-crumbs:hover { background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.crumb-trail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb { color: var(--accent-text); font-weight: 600; }
+.crumb-root { color: var(--muted); font-weight: 400; }
+.crumb-sep { margin: 0 var(--space-xs); color: var(--muted); }
+.drawer-head > .chip, .drawer-head > .icon-button { flex: none; }
+.drawer-title-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+/* A one-row textarea that grows with its content (fit via head.js): a long
+   title wraps to 2–3 lines, never an ellipsis and never a sideways clip. It
+   is the drawer's heading, set in heading-md, and it is a field, so it keeps
+   a field's boundary at rest (COLOR-03, WCAG 1.4.11): the control-border
+   underline says it is editable where a phone has no hover. */
 .drawer-title {
   flex: 1 1 auto;
   min-width: 0;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
+  border: 0;
+  border-bottom: 1px solid var(--control-border);
+  border-radius: 0;
+  background: transparent;
   color: var(--fg);
   font-family: inherit;
-  font-size: var(--font-heading-lg);
+  font-size: var(--font-heading-md);
   font-weight: 700;
-  line-height: 1.25;
-  padding: var(--space-xs) 10px;
+  line-height: 1.3;
+  padding: var(--space-xs) 0;
   resize: none;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-/* Phone: the code prefix sits on its own line ABOVE the title instead of
-   inline pushing it off-screen. The title keeps heading-lg here too —
-   the textarea wraps and grows, so there is nothing to shrink it for. */
-@media (max-width: 1023px) {
-  .drawer-title-row { flex-wrap: wrap; gap: 2px var(--space-sm); }
-  .drawer-code { flex: 1 1 100%; }
-}
-.drawer-title:focus { border-color: var(--accent); outline: none; }
-.drawer-fields {
+.drawer-title:focus { border-bottom-color: var(--accent); box-shadow: 0 1px 0 var(--accent); outline: none; }
+
+/* The body: one grid of the blocks render.js builds. One column on the phone
+   and in the 440px panel, in the owner's flow (status, due, comments, the
+   properties, notes, more, activity); content beside properties once the
+   drawer itself is wide (Today's split half on a large screen). The drawer is
+   the size container, so its own width decides, never the window's. */
+.drawer { container-type: inline-size; }
+.drawer-body {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "status" "due" "comments" "props" "notes" "more" "activity" "composer";
+  row-gap: var(--space-md);
+}
+.drawer-status { grid-area: status; }
+.drawer-due { grid-area: due; }
+.drawer-body > .drawer-comments { grid-area: comments; }
+.drawer-props { grid-area: props; }
+.drawer-body > .drawer-description { grid-area: notes; }
+.drawer-body > .drawer-more { grid-area: more; }
+.drawer-body > .drawer-activity { grid-area: activity; }
+.drawer-body > .comment-composer-pinned { grid-area: composer; }
+/* The properties span every content row and the last row takes the slack, so
+   a long property column never stretches the gaps between the content blocks.
+   Below 720px a column of four date chips beside a property column would
+   cut labels and values short, so the drawer stays one column there. */
+@container (min-width: 720px) {
+  .drawer-body {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    grid-template-areas: "status props" "due props" "comments props" "notes props" "more props" "activity props" ". props";
+    grid-template-rows: repeat(6, auto) 1fr;
+    column-gap: var(--space-lg);
+    align-items: start;
+  }
+}
+/* The folds take their spacing from the grid's row gap too. */
+.drawer-body > .card.disclosure-flat { margin-top: 0; }
+/* A chip narrower than its label plus its key leaves the key to the legend
+   under the properties (the 440px panel, a narrow column). */
+@container (max-width: 559px) {
+  .drawer-due .date-chip > .key-hint { display: none; }
+}
+/* Status: the vendored segmented control at the verbs' real 44px. */
+.drawer-status .key-hint { margin-left: 2px; }
+.drawer-status .segmented-item .icon { width: var(--icon-inline); height: var(--icon-inline); }
+/* A block's own label (Due over its chips): the label role, never a heading. */
+.drawer-label { margin: 0 0 var(--space-sm); color: var(--muted); font-size: var(--font-label); font-weight: 600; }
+.drawer-due .due-date.is-visible { width: 100%; height: var(--control-h); margin-top: var(--space-sm); }
+
+/* ------------------------------------------------- the property list
+   One inset group (the card-2 lift, as the fleet's inset lists): a 44px row
+   per property, its glyph and name in a fixed column, the value, then the
+   chevron of a row that opens a choice. Priority closes it, lower and quieter. */
+.drawer-props { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.prop-list { padding: 0 var(--space-md); border-radius: var(--radius); background: var(--card-2); }
+.prop-row {
+  display: flex;
+  align-items: center;
   gap: var(--space-sm);
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  width: 100%;
+  min-height: var(--row-sm);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line-muted);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--font-body);
+  text-align: left;
 }
-/* The fields that lead: Due across the row with its quick moves under
-   it, then status and priority side by side, on every width. The rest of the
-   fields keep the grid above, under More fields. */
-.drawer-fields.drawer-fields-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.drawer-fields-main > .field-due, .drawer-fields-main > .quick-moves { grid-column: 1 / -1; }
-/* With an Owner the three selects share one row, phone included. */
-.drawer-fields.drawer-fields-main.has-owner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* The date sheet's phrases (snooze.js phraseButtons) as one-tap buttons: the
-   phrase over the date it resolves to, two by two, four across once the
-   drawer is wide enough that "This weekend" still fits one line (Today's
-   split half; the 440px panel and the phone keep two). The fields block is
-   the query container, so the drawer's own width decides, not the window's.
-   A labelled utility button on the button-surface recipe, 44px or taller, in
-   the date field's own fill and ring so the two read as one control family. */
-.drawer-fields-main { container-type: inline-size; }
-.quick-moves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-@container (min-width: 540px) {
-  .quick-moves { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.prop-row:first-child { border-top: 0; }
+.prop-row > .icon { flex: none; color: var(--muted); }
+button.prop-row { cursor: pointer; }
+button.prop-row:hover .prop-val { color: var(--accent-text); }
+.prop-key { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); width: 5.5rem; color: var(--muted); font-size: var(--font-label); font-weight: 600; }
+/* Dark: fg-muted on the card-2 lift falls under AA, so the name steps toward
+   fg, as a hovered row's meta does. */
+[data-theme="dark"] .prop-key { color: color-mix(in srgb, var(--fg) 12%, #7d8590); }
+.prop-val { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-low { min-height: var(--row-sm); }
+.prop-low .prop-val { font-size: var(--font-body-sm); }
+.prop-none { color: var(--muted); }
+/* Due typed in place: a field like any other, with its boundary at rest
+   (COLOR-03), in a row that keeps a hairline of air around it. */
+.prop-row.field-due { padding: var(--space-xs) 0; }
+.prop-input.input-native { flex: 1 1 auto; min-width: 0; font-size: var(--font-body); }
+.prop-clear { flex: none; }
+/* Links: the pills wrap under each other, never sideways out of the row. */
+.prop-links { padding: var(--space-xs) 0; }
+.prop-links > .prop-val { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); white-space: normal; overflow: visible; }
+.prop-links .chip + .key-hint { margin-left: calc(-1 * var(--space-xs) / 2); }
+.prop-links > .icon-button { flex: none; }
+/* Repeat's every-N and fixed day: a row each, the label in the name column. */
+.prop-sub .field { flex: 1 1 auto; flex-direction: row; align-items: center; gap: var(--space-sm); }
+.prop-sub .field-label { flex: none; width: 5.5rem; padding-left: calc(var(--icon-inline) + var(--space-sm)); box-sizing: content-box; }
+.prop-sub .field-control { flex: 1 1 auto; }
+.drawer-links-editor { display: flex; flex-direction: column; }
+/* The keys that act on the open task, under the list — only where a
+   keyboard is likely. */
+.drawer-key-legend { display: none; margin: 0; color: var(--muted); font-size: var(--font-body-sm); line-height: 2; }
+@media (pointer: fine) {
+  .drawer-key-legend { display: block; }
 }
-.snooze-opt.quick-move {
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-  padding: var(--space-xs) 6px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
-  text-align: center;
-  white-space: normal;
-}
-/* --card-2 equals the field fill in both themes, so the hover cue is the ring. */
-.snooze-opt.quick-move:hover { border-color: var(--accent); }
-.quick-move .snooze-opt-label { font-weight: 600; }
-.quick-move .snooze-opt-date { margin: 0; padding: 0; }
 .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .field-label { color: var(--muted); font-size: var(--font-body-sm); font-weight: 600; }
 .field-control { width: 100%; min-width: 0; }
@@ -213,12 +271,40 @@
   font-weight: 700;
 }
 .drawer-section-title > .icon { width: var(--icon-title); height: var(--icon-title); color: var(--muted); }
+/* A block of the body takes its spacing from the grid's row gap. */
+.drawer-body > .drawer-section { padding: 0; }
+.drawer-section-count, .drawer-section-hint { color: var(--muted); font-size: var(--font-body-sm); font-weight: 400; }
+.drawer-section-hint { margin-left: auto; }
+.drawer-section-hint .key-hint { margin-right: 2px; }
+/* "C to comment" is a keyboard's hint only. */
+@media not (pointer: fine) {
+  .drawer-comments .drawer-section-hint { display: none; }
+}
+/* Show N older / the latest three: a quiet text button under the list. */
+.drawer-more-link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--row-sm);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line-muted);
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: var(--font-body-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+/* Notes are read text: the body role, a tap opens the editor in place. */
+.drawer-desc-view { border-radius: var(--radius-sm); cursor: text; }
+.drawer-desc-view:hover { background: color-mix(in srgb, var(--muted) 8%, transparent); }
 .drawer-tools { margin-left: auto; font-size: var(--font-body-sm); font-weight: 600; }
 .drawer-tools .button-ghost { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .drawer-none { margin: 0; font-size: var(--font-body-sm); }
 .drawer-desc-edit { width: 100%; height: auto; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; }
-.drawer-desc-save { margin-top: 6px; min-height: var(--control-h); padding: 0 14px; font-size: var(--font-label); }
-.markdown { font-size: var(--font-label); line-height: 1.5; }
+.markdown { font-size: var(--font-body); line-height: 1.5; }
 .markdown p, .markdown ul, .markdown ol, .markdown pre { margin: 0 0 6px; }
 .markdown h3, .markdown h4, .markdown h5 { margin: var(--space-sm) 0 var(--space-xs); font-size: var(--font-body); }
 .markdown pre { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--space-sm) 10px; overflow-x: auto; }
@@ -240,7 +326,7 @@
 .link-form, .child-add { display: flex; gap: 6px; flex-wrap: nowrap; }
 .link-form .input-native:first-child, .child-add .input-native { flex: 1 1 auto; min-width: 0; }
 .link-form .input-native:nth-child(2) { flex: 0 1 30%; min-width: 0; }
-.link-form .button-primary, .child-add .button-primary { white-space: nowrap; flex: none; }
+.link-form .button-surface, .child-add .button-surface { white-space: nowrap; flex: none; }
 /* Blocked by — same row/form shape as Links: a flat list of removable
    rows, then a Move-to-style picker to add one, down to the same --row-sm-less-
    the-gap floor. */
@@ -263,16 +349,31 @@
 }
 .blocker-form { display: flex; gap: 6px; flex-wrap: nowrap; }
 .blocker-form .select-native { flex: 1 1 auto; min-width: 0; }
-.blocker-form .button-primary { white-space: nowrap; flex: none; }
-.comment-composer { display: flex; align-items: flex-end; gap: 6px; margin-bottom: 10px; }
-/* `align-content` centres the text in the two-row box instead of parking it
-   against the top edge, so the placeholder reads level with the Send button
-   beside it. `safe` keeps the first line reachable once the comment grows past
-   the box: centred overflow would push the top out of the scroll area. */
-.comment-input { flex: 1 1 auto; height: auto; min-height: 44px; padding: var(--space-sm) 10px; resize: vertical; font-family: inherit; align-content: safe center; }
-/* Send is the vendored button-primary (48px); the inline editor's Save and
-   Cancel are the quiet ghost pair, so only they take the compact metrics. */
+.blocker-form .button-surface { white-space: nowrap; flex: none; }
+.comment-composer { display: flex; align-items: flex-end; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+/* One line at the 44px row, growing with what is typed (`field-sizing`, a
+   cap so a long comment scrolls inside it). `align-content` centres the text
+   in the box, level with Send; `safe` keeps the first line reachable once the
+   comment grows past the box. */
+.comment-input { flex: 1 1 auto; height: auto; min-height: var(--row-sm); max-height: 40vh; padding: 10px 12px; resize: none; field-sizing: content; font-family: inherit; font-size: var(--font-body); align-content: safe center; }
 .comment-send { flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
+/* Send, the drawer's one primary: labelled (a painted glyph-only button would
+   read as an icon button), at the field's own height so the two line up. The
+   inline editor's Save and Cancel are the quiet ghost pair below. */
+.comment-send.button-primary { justify-content: center; height: var(--row-sm); min-height: var(--row-sm); padding: 0 var(--space-md); }
+/* The phone's composer, pinned to the sheet's foot over the scrolling body:
+   it bleeds to the sheet's edges on the card surface, and the sheet drops its
+   own bottom padding so nothing scrolls under it. */
+.comment-composer-pinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0 calc(-1 * var(--space-md));
+  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+.drawer.has-pinned-composer { padding-bottom: 0; }
 .comment-edit-wrap .comment-send { min-height: 28px; padding: 2px var(--space-sm); }
 .comment-list { display: flex; flex-direction: column; }
 /* One comment = one flat list row on a hairline (design.md list-row): a narrow
@@ -283,12 +384,13 @@
   grid-template-columns: 3.25rem minmax(0, 1fr) auto;
   column-gap: var(--space-sm);
   align-items: start;
-  padding: 6px 0;
+  padding: 10px 0;
   border-top: 1px solid var(--line-muted);
-  font-size: var(--font-label);
+  font-size: var(--font-body);
   line-height: 1.4;
 }
 .comment:first-child { border-top: 0; }
+.comment-list + .drawer-more-link { border-top: 1px solid var(--line-muted); }
 .comment-when { color: var(--muted); font-size: var(--font-body-sm); white-space: nowrap; }
 .comment-author { color: var(--muted); }
 /* 28px box, 44px target: the vendored icon-button grows it with ::before. */
@@ -345,15 +447,11 @@
 .activity-arrow { color: var(--muted); }
 .activity-meta { color: var(--muted); white-space: nowrap; }
 .activity-sync-toggle { margin-top: var(--space-xs); }
-/* Links as pills: the folder, the issue and every link on one wrapping
-   row of 44px pills (the .folder-chips recipe), nothing to edit on it. */
-.drawer-pill-row { margin-top: -11px; }
 /* More fields: a flat disclosure after the activity log. Its summary names
    what is set inside (starts, repeats, a person, blockers, children) in the
    count slot, so a closed disclosure never hides that a field holds a value. */
-.drawer-more { margin-top: var(--space-md); }
-.drawer-more > .collapse-summary .collapse-main { align-items: center; overflow: hidden; }
-.drawer-more-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--font-body-sm); }
+.drawer-more > .collapse-summary .collapse-main, .drawer-activity > .collapse-summary .collapse-main { align-items: center; overflow: hidden; }
+.drawer-more-hint, .drawer-activity-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--font-body-sm); }
 .drawer-more > .collapse-body > .drawer-fields { border-top: 0; padding-top: var(--space-xs); }
 .children-list { display: flex; flex-direction: column; margin-bottom: var(--space-sm); }
 .child-row {
@@ -388,7 +486,7 @@
 .issue-actions .button-ghost, .issue-sync { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); }
 .issue-form { display: flex; gap: 6px; }
 .issue-form .input-native { flex: 1 1 auto; min-width: 0; }
-.issue-form .button-primary, .issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
+.issue-form .button-surface { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: var(--space-xs); }
 a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); border-color: var(--line); }
 .chip-issue-closed .chip-label { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .chip-issue .chip-state { width: var(--icon-inline); height: var(--icon-inline); color: var(--success); }
@@ -416,6 +514,8 @@ a.chip.chip-issue-closed { color: var(--muted); background: var(--card-off); bor
   .filter-select, .drawer .select-native, .drawer .input-native,
   .settings-sheet-body .select-native, .settings-sheet-body .input-native,
   .bulk-status { height: var(--row-sm); }
+  /* the drawer's text areas grow with their text; 44px is their floor */
+  .drawer .comment-input, .drawer .drawer-desc-edit { height: auto; }
   /* the strip's square buttons are one family — same square, always */
   .strip-square { width: var(--row-sm); height: var(--row-sm); }
   .pane-top .icon-button { --icon-btn-box: var(--row-sm); }
