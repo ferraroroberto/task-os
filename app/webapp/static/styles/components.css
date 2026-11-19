@@ -172,6 +172,10 @@ a.chip:hover { text-decoration: underline; }
    edge and a long ref ellipsizes on one line rather than wrapping: the full
    ref is on the chip's title, in the input, and in the copy popover. */
 .folder-current .chip { justify-self: start; min-width: 0; }
+/* The delete glyph sits in the same 44px box as the picker glyphs on line 2, so
+   both icons centre on one axis; the negative block margin keeps line 1 at the
+   height it had when the delete box was the 28px default. */
+.folder-current .icon-button { --icon-btn-box: var(--row-sm); margin-block: calc((28px - var(--row-sm)) / 2); }
 .folder-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px; }
 .folder-form .input-native { min-width: 0; }
 .folder-form .button-surface, .folder-pick { white-space: nowrap; }
