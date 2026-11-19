@@ -291,6 +291,17 @@ live_optin_env = "TASKOS_E2E_LIVE"
 [design]
 wide_views = ["board", "today"]
 
+# The Mac nightly (project-scaffolding docs/mac-runner.md). The unit leg deselects
+# `windows_only` tests (the tray, the PowerShell gate, the cmd opener); the e2e
+# conftest boots its own disposable instance, so no autoboot flag. No `views`:
+# the simulator smoke needs a [design.review.synthetic] command this repo has not declared.
+[ci.nightly]
+python       = "3.14"
+requirements = ["requirements.txt"]
+samples      = "config"
+unit         = ["tests", "--ignore=tests/e2e"]
+e2e          = ["tests/e2e"]
+
 # Diff-proportionate e2e routing (project-scaffolding#180): the gate's browser
 # phase is classified by scripts/classify_e2e.py against these rules, first
 # match wins; an unmatched path, a mixed diff, or an empty diff fails safe to

@@ -29,7 +29,12 @@ HANDLER = REPO / "assets" / "opener" / "opener.cmd"
 LAUNCHER = REPO / "assets" / "opener" / "opener.ps1"
 INSTALLER = REPO / "assets" / "opener" / "install_opener.py"
 
-windows_only = pytest.mark.skipif(sys.platform != "win32", reason="the opener is a Windows cmd handler")
+_not_windows = pytest.mark.skipif(sys.platform != "win32", reason="the opener is a Windows cmd handler")
+
+
+def windows_only(test):
+    """Skip off Windows and carry the marker the Mac nightly deselects on."""
+    return pytest.mark.windows_only(_not_windows(test))
 
 
 def _console_encoding() -> str:

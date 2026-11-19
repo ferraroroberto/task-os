@@ -14,10 +14,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.tray import tray as tray_mod
-from app.tray.tray import TrayApp
 from app.tray.watchdog import RespawnGuard
 from src.no_window import NO_WINDOW
+
+# The tray is a Windows desktop app whose module imports a GUI backend: off
+# Windows a failed import skips the file instead of failing collection.
+pytestmark = pytest.mark.windows_only
+tray_mod = pytest.importorskip("app.tray.tray")
+TrayApp = tray_mod.TrayApp
 
 _SLEEPER = "import time; time.sleep(120)"
 
