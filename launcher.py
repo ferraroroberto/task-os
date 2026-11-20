@@ -36,7 +36,6 @@ def main(argv: list[str]) -> int:
         return run_tray(config)
 
     if command == "webapp":
-        from app.webapp.event_loop import selector_loop_factory
         from app.webapp.serve import run
         from src.certs import ensure_cert_fresh, uvicorn_ssl_kwargs
 
@@ -49,7 +48,6 @@ def main(argv: list[str]) -> int:
             keyfile=ssl.get("ssl_keyfile"),
             log_level="info",
             server=config.server,
-            loop_factory=selector_loop_factory,
         )
         return 0
 

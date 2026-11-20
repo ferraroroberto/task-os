@@ -81,8 +81,6 @@ toast = { src = "app/webapp/static/_vendored/toast", sha = "e56c8330f8500b836357
 build-watch = { src = "app/webapp/static/_vendored/build-watch", sha = "2d871dd5a6a3ee6fe12a3c5c6439d2c53a93c2c4", dest = "app/webapp/static/_vendored/build-watch" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
-# app-launcher (1705558a14f12fd35518cc08e2b92ce2b45843d3): app/webapp/event_loop.py (selector loop; code
-#   verbatim, only the docstring's issue/port/path references re-pointed at this repo)
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
 #   BuildInfo/stamp_html/stamp_js; only the no_window import path adapted)
 

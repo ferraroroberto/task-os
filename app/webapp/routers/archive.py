@@ -46,7 +46,6 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response, require_feature, service_unavailable
-from src.archive_batch import ArchiveError
 from src.archive_state import annotate_run
 from src.archive_store import MAX_HINT_CHARS, get_run, list_items, list_runs
 from src.db import get_db
@@ -87,10 +86,7 @@ def archive_run(
     service = _service(request)
     if service is None or not service.enabled:
         return service_unavailable(service, "archive_disabled", "archive")
-    try:
-        run = service.start_run(limit=(body.limit if body and body.limit else limit))
-    except ArchiveError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    run = service.start_run(limit=(body.limit if body and body.limit else limit))
     return JSONResponse(run, status_code=202)
 
 
@@ -121,10 +117,7 @@ async def archive_item_revert(
     service = _service(request)
     if service is None or not service.enabled:
         return service_unavailable(service, "archive_disabled", "archive")
-    try:
-        return await run_in_threadpool(service.revert, db, item_id)
-    except ArchiveError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    return await run_in_threadpool(service.revert, db, item_id)
 
 
 @router.post("/items/{item_id}/move")
@@ -134,10 +127,7 @@ async def archive_item_move(
     service = _service(request)
     if service is None or not service.enabled:
         return service_unavailable(service, "archive_disabled", "archive")
-    try:
-        return await run_in_threadpool(service.move, db, item_id, body.folder, hint=body.hint)
-    except ArchiveError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    return await run_in_threadpool(service.move, db, item_id, body.folder, hint=body.hint)
 
 
 @router.post("/items/{item_id}/retry")
@@ -148,10 +138,7 @@ async def archive_item_retry(
     service = _service(request)
     if service is None or not service.enabled:
         return service_unavailable(service, "archive_disabled", "archive")
-    try:
-        return await run_in_threadpool(service.retry, db, item_id)
-    except ArchiveError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    return await run_in_threadpool(service.retry, db, item_id)
 
 
 @router.post("/items/{item_id}/accept")
@@ -162,7 +149,4 @@ def archive_item_accept(
     service = _service(request)
     if service is None:
         return service_unavailable(service, "archive_disabled", "archive")
-    try:
-        return service.accept(db, item_id, hint=body.hint if body else None)
-    except ArchiveError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    return service.accept(db, item_id, hint=body.hint if body else None)

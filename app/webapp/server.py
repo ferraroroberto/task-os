@@ -82,7 +82,7 @@ Run under uvicorn with the pinned selector loop (Windows proactor wedges on an
 aborted client):
 
     python -m uvicorn app.webapp.server:app --host 0.0.0.0 --port 8448 \
-        --loop app.webapp.event_loop:selector_loop_factory
+        --loop app.webapp.serve:selector_loop_factory
 """
 
 from __future__ import annotations
@@ -122,8 +122,8 @@ from app.webapp.routers import (
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
 from src import placeholders
 from src import tasks_repo as repo
-from src.ai import AIClient
-from src.archive_batch import ArchiveBatchService
+from src.ai import AIClient, AIError
+from src.archive_batch import ArchiveBatchService, ArchiveError
 from src.auth import AuthMiddleware
 from src.backup import BackupScheduler
 from src.calendar_lane import CalendarService
@@ -133,6 +133,7 @@ from src.config import load_config
 from src.db import db_path, init_db, usage_db_path
 from src.email_capture import EmailCaptureService
 from src.enrich import EnrichClient
+from src.explorer_window import ExplorerWindowError
 from src.features import FeatureOff, search_kind_off_reason
 from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
@@ -144,7 +145,7 @@ from src.sharing.publisher import AddressPublisher
 from src.static_versioning import IMMUTABLE_CACHE_CONTROL, SHEET_BUNDLE_NAME
 from src.tasks_repo import RepoError
 from src.usage_log import usage_router
-from src.voice import VoiceClient
+from src.voice import VoiceClient, VoiceError
 
 logger = logging.getLogger(__name__)
 
@@ -303,13 +304,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def _install_error_handlers(app: FastAPI) -> None:
-    @app.exception_handler(RepoError)
-    async def _repo_error(request: Request, exc: RepoError) -> Response:
-        return error_response(exc.http_status, exc.code, str(exc))
+    async def _domain_error(request: Request, exc: Exception) -> Response:
+        # Every domain error carries its own code and status; only some add a detail.
+        return error_response(
+            exc.http_status, exc.code, str(exc), getattr(exc, "detail", None)  # type: ignore[attr-defined]
+        )
 
-    @app.exception_handler(FeatureOff)
-    async def _feature_off(request: Request, exc: FeatureOff) -> Response:
-        return error_response(exc.http_status, exc.code, str(exc))
+    for error_type in (RepoError, FeatureOff, ArchiveError, VoiceError, AIError, ExplorerWindowError):
+        app.add_exception_handler(error_type, _domain_error)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> Response:
