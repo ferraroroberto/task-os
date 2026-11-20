@@ -44,7 +44,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response, require_feature
 from src import placeholders
-from src.explorer_window import ExplorerWindowError, front_explorer_folder
+from src.explorer_window import front_explorer_folder
 from src.search.folder_explorer import Unavailable
 from src.search.folders_adapter import folder_item
 from src.this_pc import is_this_pc
@@ -90,8 +90,5 @@ async def folders_explorer_window(request: Request) -> Any:
     host = request.client.host if request.client else ""
     if not is_this_pc(host):
         return error_response(403, "not_this_pc", "The Explorer window can only be read from the PC itself")
-    try:
-        path = await run_in_threadpool(front_explorer_folder, getattr(request.app.state, "folder_explorer", None))
-    except ExplorerWindowError as exc:
-        return error_response(exc.http_status, exc.code, str(exc))
+    path = await run_in_threadpool(front_explorer_folder, getattr(request.app.state, "folder_explorer", None))
     return {"path": path}

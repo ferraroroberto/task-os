@@ -16,7 +16,6 @@ from starlette.concurrency import run_in_threadpool
 
 from app.webapp.routers._helpers import error_response, require_feature
 from src.ai import (
-    AIError,
     accept_suggestion,
     generate_suggestions,
     list_suggestions,
@@ -48,10 +47,7 @@ async def triage(
     client = getattr(request.app.state, "ai", None)
     if client is None:
         return error_response(409, "ai_disabled", "AI service not started")
-    try:
-        items = await run_in_threadpool(generate_suggestions, db, client, body.task_ids)
-    except AIError as exc:
-        return error_response(exc.http_status, exc.code, str(exc))
+    items = await run_in_threadpool(generate_suggestions, db, client, body.task_ids)
     return {"items": items}
 
 

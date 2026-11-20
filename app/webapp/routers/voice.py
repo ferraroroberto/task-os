@@ -54,7 +54,7 @@ from app.webapp.routers._helpers import error_response, require_feature
 from src import quick_add
 from src.db import get_db
 from src.enrich import enrich_line
-from src.voice import MAX_AUDIO_BYTES, VoiceError
+from src.voice import MAX_AUDIO_BYTES
 
 router = APIRouter(prefix="/api", tags=["voice"], dependencies=[Depends(require_feature("ai"))])
 
@@ -78,18 +78,15 @@ async def transcribe(
             f"recording is {declared} bytes — the limit is {MAX_AUDIO_BYTES}",
         )
     audio = await request.body()
-    try:
-        # The forward is blocking `urllib` and a cold model can take seconds
-        # (`TRANSCRIBE_TIMEOUT_S` allows two minutes). On the event loop that
-        # would freeze the *whole* app for the duration — the phone, the tray's
-        # restart probe and /healthz included — so it goes to the threadpool,
-        # which is where FastAPI already runs every `def` route in this repo.
-        text = await run_in_threadpool(
-            client.transcribe, audio,
-            content_type=request.headers.get("content-type", "application/octet-stream"),
-        )
-    except VoiceError as exc:
-        return error_response(exc.http_status, exc.code, str(exc), exc.detail)
+    # The forward is blocking `urllib` and a cold model can take seconds
+    # (`TRANSCRIBE_TIMEOUT_S` allows two minutes). On the event loop that
+    # would freeze the *whole* app for the duration — the phone, the tray's
+    # restart probe and /healthz included — so it goes to the threadpool,
+    # which is where FastAPI already runs every `def` route in this repo.
+    text = await run_in_threadpool(
+        client.transcribe, audio,
+        content_type=request.headers.get("content-type", "application/octet-stream"),
+    )
     if not parse:
         return {"text": text}
     parsed = quick_add.parse(text)

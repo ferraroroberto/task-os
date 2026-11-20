@@ -90,7 +90,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
 LIVE_PORT = 8448
 LIVE_ENV = "TASKOS_E2E_LIVE"
-LOOP_FACTORY = "app.webapp.event_loop:selector_loop_factory"
 
 # Bounded Playwright waits: 15 s fails fast with a TimeoutError naming the
 # locator instead of stacking opaque 30 s waits (project-scaffolding#61).
@@ -319,7 +318,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         cmd = [
             sys.executable, "-m", "app.webapp.serve",
             "--host", "127.0.0.1", "--port", str(port),
-            "--log-level", "warning", "--loop", LOOP_FACTORY,
+            "--log-level", "warning",
         ]
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, **kwargs)
         base = f"http://127.0.0.1:{port}"

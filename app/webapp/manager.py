@@ -40,7 +40,6 @@ from pathlib import Path
 from typing import IO, Any
 
 from app.tray.single_instance import cross_process_lock
-from app.webapp.event_loop import LOOP_FACTORY
 from src.certs import cert_hostname, cert_paths, ensure_cert_fresh, uvicorn_ssl_args
 from src.no_window import NO_WINDOW
 from src.runtime import files as runtime_files
@@ -277,7 +276,6 @@ class WebappManager:
             "--host", self.config.host,
             "--port", str(self.config.port),
             "--log-level", "warning",
-            "--loop", LOOP_FACTORY,
             "--server", self.config.server,
         ]
         cmd.extend(uvicorn_ssl_args())  # [] + a loud log line when no cert pair
