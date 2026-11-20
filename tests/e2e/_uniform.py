@@ -102,8 +102,12 @@ def assert_icon_buttons_uniform(page: Page, scope: str = "body", min_count: int 
 
 def assert_focus_ring(page: Page, button: Locator) -> None:
     """Keyboard focus on an icon button draws a visible outline."""
-    page.keyboard.press("Shift")                  # keyboard modality → :focus-visible
+    # Reach the button the way a keyboard user does: WebKit leaves :focus-visible
+    # off a script focus() that follows only a lone Shift press, so step back
+    # and forward with Tab — a real key-driven focus in every engine.
     button.focus()
+    page.keyboard.press("Shift+Tab")
+    page.keyboard.press("Tab")
     style = button.evaluate("el => { const s = getComputedStyle(el);"
                             " return [el.matches(':focus-visible'), s.outlineStyle, parseFloat(s.outlineWidth)]; }")
     assert style[0] and style[1] != "none" and style[2] >= 2, style
