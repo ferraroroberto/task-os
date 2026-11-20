@@ -163,18 +163,10 @@ export function dateChips(options, o) {
   return { grid: grid, picker: pick.picker, pick: pick.button };
 }
 
-/** What each date field's menu says about itself. */
-const FIELDS = {
-  due: {
-    options: DUE_OPTIONS,
-    name: function (t) { return 'Move ' + t.title + ' to another date'; },
-    pickName: function (t) { return 'Due date of ' + t.title + ': a date you pick'; },
-    heading: 'Move to a date',
-  },
-};
+const DIALOG_HEADING = 'Move to a date';
 
 /**
- * One date field's options as a menu, with no trigger attached.
+ * The due-date options as a menu, with no trigger attached.
  *
  * One options list, one commit path: `openDatePicker()` mounts it beside
  * whatever row asked (a popover on a fine pointer, the modal on a phone). A
@@ -182,31 +174,28 @@ const FIELDS = {
  * whole reason the phrases go to the server.
  *
  * @param {object} t                          a task summary (`title`, and `due` for the clear option)
- * @param {'due'} field
  * @param {(phrase:string|null) => void} onPick  a phrase, an ISO date from the picker,
- *        or null ("No date" — due only, and only while the task has one)
+ *        or null ("No date", only while the task has a date)
  * @returns {HTMLElement} a `<div class="snooze-menu">`
  */
-export function dateMenu(t, field, onPick) {
-  const spec = FIELDS[field];
+export function dateMenu(t, onPick) {
   const menu = document.createElement('div');
   menu.className = 'snooze-menu';
-  menu.dataset.field = field;
   // The shadcn Popover role (role="dialog"): a non-modal layer over the
   // rows, never part of them.
   menu.setAttribute('role', 'dialog');
   // duplicate-surface-exempt: the mouse's popover for the one date surface a phone gets as #dateDialog in index.html
   menu.dataset.surface = 'row.date';
-  menu.setAttribute('aria-label', spec.name(t));
+  menu.setAttribute('aria-label', 'Move ' + t.title + ' to another date');
 
-  const chips = dateChips(spec.options, {
-    onPick: onPick, current: field === 'due' ? t.due : null, pickLabel: spec.pickName(t),
+  const chips = dateChips(DUE_OPTIONS, {
+    onPick: onPick, current: t.due, pickLabel: 'Due date of ' + t.title + ': a date you pick',
   });
   menu.append(chips.grid, chips.picker);
 
   // `clearable`: a selection — its tasks' dates are not known here,
   // so "No date" is always offered; clearing an undated task changes nothing
-  if (field === 'due' && (t.due || t.clearable)) {
+  if (t.due || t.clearable) {
     const clear = document.createElement('button');
     clear.dataset.track = 'snooze.clear';
     clear.type = 'button';
@@ -238,7 +227,7 @@ function markRow(anchor) {
 
 /** Fine pointer: the menu pinned beside the anchor, closed by an outside
  *  click, a scroll (it is pinned to the viewport) or Escape. */
-function openPopover(t, field, anchor, onPick) {
+function openPopover(t, anchor, onPick) {
   const pop = document.createElement('div');
   pop.className = 'snooze-pop';
   const unmark = markRow(anchor);
@@ -252,7 +241,7 @@ function openPopover(t, field, anchor, onPick) {
   }
   function onOutside(ev) { if (!pop.contains(ev.target)) close(); }
   const handle = { close: close };
-  pop.appendChild(dateMenu(t, field, function (phrase) { close(); onPick(phrase); }));
+  pop.appendChild(dateMenu(t, function (phrase) { close(); onPick(phrase); }));
   document.body.appendChild(pop);
   const r = (anchor || document.body).getBoundingClientRect();
   const w = pop.offsetWidth;
@@ -270,18 +259,18 @@ function openPopover(t, field, anchor, onPick) {
 }
 
 /** Coarse pointer: the vendored editor modal, top-anchored on the phone. */
-function openDialog(t, field, onPick) {
+function openDialog(t, onPick) {
   const dialog = document.getElementById('dateDialog');
   if (!dialog) return;
   const card = modalCard({
-    cardClass: 'date-card', title: FIELDS[field].heading, titleId: 'dateDialogTitle',
+    cardClass: 'date-card', title: DIALOG_HEADING, titleId: 'dateDialogTitle',
     closeLabel: 'Cancel', onClose: function () { dialog.close(); },
   }).card;
   const name = document.createElement('p');
   name.className = 'date-card-task muted';
   name.textContent = t.title;
   let picked;   // undefined = nothing picked; null is a pick ("No date")
-  const menu = dateMenu(t, field, function (phrase) { picked = phrase; dialog.close(); });
+  const menu = dateMenu(t, function (phrase) { picked = phrase; dialog.close(); });
   menu.classList.add('date-sheet');
   card.append(name, menu);
   const handle = { close: function () { dialog.close(); } };
@@ -298,12 +287,11 @@ function openDialog(t, field, onPick) {
  * Ask for a date for one task: a phrase, an ISO date, or null to clear `due`.
  * Nothing is written here — `onPick` runs only on a pick, never on a cancel.
  * @param {object} t
- * @param {'due'} field
  * @param {HTMLElement|null} anchor   what the popover sits beside (a row, a kebab, the bulk bar)
  * @param {(phrase:string|null) => void} onPick
  */
-export function openDatePicker(t, field, anchor, onPick) {
+export function openDatePicker(t, anchor, onPick) {
   closeDatePicker();
-  if (window.matchMedia('(pointer: coarse)').matches) openDialog(t, field, onPick);
-  else openPopover(t, field, anchor, onPick);
+  if (window.matchMedia('(pointer: coarse)').matches) openDialog(t, onPick);
+  else openPopover(t, anchor, onPick);
 }

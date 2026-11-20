@@ -569,7 +569,6 @@ def _move_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today):
     page.locator(".row-menu [data-action='change-date']").click()
     menu = page.locator(".snooze-pop .snooze-menu")
     expect(menu).to_be_visible()
-    expect(menu).to_have_attribute("data-field", "due")
     assert_date_sheet(menu, base)
     shot(page, shots / "story-13-starts-snooze-4-desktop.png")
     menu.get_by_text("Next week", exact=True).click()
@@ -691,7 +690,6 @@ def _settings_row_actions(page: Page, base: str, shots: Path, actions, picker, r
     expect(page.locator(".row-menu")).to_have_count(0)
     row.locator(".trow-main").evaluate(SWIPE_JS, [900, 300])          # synthetic touch: the wiring
     picker = page.locator(".snooze-pop .snooze-menu")
-    expect(picker).to_have_attribute("data-field", "due")
     page.keyboard.press("Escape")
     expect(picker).to_have_count(0)
     assert _get(base, f"/api/tasks/{task_id}")["due"] == due_before    # a cancelled pick writes nothing
