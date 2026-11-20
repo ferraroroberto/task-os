@@ -37,6 +37,21 @@ def test_a_short_account_name_is_matched_in_a_path_but_not_as_a_word() -> None:
     assert leaks(["/home/sam/od/house"], needles) == ["home directory"]
 
 
+def test_an_account_named_like_an_app_word_is_still_caught_in_a_path_only() -> None:
+    # a CI account called "github" would otherwise match the Issues card's own label
+    needles = host_needles(home="/Users/github", user="github", vocabulary=frozenset({"github", "issues"}))
+    assert leaks(["github · last synced", "Issues synced"], needles) == []
+    assert leaks(["/Users/github/od/house"], needles) == ["home directory"]
+
+
+def test_the_app_vocabulary_holds_ui_words_but_not_this_hosts_account() -> None:
+    from tests.e2e._host_identity import _account_name, app_vocabulary
+
+    vocabulary = app_vocabulary()
+    assert "github" in vocabulary
+    assert _account_name().lower() not in vocabulary, "the guard would be blind to this host's own name"
+
+
 def test_a_synthetic_path_is_clean() -> None:
     assert leaks(["onedrive=C:/Users/Public/taskos-e2e/folders/od", "{onedrive}/house/kitchen"], NEEDLES) == []
 

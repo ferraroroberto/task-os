@@ -16,13 +16,17 @@ The needles are the host's own facts, read here, never written down: the home
 directory in both slash forms, the account name as a profile-path segment, and
 the bare account name as a whole word when it is long enough not to collide
 with ordinary words (a three-letter name would match the fixture's own
-people). Matching ignores case, as Windows paths do.
+people) and is not itself a word the app or its fixtures print (a CI account
+called ``github`` would match the Issues card's provider label on every page).
+The path forms stay checked whatever the name is. Matching ignores case, as
+Windows paths do.
 
 Stdlib only, so the unit leg can prove the matcher without a browser.
 """
 
 from __future__ import annotations
 
+import functools
 import getpass
 import re
 from collections.abc import Iterable
@@ -30,6 +34,25 @@ from pathlib import Path
 
 #: Shorter account names are not matched as a bare word (see the module doc).
 MIN_BARE_NAME = 4
+
+
+#: Where the words a page can legitimately print come from: the UI's own
+#: sources and the synthetic data the stories seed.
+_APP_TEXT_DIRS = ("app/webapp/static", "tests/fixtures")
+_APP_TEXT_SUFFIXES = frozenset({".js", ".html", ".py", ".json"})
+_WORD = re.compile(r"[A-Za-z][A-Za-z0-9]{3,}")
+
+
+@functools.lru_cache(maxsize=1)
+def app_vocabulary() -> frozenset[str]:
+    """Every word of four letters or more in the UI sources and seed fixtures, lowercased."""
+    root = Path(__file__).resolve().parents[2]
+    words: set[str] = set()
+    for sub in _APP_TEXT_DIRS:
+        for path in (root / sub).rglob("*"):
+            if path.suffix in _APP_TEXT_SUFFIXES and path.is_file():
+                words.update(w.lower() for w in _WORD.findall(path.read_text(encoding="utf-8", errors="replace")))
+    return frozenset(words)
 
 
 def _account_name() -> str:
@@ -42,7 +65,8 @@ def _account_name() -> str:
 Needle = tuple[str, re.Pattern[str]]
 
 
-def host_needles(home: str | None = None, user: str | None = None) -> list[Needle]:
+def host_needles(home: str | None = None, user: str | None = None,
+                 vocabulary: frozenset[str] | None = None) -> list[Needle]:
     """``(kind, pattern)`` for everything that would identify this host on screen."""
     home = str(Path.home()) if home is None else home
     user = _account_name() if user is None else user
@@ -54,7 +78,8 @@ def host_needles(home: str | None = None, user: str | None = None) -> list[Needl
     if user:
         name = re.escape(user)
         needles.append(("home directory", re.compile(rf"(?:users|home)[\\/]+{name}(?!\w)", re.IGNORECASE)))
-        if len(user) >= MIN_BARE_NAME:
+        vocabulary = app_vocabulary() if vocabulary is None else vocabulary
+        if len(user) >= MIN_BARE_NAME and user.lower() not in vocabulary:
             needles.append(("account name", re.compile(rf"(?<!\w){name}(?!\w)", re.IGNORECASE)))
     return needles
 
