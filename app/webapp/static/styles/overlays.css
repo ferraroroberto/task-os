@@ -195,11 +195,6 @@
   .parent-list, .owner-list { flex: 1 1 auto; max-height: none; }
 }
 
-/* ---- the drawer's delete foot */
-.drawer-danger { padding: 14px 0 18px; }
-.drawer-delete { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 28px; padding: 2px var(--space-sm); color: var(--danger); border-color: var(--deficit-border-soft); }
-.drawer-delete:hover { background: var(--deficit-soft); }
-.drawer-delete .icon { width: var(--icon-title); height: var(--icon-title); }
 .keys-lead { margin: 0 0 10px; font-size: var(--font-caption); }
 .keys-sub { margin: 14px 0 2px; font-size: var(--font-label); }
 .keys-rows { display: grid; }

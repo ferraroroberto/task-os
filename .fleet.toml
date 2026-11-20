@@ -547,7 +547,7 @@ overlay = true
 [[design.review.extra_steps]]
 tab = "today"
 id = "confirm"
-clicks = ["#paneToday .trow .trow-main", "#taskDrawer .drawer-delete"]
+clicks = ["#paneToday .trow .trow-main", "#taskDrawer .drawer-task-more", ".drawer-task-menu [data-action='delete']"]
 overlay = true
 
 # The date sheet from a row's menu.
