@@ -1,10 +1,9 @@
 r"""Prove the story gallery is reproducible: run the e2e suite twice, diff the shots.
 
 `docs/screenshots/` is the on-screen proof `docs/validation.md` links to, so it
-is only worth anything if a change in it means a change in the app. Before the capture rules it did not: an animation still in flight, a pane that had not painted, and the
-run's own wall clock all leaked into the files, so ~30% of them moved between
-two runs of the *same* commit and a maintainer could not tell a visual
-regression from capture noise.
+is only worth anything if a change in it means a change in the app. Two runs of
+one commit must therefore write identical files; otherwise a maintainer cannot
+tell a visual regression from capture noise.
 
 Usage (from the repo root; each run is a full `tests/e2e` pass, ~2 min):
 
@@ -30,14 +29,13 @@ Anything else moving is a determinism regression — the story that writes it
 captured something still in flight, and the fix belongs in that story or in
 `tests/e2e/conftest.py`'s `settle()`, never in these escapes.
 
-Two runs minutes apart answer "is the capture stable?" — and, structurally,
-nothing else. They cannot see the *other* drift, the one that actually bit
-: a gallery that no longer matches what today's code renders. Both
-snapshots are fresh, so a shot that has been wrong in the repo for twenty
-commits compares clean against itself. Nothing was comparing the committed
-bytes, which is why 76 of them had silently drifted before anyone looked.
+Two runs minutes apart answer "is the capture stable?" and nothing else. They
+cannot see a gallery that no longer matches what today's code renders: both
+snapshots are fresh, so a shot that is wrong in the repo compares clean against
+itself. Only a comparison against the committed bytes catches that.
 
-So there is a second mode, and it is the one the pre-ship gate runs:
+The second mode compares against the committed bytes, and it is the one the
+pre-ship gate runs:
 
     & .\.venv\Scripts\python.exe -m scripts.shot_determinism --baseline
     & .\.venv\Scripts\python.exe -m scripts.shot_determinism --check-tree
@@ -57,22 +55,6 @@ tests/e2e`, look at what moved, `git add docs/screenshots`), or something on
 screen is still unpinned. Everything the app paints from a clock, a path or a
 build identity is pinned for exactly this reason — see
 `tests/e2e/conftest.py`'s "deterministic capture" section.
-
-Two captures used to move on their own and are now pinned by their stories:
-
-* Story 22's four desktop shots moved together over the Today drawer behind the
-  add dialog: the drawer opens its first task by itself and the shot caught its
-  fetch half-painted once the host was slow enough to outlast `settle()`'s
-  five-second network wait. Delaying only the page's own task-detail responses
-  past that bound reproduces it on demand; the story now waits for the drawer's
-  title before it opens the dialog.
-* Story 16's Board shots and story 29's row menu depend on where a scroller
-  rests after a layout shift, which two runs of one commit settle differently;
-  `conftest.scroll_to_top` puts them at zero first.
-
-Story 22's phone shot still lands in the glyph band on some runs: the folder
-search magnifier's stroke falls across a sub-pixel, a few pixels at most
-14/255 off. That is this rasteriser differing from itself, not content.
 """
 
 from __future__ import annotations
@@ -101,10 +83,8 @@ E2E_TIMEOUT_S = 1200
 # healthy call returns in milliseconds, so a minute means git itself is stuck.
 GIT_TIMEOUT_S = 60
 
-#: Shots whose *content* legitimately cannot be pinned, with the reason. Empty
-#: Story 06's instance now starts its clock at the suite's instant
-#: (`TASKOS_CLOCK_TICK`) and story 09's install-command shot is framed on the
-#: app's own port, so no shot is exempt from the byte-identical gallery.
+#: Shots whose *content* legitimately cannot be pinned, mapped to the reason.
+#: Empty means every shot must be byte-identical to the gallery.
 ALLOWED_TO_DIFFER: dict[str, str] = {}
 
 #: The raster-noise escape: at most this many pixels, each off by at most this
