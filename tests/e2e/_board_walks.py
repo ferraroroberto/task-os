@@ -12,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Browser, Page, Playwright, expect
+from playwright.sync_api import Browser, BrowserType, Page, Playwright, expect
 
 from tests.e2e._board_steps import (
     COLUMNS,
@@ -740,7 +740,7 @@ def _pick_one_person(page: Page, shots: Path, row, switch, stored: str) -> None:
     assert page.evaluate(stored) == "mine"
 
 
-def _walk_many_members(playwright: Playwright) -> None:
+def _walk_many_members(engine: BrowserType) -> None:
     """An install with eight members keeps Mine, two people, "+5 more" and
     Everyone in the row (five segments, the most one segmented control holds);
     the sheet filters by name, a tick there picks several people, "+N more" is
@@ -758,7 +758,7 @@ def _walk_many_members(playwright: Playwright) -> None:
     raw["time"]["people"] = [{"id": f"p{i}", "name": f"Person {i}"} for i in range(1, 9)]
     cfg.write_text(json.dumps(raw), encoding="utf-8")
     with booted(work, work / "tasks.db", cfg) as base:
-        browser = playwright.chromium.launch(headless=True)
+        browser = engine.launch(headless=True)
         try:
             page = browser.new_page(viewport=DESKTOP)
             page.goto(f"{base}/")

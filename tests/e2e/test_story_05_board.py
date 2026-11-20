@@ -128,7 +128,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Browser, Page, Playwright, expect
+from playwright.sync_api import Browser, BrowserType, Page, Playwright, expect
 
 from tests.e2e._board_steps import (
     DESKTOP,
@@ -231,8 +231,8 @@ def test_desktop_board_day(
         context.close()
     _walk_phone_today_landing_and_board_carousel(base, playwright, shots)
     _walk_second_member_phone(authed_webapp, playwright, shots)
-    _walk_one_member(playwright)
-    _walk_many_members(playwright)
+    _walk_one_member(browser.browser_type)
+    _walk_many_members(browser.browser_type)
 
 
 _JSON = {"content-type": "application/json"}
@@ -479,7 +479,7 @@ def _walk_second_member_phone(base: str, playwright: Playwright, shots: Path) ->
         wk.close()
 
 
-def _walk_one_member(playwright: Playwright) -> None:
+def _walk_one_member(engine: BrowserType) -> None:
     """§ #477 — an install with one member has no Mine · Everyone switch, and
     Today and the Board read as before apart from the scope's renamed label.
     A throwaway instance on the sample with its second member removed."""
@@ -494,7 +494,7 @@ def _walk_one_member(playwright: Playwright) -> None:
     cfg.write_text(json.dumps(raw), encoding="utf-8")
     with booted(work, work / "tasks.db", cfg) as base:
         assert len(_get(base, "/api/me")["people"]) == 1
-        browser = playwright.chromium.launch(headless=True)
+        browser = engine.launch(headless=True)
         try:
             page = browser.new_page(viewport=DESKTOP)
             page.goto(f"{base}/")
