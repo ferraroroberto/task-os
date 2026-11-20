@@ -678,6 +678,10 @@ def _walk_today_horizons(page: Page, base: str, shots: Path) -> None:
         assert pane.locator(".today-horizon-head").evaluate_all(
             "els => els.every(e => getComputedStyle(e).borderTopWidth === '0px' "
             "&& getComputedStyle(e).borderBottomWidth === '0px')")
+        # name and count are centred as boxes: equal heights keep their glyph rows on the same pixels
+        assert pane.locator(".today-horizon-head").evaluate_all(
+            "els => els.every(h => h.querySelector('.overline').getBoundingClientRect().height"
+            " === h.querySelector('.section-count').getBoundingClientRect().height)")
         expect(later.locator(".section-count")).to_have_text(re.compile(r"^\d+$"))
         _clear_toasts(page)
         nodate.scroll_into_view_if_needed()

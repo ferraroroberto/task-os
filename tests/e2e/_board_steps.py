@@ -206,6 +206,12 @@ def _week_lanes(page: Page, base: str) -> None:
         return at(h.querySelector('.board-col-count')) - at(h.querySelector('.board-col-label'));
     })""")
     assert len(offsets) == len(LANES) and all(abs(o) < 0.5 for o in offsets), offsets
+    # a shared baseline is not enough: boxes of different heights centre on different fractional
+    # pixels, and the glyph rows then round a pixel apart in the browser (the baseline probe cannot see it)
+    heights = page.locator("#paneBoard .board-week .board-col-title").evaluate_all("""heads => heads.map(h =>
+        h.querySelector('.board-col-label').getBoundingClientRect().height
+        - h.querySelector('.board-col-count').getBoundingClientRect().height)""")
+    assert len(heights) == len(LANES) and all(abs(d) < 0.01 for d in heights), heights
     lane_boxes = [_lane(page, k).bounding_box() for k in LANES]
     for a, b in zip(lane_boxes, lane_boxes[1:], strict=False):
         assert abs(a["y"] - b["y"]) < 2 and a["x"] + a["width"] <= b["x"] + 1, (a, b)   # one row, left to right
