@@ -227,6 +227,21 @@ async function chipWebUrl(info) {
 }
 
 let pop = null;
+// Where the popover's anchor sat when it opened: the popover is placed from
+// that rect, so a scroll only matters once the anchor has moved from it.
+let popAnchor = null;
+let popAnchorAt = null;
+
+/** Close the popover when a scroll carried its anchor away. WebKit also fires
+ *  `scroll` on a text input and on a scroller that did not move, which must
+ *  not dismiss a popover that has only just opened. */
+function hideIfAnchorMoved() {
+  if (!pop || pop.hidden) return;
+  if (!popAnchor || !popAnchor.isConnected) { hideFolderPopover(); return; }
+  const r = popAnchor.getBoundingClientRect();
+  if (Math.abs(r.top - popAnchorAt.top) > 1 || Math.abs(r.left - popAnchorAt.left) > 1) hideFolderPopover();
+}
+
 function popEl() {
   if (pop) return pop;
   pop = document.createElement('div');
@@ -248,7 +263,7 @@ function popEl() {
     ev.stopPropagation();
     hideFolderPopover();
   }, true);
-  window.addEventListener('scroll', hideFolderPopover, true);
+  window.addEventListener('scroll', hideIfAnchorMoved, true);
   window.addEventListener('resize', hideFolderPopover);
   return pop;
 }
@@ -268,6 +283,8 @@ function placeFolderPopover(el, row, anchor) {
   if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
   el.style.left = left + 'px';
   el.style.top = top + 'px';
+  popAnchor = anchor;
+  popAnchorAt = { top: r.top, left: r.left };
 }
 
 /** Clipboard write with the button flashing "Copied" (exported for the drawer + Settings). */
