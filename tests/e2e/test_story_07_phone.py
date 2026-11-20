@@ -160,7 +160,8 @@ def _row_meta_and_menu(page: Page, shots: Path, meta, project, row):
         // (the tail's own width is not measured against a clone: its leading dot
         // is drawn only beside the words, which the clone has no sibling to ask)
         .filter(p => p.getBoundingClientRect().right > edge + 0.5 || (p !== tail && narrow(p)))
-        .map(p => p.className + ' ' + p.textContent); }""")
+        // the overshoot in px names how much room a wider system face (iOS's) would need
+        .map(p => p.className + ' ' + p.textContent + ' +' + Math.round(p.getBoundingClientRect().right - edge) + 'px'); }""")
     assert cut == [], cut
     expect(row.locator(".trow-move")).to_be_hidden()       # the verb is a fine pointer's; a phone swipes
     row.locator(".trow-kebab").tap()
