@@ -281,7 +281,7 @@ def _week_lane_drag_and_clear(page: Page, base: str, shots: Path) -> None:
     assert ceiling_due and _lane_of(ceiling_due) == "later", ceiling_due
     ceiling.locator(".trow-kebab").click()
     page.locator(".row-menu [data-action='change-date']").click()
-    page.locator(".snooze-pop .snooze-menu[data-field='due'] .snooze-clear").click()
+    page.locator(".snooze-pop .snooze-menu .snooze-clear").click()
     expect(page.locator("#toast")).to_contain_text("Due date cleared")
     assert _get(base, f"/api/tasks/{cid}")["due"] is None
     expect(_lane(page, "later").locator(f".board-list-sub ~ .trow[data-id='{cid}']")).to_have_count(1)
@@ -580,7 +580,7 @@ def _move_verb_sheet(page: Page, base: str, shots: Path, school) -> tuple:
     assert order.index("trow-main") < order.index("trow-move") < order.index("trow-kebab"), order
     sid = int(school.get_attribute("data-id"))
     verb.click()
-    sheet = page.locator(".snooze-pop .snooze-menu[data-field='due']")
+    sheet = page.locator(".snooze-pop .snooze-menu")
     expect(sheet).to_be_visible()
     assert_date_sheet(sheet, base)
     expect(school).to_have_class(re.compile(r"\bis-key-target\b"))     # the row it moves stays marked
@@ -774,7 +774,7 @@ def _bulk_move_and_partial_failure(page: Page, base: str, shots: Path, ids: list
     page.locator(f"#paneBoard .trow[data-id='{ids[0]}'] .trow-check").check()
     page.locator(f"#paneBoard .trow[data-id='{ids[1]}'] .trow-check").check()
     page.locator("#boardBulk .bulk-move").click()
-    sheet = page.locator(".snooze-pop .snooze-menu[data-field='due']")
+    sheet = page.locator(".snooze-pop .snooze-menu")
     expect(sheet).to_be_visible()
     expect(sheet).to_have_attribute("aria-label", "Move 2 selected tasks to another date")
     expect(sheet.locator(".snooze-clear")).to_be_visible()      # a selection may clear its dates

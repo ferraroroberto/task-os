@@ -76,7 +76,7 @@ export function createTaskMenu(ctx) {
 
   function run(action, t, el) {
     if (action.menu) {
-      openDatePicker(t, action.menu, el.closest('.trow') || el, function (phrase) {
+      openDatePicker(t, el.closest('.trow') || el, function (phrase) {
         ctx.actions.run(action, [t], phrase, refocus(t, el));
       });
       return Promise.resolve(false);

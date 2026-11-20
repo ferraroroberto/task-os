@@ -151,7 +151,7 @@ export function mountBulkBar(host, handlers) {
     if (busy) return;
     const n = selection.size();
     const subject = { title: n + ' selected task' + (n === 1 ? '' : 's'), due: null, clearable: true };
-    openDatePicker(subject, 'due', host, function (phrase) { apply({ due: phrase }, function () {}); });
+    openDatePicker(subject, host, function (phrase) { apply({ due: phrase }, function () {}); });
   });
 
   // Set owner…: the square's face is its native select, so the picker

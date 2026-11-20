@@ -92,7 +92,6 @@ def _change_due_from_row(page: Page, base: str, shots: Path, quotes) -> tuple:
     quotes.locator(".trow-kebab").click()
     page.locator(".row-menu [data-action='change-date']").click()
     dates = page.locator(".snooze-pop .snooze-menu")
-    expect(dates).to_have_attribute("data-field", "due")
     # the date sheet (#391): push-outs first, each phrase beside its date
     assert_date_sheet(dates, base)
     assert dates.locator(".snooze-opt[data-phrase='tomorrow'] .snooze-opt-date").get_attribute(

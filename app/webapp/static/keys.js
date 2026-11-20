@@ -308,7 +308,7 @@ export function mountKeys(helpDialog, handlers) {
   /** The date picker beside whatever is focused (snooze.js) — the tabs whose
    *  rows carry no date control get the same options. */
   function askDate(action, tasks, rec, anchor) {
-    openDatePicker(tasks[0], action.menu, anchor, function (phrase) {
+    openDatePicker(tasks[0], anchor, function (phrase) {
       actions.run(action, tasks, phrase, refocus(rec));
     });
   }
