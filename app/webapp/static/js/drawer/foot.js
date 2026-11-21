@@ -9,7 +9,7 @@ import { toast } from '../../toast.js';
 
 /** Delete the open task. The dialog names the task, the subtree that goes
  *  with it, and — for a synced coding task whose issue is still open — that
- *  the next sync brings it back (Roberto's call, never a silent
+ *  the next sync brings it back (the owner's call, never a silent
  *  resurrection). */
 export async function deleteCurrent(ctx, t) {
   const n = Number(t.descendant_count) || 0;
