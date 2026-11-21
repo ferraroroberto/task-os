@@ -4,6 +4,7 @@
 launcher.py               entrypoint: `tray` (default) | `webapp`
 tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground dev server
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
+install.bat               the per-PC install / safe re-run (→ python -m src.install; docs/install.md)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           manager.py (adopt-or-spawn the serve.py launch; cert --check → --ssl-* when a cert exists)
 app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout, /api/team…) · tasks
@@ -53,6 +54,8 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           to say what is on today) · pooled_http.py (keep-alive outbound HTTP client, vendored verbatim)
                           imports/ (one-shot importers over an export file: sharepoint.py — `python -m src.imports.sharepoint`, `scripts\import_sharepoint.bat`)
                           sharing/ (the host address, published to a shared-folder file: address.py — the source address of the route to the share's server · publisher.py — write only on change, last outcome, off-thread)
+                          install/ (the per-PC install: config_merge.py — configs from samples, missing keys only when harmless · machine.py — opener + opt-in sign-in start · requirements.py · checklist.py · __main__.py)
+                          ps_script.py (starts a repo .ps1 under any execution policy, AllSigned included, without overriding it)
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md

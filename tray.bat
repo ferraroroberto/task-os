@@ -23,8 +23,9 @@ REM
 REM  The full detect -> kill -> reclaim -> start -> verify lifecycle lives in
 REM  the ONE shared, machine-local tray_lifecycle.ps1 owned by fleet-config
 REM  (project-scaffolding#153) -- exposed at %USERPROFILE%\.claude\tray\ by
-REM  fleet-config's install.ps1 junction, shelled to with -File, NOT in
-REM  cmd-side `for /f` output capture or inline `powershell -Command "..."`.
+REM  fleet-config's install.ps1 junction, shelled to once (loaded as a ScriptBlock,
+REM  see below), NOT in cmd-side `for /f` output capture or inline logic in a
+REM  `powershell -Command "..."` string.
 REM  Both cmd shapes have failed under non-interactive nested callers (Git Bash
 REM  -> `cmd /c "tray.bat --restart"`, or a finisher skill's Bash tool): detect
 REM  output came back empty, nothing was killed, and --restart silently degraded
@@ -44,7 +45,7 @@ REM  CommandLine still carries the .venv path. Matching the image path would mis
 REM  the real service; the CommandLine scope keeps the sweep on THIS repo only.
 REM
 REM  Mutex-shared ports (a port another app may legitimately own) must NOT go in
-REM  the 8448 reclaim list -- reclaiming one would kill the sibling.
+REM  the reclaim list -- reclaiming one would kill the sibling.
 REM
 REM  Keep this whole file ASCII-only. cmd.exe read-ahead-buffers a chunk of the
 REM  batch file for parsing at the codepage active when the buffer was filled;
@@ -109,9 +110,11 @@ if not exist "%TRAY_PS%" (
     exit /b 1
 )
 
-REM === ADAPT (4/4): replace 8448 with this tray's exclusively-owned
-REM     ports as a comma list, e.g. 8445,8446 . Exclude any mutex-shared port. ===
-set "OWNED_PORTS=8448"
+REM === ADAPT (4/4): this tray's exclusively-owned port. It is read from the
+REM     ignored config/config.json (`port`, else the sample's) by `launcher.py port`
+REM     inside the PowerShell line below, never a literal here: a second checkout
+REM     on another port (a worktree, a second install) must reclaim its own port,
+REM     not the live one. Exclude any mutex-shared port. ===
 REM Optional override for the restart-verification probe. Leave blank and the
 REM helper probes https:// then http:// on 127.0.0.1:<first-owned-port>/api/version
 REM (HTTPS first because fleet PWAs are HTTPS; loopback so an auth-gated endpoint
@@ -119,10 +122,15 @@ REM takes its bypass and a public-name leaf's cert is skipped - #147). Set this
 REM only for a non-standard path, e.g. http://127.0.0.1:8000/admin/api/version.
 set "VERSION_URL="
 
-set "RESTART_ARG="
-if defined WANT_RESTART set "RESTART_ARG=-Restart"
-
-%PS% -NoProfile -NonInteractive -File "%TRAY_PS%" launch -AppName "%TRAY_APP_NAME%" -ScriptDir "%SCRIPT_DIR_ARG%" -VenvDir "%TRAY_VENV%" -TrayMatch "launcher\.py\s+tray" -Ports "%OWNED_PORTS%" -TrayLaunch "%TRAY_LAUNCH%" -VersionUrl "%VERSION_URL%" !RESTART_ARG!
+REM  The helper is loaded as text and run as a ScriptBlock, not started with -File: -File refuses
+REM  an unsigned script under an AllSigned (or Restricted) execution policy, and overriding the
+REM  policy on the command line would weaken the machine's own control. The values travel in the
+REM  environment (set above), so no quoting nests inside the -Command string, and the process that
+REM  carries them is powershell.exe, which the helper's tray detection (python processes only)
+REM  can never mistake for the tray. The port comes from `launcher.py port` (the config), and an
+REM  empty answer stops here rather than reclaiming nothing. An `exit` inside the helper ends
+REM  this process with its code.
+%PS% -NoProfile -NonInteractive -Command "$p = & (Join-Path $env:TRAY_VENV 'Scripts\python.exe') (Join-Path $env:SCRIPT_DIR_ARG 'launcher.py') port; if (-not ($p -match '^\d+$')) { [Console]::Error.WriteLine('ERROR: could not read the port from config (launcher.py port)'); exit 1 }; $a = @{ AppName = $env:TRAY_APP_NAME; ScriptDir = $env:SCRIPT_DIR_ARG; VenvDir = $env:TRAY_VENV; TrayMatch = 'launcher\.py\s+tray'; Ports = [string]$p; TrayLaunch = $env:TRAY_LAUNCH; VersionUrl = $env:VERSION_URL }; if ($env:WANT_RESTART) { $a.Restart = $true }; try { & ([scriptblock]::Create([IO.File]::ReadAllText($env:TRAY_PS))) launch @a } catch { [Console]::Error.WriteLine(($_ | Out-String)); exit 1 }; exit 0"
 exit /b %ERRORLEVEL%
 
 REM  Standalone start (project-scaffolding#345): the shared helper is missing,

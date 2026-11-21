@@ -2,8 +2,9 @@
 
 Usage:
     python launcher.py            # same as `tray`
-    python launcher.py tray       # tray icon owning the webapp on :8448
+    python launcher.py tray       # tray icon owning the webapp on the configured port
     python launcher.py webapp     # foreground webapp (dev / headless box)
+    python launcher.py port       # print the configured port (tray.bat reclaims it)
 
 Puts its own folder on ``sys.path`` so the top-level packages (``app``,
 ``src``, ``scripts``) resolve without an outer namespace — the folder is the
@@ -25,6 +26,10 @@ def main(argv: list[str]) -> int:
     from src.logger import TRAY_LOG_FILE, configure_logging
 
     command = argv[1] if len(argv) > 1 else "tray"
+    if command == "port":
+        # stdout carries the number alone: tray.bat reads it as this checkout's owned port
+        print(load_config().port)
+        return 0
     # the tray spawns the webapp, which logs to the default file: sharing it would
     # make every rollover rename fail on Windows
     configure_logging(log_file=TRAY_LOG_FILE if command == "tray" else None)
@@ -51,7 +56,7 @@ def main(argv: list[str]) -> int:
         )
         return 0
 
-    print(f"unknown command {command!r} — use: tray | webapp", file=sys.stderr)
+    print(f"unknown command {command!r} — use: tray | webapp | port", file=sys.stderr)
     return 2
 
 
