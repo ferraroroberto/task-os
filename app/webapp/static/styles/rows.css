@@ -116,6 +116,10 @@
 /* the figures sit level on one centre line, so a chip's box never grows the line */
 .trow-meta .action-row-meta-tail { display: flex; align-items: center; }
 .action-row-meta-tail > * + * { margin-left: 4px; }
+/* A dense tail (five figures or more: a due, chips and counts) packs a pixel tighter
+   per gap, so the busiest row still fits the 390px line in a wider system face (iOS's
+   is a few pixels broader than the desktop faces). */
+.action-row-meta-tail:has(> :nth-child(5)) > * + * { margin-left: 3px; }
 /* The exception chips (the tone map): the meta line's own 14px, not the
    chip's caption size, and a tighter box so the 60px row keeps its height. */
 .trow-meta .trow-flag { padding: 0 5px; font-size: inherit; line-height: 1.35; gap: 2px; }

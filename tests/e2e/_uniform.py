@@ -108,6 +108,12 @@ def assert_focus_ring(page: Page, button: Locator) -> None:
     button.focus()
     page.keyboard.press("Shift+Tab")
     page.keyboard.press("Tab")
+    # macOS WebKit's Tab skips buttons (only Option+Tab visits every control),
+    # so the step above lands elsewhere there: repeat it with Option held.
+    if not button.evaluate("el => el === document.activeElement"):
+        button.focus()
+        page.keyboard.press("Alt+Shift+Tab")
+        page.keyboard.press("Alt+Tab")
     style = button.evaluate("el => { const s = getComputedStyle(el);"
                             " return [el.matches(':focus-visible'), s.outlineStyle, parseFloat(s.outlineWidth)]; }")
     assert style[0] and style[1] != "none" and style[2] >= 2, style
