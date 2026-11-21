@@ -152,7 +152,9 @@ if (-not (Test-Path $py)) {
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
-. (Join-Path $PSScriptRoot "box_lock_gate.ps1"); Enter-BoxLockGate
+# Loaded as text, not dot-sourced from its file: under an AllSigned execution policy a dot-sourced
+# unsigned file is refused, while a ScriptBlock made from its text runs with the policy unchanged.
+. ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $PSScriptRoot "box_lock_gate.ps1")))); Enter-BoxLockGate
 
 Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests assets launcher.py }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }

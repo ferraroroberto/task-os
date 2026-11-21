@@ -17,10 +17,10 @@ The lists here come from the code's own read and write paths (`src/config.py`, `
 ```powershell
 git clone https://github.com/ferraroroberto/task-os <checkout>
 cd <checkout>
-py -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-copy config\config.sample.json config\config.json
+.\scripts\install.bat                 # -WhatIf first lists every change and makes none
 ```
+
+`scripts\install.bat` creates the `.venv`, installs the requirements, copies `config\config.json` from the sample when it is missing (an existing one keeps every value) and registers the folder opener when this user has none. It ends with a checklist; its *config reviewed for this PC* line names the keys below that still hold the sample's values. Details: [Install and update](install.md).
 
 Edit `config\config.json` **before the first run** (the keys are in [Configuration](configuration.md)). The sample carries the author's values, so each of these needs a decision on this machine:
 
@@ -52,19 +52,22 @@ Left-click the tray icon to open the app. A fresh install opens on an empty Toda
 **Optional, per machine**
 
 - Phone access: `scripts\gen_tailscale_cert.py`, `scripts\gen_token.py`, `python -m src.password set` — see [Phone access, sign-in and team mode](access.md).
-- The folder opener for `taskos://` links: the install command is in Settings → Folder opener; it registers a per-user handler and an `opener.env` of this machine's placeholders.
+- The folder opener for `taskos://` links: `scripts\install.bat` registers it when this user has none (a per-user handler and an `opener.env` of this machine's placeholders); Settings → Folder opener holds the same install command for a PC without the checkout.
+- Starting the tray at sign-in: `scripts\install.bat --startup`.
 - The `tasks` CLI: put `tasks.bat` on `PATH`.
 
 **Update**
 
 ```powershell
-git pull
-tray.bat --restart            # reclaims the port, starts fresh, checks the served build against HEAD
+git pull --ff-only
+tray.bat --restart            # reclaims the configured port, starts fresh, checks the served build against HEAD
 ```
+
+No other step: every file a run writes is gitignored, so the pull never meets a local edit. Re-running `scripts\install.bat` afterwards is safe and picks up a new requirement or config key.
 
 `GET /api/version` reports the served `git_sha`; it must equal `git rev-parse --short HEAD` after a restart. A schema change migrates itself at startup.
 
-`tray.bat --restart` needs the shared tray helper that the author's other repos install under `%USERPROFILE%\.claude\tray`; without it the command stops with an error rather than start over a stale build. On a machine without it, choose Quit from the tray menu, run `git pull`, then `tray.bat`, and check `/api/version` the same way.
+`tray.bat --restart` needs the shared tray helper that the author's other repos install under `%USERPROFILE%\.claude\tray`; without it the command stops with an error rather than start over a stale build. On a machine without it, choose Quit from the tray menu, run `git pull --ff-only`, then `tray.bat`, and check `/api/version` the same way.
 
 ## Migrate from an existing machine
 
@@ -80,7 +83,7 @@ Stop the app on the old machine first (tray menu → Quit), so the database is c
 | The markdown mirror | the folder `mirror.dir` names | Do not copy. It is rebuilt from the database on the first start, and a folder another install wrote into is treated as foreign edits. Point the new machine's `mirror.dir` at the same synced folder, or at an empty one. |
 | Team avatars | `data/avatars/` | Optional, team mode only. |
 | HTTPS certificate | `webapp/certificates/{cert,key}.pem` | Do not copy. It is issued for one machine's tailnet name; run `scripts\gen_tailscale_cert.py` on the new one. |
-| Folder opener | `%LOCALAPPDATA%` task-os folder and a per-user registry entry | Do not copy. Reinstall it from Settings → Folder opener; it is per machine. |
+| Folder opener | `%LOCALAPPDATA%` task-os folder and a per-user registry entry | Do not copy. `scripts\install.bat` registers it on the new machine; it is per machine. |
 | Notion import token | `.env` keys `NOTION_API_TOKEN` and `NOTION_TASKS_DB_ID` | Only if you re-run the one-shot Notion import. Create `.env` by hand on the new machine; its values never travel through the repository. |
 | SharePoint column map | `config/sharepoint-mapping.json` | Only if you re-run the one-shot SharePoint import. |
 

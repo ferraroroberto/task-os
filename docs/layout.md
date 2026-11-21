@@ -53,10 +53,12 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           to say what is on today) · pooled_http.py (keep-alive outbound HTTP client, vendored verbatim)
                           imports/ (one-shot importers over an export file: sharepoint.py — `python -m src.imports.sharepoint`, `scripts\import_sharepoint.bat`)
                           sharing/ (the host address, published to a shared-folder file: address.py — the source address of the route to the share's server · publisher.py — write only on change, last outcome, off-thread)
+                          install/ (the per-PC install: config_merge.py — configs from samples, missing keys only when harmless · machine.py — opener + opt-in sign-in start · requirements.py · checklist.py · __main__.py)
+                          ps_script.py (starts a repo .ps1 under any execution policy, AllSigned included, without overriding it)
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
-scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
+scripts/                  install.bat (the per-PC install / safe re-run → python -m src.install; docs/install.md), verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py (members), set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic; domain folders archive/ · tasks/ · search/ · issues/ · runtime/ · gates/ · imports/ keep the flat top under 40 modules) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic

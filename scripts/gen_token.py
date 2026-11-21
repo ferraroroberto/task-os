@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"   {token}")
     print()
     who = f"{args.person}'s phone" if args.person else "the phone"
-    print(f"Next: tray.bat --restart, then on {who} open https://<your-host>.ts.net:8448,")
+    print(f"Next: tray.bat --restart, then on {who} open https://<your-host>.ts.net:{config.port},")
     setter = f"scripts/set_password.py --person {args.person}" if args.person else "python -m src.password set"
     print(f"paste the token at /login (or set a password: {setter}, which prompts for it).")
     if args.force:
