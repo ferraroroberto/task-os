@@ -1,6 +1,6 @@
-"""``python -m src.install [-WhatIf] [--startup]``: install.bat's second half.
+"""``python -m src.install [-WhatIf] [--startup]``: scripts/install.bat's second half.
 
-install.bat creates the ``.venv`` (when missing) and then runs this module from
+scripts/install.bat creates the ``.venv`` (when missing) and then runs this module from
 it. Each step prints one ``[status] item`` line, and the run ends with the
 checklist. Exit 1 when a step failed or a config could not be read, else 0.
 """
@@ -54,14 +54,14 @@ def run(root: Path, *, whatif: bool, startup: bool, startup_folder: Path | None 
     for check in build_checklist(root, startup_folder=startup_folder, probe=probe):
         _line(check.state, check.item, check.detail)
     if whatif:
-        print("\n-WhatIf: nothing was changed. Run install.bat without it to apply the steps above.")
+        print("\n-WhatIf: nothing was changed. Run scripts\\install.bat without it to apply the steps above.")
     return 1 if _BAD.intersection(statuses) else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-    parser = argparse.ArgumentParser(prog="install.bat", description="install or update task-os on this PC")
+    parser = argparse.ArgumentParser(prog="scripts\\install.bat", description="install or update task-os on this PC")
     parser.add_argument("-WhatIf", "--whatif", dest="whatif", action="store_true",
                         help="list every change and make none")
     parser.add_argument("--startup", action="store_true",

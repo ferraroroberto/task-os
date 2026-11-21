@@ -9,12 +9,12 @@ You need **Git** and **Python 3.14** (from python.org, with the `py` launcher). 
 ```powershell
 git clone https://github.com/ferraroroberto/task-os <folder>
 cd <folder>
-.\install.bat -WhatIf     # optional: list every change, make none
-.\install.bat             # add --startup to also start the tray at sign-in
+.\scripts\install.bat -WhatIf     # optional: list every change, make none
+.\scripts\install.bat             # add --startup to also start the tray at sign-in
 tray.bat                  # tray icon -> the app on the configured port (8448 by default)
 ```
 
-`install.bat` does, in order, and prints one `[status]` line per step:
+`scripts\install.bat` does, in order, and prints one `[status]` line per step:
 
 1. **`.venv`**: created with `py -3.14 -m venv .venv` when missing, `kept` when present.
 2. **Requirements**: whatever pip's own resolver says `requirements.txt` still needs, nothing else (`unchanged` when nothing is missing).
@@ -28,7 +28,7 @@ It ends with a **checklist**, one line each, marked `ok`, `missing` (with the st
 - set your name in **Settings → Your name** (comments and activity are signed with it);
 - for the phone: a certificate (`scripts/gen_tailscale_cert.py`) and a token or password, see [access.md](access.md).
 
-Walked once in a temp folder: the clone, then `install.bat -WhatIf` (it reports `would-create` for the venv and configs and writes nothing), then `install.bat` (`created`), then a second `install.bat` (`unchanged` everywhere).
+Walked once in a temp folder: the clone, then `scripts\install.bat -WhatIf` (it reports `would-create` for the venv and configs and writes nothing), then `scripts\install.bat` (`created`), then a second `scripts\install.bat` (`unchanged` everywhere).
 
 ## Settings that already exist
 
@@ -54,7 +54,7 @@ Nothing else is needed:
 - **The tree stays clean.** Every file a run writes is gitignored: configs, `data/` (database, logs, backups), `.env`, `mirror/`, `webapp/` (certificates), `tmp/`, the gate's caches. `.venv` is written without a trailing slash, so a junctioned venv matches too. A pull therefore never meets a local edit.
 - **No tracked file is rewritten at runtime.** The runtime-write ratchet refuses a write into a code folder.
 - **No tracked file holds a machine value.** The port `tray.bat` reclaims is the config's (`launcher.py port`), and the rest is read from the ignored config.
-- **Re-running `install.bat` after a pull is safe** and picks up a new requirement or config key.
+- **Re-running `scripts\install.bat` after a pull is safe** and picks up a new requirement or config key.
 
 ## Execution policy
 

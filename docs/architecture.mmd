@@ -104,7 +104,7 @@ flowchart LR
   subgraph ops["Process / proof"]
     tray["app/tray · tray.bat --restart (reclaims the port launcher.py port reads from config)<br/>manager.py: cert --check → uvicorn --ssl-*"]
     gate["scripts/verify-before-ship.ps1<br/>under AllSigned: python -m src.ps_script (loads it as text)"]
-    install["install.bat → src/install/<br/>.venv · requirements · configs from samples (only missing keys that change nothing, backup first)<br/>opener when unregistered · opt-in sign-in start · checklist ok / missing / unknown · -WhatIf"]
+    install["scripts\install.bat → src/install/<br/>.venv · requirements · configs from samples (only missing keys that change nothing, backup first)<br/>opener when unregistered · opt-in sign-in start · checklist ok / missing / unknown · -WhatIf"]
     renmap["scripts/apply_renumber_map.py (#176)<br/>a saved renumber map → the same heal, --dry-run first"]
     seed["tests/fixtures/seed.py<br/>synthetic dataset"]
   end

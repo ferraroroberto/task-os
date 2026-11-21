@@ -67,7 +67,7 @@ def ensure_requirements(repo: Path, *, whatif: bool) -> RequirementsStep:
     if not running_in_venv(repo):
         if whatif:
             return RequirementsStep("would-install", detail="everything in requirements.txt, into the new .venv")
-        return RequirementsStep("failed", detail=f"not running from {repo / '.venv'} (start through install.bat)")
+        return RequirementsStep("failed", detail=f"not running from {repo / '.venv'} (start through scripts\\install.bat)")
     missing, problem = missing_packages(requirements)
     if missing is None:
         return RequirementsStep("failed", detail=problem)

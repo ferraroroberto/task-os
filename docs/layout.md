@@ -4,7 +4,6 @@
 launcher.py               entrypoint: `tray` (default) | `webapp`
 tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground dev server
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
-install.bat               the per-PC install / safe re-run (→ python -m src.install; docs/install.md)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           manager.py (adopt-or-spawn the serve.py launch; cert --check → --ssl-* when a cert exists)
 app/webapp/routers/       misc (shell, /healthz, /api/version, /opener/opener.{cmd,ps1}) · auth (/login, /api/login|logout, /api/team…) · tasks
@@ -59,7 +58,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
-scripts/                  verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
+scripts/                  install.bat (the per-PC install / safe re-run → python -m src.install; docs/install.md), verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py (members), set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map)
 tests/                    unit (hermetic; domain folders archive/ · tasks/ · search/ · issues/ · runtime/ · gates/ · imports/ keep the flat top under 40 modules) + fixtures/seed.py (synthetic dataset) + fixtures/emails_fixture.py (a tiny synthetic

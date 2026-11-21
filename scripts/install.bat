@@ -1,10 +1,10 @@
 @echo off
 REM ============================================================================
-REM  install.bat - one install for a fresh PC, and a safe re-run on a used one.
+REM  scripts\install.bat - one install for a fresh PC, and a safe re-run on a used one.
 REM ----------------------------------------------------------------------------
-REM    install.bat              create .venv when missing, then python -m src.install
-REM    install.bat -WhatIf      list every change, make none
-REM    install.bat --startup    also start the tray at sign-in
+REM    scripts\install.bat      create .venv when missing, then python -m src.install
+REM    scripts\install.bat -WhatIf   list every change, make none
+REM    scripts\install.bat --startup also start the tray at sign-in
 REM
 REM  Nothing this PC already has is overwritten: an existing .venv is kept, a
 REM  config only gains the keys it lacks (after a backup), and a registration
@@ -17,14 +17,15 @@ REM  reads it in the console codepage).
 REM ============================================================================
 
 setlocal
-cd /d "%~dp0" || exit /b 1
+REM  It lives in scripts\ and works from the repo root, its parent folder.
+cd /d "%~dp0.." || exit /b 1
 set "PYTHONUTF8=1"
 
 set "WHATIF="
 for %%A in (%*) do if /i "%%~A"=="-WhatIf" set "WHATIF=1"
 for %%A in (%*) do if /i "%%~A"=="--whatif" set "WHATIF=1"
 
-set "VENV_PY=%~dp0.venv\Scripts\python.exe"
+set "VENV_PY=%CD%\.venv\Scripts\python.exe"
 if exist "%VENV_PY%" goto :have_venv
 if defined WHATIF goto :whatif_no_venv
 
@@ -54,7 +55,7 @@ if not defined BASE_PY goto :no_python
 exit /b %ERRORLEVEL%
 
 :no_python
-echo ERROR: Python 3.14 not found. Install it from python.org (with the py launcher), then re-run install.bat.
+echo ERROR: Python 3.14 not found. Install it from python.org (with the py launcher), then re-run scripts\install.bat.
 exit /b 1
 
 REM  The stack is fixed at Python 3.14: the py launcher first, then a python on PATH.

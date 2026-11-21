@@ -37,9 +37,9 @@ def _config(root: Path) -> tuple[dict[str, Any] | None, str]:
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
-        return None, f"config/config.json is not valid JSON ({exc}); fix it, then re-run install.bat"
+        return None, f"config/config.json is not valid JSON ({exc}); fix it, then re-run scripts\\install.bat"
     if not isinstance(data, dict):
-        return None, "config/config.json is not a JSON object; fix it, then re-run install.bat"
+        return None, "config/config.json is not a JSON object; fix it, then re-run scripts\\install.bat"
     return data, ""
 
 
@@ -119,7 +119,7 @@ def build_checklist(root: Path, *, startup_folder: Path | None = None, scheme: s
                     probe: bool = True) -> list[Check]:
     """The checklist for the checkout at ``root``."""
     checks = [Check("python environment (.venv)", "ok" if running_in_venv(root) else "missing",
-                    "" if running_in_venv(root) else "run install.bat (without -WhatIf) to create it")]
+                    "" if running_in_venv(root) else "run scripts\\install.bat (without -WhatIf) to create it")]
     data, problem = _config(root)
     checks.append(Check("config/config.json", "ok" if data is not None else "missing", problem))
     if data is None:
@@ -135,10 +135,10 @@ def build_checklist(root: Path, *, startup_folder: Path | None = None, scheme: s
 
     opener = opener_state(scheme)
     checks.append(Check(f"folder opener ({scheme}://)", {True: "ok", False: "missing", None: "unknown"}[opener],
-                        {True: "", False: "re-run install.bat", None: "the registry could not be read"}[opener]))
+                        {True: "", False: "re-run scripts\\install.bat", None: "the registry could not be read"}[opener]))
     entry = startup_entry(root, startup_folder or startup_dir())
     checks.append(Check("start at sign-in", "ok" if entry else "missing",
-                        "" if entry else "optional: install.bat --startup, or start tray.bat by hand"))
+                        "" if entry else "optional: scripts\\install.bat --startup, or start tray.bat by hand"))
     helper = _tray_helper().is_file()
     checks.append(Check("tray.bat --restart (shared tray helper)", "ok" if helper else "missing",
                         "" if helper else "a plain tray.bat start works; --restart needs fleet-config's helper"))

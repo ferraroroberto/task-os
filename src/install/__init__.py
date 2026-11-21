@@ -1,4 +1,4 @@
-"""The per-PC install: ``install.bat`` → ``python -m src.install``.
+"""The per-PC install: ``scripts/install.bat`` → ``python -m src.install``.
 
 Every step keeps what the PC already has. A config file is created from its
 committed ``*.sample.json`` only when missing; an existing one only gains the

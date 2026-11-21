@@ -115,7 +115,7 @@ def startup_script(repo: Path) -> str:
     return (
         "@echo off\r\n"
         "chcp 65001 >nul\r\n"
-        "REM Starts the task-os tray at sign-in (written by install.bat --startup). Delete this file to stop it.\r\n"
+        "REM Starts the task-os tray at sign-in (written by scripts\\install.bat --startup). Delete this file to stop it.\r\n"
         f'call "{repo.resolve() / "tray.bat"}"\r\n'
     )
 
@@ -128,7 +128,7 @@ def ensure_startup(repo: Path, *, whatif: bool, enable: bool, folder: Path | Non
     if existing is not None:
         return MachineStep(item, "kept", f"already present: {existing.name}")
     if not enable:
-        return MachineStep(item, "not-registered", "opt-in: install.bat --startup")
+        return MachineStep(item, "not-registered", "opt-in: scripts\\install.bat --startup")
     target = where / STARTUP_FILE_NAME
     if whatif:
         return MachineStep(item, "would-register", str(target))
