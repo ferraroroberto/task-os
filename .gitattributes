@@ -2,3 +2,6 @@
 # in places (labels, multi-line blocks) and a clone with autocrlf=false would
 # otherwise ship a broken handler.
 assets/opener/*.cmd text eol=crlf
+# The same for the root launchers and the installer (labels, goto, multi-line blocks).
+/*.bat text eol=crlf
+scripts/*.bat text eol=crlf
