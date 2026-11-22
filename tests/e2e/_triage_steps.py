@@ -121,7 +121,7 @@ def _open_drawer_with_activity(page: Page, base: str, shots: Path, task_id: int,
     expect(first_act).to_have_attribute("data-field", "due")
     expect(first_act.locator(".activity-old")).to_have_text(old_due)
     expect(first_act.locator(".activity-new")).to_have_text(new_due)
-    expect(first_act.locator(".activity-meta")).to_contain_text("Roberto")  # X-Actor default from the sample config
+    expect(first_act.locator(".activity-meta")).to_contain_text("Casey")  # X-Actor default from the sample config
     # The list stays visible beside the drawer (side panel, not an overlay).
     board_box = page.locator("#boardHost").bounding_box()
     drawer_box = drawer.bounding_box()

@@ -91,9 +91,9 @@ def _settings_then_file_edit_imported(page, base: str, shots: Path, inst, n_task
     assert (act["field"], act["actor"], act["old_value"], act["new_value"]) == ("due", "md", old_due, "2026-12-24")
     md_comment = [c for c in detail["comments"] if c["origin"] == "md"][-1]
     assert md_comment["body"] == "checked the tiles supplier, they deliver on Fridays"
-    assert md_comment["author"] == "Roberto Ferraro"  # the configured owner (sample config)
+    assert md_comment["author"] == "Casey Sample"  # the configured owner (sample config)
     # …and the file converged to canonical form (re-exported with the new comment line)
-    _wait(lambda: "· Roberto Ferraro · md: checked the tiles supplier" in path.read_text(encoding="utf-8"),
+    _wait(lambda: "· Casey Sample · md: checked the tiles supplier" in path.read_text(encoding="utf-8"),
           what="the re-export")
     page.goto(f"{base}/#task/{task_id}")
     drawer = page.locator("#taskDrawer")
