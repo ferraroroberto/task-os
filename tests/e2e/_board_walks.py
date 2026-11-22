@@ -769,6 +769,7 @@ def _walk_many_members(engine: BrowserType) -> None:
             people.locator(".segmented-item[data-kind='more']").click()
             sheet = page.locator("#ownerDialog")
             expect(sheet).to_be_visible()
+            surface(page, "strip.people-sheet")
             expect(sheet.locator(".filter-check")).to_have_count(7)
             sheet.locator(".owner-filter").fill("person 8")
             expect(sheet.locator(".filter-check:not([hidden])")).to_have_text(["Person 8"])
