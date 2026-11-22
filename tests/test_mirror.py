@@ -371,7 +371,7 @@ def test_appended_comment_lines_become_md_comments(env, mirror: Mirror) -> None:
     assert res["comments_added"] == 2
     comments = repo.list_comments(conn, tid)
     assert [c["body"] for c in comments] == ["existing thread", "hello from the editor", "dated line\nwith a second line"]
-    assert comments[1]["origin"] == "md" and comments[1]["author"] == "Roberto Ferraro"  # configured owner
+    assert comments[1]["origin"] == "md" and comments[1]["author"] == "Casey Sample"  # configured owner
     assert comments[2]["origin"] == "md" and comments[2]["author"] == "Alex Chen"
     assert comments[2]["ts"] == later
     # the known lines were not duplicated; a second import of the canonical file adds nothing
@@ -422,7 +422,7 @@ def test_unsigned_line_imports_once(env, mirror: Mirror) -> None:
     bodies = [c["body"] for c in repo.list_comments(conn, tid)]
     assert bodies.count("nobody signed this") == 1, bodies
     stored = next(c for c in repo.list_comments(conn, tid) if c["body"] == "nobody signed this")
-    assert stored["author"] == "Roberto Ferraro"  # the configured owner, per the sample config
+    assert stored["author"] == "Casey Sample"  # the configured owner, per the sample config
 
 
 def test_deleted_comment_lines_are_not_deletions(env, mirror: Mirror) -> None:
