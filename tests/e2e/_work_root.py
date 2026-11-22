@@ -82,7 +82,19 @@ MASK_PATHS_JS = """
   }
   for (const el of document.querySelectorAll('input, textarea')) {
     const was = el.value, now = swap(was || '');
-    if (now !== was) { el.value = now; undo.push(() => { el.value = was; }); }
+    if (now === was) continue;
+    // Assigning a value drops the field's selection, which a shot may be showing.
+    const put = (v) => {
+      let sel = null;
+      try { sel = [el.selectionStart, el.selectionEnd, el.selectionDirection]; } catch (e) { /* not a text field */ }
+      el.value = v;
+      if (sel && sel[0] !== null && document.activeElement === el) {
+        const at = (i) => Math.min(i, v.length);
+        el.setSelectionRange(at(sel[0]), at(sel[1]), sel[2]);
+      }
+    };
+    put(now);
+    undo.push(() => put(was));
   }
   window.__taskosPathUnmask = () => { undo.forEach((f) => f()); delete window.__taskosPathUnmask; };
 }
