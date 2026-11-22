@@ -30,6 +30,7 @@ export function lookupEls() {
     issuesSyncNow: document.getElementById('issuesSyncNow'),
     paletteOpen: document.getElementById('paletteOpen'),
     textSizeControl: document.getElementById('textSizeControl'),
+    fullscreenRow: document.getElementById('fullscreenRow'),
     rowActionsMeta: document.getElementById('rowActionsMeta'),
     swipeRight: document.getElementById('swipeRightSelect'),
     swipeLeft: document.getElementById('swipeLeftSelect'),

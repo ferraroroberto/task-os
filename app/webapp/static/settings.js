@@ -68,7 +68,7 @@ import { wireSignOut } from './js/settings/access.js';
 import { renderArchive } from './js/settings/archive.js';
 import { wireCalendarRefresh } from './js/settings/calendar.js';
 import { wireCaptureRunNow } from './js/settings/capture.js';
-import { wirePaletteOpen, wireTextSize } from './js/settings/device.js';
+import { wireFullscreen, wirePaletteOpen, wireTextSize } from './js/settings/device.js';
 import { lookupEls } from './js/settings/elements.js';
 import { mountFeatures } from './js/settings/features.js';
 import { renderIssues, wireIssueSyncNow } from './js/settings/issues.js';
@@ -110,6 +110,7 @@ export function mountSettings(opts) {
   wireIssueSyncNow(ctx);
   wirePaletteOpen(ctx);
   wireTextSize(ctx);
+  wireFullscreen(ctx);
   wireRowActions(ctx);
   wireCaptureRunNow(ctx);
   wireCalendarRefresh(ctx);
