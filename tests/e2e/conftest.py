@@ -75,7 +75,13 @@ from tests.conftest import write_test_config
 from tests.e2e._boot_lock import boot_lock
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
-from tests.e2e._host_identity import RENDERED_TEXT_JS, describe, leaks
+from tests.e2e._host_identity import (
+    RENDERED_TEXT_JS,
+    SYNTHETIC_NEEDLE,
+    describe,
+    host_needles,
+    leaks,
+)
 from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest looks for here
     get_json,
     post_json,
@@ -84,6 +90,7 @@ from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest loo
 )
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
 from tests.e2e._work_root import E2E_SHARED_ROOT, E2E_WORK_ROOT, MASK_PATHS_JS, path_mask_rules
+from tests.host._synthetic_host import synthetic_host_env
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
@@ -255,7 +262,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     log_path = work / f"webapp{worker_suffix()}.log"
     if config_path is None:
         config_path = write_test_config(work / "config.json")
-    env = {
+    env = synthetic_host_env({
         **os.environ,
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUTF8": "1",
@@ -267,7 +274,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
         "TASKOS_CAPTURE_DELAY_S": "3600",
         "TASKOS_ISSUE_SYNC_DELAY_S": "3600",
         **(extra_env or {}),
-    }
+    }, work)
     kwargs: dict = dict(cwd=str(REPO_ROOT), env=env)
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
@@ -618,7 +625,7 @@ def _assert_no_host_identity(page: Page) -> None:
     the system temp dir, inside the user profile on Windows: a story that
     paints one of its own paths would photograph the account name.
     """
-    found = leaks(page.evaluate(RENDERED_TEXT_JS))
+    found = leaks(page.evaluate(RENDERED_TEXT_JS), [*host_needles(), SYNTHETIC_NEEDLE])
     if found:
         raise AssertionError(describe(found))
 

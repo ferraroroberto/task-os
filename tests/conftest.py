@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 from src import db as dbmod
+from tests.host._synthetic_host import synthetic_host  # noqa: F401 -- registers the fixture
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_CONFIG = REPO_ROOT / "config" / "config.sample.json"

@@ -32,6 +32,8 @@ import re
 from collections.abc import Iterable
 from pathlib import Path
 
+from tests.host._synthetic_host import SYNTHETIC_ACCOUNT
+
 #: Shorter account names are not matched as a bare word (see the module doc).
 MIN_BARE_NAME = 4
 
@@ -57,6 +59,7 @@ def app_vocabulary() -> frozenset[str]:
 
 def _account_name() -> str:
     try:
+        # host-identity-exempt: the privacy check looks for this machine's real account name on a page, on purpose
         return getpass.getuser()
     except Exception:  # noqa: BLE001 — no name to establish means no name to leak
         return ""
@@ -64,10 +67,14 @@ def _account_name() -> str:
 
 Needle = tuple[str, re.Pattern[str]]
 
+#: The e2e app runs under the synthetic account (``synthetic_host_env``), so a page that shows it renders an account name too.
+SYNTHETIC_NEEDLE: Needle = ("account name", re.compile(rf"(?<!\w){re.escape(SYNTHETIC_ACCOUNT)}(?!\w)", re.IGNORECASE))
+
 
 def host_needles(home: str | None = None, user: str | None = None,
                  vocabulary: frozenset[str] | None = None) -> list[Needle]:
     """``(kind, pattern)`` for everything that would identify this host on screen."""
+    # host-identity-exempt: the privacy check looks for this machine's real home directory on a page, on purpose
     home = str(Path.home()) if home is None else home
     user = _account_name() if user is None else user
     needles: list[Needle] = []
