@@ -75,6 +75,7 @@ from playwright.sync_api import Browser, Locator, Page, expect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from tests.conftest import write_test_config
+from tests.e2e._boot_lock import boot_lock
 from tests.e2e._browser_sweep import sweep_browser_helpers
 from tests.e2e._e2e_live_guard import require_disposable_instance
 from tests.e2e._host_identity import RENDERED_TEXT_JS, describe, leaks
@@ -85,7 +86,6 @@ from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest loo
     pytest_terminal_summary,
 )
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
-from tests.e2e._boot_lock import boot_lock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
