@@ -122,3 +122,16 @@ The story is unchanged (click a folder chip → Explorer opens **this** PC's syn
 
 - [x] Automated: `tests/search/test_explorer_window.py` (the route's every outcome and code against a fake folder-explorer, the PC-only refusal that never reaches folder-explorer, `/api/me`'s `pc`, `is_this_pc`) and `tests/e2e/test_story_09_folders.py` steps 9–11 above; the gallery shots whose drawer line gained the button (4, 5, 7 and story 11's 3) were re-baselined.
 - [ ] **Not verified — the real window read.** folder-explorer's existing `POST /api/archive/explorer` answers only for a folder inside the email folders (`outside_email_folders` otherwise), so a general `GET /api/v1/explorer/folder` is filed as ferraroroberto/folder-explorer#274. Until that ships, the button on a real PC says *This folder-explorer can't report the Explorer window yet: update it and try again* (`folder_explorer_outdated`), never an empty field. To check on the PC once it has: open any folder in File Explorer, open a task's drawer → More fields → **From Explorer window** → the field shows that folder → **Set folder**.
+
+---
+
+## Amendment — 2026-11-22: the Links row leaves out links the comments already show
+
+12. A task imported with a long thread has each URL both as a comment and as a stored web link, so its Links row repeated the thread as dozens of look-alike chips. Open such a task (the walk builds one: three comments each holding a URL, the same three stored as links — one under a trailing-slash spelling — plus a hand-added link and an issue link no comment carries) → the Links row shows only the **Brochure** and **garden-bot#12** pills; the three comment URLs appear once, in the thread. The **+** editor still lists all five stored links (label edit, remove), and `GET /api/tasks/{id}/links` still returns five: the rule is display only, nothing stored changes. A task whose every link a comment carries shows **None** in the row.
+
+The cause, confirmed in `src/imports/sharepoint.py`: the import writes a `web` link for every URL it finds in the text columns and keeps the version history as comments, so the same URL lands in both. Hand-added links, the folder, an issue link and an email capture write no comment, so they stay.
+
+**Result — 2026-11-22: automated legs pass; the real-instance walk follows the restart.**
+
+- [x] `tests/tasks/test_comment_rows_js.py::test_the_links_row_leaves_out_what_a_comment_already_shows` (the matching rule: trailing punctuation and slash, folder refs, email refs, no comments) and step 12 of `tests/e2e/test_story_09_folders.py`, which failed against the pre-fix JS (five chips where two were expected) and passes with it, in a 1440×900 desktop and a 390×844 phone context, light and dark. The four proof shots are kept local, not committed.
+- [ ] Not verified: a real imported task on the live instance; the row's pill count is the only count the row shows, so it matches what is displayed by construction.

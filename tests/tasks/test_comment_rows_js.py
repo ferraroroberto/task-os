@@ -57,3 +57,23 @@ def test_a_comment_is_its_own_link_only_with_exactly_one_plain_web_link() -> Non
     assert only == {"url": "https://example.com/x/1", "rest": ""}
     assert two is None and folder is None and mixed is None and ai is None and issue is None
     assert punct == {"url": "https://example.com/a", "rest": "Read."}
+
+
+def test_the_links_row_leaves_out_what_a_comment_already_shows() -> None:
+    links = [
+        {"id": 1, "url": "https://example.com/in-comment", "kind": "web"},        # a comment pastes it
+        {"id": 2, "url": "https://example.com/trailing/", "kind": "web"},         # same URL, other spelling
+        {"id": 3, "url": "https://example.com/by-hand", "kind": "web"},           # added on purpose
+        {"id": 4, "url": "https://github.com/o/r/issues/7", "kind": "issue"},     # no comment carries it
+        {"id": 5, "url": '{"file":"a.msg"}', "kind": "email"},                    # an email ref, never a comment token
+        {"id": 6, "url": "{onedrive}/house", "kind": "web"},                      # a folder ref a comment names
+    ]
+    comments = [
+        {"body": "Notes at https://example.com/in-comment, then call."},
+        {"body": "Also (https://example.com/trailing) and {onedrive}/house."},
+    ]
+    (kept,) = call_js(MODULE, CALL_RUNNER, [["linksNotInComments", [links, comments]]])
+    assert [link["id"] for link in kept] == [3, 4, 5]
+    # no comments → every stored link shows; a missing list is the same
+    (everything, none) = call_js(MODULE, CALL_RUNNER, [["linksNotInComments", [links, []]], ["linksNotInComments", [links, None]]])
+    assert len(everything) == len(none) == len(links)

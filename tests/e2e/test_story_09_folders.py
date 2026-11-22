@@ -30,6 +30,8 @@ record links to:
     docs/screenshots/story-09-folders-7-phone.png     phone: copy popover with the resolved path
     docs/screenshots/story-09-folders-10-desktop.png  drawer: the folder of the front Explorer window, in the field before saving
 
+Issue #833 rides it too: the Links row leaves out a stored link whose URL a comment already shows (display only; the editor still lists every link), proven on a task built like an import leaves it, light and dark, desktop and phone.
+
 Issue #77 rides this walk (same surface: a chip that opens things through the
 per-PC opener, kept inside the <15-test budget): the AI-conversation chip —
 bot glyph on the row and its ⋯ menu's Open / Resume, the drawer chip's desktop
@@ -57,6 +59,7 @@ from playwright.sync_api import Browser, Page, expect
 
 from tests.conftest import write_test_config
 from tests.e2e._geometry import assert_no_horizontal_overflow
+from tests.e2e._port_pool import post_json
 from tests.e2e._ui import leave_settings, open_links_editor
 from tests.e2e._uniform import (
     assert_code_off_canvas_subtle,
@@ -494,3 +497,67 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     _unknown_placeholder_and_picker(page, base, shots, drawer, field, inst, kitchen)
     ai_row, ai_url, drawer, pop, watering = _ai_chip_from_the_board(page, base, shots, drawer, pop)
     _ai_pill_dark_and_phone(page, ctx, browser, base, shots, ai_row, ai_url, drawer, folder_pill, inst, kitchen, pop, watering)
+    _links_leave_out_comment_urls(browser, base, shots)
+
+
+def _links_leave_out_comment_urls(browser: Browser, base: str, shots: Path) -> None:
+    """The Links row leaves out a link a comment already shows: an import writes a
+    web link for every URL in a thread it also keeps as comments, which buried the
+    links added on purpose. Display only: the Edit-links editor still lists all."""
+    # the shape an import leaves: three URLs in comments, each also stored as a link
+    # (one under another spelling), plus two links added on purpose that no comment carries
+    task = post_json(base, "/api/tasks", {"title": "Garage quote"})
+    tid = task["id"]
+    pasted = ["https://example.com/garage/visit", "https://example.com/garage/quote", "https://example.com/garage/compare"]
+    for text in (
+        "Booked a site visit: https://example.com/garage/visit",
+        "Quote from the installer https://example.com/garage/quote, see page 2.",
+        "Brochure comparison at https://example.com/garage/compare/",
+    ):
+        post_json(base, f"/api/tasks/{tid}/comments", {"body": text})
+    for url in pasted:
+        post_json(base, f"/api/tasks/{tid}/links", {"url": url})
+    post_json(base, f"/api/tasks/{tid}/links", {"url": "https://example.com/garage/brochure", "label": "Brochure"})
+    post_json(base, f"/api/tasks/{tid}/links", {"url": "https://github.com/example/garden-bot/issues/12", "label": "garden-bot#12"})
+    assert len(_get(base, f"/api/tasks/{tid}/links")["items"]) == 5          # nothing stored is dropped
+    # a task whose every link a comment shows has nothing to list
+    only = post_json(base, "/api/tasks", {"title": "Thread only"})["id"]
+    post_json(base, f"/api/tasks/{only}/comments", {"body": "Notes at https://example.com/thread/a"})
+    post_json(base, f"/api/tasks/{only}/links", {"url": "https://example.com/thread/a"})
+
+    def check(page: Page) -> None:
+        page.goto(base + "/#task/" + str(tid))
+        drawer = page.locator("#taskDrawer")
+        expect(drawer).to_be_visible()
+        pills = drawer.locator(".prop-links .drawer-pill-row a.chip")
+        expect(pills).to_have_count(2)
+        hrefs = [pills.nth(i).get_attribute("href") for i in range(2)]
+        assert hrefs == ["https://example.com/garage/brochure", "https://github.com/example/garden-bot/issues/12"], hrefs
+        expect(drawer.locator(".comment")).to_have_count(3)                      # the thread carries the others
+        assert page.evaluate(f"fetch('/api/tasks/{tid}/links').then(r => r.json()).then(j => j.items.length)") == 5
+
+    def editor_lists_all(page: Page) -> None:
+        editor = open_links_editor(page.locator("#taskDrawer"))
+        expect(editor.locator(".link-row")).to_have_count(5)
+
+    ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    page = ctx.new_page()
+    check(page)
+    shot(page, shots / "story-09-folders-11-desktop.png")
+    page.emulate_media(color_scheme="dark")
+    page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    shot(page, shots / "story-09-folders-12-desktop.png")
+    editor_lists_all(page)
+    page.goto(base + "/#task/" + str(only))
+    expect(page.locator("#taskDrawer .prop-links .prop-none")).to_have_text("None")
+    ctx.close()
+
+    phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="light")
+    p = phone.new_page()
+    check(p)
+    assert_no_horizontal_overflow(p)
+    shot(p, shots / "story-09-folders-13-phone.png")
+    p.emulate_media(color_scheme="dark")
+    p.evaluate("document.documentElement.dataset.theme = 'dark'")
+    shot(p, shots / "story-09-folders-14-phone.png")
+    phone.close()

@@ -574,6 +574,24 @@ export function singleLink(text) {
   return { url: core, rest: rest };
 }
 
+/** One target as a comparison key: trailing sentence punctuation and a closing
+ *  slash do not make two spellings of one URL different. */
+function targetKey(raw) {
+  return String(raw == null ? '' : raw).replace(/[.,;:!?]+$/, '').replace(/\/+$/, '');
+}
+
+/** The links a comment does not already show. A comment renders its URLs as
+ *  links of its own, so a stored link whose URL sits in any comment's text only
+ *  repeats the thread; one no comment carries (the folder, an issue, an email,
+ *  a link added by hand) stays. Display only: nothing stored changes. */
+export function linksNotInComments(links, comments) {
+  const inComments = new Set();
+  (comments || []).forEach(function (c) {
+    (String(c.body == null ? '' : c.body).match(TOKEN_RE) || []).forEach(function (m) { inComments.add(targetKey(m)); });
+  });
+  return (links || []).filter(function (l) { return !inComments.has(targetKey(l.url)); });
+}
+
 // --------------------------------------------------------------- markdown
 /** A small, safe markdown subset: headings, lists, code, bold/italic, links, paragraphs. */
 export function renderMarkdown(md) {
