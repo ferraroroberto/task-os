@@ -53,14 +53,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import secrets
 import shutil
 import signal
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -86,6 +83,7 @@ from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest loo
     pytest_terminal_summary,
 )
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
+from tests.e2e._work_root import E2E_SHARED_ROOT, E2E_WORK_ROOT, MASK_PATHS_JS, path_mask_rules
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
@@ -134,50 +132,6 @@ E2E_CLOCK_MS = int(E2E_NOW.timestamp() * 1000)
 #: plausible SHA: a reader of the gallery should see at a glance that the build
 #: band is a fixture, not the build the shot was taken from.
 E2E_BUILD_SHA = "e2e0000"
-
-
-#: Where every e2e run on this machine keeps its own work root, and the one
-#: file they all share (the boot lock). Stories 06, 09, 10 and 24 put absolute
-#: paths on screen, and a run's root carries a per-run token, so `shot()` paints
-#: `E2E_SHARED_ROOT` in its place (`_path_mask_rules`): the gallery stays
-#: byte-identical whichever checkout, and whichever run, took the picture. The
-#: root stays under the system drive's temp-like area on purpose: a repo-local
-#: root put the SQLite file on the checkout's own drive and slowed writes enough
-#: to lose races the stories were already winning only narrowly.
-#:
-#: On Windows the base is the all-users Public folder, not the system temp dir:
-#: temp sits inside the user profile, so a path put on screen would carry the
-#: account name of whoever ran the suite into a public gallery. Public is on the
-#: same system drive as temp, so the write speed holds, and its path names no
-#: one. `shot()` refuses a page that renders the home directory or account name
-#: all the same.
-def _work_root_base() -> Path:
-    public = os.environ.get("PUBLIC") if sys.platform == "win32" else None
-    return Path(public) if public and Path(public).is_dir() else Path(tempfile.gettempdir())
-
-
-E2E_SHARED_ROOT = _work_root_base() / "taskos-e2e"
-
-#: How a pytest-xdist worker learns the root its controller named. Workers are
-#: spawned after the controller imports this module, so they inherit it.
-RUN_ROOT_ENV = "TASKOS_E2E_RUN_ROOT"
-
-
-def _resolve_work_root() -> Path:
-    """This run's own root: the controller's, handed down by env, else a fresh one.
-
-    Only the name is made here; the directory appears with its first instance,
-    so a collect-only run leaves nothing behind.
-    """
-    inherited = os.environ.get(RUN_ROOT_ENV)
-    if inherited:
-        return Path(inherited)
-    root = E2E_SHARED_ROOT / f"run-{secrets.token_hex(4)}"
-    os.environ[RUN_ROOT_ENV] = str(root)
-    return root
-
-
-E2E_WORK_ROOT = _resolve_work_root()
 
 
 def worker_suffix() -> str:
@@ -669,38 +623,6 @@ def _assert_no_host_identity(page: Page) -> None:
         raise AssertionError(describe(found))
 
 
-def _path_mask_rules() -> list[list[str]]:
-    """``[regex, replacement]`` pairs that turn this run's root into the shared one.
-
-    Both slash forms, matched without regard to case as Windows paths are. The
-    replacement is the root as the gallery shows it, so a run token never
-    reaches a committed PNG.
-    """
-    return [
-        [re.escape(str(E2E_WORK_ROOT)), str(E2E_SHARED_ROOT)],
-        [re.escape(E2E_WORK_ROOT.as_posix()), E2E_SHARED_ROOT.as_posix()],
-    ]
-
-
-_MASK_PATHS_JS = """
-(rules) => {
-  const res = rules.map(([src, to]) => [new RegExp(src, 'gi'), to]);
-  const swap = (s) => res.reduce((acc, [re, to]) => acc.replace(re, () => to), s);
-  const undo = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    const was = n.nodeValue, now = swap(was);
-    if (now !== was) { n.nodeValue = now; undo.push(() => { n.nodeValue = was; }); }
-  }
-  for (const el of document.querySelectorAll('input, textarea')) {
-    const was = el.value, now = swap(was || '');
-    if (now !== was) { el.value = now; undo.push(() => { el.value = was; }); }
-  }
-  window.__taskosPathUnmask = () => { undo.forEach((f) => f()); delete window.__taskosPathUnmask; };
-}
-"""
-
-
 def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
@@ -708,7 +630,7 @@ def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     _assert_no_host_identity(page)
     # Painted text names this run's private root; the gallery keeps the shared
     # one. The page is put back as it was so the story goes on against real values.
-    page.evaluate(_MASK_PATHS_JS, _path_mask_rules())
+    page.evaluate(MASK_PATHS_JS, path_mask_rules(E2E_WORK_ROOT, E2E_SHARED_ROOT))
     try:
         page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
     finally:

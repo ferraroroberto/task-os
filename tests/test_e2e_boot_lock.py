@@ -83,7 +83,7 @@ def test_a_boot_slot_that_never_frees_times_out_loudly(tmp_path: Path) -> None:
 
 def test_each_run_names_a_work_root_of_its_own() -> None:
     """Two fresh interpreters importing the suite's conftest get different roots."""
-    code = "from tests.e2e.conftest import E2E_WORK_ROOT; print(E2E_WORK_ROOT)"
+    code = "from tests.e2e._work_root import E2E_WORK_ROOT; print(E2E_WORK_ROOT)"
     env_free = {k: v for k, v in os.environ.items() if k != "TASKOS_E2E_RUN_ROOT"}
     roots = [
         subprocess.run(
@@ -100,10 +100,10 @@ def test_each_run_names_a_work_root_of_its_own() -> None:
 
 
 def test_a_worker_inherits_its_controllers_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from tests.e2e import conftest
+    from tests.e2e import _work_root
 
-    monkeypatch.setenv(conftest.RUN_ROOT_ENV, str(tmp_path / "run-feedbeef"))
-    assert conftest._resolve_work_root() == tmp_path / "run-feedbeef"
+    monkeypatch.setenv(_work_root.RUN_ROOT_ENV, str(tmp_path / "run-feedbeef"))
+    assert _work_root.resolve_work_root() == tmp_path / "run-feedbeef"
 
 
 def test_only_the_session_controller_owns_the_work_root() -> None:
@@ -140,16 +140,16 @@ def test_a_green_run_removes_its_own_root_and_nothing_else(
     assert (other / "search" / "webapp.log").exists()
 
 
-def test_the_gallery_keeps_the_shared_root_not_the_run_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from tests.e2e import conftest
+def test_the_gallery_keeps_the_shared_root_not_the_run_token(tmp_path: Path) -> None:
+    from tests.e2e._work_root import path_mask_rules
 
-    monkeypatch.setattr(conftest, "E2E_SHARED_ROOT", tmp_path / "taskos-e2e")
-    monkeypatch.setattr(conftest, "E2E_WORK_ROOT", tmp_path / "taskos-e2e" / "run-deadbeef")
-    run = tmp_path / "taskos-e2e" / "run-deadbeef"
+    shared = tmp_path / "taskos-e2e"
+    run = shared / "run-deadbeef"
+    rules = path_mask_rules(run, shared)
     for painted, expected in (
-        (run.as_posix() + "/folders/od", (tmp_path / "taskos-e2e").as_posix() + "/folders/od"),
-        (str(run / "folders" / "od"), str(tmp_path / "taskos-e2e" / "folders" / "od")),
+        (run.as_posix() + "/folders/od", shared.as_posix() + "/folders/od"),
+        (str(run / "folders" / "od"), str(shared / "folders" / "od")),
     ):
-        for src, to in conftest._path_mask_rules():
+        for src, to in rules:
             painted = re.sub(src, lambda _m, to=to: to, painted, flags=re.I)
         assert painted == expected
