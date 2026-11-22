@@ -94,6 +94,7 @@ from tests.e2e._triage_steps import (
     _trow,
     _walk_recurrence_anchor,
     _walk_recurrence_interval,
+    walk_old_comment_dates,
 )
 from tests.e2e._ui import (
     SWIPE_JS,
@@ -875,6 +876,7 @@ def _phone_filter_sheet_and_drawer(page: Page, base: str, shots: Path):
     walk_phone_drawer_top(page, base, drawer)
     shot(page, shots / "story-04-triage-10-phone.png")
     walk_phone_drawer_rows(page, drawer)
+    walk_old_comment_dates(page, base, drawer, int(page.url.split("#task/")[1]))
     drawer.locator(".drawer-close").tap()
     expect(drawer).to_be_hidden()
     assert page.locator("nav.tabs").evaluate("el => getComputedStyle(el).visibility") == "visible"
