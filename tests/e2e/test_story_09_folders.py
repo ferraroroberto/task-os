@@ -461,11 +461,19 @@ def _ai_pill_dark_and_phone(page: Page, ctx, browser: Browser, base: str, shots:
     assert popup.url == ai_url, popup.url
     popup.close()
     expect(p.locator("#folderPop")).to_be_hidden()              # tap = open, never a popover
-    # The tapped chip keeps the pointer's hover and the focus for as long as the
-    # popup round-trip took, which a loaded box varies: take both off it first,
-    # so the shot never catches its underline.
-    p.mouse.move(0, 0)
+    # The tap leaves the chip hovered (its underline) and focused. A pointer move
+    # to the corner clears the hover, but a loaded box can process it late, so
+    # park the pointer until the chip reports it is no longer hovered rather
+    # than trusting one move, and assert the underline is gone before the shot.
+    chip = d.locator("a.chip-ai").first
+    p.bring_to_front()
     p.evaluate("document.activeElement && document.activeElement.blur()")
+    for _ in range(100):
+        p.mouse.move(0, 0)
+        if not chip.evaluate("el => el.matches(':hover')"):
+            break
+        p.wait_for_timeout(100)
+    expect(chip).not_to_have_css("text-decoration-line", "underline")
     shot(p, shots / "story-11-ai-links-4-phone.png")
     phone.close()
 
