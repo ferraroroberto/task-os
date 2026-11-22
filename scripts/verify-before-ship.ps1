@@ -237,7 +237,7 @@ if ($tier -eq "skip") {
     $label = if ($e2eBrowsers) { $e2eBrowsers } else { "suite-default" }
     # The full tier runs on pytest-xdist workers: --dist loadfile keeps a
     # story module (and its module-scoped instance) on one worker, the
-    # controller alone holds the work-root lock, and instance boots are
+    # controller alone names the run's work root, and instance boots are
     # serialised. Four, because the evidence run (CLAUDE.md "Runtime contract")
     # found 6 and 8 buy 10 s more at the cost of a loaded box. The narrower
     # tiers are one or two files and stay serial. TASKOS_E2E_WORKERS=1 is the

@@ -6,10 +6,10 @@ loopback port with ``TASKOS_DB_PATH`` → a temp database and
 mirror / backup folders blanked (or pointed into the temp dir — see
 ``mirrored_webapp``), so a run never reads or writes the live ``:8448`` app,
 its ``data/tasks.db``, ``config/config.json`` or the real mirror folder.
-Every instance works under one fixed ``E2E_WORK_ROOT`` shared by all checkouts
-on the machine, so a run holds it for the session (``pytest_configure``,
-the controller only under ``-n``, #288)
-and a second concurrent run stops before booting anything (#244).
+Every instance works under ``E2E_WORK_ROOT``, a directory owned by this one
+run (``run-<token>`` beside the machine-wide boot lock), so two runs from two
+checkouts at the same time never share a folder. The controller removes it when
+the session ends green and keeps it, ``webapp.log`` included, when it does not.
 
 Auth (Step 7): the browser reaches the disposable instance over loopback,
 which ``src.auth`` treats as the owner — no token, cookie or env switch is
@@ -53,6 +53,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import secrets
 import shutil
 import signal
 import socket
@@ -83,8 +85,7 @@ from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest loo
     pytest_terminal_summary,
 )
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
-from tests.e2e._work_root_lock import WorkRootBusy, boot_lock
-from tests.e2e._work_root_lock import acquire as acquire_work_root
+from tests.e2e._boot_lock import boot_lock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHOTS_DIR = REPO_ROOT / "docs" / "screenshots"
@@ -135,27 +136,48 @@ E2E_CLOCK_MS = int(E2E_NOW.timestamp() * 1000)
 E2E_BUILD_SHA = "e2e0000"
 
 
-#: One stable working root for the whole suite (#134). `tmp_path_factory`
-#: numbers its base directory per run — `pytest-9167`, `pytest-9168`, … — and
-#: stories 09 and 10 put those absolute paths on screen, so every run rewrote
-#: those shots for no reason anyone could review. A fixed name under the same
-#: system temp root keeps the paths identical run to run. It stays under the
-#: system temp dir on purpose: a repo-local root put the SQLite file on the
-#: checkout's own drive and slowed writes enough to lose races the stories were
-#: already winning only narrowly.
+#: Where every e2e run on this machine keeps its own work root, and the one
+#: file they all share (the boot lock). Stories 06, 09, 10 and 24 put absolute
+#: paths on screen, and a run's root carries a per-run token, so `shot()` paints
+#: `E2E_SHARED_ROOT` in its place (`_path_mask_rules`): the gallery stays
+#: byte-identical whichever checkout, and whichever run, took the picture. The
+#: root stays under the system drive's temp-like area on purpose: a repo-local
+#: root put the SQLite file on the checkout's own drive and slowed writes enough
+#: to lose races the stories were already winning only narrowly.
 #:
-#: On Windows the root is the all-users Public folder, not the system temp dir
-#: (#351): temp sits inside the user profile, so the paths stories 06, 09, 10
-#: and 24 put on screen carried the account name of whoever ran the suite into
-#: a public gallery. Public is on the same system drive as temp, so the #134
-#: write speed holds, and its path names no one. `shot()` refuses a page that
-#: renders the home directory or account name all the same.
+#: On Windows the base is the all-users Public folder, not the system temp dir:
+#: temp sits inside the user profile, so a path put on screen would carry the
+#: account name of whoever ran the suite into a public gallery. Public is on the
+#: same system drive as temp, so the write speed holds, and its path names no
+#: one. `shot()` refuses a page that renders the home directory or account name
+#: all the same.
 def _work_root_base() -> Path:
     public = os.environ.get("PUBLIC") if sys.platform == "win32" else None
     return Path(public) if public and Path(public).is_dir() else Path(tempfile.gettempdir())
 
 
-E2E_WORK_ROOT = _work_root_base() / "taskos-e2e"
+E2E_SHARED_ROOT = _work_root_base() / "taskos-e2e"
+
+#: How a pytest-xdist worker learns the root its controller named. Workers are
+#: spawned after the controller imports this module, so they inherit it.
+RUN_ROOT_ENV = "TASKOS_E2E_RUN_ROOT"
+
+
+def _resolve_work_root() -> Path:
+    """This run's own root: the controller's, handed down by env, else a fresh one.
+
+    Only the name is made here; the directory appears with its first instance,
+    so a collect-only run leaves nothing behind.
+    """
+    inherited = os.environ.get(RUN_ROOT_ENV)
+    if inherited:
+        return Path(inherited)
+    root = E2E_SHARED_ROOT / f"run-{secrets.token_hex(4)}"
+    os.environ[RUN_ROOT_ENV] = str(root)
+    return root
+
+
+E2E_WORK_ROOT = _resolve_work_root()
 
 
 def worker_suffix() -> str:
@@ -164,61 +186,50 @@ def worker_suffix() -> str:
     Only what two workers could otherwise both name gets it: the session-scoped
     ``webapp``'s work dir and every instance's log file. The module-scoped
     instances are already one directory per story module, and ``--dist
-    loadfile`` keeps a module on one worker, so those paths (stories 09 and 10
-    put them on screen) are the same ones a serial run uses.
+    loadfile`` keeps a module on one worker.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "")
     return f"-{worker}" if worker else ""
 
 
-def holds_work_root(config: pytest.Config) -> bool:
-    """Whether this process is the one that holds ``E2E_WORK_ROOT`` (#244, #288).
+def owns_work_root(config: pytest.Config) -> bool:
+    """Whether this process removes ``E2E_WORK_ROOT`` when the run ends.
 
-    The root belongs to the *session*: one holder, taken before anything boots.
-    Under pytest-xdist that is the controller; a worker has ``workerinput`` and
-    must never take it (it would refuse itself, the controller already holding
-    it). A collect-only run boots nothing, so it does not take it either.
+    The root belongs to the *session*. Under pytest-xdist that is the
+    controller, which outlives its workers; a worker has ``workerinput`` and
+    leaves it alone. A collect-only run boots nothing, so it has nothing to
+    remove either.
     """
     return not hasattr(config, "workerinput") and not config.option.collectonly
 
 
-_WORK_ROOT_LOCK: list = []
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    """Hold ``E2E_WORK_ROOT`` for the whole session, or stop before booting (#244).
-
-    The root is per machine, so another checkout's concurrent run would share
-    every folder `e2e_workdir` clears. A hook rather than a session fixture
-    since #288: the controller of a ``-n`` run executes no fixtures, and each
-    worker would otherwise try to take the lock the controller holds.
-    ``pytest.exit`` rather than a fixture error: one message naming the holder,
-    not the same error repeated on every story.
-    """
-    if not holds_work_root(config):
-        return
-    try:
-        _WORK_ROOT_LOCK.append(acquire_work_root(E2E_WORK_ROOT, REPO_ROOT))
-    except WorkRootBusy as busy:
-        pytest.exit(str(busy), returncode=2)
+_SESSION_EXIT: list[int] = []
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
-    while _WORK_ROOT_LOCK:
-        _WORK_ROOT_LOCK.pop().release()
+    """Remove this run's work root, and only this run's, once the session is over.
+
+    It runs after the controller has stopped its workers, so no instance still
+    has a file open there. A run that did not end green keeps the root: each
+    instance's `webapp.log` is the post-mortem for the story that failed.
+    """
+    if not owns_work_root(config) or _SESSION_EXIT != [0]:
+        return
+    shutil.rmtree(E2E_WORK_ROOT, ignore_errors=True)
+    if E2E_WORK_ROOT.exists():
+        print(f"[e2e] could not remove this run's work root {E2E_WORK_ROOT}")
 
 
 def e2e_workdir(name: str) -> Path:
-    """An empty, same-path-every-run working directory for one disposable instance.
+    """An empty working directory for one disposable instance, under this run's root.
 
-    A leftover from a previous run is removed rather than reused — a stale
-    database would make the seed refuse to fill it. Left in place afterwards:
-    each instance's `webapp.log` is the post-mortem for a story that failed.
+    A leftover from earlier in the same run is removed rather than reused — a
+    stale database would make the seed refuse to fill it.
     """
     work = E2E_WORK_ROOT / name
     shutil.rmtree(work, ignore_errors=True)
     if work.exists():   # still there → something is holding it open, say so now
-        raise RuntimeError(f"could not clear the e2e work dir {work} — is a previous instance still running?")
+        raise RuntimeError(f"could not clear the e2e work dir {work} — is an instance of this run still open?")
     work.mkdir(parents=True, exist_ok=True)
     return work
 
@@ -311,7 +322,7 @@ def _boot(work: Path, db_path: Path, config_path: Path | None = None,
     # workers in that window can be handed one number: then `healthz` is
     # answered by the *other* worker's instance and the loser fails far from
     # the cause. The lock covers pick, start and first answer, about a second.
-    with boot_lock(E2E_WORK_ROOT):
+    with boot_lock(E2E_SHARED_ROOT):
         port = _free_tcp_port()
         print(f"[e2e] booting disposable instance on 127.0.0.1:{port} (db {db_path})")
         log: IO[str] = log_path.open("w", encoding="utf-8")
@@ -658,12 +669,50 @@ def _assert_no_host_identity(page: Page) -> None:
         raise AssertionError(describe(found))
 
 
+def _path_mask_rules() -> list[list[str]]:
+    """``[regex, replacement]`` pairs that turn this run's root into the shared one.
+
+    Both slash forms, matched without regard to case as Windows paths are. The
+    replacement is the root as the gallery shows it, so a run token never
+    reaches a committed PNG.
+    """
+    return [
+        [re.escape(str(E2E_WORK_ROOT)), str(E2E_SHARED_ROOT)],
+        [re.escape(E2E_WORK_ROOT.as_posix()), E2E_SHARED_ROOT.as_posix()],
+    ]
+
+
+_MASK_PATHS_JS = """
+(rules) => {
+  const res = rules.map(([src, to]) => [new RegExp(src, 'gi'), to]);
+  const swap = (s) => res.reduce((acc, [re, to]) => acc.replace(re, () => to), s);
+  const undo = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const was = n.nodeValue, now = swap(was);
+    if (now !== was) { n.nodeValue = now; undo.push(() => { n.nodeValue = was; }); }
+  }
+  for (const el of document.querySelectorAll('input, textarea')) {
+    const was = el.value, now = swap(was || '');
+    if (now !== was) { el.value = now; undo.push(() => { el.value = was; }); }
+  }
+  window.__taskosPathUnmask = () => { undo.forEach((f) => f()); delete window.__taskosPathUnmask; };
+}
+"""
+
+
 def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     """Save one story proof screenshot to *path*, deterministically."""
     settle(page)
     _assert_pinned_clock(page)
     _assert_no_host_identity(page)
-    page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
+    # Painted text names this run's private root; the gallery keeps the shared
+    # one. The page is put back as it was so the story goes on against real values.
+    page.evaluate(_MASK_PATHS_JS, _path_mask_rules())
+    try:
+        page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
+    finally:
+        page.evaluate("() => { if (window.__taskosPathUnmask) window.__taskosPathUnmask(); }")
 
 
 def dismiss_toasts(page: Page) -> None:
@@ -854,7 +903,8 @@ def _bound_default_timeouts(context) -> None:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Advisory sweep of browser helpers this run orphaned inside this checkout."""
+    """Note how the run ended (for `pytest_unconfigure`), then sweep browser helpers this run orphaned."""
+    _SESSION_EXIT[:] = [int(exitstatus)]
     if hasattr(session.config, "workerinput"):
         return          # the controller sweeps once, after the last worker (#288)
     result = sweep_browser_helpers(REPO_ROOT)
