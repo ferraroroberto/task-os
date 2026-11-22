@@ -5,6 +5,7 @@
 
 import { emptyStateEl } from '../../_vendored/empty-state/empty-state.js';
 import { fmtMinutes } from '../../time-format.js';
+import { createPoll } from '../poll.js';
 import { loadMeta, refreshLive, refreshRecent, timerOf } from './data.js';
 import { loadHistory } from './history.js';
 import { buildLog, renderGlance, renderTimer, tick, timerSignature } from './log.js';
@@ -37,23 +38,24 @@ export function hide(ctx) {
 function startPolling(ctx) {
   const st = ctx.st;
   stopPolling(ctx);
-  st.poll = window.setInterval(function () {
-    if (!st.shown || document.hidden) return;
+  st.poll = createPoll(function () {
+    if (!st.shown) return null;
     const before = timerSignature(timerOf(ctx, st.person));
-    refreshLive(ctx).then(function () {
+    return refreshLive(ctx).then(function () {
       renderGlance(ctx);
       // Rebuild the timer card only when the running timer itself changed
       // (stopped/switched/started elsewhere) — a same-timer poll must never
       // discard a typed "minutes to save" correction or steal focus.
       if (timerSignature(timerOf(ctx, st.person)) !== before) renderTimer(ctx);
-    }).catch(function () {});
+    });
   }, POLL_MS);
+  st.poll.start();
   st.tick = window.setInterval(function () { tick(ctx); }, 1000);
 }
 
 function stopPolling(ctx) {
   const st = ctx.st;
-  if (st.poll) window.clearInterval(st.poll);
+  if (st.poll) st.poll.stop();
   if (st.tick) window.clearInterval(st.tick);
   st.poll = st.tick = null;
 }
