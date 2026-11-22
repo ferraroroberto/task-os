@@ -497,13 +497,15 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     _unknown_placeholder_and_picker(page, base, shots, drawer, field, inst, kitchen)
     ai_row, ai_url, drawer, pop, watering = _ai_chip_from_the_board(page, base, shots, drawer, pop)
     _ai_pill_dark_and_phone(page, ctx, browser, base, shots, ai_row, ai_url, drawer, folder_pill, inst, kitchen, pop, watering)
-    _links_leave_out_comment_urls(browser, base, shots)
+    _links_leave_out_comment_urls(browser, base)
 
 
-def _links_leave_out_comment_urls(browser: Browser, base: str, shots: Path) -> None:
+def _links_leave_out_comment_urls(browser: Browser, base: str) -> None:
     """The Links row leaves out a link a comment already shows: an import writes a
     web link for every URL in a thread it also keeps as comments, which buried the
     links added on purpose. Display only: the Edit-links editor still lists all."""
+    # the proof shots stay local to the run (not the committed gallery): a leg of this story, not a new gallery entry
+    local = e2e_workdir("links-proof")
     # the shape an import leaves: three URLs in comments, each also stored as a link
     # (one under another spelling), plus two links added on purpose that no comment carries
     task = post_json(base, "/api/tasks", {"title": "Garage quote"})
@@ -543,10 +545,10 @@ def _links_leave_out_comment_urls(browser: Browser, base: str, shots: Path) -> N
     ctx = browser.new_context(viewport=DESKTOP, color_scheme="light")
     page = ctx.new_page()
     check(page)
-    shot(page, shots / "story-09-folders-11-desktop.png")
+    shot(page, local / "story-09-folders-11-desktop.png")
     page.emulate_media(color_scheme="dark")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
-    shot(page, shots / "story-09-folders-12-desktop.png")
+    shot(page, local / "story-09-folders-12-desktop.png")
     editor_lists_all(page)
     page.goto(base + "/#task/" + str(only))
     expect(page.locator("#taskDrawer .prop-links .prop-none")).to_have_text("None")
@@ -556,8 +558,8 @@ def _links_leave_out_comment_urls(browser: Browser, base: str, shots: Path) -> N
     p = phone.new_page()
     check(p)
     assert_no_horizontal_overflow(p)
-    shot(p, shots / "story-09-folders-13-phone.png")
+    shot(p, local / "story-09-folders-13-phone.png")
     p.emulate_media(color_scheme="dark")
     p.evaluate("document.documentElement.dataset.theme = 'dark'")
-    shot(p, shots / "story-09-folders-14-phone.png")
+    shot(p, local / "story-09-folders-14-phone.png")
     phone.close()

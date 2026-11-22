@@ -133,5 +133,5 @@ The cause, confirmed in `src/imports/sharepoint.py`: the import writes a `web` l
 
 **Result — 2026-11-22: automated legs pass; the real-instance walk follows the restart.**
 
-- [x] `tests/tasks/test_comment_rows_js.py::test_the_links_row_leaves_out_what_a_comment_already_shows` (the matching rule: trailing punctuation and slash, folder refs, email refs, no comments) and step 12 of `tests/e2e/test_story_09_folders.py`, which failed against the pre-fix JS (five chips where two were expected) and passes with it, in a 1440×900 desktop and a 390×844 phone context, light and dark. The four proof shots are kept local, not committed.
+- [x] `tests/tasks/test_comment_rows_js.py::test_the_links_row_leaves_out_what_a_comment_already_shows` (the matching rule: trailing punctuation and slash, folder refs, email refs, no comments) and step 12 of `tests/e2e/test_story_09_folders.py`, which failed against the pre-fix JS (five chips where two were expected) and passes with it, in a 1440×900 desktop and a 390×844 phone context, light and dark. The four proof shots are written to the run's own work folder, not the committed gallery.
 - [ ] Not verified: a real imported task on the live instance; the row's pill count is the only count the row shows, so it matches what is displayed by construction.
