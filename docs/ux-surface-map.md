@@ -573,7 +573,7 @@ flowchart LR
 ### `drawer.links` Links
 
 - **Root:** none — a row of the drawer's property list.
-- **Holds:** pills for the folder, the issue and every link, each opening on one click; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy). **+** (or `l`) unfolds the **Folder** editor (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**) and the link editor (label edit, remove, **Add link**) under the group.
+- **Holds:** pills for the folder, the issue and every link no comment already shows (a stored link whose URL sits in a comment is left out here, since the thread shows it; nothing stored changes, and the link editor below still lists them all), each opening on one click; an AI-conversation URL wears the bot chip; a folder chip is a `taskos://` link opened by the per-PC opener (the phone shows the path to copy). **+** (or `l`) unfolds the **Folder** editor (typed ref, **Find in folder index**, or on the PC itself **From Explorer window**) and the link editor (label edit, remove, **Add link**) under the group.
 - **Leads to:**
   - [Folder and conversation popover](#chipfolder-popover-folder-and-conversation-popover) (a folder or conversation chip)
   - [Folder picker](#folderpicker-folder-picker) (Find in folder index)

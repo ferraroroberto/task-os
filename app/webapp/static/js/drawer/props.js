@@ -14,7 +14,7 @@
 
 import { icon } from '../../_vendored/icons/icons.js';
 import { createRowMenu } from '../../_vendored/row-menu/row-menu.js';
-import { PRIORITIES, fmtDay, issueChip, relDue } from '../../format.js';
+import { PRIORITIES, fmtDay, issueChip, linksNotInComments, relDue } from '../../format.js';
 import { openParentPicker } from '../../parentpick.js';
 import { RECURRENCES, anchorOptions } from '../../recurrence.js';
 import { keyHint } from '../../snooze.js';
@@ -125,8 +125,9 @@ function dueRow(ctx, t) {
   return row;
 }
 
-/** Links: the folder, the linked issue and every link as pills that open
- *  on one click (one home per fact), then + for the editors. */
+/** Links: the folder, the linked issue and every link no comment already
+ *  shows, as pills that open on one click (one home per fact), then + for
+ *  the editors, which list every stored link. */
 function linksRow(ctx, t) {
   const row = document.createElement('div');
   row.className = 'prop-row prop-links';
@@ -145,7 +146,7 @@ function linksRow(ctx, t) {
     issueHref = ic.href;
     pills.appendChild(ic);
   }
-  (t.links || []).forEach(function (l) {
+  linksNotInComments(t.links, t.comments).forEach(function (l) {
     // linking an issue also stores it as an `issue` link; the issue chip
     // above already is that link, with its state
     if (l.kind === 'issue' && issueHref && new URL(l.url, location.href).href === issueHref) return;
