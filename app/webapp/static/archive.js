@@ -107,10 +107,9 @@ export function mountArchive(opts) {
       // picker overwrites `runId`: polling that would read a finished older run,
       // toast a false "done" and stop following the real one.
       liveRunId: null,
-      poll: 0,         // setTimeout handle between two polls of a live run
-      // Whether this pane is following a run *at all* — true across the gap where
-      // `poll` is 0 because a tick is in flight. Re-opening the sheet mid-run must
-      // not start a second chain that double-polls and double-toasts.
+      poll: null,      // the `createPoll` handle while a live run is followed
+      // Whether this pane is following a run *at all*. Re-opening the sheet
+      // mid-run must not start a second poll that double-polls and double-toasts.
       polling: false,
       busy: false,     // a run or a review action is in flight
     },

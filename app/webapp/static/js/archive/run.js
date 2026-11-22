@@ -6,14 +6,16 @@
 import { api } from '../../api.js';
 import { toast } from '../../toast.js';
 import { holdBusy, releaseBusy } from '../busy.js';
+import { createPoll } from '../poll.js';
 import { renderPicker } from './head.js';
 import { loadRuns, refresh, refreshStatus } from './load.js';
 import { renderReport } from './report.js';
 import { runFailed, runIsLive, runReason } from './state.js';
 import { counts } from './text.js';
 
-//: How often the screen re-reads a run that is still going. The run itself is
-//: minutes-scale over COM; this is only how often the counters move.
+//: How often the screen re-reads a run that is still going (never while the tab
+//: is hidden — `createPoll`). The run itself is minutes-scale over COM; this is
+//: only how often the counters move.
 const POLL_MS = 1500;
 
 function progressText(r) {
@@ -24,22 +26,28 @@ function progressText(r) {
 
 export function startPolling(ctx) {
   const st = ctx.st;
-  window.clearTimeout(st.poll);
+  stopPoll(st);
   st.polling = true;
-  st.poll = window.setTimeout(function () { return tick(ctx); }, POLL_MS);
+  st.poll = createPoll(function () { return tick(ctx); }, POLL_MS);
+  st.poll.start();
   ctx.els.run.disabled = true;
   ctx.els.limit.disabled = true;
   ctx.els.runLabel.textContent = 'Archiving…';
 }
 
+function stopPoll(st) {
+  if (st.poll) st.poll.stop();
+  st.poll = null;
+}
+
 async function tick(ctx) {
   const st = ctx.st;
-  st.poll = 0;
   let live;
   try {
     if (st.liveRunId == null) { const list = await api('/api/archive/runs?limit=1'); st.liveRunId = (list.runs[0] || {}).id; }
     live = await api('/api/archive/runs/' + st.liveRunId);
   } catch (err) {
+    stopPoll(st);
     st.polling = false;
     ctx.els.progress.textContent = 'lost contact with the run — ' + (err.message || 'unknown');
     await refreshStatus(ctx);
@@ -49,7 +57,8 @@ async function tick(ctx) {
   // from the live run only while it is the one on show.
   if (st.runId === st.liveRunId) { st.run = live; renderReport(ctx); }
   ctx.els.progress.textContent = progressText(live);
-  if (runIsLive(live)) { startPolling(ctx); return; }
+  if (runIsLive(live)) return;
+  stopPoll(st);
   st.polling = false;
   toast(runFailed(live)
     ? 'Archive run ' + live.state + ' — ' + runReason(live)

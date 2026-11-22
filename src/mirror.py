@@ -27,9 +27,11 @@ prefix keeps it findable), a deleted task removes it. The debounced
 :meth:`Mirror.touch` queue behind :func:`src.tasks_repo.add_write_listener`
 re-exports only the touched ids ~1 s after the last write.
 
-**Import** — the watcher (:meth:`Mirror.import_tick`, stdlib polling of the
-dir's mtimes every ~2 s; no watchdog dependency) picks files whose mtime
-differs from the recorded one, parses them and applies:
+**Import** — the watcher (:meth:`Mirror.import_tick`) lists the dir and picks files
+whose mtime differs from the recorded one, parses them and applies. It runs
+when the OS says the folder changed (``src/watch/dir_change.py``, at most once
+per ~2 s) plus a slow safety sweep; where there is no such signal it falls back
+to a pass every ~2 s. No watchdog dependency. It applies:
 
 - changed **scalar frontmatter fields** through the repo with ``actor="md"``
   (so activity rows are written like any other change) — ``title``, ``code``,
@@ -110,12 +112,17 @@ from src.db import DB_PATH_ENV, connect
 from src.mirror_format import FILE_RE, MirrorParseError, ParsedFile, file_name, parse_file, render
 from src.placeholders import resolve_placeholders, unresolved_placeholders
 from src.runtime import files as runtime_files
+from src.watch.dir_change import DirChangeSignal
 
 logger = logging.getLogger(__name__)
 
 MD_ACTOR = "md"
 DEBOUNCE_S = 1.0
 POLL_S = 2.0
+#: With a change signal the folder is listed only on a signal, but an editor on a
+#: synced or network folder can write without one; this sweep bounds how long
+#: such an edit goes unread.
+SWEEP_S = 60.0
 
 #: Keys the import applies (everything else in the frontmatter is read-only).
 #: ``blocked_by`` is importable but not a scalar task field — it goes through
@@ -216,13 +223,18 @@ class Mirror:
         db_path: Path | None = None,
         debounce_s: float = DEBOUNCE_S,
         poll_s: float = POLL_S,
+        sweep_s: float = SWEEP_S,
     ) -> None:
         self.dir, self.reason = resolve_dir(config.mirror.dir, config.placeholders, label="mirror.dir")
         self.owner = config.install_name or repo.DEFAULT_ACTOR
         self.db_path = db_path
         self.debounce_s = debounce_s
         self.poll_s = poll_s
+        self.sweep_s = sweep_s
         self._lock = threading.RLock()
+        self._wake = threading.Event()  # set by a write, a folder change or stop: the loop re-plans
+        self._folder_changed = threading.Event()
+        self.scans = 0  # import_tick passes the watcher thread has run
         self._pending: set[int] = set()
         self._pending_since = 0.0
         self._stop = threading.Event()
@@ -760,6 +772,7 @@ class Mirror:
         with self._lock:
             self._pending.update(int(i) for i in ids)
             self._pending_since = time.monotonic()
+        self._wake.set()
 
     def start(self) -> None:
         """Start the background thread (import first — offline edits — then a full export, then the loop)."""
@@ -774,6 +787,7 @@ class Mirror:
     def stop(self) -> None:
         repo.remove_write_listener(self.touch)
         self._stop.set()
+        self._wake.set()
         if self._thread is not None:
             self._thread.join(timeout=5)
             self._thread = None
@@ -787,34 +801,76 @@ class Mirror:
 
     def _run(self) -> None:
         conn = connect(self.db_path)
+        # Open the signal before the first sync so an edit landing during it is not missed.
+        signal = DirChangeSignal(self.dir, self._on_folder_change) if self.dir else None
         try:
             try:
                 self.import_tick(conn)
                 self.export_all(conn)
             except Exception:  # noqa: BLE001
                 logger.exception("❌ mirror: initial sync failed")
-            last_poll = time.monotonic()
-            while not self._stop.wait(0.25):
-                now = time.monotonic()
-                ids: list[int] = []
-                with self._lock:
-                    if self._pending and now - self._pending_since >= self.debounce_s:
-                        ids = sorted(self._pending)
-                        self._pending.clear()
-                if ids:
-                    try:
-                        self.export_ids(conn, ids)
-                    except Exception:  # noqa: BLE001
-                        logger.exception("❌ mirror: debounced export failed")
-                if now - last_poll >= self.poll_s:
-                    last_poll = now
-                    try:
-                        self.import_tick(conn)
-                    except Exception:  # noqa: BLE001
-                        logger.exception("❌ mirror: import tick failed")
+            watching = signal is not None and signal.available
+            if signal is not None:
+                signal.start()
+            last_scan = time.monotonic()
+            try:
+                while True:
+                    now = time.monotonic()
+                    with self._lock:
+                        pending_since = self._pending_since if self._pending else None
+                    self._wake.wait(self.wait_s(now, last_scan, watching, self._folder_changed.is_set(), pending_since))
+                    self._wake.clear()
+                    if self._stop.is_set():
+                        break
+                    now = time.monotonic()
+                    ids: list[int] = []
+                    with self._lock:
+                        if self._pending and now - self._pending_since >= self.debounce_s:
+                            ids = sorted(self._pending)
+                            self._pending.clear()
+                    if ids:
+                        try:
+                            self.export_ids(conn, ids)
+                        except Exception:  # noqa: BLE001
+                            logger.exception("❌ mirror: debounced export failed")
+                    if self.scan_due(now, last_scan, watching, self._folder_changed.is_set()):
+                        last_scan = now
+                        self._folder_changed.clear()  # before the pass: a change during it re-arms
+                        self.scans += 1
+                        try:
+                            self.import_tick(conn)
+                        except Exception:  # noqa: BLE001
+                            logger.exception("❌ mirror: import tick failed")
+            finally:
+                if signal is not None:
+                    signal.stop()
             self.flush(conn)
         finally:
             conn.close()
+
+    def _on_folder_change(self) -> None:
+        self._folder_changed.set()
+        self._wake.set()
+
+    def scan_due(self, now: float, last_scan: float, watching: bool, changed: bool) -> bool:
+        """Whether the watcher lists the folder now.
+
+        With a change signal: only after a change (at most once per ``poll_s``, so a burst of
+        writes is one pass) or when the safety sweep is due. Without one: every ``poll_s``.
+        """
+        since = now - last_scan
+        if not watching:
+            return since >= self.poll_s
+        return (changed and since >= self.poll_s) or since >= self.sweep_s
+
+    def wait_s(self, now: float, last_scan: float, watching: bool, changed: bool, pending_since: float | None) -> float:
+        """How long the loop may sleep before it next has something to do (never negative)."""
+        due = [last_scan + (self.sweep_s if watching else self.poll_s)]
+        if watching and changed:
+            due.append(last_scan + self.poll_s)
+        if pending_since is not None:
+            due.append(pending_since + self.debounce_s)
+        return max(0.0, min(due) - now)
 
 
 def _valid_ts(value: str) -> bool:
