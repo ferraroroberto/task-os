@@ -363,13 +363,20 @@ button.prop-row:hover .prop-val { color: var(--accent-text); }
 .comment-send.button-primary { justify-content: center; height: var(--row-sm); min-height: var(--row-sm); padding: 0 var(--space-md); }
 /* The phone's composer, pinned to the sheet's foot over the scrolling body:
    it bleeds to the sheet's edges on the card surface, and the sheet drops its
-   own bottom padding so nothing scrolls under it. */
+   own bottom padding so nothing scrolls under it. Its controls keep the nav
+   pill's edge clearance (21px), never less: the installed iOS app reports a
+   zero safe-area inset (viewport-fit=auto), so the screen's rounded corners
+   would otherwise clip the field's left edge and Send's right edge. The inset
+   still wins where a device reports a larger one. */
 .comment-composer-pinned {
   position: sticky;
   bottom: 0;
   z-index: 2;
   margin: 0 calc(-1 * var(--space-md));
-  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-sm)
+           max(var(--bottom-tabs-margin, 21px), env(safe-area-inset-right, 0px))
+           max(var(--bottom-tabs-margin, 21px), calc(var(--space-sm) + env(safe-area-inset-bottom, 0px)))
+           max(var(--bottom-tabs-margin, 21px), env(safe-area-inset-left, 0px));
   border-top: 1px solid var(--line);
   background: var(--card);
 }
