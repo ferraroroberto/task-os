@@ -119,7 +119,7 @@ from app.webapp.routers import (
     views,
     voice,
 )
-from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response
+from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR, error_response, require_signed_in
 from src import placeholders
 from src import tasks_repo as repo
 from src.ai import AIClient, AIError
@@ -141,6 +141,7 @@ from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
 from src.search import build_federated
 from src.search.folder_explorer import FolderExplorerClient
+from src.self_restart import TRAY_RESTART, RestartTarget, restart_router
 from src.sharing.publisher import AddressPublisher
 from src.static_versioning import IMMUTABLE_CACHE_CONTROL, SHEET_BUNDLE_NAME
 from src.tasks_repo import RepoError
@@ -361,6 +362,13 @@ def create_app() -> FastAPI:
     # The local usage log: /api/usage/*, so AuthMiddleware gates it like
     # every other /api/ route — no per-route dependency.
     app.include_router(usage_router(usage_db_path()))
+    # The build readout's restart sheet runs this repo's own `tray.bat --restart`,
+    # for any signed-in caller (the PC itself included).
+    app.include_router(restart_router(
+        targets=[RestartTarget("app", "Restart app", TRAY_RESTART)],
+        status_dir=usage_db_path().parent / "restart",
+        guard=require_signed_in,
+    ))
     return app
 
 

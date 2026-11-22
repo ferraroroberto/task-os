@@ -46,7 +46,8 @@ import { initNavTabs } from './_vendored/nav/nav-tabs.js';
 import { emptyStateEl } from './_vendored/empty-state/empty-state.js';
 import { initUsageLog } from './_vendored/usage-log/usage-log.js';
 import { createActions } from './actions.js';
-import { api, qs } from './api.js';
+import { api, postRestart, qs } from './api.js';
+import { initRestartSheet } from './_vendored/page-foot/restart-sheet.js';
 import { mountArchive } from './archive.js';
 import { mountBoard } from './board.js';
 import { mountBulkBar } from './bulkbar.js';
@@ -926,6 +927,7 @@ async function boot() {
   window.addEventListener('hashchange', onHashChange);
   window.addEventListener('popstate', onHashChange);
   app.fetchVersion();
+  initRestartSheet({ fetchJson: api, postJson: postRestart });
   // "New version available · Reload" when a deploy lands under an open page.
   initBuildWatch();
   settings.refreshStatus();
