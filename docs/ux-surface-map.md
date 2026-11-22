@@ -782,6 +782,7 @@ flowchart LR
 | Group | Row | Value shown | Sheet holds |
 | --- | --- | --- | --- |
 | This device | **Text size** | Small / Default / Large (in place, no sheet) | a three-way control; scales rem-based type, not rows or icons |
+| | **Full screen on Edge** | an on / off switch (in place, no sheet), shown in Edge only | hides the address bar and toolbar; while on and out of full screen the hint adds *Tap anywhere to go full screen.* |
 | | **Row actions** | *Default* | a select for **swipe right** and one for **swipe left** (any action or nothing), then every row action with **Show in the menu**, **Move up**, **Move down**, and **Reset to the defaults**; an action a swipe runs always stays in the menu |
 | | **Command palette** | *Ctrl+K* | a line of explanation and **Open command palette** |
 | | **Phone access** | the client (*this PC* or the member) | who you are signed in as, whether HTTPS is on, whether a token and a password are set (and the script that sets them), the team line *you are X · change name* with team mode, install hints for iOS and Android, **Sign out on this device** (only for a cookie session) |

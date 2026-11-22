@@ -1,0 +1,20 @@
+<!-- Markup skeleton — copy into the app's Settings, inside a settings-group
+     card (link settings-group.css, switch.css and fullscreen.css, with the
+     icons sprite on the page). The row ships `hidden`: fullscreen.js's
+     bindFullscreen(row, app) shows it in Edge only. Keep the
+     data-fullscreen-toggle attribute and the .fullscreen-armed span; the
+     labels may be translated. The binder owns the switch's state. -->
+<label class="settings-row fullscreen-row" id="fullscreenRow" hidden>
+  <svg class="icon settings-row-icon" aria-hidden="true"><use href="#i-maximize"></use></svg>
+  <span class="settings-row-text">
+    <span class="settings-row-label">Full screen on Edge</span>
+    <span class="settings-row-hint" aria-live="polite">Hides the address bar and toolbar.<span class="fullscreen-armed"> Tap anywhere to go full screen.</span></span>
+  </span>
+  <button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Full screen on Edge" data-fullscreen-toggle data-track="settings.fullscreen">
+    <span class="knob"></span><span class="toggle-label">OFF</span>
+  </button>
+</label>
+<script type="module">
+  import { bindFullscreen } from '/static/_vendored/fullscreen/fullscreen.js';
+  bindFullscreen(document.getElementById('fullscreenRow'), 'my-app');
+</script>
