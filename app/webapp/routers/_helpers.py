@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from src.features import OFF_REASON, Feature, FeatureOff, feature
@@ -47,6 +47,19 @@ def resolve_actor(request: Request, explicit: str | None = None) -> str:
     if viewer is not None and viewer.name and config is not None and viewer.id != config.owner.id:
         return viewer.name
     return getattr(config, "install_name", None) or DEFAULT_ACTOR
+
+
+def require_signed_in(request: Request) -> None:
+    """Route dependency: refuse unless :class:`src.auth.AuthMiddleware` admitted a credential.
+
+    The middleware records its verdict on the request (``loopback``, ``token``
+    or ``team`` for a caller it let in; ``public`` for an exempt path, which
+    carries no credential). A route that must never be reachable on an exempt
+    path, such as the restart, depends on this so it cannot be mounted open,
+    and an app built without the middleware refuses it too.
+    """
+    if getattr(request.state, "auth", None) not in ("loopback", "token", "team"):
+        raise HTTPException(status_code=401, detail="authentication required")
 
 
 def require_feature(key: str) -> Callable[[Request], None]:

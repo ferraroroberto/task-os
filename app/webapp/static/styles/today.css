@@ -114,7 +114,9 @@
     min-height: 520px;
     padding-bottom: var(--gap);
   }
-  .app:has(> :is(#paneToday, #paneBoard):not([hidden])) > .page-foot { margin-block: var(--space-xs) 0; }
+  /* The build line sits flush at the window's bottom here, and a fine pointer needs no 44px target, so the
+     restart readout's hit area stays inside the footer instead of adding page scroll. */
+  .app:has(> :is(#paneToday, #paneBoard):not([hidden])) > .page-foot { margin-block: var(--space-xs) 0; --hit-min: 16px; }
   #paneToday:not([hidden]), #paneToday > .pane-body, #todayHost, #todayHost > .today-layout,
   #paneBoard:not([hidden]), #paneBoard > .pane-body, #boardHost, #boardHost > .board {
     display: flex;

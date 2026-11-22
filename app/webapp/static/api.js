@@ -53,6 +53,20 @@ export async function api(path, opts) {
   return data;
 }
 
+/**
+ * The restart sheet's POST: it reads the status itself (a refusal is an answer, not an error).
+ * @returns {Promise<{status: number, body: any}>}
+ */
+export async function postRestart(url, body) {
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    credentials: 'same-origin', body: JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) { data = null; }
+  return { status: res.status, body: data };
+}
+
 let redirecting = false;
 /** Send this device to /login once (many calls can 401 at the same time). */
 export function redirectToLogin() {

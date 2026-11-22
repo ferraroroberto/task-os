@@ -632,7 +632,12 @@ def shot(page: Page, path: Path, *, full_page: bool = False) -> None:
     # one. The page is put back as it was so the story goes on against real values.
     page.evaluate(MASK_PATHS_JS, path_mask_rules(E2E_WORK_ROOT, E2E_SHARED_ROOT))
     try:
-        page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide")
+        # The restart sheet dots the build readout once /api/restart answers; the dots land on a
+        # different sub-pixel from run to run, and its hit area can flip the text's antialiasing where it overlaps
+        # another layer, so the
+        # gallery keeps the plain readout.
+        page.screenshot(path=str(path), full_page=full_page, animations="disabled", caret="hide",
+                        style=".page-foot-restart { text-decoration: none !important; } .page-foot-restart::after { display: none !important; }")
     finally:
         page.evaluate("() => { if (window.__taskosPathUnmask) window.__taskosPathUnmask(); }")
 

@@ -54,6 +54,7 @@
 /src/password.py
 /src/pooled_http.py
 /src/runtime_data.py
+/src/self_restart.py
 /src/usage_log.py
 /tests/e2e/_browser_sweep.py
 /tests/e2e/_e2e_live_guard.py
