@@ -8,6 +8,7 @@ not an isolated test: it leaves the page where the next one expects it, and the
 from __future__ import annotations
 
 import re
+import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from tests.e2e._ui import (
     open_filter_sheet,
     pick_prop,
 )
+from tests.e2e._work_root import E2E_WORK_ROOT
 from tests.e2e.conftest import E2E_ANCHOR, _get, dismiss_toasts, shot
 
 LINK = "https://example.com/passport-office"
@@ -190,8 +192,65 @@ def _drawer_quick_moves_and_comment(
     popup.wait_for_load_state()
     assert popup.url == LINK, popup.url
     popup.close()
+    walk_old_comment_dates(page, base, drawer, task_id)
     drawer.locator(".drawer-close").click()
     expect(drawer).to_be_hidden()
+
+def assert_comment_date_gap(drawer, forms: int = 3) -> None:
+    """Every visible comment's date keeps a clear gap before its text, and the texts align.
+
+    The thread is the one `_age_comments` left: today's time, a this-year short
+    date and a previous-year date that carries the year (the longest form).
+    """
+    rows = drawer.locator(".comment")
+    expect(rows).to_have_count(forms)
+    texts = drawer.locator(".comment .comment-when").all_inner_texts()
+    assert any(re.fullmatch(r"\d{1,2} \w{3} \d{2}", t) for t in texts), texts   # the year form is on screen
+    boxes = rows.evaluate_all(
+        """rows => rows.map(r => {
+            const range = document.createRange();   // the glyphs' own box: the <time> box stays track-wide while its text spills
+            range.selectNodeContents(r.querySelector('.comment-when'));
+            const b = r.querySelector('.comment-body').getBoundingClientRect();
+            return {whenRight: range.getBoundingClientRect().right, bodyLeft: b.left};
+        })""")
+    for text, box in zip(texts, boxes, strict=True):
+        assert box["bodyLeft"] - box["whenRight"] >= 4, (text, box)    # a gap, not a touch
+    assert len({round(b["bodyLeft"]) for b in boxes}) == 1, boxes      # the bodies stay aligned
+
+
+def walk_old_comment_dates(page: Page, base: str, drawer, task_id: int) -> None:
+    """Re-date the open task's seeded comments across years, assert the date gap, put them back.
+
+    The API stamps every comment "now", so a previous-year comment needs the
+    stored timestamp moved: the oldest two go to last December, the third to
+    January, the one this walk typed stays today's. The original stamps are
+    restored afterwards and the drawer re-opened, so nothing later in the story
+    (or its shots) sees the re-dated thread.
+    """
+    db = E2E_WORK_ROOT / "seeded-test_story_04_triage" / "tasks.db"
+    year = date.today().year
+    stamps = [f"{year - 1}-12-12T09:30:00+00:00", f"{year - 1}-12-17T09:30:00+00:00", f"{year}-01-07T09:30:00+00:00"]
+    items = _get(base, f"/api/tasks/{task_id}/comments")["items"][:3]
+    assert len(items) == 3, items
+
+    def stamp(values: list[str]) -> None:
+        with sqlite3.connect(db, timeout=10) as conn:
+            for c, ts in zip(items, values, strict=True):
+                conn.execute("UPDATE comments SET ts = ? WHERE id = ?", (ts, c["id"]))
+        # close and re-open through the URL hash: the drawer re-reads its thread
+        # while the list behind it keeps its scroll, which a reload would reset
+        drawer.locator(".drawer-close").evaluate("el => el.click()")
+        expect(drawer).to_be_hidden()
+        page.evaluate("id => { location.hash = '#task/' + id; }", task_id)
+        expect(drawer).to_be_visible()
+        expect(drawer.locator(".comment")).not_to_have_count(0)
+
+    stamp(stamps)
+    try:
+        assert_comment_date_gap(drawer)
+    finally:
+        stamp([c["ts"] for c in items])
+
 
 def _quick_add_fill(page: Page, shots: Path) -> tuple:
     """The + opens quick-add; the typed phrase parses into the due field. Returns the dialog, input, date."""

@@ -382,14 +382,21 @@ button.prop-row:hover .prop-val { color: var(--accent-text); }
 }
 .drawer.has-pinned-composer { padding-bottom: 0; }
 .comment-edit-wrap .comment-send { min-height: 28px; padding: 2px var(--space-sm); }
-.comment-list { display: flex; flex-direction: column; }
+/* The list owns the three columns and every row takes them as a subgrid, so
+   the time column is as wide as the widest time shown (a previous-year date
+   carries its year) and every body starts at the same x. */
+.comment-list {
+  display: grid;
+  grid-template-columns: minmax(3.25rem, max-content) minmax(0, 1fr) auto;
+  column-gap: var(--space-sm);
+}
 /* One comment = one flat list row on a hairline (design.md list-row): a narrow
    time column, the text, and the "···" at the end. Time and text share one
    line-height so their first lines sit on one baseline. */
 .comment {
   display: grid;
-  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
-  column-gap: var(--space-sm);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: start;
   padding: 10px 0;
   border-top: 1px solid var(--line-muted);
