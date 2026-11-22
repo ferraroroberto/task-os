@@ -291,8 +291,7 @@ wide_views = ["board", "today"]
 
 # The Mac nightly (project-scaffolding docs/mac-runner.md). The unit leg deselects
 # `windows_only` tests (the tray, the PowerShell gate, the cmd opener); the e2e
-# conftest boots its own disposable instance, so no autoboot flag. No `views`:
-# the simulator smoke needs a [design.review.synthetic] command this repo has not declared.
+# conftest boots its own disposable instance, so no autoboot flag. No `views`.
 [ci.nightly]
 python       = "3.14"
 requirements = ["requirements.txt"]
@@ -431,6 +430,13 @@ path = "LICENSE"
 # scheme), so the hook has to set that key too or its dark shots stay light.
 [design.review]
 theme_storage_key = "task-os.theme"
+
+# The throwaway instance /design-review and the fleet inventory sweep boot instead of the
+# live app: scripts/design_review_synthetic.py serves the synthetic seed on a free loopback
+# port and exits when its stdin closes.
+[design.review.synthetic]
+command           = ["scripts/design_review_synthetic.py"]
+startup_timeout_s = 60
 
 # /design-review (fleet-config skills/design-review): Settings is no tab since
 # #281 (five destinations is the pill's ceiling) but the header gear, so the
