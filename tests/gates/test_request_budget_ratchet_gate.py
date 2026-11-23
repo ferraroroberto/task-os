@@ -41,3 +41,20 @@ def test_the_stage_is_enabled_vendored_and_routed_to_no_browser_suite() -> None:
 
 def test_the_reader_the_script_loads_is_vendored_too() -> None:
     assert (REPO_ROOT / FLEET["vendored"]["request_budget_scan"]["dest"]).is_file()
+
+
+def test_the_tree_holds_no_request_budget_debt_and_every_declared_loop_is_real() -> None:
+    """The baseline is empty, so the tree must hold no hit at all; a loop declaration that
+    no loop matches any more would excuse nothing and only hide the next one."""
+    from scripts import request_budget_ratchet as ratchet
+
+    cfg, vendored = ratchet.load_config(REPO_ROOT)
+    assert cfg is not None
+    tree = ratchet.scan_tree(REPO_ROOT, cfg, vendored)
+    assert tree.found == {}
+    assert tree.stale_loops == []
+    assert set(cfg.loops) == {"app/tray/tray.py", "app/webapp/manager.py", "src/mirror.py", "src/poller.py"}
+    assert {(path, rule) for path, _line, rule, _why in tree.exempted} == {
+        ("app/webapp/static/js/time/frame.js", "fixed-rate-poll"),
+        ("app/webapp/static/js/time/frame.js", "poll-floor"),
+    }

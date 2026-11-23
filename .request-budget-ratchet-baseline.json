@@ -1,12 +1,4 @@
 {
   "version": 1,
-  "entries": [
-    {"key": "app/tray/tray.py", "counts": {"unwatched-loop": 1}},
-    {"key": "app/webapp/manager.py", "counts": {"unwatched-loop": 1}},
-    {"key": "app/webapp/server.py", "counts": {"timing-middleware": 1}},
-    {"key": "app/webapp/static/js/time/frame.js", "counts": {"fixed-rate-poll": 1, "poll-floor": 1}},
-    {"key": "app/webapp/static/voice.js", "counts": {"fixed-rate-poll": 1}},
-    {"key": "src/mirror.py", "counts": {"unwatched-loop": 1}},
-    {"key": "src/poller.py", "counts": {"unwatched-loop": 1}}
-  ]
+  "entries": []
 }
