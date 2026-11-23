@@ -140,6 +140,14 @@ def test_version_shape(client: TestClient) -> None:
     assert body["schema_version"] == dbmod.SCHEMA_VERSION
 
 
+def test_every_api_response_says_where_its_time_went(client: TestClient) -> None:
+    """The request-timing middleware: an /api/ answer carries queue, worker and app time,
+    a static asset (outside the timed prefix) does not."""
+    timing = client.get("/api/version").headers.get("server-timing", "")
+    assert [part.split(";")[0].strip() for part in timing.split(",")] == ["queue", "worker", "app"]
+    assert "server-timing" not in client.get("/healthz").headers
+
+
 def test_the_build_sha_can_be_pinned_for_the_gallery(monkeypatch: pytest.MonkeyPatch) -> None:
     """#225 — the ``Build:`` footer is on every story screenshot, so an honest
     ``git rev-parse`` rewrote 19 of them on every commit and the gallery could

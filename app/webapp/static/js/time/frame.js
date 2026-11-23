@@ -50,6 +50,7 @@ function startPolling(ctx) {
     });
   }, POLL_MS);
   st.poll.start();
+  // request-budget-exempt: the on-screen clock; tick() redraws the elapsed time from the last read and never reaches the server
   st.tick = window.setInterval(function () { tick(ctx); }, 1000);
 }
 

@@ -139,6 +139,7 @@ from src.issue_sync import IssueSyncService
 from src.logger import configure_logging
 from src.login_guard import build_lockout, notifier_for
 from src.mirror import Mirror
+from src.request_timing import RequestTimingMiddleware
 from src.search import build_federated
 from src.search.folder_explorer import FolderExplorerClient
 from src.self_restart import TRAY_RESTART, RestartTarget, restart_router
@@ -339,6 +340,9 @@ def create_app() -> FastAPI:
         get_team=lambda: app.state.config.team,
         get_people=lambda: app.state.config.people,
     )
+    # Outside the gate, so a request's Server-Timing and slow-request line include
+    # the time the gate spent on it.
+    app.add_middleware(RequestTimingMiddleware)
     # Added last, so it is the outermost layer: a 401 from the gate or a bodyless
     # 304 is under the minimum size and passes through unchanged.
     app.add_middleware(StreamSafeGZipMiddleware)

@@ -47,6 +47,7 @@
 'use strict';
 
 import { api } from './api.js';
+import { startPoll } from './_vendored/poll/poll.js';
 import { attachRecWave } from './_vendored/rec-wave/rec-wave.js';
 
 /** What the models want, and what a phrase needs: mono speech, 16 kHz. */
@@ -275,7 +276,7 @@ export function mountMic(btn, hint, opts) {
     busy: false,            // the final clip is being encoded / transcribed
     ready: false,           // the install + this browser can actually record
     partialMs: FALLBACK_PARTIAL_MS,   // 0 = no live transcript
-    poller: 0,              // the partial interval
+    poller: null,           // the partial poll: one pass at a time, none while the tab is hidden
     inFlight: null,         // the AbortController of the partial in flight
     lastSent: 0,            // `captured` at the last partial post
     shown: 0,               // `captured` behind the transcript on screen
@@ -353,7 +354,7 @@ function setState(m, cls) {
 
 /** Tear the audio graph down and release the microphone. Idempotent. */
 function release(m) {
-  window.clearInterval(m.poller); m.poller = 0;
+  if (m.poller) { m.poller.stop(); m.poller = null; }
   if (m.stopWave) { m.stopWave(); m.stopWave = null; }
   if (m.node) { try { m.node.port.onmessage = null; m.node.disconnect(); } catch (_) { /* already gone */ } }
   if (m.stream) m.stream.getTracks().forEach(function (t) { t.stop(); });
@@ -394,7 +395,7 @@ async function post(m, wav, parse) {
 async function partial(m) {
   if (!m.recording || m.inFlight || m.captured === m.lastSent) return;
   if (m.captured > MAX_PARTIAL_SECONDS * m.ctx.sampleRate) {
-    window.clearInterval(m.poller); m.poller = 0;
+    if (m.poller) { m.poller.stop(); m.poller = null; }
     return;
   }
   const version = m.captured;
@@ -482,7 +483,11 @@ async function start(m) {
       console.info('[voice] waveform not shown', err);
     }
   }
-  if (m.partialMs > 0) m.poller = window.setInterval(function () { partial(m); }, m.partialMs);
+  // Faster than the 2 s floor on purpose: it runs only while this take records.
+  if (m.partialMs > 0) {
+    m.poller = startPoll(function () { return partial(m); }, m.partialMs,
+      { activeWhile: function () { return m.recording; } });
+  }
   m.onStart();
 }
 

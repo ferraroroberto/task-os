@@ -271,6 +271,31 @@ handler_dirs   = ["app/webapp/routers"]
 # The client's one fetch wrapper (app/webapp/static/api.js), so a poll that calls it is read as reaching the server.
 fetch_wrappers = ["api"]
 
+# The server loops that run whether or not anyone is looking, and why each one must.
+[[request_budget.loops]]
+path       = "app/tray/tray.py"
+function   = "TrayApp._announce_ready"
+interval_s = 2
+why        = "a bounded startup wait: it ends once the spawned webapp answers or its startup window closes"
+
+[[request_budget.loops]]
+path       = "app/webapp/manager.py"
+function   = "WebappManager._wait_until_ready"
+interval_s = 0.4
+why        = "a bounded startup wait: it ends once uvicorn answers, exits, or the startup timeout passes"
+
+[[request_budget.loops]]
+path       = "src/mirror.py"
+function   = "Mirror._run"
+interval_s = 2
+why        = "keeps the synced folder and the database in step for edits made elsewhere; it sleeps until the next debounce, change or 60 s sweep is due"
+
+[[request_budget.loops]]
+path       = "src/poller.py"
+function   = "Poller._run"
+interval_s = 60
+why        = "issue sync and email capture land work in the Inbox while nobody is viewing; the interval is a setting in minutes, one at the least"
+
 # [windows_only_ratchet] -- the scaffold's Windows-only-test stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/windows_only_ratchet.py, which fails when a test
 # imports a Windows-only module, reads a Windows-only API or environment variable, or plants a
