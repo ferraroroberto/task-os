@@ -100,6 +100,8 @@ poll = { src = "app/webapp/static/_vendored/poll", sha = "2e2a4cca9d3180980db6f8
 # copies are duplicates by design, so they are excluded. Procedure + limits:
 # project-scaffolding docs/static-ratchet.md.
 self_restart = { src = "src/self_restart.py", sha = "564864cb95a8b416c16d1a1e1e9f31b9d5b2ec8e", dest = "src/self_restart.py" }
+build_info = { src = "src/build_info.py", sha = "1c1007fcd0b65b54342779250cb66975d57482e8", dest = "src/build_info.py" }
+restart_check = { src = "src/restart_check.py", sha = "1c1007fcd0b65b54342779250cb66975d57482e8", dest = "src/restart_check.py" }
 [static_ratchet]
 enabled  = true
 baseline = ".static-ratchet-baseline.json"
