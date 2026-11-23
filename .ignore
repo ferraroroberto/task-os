@@ -9,6 +9,7 @@
 /app/webapp/static/_vendored/color-scheme
 /app/webapp/static/_vendored/disclosure
 /app/webapp/static/_vendored/empty-state
+/app/webapp/static/_vendored/fullscreen
 /app/webapp/static/_vendored/home-head
 /app/webapp/static/_vendored/icon-button
 /app/webapp/static/_vendored/icons
@@ -61,4 +62,5 @@
 /tests/e2e/_geometry.py
 /tests/e2e/_paced_browser.py
 /tests/e2e/_surface.py
+/tests/host/_synthetic_host.py
 # END vendored-copies
