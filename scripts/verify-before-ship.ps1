@@ -79,7 +79,14 @@
                              scripts/request_budget_ratchet_gate.py. Whole tree, never
                              routed; an exit 3 (a file that cannot be read or parsed) is NOT
                              CONFIRMED and fails, never a pass or a skip.
-     11. pytest (unit)     — hermetic suite, tests/e2e excluded; a runtime write
+     10f. windows only ratchet — no file's count of unmarked Windows-only tests (a
+                             Windows-only module or API, a Windows-only environment
+                             variable read, a planted `.exe` install) above
+                             .windows-only-ratchet-baseline.json, through
+                             scripts/windows_only_ratchet_gate.py. Whole tree, never
+                             routed; an exit 3 (a test module that cannot be listed, read
+                             or parsed) is NOT CONFIRMED and fails, never a pass or a skip.
+     11. pytest (unit)    — hermetic suite, tests/e2e excluded; a runtime write
                              --snapshot is taken first
      12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
                              scripts/classify_e2e.py against .fleet.toml [e2e]
@@ -202,6 +209,9 @@ Invoke-Stage "ux surface ratchet"      { & $py -m scripts.ux_surface_ratchet_gat
 # Same wrapper shape: it maps the request budget script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_request_budget_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "request budget ratchet"  { & $py -m scripts.request_budget_ratchet_gate }
+# Same wrapper shape: it maps the windows-only script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_windows_only_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "windows only ratchet"    { & $py -m scripts.windows_only_ratchet_gate }
 # Runtime write probe, first half: what already sits untracked or ignored under
 # the code folders, so the probe after the tests names only what they wrote.
 $runtimeSnapshot = Join-Path ([IO.Path]::GetTempPath()) "runtime-write-snapshot-$PID.json"
