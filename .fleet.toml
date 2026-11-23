@@ -81,6 +81,7 @@ instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac32
 toast = { src = "app/webapp/static/_vendored/toast", sha = "e56c8330f8500b83635773033a09de6fc3cba342", dest = "app/webapp/static/_vendored/toast" }
 build-watch = { src = "app/webapp/static/_vendored/build-watch", sha = "2d871dd5a6a3ee6fe12a3c5c6439d2c53a93c2c4", dest = "app/webapp/static/_vendored/build-watch" }
 fullscreen = { src = "app/webapp/static/_vendored/fullscreen", sha = "e14844faa70acbd89dc43011c5bc98025052c2c3", dest = "app/webapp/static/_vendored/fullscreen" }
+windows_only_ratchet = { src = "scripts/windows_only_ratchet.py", sha = "5ba99b0a04b1b5d7b3689f8f7a59bd3fe625a9bc", dest = "scripts/windows_only_ratchet.py" }
 request_budget_ratchet = { src = "scripts/request_budget_ratchet.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "scripts/request_budget_ratchet.py" }
 request_budget_scan = { src = "scripts/request_budget_scan.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "scripts/request_budget_scan.py" }
 request_timing = { src = "src/request_timing.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "src/request_timing.py" }
@@ -270,6 +271,18 @@ handler_dirs   = ["app/webapp/routers"]
 # The client's one fetch wrapper (app/webapp/static/api.js), so a poll that calls it is read as reaching the server.
 fetch_wrappers = ["api"]
 
+# [windows_only_ratchet] -- the scaffold's Windows-only-test stage. The gate
+# (scripts/verify-before-ship.ps1) runs scripts/windows_only_ratchet.py, which fails when a test
+# imports a Windows-only module, reads a Windows-only API or environment variable, or plants a
+# Windows `.exe` install without the `windows_only` marker the Mac nightly deselects
+# ([ci.nightly]); a file's count above .windows-only-ratchet-baseline.json fails. Exit 3 is
+# "not confirmed", never clean. Mechanism: project-scaffolding docs/windows-only-ratchet.md.
+[windows_only_ratchet]
+enabled    = true
+baseline   = ".windows-only-ratchet-baseline.json"
+test_paths = ["tests/**"]
+exclude    = ["tests/fixtures/**"]
+
 # [comment_ratchet] -- the scaffold's comment-history stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/comment_ratchet.py, which counts `#NNN`
 # issue references inside product-code comments (.py, .js, .css, .ps1; strings and
@@ -444,6 +457,9 @@ path = ".ux-surface-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = ".request-budget-ratchet-baseline.json"
+[[e2e.rule]]
+tier = "none"
+path = ".windows-only-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = ".comment-ratchet-baseline.json"
