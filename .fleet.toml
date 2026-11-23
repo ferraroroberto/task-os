@@ -81,6 +81,10 @@ instruction_repeats = { src = "scripts/instruction_repeats.py", sha = "c5535ac32
 toast = { src = "app/webapp/static/_vendored/toast", sha = "e56c8330f8500b83635773033a09de6fc3cba342", dest = "app/webapp/static/_vendored/toast" }
 build-watch = { src = "app/webapp/static/_vendored/build-watch", sha = "2d871dd5a6a3ee6fe12a3c5c6439d2c53a93c2c4", dest = "app/webapp/static/_vendored/build-watch" }
 fullscreen = { src = "app/webapp/static/_vendored/fullscreen", sha = "e14844faa70acbd89dc43011c5bc98025052c2c3", dest = "app/webapp/static/_vendored/fullscreen" }
+request_budget_ratchet = { src = "scripts/request_budget_ratchet.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "scripts/request_budget_ratchet.py" }
+request_budget_scan = { src = "scripts/request_budget_scan.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "scripts/request_budget_scan.py" }
+request_timing = { src = "src/request_timing.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "src/request_timing.py" }
+poll = { src = "app/webapp/static/_vendored/poll", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "app/webapp/static/_vendored/poll" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
@@ -249,6 +253,22 @@ enabled  = true
 baseline = ".ux-surface-ratchet-baseline.json"
 map      = "docs/ux-surfaces.yaml"
 paths    = ["app/webapp/static/**"]
+
+# [request_budget_ratchet] -- the scaffold's request-budget stage. The gate
+# (scripts/verify-before-ship.ps1) runs scripts/request_budget_ratchet.py (with its reader
+# scripts/request_budget_scan.py), which fails when a fixed-rate browser poll that reaches the
+# server, a poll under the 2 s floor, an undeclared fast server loop, a directory scan in a
+# request handler, a submit to the shared default pool, or a web app without the request-timing
+# middleware is new beyond .request-budget-ratchet-baseline.json. Existing hits are baselined
+# at today's count, never excluded; burn-down is separate work. Exit 3 is "not confirmed",
+# never clean. Mechanism: project-scaffolding docs/request-budget-ratchet.md; the rules and
+# why: docs/polling-budget.md.
+[request_budget_ratchet]
+enabled        = true
+baseline       = ".request-budget-ratchet-baseline.json"
+handler_dirs   = ["app/webapp/routers"]
+# The client's one fetch wrapper (app/webapp/static/api.js), so a poll that calls it is read as reaching the server.
+fetch_wrappers = ["api"]
 
 # [comment_ratchet] -- the scaffold's comment-history stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/comment_ratchet.py, which counts `#NNN`
@@ -421,6 +441,9 @@ path = ".usage-track-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = ".ux-surface-ratchet-baseline.json"
+[[e2e.rule]]
+tier = "none"
+path = ".request-budget-ratchet-baseline.json"
 [[e2e.rule]]
 tier = "none"
 path = ".comment-ratchet-baseline.json"
