@@ -4,7 +4,8 @@ Run it from any shell, identically (Git Bash, PowerShell, cmd)::
 
     .venv\Scripts\python.exe -m src.restart_check restart --port <webapp port>
 
-It reads the served ``/api/version`` identity, runs this checkout's ``tray.bat --restart``
+It reads the served ``/api/version`` identity (``--version-path`` names another path, e.g.
+``/admin/api/version``, for an app that serves it elsewhere), runs this checkout's ``tray.bat --restart``
 by absolute path, then polls until a *different* process answers with a ``git_sha`` that
 matches ``HEAD``. It exits ``0`` only then; ``1`` when the restart ran but did not replace
 the old process (the bat failed or hung, or the old build still serves); ``2`` when the
@@ -30,6 +31,7 @@ which needs ``build_info``). Self-contained on purpose, standard library only, P
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import logging
 import ssl
@@ -53,6 +55,7 @@ TRAY_BAT = _REPO_ROOT / "tray.bat"
 # fresh console window for the bat. Derived here, not imported: this file is vendored verbatim.
 _NO_WINDOW: int = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
+DEFAULT_VERSION_PATH = "/api/version"
 DEFAULT_VERIFY_TIMEOUT_S = 60.0
 # tray_lifecycle.ps1 stops the old tray, waits up to 5 s per held port, sleeps 2 s, then polls
 # the new build for 30 s; 180 s is that chain with margin, so a bat past it is hung, not slow.
@@ -67,14 +70,14 @@ EXIT_NOT_CONFIRMED = 2
 Identity = dict[str, Any]
 
 
-def fetch_version(port: int) -> Identity | None:
-    """``GET /api/version`` on the loopback webapp (https, then http), or ``None``."""
+def fetch_version(port: int, path: str = DEFAULT_VERSION_PATH) -> Identity | None:
+    """``GET <path>`` on the loopback webapp (https, then http), or ``None``."""
     # Loopback only, and a self-signed fleet cert is the normal case.
     insecure = ssl.create_default_context()
     insecure.check_hostname = False
     insecure.verify_mode = ssl.CERT_NONE
     for scheme in ("https", "http"):
-        url = f"{scheme}://127.0.0.1:{port}/api/version"
+        url = f"{scheme}://127.0.0.1:{port}{path}"
         try:
             with urllib.request.urlopen(url, timeout=_PROBE_TIMEOUT_S, context=insecure) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
@@ -177,15 +180,22 @@ def restart(
     *,
     tray_bat: Path = TRAY_BAT,
     run: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
-    fetch: Callable[[int], Identity | None] = fetch_version,
-    verify_fn: Callable[..., int] = verify,
+    fetch: Callable[[int], Identity | None] | None = None,
+    verify_fn: Callable[..., int] | None = None,
+    version_path: str = DEFAULT_VERSION_PATH,
 ) -> int:
-    """Read the served identity, run ``tray_bat --restart`` by absolute path, then verify."""
+    """Read the served identity, run ``tray_bat --restart`` by absolute path, then verify.
+
+    ``version_path`` names where the app serves its identity; an explicit ``fetch`` or
+    ``verify_fn`` (a test seam) wins over it.
+    """
     bat = tray_bat.resolve()
     if not bat.is_file():
         _log.error("❌ restart NOT CONFIRMED: %s does not exist", bat)
         return EXIT_NOT_CONFIRMED
-    before = fetch(port)
+    probe = fetch if fetch is not None else functools.partial(fetch_version, path=version_path)
+    check = verify_fn if verify_fn is not None else functools.partial(verify, fetch=probe)
+    before = probe(port)
     kind, value = _identity_of(before)
     _log.info("ℹ️ snapshot :%s %s", port, f"{kind} {value}" if kind else "nothing answering")
     _log.info("ℹ️ restart running %s --restart", bat)
@@ -207,7 +217,15 @@ def restart(
     if done.returncode != 0:
         _log.error("❌ restart FAILED: tray.bat exited %s, so the old process was not replaced", done.returncode)
         return EXIT_FAILED
-    return verify_fn(port, before, timeout_s)
+    return check(port, before, timeout_s)
+
+
+def _utf8_streams() -> None:
+    """Let the ✅/❌ lines through a console whose code page cannot encode them."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -215,9 +233,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("action", choices=("restart",))
     parser.add_argument("--port", type=int, required=True, help="the webapp's loopback port")
     parser.add_argument("--timeout", type=float, default=DEFAULT_VERIFY_TIMEOUT_S, help="verify seconds")
+    parser.add_argument(
+        "--version-path", default=DEFAULT_VERSION_PATH,
+        help="where the app serves its identity, for an app whose endpoint is not /api/version",
+    )
     args = parser.parse_args(argv)
+    if not args.version_path.startswith("/"):
+        parser.error("--version-path must start with '/'")
+    _utf8_streams()
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
-    return restart(args.port, args.timeout)
+    return restart(args.port, args.timeout, version_path=args.version_path)
 
 
 if __name__ == "__main__":
