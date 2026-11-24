@@ -86,6 +86,7 @@ request_budget_ratchet = { src = "scripts/request_budget_ratchet.py", sha = "2e2
 request_budget_scan = { src = "scripts/request_budget_scan.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "scripts/request_budget_scan.py" }
 request_timing = { src = "src/request_timing.py", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "src/request_timing.py" }
 poll = { src = "app/webapp/static/_vendored/poll", sha = "2e2a4cca9d3180980db6f8cd7f03a6f12737b7db", dest = "app/webapp/static/_vendored/poll" }
+request_budget_probe = { src = "tests/e2e/budget/_request_budget.py", sha = "be7de0edb225505f0b4773736b4eaf6b34a49363", dest = "tests/e2e/budget/_request_budget.py" }
 # Not (yet) scaffold-owned — copied from the fleet reference apps the scaffold's
 # CLAUDE.md nominates; source repo noted in the key comment.
 # home-automation (25a80d144d3198b1a903499a94f93cc1ba3f4ba1): src/static_versioning.py (canonical
@@ -272,6 +273,12 @@ baseline       = ".request-budget-ratchet-baseline.json"
 handler_dirs   = ["app/webapp/routers"]
 # The client's one fetch wrapper (app/webapp/static/api.js), so a poll that calls it is read as reaching the server.
 fetch_wrappers = ["api"]
+
+# The runtime check (tests/e2e/budget/_request_budget.py, run by story 01): API requests the
+# main page may make in one visible minute. An idle page sends the usage log's batch once; the
+# rest is headroom for one refresh, so a new fixed-rate poll (12 or more a minute) breaks it.
+[request_budget]
+visible_requests_per_minute = 3
 
 # The server loops that run whether or not anyone is looking, and why each one must.
 [[request_budget.loops]]

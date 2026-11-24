@@ -32,7 +32,10 @@ from tests.e2e._port_pool import get_json
 from tests.e2e._surface import surface
 from tests.e2e._ui import assert_control_boundaries, close_settings_sheet, open_settings_sheet
 from tests.e2e._uniform import assert_code_off_canvas_subtle
-from tests.e2e.conftest import shot
+from tests.e2e.budget._request_budget import (
+    assert_request_budget, measure_request_budget, visible_budget,
+)
+from tests.e2e.conftest import REPO_ROOT, shot
 
 # Four destinations: the Table tab (grid and Tree) went in #350, the Archive
 # tab into Settings → Email archiving in #397, and Time arrived third in #457.
@@ -94,6 +97,27 @@ def test_story_01_open(
         context.close()
     _desktop_leg(webapp, browser, shots, sha)
     _phone_leg(webapp, playwright, shots, sha)
+    _request_budget_leg(webapp, browser)
+
+
+# --------------------------------------------------------- request budget leg
+
+# The one request a hidden tab still makes: the usage log's `session_end` beacon, sent
+# once at the moment the tab hides so the last view is not lost. Nothing repeats after it.
+HIDE_BEACON = "/api/usage/events"
+
+
+def _request_budget_leg(webapp: str, browser: Browser) -> None:
+    """The main page in a fake-clock minute visible and a minute hidden: within the
+    `.fleet.toml` budget, silent once hidden bar the hide beacon, one catch-up read per path."""
+    context = browser.new_context(viewport=DESKTOP, color_scheme="light")
+    try:
+        reading = measure_request_budget(context.new_page(), f"{webapp}/")
+    finally:
+        context.close()
+    assert reading.hidden[HIDE_BEACON] == 1, reading.summary()
+    del reading.hidden[HIDE_BEACON]
+    assert_request_budget(reading, visible_budget(REPO_ROOT))
 
 
 # --------------------------------------------------------------- API leg
