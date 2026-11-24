@@ -24,3 +24,5 @@
 - Not verified in this step: PWA install on a real iPhone and HTTPS (Step 7); anything beyond the empty shell (no tasks exist yet — Step 2 brings the schema, Step 4 the first task).
 
 **2026-10-05 (#350):** the Table view (grid and Tree) was removed. The nav holds four destinations; the walk now also loads a browser that stored the old `table` tab, with `?view=table#table`, and lands on Today with no page error and the Table-only `localStorage` keys gone.
+
+**2026-11-24:** a fourth leg runs the runtime request check (`tests/e2e/budget/_request_budget.py`) on the main page, on a fake clock: a visible minute stays within `.fleet.toml [request_budget] visible_requests_per_minute` (measured 1: the usage log's one batch), a hidden minute sends only the usage log's one hide beacon (`session_end`, named in the test), and the return reads each path at most once (`/api/version`). A missing budget key reports NOT CONFIRMED, never a pass. Result: verified.
