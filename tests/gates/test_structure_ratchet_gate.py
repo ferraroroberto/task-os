@@ -94,5 +94,5 @@ def test_the_shape_is_declared_and_the_script_is_vendored() -> None:
 
 def test_the_baseline_file_routes_to_no_browser_suite() -> None:
     config = classify_e2e.load_config(REPO_ROOT / ".fleet.toml")
-    routing = classify_e2e.classify([".structure-ratchet-baseline.json"], config)
+    routing = classify_e2e.classify([".ratchets/structure.json"], config)
     assert routing.tier == "skip"
