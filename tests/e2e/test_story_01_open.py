@@ -33,7 +33,9 @@ from tests.e2e._surface import surface
 from tests.e2e._ui import assert_control_boundaries, close_settings_sheet, open_settings_sheet
 from tests.e2e._uniform import assert_code_off_canvas_subtle
 from tests.e2e.budget._request_budget import (
-    assert_request_budget, measure_request_budget, visible_budget,
+    assert_request_budget,
+    measure_request_budget,
+    visible_budget,
 )
 from tests.e2e.conftest import REPO_ROOT, shot
 
