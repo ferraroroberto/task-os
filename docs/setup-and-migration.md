@@ -47,7 +47,7 @@ The keys are the blocks in [Available features](#available-features); only an ex
 tray.bat                      # tray icon owning the webapp on the configured port
 ```
 
-Left-click the tray icon to open the app. A fresh install opens on an empty Today. `webapp.bat` runs the same server in the foreground instead. On a machine without the other fleet repos, `tray.bat` prints a note and starts the tray on its own; only `tray.bat --restart` needs the shared helper (see Update).
+Left-click the tray icon to open the app. A fresh install opens on an empty Today. `scripts/webapp.bat` runs the same server in the foreground instead. On a machine without the other fleet repos, `tray.bat` prints a note and starts the tray on its own; only `tray.bat --restart` needs the shared helper (see Update).
 
 **Optional, per machine**
 
@@ -128,6 +128,6 @@ The state is the `features` block of `config/config.json`, one `false` per switc
 Another computer can reach this install through a small launcher kept in a shared folder: the launcher reads the host's address from a text file next to it. The host's address changes from time to time, so the **Publish host address** switch keeps that file current. It only writes the file: no port is opened, no login or firewall rule changes, and the password and bearer gate stays the only way in.
 
 1. Set `network_sharing.host_ip_file` in `config\config.json` to the file's path (a UNC path, or a drive letter mapped to the share).
-2. Turn the switch on in Settings → Available features. It publishes once at once; after that, at every start, through both the tray and `webapp.bat`.
+2. Turn the switch on in Settings → Available features. It publishes once at once; after that, at every start, through both the tray and `scripts/webapp.bat`.
 
 The row shows the last outcome: *Published* (the address was written), *Unchanged* (the file already held it, and was left alone), *Unavailable* with the reason (a blank or unusable path, a file that is not on a share, an ambiguous route, a server that is this computer) or *Failed* with the reason (the share could not be read or written). Turning the switch off stops future writes and leaves the file as it is. There is no watcher: an address that changes while the app is running is published at the next start. A slow or missing share never delays startup: the write runs on its own thread.

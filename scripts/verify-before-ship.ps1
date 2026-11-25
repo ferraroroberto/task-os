@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Stages, fail-fast:
-      1. byte-compile      — every .py under app/ src/ scripts/ tests/ + launcher.py parses
+      1. byte-compile      — every .py under app/ src/ scripts/ tests/ parses (scripts/launcher.py included)
       2. ruff              — lint the whole repo (pyproject.toml owns strictness)
       3. static ratchet    — no new duplicate block (jscpd via npx), unused
                              import/variable (ruff F401,F841) or likely-bug /
@@ -171,7 +171,7 @@ $env:PYTHONIOENCODING = "utf-8"
 # unsigned file is refused, while a ScriptBlock made from its text runs with the policy unchanged.
 . ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $PSScriptRoot "box_lock_gate.ps1")))); Enter-BoxLockGate
 
-Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests assets launcher.py }
+Invoke-Stage "byte-compile"            { & $py -m compileall -q app src scripts tests assets }
 Invoke-Stage "ruff"                    { & $py -m ruff check . }
 # The wrapper maps the script's exit 3 to NOT CONFIRMED (tests/gates/test_static_ratchet_gate.py
 # pins it); call it, never scripts/static_ratchet.py directly.

@@ -8,7 +8,7 @@ MagicDNS name, trusted by every device on the tailnet with zero per-device
 steps. The leaf is ~90 days, so ``ensure_cert_fresh()`` runs the generator's
 ``--check`` leg (renew only a ``.ts.net`` cert expiring within ~30 days, never
 block startup on an error) from every spawn point — ``WebappManager`` under
-the tray, ``launcher.py webapp`` and ``webapp.bat``.
+the tray, ``scripts/launcher.py webapp`` and ``scripts/webapp.bat``.
 
 Pair present → the launcher passes ``--ssl-keyfile/--ssl-certfile`` and the
 app serves ``https://<host>.ts.net:8448``; absent → plain HTTP with a loud
@@ -103,7 +103,7 @@ def ensure_cert_fresh(python: str | None = None) -> bool:
 
 def uvicorn_ssl_kwargs() -> dict[str, str]:
     """``uvicorn.run`` keyword arguments for the pair, ``{}`` when serving
-    plain HTTP (logged loudly) — ``launcher.py webapp``'s in-process spawn."""
+    plain HTTP (logged loudly) — ``scripts/launcher.py webapp``'s in-process spawn."""
     pair = cert_paths()
     if pair is None:
         logger.warning(

@@ -82,15 +82,15 @@ REM  inherits it, and so does every session and app it spawns -- where APP_NAME
 REM  is another project's own config key (app-launcher#963).
 set "TRAY_APP_NAME=task-os"
 REM === ADAPT (2/4): the args python is started with to launch the tray,
-REM     e.g. "launcher.py tray"  or  "-m tray" ===
-set "TRAY_LAUNCH=launcher.py tray"
+REM     e.g. "scripts\launcher.py tray"  or  "-m tray" ===
+set "TRAY_LAUNCH=scripts\launcher.py tray"
 
 set "WANT_RESTART="
 if /i "%~1"=="--restart" set "WANT_RESTART=1"
 if /i "%~1"=="-r"        set "WANT_RESTART=1"
 
 REM === ADAPT (3/4): the -TrayMatch below is a regex matching THIS app's tray
-REM     invocation (launcher\.py\s+tray) -- filled in from the template.
+REM     invocation, in both spellings: (scripts[\\/]+)?launcher\.py\s+tray
 set "PS=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 set "TRAY_VENV=%SCRIPT_DIR%.venv"
 REM  ONE shared, machine-local copy owned by fleet-config (project-scaffolding#153)
@@ -111,7 +111,7 @@ if not exist "%TRAY_PS%" (
 )
 
 REM === ADAPT (4/4): this tray's exclusively-owned port. It is read from the
-REM     ignored config/config.json (`port`, else the sample's) by `launcher.py port`
+REM     ignored config/config.json (`port`, else the sample's) by `scripts\launcher.py port`
 REM     inside the PowerShell line below, never a literal here: a second checkout
 REM     on another port (a worktree, a second install) must reclaim its own port,
 REM     not the live one. Exclude any mutex-shared port. ===
@@ -127,10 +127,10 @@ REM  an unsigned script under an AllSigned (or Restricted) execution policy, and
 REM  policy on the command line would weaken the machine's own control. The values travel in the
 REM  environment (set above), so no quoting nests inside the -Command string, and the process that
 REM  carries them is powershell.exe, which the helper's tray detection (python processes only)
-REM  can never mistake for the tray. The port comes from `launcher.py port` (the config), and an
+REM  can never mistake for the tray. The port comes from `scripts\launcher.py port` (the config), and an
 REM  empty answer stops here rather than reclaiming nothing. An `exit` inside the helper ends
 REM  this process with its code.
-%PS% -NoProfile -NonInteractive -Command "$p = & (Join-Path $env:TRAY_VENV 'Scripts\python.exe') (Join-Path $env:SCRIPT_DIR_ARG 'launcher.py') port; if (-not ($p -match '^\d+$')) { [Console]::Error.WriteLine('ERROR: could not read the port from config (launcher.py port)'); exit 1 }; $a = @{ AppName = $env:TRAY_APP_NAME; ScriptDir = $env:SCRIPT_DIR_ARG; VenvDir = $env:TRAY_VENV; TrayMatch = 'launcher\.py\s+tray'; Ports = [string]$p; TrayLaunch = $env:TRAY_LAUNCH; VersionUrl = $env:VERSION_URL }; if ($env:WANT_RESTART) { $a.Restart = $true }; try { & ([scriptblock]::Create([IO.File]::ReadAllText($env:TRAY_PS))) launch @a } catch { [Console]::Error.WriteLine(($_ | Out-String)); exit 1 }; exit 0"
+%PS% -NoProfile -NonInteractive -Command "$p = & (Join-Path $env:TRAY_VENV 'Scripts\python.exe') (Join-Path $env:SCRIPT_DIR_ARG 'scripts\launcher.py') port; if (-not ($p -match '^\d+$')) { [Console]::Error.WriteLine('ERROR: could not read the port from config (launcher.py port)'); exit 1 }; $a = @{ AppName = $env:TRAY_APP_NAME; ScriptDir = $env:SCRIPT_DIR_ARG; VenvDir = $env:TRAY_VENV; TrayMatch = '(scripts[\\/]+)?launcher\.py\s+tray'; Ports = [string]$p; TrayLaunch = $env:TRAY_LAUNCH; VersionUrl = $env:VERSION_URL }; if ($env:WANT_RESTART) { $a.Restart = $true }; try { & ([scriptblock]::Create([IO.File]::ReadAllText($env:TRAY_PS))) launch @a } catch { [Console]::Error.WriteLine(($_ | Out-String)); exit 1 }; exit 0"
 exit /b %ERRORLEVEL%
 
 REM  Standalone start (project-scaffolding#345): the shared helper is missing,

@@ -1,14 +1,14 @@
 """Thin launcher — the one entrypoint ``tray.bat`` / ``webapp.bat`` invoke.
 
 Usage:
-    python launcher.py            # same as `tray`
-    python launcher.py tray       # tray icon owning the webapp on the configured port
-    python launcher.py webapp     # foreground webapp (dev / headless box)
-    python launcher.py port       # print the configured port (tray.bat reclaims it)
+    python scripts/launcher.py            # same as `tray`
+    python scripts/launcher.py tray       # tray icon owning the webapp on the configured port
+    python scripts/launcher.py webapp     # foreground webapp (dev / headless box)
+    python scripts/launcher.py port       # print the configured port (tray.bat reclaims it)
 
-Puts its own folder on ``sys.path`` so the top-level packages (``app``,
-``src``, ``scripts``) resolve without an outer namespace — the folder is the
-root of its own repository.
+Puts the repository root (the parent of this folder) on ``sys.path`` so the
+top-level packages (``app``, ``src``, ``scripts``) resolve without an outer
+namespace.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def main(argv: list[str]) -> int:

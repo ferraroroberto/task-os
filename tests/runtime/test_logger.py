@@ -12,7 +12,7 @@ import types
 
 import pytest
 
-import launcher
+from scripts import launcher
 from src import logger as logmod
 
 

@@ -53,7 +53,7 @@ Nothing else is needed:
 
 - **The tree stays clean.** Every file a run writes is gitignored: configs, `data/` (database, logs, backups), `.env`, `mirror/`, `webapp/` (certificates), `tmp/`, the gate's caches. `.venv` is written without a trailing slash, so a junctioned venv matches too. A pull therefore never meets a local edit.
 - **No tracked file is rewritten at runtime.** The runtime-write ratchet refuses a write into a code folder.
-- **No tracked file holds a machine value.** The port `tray.bat` reclaims is the config's (`launcher.py port`), and the rest is read from the ignored config.
+- **No tracked file holds a machine value.** The port `tray.bat` reclaims is the config's (`scripts/launcher.py port`), and the rest is read from the ignored config.
 - **Re-running `scripts\install.bat` after a pull is safe** and picks up a new requirement or config key.
 
 ## Execution policy
