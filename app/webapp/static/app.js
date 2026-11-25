@@ -897,8 +897,7 @@ async function boot() {
       if (tab === 'board' && board) board.show();
       if (tab === 'time') time.show();
       else time.hide();
-      if (tab === 'history') historyTab.show();
-      else historyTab.hide();
+      if (tab === 'history') historyTab.show(); else historyTab.hide();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
       app.renderHeadStatus();

@@ -1,6 +1,6 @@
 # Story 36 — What did I change (#858)
 
-**Issue:** #858. **Tests:** `tests/tasks/test_history.py` (the feed, the grouping, the kinds, the window and the endpoint's own-actor rule) and the `_history_on_phone` leg inside `tests/e2e/test_story_07_phone.py`, walked by `tests/e2e/_history_steps.py` (WebKit device emulation, 390×844, light then dark).
+**Issue:** #858. **Tests:** `tests/tasks/test_history.py` (the feed, the grouping, the kinds, the window and the endpoint's own-actor rule) and the `walk_history` leg inside `tests/e2e/test_story_07_phone.py`, walked by `tests/e2e/_history_steps.py` (WebKit device emulation, 390×844, light then dark).
 
 **User story:** I open History and see what I changed today, newest first, one entry per task, each opening its task; a chip narrows the list to one kind of change.
 

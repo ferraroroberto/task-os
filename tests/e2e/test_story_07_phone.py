@@ -421,7 +421,7 @@ def test_phone_install_metadata_and_story(
 ) -> None:
     # History first, while the seeded instance holds no change of the owner's
     # own: it lists exactly what its leg writes (folded in, #858).
-    _history_on_phone(seeded_webapp, playwright, shots)
+    walk_history(playwright.webkit.launch(headless=HEADLESS), lambda b, s: _phone_context(b, PHONE, s), seeded_webapp, shots)
     _phone_story(seeded_webapp, playwright, shots)
     # Settings → Available features rides the same function, on the same
     # instance and after the phone story: folded in so the e2e suite does not grow.
@@ -537,15 +537,6 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         errors = [e for e in errors if "access control checks" not in e]
         assert errors == [], errors
         context.close()
-    finally:
-        wk.close()
-
-
-def _history_on_phone(base: str, playwright: Playwright, shots: Path) -> None:
-    """History at 390 wide, light then dark (walk in `_history_steps.py`)."""
-    wk = playwright.webkit.launch(headless=HEADLESS)
-    try:
-        walk_history(wk, lambda b, scheme: _phone_context(b, PHONE, scheme), base, shots)
     finally:
         wk.close()
 

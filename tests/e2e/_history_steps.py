@@ -45,7 +45,15 @@ def _open_history(page: Page) -> None:
 
 
 def walk_history(browser: Browser, new_context, base: str, shots: Path) -> None:
-    """``new_context(browser, scheme)`` opens a phone context in that colour scheme."""
+    """History at 390 wide, light then dark, on a browser this walk closes.
+    ``new_context(browser, scheme)`` opens a phone context in that colour scheme."""
+    try:
+        _walk(browser, new_context, base, shots)
+    finally:
+        browser.close()
+
+
+def _walk(browser: Browser, new_context, base: str, shots: Path) -> None:
     # The writes go through a context of their own, open until the clean-up has run.
     api_context = browser.new_context()
     api = api_context.request
