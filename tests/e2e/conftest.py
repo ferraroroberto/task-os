@@ -88,6 +88,7 @@ from tests.e2e._port_pool import (  # noqa: F401 — the report hooks pytest loo
     pytest_runtest_makereport,
     pytest_terminal_summary,
 )
+from tests.e2e._shots_dir import resolve_shots_dir
 from tests.e2e._surface import pytest_collection_modifyitems  # noqa: F401
 from tests.e2e._work_root import E2E_SHARED_ROOT, E2E_WORK_ROOT, MASK_PATHS_JS, path_mask_rules
 from tests.host._synthetic_host import synthetic_host_env
@@ -513,8 +514,9 @@ def issues_webapp() -> Iterator[IssuesInstance]:
 @pytest.fixture(scope="session")
 def shots() -> Path:
     """Where story tests save their numbered proof screenshots."""
-    SHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    return SHOTS_DIR
+    target = resolve_shots_dir(os.environ, SHOTS_DIR)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 # ------------------------------------------------ deterministic capture (#134)
