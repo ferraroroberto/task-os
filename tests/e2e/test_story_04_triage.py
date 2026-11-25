@@ -24,6 +24,8 @@ touch) with the geometry checks:
 
     docs/screenshots/story-04-triage-9-phone.png   (the Board's rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
+    docs/screenshots/story-04-triage-13-phone.png  (the × beside the filter button, light)
+    docs/screenshots/story-04-triage-14-phone-dark.png  (the same, dark)
 
 UX round 3 (issue #46): the filter state is ONE state shared by every tab and
 lives in the URL (``?status=todo`` is the same view on the Board and
@@ -95,6 +97,7 @@ from tests.e2e._triage_steps import (
     _walk_recurrence_anchor,
     _walk_recurrence_interval,
     walk_old_comment_dates,
+    walk_phone_clear_all,
 )
 from tests.e2e._ui import (
     SWIPE_JS,
@@ -979,6 +982,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         drawer = _phone_filter_sheet_and_drawer(page, base, shots)
         menu = _phone_snooze_target(page, base, shots)
         surface(page, "row.date")
+        walk_phone_clear_all(page, base, shots)
         _phone_sleeping_marker(page, context, base, shots, drawer, menu)
     finally:
         wk.close()

@@ -10,6 +10,8 @@
  *                                     list's count is its placeholder
  *   <button class="filter-open">      beside it: the filter glyph and how many
  *                                     settings are on
+ *   <button class="filter-clear-all"> a × after it, there only while any are on:
+ *                                     the sheet's Clear in one tap
  *   <dialog id="filterSheet">         what the button opens — the vendored
  *                                     editor modal, "Filters & sort": sort,
  *                                     the view toggles a tab brings (`views`),
@@ -575,12 +577,27 @@ function filterButton() {
   return button;
 }
 
-/** The badge's number, and a name that spells out what is on. */
-function paintFilterButton(button, badge, filters, options, opts) {
+/** The strip's one-tap clear: a × beside the filter button, there only while
+ *  something is on, like the search box's. */
+function clearAllButton() {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'icon-button filter-clear-all';
+  button.dataset.track = 'filters.clear-all';
+  button.setAttribute('aria-label', 'Clear filters');
+  button.title = 'Clear filters';
+  button.hidden = true;
+  button.innerHTML = icon('x');
+  return button;
+}
+
+/** The badge's number, and a name that spells out what is on; the × shows with it. */
+function paintFilterButton(button, badge, filters, options, opts, clearAll) {
   const views = opts.views;
   const n = activeFilterCount(filters, opts.hide, opts.searchStatus) + (views ? views.count(filters) : 0);
   badge.textContent = n ? String(n) : '';
   badge.hidden = !n;
+  clearAll.hidden = !n;
   button.classList.toggle('has-value', n > 0);
   const words = describeFilters(filters, { projects: options.projects, people: options.people, hide: opts.hide, searchStatus: opts.searchStatus })
     .concat(views ? views.words(filters) : []);
@@ -677,13 +694,16 @@ function sheetHasValue(f, opts) {
  * @param {object} opts  `mountFilters`' options
  * @param {() => {current: object, options: object}} read  the state last rendered and its options
  * @param {() => void} onOpen  opens the sheet
+ * @param {string[]|null} statusDefaults  the resting statuses of the tick model, null on the journal
+ * @param {() => void} onClear  resets every filter, the sheet's Clear and the strip's × alike
  */
-function mountStrip(opts, read, onOpen, statusDefaults) {
+function mountStrip(opts, read, onOpen, statusDefaults, onClear) {
   let textEl = null;
   let pillsEl = null;
   let pillsKey = null;
   let button = null;
   let badge = null;
+  let clearAll = null;
 
   /** The status filter as pills inside the field: the same ticks the sheet draws,
    *  so removing one is un-ticking it there — one state, never two. */
@@ -731,9 +751,11 @@ function mountStrip(opts, read, onOpen, statusDefaults) {
       button = filterButton();
       badge = button.querySelector('.filter-count');
       button.addEventListener('click', onOpen);
-      host.appendChild(button);
+      clearAll = clearAllButton();
+      clearAll.addEventListener('click', onClear);
+      host.append(button, clearAll);
     }
-    paintFilterButton(button, badge, filters, options, opts);
+    paintFilterButton(button, badge, filters, options, opts, clearAll);
   }
 
   return { render: function (filters) { const o = read().options; renderText(filters, o); renderButton(filters, o); } };
@@ -787,7 +809,7 @@ export function mountFilters(opts) {
   // the tick model (Search and the working views): the resting statuses the row ticks
   // and the pills show; null on the journal, whose status is implicit
   const statusDefaults = opts.searchStatus ? (opts.statusDefaults || OPEN_STATUSES) : null;
-  const strip = mountStrip(opts, function () { return { current: current, options: options }; }, function () { openSheet(); }, opts.textHost ? statusDefaults : null);
+  const strip = mountStrip(opts, function () { return { current: current, options: options }; }, function () { openSheet(); }, opts.textHost ? statusDefaults : null, function () { clearAll(); });
   let current = DEFAULT_FILTERS;   // the state last rendered
   let options = {};
   let drawn = null;          // the state the open sheet's controls show; null while closed
@@ -823,6 +845,16 @@ export function mountFilters(opts) {
     opts.onChange(drawn);
   }
 
+  /** Reset every filter (and the view toggles) — the one rule behind the sheet's
+   *  Clear and the strip's ×. With the sheet shut `drawn` is null and stays so:
+   *  a stale copy there would be read as what the next sheet change builds on. */
+  function clearAll() {
+    if (opts.views) opts.views.clear();
+    const cleared = clearedFilters(drawn || current, !opts.textHost, !opts.views);
+    if (drawn) drawn = cleared;
+    opts.onChange(cleared);
+  }
+
   function drawSheet(dialog) {
     const f = drawn || current;
     drawn = f;
@@ -832,9 +864,7 @@ export function mountFilters(opts) {
       return function (value, searchTicks) { const p = {}; p[name] = value; commit(searchTicks ? searchStatusPatch(value, statusDefaults) : p); };
     }, function (rows) { if (opts.views) opts.views.draw(rows, f); }, statusDefaults);
     const foot = sheetActions(!sheetHasValue(f, opts), function () {
-      if (opts.views) opts.views.clear();
-      drawn = clearedFilters(drawn || f, !opts.textHost, !opts.views);
-      opts.onChange(drawn);
+      clearAll();
       drawSheet(dialog);
       focusClose(dialog);
     }, function () { dialog.close(); });
