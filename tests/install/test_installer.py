@@ -1,20 +1,24 @@
-"""The install keeps every setting a PC has: configs are created only when missing, an existing one gains only
+"""``setup.bat`` keeps every setting a PC has: configs are created only when missing, an existing one gains only
 the keys that change nothing (after a backup), registrations that exist are kept, a second run is unchanged and
-``-WhatIf`` writes nothing. Every test runs against a temp folder, never this checkout's config."""
+``-WhatIf`` writes nothing. Every test runs against a temp folder, never this checkout's config; the vendored
+installer runs for real with its subprocess calls faked."""
 
 from __future__ import annotations
 
 import json
 import shutil
 import socket
+import subprocess
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from src import installer
 from src.install import __main__ as cli
-from src.install import checklist, machine, requirements
+from src.install import checklist, machine
 from src.install.config_merge import (
     config_same_behaviour,
     ensure_config,
@@ -23,7 +27,6 @@ from src.install.config_merge import (
     plan_additions,
 )
 from src.install.machine import MachineStep
-from src.install.requirements import RequirementsStep
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = REPO_ROOT / "config" / "config.sample.json"
@@ -213,79 +216,147 @@ def test_the_folder_opener_is_registered_only_where_none_exists(
     assert len(fake.calls) == installs
 
 
-# ---------------------------------------------------------------- requirements
-
-
-def _pip_answer(stdout: str, code: int = 0) -> Any:
-    class Done:
-        returncode, stderr = code, ""
-
-    Done.stdout = stdout
-    return lambda args, timeout: Done
-
-
-@pytest.mark.parametrize(("report", "whatif", "status"), [
-    ('{"install": []}', False, "unchanged"),
-    ('{"install": [{"metadata": {"name": "fastapi", "version": "1.0"}}]}', True, "would-install"),
-    ("not json", False, "failed"),
-])
-def test_requirements_trust_only_pips_own_report(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, report: str, whatif: bool, status: str,
-) -> None:
-    monkeypatch.setattr(requirements, "running_in_venv", lambda repo: True)
-    monkeypatch.setattr(requirements, "_pip", _pip_answer(report))
-    assert requirements.ensure_requirements(tmp_path, whatif=whatif).status == status
-
-
-# ---------------------------------------------------------------- the whole run + checklist
+# ---------------------------------------------------------------- the whole run through the vendored installer
 
 
 @pytest.fixture
-def quiet_machine(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The run's PC-wide steps stubbed: the registry and pip stay out of a unit test."""
-    monkeypatch.setattr(cli, "ensure_requirements", lambda repo, whatif: RequirementsStep("unchanged"))
+def quiet_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The per-user registry stays out of a unit test."""
     monkeypatch.setattr(cli, "ensure_opener", lambda whatif: MachineStep("folder opener", "kept"))
     monkeypatch.setattr(checklist, "opener_state", lambda scheme: True)
+
+
+@pytest.fixture
+def checkout(root: Path) -> Path:
+    """A checkout-shaped temp folder: the real ``.fleet.toml`` and requirements beside the real samples."""
+    for name in (".fleet.toml", "requirements.txt"):
+        shutil.copy(REPO_ROOT / name, root / name)
+    return root
+
+
+class _Runner:
+    """Stands in for ``subprocess.run``: a venv appears, the declared dependency step runs in-process,
+    every probe answers ok."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.calls: list[list[str]] = []
+
+    def __call__(self, command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        self.calls.append(command)
+        if command[1:3] == ["-m", "venv"]:
+            python = installer.venv_python(self.root)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"")
+        elif command[-3:] == ["-m", "src.install", "apply"]:
+            cli.apply(self.root, whatif=False)
+        return subprocess.CompletedProcess(command, 0)
 
 
 def _tree(path: Path) -> dict[str, bytes]:
     return {p.relative_to(path).as_posix(): p.read_bytes() for p in sorted(path.rglob("*")) if p.is_file()}
 
 
-def test_install_whatif_then_install_then_reinstall(root: Path, quiet_machine: None,
-                                                    capsys: pytest.CaptureFixture[str]) -> None:
-    folder = root / "Startup"
-    before = _tree(root)
-    assert cli.run(root, whatif=True, startup=True, startup_folder=folder, probe=False) == 0
-    assert _tree(root) == before
-    assert "[would-create] config/config.json" in capsys.readouterr().out
+def test_the_install_table_hands_the_config_top_up_to_this_app() -> None:
+    plan = installer.load_plan(REPO_ROOT)
+    assert plan.settings == []  # the vendored top-up would add the sample's author values
+    assert plan.deps_command[-3:] == ["-m", "src.install", "apply"]
+    assert plan.deps_inputs == ["config/config.sample.json"]
+    assert {c.command[-1] for c in plan.checks} == set(checklist.CHECKS)
+    assert plan.startup_check[-3:] == ["src.install", "startup", "status"]
+    manifest = tomllib.loads((REPO_ROOT / ".fleet.toml").read_text(encoding="utf-8"))
+    assert manifest["vendored"]["installer"]["dest"] == "src/installer.py"
 
-    assert cli.run(root, whatif=False, startup=True, startup_folder=folder, probe=False) == 0
-    assert "[created] config/config.json" in capsys.readouterr().out
 
-    installed = _tree(root)
-    assert cli.run(root, whatif=False, startup=True, startup_folder=folder, probe=False) == 0
+def test_a_fresh_pc_installs_then_reports_unchanged_and_whatif_writes_nothing(
+    checkout: Path, quiet_registry: None,
+) -> None:
+    run = _Runner(checkout)
+    before = _tree(checkout)
+    preview = installer.run(checkout, what_if=True, runner=run)
+    assert _tree(checkout) == before and run.calls == []
+    assert ("would create", "config/config.json", "from config.sample.json") in preview.lines
+
+    first = installer.run(checkout, what_if=False, runner=run)
+    assert not first.failed
+    assert (checkout / "config" / "config.json").read_bytes() == SAMPLE.read_bytes()
+    assert ("created", "config/config.json", "from config.sample.json") in first.lines
+
+    installed = _tree(checkout)
+    second = installer.run(checkout, what_if=False, runner=run)
+    assert second.changes == [] and _tree(checkout) == installed
+    assert "-> unchanged: nothing to do" in installer.render(second)
+
+
+def test_a_pc_with_its_own_config_keeps_every_value_and_gains_only_the_harmless_keys(
+    checkout: Path, quiet_registry: None,
+) -> None:
+    target = checkout / "config" / "config.json"
+    original = _write(target, EXISTING)
+
+    report = installer.run(checkout, what_if=False, runner=_Runner(checkout))
+
+    merged = json.loads(target.read_text(encoding="utf-8"))
+    assert not report.failed
+    for path, value in _leaves(EXISTING).items():  # no existing value changed
+        node: Any = merged
+        for key in path:
+            node = node[key]
+        assert node == value, path
+    assert "capture" in merged and "people" not in merged["time"]  # added, and held back
+    (backup,) = (checkout / "config" / "backups").iterdir()
+    assert backup.read_bytes() == original
+    # the vendored pass leaves the file to the app's own top-up
+    assert ("unchanged", "config/config.json", "the owner's own list, never rewritten") in report.lines
+    assert not list((checkout / "config").glob("*.bak-*"))
+
+
+def test_apply_whatif_lists_the_top_up_and_writes_nothing(checkout: Path, quiet_registry: None,
+                                                          capsys: pytest.CaptureFixture[str]) -> None:
+    target = checkout / "config" / "config.json"
+    _write(target, EXISTING)
+    before = _tree(checkout)
+    assert cli.apply(checkout, whatif=True) == 0
     out = capsys.readouterr().out
-    assert _tree(root) == installed
-    assert "[unchanged] config/config.json" in out and "[kept] start at sign-in" in out
-    assert "[ok] config/config.json" in out and "[missing] your name" in out
-    # a config straight from the sample still names the author's account and folders: flagged, never ok
-    assert "[unknown] config reviewed for this PC - still the sample's values" in out and "issues.owner" in out
+    assert _tree(checkout) == before
+    assert "[would-merge] config/config.json" in out and "would add: capture" in out
+    assert "held back" in out and "time.people" in out
+    assert "sharepoint-mapping" not in out  # a missing config is created by setup.bat, not here
+
+
+def test_apply_fails_the_run_on_a_config_that_does_not_parse(checkout: Path, quiet_registry: None,
+                                                             capsys: pytest.CaptureFixture[str]) -> None:
+    (checkout / "config" / "config.json").write_text("{", encoding="utf-8")
+    assert cli.apply(checkout, whatif=False) == 1
+    assert "[unparseable] config/config.json" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- the personal checks
+
+
+def test_a_check_answers_with_the_exit_code_the_installer_reads(checkout: Path,
+                                                                capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.check(checkout, "your-name") == 2  # no config yet: not established
+    shutil.copy(SAMPLE, checkout / "config" / "config.json")
+    assert cli.check(checkout, "your-name") == 1  # the sample's name is empty
+    assert cli.check(checkout, "config-reviewed") == 2  # the sample's values are the author's: never ok
+    out = capsys.readouterr().out
+    assert "[missing] your name" in out and "issues.owner" in out
+    _write(checkout / "config" / "config.json", {"your_name": "Alex"})
+    assert cli.check(checkout, "your-name") == 0
+
+
+def test_the_sign_in_start_command_reports_by_exit_code(checkout: Path, tmp_path: Path) -> None:
+    folder = tmp_path / "Startup"
+    assert cli.startup(checkout, "status", folder=folder) == 1
+    assert cli.startup(checkout, "enable", folder=folder) == 0
+    assert cli.startup(checkout, "status", folder=folder) == 0
 
 
 def test_a_config_with_its_own_values_counts_as_reviewed(root: Path) -> None:
     data = {"issues": {"owner": "me"}, "placeholders": {"onedrive": "{x}", "user": "me"},
             "mirror": {"dir": "", "backup_dir": ""}, "team": {"people": []}, "time": {"people": []}}
     assert checklist.sample_values_kept(root, data).state == "ok"
-
-
-def test_an_unparseable_config_fails_the_run_and_the_checklist_says_unknown(
-    root: Path, quiet_machine: None, capsys: pytest.CaptureFixture[str],
-) -> None:
-    (root / "config" / "config.json").write_text("{", encoding="utf-8")
-    assert cli.run(root, whatif=False, startup=False, startup_folder=root / "S", probe=False) == 1
-    out = capsys.readouterr().out
-    assert "[unparseable] config/config.json" in out and "[unknown] your name" in out
 
 
 def test_the_app_probe_tells_not_running_from_answering() -> None:

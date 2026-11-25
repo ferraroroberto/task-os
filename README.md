@@ -13,11 +13,11 @@ Python 3.14 · FastAPI + uvicorn · stdlib `sqlite3` (WAL, FTS5) · vanilla-JS s
 ```powershell
 git clone https://github.com/ferraroroberto/task-os <folder>
 cd <folder>
-.\scripts\install.bat       # .venv, requirements, config from the sample, the folder opener; -WhatIf lists it all first
+.\setup.bat       # .venv, requirements, config from the sample, the folder opener; -WhatIf lists it all first
 tray.bat            # tray icon → owns the webapp on the configured port, 8448 by default (HTTPS once a cert exists — see docs/access.md)
 ```
 
-`scripts\install.bat` never overwrites what a PC has: an existing config keeps every value and gains only the keys that change nothing, after a backup, and a second run reports `unchanged`. **Updating** an installed PC is `git pull --ff-only`, then `tray.bat --restart`, with no other step: every file a run writes is gitignored, no tracked file is rewritten at runtime or holds a machine value, and the scripts start under any execution policy, `AllSigned` included. Fresh PC, already-configured PC, the checklist it ends with, and uninstall: [docs/install.md](docs/install.md).
+`setup.bat` never overwrites what a PC has: an existing config keeps every value and gains only the keys that change nothing, after a backup, and a second run reports `unchanged`. **Updating** an installed PC is `git pull --ff-only`, then `tray.bat --restart`, with no other step: every file a run writes is gitignored, no tracked file is rewritten at runtime or holds a machine value, and the scripts start under any execution policy, `AllSigned` included. The playbook (fresh PC, update, migrating a PC that already runs an older copy, uninstall, and the checklist `setup.bat` ends with): [docs/install.md](docs/install.md).
 
 Left-click the tray icon (or **Open task-os**) to open the app; **Copy URL** puts the same address on the clipboard for the phone. `tray.bat` is idempotent — a second run is a no-op while a tray is up. Without the tray: `scripts/webapp.bat` runs uvicorn in the foreground (a thin wrapper over `scripts/launcher.py webapp`, so it serves on the configured `port`, not a hardcoded one).
 

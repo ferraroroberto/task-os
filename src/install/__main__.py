@@ -1,8 +1,12 @@
-"""``python -m src.install [-WhatIf] [--startup]``: scripts/install.bat's second half.
+"""``python -m src.install``: the three commands ``.fleet.toml [install]`` runs for ``setup.bat``.
 
-scripts/install.bat creates the ``.venv`` (when missing) and then runs this module from
-it. Each step prints one ``[status] item`` line, and the run ends with the
-checklist. Exit 1 when a step failed or a config could not be read, else 0.
+    apply [-WhatIf]          add the keys an existing config lacks that change nothing (after a backup), and
+                             register the folder opener when this user has none. This is the install's
+                             dependency step; a missing config is created by setup.bat itself.
+    startup status|enable    the sign-in start: ``status`` exits 0 when present, 1 when not; ``enable`` adds it.
+    check <name>             one personal checklist item: exit 0 ok, 1 missing, 2 unknown, detail on stdout.
+
+Each step prints one ``[status] item`` line. Exit 1 when a step failed or a config could not be read.
 """
 
 from __future__ import annotations
@@ -11,10 +15,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.install.checklist import build_checklist
+from src.install.checklist import CHECKS, EXIT_CODES
 from src.install.config_merge import ensure_configs
-from src.install.machine import ensure_opener, ensure_startup
-from src.install.requirements import ensure_requirements
+from src.install.machine import ensure_opener, ensure_startup, startup_dir, startup_entry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _BAD = {"failed", "unparseable"}
@@ -24,17 +27,10 @@ def _line(status: str, item: str, detail: str = "") -> None:
     print(f"  [{status}] {item}" + (f" - {detail}" if detail else ""))
 
 
-def run(root: Path, *, whatif: bool, startup: bool, startup_folder: Path | None = None,
-        probe: bool = True) -> int:
-    """Every step for the checkout at ``root``; returns the exit code."""
-    print("task-os install" + (" (-WhatIf: nothing is changed)" if whatif else "") + f" in {root}")
+def apply(root: Path, *, whatif: bool) -> int:
+    """The config top-up and the opener for the checkout at ``root``; returns the exit code."""
     statuses: list[str] = []
-
-    req = ensure_requirements(root, whatif=whatif)
-    statuses.append(req.status)
-    _line(req.status, "requirements.txt", req.detail or ", ".join(req.packages))
-
-    for step in ensure_configs(root / "config", whatif=whatif):
+    for step in ensure_configs(root / "config", whatif=whatif, only_existing=True):
         statuses.append(step.status)
         rel = step.path.relative_to(root).as_posix()
         _line(step.status, rel, step.detail)
@@ -44,30 +40,46 @@ def run(root: Path, *, whatif: bool, startup: bool, startup_folder: Path | None 
             print(f"      backup: {step.backup.relative_to(root).as_posix()}")
         for key in step.held_back:
             print(f"      held back (would change what this PC runs; add by hand if wanted): {key}")
-
-    for machine in (ensure_opener(whatif=whatif),
-                    ensure_startup(root, whatif=whatif, enable=startup, folder=startup_folder)):
-        statuses.append(machine.status)
-        _line(machine.status, machine.item, machine.detail)
-
-    print("\nChecklist:")
-    for check in build_checklist(root, startup_folder=startup_folder, probe=probe):
-        _line(check.state, check.item, check.detail)
-    if whatif:
-        print("\n-WhatIf: nothing was changed. Run scripts\\install.bat without it to apply the steps above.")
+    opener = ensure_opener(whatif=whatif)
+    statuses.append(opener.status)
+    _line(opener.status, opener.item, opener.detail)
     return 1 if _BAD.intersection(statuses) else 0
+
+
+def startup(root: Path, action: str, *, folder: Path | None = None) -> int:
+    """``status``: 0 when a sign-in start exists, 1 when not. ``enable``: add it when absent."""
+    if action == "status":
+        return 0 if startup_entry(root, folder or startup_dir()) else 1
+    step = ensure_startup(root, whatif=False, enable=True, folder=folder)
+    _line(step.status, step.item, step.detail)
+    return 1 if step.status in _BAD else 0
+
+
+def check(root: Path, name: str) -> int:
+    """One personal checklist item: its detail on stdout, its state as the exit code."""
+    result = CHECKS[name](root)
+    _line(result.state, result.item, result.detail)
+    return EXIT_CODES[result.state]
 
 
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-    parser = argparse.ArgumentParser(prog="scripts\\install.bat", description="install or update task-os on this PC")
-    parser.add_argument("-WhatIf", "--whatif", dest="whatif", action="store_true",
-                        help="list every change and make none")
-    parser.add_argument("--startup", action="store_true",
-                        help="also start the tray at sign-in (a task-os.bat in the Startup folder)")
+    parser = argparse.ArgumentParser(prog="python -m src.install", description="the app's part of setup.bat")
+    commands = parser.add_subparsers(dest="command", required=True)
+    apply_cmd = commands.add_parser("apply", help="config top-up and folder opener")
+    apply_cmd.add_argument("-WhatIf", "--whatif", dest="whatif", action="store_true",
+                           help="list every change and make none")
+    startup_cmd = commands.add_parser("startup", help="the sign-in start")
+    startup_cmd.add_argument("action", choices=("status", "enable"))
+    check_cmd = commands.add_parser("check", help="one personal checklist item")
+    check_cmd.add_argument("name", choices=sorted(CHECKS))
     args = parser.parse_args(argv)
-    return run(REPO_ROOT, whatif=args.whatif, startup=args.startup)
+    if args.command == "apply":
+        return apply(REPO_ROOT, whatif=args.whatif)
+    if args.command == "startup":
+        return startup(REPO_ROOT, args.action)
+    return check(REPO_ROOT, args.name)
 
 
 if __name__ == "__main__":

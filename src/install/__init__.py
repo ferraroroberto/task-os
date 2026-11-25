@@ -1,15 +1,16 @@
-"""The per-PC install: ``scripts/install.bat`` → ``python -m src.install``.
+"""What task-os adds to the vendored installer (``setup.bat`` → ``src/installer.py``).
 
-Every step keeps what the PC already has. A config file is created from its
-committed ``*.sample.json`` only when missing; an existing one only gains the
-keys it lacks, after a timestamped backup, and only when adding them changes
-nothing the app would run with; a machine registration that is already there
-is reported ``kept``. A second run therefore reports ``unchanged`` everywhere,
-and ``-WhatIf`` lists the same steps without making any of them.
+The vendored installer creates the ``.venv``, installs the requirements, creates
+each missing config from its committed sample and ends with the checklist. It
+tops up a settings file with every key the sample has, which this app must not
+do: absence carries meaning here (no ``mirror`` block means no mirror), and the
+sample's values are the author's own. So ``.fleet.toml [install]`` declares
+``config/config.json`` as a registry (never rewritten by that pass) and hands the
+top-up, the opener, the sign-in start and the personal checks to this package.
+Every step keeps what the PC already has, and a second run is unchanged.
 
-    config_merge.py   ignored configs from their samples: create, add missing keys, back up
+    config_merge.py   ignored configs from their samples: create, add the keys that change nothing, back up
     machine.py        the per-user registrations (the folder opener, the sign-in start)
-    requirements.py   requirements.txt into the running .venv, only what is missing
-    checklist.py      what works on this PC and what still needs the owner
-    __main__.py       the command line and the printed report
+    checklist.py      the personal checks, one exit code each (0 ok, 1 missing, 2 unknown)
+    __main__.py       ``apply`` · ``startup`` · ``check`` — the commands ``.fleet.toml [install]`` runs
 """
