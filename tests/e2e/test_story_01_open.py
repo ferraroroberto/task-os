@@ -125,7 +125,7 @@ def _request_budget_leg(webapp: str, browser: Browser) -> None:
 # --------------------------------------------------------------- API leg
 
 def _api_leg(webapp: str) -> None:
-    assert get_json(webapp, "/healthz") == {"ok": True}
+    assert get_json(webapp, "/healthz") == {"ok": True, "service": "task-os"}
     body = _version(webapp)
     assert body["git_sha"] and body["git_sha"] != "unknown"
     assert body["asset_hash"] and body["asset_hash"] != "missing"
