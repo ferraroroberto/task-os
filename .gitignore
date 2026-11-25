@@ -37,3 +37,6 @@ test-results/
 
 # The app password hash (src/password.py)
 config/app_password.json
+
+# Top-up backups of a settings file hold its values (src/installer.py)
+*.json.bak-*
