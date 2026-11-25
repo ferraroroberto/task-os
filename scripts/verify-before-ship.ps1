@@ -280,10 +280,11 @@ if ($tier -eq "skip") {
 Invoke-Stage "gallery baseline (committed vs regenerated)" { & $py -m scripts.shot_determinism --check-tree }
 
 # After the gallery baseline, never before it: the one budget test lives inside
-# the open story, so its WebKit rerun rewrites that story's shots with WebKit's
-# rendering, which the baseline would read as drift. The baseline has already
-# restored and compared the tree by here; the shots the rerun writes are put
-# back so the working tree stays what the baseline just proved.
+# the open story, and WebKit renders its shots differently from the committed
+# Chromium ones, which the baseline would read as drift. The rerun saves its
+# shots to a scratch folder (TASKOS_SHOTS_DIR) so the tracked gallery is never
+# written: a restore afterwards would destroy a deliberate re-baseline and leave
+# the tree dirty, and so unable to carry gate evidence, whenever the run is cut short.
 if ($tier -eq "skip") {
     Write-Host "[SKIP] request budget on webkit - no e2e surface touched" -ForegroundColor DarkGray
 } elseif ($tier -eq "static") {
@@ -295,11 +296,19 @@ if ($tier -eq "skip") {
     # anything else, 3 (not confirmed) included, fails the gate.
     Write-Host ""
     Write-Host ">> request budget on webkit" -ForegroundColor Cyan
-    & $py "scripts/tools/webkit_budget_check.py"
-    $webkitBudget = $LASTEXITCODE
-    & git checkout -- docs/screenshots
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "[FAIL] request budget on webkit: could not restore docs/screenshots after the WebKit run" -ForegroundColor Red
+    $galleryBefore = (& git status --porcelain -- docs/screenshots) -join "`n"
+    $webkitShots = Join-Path ([IO.Path]::GetTempPath()) "taskos-webkit-shots-$PID"
+    $env:TASKOS_SHOTS_DIR = $webkitShots
+    try {
+        & $py "scripts/tools/webkit_budget_check.py"
+        $webkitBudget = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:TASKOS_SHOTS_DIR -ErrorAction SilentlyContinue
+        if (Test-Path $webkitShots) { Remove-Item -Recurse -Force $webkitShots }
+    }
+    $galleryAfter = (& git status --porcelain -- docs/screenshots) -join "`n"
+    if ($galleryAfter -ne $galleryBefore) {
+        Write-Host "[FAIL] request budget on webkit: the run changed docs/screenshots" -ForegroundColor Red
         Complete-Gate 1
     }
     if ($webkitBudget -eq 0) {
