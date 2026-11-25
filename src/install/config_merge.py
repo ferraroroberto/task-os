@@ -195,12 +195,18 @@ def ensure_config(
     return ConfigStep(target, "merged", added=tuple(added), held_back=tuple(held), backup=backup)
 
 
-def ensure_configs(config_dir: Path, *, whatif: bool, now: datetime | None = None) -> list[ConfigStep]:
-    """:func:`ensure_config` for every committed sample in ``config_dir``."""
+def ensure_configs(
+    config_dir: Path, *, whatif: bool, now: datetime | None = None, only_existing: bool = False,
+) -> list[ConfigStep]:
+    """:func:`ensure_config` for every committed sample in ``config_dir``.
+
+    ``only_existing`` leaves a missing live config alone: ``setup.bat`` creates it from its sample itself.
+    """
     return [
         ensure_config(
             sample, config_dir / live_name(sample), whatif=whatif,
             same=READERS.get(live_name(sample), never_same), now=now,
         )
         for sample in sorted(config_dir.glob("*" + SAMPLE_SUFFIX))
+        if not only_existing or (config_dir / live_name(sample)).exists()
     ]

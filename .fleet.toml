@@ -106,6 +106,63 @@ build_info = { src = "src/build_info.py", sha = "1c1007fcd0b65b54342779250cb6697
 health_routes = { src = "src/health_routes.py", sha = "732c304a4735d4e654f5acb3b6f53b7db67d47ef", dest = "src/health_routes.py" }
 restart_check = { src = "src/restart_check.py", sha = "f8c2f66eae7a69f3c834386579702ed5b747d7af", dest = "src/restart_check.py" }
 ratchet_baseline = { src = "scripts/ratchet_baseline.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ratchet_baseline.py" }
+installer = { src = "src/installer.py", sha = "c23c5bf575a3f375a4ddbfb99a31763a80c6bee5", dest = "src/installer.py" }
+
+# [install] -- what `setup.bat` (the vendored src/installer.py) does on this PC; the schema is
+# project-scaffolding docs/installer.md, this app's part is docs/install.md. The vendored top-up
+# adds every key a sample has, which would turn on a mirror or issue sync from the author's own
+# values, so config/config.json is NOT listed in `settings`: the installer creates it from its
+# sample when missing and never rewrites it. The dependency step below does the top-up instead
+# (src/install: only keys that change nothing the app runs, after a backup) and registers the
+# folder opener; it reruns when the sample changes. config/sharepoint-mapping.json is read only
+# by the one-shot import, so it is a registry too.
+[install]
+requirements = "requirements.txt"
+samples      = ["config"]
+settings     = []
+
+[install.deps]
+command = ["{python}", "-m", "src.install", "apply"]
+inputs  = ["config/config.sample.json"]
+
+[install.startup]
+check    = ["{python}", "-m", "src.install", "startup", "status"]
+register = ["{python}", "-m", "src.install", "startup", "enable"]
+
+[[install.check]]
+name    = "Config reviewed for this PC"
+command = ["{python}", "-m", "src.install", "check", "config-reviewed"]
+hint    = "a personal key still holds the sample's value; list them: .venv/Scripts/python.exe -m src.install check config-reviewed"
+
+[[install.check]]
+name    = "Your name"
+command = ["{python}", "-m", "src.install", "check", "your-name"]
+hint    = "set it in Settings, Your name: comments and activity are signed with it"
+
+[[install.check]]
+name    = "Folder opener (taskos://)"
+command = ["{python}", "-m", "src.install", "check", "opener"]
+hint    = "register it: .venv/Scripts/python.exe -m src.install apply"
+
+[[install.check]]
+name    = "Shared tray helper (tray.bat --restart)"
+command = ["{python}", "-m", "src.install", "check", "tray-helper"]
+hint    = "a plain tray.bat start works; --restart needs fleet-config's helper"
+
+[[install.check]]
+name    = "HTTPS certificate (phone access)"
+command = ["{python}", "-m", "src.install", "check", "certificate"]
+hint    = "optional, for the phone: .venv/Scripts/python.exe scripts/gen_tailscale_cert.py (docs/access.md)"
+
+[[install.check]]
+name    = "Sign-in for other devices"
+command = ["{python}", "-m", "src.install", "check", "signin"]
+hint    = "optional, for the phone: scripts/gen_token.py or: .venv/Scripts/python.exe -m src.password set"
+
+[[install.check]]
+name    = "App answering on its port"
+command = ["{python}", "-m", "src.install", "check", "app-answering"]
+hint    = "start it: tray.bat"
 
 [static_ratchet]
 enabled  = true
