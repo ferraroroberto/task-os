@@ -330,3 +330,38 @@ def open_more_fields(drawer: Locator) -> Locator:
         more.locator("summary").first.click()
     expect(more).to_have_attribute("open", "")
     return more
+
+
+def wait_for_boot(page: Page) -> None:
+    """Wait until the page's boot has made all of its reads, not just its first wave.
+
+    The app reads in two waves, the second (tasks, today, projects) starting only
+    once the first (who is asking) has answered, so a page that has fired `load`
+    and has nothing in flight can still be between waves, and WebKit announces the
+    wave's requests to the driver after the first one finishes. Real-time network
+    quiet (the driver's 500 ms, far longer than that gap, and independent of a fake
+    clock) is the one signal that the second wave is over: a test that navigates away
+    sooner gets WebKit's "access control checks" page errors for the aborted reads, and
+    the request-budget probe counts the wave as part of its visible minute.
+    """
+    page.wait_for_load_state("networkidle")
+
+
+class BootSettledPage:
+    """A page whose `load` wait also waits out the boot's request waves.
+
+    `measure_request_budget` starts its minute once `load` has settled and nothing is
+    in flight; handing it this wrapper makes that point the end of the boot (see
+    `wait_for_boot`). Every other call goes to the page itself.
+    """
+
+    def __init__(self, page: Page) -> None:
+        self._page = page
+
+    def __getattr__(self, name: str):
+        return getattr(self._page, name)
+
+    def wait_for_load_state(self, state: str = "load", **kwargs) -> None:
+        self._page.wait_for_load_state(state, **kwargs)
+        if state == "load":
+            wait_for_boot(self._page)

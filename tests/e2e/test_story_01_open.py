@@ -30,7 +30,13 @@ from tests.e2e._geometry import (
 )
 from tests.e2e._port_pool import get_json
 from tests.e2e._surface import surface
-from tests.e2e._ui import assert_control_boundaries, close_settings_sheet, open_settings_sheet
+from tests.e2e._ui import (
+    BootSettledPage,
+    assert_control_boundaries,
+    close_settings_sheet,
+    open_settings_sheet,
+    wait_for_boot,
+)
 from tests.e2e._uniform import assert_code_off_canvas_subtle
 from tests.e2e.budget._request_budget import (
     assert_request_budget,
@@ -114,7 +120,7 @@ def _request_budget_leg(webapp: str, browser: Browser) -> None:
     `.fleet.toml` budget, silent once hidden bar the hide beacon, one catch-up read per path."""
     context = browser.new_context(viewport=DESKTOP, color_scheme="light")
     try:
-        reading = measure_request_budget(context.new_page(), f"{webapp}/")
+        reading = measure_request_budget(BootSettledPage(context.new_page()), f"{webapp}/")
     finally:
         context.close()
     assert reading.hidden[HIDE_BEACON] == 1, reading.summary()
@@ -171,6 +177,7 @@ def _desktop_leg(webapp: str, browser: Browser, shots: Path, sha: str) -> None:
         page.keyboard.press("Escape")
         page.reload()
         expect(page.locator("nav.tabs .tab.active")).to_have_attribute("data-tab", "board")
+        wait_for_boot(page)   # the next navigation must not abort the reload's second wave of reads
         # The Table tab is gone (#350): a browser that stored it, or an old
         # `?view=` / `#table` link, lands on Today with no error, and the keys
         # only that tab read are dropped.
