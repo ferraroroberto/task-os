@@ -18,7 +18,7 @@
  *
  * Every tab is its own module and this file is the wiring: board.js ·
  * today.js · time.js (the time tracker — loads nothing until its tab
- * is first shown) · search.js · settings.js (the Settings cards: inset
+ * is first shown) · history.js (my own changes, by day and task — the same) · search.js · settings.js (the Settings cards: inset
  * groups and their sheets) · archive.js (the batch-archiving run and its
  * report, shown in the Settings → Email archiving sheet) · journal.js (the done journal —
  * `#journal`, a pane without a tab: reached from the palette and the Board's
@@ -67,6 +67,7 @@ import { mountSearch } from './search.js';
 import * as selection from './selection.js';
 import { mountSettings } from './settings.js';
 import { featureOn, restorableTab } from './js/features.js';
+import { mountHistory } from './history.js';
 import { mountTime } from './time.js';
 import { loadPhraseDates } from './snooze.js';
 import { toast } from './toast.js';
@@ -161,6 +162,7 @@ let preselectedId = null;
 let board = null;
 let search = null;
 let time = null;          // the Time tab: show() on its first press, hide() off it
+let historyTab = null;    // the History tab: the same, re-read after every write
 let settings = null;
 let archive = null;       // the Email archiving sheet — the batch run + its report
 let palette = null;
@@ -190,6 +192,7 @@ const app = {
   get drawer() { return drawer; },
   get search() { return search; },
   get time() { return time; },
+  get history() { return historyTab; },
   get settings() { return settings; },
   get archive() { return archive; },
   get keys() { return keys; },
@@ -391,6 +394,7 @@ async function refreshAll() {
     // re-read the query so a completed / re-dated hit does not snap back.
     if (search) search.rerun();
     if (state.journal.open) app.refreshJournal();
+    if (historyTab) historyTab.refresh();
   } catch (err) {
     state.headNote = 'Server unreachable';
     app.renderHeadStatus();
@@ -874,6 +878,7 @@ async function boot() {
   if (wantsSearch) { searchQ = f.q; state.filters = Object.assign({}, f, { q: '' }); }
   // Before the nav: its first onChange restores a stored tab, Time among them.
   time = mountTime({ onHead: app.renderHeadStatus });
+  historyTab = mountHistory({ onOpen: openTask, onHead: app.renderHeadStatus });
   nav = initNavTabs({
     storageKey: TAB_KEY,
     defaultTab: 'today',
@@ -892,6 +897,8 @@ async function boot() {
       if (tab === 'board' && board) board.show();
       if (tab === 'time') time.show();
       else time.hide();
+      if (tab === 'history') historyTab.show();
+      else historyTab.hide();
       if (tab === 'search' && search) { syncSearchUrl(search.getQuery()); if (!coarse) search.focus(); }
       else syncUrl();
       app.renderHeadStatus();

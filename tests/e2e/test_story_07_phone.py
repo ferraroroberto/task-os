@@ -60,6 +60,8 @@ Screenshots the validation record links to:
     docs/screenshots/story-07-phone-16-phone.png   Quick-add with its folder picker open at 390×664, light
     docs/screenshots/story-07-phone-17-phone.png   the same in dark
     docs/screenshots/story-07-phone-18-phone.png   Settings → Time categories at 390×664, Done pinned
+    docs/screenshots/story-07-phone-19-phone.png   History, a run of two changes expanded (light)
+    docs/screenshots/story-07-phone-20-phone.png   History filtered to Date moved (dark)
 
 What no browser can prove — the real iPhone install over the tailnet HTTPS
 URL — is recorded **not verified** in docs/validation/story-07-phone.md with
@@ -91,6 +93,7 @@ from tests.e2e._geometry import (
     assert_no_overlap,
     effective_rects,
 )
+from tests.e2e._history_steps import walk_history
 from tests.e2e._sheet_fit import walk_sheets_fit
 from tests.e2e._ui import (
     SWIPE_JS,
@@ -416,6 +419,9 @@ def _walk_row_tap_targets(page: Page, base: str, shots: Path) -> None:
 def test_phone_install_metadata_and_story(
     seeded_webapp: str, authed_webapp: str, playwright: Playwright, browser: Browser, shots: Path
 ) -> None:
+    # History first, while the seeded instance holds no change of the owner's
+    # own: it lists exactly what its leg writes (folded in, #858).
+    _history_on_phone(seeded_webapp, playwright, shots)
     _phone_story(seeded_webapp, playwright, shots)
     # Settings → Available features rides the same function, on the same
     # instance and after the phone story: folded in so the e2e suite does not grow.
@@ -480,7 +486,7 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         # The modal page hides the phone's pill: the tabs are read once it closes.
         leave_settings(page, tap=True)
         expect(time_tab).to_be_hidden()
-        expect(page.locator("nav.tabs .tab:visible")).to_have_count(3)
+        expect(page.locator("nav.tabs .tab:visible")).to_have_count(4)
         # Off is the machine's, kept across a reload and served on the page itself.
         page.reload()
         expect(page.locator("html")).to_have_attribute("data-features-off", "time")
@@ -531,6 +537,15 @@ def _available_features(base: str, playwright: Playwright, shots: Path) -> None:
         errors = [e for e in errors if "access control checks" not in e]
         assert errors == [], errors
         context.close()
+    finally:
+        wk.close()
+
+
+def _history_on_phone(base: str, playwright: Playwright, shots: Path) -> None:
+    """History at 390 wide, light then dark (walk in `_history_steps.py`)."""
+    wk = playwright.webkit.launch(headless=HEADLESS)
+    try:
+        walk_history(wk, lambda b, scheme: _phone_context(b, PHONE, scheme), base, shots)
     finally:
         wk.close()
 

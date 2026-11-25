@@ -69,6 +69,7 @@
   <link rel="stylesheet" href="/static/styles/overlays.css">
   <link rel="stylesheet" href="/static/styles/archive.css">
   <link rel="stylesheet" href="/static/styles/time.css">
+  <link rel="stylesheet" href="/static/styles/history.css">
   <link rel="stylesheet" href="/static/_vendored/toast/toast.css">
   <link rel="stylesheet" href="/static/_vendored/build-watch/build-watch.css">
   <title>task-os</title>
@@ -365,6 +366,11 @@
   </symbol>
   <!-- Time tab glyphs, pasted verbatim from the scaffold sprite
        (_vendored/icons/icons-sprite.html). -->
+  <symbol id="i-history" viewBox="0 0 24 24" fill="none">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M12 7v5l4 2" />
+  </symbol>
   <symbol id="i-timer" viewBox="0 0 24 24" fill="none">
     <line x1="10" x2="14" y1="2" y2="2" />
     <line x1="12" x2="15" y1="14" y2="11" />
@@ -413,6 +419,13 @@
       <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-timer"></use></svg>
       <span class="tab-label">Time</span>
     </button>
+    <!-- History: the owner's own changes, by day and task (history.js) —
+         the fourth of the pill's five places. -->
+    <button id="tabHistory" type="button" class="tab" data-tab="history"
+            role="tab" aria-selected="false" aria-controls="paneHistory" tabindex="-1">
+      <svg class="tab-icon" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg>
+      <span class="tab-label">History</span>
+    </button>
     <!-- No Archive tab: the batch-archiving run and its report are
          Settings → Email archiving, a rarely run job. -->
     <button id="tabSearch" type="button" class="tab" data-tab="search"
@@ -421,8 +434,9 @@
       <span class="tab-label">Search</span>
     </button>
     <!-- No Settings tab: five destinations is the pill's ceiling
-         (design.md nav-bar.maxTabs), and Settings is the rarely-used one —
-         it is the gear in the header, one tap from every tab. -->
+         (design.md nav-bar.maxTabs) and History took the fifth; Settings is
+         the rarely-used one — it is the gear in the header, one tap from
+         every tab. -->
   </nav>
 
   <main class="app">
@@ -525,6 +539,15 @@
         <div id="timeLog" data-surface="time.log" class="time-view"></div>
         <div id="timeTotals" data-surface="time.totals" class="time-view" hidden></div>
         <div id="timeHistory" data-surface="time.history" class="time-view" hidden></div>
+      </div>
+    </section>
+    <!-- History: my own changes, newest first — the kind chips, then one
+         card of task rows per day (history.js). One-dimensional, so it keeps
+         the 772px measure. Nothing loads until the tab is first shown. -->
+    <section id="paneHistory" data-surface="history.pane" class="pane" role="tabpanel" aria-labelledby="tabHistory" aria-label="History" hidden>
+      <div class="pane-body">
+        <div class="history-kinds" id="historyKinds" data-surface="history.kinds" role="group" aria-label="Kind of change"></div>
+        <div id="historyHost" class="history-host" aria-live="polite"></div>
       </div>
     </section>
     <section id="paneSearch" data-surface="search.pane" class="pane" role="tabpanel" aria-labelledby="tabSearch" aria-label="Search" hidden>

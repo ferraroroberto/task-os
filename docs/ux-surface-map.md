@@ -12,7 +12,7 @@ The checklist of everything a person can see and do in task-os: every pane, dril
 
 ## Ground rules
 
-**Four destinations, one gear.** The nav is Today · Board · Time · Search. Settings is the header gear, one tap from every tab, and is not a tab. The Done journal is a pane with no tab. Time can be switched off (Settings → Available features), which removes its tab.
+**Five destinations, one gear.** The nav is Today · Board · Time · History · Search, the fleet pill's ceiling of five. Settings is the header gear, one tap from every tab, and is not a tab. The Done journal is a pane with no tab. Time can be switched off (Settings → Available features), which removes its tab.
 
 **Layout bands** (the same markup, three placements):
 
@@ -20,7 +20,7 @@ The checklist of everything a person can see and do in task-os: every pane, dril
 | --- | --- | --- | --- | --- |
 | Phone | touch pointer, up to 520px | floating bottom pill, hidden under a modal | one column; task lists are inset rounded cards at the page gutter | full-screen sheet |
 | Narrow or mid window | a mouse below 1100px, or a touch device wider than 520px | an inline tab bar pinned at the top | one column | full-screen sheet below 1024px, side panel or split from 1024px |
-| Wide | 1100px and up with a mouse | left rail | Board and Today span the window; Time, Search and Settings keep a 772px measure | side panel (Board), split pane (Today) |
+| Wide | 1100px and up with a mouse | left rail | Board and Today span the window; Time, History, Search and Settings keep a 772px measure | side panel (Board), split pane (Today) |
 
 The 1024px breakpoint (side panel, split, a list scrolling inside its own box) is separate from the 1100px rail breakpoint, so a 1024 to 1099px window has the top bar and the split.
 
@@ -107,6 +107,7 @@ Walked 2026-11-17 against build `3de7b58`, at widths 390, 1440, themes not recor
 | [The task row](#the-task-row) | 6 |
 | [Task drawer](#task-drawer) | 14 |
 | [Time](#time) | 7 |
+| [History](#history) | 2 |
 | [Search and command palette](#search-and-command-palette) | 3 |
 | [Done journal](#done-journal) | 1 |
 | [Settings](#settings) | 20 |
@@ -123,15 +124,17 @@ flowchart LR
   s3["Toast"]
   s4["New-version notice"]
   s5["Install shell"]
-  s52(["Settings · Settings"])
+  s54(["Settings · Settings"])
   s6(["List · Today"])
   s9(["Board · Board"])
   s41(["Time · Time"])
+  s51(["History · History"])
   s48(["Search tab · Search and command palette"])
-  s0 --> s52
+  s0 --> s54
   s1 --> s6
   s1 --> s9
   s1 --> s41
+  s1 --> s51
   s1 --> s48
 ```
 
@@ -149,14 +152,15 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** always.
-- **Holds:** four tabs with a glyph and label; the active one is tinted.
+- **Holds:** five tabs with a glyph and label; the active one is tinted.
 - **Does:** switches the pane; Arrow keys move between tabs. A deep link beats the remembered tab; the last tab is remembered per browser.
 - **States:** Time absent when its block is off.
-- **Why:** the fleet nav contract caps the bar at five; Settings is the rarely-used destination, so it is the gear.
+- **Why:** the fleet nav contract caps the bar at five, and History took the fifth place (the owner asked for its own entry); Settings is the rarely-used destination, so it is the gear.
 - **Leads to:**
   - [List](#todaylist-list)
   - [Board](#boardpane-board)
   - [Time](#timepane-time)
+  - [History](#historypane-history)
   - [Search tab](#searchpane-search-tab)
 
 ### `chrome.footer` Footer
@@ -197,16 +201,16 @@ flowchart LR
   s14(["Top strip · Shared strip above every list"])
   s21(["Row · The task row"])
   s49(["Command palette · Search and command palette"])
-  s72(["Sign-in · Sign-in and team name"])
-  s73(["Name picker · Sign-in and team name"])
+  s74(["Sign-in · Sign-in and team name"])
+  s75(["Name picker · Sign-in and team name"])
   s1 --> s6
   s6 --> s14
   s6 --> s8
   s6 --> s21
   s6 -->|"desktop"| s7
   s49 --> s6
-  s72 --> s6
-  s73 --> s6
+  s74 --> s6
+  s75 --> s6
 ```
 
 ### `today.list` List
@@ -247,11 +251,11 @@ flowchart LR
   s12["AI suggestion strip"]
   s13["Row panel"]
   s1(["Nav · Chrome"])
-  s51(["Journal · Done journal"])
+  s53(["Journal · Done journal"])
   s14(["Top strip · Shared strip above every list"])
   s21(["Row · The task row"])
   s1 --> s9
-  s9 -->|"Done column: journal"| s51
+  s9 -->|"Done column: journal"| s53
   s9 --> s14
   s9 --> s21
   s9 -->|"Week mode"| s10
@@ -317,10 +321,10 @@ flowchart LR
   s6(["List · Today"])
   s9(["Board · Board"])
   s25(["Date sheet / popover · The task row"])
-  s74(["Confirm dialog · Overlay catalog"])
+  s76(["Confirm dialog · Overlay catalog"])
   s40(["Folder picker · Task drawer"])
   s48(["Search tab · Search and command palette"])
-  s51(["Journal · Done journal"])
+  s53(["Journal · Done journal"])
   s6 --> s14
   s9 --> s14
   s14 --> s15
@@ -328,10 +332,10 @@ flowchart LR
   s14 --> s19
   s17 -->|"+N more"| s18
   s19 --> s25
-  s19 --> s74
+  s19 --> s76
   s20 --> s40
   s48 --> s16
-  s51 --> s14
+  s53 --> s14
 ```
 
 ### `strip.top` Top strip
@@ -408,7 +412,7 @@ flowchart LR
   s19(["Select mode and bulk bar · Shared strip above every list"])
   s27(["Task drawer · Task drawer"])
   s48(["Search tab · Search and command palette"])
-  s51(["Journal · Done journal"])
+  s53(["Journal · Done journal"])
   s6 --> s21
   s9 --> s21
   s19 --> s25
@@ -421,7 +425,7 @@ flowchart LR
   s24 --> s25
   s24 --> s27
   s48 --> s21
-  s51 --> s21
+  s53 --> s21
 ```
 
 ### `row.item` Row
@@ -490,17 +494,18 @@ flowchart LR
   s20(["Quick-add dialog · Shared strip above every list"])
   s21(["Row · The task row"])
   s24(["Row menu (⋯) · The task row"])
-  s74(["Confirm dialog · Overlay catalog"])
-  s75(["Folder and conversation popover · Overlay catalog"])
+  s76(["Confirm dialog · Overlay catalog"])
+  s77(["Folder and conversation popover · Overlay catalog"])
   s48(["Search tab · Search and command palette"])
   s49(["Command palette · Search and command palette"])
-  s70(["Email archiving report · Settings"])
+  s51(["History · History"])
+  s72(["Email archiving report · Settings"])
   s20 --> s40
   s21 -->|"tap / Enter"| s27
   s24 --> s27
   s27 --> s36
   s27 --> s40
-  s27 --> s74
+  s27 --> s76
   s27 -->|"a block inside the drawer"| s31
   s27 -->|"a block inside the drawer"| s33
   s27 -->|"a block inside the drawer"| s29
@@ -515,11 +520,12 @@ flowchart LR
   s28 -->|"the breadcrumb"| s36
   s28 -->|"···"| s39
   s31 -->|"the Parent row"| s36
-  s32 -->|"a folder or conversation chip"| s75
+  s32 -->|"a folder or conversation chip"| s77
   s32 -->|"Find in folder index"| s40
   s48 --> s27
   s49 --> s27
-  s70 --> s40
+  s51 --> s27
+  s72 --> s40
 ```
 
 ### `drawer.panel` Task drawer
@@ -633,7 +639,7 @@ flowchart LR
   s46["Time dialogs"]
   s47["Person picker"]
   s1(["Nav · Chrome"])
-  s61(["Time categories sheet · Settings"])
+  s63(["Time categories sheet · Settings"])
   s1 --> s41
   s41 --> s42
   s41 --> s43
@@ -642,7 +648,7 @@ flowchart LR
   s42 --> s46
   s44 --> s46
   s44 --> s45
-  s61 --> s46
+  s63 --> s46
 ```
 
 ### `time.pane` Time
@@ -693,6 +699,38 @@ flowchart LR
 - **Root:** `data-surface`
 - **Holds:** on first visit when a team sign-in names nobody in the install, a one-time question of who is logging, kept in memory only.
 
+## History
+
+```mermaid
+flowchart LR
+  s51["History"]
+  s52["Kind chips"]
+  s1(["Nav · Chrome"])
+  s27(["Task drawer · Task drawer"])
+  s1 --> s51
+  s51 --> s52
+  s51 --> s27
+```
+
+### `history.pane` History
+
+- **Root:** `data-surface`
+- **Reach:** nav · palette *Go to History*.
+- **Holds:** the kind chips, then my own changes and comments newest first under one heading per local day (*Today · Tue 1 Sep · 6 changes*): one row per task for each run of consecutive changes to it, the newest change and its time on the meta line, **Show the day before** to widen by a day.
+- **Does:** the row opens the task's drawer; a row with more than one change has a chevron that lists them all under it (*Due 17 Aug → 20 Aug · 10:32*).
+- **States:** an empty day says so (with **Show all changes** under a kind); a feed that cannot be read shows the reason and **Try again**, never an empty day. It says it has reached the end only once the server confirms nothing older. One-dimensional (772px measure). Only the viewer's own writes: the mirror, the AI and the issue sync write as themselves and are left out.
+- **Why:** answers "what did I do today" and "did I re-plan a lot" from the activity log and the comments the app already keeps; nothing new is recorded for it.
+- **Leads to:**
+  - [Kind chips](#historykinds-kind-chips)
+  - [Task drawer](#drawerpanel-task-drawer)
+
+### `history.kinds` Kind chips
+
+- **Root:** `data-surface`
+- **Reach:** the top of History.
+- **Holds:** **All** · **Date moved** · **Closed/reopened** · **Status** · **Priority** · **Moved** · **Comments**, each with its count over the window.
+- **Does:** narrows the list to one kind and regroups it; **All** shows everything, the edits no chip names (title, notes, folder …) included. The choice is remembered on this device.
+
 ## Search and command palette
 
 ```mermaid
@@ -704,20 +742,20 @@ flowchart LR
   s16(["Scope switch · Shared strip above every list"])
   s21(["Row · The task row"])
   s27(["Task drawer · Task drawer"])
-  s51(["Journal · Done journal"])
+  s53(["Journal · Done journal"])
   s6(["List · Today"])
-  s52(["Settings · Settings"])
-  s53(["Settings sheet · Settings"])
+  s54(["Settings · Settings"])
+  s55(["Settings sheet · Settings"])
   s1 --> s48
   s48 --> s16
   s48 --> s21
   s48 --> s27
   s48 --> s50
-  s49 -->|"Journal command"| s51
+  s49 -->|"Journal command"| s53
   s49 --> s27
   s49 --> s6
-  s49 --> s52
-  s53 --> s49
+  s49 --> s54
+  s55 --> s49
 ```
 
 ### `search.pane` Search tab
@@ -754,15 +792,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s51["Journal"]
+  s53["Journal"]
   s9(["Board · Board"])
   s49(["Command palette · Search and command palette"])
   s14(["Top strip · Shared strip above every list"])
   s21(["Row · The task row"])
-  s9 -->|"Done column: journal"| s51
-  s49 -->|"Journal command"| s51
-  s51 --> s14
-  s51 --> s21
+  s9 -->|"Done column: journal"| s53
+  s49 -->|"Journal command"| s53
+  s53 --> s14
+  s53 --> s21
 ```
 
 ### `journal.pane` Journal
@@ -804,57 +842,57 @@ Each sheet is one entry named by the row that opens it; what it holds is the tab
 
 ```mermaid
 flowchart LR
-  s52["Settings"]
-  s53["Settings sheet"]
-  s54["Row actions sheet"]
-  s55["Command palette sheet"]
-  s56["Phone access sheet"]
-  s57["Issues as tasks sheet"]
-  s58["Calendar sheet"]
-  s59["Capture into Inbox sheet"]
-  s60["Email archiving sheet"]
-  s61["Time categories sheet"]
-  s62["Search sheet"]
-  s63["Folder opener sheet"]
-  s64["Voice quick-add sheet"]
-  s65["AI Inbox triage sheet"]
-  s66["Your name sheet"]
-  s67["Database sheet"]
-  s68["Mirror and backup sheet"]
-  s69["Time categories menu (⋮)"]
-  s70["Email archiving report"]
-  s71["Report row menu (⋮)"]
+  s54["Settings"]
+  s55["Settings sheet"]
+  s56["Row actions sheet"]
+  s57["Command palette sheet"]
+  s58["Phone access sheet"]
+  s59["Issues as tasks sheet"]
+  s60["Calendar sheet"]
+  s61["Capture into Inbox sheet"]
+  s62["Email archiving sheet"]
+  s63["Time categories sheet"]
+  s64["Search sheet"]
+  s65["Folder opener sheet"]
+  s66["Voice quick-add sheet"]
+  s67["AI Inbox triage sheet"]
+  s68["Your name sheet"]
+  s69["Database sheet"]
+  s70["Mirror and backup sheet"]
+  s71["Time categories menu (⋮)"]
+  s72["Email archiving report"]
+  s73["Report row menu (⋮)"]
   s0(["Header · Chrome"])
   s49(["Command palette · Search and command palette"])
   s46(["Time dialogs · Time"])
   s40(["Folder picker · Task drawer"])
-  s74(["Confirm dialog · Overlay catalog"])
-  s0 --> s52
-  s49 --> s52
-  s52 --> s53
-  s53 --> s70
-  s53 --> s61
-  s53 --> s49
-  s53 --> s54
-  s53 --> s66
-  s53 --> s63
-  s53 --> s58
-  s53 --> s55
-  s53 --> s56
-  s53 --> s65
-  s53 --> s67
-  s53 --> s64
-  s53 --> s57
-  s53 --> s62
-  s53 --> s68
-  s53 --> s60
-  s53 --> s59
-  s60 -->|"the report below"| s70
-  s61 --> s46
-  s61 -->|"the ⋮ beside an area or category"| s69
-  s70 --> s40
-  s70 --> s74
-  s70 -->|"the ⋮ on a desktop row"| s71
+  s76(["Confirm dialog · Overlay catalog"])
+  s0 --> s54
+  s49 --> s54
+  s54 --> s55
+  s55 --> s72
+  s55 --> s63
+  s55 --> s49
+  s55 --> s56
+  s55 --> s68
+  s55 --> s65
+  s55 --> s60
+  s55 --> s57
+  s55 --> s58
+  s55 --> s67
+  s55 --> s69
+  s55 --> s66
+  s55 --> s59
+  s55 --> s64
+  s55 --> s70
+  s55 --> s62
+  s55 --> s61
+  s62 -->|"the report below"| s72
+  s63 --> s46
+  s63 -->|"the ⋮ beside an area or category"| s71
+  s72 --> s40
+  s72 --> s76
+  s72 -->|"the ⋮ on a desktop row"| s73
 ```
 
 ### `settings.pane` Settings
@@ -1006,12 +1044,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  s72["Sign-in"]
-  s73["Name picker"]
+  s74["Sign-in"]
+  s75["Name picker"]
   s6(["List · Today"])
-  s72 --> s73
-  s72 --> s6
-  s73 --> s6
+  s74 --> s75
+  s74 --> s6
+  s75 --> s6
 ```
 
 ### `login.card` Sign-in
@@ -1052,16 +1090,16 @@ A modal hides the phone's floating nav while it is open.
 
 ```mermaid
 flowchart LR
-  s74["Confirm dialog"]
-  s75["Folder and conversation popover"]
+  s76["Confirm dialog"]
+  s77["Folder and conversation popover"]
   s19(["Select mode and bulk bar · Shared strip above every list"])
   s27(["Task drawer · Task drawer"])
   s32(["Links · Task drawer"])
-  s70(["Email archiving report · Settings"])
-  s19 --> s74
-  s27 --> s74
-  s32 -->|"a folder or conversation chip"| s75
-  s70 --> s74
+  s72(["Email archiving report · Settings"])
+  s19 --> s76
+  s27 --> s76
+  s32 -->|"a folder or conversation chip"| s77
+  s72 --> s76
 ```
 
 ### `confirm.dialog` Confirm dialog
@@ -1087,6 +1125,7 @@ flowchart LR
 | [Nav](#chromenav-nav) |  | [List](#todaylist-list) |
 | [Nav](#chromenav-nav) |  | [Board](#boardpane-board) |
 | [Nav](#chromenav-nav) |  | [Time](#timepane-time) |
+| [Nav](#chromenav-nav) |  | [History](#historypane-history) |
 | [Nav](#chromenav-nav) |  | [Search tab](#searchpane-search-tab) |
 | [List](#todaylist-list) |  | [Top strip](#striptop-top-strip) |
 | [List](#todaylist-list) |  | [Calendar lane](#todaycalendar-lane-calendar-lane) |
@@ -1148,6 +1187,8 @@ flowchart LR
 | [Command palette](#searchpalette-command-palette) |  | [Task drawer](#drawerpanel-task-drawer) |
 | [Command palette](#searchpalette-command-palette) |  | [List](#todaylist-list) |
 | [Command palette](#searchpalette-command-palette) |  | [Settings](#settingspane-settings) |
+| [History](#historypane-history) |  | [Kind chips](#historykinds-kind-chips) |
+| [History](#historypane-history) |  | [Task drawer](#drawerpanel-task-drawer) |
 | [Journal](#journalpane-journal) |  | [Top strip](#striptop-top-strip) |
 | [Journal](#journalpane-journal) |  | [Row](#rowitem-row) |
 | [Settings](#settingspane-settings) |  | [Settings sheet](#settingssheet-settings-sheet) |

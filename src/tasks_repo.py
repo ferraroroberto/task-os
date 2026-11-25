@@ -11,6 +11,7 @@ from __future__ import annotations
 # `use_clock` is re-exported too: the seed and the tests pin the clock through
 # `repo.use_clock(...)`.
 from src.clock import now_iso, today, use_clock
+from src.tasks.history import history
 from src.tasks.mutations import (
     add_blocker,
     bulk_delete,

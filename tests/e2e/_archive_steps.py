@@ -587,7 +587,7 @@ def _open_phone_report(browser: Browser, base: str) -> tuple:
     phone.add_init_script(INTERCEPT)
     p = phone.new_page()
     p.goto(base + "/")
-    expect(p.locator("nav.tabs .tab")).to_have_count(4)
+    expect(p.locator("nav.tabs .tab")).to_have_count(5)
     open_settings_sheet(p, "archive", tap=True)
     expect(p.locator(".archive-card")).to_have_count(7)
     expect(p.locator(".archive-grid")).to_have_count(0)

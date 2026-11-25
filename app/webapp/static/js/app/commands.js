@@ -57,6 +57,7 @@ export function paletteCommands(app) {
     { id: 'go-today', label: 'Go to Today', icon: 'calendar-days', run: go('today') },
     { id: 'go-board', label: 'Go to Board', icon: 'square-kanban', run: go('board') },
     { id: 'go-time', label: 'Go to Time', icon: 'timer', run: go('time') },
+    { id: 'go-history', label: 'Go to History', hint: 'what I changed, by day', icon: 'history', run: go('history') },
     // The Archive tab: Settings → Email archiving now, one command away still.
     { id: 'go-archive', label: 'Go to Archive', hint: app.archiveHint(), icon: 'archive', run: function () { app.openSettingsSheet('archive'); } },
     { id: 'go-search', label: 'Go to Search', icon: 'search', run: go('search') },

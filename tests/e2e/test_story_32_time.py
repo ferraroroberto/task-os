@@ -219,8 +219,8 @@ def test_track_time_and_compare_shares(authed_webapp: str, browser: Browser, sho
         time_calls: list[str] = []
         page.on("request", lambda r: time_calls.append(r.url) if "/api/time/" in r.url else None)
         page.goto(f"{base}/")
-        expect(page.locator("nav.tabs .tab")).to_have_count(4)
-        expect(page.locator("nav.tabs .tab .tab-label")).to_have_text(["Today", "Board", "Time", "Search"])
+        expect(page.locator("nav.tabs .tab")).to_have_count(5)
+        expect(page.locator("nav.tabs .tab .tab-label")).to_have_text(["Today", "Board", "Time", "History", "Search"])
         page.wait_for_load_state("networkidle")
         assert time_calls == [], "Today's load must not touch the time tracker"
         glance, timer = _first_visit_and_timer(page, base, shots)

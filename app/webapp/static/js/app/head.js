@@ -70,6 +70,8 @@ export function renderHeadStatus(app) {
     }
   } else if (app.state.tab === 'time' && onPane && app.time) {
     text = app.time.headText();
+  } else if (app.state.tab === 'history' && onPane && app.history) {
+    text = app.history.headText();
   }
   // The Settings page covers the header: its own line sits under its title.
   if (app.state.settingsOpen) paintParts(app.els.settingsHeadStatus, app.settingsHeadParts());

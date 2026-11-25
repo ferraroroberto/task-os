@@ -23,7 +23,7 @@ const FIELD_WORDS = {
 
 /** The words for a field: the drawer's word where it has one, else the key
  *  with its underscores read as spaces. */
-function fieldWords(field) {
+export function fieldWords(field) {
   return FIELD_WORDS[field] || String(field).replace(/_/g, ' ');
 }
 

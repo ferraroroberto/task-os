@@ -309,14 +309,15 @@ html, body {
 
 /* Width follows the shape of the view (design.md Layout): the
    Board and Today tabs are two-dimensional (lanes, a calendar lane) and span
-   the window; Search (results as cards) and Time are one-dimensional and keep
+   the window; Search (results as cards), Time and History are one-dimensional and keep
    the centred measure, as the Settings page (a modal, vendored settings-group)
    does on its own. The declaration is .fleet.toml [design] wide_views.
    One measure per view: the persistent header row and the build footer are
    capped with the active pane, so the view never mixes two widths. The drawer
    is a fixed aside and is left out on purpose. */
 .app:has(> #paneSearch:not([hidden])) > :is(.home-head, .pane, .page-foot),
-.app:has(> #paneTime:not([hidden])) > :is(.home-head, .pane, .page-foot) {
+.app:has(> #paneTime:not([hidden])) > :is(.home-head, .pane, .page-foot),
+.app:has(> #paneHistory:not([hidden])) > :is(.home-head, .pane, .page-foot) {
   max-width: var(--layout-measure);
   margin-left: auto;
   margin-right: auto;

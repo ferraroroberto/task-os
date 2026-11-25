@@ -1,0 +1,50 @@
+/* History. Linked after the file before it in index.html: rule order is the cascade. */
+
+/* The History tab (history.js): one-dimensional, so it keeps the measure
+   (base.css). The day cards are the vendored action-list and the empty and
+   unreadable states the vendored empty-state; what follows is only what
+   none of them covers: the kind chips, the day header's count, a group's
+   expanded change list and the foot. */
+#paneHistory .pane-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+/* Seven chips: they wrap rather than scroll, so every kind stays in sight. */
+.history-kinds { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+/* A chip keeps the control height and reaches the 44px floor vertically:
+   the chips sit apart, so the grown targets never overlap (Touch targets). */
+.history-kind { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.history-kind::before { content: ""; position: absolute; inset: -4px 0; }
+.history-kind[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border-soft);
+  color: var(--accent-text);
+}
+.history-kind-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.history-kind[aria-pressed="true"] .history-kind-count { color: inherit; }
+
+.history-host { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); }
+.history-day-title { display: flex; align-items: baseline; gap: var(--space-sm); margin: var(--space-xs) 0 0; }
+.history-day-count { font-variant-numeric: tabular-nums; }
+
+/* A group's changes, opened under its row: one quiet line each, its time
+   right-aligned in tabular figures so a run of edits reads as a column. */
+.history-detail { list-style: none; border-top: 1px solid var(--line-muted); }
+/* The vendored divider joins two adjacent rows; an opened list sits between them. */
+.history-detail + .action-row { border-top: 1px solid var(--line-muted); }
+.history-entries { list-style: none; margin: 0; padding: var(--space-xs) 14px var(--space-sm) 14px; }
+.history-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 6px 0;
+  font-size: var(--font-body-sm);
+}
+.history-entry + .history-entry { border-top: 1px solid var(--line-muted); }
+.history-entry-text { min-width: 0; overflow-wrap: anywhere; }
+.history-entry-time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.history-foot { display: flex; justify-content: center; padding-bottom: var(--gap); }
+.history-foot .muted { font-size: var(--font-body-sm); }

@@ -28,6 +28,7 @@
     POST   /api/tasks/{id}/blockers      {blocker_id} → add (409 on a cycle/self-block)
     DELETE /api/tasks/{id}/blockers/{bid} remove one blocker
     GET    /api/activity?task=N&limit=   newest first (all tasks when no task)
+    GET    /api/history?from=&to=&kind=  the viewer's own changes + comments, by day then task
     POST   /api/parse                    {text} → quick-add split: title, due, parent
     GET    /api/dates?phrases=a,b        {today, dates: {phrase: ISO | null}} — what each
                                          date phrase means today (the date sheet)
@@ -584,6 +585,29 @@ def activity(
     if task is not None:
         repo.get_task(db, task)
     return {"items": repo.list_activity(db, task, limit=limit)}
+
+
+def _own_actors(request: Request) -> list[str]:
+    """The names the viewer's own writes are signed with: the one this request
+    would write as, plus the repo's unnamed default when that is the owner's
+    fallback name — a change made before the install had a name is still theirs."""
+    actor = resolve_actor(request)
+    config = getattr(request.app.state, "config", None)
+    owner_actor = getattr(config, "install_name", None) or repo.DEFAULT_ACTOR
+    if actor == owner_actor and actor != repo.DEFAULT_ACTOR:
+        return [actor, repo.DEFAULT_ACTOR]
+    return [actor]
+
+
+@router.get("/history")
+def history(
+    request: Request,
+    day_from: str | None = Query(default=None, alias="from"),
+    day_to: str | None = Query(default=None, alias="to"),
+    kind: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict[str, Any]:
+    return repo.history(db, _own_actors(request), day_from=day_from, day_to=day_to, kind=kind)
 
 
 # ------------------------------------------------------------- quick-add

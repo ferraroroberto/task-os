@@ -36,7 +36,7 @@ Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray t
   - app/webapp/static/**/*.css
   - app/webapp/static/**/*.{js,html}
 - key views:
-  - /          (Today · Board · Time · Search tabs · Settings behind the header gear: inset groups, each row's sheet — Email archiving and Time categories among them)
+  - /          (Today · Board · Time · History · Search tabs · Settings behind the header gear: inset groups, each row's sheet — Email archiving and Time categories among them)
   - /login     (sign-in card: token or password → cookie)
 
 ## CI expectations
