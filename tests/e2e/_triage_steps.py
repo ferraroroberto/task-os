@@ -14,7 +14,7 @@ from pathlib import Path
 
 from playwright.sync_api import BrowserContext, Page, expect
 
-from tests.e2e._geometry import assert_no_horizontal_overflow
+from tests.e2e._geometry import assert_min_target, assert_no_horizontal_overflow
 from tests.e2e._ui import (
     assert_crumb_trail,
     assert_date_sheet,
@@ -526,3 +526,36 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
 
 
 # ------------------------------------------------- stale window (#101)
+
+
+def walk_phone_clear_all(page: Page, base: str, shots: Path) -> None:
+    """Phone: the × beside the filter button clears every filter in one tap, light and dark.
+
+    The × is there only while a filter is on; one tap runs the sheet's Clear, so
+    the list and the badge return to the resting view with the sheet never opened.
+    """
+    board_rows = page.locator("#paneBoard .trow[data-id]")
+    clear_all = page.locator("#paneBoard .filter-clear-all")
+    page.goto(f"{base}/")
+    page.locator("nav.tabs .tab[data-tab='board']").tap()
+    expect(board_rows.first).to_be_visible()
+    resting = board_rows.count()
+    expect(clear_all).to_be_hidden()
+    for theme, name in (("light", "story-04-triage-13-phone.png"), ("dark", "story-04-triage-14-phone-dark.png")):
+        page.emulate_media(color_scheme=theme)
+        page.evaluate("t => { document.documentElement.dataset.theme = t; }", theme)
+        open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='deferred']").check()
+        close_filter_sheet(page)
+        expect(page).to_have_url(re.compile(r"\?status="))
+        expect(clear_all).to_be_visible()
+        assert_min_target(clear_all)
+        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_visible()
+        dismiss_toasts(page)
+        shot(page, shots / name)
+        clear_all.tap()
+        expect(page).to_have_url(f"{base}/")
+        expect(clear_all).to_be_hidden()
+        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
+        expect(board_rows).to_have_count(resting)
+    page.emulate_media(color_scheme="light")
+    page.evaluate("() => { document.documentElement.dataset.theme = 'light'; }")

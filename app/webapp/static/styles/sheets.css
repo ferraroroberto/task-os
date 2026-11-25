@@ -226,8 +226,10 @@
 }
 .filter-count { font-size: var(--font-label); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* In the Search box (a 52px bar) it takes the strip's box too. */
-.search-box .filter-open { --icon-btn-box: var(--control-h); }
-@media (pointer: coarse) { .search-box .filter-open { --icon-btn-box: var(--row-sm); } }
+.search-box .filter-open, .search-box .filter-clear-all { --icon-btn-box: var(--control-h); }
+@media (pointer: coarse) { .search-box .filter-open, .search-box .filter-clear-all { --icon-btn-box: var(--row-sm); } }
+/* The × beside the filter button is the plain icon button on the strip's box, like the search ×. */
+.filter-clear-all { flex: none; }
 
 .detail-dialog.filter-dialog {
   width: min(520px, 94vw);

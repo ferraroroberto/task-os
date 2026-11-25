@@ -95,6 +95,7 @@ from tests.e2e._triage_steps import (
     _walk_recurrence_anchor,
     _walk_recurrence_interval,
     walk_old_comment_dates,
+    walk_phone_clear_all,
 )
 from tests.e2e._ui import (
     SWIPE_JS,
@@ -979,6 +980,7 @@ def _walk_phone_rows_and_drawer_sheet(base: str, playwright: Playwright, shots: 
         drawer = _phone_filter_sheet_and_drawer(page, base, shots)
         menu = _phone_snooze_target(page, base, shots)
         surface(page, "row.date")
+        walk_phone_clear_all(page, base, shots)
         _phone_sleeping_marker(page, context, base, shots, drawer, menu)
     finally:
         wk.close()

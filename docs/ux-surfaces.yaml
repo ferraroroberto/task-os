@@ -413,7 +413,7 @@ surfaces:
         count, *Filter 12 tasks…*; on Today and Board the status filter sits inside it as removable
         **status pills**, a *Todo* pill by default, each a chip with a × that widens the search),
         the **filter button** (carries how many filters are on; its
-        name spells them), **+**, and on a wide screen **Select** (on a phone Select is a row of the filter sheet, and the strip shows it only while Select mode is on, as **Done**). Today, Board and the Done journal carry it; Search carries its own box and the
+        name spells them), a **Clear filters** × beside it that shows only while any filter is on and resets them all in one tap (the sheet's **Clear**, same rule), **+**, and on a wide screen **Select** (on a phone Select is a row of the filter sheet, and the strip shows it only while Select mode is on, as **Done**). Today, Board and the Done journal carry it; Search carries its own box and the
         filter button inside it.
     links:
       - to: strip.filter-sheet
@@ -917,7 +917,7 @@ surfaces:
     holds:
       - >-
         an auto-focused box (a **Clear search** button that shows only while the box holds text, a
-        filter button, and the scope switch under it), a count, and results. *Clear search* is a
+        filter button with its own **Clear filters** × while any filter is on, and the scope switch under it), a count, and results. *Clear search* is a
         44px target; one tap empties the query, the count and the results, and keeps focus in the
         box (Escape in the box does the same). A group appears only for a kind with hits (Tasks,
         Folders, Emails, Issues), open, under an uppercase header with its count; every other kind
