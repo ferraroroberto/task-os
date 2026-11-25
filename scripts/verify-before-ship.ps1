@@ -279,6 +279,41 @@ if ($tier -eq "skip") {
 # capture is stable, never that the gallery still matches the code.
 Invoke-Stage "gallery baseline (committed vs regenerated)" { & $py -m scripts.shot_determinism --check-tree }
 
+# After the gallery baseline, never before it: the one budget test lives inside
+# the open story, so its WebKit rerun rewrites that story's shots with WebKit's
+# rendering, which the baseline would read as drift. The baseline has already
+# restored and compared the tree by here; the shots the rerun writes are put
+# back so the working tree stays what the baseline just proved.
+if ($tier -eq "skip") {
+    Write-Host "[SKIP] request budget on webkit - no e2e surface touched" -ForegroundColor DarkGray
+} elseif ($tier -eq "static") {
+    Write-Host "[SKIP] request budget on webkit - an inert-asset diff runs only the smoke target" -ForegroundColor DarkGray
+} else {
+    # The Mac nightly runs the request-budget tests on WebKit, which the Chromium
+    # slice above never does. 0 passed; 4 (WebKit not installed) and 5 (the repo
+    # has no budget test) are "not run", printed as such and never as a pass;
+    # anything else, 3 (not confirmed) included, fails the gate.
+    Write-Host ""
+    Write-Host ">> request budget on webkit" -ForegroundColor Cyan
+    & $py "scripts/tools/webkit_budget_check.py"
+    $webkitBudget = $LASTEXITCODE
+    & git checkout -- docs/screenshots
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[FAIL] request budget on webkit: could not restore docs/screenshots after the WebKit run" -ForegroundColor Red
+        Complete-Gate 1
+    }
+    if ($webkitBudget -eq 0) {
+        Write-Host "[PASS] request budget on webkit" -ForegroundColor Green
+    } elseif ($webkitBudget -eq 4) {
+        Write-Host "[NOT RUN] request budget on webkit - WebKit is not installed here, so the nightly's engine was not checked" -ForegroundColor Yellow
+    } elseif ($webkitBudget -eq 5) {
+        Write-Host "[NOT RUN] request budget on webkit - no request-budget test in this repo" -ForegroundColor Yellow
+    } else {
+        Write-Host "[FAIL] request budget on webkit (exit $webkitBudget)" -ForegroundColor Red
+        Complete-Gate 1
+    }
+}
+
 # Runtime write probe, second half: any file the unit and e2e runs left under a
 # code folder (the snapshot was taken before stage 11).
 Invoke-Stage "runtime write probe" { & $py "scripts/runtime_write_ratchet.py" --probe $runtimeSnapshot }
