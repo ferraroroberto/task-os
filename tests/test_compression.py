@@ -96,7 +96,7 @@ def test_identity_clients_get_the_body_untouched(client: TestClient) -> None:
 
 def test_small_responses_are_left_alone(client: TestClient) -> None:
     r = _get(client, "/healthz")
-    assert r.json() == {"ok": True}
+    assert r.json() == {"ok": True, "service": "task-os"}
     assert "content-encoding" not in r.headers
 
 
