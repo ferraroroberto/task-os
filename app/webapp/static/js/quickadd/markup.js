@@ -62,20 +62,7 @@ export function fillQuickAdd(dialog) {
       <span><label for="quickAddStatus">Status</label></span>
       <select data-track="quick-add.status" id="quickAddStatus" class="select-native quick-add-status"></select>
     </div>
-    <div class="row row--stack">
-      <span>
-        <label for="quickAddFolder">Folder</label>
-        <button data-track="quick-add.folder-pick" type="button" class="button-ghost folder-pick quick-add-pick"
-                aria-label="Find in folder index" title="Find in folder index"
-                aria-expanded="false" aria-controls="quickAddPicker">
-          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-          <span class="folder-pick-label">Find in folder index</span>
-        </button>
-      </span>
-      <input id="quickAddFolder" class="input-native quick-add-folder" type="text"
-             placeholder="{onedrive}/folder  — or paste an absolute path">
-      <div class="folder-picker quick-add-picker" id="quickAddPicker" hidden></div>
-    </div>
+    ${folderRow()}
     <div class="row row--stack">
       <span><label for="quickAddLink">Link</label></span>
       <div class="quick-add-link">
@@ -93,4 +80,30 @@ export function fillQuickAdd(dialog) {
     </div>
   </form>
 `;
+}
+
+/** The Folder row: the label line with its two openers, the ref input, the picker host. */
+function folderRow() {
+  return `
+    <div class="row row--stack">
+      <span>
+        <label for="quickAddFolder">Folder</label>
+        <button data-track="quick-add.folder-pick" type="button" class="button-ghost folder-pick quick-add-pick"
+                aria-label="Find in folder index" title="Find in folder index"
+                aria-expanded="false" aria-controls="quickAddPicker">
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+          <span class="folder-pick-label">Find in folder index</span>
+        </button>
+        <!-- the PC itself only (quickadd.js::open shows it); fills the field below -->
+        <button data-track="quick-add.folder-explorer" type="button" class="button-ghost folder-pick quick-add-explorer"
+                aria-label="From Explorer window" title="Use the folder open in the front File Explorer window" hidden>
+          <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg>
+          <span class="folder-pick-label">From Explorer window</span>
+        </button>
+      </span>
+      <input id="quickAddFolder" class="input-native quick-add-folder" type="text"
+             placeholder="{onedrive}/folder  — or paste an absolute path">
+      <div class="folder-picker quick-add-picker" id="quickAddPicker" hidden></div>
+    </div>
+  `;
 }

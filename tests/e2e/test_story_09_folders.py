@@ -29,6 +29,9 @@ record links to:
     docs/screenshots/story-09-folders-6-desktop.png   drawer after the pick (dark)
     docs/screenshots/story-09-folders-7-phone.png     phone: copy popover with the resolved path
     docs/screenshots/story-09-folders-10-desktop.png  drawer: the folder of the front Explorer window, in the field before saving
+    docs/screenshots/story-09-folders-11-desktop.png  quick add: the same pick fills the Folder field
+    docs/screenshots/story-09-folders-12-phone.png    quick add on the phone: the glyph button, light
+    docs/screenshots/story-09-folders-13-phone.png    quick add on the phone, dark
 
 Issue #833 rides it too: the Links row leaves out a stored link whose URL a comment already shows (display only; the editor still lists every link), proven on a task built like an import leaves it, light and dark, desktop and phone.
 
@@ -337,6 +340,52 @@ def _explorer_window_pick(page: Page, base: str, shots: Path, drawer, inst, kitc
     expect(drawer.locator(".drawer-folder a.chip-folder")).to_have_attribute("data-ref", plans)
 
 
+def _quick_add_explorer_pick(page: Page, base: str, shots: Path, browser: Browser, inst) -> None:
+    """Quick add's From Explorer window: the drawer's pick on the new-task form, three states, light and dark, desktop and phone."""
+    garden = str(inst.od / "house" / "garden")
+    page.goto(base + "/")
+    page.locator("[data-quick-add]:visible").first.click()
+    dialog = page.locator("#quickAdd")
+    expect(dialog).to_be_visible()
+    # both ghost buttons share the label line; the new one reads like the drawer's
+    expect(dialog.locator("button.folder-pick")).to_have_count(2)
+    win = dialog.locator("button.quick-add-explorer")
+    expect(win).to_have_attribute("aria-label", "From Explorer window")
+    field = dialog.locator("#quickAddFolder")
+    inst.fe.explorer = ("ok", garden)
+    win.click()
+    expect(field).to_have_value(garden)                 # filled in full, and nothing is created by it
+    shot(page, shots / "story-09-folders-11-desktop.png")
+    # no window open / Windows could not say: the server's own message, the field as it was
+    for state, message in (("none", "No Explorer folder is open"), ("unavailable", "Windows did not say")):
+        inst.fe.explorer = (state, None)
+        field.fill("{onedrive}/house")
+        win.click()
+        expect(page.locator("#toast")).to_contain_text(message)
+        assert field.input_value() == "{onedrive}/house"
+    page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+    # the phone keeps the button as a glyph (the drawer's rule), light then dark
+    inst.fe.explorer = ("ok", garden)
+    phone = browser.new_context(viewport=PHONE, device_scale_factor=3, is_mobile=True, has_touch=True)
+    p = phone.new_page()
+    p.goto(base + "/")
+    p.locator("[data-quick-add]:visible").first.click()
+    pd = p.locator("#quickAdd")
+    expect(pd).to_be_visible()
+    expect(pd.locator("button.quick-add-explorer")).to_be_visible()
+    for label in pd.locator("button.folder-pick .folder-pick-label").all():
+        expect(label).to_be_hidden()
+    pd.locator("button.quick-add-explorer").tap()
+    expect(pd.locator("#quickAddFolder")).to_have_value(garden)
+    assert_no_horizontal_overflow(p)
+    shot(p, shots / "story-09-folders-12-phone.png")
+    p.emulate_media(color_scheme="dark")
+    p.evaluate("document.documentElement.dataset.theme = 'dark'")
+    shot(p, shots / "story-09-folders-13-phone.png")
+    phone.close()
+
+
 def _ai_chip_from_the_board(page: Page, base: str, shots: Path, drawer, pop):
     """Step 8: the AI-conversation chip, from the Board's row menu to the drawer."""
     # 8. (issue #77) the AI-conversation chip — one kind for every provider,
@@ -495,6 +544,7 @@ def test_open_a_folder(folder_webapp: FolderInstance, browser: Browser, shots: P
     _opener_card_in_settings(page, base, shots, chip, pop)
     drawer, field, folder_pill = _drawer_folder_editor(page, base, shots, inst, kitchen)
     _unknown_placeholder_and_picker(page, base, shots, drawer, field, inst, kitchen)
+    _quick_add_explorer_pick(page, base, shots, browser, inst)
     ai_row, ai_url, drawer, pop, watering = _ai_chip_from_the_board(page, base, shots, drawer, pop)
     _ai_pill_dark_and_phone(page, ctx, browser, base, shots, ai_row, ai_url, drawer, folder_pill, inst, kitchen, pop, watering)
     _links_leave_out_comment_urls(browser, base)

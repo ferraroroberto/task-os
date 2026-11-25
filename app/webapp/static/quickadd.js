@@ -56,7 +56,8 @@ const DEFAULT_STATUS = 'todo';
 /**
  * @param {HTMLDialogElement} dialog  the `#quickAdd` shell (index.html)
  * @param {{onCreated: (task: object) => void, projects: () => Array, members: () => Array,
- *          viewer: () => (string|null), defaultProject: () => string}} opts
+ *          viewer: () => (string|null), defaultProject: () => string,
+ *          onPc: () => boolean}} opts
  * @returns {{open: (preset?: {status?: string, due?: string}) => void, close: () => void}}
  */
 export function createQuickAdd(dialog, opts) {
@@ -80,6 +81,7 @@ export function createQuickAdd(dialog, opts) {
       ownerRow: q('.quick-add-owner-row'),
       folder: q('.quick-add-folder'),
       pick: q('.quick-add-pick'),
+      explorer: q('.quick-add-explorer'),
       picker: q('.quick-add-picker'),
       link: q('.quick-add-link-url'),
       linkLabel: q('.quick-add-link-label'),
@@ -124,6 +126,8 @@ export function createQuickAdd(dialog, opts) {
     if (p.status && STATUSES.indexOf(p.status) >= 0) els.status.value = p.status;
     if (p.due) { showDate(els.due, p.due, ''); ctx.st.touched.due = true; }
     fillPlacement(ctx);
+    // /api/me answers after this dialog is built, so the PC check is made per open
+    els.explorer.hidden = !(opts.onPc && opts.onPc());
     if (!dialog.open) dialog.showModal();
     ctx.voice.refresh();
     els.input.focus();

@@ -135,3 +135,20 @@ The cause, confirmed in `src/imports/sharepoint.py`: the import writes a `web` l
 
 - [x] `tests/tasks/test_comment_rows_js.py::test_the_links_row_leaves_out_what_a_comment_already_shows` (the matching rule: trailing punctuation and slash, folder refs, email refs, no comments) and step 12 of `tests/e2e/test_story_09_folders.py`, which failed against the pre-fix JS (five chips where two were expected) and passes with it, in a 1440×900 desktop and a 390×844 phone context, light and dark. The four proof shots are written to the run's own work folder, not the committed gallery.
 - [ ] Not verified: a real imported task on the live instance; the row's pill count is the only count the row shows, so it matches what is displayed by construction.
+
+---
+
+## Amendment — 2026-11-25: quick add takes the Explorer window's folder too
+
+13. Open the **+** dialog on the PC: the Folder label line carries **Find in folder index** and, beside it, **From Explorer window** (the drawer's own button, the same shared function). With a window in front, it fills the Folder field with that window's folder in full and creates nothing; **Add** stores it like a typed path. With no window open, or Windows unable to say, the server's own message shows as a toast and the field keeps what it held. Off the PC the button is absent. At 390 wide it is a glyph beside the picker's glyph, light and dark.
+
+| Step | Shot |
+| --- | --- |
+| 13 quick add: the Explorer window's folder in the Folder field | [story-09-folders-11-desktop.png](../screenshots/story-09-folders-11-desktop.png) |
+| 13 phone, light (390×844) | [story-09-folders-12-phone.png](../screenshots/story-09-folders-12-phone.png) |
+| 13 phone, dark | [story-09-folders-13-phone.png](../screenshots/story-09-folders-13-phone.png) |
+
+**Result — 2026-11-25: automated legs pass; the real window read is not verified.**
+
+- [x] Step 13 of `tests/e2e/test_story_09_folders.py` against the fake folder-explorer: the fill, the no-window and Windows-could-not-say messages with the field untouched, the glyph button at 390 wide without horizontal overflow, light and dark, all seen in the saved shots.
+- [ ] Not verified: a real File Explorer window in front, as for the drawer's button above.

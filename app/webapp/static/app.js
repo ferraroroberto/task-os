@@ -696,6 +696,7 @@ function wireQuickAdd() {
     members: function () { return state.members; },
     viewer: function () { return state.viewer; },
     defaultProject: function () { return state.filters.project; },
+    onPc: function () { return state.onPc; },
   });
   document.querySelectorAll('[data-quick-add]').forEach(function (btn) {
     btn.addEventListener('click', function () { quickAdd.open(); });

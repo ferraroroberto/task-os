@@ -2,6 +2,7 @@
 
 'use strict';
 
+import { takeExplorerFolder } from '../../folderpick.js';
 import { closeOnBackdrop } from '../../modal.js';
 import { setPicker } from './folder.js';
 import { resetForm } from './form.js';
@@ -10,7 +11,7 @@ import { parseNow } from './preview.js';
 const PARSE_DEBOUNCE_MS = 180;
 
 export function wireQuickAdd(ctx) {
-  const { input, submit, due, starts, pick, picker, folder } = ctx.els;
+  const { input, submit, due, starts, pick, explorer, picker, folder } = ctx.els;
   const dialog = ctx.dialog;
   const st = ctx.st;
 
@@ -25,6 +26,7 @@ export function wireQuickAdd(ctx) {
   due.addEventListener('input', function () { st.touched.due = true; due.title = ''; });
   starts.addEventListener('input', function () { st.touched.starts = true; starts.title = ''; });
   pick.addEventListener('click', function () { setPicker(ctx, picker.hidden); });
+  explorer.addEventListener('click', function () { takeExplorerFolder(folder, explorer); });
 
   // Escape closes the folder picker first, the dialog second — one keystroke
   // per thing open, so it never discards a draft the user was still filling.

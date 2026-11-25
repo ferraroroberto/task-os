@@ -17,7 +17,10 @@
  *                             attaching, `opts.onClose()` lets the caller keep
  *                             its own open/closed flag in step.
  *
- * Both were the drawer's private code until the quick-add dialog needed the
+ *   takeExplorerFolder(input, button, note?)   the front File Explorer
+ *                             window's folder into a folder field (the PC only).
+ *
+ * The first two were the drawer's private code until the quick-add dialog needed the
  * same picker — one copy, not two, so the index search behaves identically
  * wherever a folder is attached.
  */
@@ -45,6 +48,32 @@ export async function resolveFolderRef(value) {
   } catch (err) {
     toast(err.message || 'Could not resolve the path', 'error');
     return undefined;
+  }
+}
+
+/** Fill `input` with the folder of the front File Explorer window, for the
+ *  person to read and save; it never saves on its own. `note`, when the caller
+ *  has one (the drawer's input is narrow), shows the path in full. A failure
+ *  says which it was (the server's own message) and leaves the input as it was.
+ *  @param {HTMLInputElement} input
+ *  @param {HTMLButtonElement} button  disabled while the request is out
+ *  @param {HTMLElement} [note] */
+export async function takeExplorerFolder(input, button, note) {
+  button.disabled = true;
+  try {
+    const r = await api('/api/folders/explorer-window', { method: 'POST' });
+    input.value = r.path;
+    input.title = r.path;
+    if (note) {
+      note.textContent = 'From the Explorer window, not saved yet: ' + r.path;
+      note.hidden = false;
+    }
+    input.focus();
+    input.select();
+  } catch (err) {
+    toast(err.message || 'Could not read the File Explorer window', 'error');
+  } finally {
+    button.disabled = false;
   }
 }
 
