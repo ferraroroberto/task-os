@@ -528,34 +528,40 @@ def _walk_recurrence_interval(page: Page, base: str, shots: Path) -> None:
 # ------------------------------------------------- stale window (#101)
 
 
+def _filter_on_then_clear_all(page: Page, base: str, theme: str, shots: Path) -> None:
+    """One round: a filter goes on (× and badge appear), the shot, one tap on the × and it is all back."""
+    clear_all = page.locator("#paneBoard .filter-clear-all")
+    rows = page.locator("#paneBoard .trow[data-id]")
+    resting = rows.count()
+    page.emulate_media(color_scheme=theme)
+    page.evaluate("t => { document.documentElement.dataset.theme = t; }", theme)
+    open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='deferred']").check()
+    close_filter_sheet(page)
+    expect(page).to_have_url(re.compile(r"\?status="))
+    expect(clear_all).to_be_visible()
+    assert_min_target(clear_all)
+    expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_visible()
+    dismiss_toasts(page)
+    shot(page, shots / ("story-04-triage-13-phone.png" if theme == "light"
+                        else "story-04-triage-14-phone-dark.png"))
+    clear_all.tap()
+    expect(page).to_have_url(f"{base}/")
+    expect(clear_all).to_be_hidden()
+    expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
+    expect(rows).to_have_count(resting)
+
+
 def walk_phone_clear_all(page: Page, base: str, shots: Path) -> None:
     """Phone: the × beside the filter button clears every filter in one tap, light and dark.
 
     The × is there only while a filter is on; one tap runs the sheet's Clear, so
     the list and the badge return to the resting view with the sheet never opened.
     """
-    board_rows = page.locator("#paneBoard .trow[data-id]")
-    clear_all = page.locator("#paneBoard .filter-clear-all")
     page.goto(f"{base}/")
     page.locator("nav.tabs .tab[data-tab='board']").tap()
-    expect(board_rows.first).to_be_visible()
-    resting = board_rows.count()
-    expect(clear_all).to_be_hidden()
-    for theme, name in (("light", "story-04-triage-13-phone.png"), ("dark", "story-04-triage-14-phone-dark.png")):
-        page.emulate_media(color_scheme=theme)
-        page.evaluate("t => { document.documentElement.dataset.theme = t; }", theme)
-        open_filter_sheet(page, "paneBoard").locator(".filter-checks[data-name='status'] input[value='deferred']").check()
-        close_filter_sheet(page)
-        expect(page).to_have_url(re.compile(r"\?status="))
-        expect(clear_all).to_be_visible()
-        assert_min_target(clear_all)
-        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_visible()
-        dismiss_toasts(page)
-        shot(page, shots / name)
-        clear_all.tap()
-        expect(page).to_have_url(f"{base}/")
-        expect(clear_all).to_be_hidden()
-        expect(filter_button(page, "paneBoard").locator(".filter-count")).to_be_hidden()
-        expect(board_rows).to_have_count(resting)
+    expect(page.locator("#paneBoard .trow[data-id]").first).to_be_visible()
+    expect(page.locator("#paneBoard .filter-clear-all")).to_be_hidden()
+    _filter_on_then_clear_all(page, base, "light", shots)
+    _filter_on_then_clear_all(page, base, "dark", shots)
     page.emulate_media(color_scheme="light")
     page.evaluate("() => { document.documentElement.dataset.theme = 'light'; }")

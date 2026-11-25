@@ -24,6 +24,8 @@ touch) with the geometry checks:
 
     docs/screenshots/story-04-triage-9-phone.png   (the Board's rows)
     docs/screenshots/story-04-triage-10-phone.png  (drawer as a full-screen sheet)
+    docs/screenshots/story-04-triage-13-phone.png  (the × beside the filter button, light)
+    docs/screenshots/story-04-triage-14-phone-dark.png  (the same, dark)
 
 UX round 3 (issue #46): the filter state is ONE state shared by every tab and
 lives in the URL (``?status=todo`` is the same view on the Board and
