@@ -27,9 +27,12 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.webapp.routers._helpers import BUILD_INFO, STATIC_DIR
 from src.db import get_db, schema_version
+from src.health_routes import health_router
 from src.opener import HANDLER_PATH, LAUNCHER_PATH
 
 router = APIRouter()
+# The fleet's standard liveness and build identity routes (vendored).
+router.include_router(health_router(service="task-os", version=False))
 
 
 _INDEX_CACHE_CONTROL = "no-cache, must-revalidate"
@@ -72,11 +75,6 @@ async def index(request: Request) -> Response:
     if _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers=headers)
     return HTMLResponse(html, headers=headers)
-
-
-@router.get("/healthz")
-async def healthz() -> dict[str, Any]:
-    return {"ok": True}
 
 
 def _opener_file(path: Path) -> FileResponse:

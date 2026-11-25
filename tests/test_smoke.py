@@ -130,7 +130,7 @@ def test_get_db_yields_and_closes(_temp_db: Path) -> None:
 def test_healthz(client: TestClient) -> None:
     r = client.get("/healthz")
     assert r.status_code == 200
-    assert r.json() == {"ok": True}
+    assert r.json() == {"ok": True, "service": "task-os"}
 
 
 def test_version_shape(client: TestClient) -> None:
