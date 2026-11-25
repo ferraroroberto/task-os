@@ -415,7 +415,7 @@ tier   = "full"
 prefix = "tests/e2e/"
 [[e2e.rule]]
 tier = "full"
-path = "launcher.py"
+path = "scripts/launcher.py"
 # What the stories import and read: the fakes (whisper, chat, anthropic, archiver,
 # calendar), the seed, the calendar .ics/.html files, and write_test_config. These
 # used to fall to the "tests/ -> none" rule below, or to unclassified (#279).

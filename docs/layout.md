@@ -1,8 +1,7 @@
 # Layout
 
 ```
-launcher.py               entrypoint: `tray` (default) | `webapp`
-tray.bat / webapp.bat     tray lifecycle (from the fleet template) / foreground dev server
+tray.bat                  tray lifecycle (from the fleet template)
 tasks.bat                 the `tasks` CLI (→ python -m src.cli)
 app/webapp/               FastAPI app: server.py (create_app, CachingStaticFiles, AuthMiddleware, JSON error envelope),
                           manager.py (adopt-or-spawn the serve.py launch; cert --check → --ssl-* when a cert exists)
@@ -58,7 +57,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
-scripts/                  install.bat (the per-PC install / safe re-run → python -m src.install; docs/install.md), verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
+scripts/                  launcher.py (entrypoint: `tray` (default) | `webapp` | `port`), webapp.bat (the foreground dev server, a venv-finding wrapper over `launcher.py webapp`), install.bat (the per-PC install / safe re-run → python -m src.install; docs/install.md), verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py (members), set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map),
                           design_review_synthetic.py (a throwaway instance over the synthetic seed for /design-review: `URL=<base>` once up, exits on stdin EOF)

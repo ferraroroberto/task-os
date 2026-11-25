@@ -19,7 +19,7 @@ tray.bat            # tray icon → owns the webapp on the configured port, 8448
 
 `scripts\install.bat` never overwrites what a PC has: an existing config keeps every value and gains only the keys that change nothing, after a backup, and a second run reports `unchanged`. **Updating** an installed PC is `git pull --ff-only`, then `tray.bat --restart`, with no other step: every file a run writes is gitignored, no tracked file is rewritten at runtime or holds a machine value, and the scripts start under any execution policy, `AllSigned` included. Fresh PC, already-configured PC, the checklist it ends with, and uninstall: [docs/install.md](docs/install.md).
 
-Left-click the tray icon (or **Open task-os**) to open the app; **Copy URL** puts the same address on the clipboard for the phone. `tray.bat` is idempotent — a second run is a no-op while a tray is up. Without the tray: `webapp.bat` runs uvicorn in the foreground (a thin wrapper over `launcher.py webapp`, so it serves on the configured `port`, not a hardcoded one).
+Left-click the tray icon (or **Open task-os**) to open the app; **Copy URL** puts the same address on the clipboard for the phone. `tray.bat` is idempotent — a second run is a no-op while a tray is up. Without the tray: `scripts/webapp.bat` runs uvicorn in the foreground (a thin wrapper over `scripts/launcher.py webapp`, so it serves on the configured `port`, not a hardcoded one).
 
 From a terminal, `tasks.bat` (put the repo on `PATH` or alias it) is the CLI — it works whether or not the app is running:
 

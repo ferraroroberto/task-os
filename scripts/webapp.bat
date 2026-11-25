@@ -6,7 +6,7 @@ REM ----------------------------------------------------------------------------
 REM  Daily use: launch tray.bat instead -- it adopt-or-spawns the webapp for
 REM  you and self-heals it. This bat is for headless boxes and dev iteration.
 REM
-REM  It only finds the venv and hands over to launcher.py, which owns the
+REM  It only finds the venv and hands over to scripts\launcher.py, which owns the
 REM  port (config.json's `port`, NOT a literal here), the HTTPS decision
 REM  (src/certs.py: the Tailscale pair under webapp\certificates\ when it is
 REM  there, plain HTTP said loudly otherwise, --check auto-renew before the
@@ -18,7 +18,7 @@ REM  for the wrong port.
 REM ============================================================================
 
 setlocal
-set "SCRIPT_DIR=%~dp0"
+for %%I in ("%~dp0..") do set "SCRIPT_DIR=%%~fI\"
 set "VENV_PY=%SCRIPT_DIR%.venv\Scripts\python.exe"
 if not exist "%VENV_PY%" (
     echo [ERROR] .venv missing. Run: py -m venv .venv ^&^& .venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -26,5 +26,5 @@ if not exist "%VENV_PY%" (
 )
 
 cd /d "%SCRIPT_DIR%" || exit /b 1
-"%VENV_PY%" "%SCRIPT_DIR%launcher.py" webapp
+"%VENV_PY%" "%SCRIPT_DIR%scripts\launcher.py" webapp
 exit /b %ERRORLEVEL%

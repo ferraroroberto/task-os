@@ -316,7 +316,7 @@ def test_both_launch_paths_boot_the_one_lifespan() -> None:
     from app.webapp import manager, serve
     from app.webapp.server import create_app
 
-    # `tray.bat` (manager.py) spawns `python -m app.webapp.serve` and `launcher.py webapp`
+    # `tray.bat` (manager.py) spawns `python -m app.webapp.serve` and `scripts/launcher.py webapp`
     # calls serve.run: one default app, built by create_app() around the one lifespan
     # that starts the publish (the booted-app tests above prove that lifespan runs it).
     assert serve.DEFAULT_APP == "app.webapp.server:app"

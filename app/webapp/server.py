@@ -48,7 +48,7 @@ needs the bearer token (header or the ``taskos_token`` cookie ``/login``
 sets) or, in team mode, the ``taskos_team`` cookie the team password buys.
 Static assets, ``/healthz``, ``/api/version`` and ``/login`` stay
 public. HTTPS is uvicorn's job (``--ssl-*`` from ``app.webapp.manager`` /
-``webapp.bat`` when ``webapp/certificates/{cert,key}.pem`` exist).
+``scripts/webapp.bat`` when ``webapp/certificates/{cert,key}.pem`` exist).
 
 Background services (started in the lifespan, stopped on shutdown, exposed
 on ``app.state``): ``src.mirror.Mirror`` (debounced export on every write via

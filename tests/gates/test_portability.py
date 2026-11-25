@@ -87,15 +87,28 @@ def test_the_gitignore_names_the_venv_without_a_trailing_slash() -> None:
 
 
 def test_the_tray_reads_its_port_from_the_config(tmp_path: Path) -> None:
-    """``launcher.py port`` is what tray.bat reclaims: the ignored config's port, never a literal."""
+    """``scripts/launcher.py port`` is what tray.bat reclaims: the ignored config's port, never a literal."""
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"port": 8999}), encoding="utf-8")
     env = {**os.environ, "TASKOS_CONFIG_PATH": str(config), "PYTHONUTF8": "1"}
-    done = subprocess.run([sys.executable, str(REPO_ROOT / "launcher.py"), "port"], capture_output=True, text=True,
+    launcher = REPO_ROOT / "scripts" / "launcher.py"
+    done = subprocess.run([sys.executable, str(launcher), "port"], capture_output=True, text=True,
                           timeout=PS_TIMEOUT_S, env=env, cwd=tmp_path, creationflags=NO_WINDOW)
     assert done.returncode == 0 and done.stdout.strip() == "8999", done.stderr
     bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
-    assert "OWNED_PORTS=" not in bat and "launcher.py') port" in bat
+    assert "OWNED_PORTS=" not in bat and "scripts\\launcher.py') port" in bat
+
+
+def test_the_tray_match_finds_both_launcher_spellings() -> None:
+    """A tray started before the move (``launcher.py tray``) is found and replaced by the first restart after it."""
+    bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
+    found = re.search(r"TrayMatch = '([^']+)'", bat)
+    assert found, "tray.bat names no -TrayMatch"
+    match = re.compile(found.group(1))
+    assert match.search(r"pythonw.exe launcher.py tray")
+    assert match.search(r"pythonw.exe scripts\launcher.py tray")
+    assert match.search("pythonw.exe scripts/launcher.py  tray")
+    assert not match.search(r"pythonw.exe scripts\launcher.py webapp")
 
 
 # ---------------------------------------------------------------- AllSigned
@@ -163,7 +176,7 @@ def test_the_gate_loads_its_sibling_under_allsigned(tmp_path: Path) -> None:
 def test_tray_bat_starts_the_shared_helper_under_allsigned(tmp_path: Path) -> None:
     """tray.bat's own -Command line, run with the read-only ``detect`` action instead of ``launch``.
 
-    Its venv is a junction to the real one under a path no running process carries, so ``launcher.py port``
+    Its venv is a junction to the real one under a path no running process carries, so ``scripts/launcher.py port``
     really runs and detect finds no tray.
     """
     bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
@@ -175,7 +188,7 @@ def test_tray_bat_starts_the_shared_helper_under_allsigned(tmp_path: Path) -> No
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"port": 8999}), encoding="utf-8")
     env = {**os.environ, "PSExecutionPolicyPreference": "AllSigned", "TRAY_PS": str(TRAY_HELPER), "TRAY_VENV": str(venv),
-           "TRAY_APP_NAME": "probe", "SCRIPT_DIR_ARG": str(REPO_ROOT), "TRAY_LAUNCH": "launcher.py tray",
+           "TRAY_APP_NAME": "probe", "SCRIPT_DIR_ARG": str(REPO_ROOT), "TRAY_LAUNCH": "scripts\\launcher.py tray",
            "TASKOS_CONFIG_PATH": str(config)}
     done = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command], capture_output=True,
                           text=True, timeout=PS_TIMEOUT_S, env=env, creationflags=NO_WINDOW)

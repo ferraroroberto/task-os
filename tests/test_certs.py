@@ -1,6 +1,6 @@
 """``src/certs.py`` — the two uvicorn spawn shapes make one HTTPS decision.
 
-``launcher.py webapp`` runs uvicorn in-process (keyword arguments) and the
+``scripts/launcher.py webapp`` runs uvicorn in-process (keyword arguments) and the
 tray's ``WebappManager`` spawns it as a subprocess (CLI flags); CLAUDE.md
 requires the two to agree. Hermetic: ``cert_paths`` is stubbed, no real pair.
 """
