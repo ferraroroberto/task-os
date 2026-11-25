@@ -278,8 +278,8 @@ def _palette_and_commands(page: Page, ctx, browser: Browser, base: str, shots: P
     pin.fill(">go to")
     cmds = page.locator("#paletteList .palette-item[data-kind='command']")
     expect(cmds.first).to_contain_text("Go to Today")   # nav order: Today leads (#319)
-    # one per nav destination plus Archive and Settings — Time joined in #457
-    expect(cmds).to_have_text([re.compile(rf"^Go to {name}") for name in ("Today", "Board", "Time", "Archive", "Search", "Settings")])
+    # one per nav destination plus Archive and Settings — Time joined in #457, History in #858
+    expect(cmds).to_have_text([re.compile(rf"^Go to {name}") for name in ("Today", "Board", "Time", "History", "Archive", "Search", "Settings")])
     shot(page, shots / "story-10-search-5-desktop.png")
     pin.fill(">go to board")
     expect(cmds.first).to_contain_text("Go to Board")

@@ -45,17 +45,18 @@ from tests.e2e.budget._request_budget import (
 )
 from tests.e2e.conftest import REPO_ROOT, shot
 
-# Four destinations: the Table tab (grid and Tree) went in #350, the Archive
-# tab into Settings → Email archiving in #397, and Time arrived third in #457.
-# Today leads, and is where a first visit opens (#319).
-TABS = ["Today", "Board", "Time", "Search"]   # Settings is the header gear (#281)
-VIEWS = ["today", "board", "time", "search"]  # the tabs' data-tab ids, in TABS order
+# Five destinations, the pill's ceiling: the Table tab (grid and Tree) went in
+# #350, the Archive tab into Settings → Email archiving in #397, Time arrived
+# third in #457 and History fourth in #858. Today leads, and is where a first
+# visit opens (#319).
+TABS = ["Today", "Board", "Time", "History", "Search"]   # Settings is the header gear (#281)
+VIEWS = ["today", "board", "time", "history", "search"]  # the tabs' data-tab ids, in TABS order
 HEADINGS = dict(zip(VIEWS, TABS, strict=True))             # what the header names each view (#339)
 DESKTOP = {"width": 1440, "height": 900}
 PHONE = {"width": 390, "height": 844}
 MEASURE = 772
 WIDE_VIEWS = ["board", "today"]
-MEASURED_VIEWS = ["time", "search", "settings"]
+MEASURED_VIEWS = ["time", "history", "search", "settings"]
 
 
 def _version(base: str) -> dict:
