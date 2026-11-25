@@ -20,6 +20,7 @@ known-first-party = ["app", "src", "scripts", "tests"]
 [tool.ruff.lint.per-file-ignores]
 # Vendor-verbatim files keep their upstream style byte-for-byte.
 "app/tray/single_instance.py" = ["ALL"]
+"src/health_routes.py" = ["ALL"]
 "app/tray/watchdog.py" = ["ALL"]
 "tests/e2e/_e2e_live_guard.py" = ["ALL"]
 "tests/e2e/_geometry.py" = ["ALL"]

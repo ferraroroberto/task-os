@@ -64,7 +64,7 @@ no_window      = { src = "src/no_window.py",                         sha = "fe8c
 pooled_http    = { src = "src/pooled_http.py",                        sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "src/pooled_http.py" }
 runtime_data   = { src = "src/runtime_data.py",                        sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "src/runtime_data.py" }
 usage_log      = { src = "src/usage_log.py",                           sha = "78635aa74a92b9622326cb53992e0634fbaf6246", dest = "src/usage_log.py" }
-usage_track_ratchet = { src = "scripts/usage_track_ratchet.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/usage_track_ratchet.py" }
+usage_track_ratchet = { src = "scripts/usage_track_ratchet.py", sha = "732c304a4735d4e654f5acb3b6f53b7db67d47ef", dest = "scripts/usage_track_ratchet.py" }
 usage_track_scan = { src = "scripts/usage_track_scan.py", sha = "c4a7afcb413fe88de11e66f24269c8729ecd85d9", dest = "scripts/usage_track_scan.py" }
 ux_surface_ratchet = { src = "scripts/ux_surface_ratchet.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ux_surface_ratchet.py" }
 ux_surface_map = { src = "scripts/ux_surface_map.py", sha = "adf0375e08a186330196b8d6be7b8b51078a73ae", dest = "scripts/ux_surface_map.py" }
@@ -103,6 +103,7 @@ webkit_budget_check = { src = "scripts/tools/webkit_budget_check.py", sha = "7c4
 # project-scaffolding docs/static-ratchet.md.
 self_restart = { src = "src/self_restart.py", sha = "48602060fffdacbcdcdde66b9886c6471d835ff3", dest = "src/self_restart.py" }
 build_info = { src = "src/build_info.py", sha = "1c1007fcd0b65b54342779250cb66975d57482e8", dest = "src/build_info.py" }
+health_routes = { src = "src/health_routes.py", sha = "732c304a4735d4e654f5acb3b6f53b7db67d47ef", dest = "src/health_routes.py" }
 restart_check = { src = "src/restart_check.py", sha = "f8c2f66eae7a69f3c834386579702ed5b747d7af", dest = "src/restart_check.py" }
 ratchet_baseline = { src = "scripts/ratchet_baseline.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ratchet_baseline.py" }
 
@@ -237,7 +238,7 @@ baseline = ".ratchets/runtime-write.json"
 [usage_track_ratchet]
 enabled  = true
 baseline = ".ratchets/usage-track.json"
-rules    = ["untracked-control", "untracked-sheet", "dynamic-id", "usage-log-wired"]
+rules    = ["untracked-control", "untracked-sheet", "dynamic-id", "usage-log-wired", "health-routes-wired"]
 # A shared control factory is declared here; its callers pass `{ track: '<id>' }`, its own
 # body sets the attribute from that option.
 builders = [
