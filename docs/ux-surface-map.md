@@ -386,7 +386,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** **+** · palette *New task* · no-tasks button.
-- **Holds:** the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then **Project** (a select of the open projects, opening on the project the list is filtered to) and **Owner** (the members, opening on the viewer; absent for one member), description, due, starts, status, folder (typed or **Find in folder index**), one link (URL and label). The parsed parent shows as a chip and wins over the picked project, a parent that matches nothing as a red chip and nothing is created.
+- **Holds:** the title line (natural language, parsed on the server: trailing date, `starts`, `#id` or `› parent`), a **Dictate** mic, then **Project** (a select of the open projects, opening on the project the list is filtered to) and **Owner** (the members, opening on the viewer; absent for one member), description, due, starts, status, folder (typed, **Find in folder index**, or on the PC itself **From Explorer window**), one link (URL and label). The parsed parent shows as a chip and wins over the picked project, a parent that matches nothing as a red chip and nothing is created.
 - **Does:** **Add** or Enter creates and focuses the row; Escape, the backdrop and × discard.
 - **States:** dictation shows listening, settling and unreachable-service states. See [Views](views.md#views).
 - **Leads to:** [Folder picker](#folderpicker-folder-picker)
@@ -619,7 +619,7 @@ flowchart LR
 - **Holds:** a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel.
 - **States:**
   - the index not configured or unavailable says so instead of listing nothing.
-  - the drawer's Folder field also carries **From Explorer window**, a folder glyph beside the opener, on the PC itself only; it fills the field, shows the path in full in a note under the line, and saves nothing until **Set folder**, and says which when it cannot (no folder window open, Windows could not say, folder-explorer down or too old).
+  - the drawer's Folder field and the quick-add dialog's also carry **From Explorer window**, a folder glyph beside the opener, on the PC itself only; it fills the field (the drawer also shows the path in full in a note under the line), saves nothing until **Set folder** or **Add**, and says which when it cannot (no folder window open, Windows could not say, folder-explorer down or too old).
 
 ## Time
 

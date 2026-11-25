@@ -27,14 +27,17 @@
 }
 /* The picker's own toggle sits on the label line, so the ref input keeps the
    full width; the hit list drops under both. */
-.quick-add-pick { position: relative; min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
+.quick-add-pick, .quick-add-explorer { position: relative; min-height: 28px; padding: 0 var(--space-sm); font-size: var(--font-caption); display: inline-flex; align-items: center; gap: var(--space-xs); }
 /* 28 + 2x8 = 44: the label line keeps its height, the 12px row padding
    above and the 8px row gap below hold the expansion clear of the divider and
    of the input under it. */
-.quick-add-pick::before { content: ""; position: absolute; inset: -8px 0; }
+.quick-add-pick::before, .quick-add-explorer::before { content: ""; position: absolute; inset: -8px 0; }
 /* modal.css styles every span inside a .row as a label (ink, 600); the
    picker toggle's own label must keep the ghost button's muted tone. */
-.quick-add-pick .folder-pick-label { color: inherit; }
+.quick-add-pick .folder-pick-label, .quick-add-explorer .folder-pick-label { color: inherit; }
+/* display above beats the hidden attribute: off the PC the button must be gone */
+.quick-add-explorer[hidden] { display: none; }
+.quick-add-explorer { margin-inline-start: var(--space-xs); }
 .quick-add-picker { margin-top: 6px; }
 .quick-add-link { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 @media (min-width: 520px) {
