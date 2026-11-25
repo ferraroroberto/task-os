@@ -120,7 +120,8 @@ export function render(ctx) {
     return;
   }
   const feed = st.feed;
-  if (!feed) { host.dataset.state = 'loading'; host.replaceChildren(); return; }
+  // Not read yet: no state is claimed, and nothing is drawn.
+  if (!feed) { delete host.dataset.state; host.replaceChildren(); return; }
   const parts = [];
   host.dataset.state = feed.days.length ? 'ok' : 'empty';
   if (!feed.days.length) parts.push(emptyDay(ctx, feed));
