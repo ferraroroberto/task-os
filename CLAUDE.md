@@ -40,11 +40,11 @@ Personal open-source task manager: FastAPI + SQLite + vanilla-JS PWA + pystray t
   - /login     (sign-in card: token or password → cookie)
 
 ## CI expectations
-- Workflow `.github/workflows/ci.yml`, job `gate`, on every PR and every push to `main`. **Advisory, not required** (no branch protection) — the local gate (`scripts/verify-before-ship.ps1`) is the contract; CI is the clean-runner second opinion (fresh `.venv`, committed files only).
-- Typical green: **~8 min**. Investigate at **>16 min**; treat as wedged at **>~30 min**.
-- Flaky leg: the WebKit phone contexts inside the e2e run can wedge on the hosted runner (capped by `timeout-minutes`); a wedge is a flake, not the diff.
-- CI's only signal beyond the local gate is the **e2e suite on a clean runner**. Its e2e surface = `app/webapp/`, `src/`, `tests/e2e/`, `.github/workflows/`. A diff touching none of these gains nothing from CI.
-- The runner has no gitignored config: the workflow seeds `config/*.sample.json` to their live names, and nothing reads the live `:8448`, a real mirror folder, the real folder-explorer or the archiver's `emails.db`.
+- No hosted workflow. The Mac Mini nightly (`project-scaffolding`'s `nightly-mac`, this repo's `[ci.nightly]` table in `.fleet.toml`) is the one CI. It runs when `main` moved since the last green night, and every Sunday: a fresh `.venv`, the unit suite without the `windows_only` tests, and the e2e suite on Playwright WebKit with the iPhone projection.
+- **Advisory, not a merge gate**: a PR starts no run, so the local gate (`scripts/verify-before-ship.ps1`) is the per-change contract and `/issue-finish` has no CI run to wait on.
+- A red night opens one `ci-red-main` issue here, closed by the next green night. A test that passes only on its one retry is recorded as flaky, not red.
+- Only the local gate covers the `windows_only` tests (tray, PowerShell gate, cmd opener) and the Chromium run of the stories.
+- The runner has no gitignored config: the nightly seeds `config/*.sample.json` to their live names, and nothing reads the live `:8448`, a real mirror folder, the real folder-explorer or the archiver's `emails.db`.
 
 ## Internal architecture
 
