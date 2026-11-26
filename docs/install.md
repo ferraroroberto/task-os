@@ -99,7 +99,7 @@ The database is **not** in the folder: it is in the runtime-data folder (`C:\sql
 Nothing needs a signature or a policy override, `AllSigned` included:
 
 - **`.bat` files** (`setup.bat`, `tray.bat`, `tasks.bat`) run in cmd.exe, which no execution policy covers.
-- **`tray.bat`** loads the shared tray helper as text and runs it as a ScriptBlock instead of `-File`.
+- **`tray.bat`** starts the shared tray helper through `src\ps_script.py`, which loads it as a ScriptBlock under `AllSigned` or `Restricted`.
 - **The gate** loads its one sibling script the same way. To start the gate itself under `AllSigned`, run `& .\.venv\Scripts\python.exe -m src.ps_script scripts\verify-before-ship.ps1`.
 
 `tests/gates/test_portability.py` checks all three under a process-scope `AllSigned` policy.

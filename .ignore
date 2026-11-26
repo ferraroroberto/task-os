@@ -63,6 +63,7 @@
 /src/notify
 /src/password.py
 /src/pooled_http.py
+/src/ps_script.py
 /src/request_timing.py
 /src/restart_check.py
 /src/runtime_data.py

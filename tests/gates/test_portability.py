@@ -96,14 +96,15 @@ def test_the_tray_reads_its_port_from_the_config(tmp_path: Path) -> None:
                           timeout=PS_TIMEOUT_S, env=env, cwd=tmp_path, creationflags=NO_WINDOW)
     assert done.returncode == 0 and done.stdout.strip() == "8999", done.stderr
     bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
-    assert "OWNED_PORTS=" not in bat and "scripts\\launcher.py') port" in bat
+    assert not re.search(r"OWNED_PORTS=\d", bat)
+    assert 'python.exe" scripts\\launcher.py port`) do set "OWNED_PORTS=%%p"' in bat
 
 
 def test_the_tray_match_finds_both_launcher_spellings() -> None:
     """A tray started before the move (``launcher.py tray``) is found and replaced by the first restart after it."""
     bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
-    found = re.search(r"TrayMatch = '([^']+)'", bat)
-    assert found, "tray.bat names no -TrayMatch"
+    found = re.search(r'set "TRAY_MATCH=([^"]+)"', bat)
+    assert found, "tray.bat sets no TRAY_MATCH"
     match = re.compile(found.group(1))
     assert match.search(r"pythonw.exe launcher.py tray")
     assert match.search(r"pythonw.exe scripts\launcher.py tray")
@@ -173,27 +174,16 @@ def test_the_gate_loads_its_sibling_under_allsigned(tmp_path: Path) -> None:
 
 @windows_only
 @pytest.mark.skipif(not TRAY_HELPER.is_file(), reason="this PC has no shared tray helper")
-def test_tray_bat_starts_the_shared_helper_under_allsigned(tmp_path: Path) -> None:
-    """tray.bat's own -Command line, run with the read-only ``detect`` action instead of ``launch``.
-
-    Its venv is a junction to the real one under a path no running process carries, so ``scripts/launcher.py port``
-    really runs and detect finds no tray.
-    """
+def test_tray_bat_starts_the_shared_helper_under_allsigned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """tray.bat's launcher line and the arguments it sets, doing the read-only ``detect`` instead of ``launch``."""
     bat = (REPO_ROOT / "tray.bat").read_text(encoding="ascii")
-    match = re.search(r'^%PS% -NoProfile -NonInteractive -Command "(.*)"\r?$', bat, re.MULTILINE)
-    assert match and " launch @a " in match.group(1)
-    command = match.group(1).replace(" launch @a ", " detect @a ")
-    venv = tmp_path / "venv"
-    _link_dir(venv, Path(sys.prefix))
-    config = tmp_path / "config.json"
-    config.write_text(json.dumps({"port": 8999}), encoding="utf-8")
-    env = {**os.environ, "PSExecutionPolicyPreference": "AllSigned", "TRAY_PS": str(TRAY_HELPER), "TRAY_VENV": str(venv),
-           "TRAY_APP_NAME": "probe", "SCRIPT_DIR_ARG": str(REPO_ROOT), "TRAY_LAUNCH": "scripts\\launcher.py tray",
-           "TASKOS_CONFIG_PATH": str(config)}
-    done = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command], capture_output=True,
-                          text=True, timeout=PS_TIMEOUT_S, env=env, creationflags=NO_WINDOW)
+    assert '-m src.ps_script "%TRAY_PS%" launch' in bat
+    for name in re.findall(r'^set "PSL_ARG_(\w+)=', bat, re.MULTILINE):
+        monkeypatch.setenv(f"PSL_ARG_{name}", str(tmp_path))
+    monkeypatch.setenv("PSL_ARG_TrayMatch", r"-m\s+probe")
+    done = _launch(TRAY_HELPER, ["detect"], "AllSigned")
     assert done.returncode == 0, done.stderr
-    assert "cannot be loaded" not in done.stderr and "could not read the port" not in done.stderr
+    assert "ScriptBlock" in done.stderr and "cannot be loaded" not in done.stderr
     assert done.stdout.strip() == ""
 
 
