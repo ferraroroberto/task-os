@@ -8,8 +8,8 @@
  *                             past entry keeps its category and its totals
  *
  * Who the tab logs as is not set here any more: it is whoever is
- * signed in. The row and sheet body are markup in index.html (the Settings
- * pattern); this fills them. Every write goes to `/api/time/{areas,categories}`
+ * signed in. The row is markup in index.html and the sheet body in
+ * js/settings/markup.js (the Settings pattern); this fills them. Every write goes to `/api/time/{areas,categories}`
  * and then `onMetaChanged()` re-reads the meta the Time tab draws from.
  */
 
