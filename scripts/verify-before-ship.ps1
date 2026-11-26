@@ -253,8 +253,23 @@ if ($tier -eq "skip") {
     foreach ($b in ($e2eBrowsers -split ',' | Where-Object { $_ })) {
         $e2eArgs += @("--browser", $b)
     }
-    # Per-test seconds for /e2e-audit (`.fleet.toml [e2e] junit_xml`); data/ is gitignored.
-    $e2eArgs += @("--junitxml", "data/e2e-junit.xml")
+    # Per-test seconds for /e2e-audit (`.fleet.toml [e2e] junit_xml`). Only a
+    # full-tier run is the suite's record: a slice would replace it with a few
+    # nodes. data/ is gitignored, so scripts/e2e_record_path.py names the file in
+    # the primary checkout; a worktree's own copy would go with the worktree.
+    if ($tier -eq "full") {
+        $junit = ""
+        foreach ($line in (& $py "scripts/e2e_record_path.py")) {
+            if ($line -match '^E2E_JUNIT=(.+)$') { $junit = $matches[1] }
+            elseif ($line -match '^E2E_JUNIT_NOTE=(.+)$') { Write-Host "   timing record: $($matches[1])" -ForegroundColor Yellow }
+        }
+        if ($junit) {
+            $e2eArgs += @("--junitxml", $junit)
+            Write-Host "   timing record: $junit" -ForegroundColor DarkGray
+        } else {
+            Write-Host "   timing record: NOT CONFIRMED - no path was named, this run records none" -ForegroundColor Yellow
+        }
+    }
     $label = if ($e2eBrowsers) { $e2eBrowsers } else { "suite-default" }
     # The full tier runs on pytest-xdist workers: --dist loadfile keeps a
     # story module (and its module-scoped instance) on one worker, the

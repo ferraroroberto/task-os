@@ -164,7 +164,7 @@ def _chip_and_first_click(page: Page, base: str, shots: Path, inst, kitchen):
     page.locator("#drawerTitle").click()                                    # an outside click closes it
     expect(pop).to_be_hidden()
     chip.click()                                                            # second click: no hint (one-time)
-    page.wait_for_timeout(600)                                              # past the hint's own 350 ms delay (format.js)
+    page.clock.run_for(600)                                                 # past the hint's own 350 ms delay (format.js)
     expect(pop).to_be_hidden()
     assert len(page.evaluate("window.__taskosClicks")) == 3
     return chip, pop

@@ -57,7 +57,7 @@ src/                      schema.py (versioned migrations) · db.py (get_db, WAL
                           runtime/files.py (the one writer for runtime files whose path a caller names: refuses any path under a code folder at run time) · logger.py · static_versioning.py
 assets/opener/            the per-PC folder opener: opener.ps1 (the registered launcher) · opener.cmd (the handler) · install.txt (one-line PowerShell
                           install / uninstall) · install_opener.py (same via winreg) · README.md
-scripts/                  launcher.py (entrypoint: `tray` (default) | `webapp` | `port`), webapp.bat (the foreground dev server, a venv-finding wrapper over `launcher.py webapp`), verify-before-ship.ps1, classify_e2e.py, shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
+scripts/                  launcher.py (entrypoint: `tray` (default) | `webapp` | `port`), webapp.bat (the foreground dev server, a venv-finding wrapper over `launcher.py webapp`), verify-before-ship.ps1, classify_e2e.py, e2e_record_path.py (where the gate writes the e2e timing record), shot_determinism.py, gen_icons.py, import_notion.py (+ .bat), import_sharepoint.bat, import_time_prototype.py (#457),
                           gen_tailscale_cert.py (copy-to-adapt from the scaffold, not vendor-verbatim), gen_token.py, set_password.py (members), set_team_password.py,
                           apply_renumber_map.py (heal stored .msg paths from an archiver renumber map),
                           design_review_synthetic.py (a throwaway instance over the synthetic seed for /design-review: `URL=<base>` once up, exits on stdin EOF)

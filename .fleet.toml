@@ -438,7 +438,11 @@ e2e          = ["tests/e2e"]
 static_pytest_target = "tests/e2e/test_smoke.py"
 static_browsers       = ["chromium"]
 full_pytest_target    = "tests/e2e"
-# The gate writes this on every routed e2e run (per-test seconds for /e2e-audit).
+# Collected nodes: one walk per story, so the size is structural. /e2e-audit's
+# trigger holds the suite here; lower it as the suite trims.
+test_budget           = 16
+# The gate writes this on every full-tier e2e run (per-test seconds for
+# /e2e-audit), into the primary checkout from any worktree (scripts/e2e_record_path.py).
 junit_xml             = "data/e2e-junit.xml"
 
 # Inert assets under the static tree -> smoke is enough.
@@ -482,6 +486,15 @@ prefix = "tests/fixtures/"
 [[e2e.rule]]
 tier = "full"
 path = "tests/conftest.py"
+# The e2e conftest builds each instance's environment from the first; the suite's
+# config is a copy of the second, read through tests/conftest.py. The "none"
+# rules for tests/ and config/ below would otherwise run no browser suite.
+[[e2e.rule]]
+tier = "full"
+path = "tests/host/_synthetic_host.py"
+[[e2e.rule]]
+tier = "full"
+path = "config/config.sample.json"
 
 # Backend / tooling / docs with no browser impact -> no browser suite.
 [[e2e.rule]]
@@ -519,6 +532,10 @@ path = ".gitignore"
 [[e2e.rule]]
 tier = "none"
 path = ".gitattributes"
+# The generated search-tool ignore list: no test opens it.
+[[e2e.rule]]
+tier = "none"
+path = ".ignore"
 [[e2e.rule]]
 tier = "none"
 path = ".ratchets/static.json"
