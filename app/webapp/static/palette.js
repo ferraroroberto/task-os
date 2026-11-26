@@ -4,7 +4,8 @@
  * native showModal / close, Esc closes) holding one input and a list:
  *
  *   plain text   jump to a task — GET /api/search?kinds=tasks&limit=8, one row
- *                per hit (title · breadcrumb · status pill), Enter opens it
+ *                per hit (title · breadcrumb · status pill) under its tier's
+ *                label when it is not exact, Enter opens it
  *   >text        commands — the list `opts.commands()` returns ({id, label,
  *                hint, icon, run}), filtered by substring; empty `>` lists all
  *   (empty)      the command list, so the palette is discoverable
@@ -19,6 +20,7 @@
 import { icon } from './_vendored/icons/icons.js';
 import { api } from './api.js';
 import { breadcrumbText, statusMark } from './format.js';
+import { tierHeading, tierOf } from './js/search/tiers.js';
 import { closeOnBackdrop } from './modal.js';
 
 const DEBOUNCE_MS = 150;
@@ -66,7 +68,7 @@ function commandItems(commands, filter) {
 /** A task search hit as a palette item. */
 function taskItem(h, onOpenTask) {
   return {
-    kind: 'task', label: h.title, status: h.status,
+    kind: 'task', label: h.title, status: h.status, tier: tierOf(h.match_kind),
     hint: [breadcrumbText(h.breadcrumb), h.code].filter(Boolean).join(' · ') || null,
     icon: 'list-checks',
     run: function () { onOpenTask(h.task_id); },
@@ -114,13 +116,15 @@ export function createPalette(dialog, opts) {
       list.appendChild(li);
       return;
     }
+    let tier = 0;
     items.forEach(function (it, i) {
+      if (it.tier > tier) { tier = it.tier; list.appendChild(tierHeading(tier)); }
       const li = itemEl(it, i === active);
       li.addEventListener('mousemove', function () { if (active !== i) { active = i; paint(); } });
       li.addEventListener('click', function () { run(it); });
       list.appendChild(li);
     });
-    const el = list.children[active];
+    const el = list.querySelectorAll('.palette-item')[active];
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
   }
 

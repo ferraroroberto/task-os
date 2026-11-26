@@ -19,6 +19,9 @@ anthropic>=0.64
 # the *runtime* depends on it, and a test-only dependency's disappearance must
 # not take the mic with it.
 requests>=2.32
+# Task search's closest tier compares the typed words with the indexed ones
+# (src/tasks/search.py), with the scorer folder-explorer ranks folders by.
+rapidfuzz>=3.0
 
 # --- dev / verification gate ----------------------------------------------
 pytest>=8.0

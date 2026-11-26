@@ -652,7 +652,7 @@ def search(
 
     Returns task summaries with ``snippet`` (the matched text, ``[`` ``]``
     marks), ``matched_in`` (``title|description|comment``) and ``match_kind``
-    (``exact|partial|similar``); a task appears once, at its best tier. The
+    (``exact|partial|similar|closest``); a task appears once, at its best tier. The
     ranking itself lives in :mod:`src.tasks.search`.
     """
     hits = rank_tasks(conn, (q or "").strip(), limit=limit, exact_only=exact_only)

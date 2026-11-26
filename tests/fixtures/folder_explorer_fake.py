@@ -73,6 +73,8 @@ class FakeFolderExplorer:
         self.flagged = list(flagged or [])
         self.state = {"folders": ("ok", None), "emails": ("ok", None), "flagged": ("ok", None)}
         self.mode = "ok"
+        #: when a query matches no folder, list them all as ``closest`` guesses
+        self.closest = False
         self.explorer: tuple[str, str | None] = ("none", None)
         #: seconds every answer waits first — a hung folder-explorer, for the client's timeout
         self.delay = 0.0
@@ -157,7 +159,13 @@ class FakeFolderExplorer:
         words = [w.lower() for w in q.get("q", "").replace(";", " ").split()]
         limit = int(q.get("limit", "30"))
         if route == "folders":
-            hits = [self._folder(p) for p in self.folders if words and all(w in p.lower() for w in words)][:limit]
+            # the contract's tiers, as far as the tests need them: every word, else any word
+            held = [(p, sum(1 for w in words if w in p.lower())) for p in self.folders]
+            exact = [self._folder(p) for p, n in held if words and n == len(words)]
+            hits = exact or [self._folder(p, "partial") for p, n in held if n]
+            if not hits and words and self.closest:
+                hits = [self._folder(p, "closest") for p in self.folders]
+            hits = hits[:limit]
             return 200, self._envelope("ok", None, query=q.get("q", ""), results=hits, total=len(hits), truncated=False,
                                        needs_rescan=[], missing=[], page="/#search?mode=folders")
         hits = [self._mark(m, words) for m in self.emails if words and all(w in self._text(m) for w in words)]
@@ -194,10 +202,11 @@ class FakeFolderExplorer:
         return " ".join(str(m.get(k) or "") for k in ("subject", "from_name", "from_addr", "recipients", "snippet")).lower()
 
     @staticmethod
-    def _folder(path: str) -> dict[str, Any]:
+    def _folder(path: str, tier: str = "exact") -> dict[str, Any]:
         name = path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
         return {"root": "d", "root_name": "D:", "kind": "local", "id": 1, "name": name, "path": path,
-                "depth": path.replace("\\", "/").rstrip("/").count("/"), "score": 1.0, "size": 0, "files": 0, "people": 0}
+                "depth": path.replace("\\", "/").rstrip("/").count("/"), "score": 1.0, "size": 0, "files": 0, "people": 0,
+                "tier": tier}
 
     @staticmethod
     def _mark(m: dict[str, Any], words: list[str]) -> dict[str, Any]:
@@ -213,4 +222,4 @@ class FakeFolderExplorer:
                     out += text[i]
                     i += 1
             return out
-        return {**m, "subject": mark(m["subject"]), "snippet": mark(m["snippet"])}
+        return {**m, "subject": mark(m["subject"]), "snippet": mark(m["snippet"]), "tier": "exact"}

@@ -72,3 +72,14 @@
 - [x] Automated: the new and rewritten cases in `tests/search/test_search_status_filter.py` and the pill leg of `tests/e2e/test_story_10_search.py`.
 - [x] Seen in the two phone shots above (light, dark): the pill and its × inside the field, one line with the filter button and +.
 - [ ] **Not verified — the owner's phone check on the real install (iPhone):** the pill's look and tap target, and whether the pill's label should read *To do* (the sheet and Board say *Todo*).
+
+**2026-11-26 (#880 — four tiers in every search box).** Task search gains `closest`, run only when exact, partial and similar find nothing: up to 20 tasks, labelled, half the places kept for open ones. Folder and email hits carry folder-explorer's tier. The Search tab and the palette show every weaker tier under its sub-heading. The empty-tab leg now expects a nonsense word to list closest tasks with the other kinds folded; the weaker-tier leg adds a partial folder match and the *Closest matches* label on the tab and in the palette (no new test function).
+
+| Step | Shot |
+| --- | --- |
+| 12 phone: tasks and folders under *Partial matches* | [story-10-search-12-phone.png](../screenshots/story-10-search-12-phone.png) |
+
+- [x] Automated: `tests/tasks/test_search_tiers.py` (closest, its cap, the places kept for open tasks, exact still leading, and the timing budget with a five-letter nonsense word and with eight over 24,000 distinct words), `tests/search/test_search_adapters.py`, and this story's test.
+- [x] Seen in the shot above: both groups under *Partial matches*.
+- [x] Timed on a read-only copy of the real database (4,768 tasks, 668 comments, 23,218 title and description words), median of five from a fresh connection, before → after: one word 30 → 26 ms, two words 87 → 90 ms, a number range 19 → 17 ms, a short prefix 52 → 52 ms, a typo 55 → 51 ms, one wrong extra word 26 → 27 ms; a query matching nothing went from an empty list to 20 closest tasks: one word 32 → 105 ms, three words 90 → 178 ms, eight words 239 → 377 ms.
+- [ ] **Not verified — the owner's phone check on the real install**, and the email labels on screen against a real folder-explorer.

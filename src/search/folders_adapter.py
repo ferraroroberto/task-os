@@ -10,7 +10,8 @@ visible group state and never an empty list.
 
 Hit: title = the folder name · subtitle = the portable ref (``{onedrive}/…``)
 · snippet = the resolved path with ``[match]`` marks · ref = the portable ref ·
-url = the ``taskos://open?ref=…`` opener link · extra = ``path, name, depth``.
+url = the ``taskos://open?ref=…`` opener link · extra = ``path, name, depth,
+match_kind`` (folder-explorer's tier, ``exact|partial|similar|closest``).
 """
 
 from __future__ import annotations
@@ -26,13 +27,15 @@ __all__ = ["FoldersAdapter", "folder_item"]
 
 
 def folder_item(hit: Mapping[str, Any], placeholders: Mapping[str, str]) -> dict[str, Any]:
-    """One folder-explorer folder hit → ``{path, ref, name, depth}``, the shape the folder picker reads."""
+    """One folder-explorer folder hit → ``{path, ref, name, depth, match_kind}``, the shape the folder
+    picker reads. ``match_kind`` is the tier as folder-explorer sends it, ``None`` when it sends none."""
     path = normalize_path(str(hit.get("path") or ""))
     return {
         "path": path,
         "ref": to_ref(path, placeholders),
         "name": str(hit.get("name") or path.rsplit("/", 1)[-1] or path),
         "depth": hit.get("depth"),
+        "match_kind": hit.get("tier"),
     }
 
 
@@ -73,6 +76,6 @@ class FoldersAdapter:
                 ref=item["ref"],
                 url=opener_url(item["ref"]),
                 score=float(r.get("score") or 0.0),
-                extra={"path": item["path"], "name": item["name"], "depth": item["depth"]},
+                extra={k: item[k] for k in ("path", "name", "depth", "match_kind")},
             ))
         return out

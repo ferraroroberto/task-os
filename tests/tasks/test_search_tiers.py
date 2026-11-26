@@ -1,14 +1,15 @@
-"""Task search ranks exact matches first, then partial, then typo-tolerant ones."""
+"""Task search ranks exact matches first, then partial, typo-tolerant and, failing all, closest ones."""
 
 from __future__ import annotations
 
+import random
 import sqlite3
 import time
 
 import pytest
 
 from src import tasks_repo as repo
-from src.tasks.search import split_terms
+from src.tasks.search import CLOSEST_LIMIT, CLOSEST_OPEN, split_terms
 
 
 def _ids(hits: list[dict]) -> list[int]:
@@ -140,10 +141,10 @@ def test_the_fuzzy_tier_leaves_noise_out(conn: sqlite3.Connection) -> None:
     repo.create_task(conn, "Buy a boat")
     repo.create_task(conn, "Ticket 123457")
     repo.create_task(conn, "The cat sat")
-    assert repo.search(conn, "pxsspxrt") == []     # two edits on a seven-letter word
-    assert repo.search(conn, "garage") == []       # unrelated word
-    assert repo.search(conn, "123456") == []       # a number off by a digit is another number
-    assert repo.search(conn, "cut") == []          # three letters: too short to guess
+    # two edits on a seven-letter word, an unrelated word, a number off by a digit, three
+    # letters: none is a typo match, so each can only come back as the closest guess
+    for q in ("pxsspxrt", "garage", "123456", "cut"):
+        assert {h["match_kind"] for h in repo.search(conn, q)} == {"closest"}, q
 
 
 def test_longer_words_tolerate_two_edits(conn: sqlite3.Connection) -> None:
@@ -164,6 +165,7 @@ def test_exact_matches_always_rank_above_partial_and_similar(conn: sqlite3.Conne
     order = [h["match_kind"] for h in hits]
 
     assert order == sorted(order, key=("exact", "partial", "similar").index)
+    assert "closest" not in order                      # the stricter tiers found something
     assert hits[0]["match_kind"] == "exact"
     assert _kinds(hits)[partial["id"]] == "partial"
     assert _kinds(hits).get(similar["id"]) in ("partial", "similar")
@@ -201,9 +203,61 @@ def test_search_follows_edits_for_the_fuzzy_tier(conn: sqlite3.Connection) -> No
     t = repo.create_task(conn, "Renew passport")
     assert _ids(repo.search(conn, "pasport")) == [t["id"]]
     repo.update_task(conn, t["id"], title="Renew licence")
-    assert repo.search(conn, "pasport") == []
+    assert "similar" not in _kinds(repo.search(conn, "pasport")).values()
     repo.delete_task(conn, t["id"])
     assert repo.search(conn, "licence") == []
+
+
+def test_a_query_matching_nothing_lists_the_closest_tasks(conn: sqlite3.Connection) -> None:
+    near = repo.create_task(conn, "Renew passport")
+    further = repo.create_task(conn, "Water the garden")
+    repo.update_task(conn, near["id"], status="done")      # every status: the client filters
+
+    hits = repo.search(conn, "pxsspxrt")
+
+    assert _ids(hits)[0] == near["id"] and further["id"] != near["id"]
+    assert {h["match_kind"] for h in hits} == {"closest"}
+    assert hits[0]["matched_in"] == "title" and "[passport]" in hits[0]["snippet"]
+    # the filter boxes keep "every word": no guessing there
+    assert repo.search(conn, "pxsspxrt", exact_only=True) == []
+    assert repo.list_tasks(conn, q="pxsspxrt") == []
+    # not one letter in common with any word: there is no closest one
+    assert repo.search(conn, "日本語") == []
+
+
+def test_closest_is_capped_and_orders_by_likeness(conn: sqlite3.Connection) -> None:
+    for i in range(30):
+        repo.create_task(conn, f"Water the garden {i}")
+    best = repo.create_task(conn, "Gardener visit")
+    repo.create_task(conn, "Order paint")
+
+    hits = repo.search(conn, "gxrdxnxr")
+
+    assert len(hits) == CLOSEST_LIMIT == 20
+    assert _ids(hits)[0] == best["id"]
+    assert len(repo.search(conn, "gxrdxnxr", limit=8)) == 8
+
+
+def test_closest_keeps_places_for_open_tasks(conn: sqlite3.Connection) -> None:
+    """The Search tab shows open tasks unless asked: better-matching done ones must not take every place."""
+    for i in range(30):
+        done = repo.create_task(conn, f"Gardener visit {i}")
+        repo.update_task(conn, done["id"], status="done")
+    still_open = {repo.create_task(conn, f"Water the garden {i}")["id"] for i in range(15)}
+
+    hits = repo.search(conn, "gxrdxnxr")
+
+    assert len(hits) == CLOSEST_LIMIT
+    assert len(still_open & set(_ids(hits))) == CLOSEST_OPEN
+    assert hits[0]["status"] == "done"                 # still ordered by likeness
+    assert set(_ids(hits[-CLOSEST_OPEN:])) == still_open & set(_ids(hits))
+
+
+def test_closest_stays_out_when_any_stricter_tier_hit(conn: sqlite3.Connection) -> None:
+    repo.create_task(conn, "Renew passport")
+    repo.create_task(conn, "Water the garden")
+    for q in ("passport", "passport zzzzqq", "pasport"):
+        assert "closest" not in _kinds(repo.search(conn, q)).values(), q
 
 
 @pytest.mark.parametrize(
@@ -225,6 +279,26 @@ def test_a_search_on_a_real_sized_database_stays_fast(conn: sqlite3.Connection) 
         )
     conn.commit()
     start = time.perf_counter()
-    for q in ("017-052", "kitchen garden", "pasport", "a b c"):
+    queries = ("017-052", "kitchen garden", "pasport", "a b c", "xqzvwk")
+    for q in queries:
         repo.search(conn, q)
-    assert (time.perf_counter() - start) / 4 < 0.5
+    assert (time.perf_counter() - start) / len(queries) < 0.5
+
+
+def test_a_long_nonsense_query_stays_fast_over_a_big_vocabulary(conn: sqlite3.Connection) -> None:
+    """The closest tier's worst case: eight terms, none anywhere, over some 24,000 distinct words."""
+    rng = random.Random(880)
+
+    def word() -> str:
+        return "".join(rng.choice("abcdefghilmnoprstuv") for _ in range(rng.randint(4, 10)))
+
+    conn.executemany(
+        "INSERT INTO tasks(title, description, status, priority, type, created_at, updated_at) "
+        "VALUES (?, ?, 'todo', 'none', 'task', 't', 't')",
+        [(f"{word()} {word()} {word()}", " ".join(word() for _ in range(5))) for _ in range(3000)],
+    )
+    conn.commit()
+    start = time.perf_counter()
+    hits = repo.search(conn, "xqzvwk jqkzw wyxqz zzqxj kwxyq qjxzv yqkwz xwjqy")
+    assert time.perf_counter() - start < 1.0
+    assert len(hits) <= CLOSEST_LIMIT

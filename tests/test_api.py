@@ -318,7 +318,8 @@ def test_comment_edit_and_delete_routes(client: TestClient) -> None:
     # the FTS index follows the edit: the new words hit, the old ones no longer do
     def task_hits(q: str) -> int:
         groups = client.get(f"/api/search?q={q}").json()["groups"]
-        return int(next(g for g in groups if g["kind"] == "tasks")["count"])
+        hits = next(g for g in groups if g["kind"] == "tasks")["hits"]
+        return sum(1 for h in hits if h["match_kind"] != "closest")   # closest = nothing matched
 
     assert task_hits("email") == 1 and task_hits("emial") == 0
 

@@ -231,7 +231,7 @@ def test_search_title_description_and_comments(conn: sqlite3.Connection, seeded:
     assert seeded["watering"] in {h["id"] for h in repo.search(conn, "garden-bot#12")}
     assert seeded["quotes"] in {h["id"] for h in repo.search(conn, "quot")}
     assert repo.search(conn, "") == []
-    assert repo.search(conn, "zzzznothing") == []
+    assert {h["match_kind"] for h in repo.search(conn, "zzzznothing")} <= {"closest"}
     # a hit reaches list_tasks via q=
     assert [t["id"] for t in repo.list_tasks(conn, q="washer")] == [seeded["tap"]]
 
@@ -259,17 +259,21 @@ def test_a_bracket_in_a_title_does_not_decide_where_a_search_matched(
 
 def test_fts_follows_updates_and_deletes(conn: sqlite3.Connection) -> None:
     t = repo.create_task(conn, "Alpha", description="first text")
-    assert repo.search(conn, "alpha")
+
+    def found(word: str) -> list[dict]:
+        return repo.search(conn, word, exact_only=True)  # a gone word may still get a closest guess
+
+    assert found("alpha")
     repo.update_task(conn, t["id"], title="Beta")
-    assert not repo.search(conn, "alpha") and repo.search(conn, "beta")
+    assert not found("alpha") and found("beta")
     c = repo.add_comment(conn, t["id"], "unique gamma word")
     assert repo.search(conn, "gamma")[0]["matched_in"] == "comment"
     repo.update_comment(conn, t["id"], c["id"], "unique delta word")
-    assert not repo.search(conn, "gamma") and repo.search(conn, "delta")[0]["matched_in"] == "comment"
+    assert not found("gamma") and repo.search(conn, "delta")[0]["matched_in"] == "comment"
     repo.delete_comment(conn, t["id"], c["id"])
-    assert not repo.search(conn, "delta")
+    assert not found("delta")
     repo.delete_task(conn, t["id"])
-    assert not repo.search(conn, "beta")
+    assert not found("beta")
 
 
 def test_dates_stay_iso_and_clock_pinned(conn: sqlite3.Connection, frozen: None) -> None:

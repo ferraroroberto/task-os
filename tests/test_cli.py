@@ -293,10 +293,11 @@ def test_ls_filters_done_move_search_people(run: Runner) -> None:
     code, out, _ = run("search", "archive")
     assert code == 0 and "#2  Child A" in out and "comment: note about the [archive] box" in out
     assert "folders: not configured" in out and "emails: not configured" in out and "issues: not configured" in out
-    code, out, _ = run("search", "nothing-here", "--json", "--kind", "tasks")
+    code, out, _ = run("search", "nxthxng", "--json", "--kind", "tasks")       # nothing matches: the closest
     assert code == 0
     groups = {g["kind"]: g for g in _json(out)["groups"]}
-    assert groups["tasks"]["hits"] == [] and groups["tasks"]["configured"] is True
+    assert groups["tasks"]["configured"] is True
+    assert {h["match_kind"] for h in groups["tasks"]["hits"]} == {"closest"}
     assert groups["emails"]["skipped"] is True and groups["emails"]["configured"] is False
     code, out, _ = run("search", "archiv", "--kind", "tasks")           # a prefix of "archive": exact, no label
     assert code == 0 and "(similar)" not in out and "(partial)" not in out

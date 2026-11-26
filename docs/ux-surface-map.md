@@ -622,9 +622,10 @@ flowchart LR
 ### `folder.picker` Folder picker
 
 - **Root:** `data-surface`
-- **Holds:** a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel.
+- **Holds:** a search-as-you-type list over the folder index with **Find in folder index** as its opener; Enter attaches the first hit, Escape closes the picker first. Hits below the exact ones sit under *Partial matches*, *Similar matches* or *Closest matches*. Shared by the drawer, the quick-add dialog and Email archiving's file-it panel.
 - **States:**
   - the index not configured or unavailable says so instead of listing nothing.
+  - nothing matched: the closest folders, none pre-selected, so Enter attaches nothing until one is picked with the arrow keys.
   - the drawer's Folder field and the quick-add dialog's also carry **From Explorer window**, a folder glyph beside the opener, on the PC itself only; it fills the field (the drawer also shows the path in full in a note under the line), saves nothing until **Set folder** or **Add**, and says which when it cannot (no folder window open, Windows could not say, folder-explorer down or too old).
 
 ## Time
@@ -762,7 +763,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** nav · `#search` · Go to Search.
-- **Holds:** an auto-focused box (a **Clear search** button that shows only while the box holds text, a filter button with its own **Clear filters** × while any filter is on, and the scope switch under it), a count, and results. *Clear search* is a 44px target; one tap empties the query, the count and the results, and keeps focus in the box (Escape in the box does the same). A group appears only for a kind with hits (Tasks, Folders, Emails, Issues), open, under an uppercase header with its count; every other kind folds into one line (*No matches in …*, *Not set up: …*). Task hits are the standard row plus the matched snippet, exact first, then *Partial matches*, then *Similar matches*; other hits are a title and one meta line whose single control opens them. The count line ends with the statuses the task hits cover (*open only*, *every status*, or the ticked ones), and the *No matches* line names them after Tasks.
+- **Holds:** an auto-focused box (a **Clear search** button that shows only while the box holds text, a filter button with its own **Clear filters** × while any filter is on, and the scope switch under it), a count, and results. *Clear search* is a 44px target; one tap empties the query, the count and the results, and keeps focus in the box (Escape in the box does the same). A group appears only for a kind with hits (Tasks, Folders, Emails, Issues), open, under an uppercase header with its count; every other kind folds into one line (*No matches in …*, *Not set up: …*). Task hits are the standard row plus the matched snippet; other hits are a title and one meta line whose single control opens them. Task, folder and email hits come exact first, then under *Partial matches*, *Similar matches* and, when nothing else matched, *Closest matches*. The count line ends with the statuses the task hits cover (*open only*, *every status*, or the ticked ones), and the *No matches* line names them after Tasks.
 - **States:** folder-explorer answering badly is its own line per kind, never *No matches*: *unreachable*, *indexing*, *not set up*, *failed*, with the reason; a broken index is shown in the danger tone. *Keys:* Down from the box focuses the first row, Up and Down move, Enter opens, Escape or `/` returns to the box.
 - **Why:** the 200ms debounce and the *`?q=`* URL make a search shareable.
 - **Leads to:**
@@ -775,7 +776,7 @@ flowchart LR
 
 - **Root:** `data-surface`
 - **Reach:** Ctrl+K or Cmd+K from any tab · Settings → Command palette → **Open command palette** (the phone's only way; the header has no button).
-- **Holds:** a box; plain text jumps to a task (top eight: title, breadcrumb, status); `>` lists commands. Commands: *New task* · the row actions for the focused or ticked task (first while one is targeted) · *Go to Today / Board / Time / Archive / Search / Settings* · *Journal* · *Filter: status inbox / todo / standby / done / cancelled* · *Filter: clear* · *Sync issues* · *Export mirror* · *Open folder of current task* · *Toggle theme* · *Sign out*. Commands of a switched-off block are omitted. Up/Down move, Enter runs, Escape closes.
+- **Holds:** a box; plain text jumps to a task (top eight: title, breadcrumb, status, under the same tier sub-headings as the Search tab); `>` lists commands. Commands: *New task* · the row actions for the focused or ticked task (first while one is targeted) · *Go to Today / Board / Time / Archive / Search / Settings* · *Journal* · *Filter: status inbox / todo / standby / done / cancelled* · *Filter: clear* · *Sync issues* · *Export mirror* · *Open folder of current task* · *Toggle theme* · *Sign out*. Commands of a switched-off block are omitted. Up/Down move, Enter runs, Escape closes.
 - **Phone:** a full-width sheet.
 - **Leads to:**
   - [Journal](#journalpane-journal) (Journal command)
