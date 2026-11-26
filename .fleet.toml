@@ -70,7 +70,7 @@ ux_surface_ratchet = { src = "scripts/ux_surface_ratchet.py", sha = "48db2132dab
 ux_surface_map = { src = "scripts/ux_surface_map.py", sha = "adf0375e08a186330196b8d6be7b8b51078a73ae", dest = "scripts/ux_surface_map.py" }
 login_lockout = { src = "src/login_lockout.py", sha = "93208ab08bdc8591c678a08f55a0f46b3fc8a525", dest = "src/login_lockout.py" }
 login_alert = { src = "src/login_alert.py", sha = "ce64203b017ba636c82737ee7f768c9ef6f422cd", dest = "src/login_alert.py" }
-password = { src = "src/password.py", sha = "1fab1b600964581c3df51a9f916f1fb4795ac286", dest = "src/password.py" }
+password = { src = "src/password.py", sha = "289455f1ad9aa9e3f346c495540cf0c210226265", dest = "src/password.py" }
 notify         = { src = "src/notify", sha = "fe8cc1bdbd038ed65947186248df13072eceb25a", dest = "src/notify" }
 compression    = { src = "src/compression.py", sha = "d930466848d17d47261261c490c4e9c1cce9399e", dest = "src/compression.py" }
 # gen_tailscale_cert.py is copy-to-adapt, not vendor-verbatim (project-scaffolding#232) —
