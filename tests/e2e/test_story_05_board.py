@@ -600,11 +600,14 @@ def _walk_delete_task(page: Page, base: str, shots: Path) -> None:
 
 # Wraps the page's own fetch so a list read is answered by the server at once
 # and handed to the app late — the order the network does not promise (#321).
-# In the page, not a Playwright route: a route handler that sleeps is a callback
-# in flight, and one still sleeping when the context closes fails the teardown.
+# "Late" is when the walk calls `release()`, never a timer: the held answers have
+# to land after the newer ones however slow the box is. In the page, not a
+# Playwright route: a route handler that sleeps is a callback in flight, and one
+# still sleeping when the context closes fails the teardown.
 _HOLD_LIST_READS = r"""() => {
   const real = window.fetch.bind(window);
   const hold = window.__hold = {on: false, held: 0, delivered: 0};
+  const released = new Promise(function (resolve) { hold.release = resolve; });
   window.fetch = function (input, init) {
     const url = typeof input === 'string' ? input : input.url;
     const method = (init && init.method) || 'GET';
@@ -612,9 +615,7 @@ _HOLD_LIST_READS = r"""() => {
     if (!hold.on || method !== 'GET' || !lists) return real(input, init);
     hold.held += 1;
     return real(input, init).then(function (res) {
-      return new Promise(function (resolve) {
-        setTimeout(function () { hold.delivered += 1; resolve(res); }, 1500);
-      });
+      return released.then(function () { hold.delivered += 1; return res; });
     });
   };
 }"""
@@ -851,8 +852,12 @@ def _edit_refresh_second_edit(page: Page, base: str, drawer, tid) -> None:
 
 def _edit_refresh_rows_after_release(page: Page, counts, drawer, tid) -> None:
     """Step 3: every held answer lands; the rows keep the newer edit."""
-    # 3. Let every held answer land, then settle — the stale overwrite, if there
-    #    is one, has happened by now.
+    # 3. The newer edit's answer is on the row first, so what is released now
+    #    really is stale. Let every held answer land, then settle — the stale
+    #    overwrite, if there is one, has happened by now.
+    expect(page.locator(f"#boardHost .trow[data-id='{tid}']")).to_contain_text("in 4w")
+    assert counts()["delivered"] == 0, "a held read landed before the walk released it"
+    page.evaluate("window.__hold.release()")
     for _ in range(200):
         state = counts()
         if state["delivered"] >= state["held"]:
