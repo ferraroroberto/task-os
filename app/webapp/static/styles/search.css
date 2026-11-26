@@ -39,8 +39,9 @@
 .search-group-count { white-space: nowrap; }
 .search-hits { list-style: none; margin: 0; padding: 0; }
 .search-hit:first-child { border-top: 0; }
-/* A weaker tier's sub-heading inside the task list: the overline role on the
-   list's hairline, like the Board's closing group. */
+/* A weaker tier's sub-heading inside a result list (a Search group, the folder
+   picker, the palette): the overline role on the list's hairline, like the
+   Board's closing group. */
 .search-tier {
   list-style: none;
   padding: var(--space-md) var(--space-xs) var(--space-xs);

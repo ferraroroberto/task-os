@@ -152,3 +152,8 @@ The cause, confirmed in `src/imports/sharepoint.py`: the import writes a `web` l
 
 - [x] Step 13 of `tests/e2e/test_story_09_folders.py` against the fake folder-explorer: the fill, the no-window and Windows-could-not-say messages with the field untouched, the glyph button at 390 wide without horizontal overflow, light and dark, all seen in the saved shots.
 - [ ] Not verified: a real File Explorer window in front, as for the drawer's button above.
+
+**2026-11-26 (#880).** Step 5 gains the picker's guess case (no new test function): with the fake folder-explorer answering `closest`, the list sits under *Closest matches*, nothing is pre-selected, Enter attaches nothing and `↓` selects the first.
+
+- [x] Automated: step 5 of `tests/e2e/test_story_09_folders.py`.
+- [ ] Not verified: a hand walk of the picker against the real folder-explorer.

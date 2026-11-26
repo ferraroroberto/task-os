@@ -116,7 +116,8 @@ def test_tasks_adapter_hits_on_seed(seeded_db: Path) -> None:
     quotes = hits[1].to_dict()
     assert quotes["matched_in"] == "comment" and "[kitchen]" in quotes["snippet"]
     assert quotes["breadcrumb"][-1]["title"] == "Kitchen"
-    assert a.search("nothing-like-this", 10) == []
+    guesses = a.search("zzqxnothing", 10)                           # nothing matches: the closest, labelled
+    assert guesses and {h.extra["match_kind"] for h in guesses} == {"closest"}
     assert top["match_kind"] == "exact" and "match_kind" not in top["task"]
     similar = a.search("kitchne", 10)[0].to_dict()                  # a typo: found, labelled as weaker
     assert similar["match_kind"] == "similar" and similar["title"] == "Kitchen"
@@ -133,6 +134,9 @@ def test_folders_adapter_hits_from_folder_explorer(client_fe: FolderExplorerClie
     h = hits[0].to_dict()
     assert h["title"] == "kitchen" and h["subtitle"] == "{onedrive}/house/kitchen"
     assert h["url"] == "taskos://open?ref=%7Bonedrive%7D%2Fhouse%2Fkitchen"
+    # folder-explorer's tier comes through as the same key a task hit carries
+    assert h["match_kind"] == "exact"
+    assert {x.extra["match_kind"] for x in a.search("kitchen zzqxj", 10)} == {"partial"}
     assert h["snippet"].endswith("/house/[kitchen]") and h["path"].endswith("/od/house/kitchen")
     assert a.search("nothing-like-this", 10) == []              # ok + no match is an empty list
     assert a.availability() == ("ok", None, "1 of 1 root(s) scanned")

@@ -1,7 +1,8 @@
 """Story 10 — find anything (Step 10/13, issue #11).
 
     The Search tab opens on one box and a hint, no group waiting empty
-    (#395) → a word that matches nothing folds every kind into one line →
+    (#395) → a word that matches nothing lists the closest tasks under their
+    label, every other kind folded into one line →
     type a word → one open group per kind with hits, Tasks · Folders · Emails
     · Issues (task hits are the ONE shared row, narrowed by the scope switch
     and the filter sheet; folder / email / issue hits are the same row shape,
@@ -10,7 +11,8 @@
     ↓ ↓ Enter walks the rows → Ctrl+K → type a word → Enter opens the task →
     `>` lists the commands, Today first as in the nav → "Go to Board" switches the tab. On the phone the
     same box and the palette as a full-width sheet → a typo or a half-remembered query still finds the
-    task, under a *Similar matches* / *Partial matches* sub-heading.
+    task, under a *Similar matches* / *Partial matches* sub-heading, as a folder does; a word that
+    matches nothing is labelled *Closest matches* on the tab and in the palette.
 
 Walks the story against a **disposable seeded instance** whose four indexes
 are all fixtures: ``{onedrive}`` → a temp tree, ``search.folder_explorer_url`` →
@@ -28,6 +30,7 @@ validation record links to:
     docs/screenshots/story-10-search-7-phone.png     phone: the palette sheet
     docs/screenshots/story-10-search-10-phone.png    phone: Today's search field with its Todo pill (light)
     docs/screenshots/story-10-search-11-phone.png    phone: the same, widened to every status (dark)
+    docs/screenshots/story-10-search-12-phone.png    phone: tasks and folders under "Partial matches"
 
 A shot number is the step it belongs to, so the set skips 3: that step used
 to be "New task on a folder hit", which #48 removed along with the per-hit
@@ -131,12 +134,13 @@ def _empty_search_tab(page: Page, box) -> None:
     expect(page.locator(".search-hint")).to_have_text(re.compile(r"^Searches your tasks, folders, emails and issues"))
     expect(page.locator(".search-group")).to_have_count(0)
     expect(page.locator(".search-fold")).to_have_count(0)
-    # a word that matches nothing: no group at all, every kind named on the one
-    # folded line instead of four cards each saying "nothing"
+    # a word that matches nothing: the tasks group lists the closest ones under
+    # their label, and the kinds with nothing are named on the one folded line
+    # instead of three cards each saying "nothing"
     box.fill("zzqxnothing")
-    expect(page.locator("#searchMeta")).to_have_text("0 hits · open only")
-    expect(page.locator(".search-group")).to_have_count(0)
-    expect(page.locator(".search-fold")).to_have_text("No matches in tasks (open only), folders, emails and issues")
+    expect(page.locator(".search-group")).to_have_count(1)
+    expect(page.locator(".search-tier[data-tier='closest']")).to_have_text("Closest matches")
+    expect(page.locator(".search-fold").first).to_contain_text("folders, emails and issues")
     # the clear button shows only while the box holds text, is a 44px target,
     # and one tap empties the query and the count and keeps the caret in the box
     clear = page.get_by_role("button", name="Clear search")
@@ -150,7 +154,7 @@ def _empty_search_tab(page: Page, box) -> None:
     expect(clear).to_be_hidden()
     expect(page.locator(".search-hint")).to_be_visible()
     box.fill("zzqxnothing")                                       # leave the box as the next steps expect it
-    expect(page.locator("#searchMeta")).to_have_text("0 hits · open only")
+    expect(page.locator(".search-tier[data-tier='closest']")).to_be_visible()
     # the box carries the filter button (the sheet narrows the task hits), the
     # scope switch is the line under it; the sheet leads with the sort and
     # holds every filter (#395)
@@ -314,7 +318,7 @@ def _palette_and_commands(page: Page, ctx, browser: Browser, base: str, shots: P
     return p, phone
 
 
-def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
+def _long_hits_and_everyone(base: str, inst, p, phone, shots: Path) -> None:
     """Steps 8-9: a long hit never widens the page; search covers everyone."""
     # 8. a long hit never widens the page (#417): invented over-long names (a
     # folder, a project holding the matching task) on a 390px screen. The grid
@@ -360,12 +364,12 @@ def _long_hits_and_everyone(base: str, inst, p, phone) -> None:
     p.locator("#paletteInput").fill("zebra")
     expect(p.locator("#paletteList .palette-item[data-kind='task']").first).to_contain_text("Zebra paperwork")
     p.keyboard.press("Escape")
-    _weaker_matches_sit_under_a_label(base, p)
+    _weaker_matches_sit_under_a_label(base, p, shots)
     _cleared_status_searches_every_task(base, p)
     phone.close()
 
 
-def _weaker_matches_sit_under_a_label(base: str, p: Page) -> None:
+def _weaker_matches_sit_under_a_label(base: str, p: Page, shots: Path) -> None:
     """Step 10: a typo and a half-remembered query still find the task, under a label.
 
     One word that is not spelled right, and a second word that is nowhere: each
@@ -380,6 +384,19 @@ def _weaker_matches_sit_under_a_label(base: str, p: Page) -> None:
     p.goto(f"{base}/?q=worktop%20zzqxj#search")                    # one word of two is in the task
     expect(p.locator(f"{tasks} .search-tier[data-tier='partial']")).to_have_text("Partial matches")
     expect(_task_hit(p, "Choose worktop material")).to_be_visible()
+    folders = ".search-group[data-kind='folders']"
+    p.goto(f"{base}/?q=kitchen%20zzqxj#search")                    # a folder holding one word of two
+    expect(p.locator(f"{folders} .search-tier[data-tier='partial']")).to_have_text("Partial matches")
+    expect(p.locator(f"{folders} .search-hit").first).to_be_visible()
+    shot(p, shots / "story-10-search-12-phone.png", full_page=True)
+    surface(p, "search.weaker")
+    p.goto(f"{base}/?q=zzqxnothing#search")                        # nothing at all: the closest, said so
+    expect(p.locator(f"{tasks} .search-tier[data-tier='closest']")).to_have_text("Closest matches")
+    expect(p.locator(f"{tasks} .search-hit").first).to_be_visible()
+    p.keyboard.press("Control+K")
+    p.locator("#paletteInput").fill("zzqxnothing")
+    expect(p.locator("#paletteList .search-tier[data-tier='closest']")).to_have_text("Closest matches")
+    p.keyboard.press("Escape")
     p.goto(f"{base}/?q=worktop#search")                            # spelled right: no label
     expect(_task_hit(p, "Choose worktop material")).to_be_visible()
     expect(p.locator(f"{tasks} .search-tier")).to_have_count(0)
@@ -524,5 +541,5 @@ def test_find_anything(search_webapp: SearchInstance, browser: Browser, shots: P
     surface(page, "search.pane")
     drawer = _open_hits_from_the_results(page, base, shots, box, kitchen_hit)
     p, phone = _palette_and_commands(page, ctx, browser, base, shots, drawer, g)
-    _long_hits_and_everyone(base, inst, p, phone)
+    _long_hits_and_everyone(base, inst, p, phone, shots)
     _status_pills_in_the_search_field(base, browser, shots)

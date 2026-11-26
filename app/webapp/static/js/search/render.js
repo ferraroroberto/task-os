@@ -8,8 +8,8 @@
  *                    `overline` with its count, open; every kind without hits
  *                    folds into ONE line under them. A kind that failed says so
  *                    on its own line, in the danger tone: a fault, not an empty
- *                    result. Task hits below the exact ones sit under a quiet
- *                    "Partial matches" / "Similar matches" sub-heading.
+ *                    result. Hits below the exact ones sit under a quiet
+ *                    "Partial / Similar / Closest matches" sub-heading.
  *
  * Takes the composer's `ctx` first (`host`, `meta`, `opts`, `status`,
  * `hitByIdx`). */
@@ -21,6 +21,7 @@ import { matchesFilters, matchesScope, statusCoverage } from '../../filters.js';
 import { sortItems } from '../../rows.js';
 import { hitRow, taskHitRow } from './hits.js';
 import { HINT, KINDS, foldParts, hitWord } from './text.js';
+import { tierHeading, tierOf } from './tiers.js';
 
 export function note(cls, text) {
   const p = document.createElement('p');
@@ -89,21 +90,8 @@ export function renderIdle(ctx) {
   ctx.host.replaceChildren.apply(ctx.host, nodes);
 }
 
-/** The order the server's tiers come in: every exact hit above every partial one above every similar one. */
-const TIERS = ['exact', 'partial', 'similar'];
-const TIER_LABELS = { partial: 'Partial matches', similar: 'Similar matches' };
-
-function tierOf(t) { return Math.max(0, TIERS.indexOf(t._hit && t._hit.match_kind)); }
-
-/** The quiet sub-heading above the first row of a weaker tier (exact needs none). */
-function tierHeading(tier) {
-  const li = document.createElement('li');
-  li.className = 'search-tier overline';
-  li.dataset.tier = TIERS[tier];
-  li.setAttribute('role', 'presentation');
-  li.textContent = TIER_LABELS[TIERS[tier]];
-  return li;
-}
+/** A row's tier: a task row carries its hit as `_hit`, a row of any other kind is the hit. */
+function rowTier(row) { return tierOf((row._hit || row).match_kind); }
 
 /** The task hits as rows' data, narrowed by the shared filter state and the scope.
  *  Tiers never mix: within one, the server's relevance order stands unless the
@@ -118,7 +106,7 @@ function taskHits(ctx, g) {
   if (!f) return tasks;
   const kept = tasks.filter(function (t) { return matchesScope(t, f.scope) && matchesFilters(t, f); });
   const ordered = f.sort && f.sort !== 'due' ? sortItems(kept, f.sort) : kept;
-  return ordered.slice().sort(function (a, b) { return tierOf(a) - tierOf(b); });
+  return ordered.slice().sort(function (a, b) { return rowTier(a) - rowTier(b); });
 }
 
 export function render(ctx, res) {
@@ -153,7 +141,7 @@ export function render(ctx, res) {
     ul.setAttribute('role', 'list');
     let tier = 0;
     rows.forEach(function (h) {
-      if (k.kind === 'tasks' && tierOf(h) > tier) { tier = tierOf(h); ul.appendChild(tierHeading(tier)); }
+      if (rowTier(h) > tier) { tier = rowTier(h); ul.appendChild(tierHeading(tier)); }
       ul.appendChild(k.kind === 'tasks' ? taskHitRow(ctx, h, idx++) : hitRow(ctx, h, idx++));
     });
     parts.body.appendChild(ul);

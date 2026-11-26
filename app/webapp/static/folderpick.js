@@ -12,7 +12,8 @@
  *                             http(s) URL.
  *   mountFolderPicker(host, opts)   the search box + hit list + keyboard
  *                             (↑↓ move · Enter takes the active hit · Escape
- *                             closes) over GET /api/folders/search. Mounts
+ *                             closes) over GET /api/folders/search, hits below
+ *                             the exact ones under their tier's label. Mounts
  *                             once per host; `opts.onPick(ref)` does the
  *                             attaching, `opts.onClose()` lets the caller keep
  *                             its own open/closed flag in step.
@@ -29,6 +30,7 @@
 
 import { api } from './api.js';
 import { icon } from './_vendored/icons/icons.js';
+import { tierHeading, tierOf } from './js/search/tiers.js';
 import { toast } from './toast.js';
 
 const SEARCH_DEBOUNCE_MS = 220;
@@ -105,7 +107,9 @@ export function mountFolderPicker(host, opts) {
 
   function paint() {
     list.innerHTML = '';
+    let tier = 0;
     items.forEach(function (it, i) {
+      if (tierOf(it.match_kind) > tier) { tier = tierOf(it.match_kind); list.appendChild(tierHeading(tier)); }
       const li = document.createElement('li');
       li.dataset.track = 'folder-picker.item';
       li.setAttribute('role', 'option');
@@ -136,9 +140,12 @@ export function mountFolderPicker(host, opts) {
     try {
       const r = await api('/api/folders/search?q=' + encodeURIComponent(text) + '&limit=15');
       items = r.items || [];
-      active = items.length ? 0 : -1;
+      // a closest hit is a guess nothing matched: Enter must not attach it unpicked
+      const guess = items.length > 0 && items[0].match_kind === 'closest';
+      active = items.length && !guess ? 0 : -1;
       paint();
-      note.textContent = items.length ? r.count + ' hit(s)' : 'No folder matches.';
+      note.textContent = !items.length ? 'No folder matches.'
+        : guess ? 'Nothing matched. ↓ then Enter attaches a closest folder.' : r.count + ' hit(s)';
     } catch (err) {
       items = []; active = -1; paint();
       // folder-explorer's own state (down, still indexing, not set up) is the answer, not "No folder matches".
@@ -151,7 +158,7 @@ export function mountFolderPicker(host, opts) {
   q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(search, SEARCH_DEBOUNCE_MS); });
   q.addEventListener('keydown', function (ev) {
     if (ev.key === 'ArrowDown' && items.length) { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
-    else if (ev.key === 'ArrowUp' && items.length) { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
+    else if (ev.key === 'ArrowUp' && items.length) { ev.preventDefault(); active = (active <= 0 ? items.length : active) - 1; paint(); }
     else if (ev.key === 'Enter') { ev.preventDefault(); if (active >= 0 && items[active]) opts.onPick(items[active].ref); }
     else if (ev.key === 'Escape') { host.hidden = true; if (opts.onClose) opts.onClose(); }
   });

@@ -7,7 +7,7 @@ adapters run concurrently in a thread pool.
 Hit: title = the task title · subtitle = ``breadcrumb › … · status`` ·
 snippet = the FTS snippet with ``[match]`` marks · ref = the id · url =
 ``#task/<id>`` · extra = ``task_id, code, status, priority, due, matched_in,
-match_kind (exact|partial|similar), breadcrumb, folder_ref, issue_ref`` (the CLI's one-line format) plus ``task``
+match_kind (exact|partial|similar|closest), breadcrumb, folder_ref, issue_ref`` (the CLI's one-line format) plus ``task``
 = the whole enriched summary, so the Search tab renders the hit as the same
 row every other view shows.
 """

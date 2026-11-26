@@ -293,8 +293,21 @@ def _unknown_placeholder_and_picker(page: Page, base: str, shots: Path, drawer, 
     pick.click()
     q = drawer.locator(".folder-picker-q")
     expect(q).to_be_visible()
-    q.fill("kitchen plans")
     hit = drawer.locator(".folder-picker-item")
+    # nothing matches: the closest folders are labelled and none is pre-selected,
+    # so Enter attaches nothing until one is picked with ↓
+    inst.fe.closest = True
+    before = _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"]
+    q.fill("zzqxj")
+    expect(drawer.locator(".folder-picker-list .search-tier[data-tier='closest']")).to_have_text("Closest matches")
+    expect(drawer.locator(".folder-picker-item.is-active")).to_have_count(0)
+    q.press("Enter")
+    expect(q).to_be_visible()
+    q.press("ArrowDown")
+    expect(drawer.locator(".folder-picker-item.is-active")).to_have_count(1)
+    assert _get(base, f"/api/tasks/{kitchen['id']}")["folder_ref"] == before
+    inst.fe.closest = False
+    q.fill("kitchen plans")
     expect(hit).to_have_count(1)
     expect(hit.first.locator(".folder-picker-ref")).to_have_text("{onedrive}/house/kitchen/plans")
     shot(page, shots / "story-09-folders-5-desktop.png")

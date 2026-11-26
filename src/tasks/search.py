@@ -4,7 +4,8 @@ A query becomes a list of **terms**: every run of letters and digits, with a
 dot kept inside a run (``0.17``), so ``017-052``, ``garden-bot-12`` and
 ``a/b`` search for their parts in any order and any place. A decimal such as
 ``0.17`` also matches written without the dot (``017``). Each task lands in
-one tier, and the tiers never interleave:
+one tier, and the tiers never interleave. They are the four folder-explorer
+ranks folders and mails by, so every search box ranks alike:
 
 * ``exact`` — every term matches somewhere in the title, description or a
   comment (the terms may sit in different places). A task holding the whole
@@ -15,8 +16,13 @@ one tier, and the tiers never interleave:
   also matches a word in a title or description within one edit (two for
   eight or more characters) of it. Only run when the stricter tiers do not
   already fill the limit, so a good query never pays for it.
+* ``closest`` — only when the three above found nothing: the
+  ``CLOSEST_LIMIT`` tasks whose title or description words look most like the
+  query's, scored by the mean of each term's best likeness. Half the places are
+  kept for open tasks: the Search tab shows only those unless asked, and a
+  database that is mostly done tasks would otherwise show an empty list.
 
-The fuzzy tier reads the words the index already holds through an
+The two weakest tiers read the words the index already holds through an
 ``fts5vocab`` view created in the connection's own temp schema, so it adds no
 second index to keep in step and no migration (a schema bump would re-baseline
 the version shown in Settings).
@@ -30,11 +36,17 @@ import unicodedata
 from collections import Counter
 from typing import Any
 
-__all__ = ["MATCH_EXACT", "MATCH_PARTIAL", "MATCH_SIMILAR", "rank_tasks", "split_terms"]
+from rapidfuzz import fuzz, process
+
+from src.tasks.schema import CLOSED_SQL
+
+__all__ = ["CLOSEST_LIMIT", "MATCH_CLOSEST", "MATCH_EXACT", "MATCH_PARTIAL", "MATCH_SIMILAR", "rank_tasks",
+           "split_terms"]
 
 MATCH_EXACT = "exact"
 MATCH_PARTIAL = "partial"
 MATCH_SIMILAR = "similar"
+MATCH_CLOSEST = "closest"
 
 #: Terms past this are ignored: each one costs two index lookups.
 MAX_TERMS = 8
@@ -44,6 +56,18 @@ FUZZY_MIN_LEN = 4
 FUZZY_TWO_EDITS_LEN = 8
 #: Near-words kept per term, closest then most common first, so one term cannot flood the query.
 FUZZY_WORDS_PER_TERM = 12
+# The closest tier's caps, folder-explorer's own values; with ``MAX_TERMS`` they
+# keep a query that matches nothing quick on a slow PC.
+#: Tasks it lists: enough to recognise the one meant, few enough to read.
+CLOSEST_LIMIT = 20
+#: Of those, the places kept for the most alike open tasks.
+CLOSEST_OPEN = CLOSEST_LIMIT // 2
+#: Indexed words kept per term, most alike first.
+CLOSEST_WORDS = 20
+#: How much longer or shorter than the term a word may be and still be compared.
+CLOSEST_LENGTH_SLACK = 3
+#: Tasks one closest word brings, newest first: a word thousands hold tells none of them apart.
+CLOSEST_TASKS_PER_WORD = 200
 
 _PART = re.compile(r"[^\W_]+(?:\.[^\W_]+)*")
 _DECIMAL = re.compile(r"\d+(?:\.\d+)+")
@@ -200,6 +224,53 @@ def _fuzzy(
     return found, words
 
 
+def _any_word(words: set[str] | list[str]) -> str:
+    """An FTS5 expression for any of these indexed words, each as a whole word."""
+    return " OR ".join(f'"{w}"' for w in sorted(words))
+
+
+def _closest(conn: sqlite3.Connection, terms: list[str]) -> tuple[dict[int, float], set[str]]:
+    """``({task id: likeness 0..1}, words that found them)`` for a query nothing else matched.
+
+    The vocabulary is read once and each term is compared only with words of
+    about its length; no task text is scanned.
+    """
+    by_length: dict[int, list[str]] = {}
+    for r in conn.execute(f"SELECT term FROM {_vocab(conn)}"):
+        by_length.setdefault(len(r[0]), []).append(r[0])
+    per_term: list[dict[int, float]] = []
+    used: set[str] = set()
+    for term in terms:
+        word = _fold(term)
+        lengths = range(max(1, len(word) - CLOSEST_LENGTH_SLACK), len(word) + CLOSEST_LENGTH_SLACK + 1)
+        pool = [w for n in lengths for w in by_length.get(n, ())]
+        best: dict[int, float] = {}
+        for near, likeness, _ in process.extract(word, pool, scorer=fuzz.ratio, limit=CLOSEST_WORDS):
+            if likeness <= 0:  # not one letter in common
+                continue
+            used.add(near)
+            for r in conn.execute(
+                "SELECT rowid FROM tasks_fts WHERE tasks_fts MATCH ? ORDER BY rowid DESC LIMIT ?",
+                (f'"{near}"', CLOSEST_TASKS_PER_WORD),
+            ):
+                best[int(r[0])] = max(likeness / 100, best.get(int(r[0]), 0.0))
+        per_term.append(best)
+    scores = {
+        tid: round(sum(b.get(tid, 0.0) for b in per_term) / len(terms), 3) for tid in set().union(*per_term)
+    }
+    return scores, used
+
+
+def _pick_closest(conn: sqlite3.Connection, alike: list[int]) -> list[int]:
+    """Of ``alike`` (most alike first), the ``CLOSEST_LIMIT`` to list: the best
+    ``CLOSEST_OPEN`` open tasks, then the most alike of the rest, same order kept."""
+    still_open = {int(r[0]) for r in conn.execute(f"SELECT id FROM tasks WHERE status NOT IN ({CLOSED_SQL})")}
+    kept = set([tid for tid in alike if tid in still_open][:CLOSEST_OPEN])
+    rest = [tid for tid in alike if tid not in kept][: CLOSEST_LIMIT - len(kept)]
+    chosen = kept.union(rest)
+    return [tid for tid in alike if tid in chosen]
+
+
 _TOKENIZER = "tokenize='unicode61 remove_diacritics 2'"
 
 
@@ -285,8 +356,8 @@ def rank_tasks(
     ranks = _ranks(conn, " OR ".join(exprs)) if covered else {}
     phrase_ids = _task_ids(conn, f'"{" ".join(terms)}"*') if n > 1 and covered else set()
 
-    # (tier, not-the-whole-phrase, fewer terms matched, bm25, id) → match kind
-    keyed: list[tuple[tuple[int, int, int, float, int], str]] = []
+    # (tier, not-the-whole-phrase, fewer terms matched or less alike, bm25, id) → match kind
+    keyed: list[tuple[tuple[int, int, float, float, int], str]] = []
     for tid, k in covered.items():
         if k == n:
             keyed.append(((0, int(tid not in phrase_ids), 0, ranks.get(tid, 0.0), tid), MATCH_EXACT))
@@ -297,9 +368,18 @@ def rank_tasks(
     if len(keyed) < limit and not exact_only:
         found, words = _fuzzy(conn, terms, exact_sets, need, {key[4] for key, _ in keyed})
         if found:
-            fuzzy_ranks = _ranks(conn, " OR ".join(f'"{w}"' for w in words), comments=False)
+            fuzzy_ranks = _ranks(conn, _any_word(words), comments=False)
             keyed.extend(((2, 0, -k, fuzzy_ranks.get(tid, 0.0), tid), MATCH_SIMILAR) for tid, k in found.items())
-            detail_expr += " OR " + " OR ".join(f'"{w}"' for w in words)
+            detail_expr += " OR " + _any_word(words)
+
+    if not keyed and not exact_only:
+        scores, words = _closest(conn, terms)
+        if scores:
+            detail_expr = _any_word(words)  # the typed terms found nothing: mark the words that did
+            word_ranks = _ranks(conn, detail_expr, comments=False)
+            alike = sorted(scores, key=lambda tid: (-scores[tid], word_ranks.get(tid, 0.0), tid))
+            keyed = [((3, 0, -scores[tid], word_ranks.get(tid, 0.0), tid), MATCH_CLOSEST)
+                     for tid in _pick_closest(conn, alike)]
 
     keyed.sort(key=lambda kv: kv[0])
     keyed = keyed[:limit]

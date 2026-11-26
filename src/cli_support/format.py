@@ -164,12 +164,12 @@ def fmt_search(result: dict[str, Any]) -> str:
         out.append(head)
         for h in g.get("hits") or []:
             if kind == "tasks":
-                weaker = f"  ({h['match_kind']})" if h.get("match_kind") not in (None, "exact") else ""
-                lead = f"#{h['task_id']}  {h['title']}{weaker}"
+                lead = f"#{h['task_id']}  {h['title']}"
             elif kind == "issues":
                 lead = f"{h['ref']}  {h['title']}"
             else:
                 lead = h["title"]
+            lead += _weaker(h)
             sub = f"  — {h['subtitle']}" if h.get("subtitle") else ""
             out.append(f"  {lead}{sub}")
             snippet = h.get("snippet") or ""
@@ -304,6 +304,11 @@ def fmt_ai_status(ai: dict[str, Any]) -> str:
             + (f" · checked {ai['checked_at']}" if ai.get("checked_at") else ""))
 
 
+def _weaker(hit: dict[str, Any]) -> str:
+    """``  (partial)`` and the like for a hit below the exact tier, else nothing."""
+    return f"  ({hit['match_kind']})" if hit.get("match_kind") not in (None, "exact") else ""
+
+
 def fmt_folders_status(f: dict[str, Any]) -> str:
     if not f.get("enabled"):
         return f"folders  not configured — {f.get('reason') or 'unknown'}"
@@ -314,4 +319,4 @@ def fmt_folders_search(r: dict[str, Any]) -> str:
     items = r.get("items") or []
     if not items:
         return "(no folders match)"
-    return "\n".join(f"{i['ref']}\n    {i['path']}" for i in items)
+    return "\n".join(f"{i['ref']}{_weaker(i)}\n    {i['path']}" for i in items)

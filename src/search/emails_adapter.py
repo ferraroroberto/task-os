@@ -12,7 +12,8 @@ the ``.msg`` path folded onto the placeholders (``{onedrive}/…/mail.msg`` when
 lies under a configured root, else the absolute path) — what "attach" stores as
 ``links(kind=email)`` and the per-PC opener opens as a file · url = the
 ``taskos://open?ref=…`` link · extra = ``path, sender, recipients, date, folder,
-filename, email_id``.
+filename, email_id, match_kind`` (folder-explorer's tier,
+``exact|partial|similar|closest``; ``None`` when it sends none).
 """
 
 from __future__ import annotations
@@ -65,7 +66,7 @@ class EmailsAdapter:
         body = self.client.emails(q, limit)
         start, end = (body.get("marks") or {}).get("start"), (body.get("marks") or {}).get("end")
         hits = body.get("hits") or []
-        # folder-explorer sends hits best first and no score, so the rank is the score.
+        # folder-explorer sends hits best first, tier first, so the rank is the score.
         return [self._hit(h, start, end, float(len(hits) - i)) for i, h in enumerate(hits)]
 
     def _hit(self, e: Mapping[str, Any], start: str | None, end: str | None, score: float) -> Hit:
@@ -94,6 +95,7 @@ class EmailsAdapter:
                 "date": e.get("date"),
                 "folder": folder,
                 "filename": e.get("filename"),
+                "match_kind": e.get("tier"),
             },
         )
 
