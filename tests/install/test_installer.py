@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from src import installer
+from src import installer, password
 from src.install import __main__ as cli
 from src.install import checklist, machine
 from src.install.config_merge import (
@@ -344,6 +344,42 @@ def test_a_check_answers_with_the_exit_code_the_installer_reads(checkout: Path,
     assert "[missing] your name" in out and "issues.owner" in out
     _write(checkout / "config" / "config.json", {"your_name": "Alex"})
     assert cli.check(checkout, "your-name") == 0
+
+
+@pytest.fixture
+def password_file(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The temp checkout's own password file, which ``src.password`` is pointed at."""
+    path = root / "config" / "app_password.json"
+    monkeypatch.setenv(password.ENV_VAR, str(path))
+    return path
+
+
+@pytest.mark.parametrize("token", ["", "a-token"])
+@pytest.mark.parametrize("content", ["", "{", "[]", "{}", '{"password_hash": "plain"}'])
+def test_a_password_file_without_a_usable_password_is_never_ok(
+    root: Path, password_file: Path, content: str, token: str,
+) -> None:
+    _write(root / "config" / "config.json", {"auth": {"token": token}})
+    password_file.write_text(content, encoding="utf-8")
+    assert checklist.check_signin(root).state == "missing"
+
+
+@pytest.mark.parametrize("token", ["", "a-token"])
+def test_a_password_file_that_cannot_be_read_is_unknown(root: Path, password_file: Path, token: str) -> None:
+    _write(root / "config" / "config.json", {"auth": {"token": token}})
+    password_file.mkdir()  # there, but reading it raises on every OS
+    assert checklist.check_signin(root).state == "unknown"
+
+
+def test_a_stored_password_or_a_token_alone_counts_as_signed_in(root: Path, password_file: Path) -> None:
+    config = root / "config" / "config.json"
+    _write(config, {"auth": {"token": ""}})
+    assert checklist.check_signin(root).state == "missing"  # neither
+    password.set_password("4321")
+    assert checklist.check_signin(root).state == "ok"
+    password_file.unlink()
+    _write(config, {"auth": {"token": "a-token"}})
+    assert checklist.check_signin(root).state == "ok"
 
 
 def test_the_sign_in_start_command_reports_by_exit_code(checkout: Path, tmp_path: Path) -> None:
