@@ -4,9 +4,9 @@
  * block's background work, and the page hides or restores the block's UI with
  * no reload. A block whose dependency is missing here says so on its row.
  *
- * The group is built here because index.html is at its size limit; the rows of
- * the blocks that are off are hidden from the other Settings groups by tagging
- * them `data-feature` (the same attribute that hides the tab). */
+ * The group is built here, beside the rows the server's feature list fills it
+ * with; the rows of the blocks that are off are hidden from the other Settings
+ * groups by tagging them `data-feature` (the same attribute that hides the tab). */
 
 'use strict';
 

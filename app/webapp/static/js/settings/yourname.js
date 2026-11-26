@@ -21,8 +21,9 @@ const SHEET_HTML = `
     <p class="card-meta" id="yourNameStatus" role="status" aria-live="polite"></p>
   </form>`;
 
-/** Fill the sheet body the page ships empty. The markup lives here, not in
- *  index.html, which is at its size limit; call it before the elements are looked up. */
+/** Fill this card's section, which the sheet's markup leaves empty: the form
+ *  sits beside the code that reads it. Call it after the sheet is filled and
+ *  before the elements are looked up. */
 export function buildYourNameSheet() {
   document.getElementById('yourNameCard').innerHTML = SHEET_HTML;
 }

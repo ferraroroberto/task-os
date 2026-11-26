@@ -59,7 +59,8 @@
  *
  * This file is the composer: it builds the `ctx` its parts share (the caller's
  * `opts`, the looked-up elements, the state words) and wires them. Each card
- * lives in js/settings/<part>.js and takes `ctx` as its first argument.
+ * lives in js/settings/<part>.js and takes `ctx` as its first argument; the
+ * sheet's markup is js/settings/markup.js.
  */
 
 'use strict';
@@ -72,6 +73,7 @@ import { wireFullscreen, wirePaletteOpen, wireTextSize } from './js/settings/dev
 import { lookupEls } from './js/settings/elements.js';
 import { mountFeatures } from './js/settings/features.js';
 import { renderIssues, wireIssueSyncNow } from './js/settings/issues.js';
+import { fillSettingsSheet } from './js/settings/markup.js';
 import { wireMirrorEventsClear } from './js/settings/mirror.js';
 import { wireRowActions } from './js/settings/rowactions.js';
 import { refreshSearchStatus } from './js/settings/search.js';
@@ -96,6 +98,8 @@ import { buildYourNameSheet, wireYourName } from './js/settings/yourname.js';
  *            headParts: () => Array<{text: string, tone: string}>}}
  */
 export function mountSettings(opts) {
+  // First: the rows' sheet ships empty, and every lookup below reads its ids.
+  fillSettingsSheet(document.getElementById('settingsSheet'));
   buildYourNameSheet();
   const ctx = {
     opts: opts,
