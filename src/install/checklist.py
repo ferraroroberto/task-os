@@ -8,7 +8,9 @@ which is never folded into ok).
 
 from __future__ import annotations
 
+import contextlib
 import http.client
+import io
 import json
 import os
 import ssl
@@ -17,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src import password
 from src.certs import cert_paths
 from src.config import DEFAULT_PORT
 from src.install.machine import SCHEME, opener_state
@@ -159,14 +162,29 @@ def check_certificate(root: Path) -> Check:
     return Check(item, "missing", "optional, for the phone: scripts/gen_tailscale_cert.py (docs/access.md)")
 
 
+def _password_status() -> int:
+    """The vendored ``status`` probe's answer: 0 a usable hash is stored, 1 none, 2 the file cannot be read."""
+    # its own report line is dropped: a check prints one line
+    with contextlib.redirect_stdout(io.StringIO()):
+        return password.main(["status"])
+
+
 def check_signin(root: Path) -> Check:
     item = "sign-in for other devices"
     data, problem = _config(root)
     if data is None:
         return Check(item, "unknown", problem)
+    status = _password_status()
+    if status == 0:
+        return Check(item, "ok")
+    path = password.password_file()
+    if status != 1:
+        return Check(item, "unknown", f"the password file could not be read: {path}")
+    # a broken file is reported even beside a token: a password was meant to work and does not
+    if path.exists():
+        return Check(item, "missing", f"{path} holds no usable password; set it again: python -m src.password set")
     auth = data.get("auth") if isinstance(data.get("auth"), dict) else {}
-    signed = bool(str(auth.get("token", "") or "").strip()) or (root / "config" / "app_password.json").is_file()
-    if signed:
+    if str(auth.get("token", "") or "").strip():
         return Check(item, "ok")
     return Check(item, "missing", "optional, for the phone: scripts/gen_token.py or python -m src.password set")
 

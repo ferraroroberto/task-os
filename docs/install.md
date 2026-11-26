@@ -37,7 +37,7 @@ Then start it:
 What the checklist may still ask for:
 
 - **Your name:** Settings, Your name (comments and activity are signed with it).
-- **HTTPS certificate** and **Sign-in for other devices**, for the phone only: `.venv\Scripts\python.exe scripts\gen_tailscale_cert.py`, then `scripts\gen_token.py` or `.venv\Scripts\python.exe -m src.password set` ([Phone access](access.md)).
+- **HTTPS certificate** and **Sign-in for other devices**, for the phone only: `.venv\Scripts\python.exe scripts\gen_tailscale_cert.py`, then `scripts\gen_token.py` or `.venv\Scripts\python.exe -m src.password set` ([Phone access](access.md)). A password file that holds no usable password (empty or corrupt) is `missing` even when a token is set, and one that cannot be read is `unknown`.
 - **Shared tray helper:** `tray.bat --restart` needs the fleet's `tray_lifecycle.ps1` under `%USERPROFILE%\.claude\tray`. A plain `tray.bat` start works without it.
 - **Start at log on:** run `.\setup.bat -Startup`. It adds a `task-os.bat` to your Startup folder that calls this checkout's `tray.bat`.
 
