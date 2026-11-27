@@ -37,6 +37,10 @@ required item is ``ok`` (``-WhatIf`` does not hold the items setup has yet to
 create against it); 1 otherwise, including a config left alone because it does
 not parse and a top-up refused for its backup. An optional feature never fails it.
 
+``-MigrateFrom <old folder>`` hands the run to ``installer_migrate.py`` beside this
+file: it copies this PC's declared files from an existing install, runs this same
+install, starts the app and verifies the clone serves.
+
 The module is stdlib only: on a fresh PC it runs on the system python before any
 requirement is installed.
 """
@@ -47,6 +51,7 @@ import argparse
 import ctypes
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -56,6 +61,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 # A vendor-verbatim file keeps its own copy of the no-console flag: it cannot
@@ -678,6 +684,18 @@ def render(report: Report) -> str:
     return "\n".join(out)
 
 
+def _migration() -> ModuleType:
+    """``installer_migrate.py`` beside this file, loaded by path: ``-I`` keeps this folder off ``sys.path``."""
+    path = Path(__file__).with_name("installer_migrate.py")
+    spec = importlib.util.spec_from_file_location("installer_migrate", path)
+    if spec is None or spec.loader is None or not path.is_file():
+        raise SystemExit(f"setup.bat: {path.name} is missing beside installer.py; vendor it to migrate")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve their module by name
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(root: Path, argv: list[str] | None = None) -> int:
     """``setup.bat``'s command line: ``-WhatIf`` and ``-Startup``; returns the exit code."""
     parser = argparse.ArgumentParser(prog="setup.bat", description="Install this app on this PC, or bring its "
@@ -686,7 +704,19 @@ def main(root: Path, argv: list[str] | None = None) -> int:
                         help="list every change and make none")
     parser.add_argument("-Startup", "--startup", dest="startup", action="store_true",
                         help="also start the app at log on (only when not already registered)")
+    parser.add_argument("-MigrateFrom", "--migrate-from", dest="migrate_from", metavar="OLD_FOLDER",
+                        help="copy this PC's declared files from an existing install, install, start and verify")
+    parser.add_argument("-StopOld", "--stop-old", dest="stop_old", action="store_true",
+                        help="with -MigrateFrom: first stop the processes that run from the old folder")
+    parser.add_argument("-Json", "--json", dest="as_json", action="store_true",
+                        help="with -MigrateFrom: print the report as JSON")
     args = parser.parse_args(argv)
+    if args.migrate_from:
+        return int(_migration().main_migrate(root, Path(args.migrate_from), installer=sys.modules[__name__],
+                                             what_if=args.what_if, stop=args.stop_old, startup=args.startup,
+                                             as_json=args.as_json))
+    if args.stop_old or args.as_json:
+        parser.error("-StopOld and -Json go with -MigrateFrom")
     reconfigure = getattr(sys.stdout, "reconfigure", None)
     if reconfigure is not None:
         reconfigure(encoding="utf-8")

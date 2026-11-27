@@ -71,6 +71,8 @@ No other step: every file a run writes is gitignored, so the pull never meets a 
 
 ## Migrate from an existing machine
 
+A copy already on **this** PC is moved by one `setup.bat` call: [Install, update and migrate](install.md#migrate). This section is the move to another PC.
+
 Stop the app on the old machine first (tray menu → Quit), so the database is checkpointed and no file is mid-write. Then copy, relative to the old checkout unless a path says otherwise.
 
 | What | Where it lives | Needed? |
