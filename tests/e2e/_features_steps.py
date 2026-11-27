@@ -61,6 +61,9 @@ def walk_opt_in_row(page: Page, group: Locator) -> None:
     publish.locator(".toggle").tap()
     expect(publish.locator(".settings-feature-state")).to_have_text(
         "On, unavailable here: network_sharing.host_ip_file is blank — no file to publish to")
+    # The row's state is a word of the async vocabulary, and the reason replaces the summary.
+    expect(publish).to_have_attribute("data-state", "error")
+    expect(publish.locator(".settings-feature-summary")).to_be_hidden()
     expect(page.locator("html")).not_to_have_attribute("data-features-off", re.compile("."))
     publish.locator(".toggle").tap()
     expect(publish.locator(".settings-feature-state")).to_have_text("Off on this machine")

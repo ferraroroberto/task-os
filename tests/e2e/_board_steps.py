@@ -276,6 +276,8 @@ def _week_lane_drag_and_clear(page: Page, base: str, shots: Path) -> None:
     # The "Undone" toast is raised after the inverse write lands: waiting on it
     # keeps the API read below off a slower runner's race (#411).
     expect(page.locator("#toast")).to_contain_text("Undone")
+    # The Undo's own toast stays up: the tap that raised it must not hide it.
+    expect(page.locator("#toast")).to_be_visible()
     expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
     assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
     dismiss_toasts(page)
@@ -613,6 +615,7 @@ def _move_verb_apply(page: Page, base: str, sheet, sid: int) -> None:
     expect(moved).to_contain_text("Due ")
     assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow
     moved.locator(".toast-action").click()
+    expect(page.locator("#toast")).to_contain_text("Undone")
     expect(_today_row(page, "School enrolment forms")).to_be_visible()
     assert _get(base, f"/api/tasks/{sid}")["due"] == E2E_ANCHOR.isoformat()
     dismiss_toasts(page)

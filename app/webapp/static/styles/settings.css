@@ -55,7 +55,7 @@ dialog.settings-sheet[data-sheet="archive"] { width: min(1400px, 96vw); }
    simply on has no state text. An unavailable block shows its reason in place
    of the summary, so the part to act on is the one that stays readable. */
 .settings-feature-state:not(:empty)::before { content: "·"; content: "·" / ""; margin: 0 6px; }
-.settings-feature[data-state="unavailable"] .settings-feature-summary { display: none; }
-.settings-feature[data-state="unavailable"] .settings-feature-state::before { content: none; }
+.settings-feature[data-state="error"] .settings-feature-summary { display: none; }
+.settings-feature[data-state="error"] .settings-feature-state::before { content: none; }
 .settings-feature-state[data-tone="attention"] { color: var(--attention-text); font-weight: 600; }
 .settings-features-note:empty { display: none; }

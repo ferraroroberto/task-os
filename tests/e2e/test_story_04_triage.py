@@ -589,6 +589,7 @@ def _move_from_a_today_row(page: Page, base: str, shots: Path, snoozed, today):
     assert task_id not in [t["id"] for t in _get(base, "/api/tasks?status=deferred")["items"]]
 
     toast.locator(".toast-action").click()
+    expect(toast).to_contain_text("Undone")   # it stays up: wait for it, so a later dismiss catches it
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     undone = _get(base, f"/api/tasks/{task_id}")
     assert (undone["starts"], undone["due"]) == (None, before["due"])   # Undo restores the due date
@@ -637,6 +638,7 @@ def _move_from_the_menu(page: Page, base: str, menu, task_id, toast, today):
     moved = _get(base, f"/api/tasks/{task_id}")
     assert (moved["due"], moved["starts"]) == (tomorrow, None)
     toast.locator(".toast-action").click()
+    expect(toast).to_contain_text("Undone")
     expect(_trow(page, "School enrolment forms", "#paneToday")).to_be_visible()
     assert _get(base, f"/api/tasks/{task_id}")["due"] == before
     # `.` on a focused row opens its menu; Escape closes it, focus back on the kebab
