@@ -24,7 +24,7 @@ cd <folder>
 2. installs `requirements.txt`, and later reinstalls only when that file changed (its hash is kept inside `.venv`);
 3. runs the dependency step, `python -m src.install apply`: on a PC that already has a `config/config.json` it adds the keys that change nothing (below), and it registers the `taskos://` folder opener for this user when none is registered. It reruns only when `config/config.sample.json` changed;
 4. creates `config/config.json` and `config/sharepoint-mapping.json` from their `*.sample.json` when they are missing;
-5. ends with a checklist that marks each item `ok`, `missing` or `unknown`.
+5. ends with two lists: the required items, each `ok`, `missing` or `unknown`, and the optional features, each `available`, `off` or `unknown` with what it unlocks. Setup has succeeded when it ends with `Setup complete` and exits 0; an optional feature that is `off` never changes that.
 
 **Edit `config/config.json` before the first start.** The sample carries the author's account and synced folders, and issue sync and the mirror act on them within seconds of the first start. The checklist's *Config reviewed for this PC* item stays `unknown` until each such key holds a value of yours; `.venv\Scripts\python.exe -m src.install check config-reviewed` lists them. What to decide for each key: [Setup and migration](setup-and-migration.md#set-up-a-new-machine); every key: [Configuration](configuration.md).
 
@@ -34,10 +34,10 @@ Then start it:
 .\tray.bat          # tray icon -> the app on the configured port (8448 by default)
 ```
 
-What the checklist may still ask for:
+The optional features that may still want you:
 
 - **Your name:** Settings, Your name (comments and activity are signed with it).
-- **HTTPS certificate** and **Sign-in for other devices**, for the phone only: `.venv\Scripts\python.exe scripts\gen_tailscale_cert.py`, then `scripts\gen_token.py` or `.venv\Scripts\python.exe -m src.password set` ([Phone access](access.md)). A password file that holds no usable password (empty or corrupt) is `missing` even when a token is set, and one that cannot be read is `unknown`.
+- **HTTPS certificate** and **Sign-in for other devices**, for the phone only: `.venv\Scripts\python.exe scripts\gen_tailscale_cert.py`, then `scripts\gen_token.py` or `.venv\Scripts\python.exe -m src.password set` ([Phone access](access.md)). A password file that holds no usable password (empty or corrupt) is `off` even when a token is set, and one that cannot be read is `unknown`.
 - **Shared tray helper:** `tray.bat --restart` needs the fleet's `tray_lifecycle.ps1` under `%USERPROFILE%\.claude\tray`. A plain `tray.bat` start works without it.
 - **Start at log on:** run `.\setup.bat -Startup`. It adds a `task-os.bat` to your Startup folder that calls this checkout's `tray.bat`.
 

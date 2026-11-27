@@ -106,7 +106,7 @@ build_info = { src = "src/build_info.py", sha = "1c1007fcd0b65b54342779250cb6697
 health_routes = { src = "src/health_routes.py", sha = "732c304a4735d4e654f5acb3b6f53b7db67d47ef", dest = "src/health_routes.py" }
 restart_check = { src = "src/restart_check.py", sha = "f8c2f66eae7a69f3c834386579702ed5b747d7af", dest = "src/restart_check.py" }
 ratchet_baseline = { src = "scripts/ratchet_baseline.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ratchet_baseline.py" }
-installer = { src = "src/installer.py", sha = "bafa9446b907dcb7fc6d833c1edfb1a069b7ca38", dest = "src/installer.py" }
+installer = { src = "src/installer.py", sha = "f774234582bc8fe2ce2e44804275b690b192f40d", dest = "src/installer.py" }
 ps_script = { src = "src/ps_script.py", sha = "2d786d295c9b8d545aaf35703889638096f251ad", dest = "src/ps_script.py" }
 
 # [install] -- what `setup.bat` (the vendored src/installer.py) does on this PC; the schema is
@@ -132,36 +132,50 @@ register = ["{python}", "-m", "src.install", "startup", "enable"]
 
 [[install.check]]
 name    = "Config reviewed for this PC"
+level   = "optional"
+blocks  = "issue sync and the mirror on your own accounts and folders"
 command = ["{python}", "-m", "src.install", "check", "config-reviewed"]
 hint    = "a personal key still holds the sample's value; list them: .venv/Scripts/python.exe -m src.install check config-reviewed"
 
 [[install.check]]
 name    = "Your name"
+level   = "optional"
+blocks  = "signed comments and activity"
 command = ["{python}", "-m", "src.install", "check", "your-name"]
 hint    = "set it in Settings, Your name: comments and activity are signed with it"
 
 [[install.check]]
 name    = "Folder opener (taskos://)"
+level   = "optional"
+blocks  = "opening a task's folder link"
 command = ["{python}", "-m", "src.install", "check", "opener"]
 hint    = "register it: .venv/Scripts/python.exe -m src.install apply"
 
 [[install.check]]
-name    = "Shared tray helper (tray.bat --restart)"
+name    = "Shared tray helper"
+level   = "optional"
+blocks  = "tray.bat --restart"
 command = ["{python}", "-m", "src.install", "check", "tray-helper"]
 hint    = "a plain tray.bat start works; --restart needs fleet-config's helper"
 
 [[install.check]]
-name    = "HTTPS certificate (phone access)"
+name    = "HTTPS certificate"
+level   = "optional"
+blocks  = "phone access"
 command = ["{python}", "-m", "src.install", "check", "certificate"]
 hint    = "optional, for the phone: .venv/Scripts/python.exe scripts/gen_tailscale_cert.py (docs/access.md)"
 
 [[install.check]]
 name    = "Sign-in for other devices"
+level   = "optional"
+blocks  = "remote sign-in"
 command = ["{python}", "-m", "src.install", "check", "signin"]
 hint    = "optional, for the phone: scripts/gen_token.py or: .venv/Scripts/python.exe -m src.password set"
 
 [[install.check]]
 name    = "App answering on its port"
+level   = "optional"
+blocks  = "using the app now"
 command = ["{python}", "-m", "src.install", "check", "app-answering"]
 hint    = "start it: tray.bat"
 
