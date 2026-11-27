@@ -247,8 +247,8 @@ surfaces:
         one message at a time, pinned above the nav, with an optional **Undo (Z)** button.
     does:
       - >-
-        Undo writes the inverse change; it and the `z` key expire together after ten seconds. Bulk
-        results name any task that failed.
+        Undo writes the inverse change; it and the `z` key expire together after ten seconds. The
+        result toast it raises stays up. Bulk results name any task that failed.
     states:
       - "neutral, or tinted for an error."
   - id: app.update-banner

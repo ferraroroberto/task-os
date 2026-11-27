@@ -173,7 +173,7 @@ flowchart LR
 - **Root:** `data-surface`
 - **Reach:** after a user-initiated write or an error; passive status renders inline instead.
 - **Holds:** one message at a time, pinned above the nav, with an optional **Undo (Z)** button.
-- **Does:** Undo writes the inverse change; it and the `z` key expire together after ten seconds. Bulk results name any task that failed.
+- **Does:** Undo writes the inverse change; it and the `z` key expire together after ten seconds. The result toast it raises stays up. Bulk results name any task that failed.
 - **States:** neutral, or tinted for an error.
 
 ### `app.update-banner` New-version notice

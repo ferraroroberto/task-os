@@ -276,6 +276,8 @@ def _week_lane_drag_and_clear(page: Page, base: str, shots: Path) -> None:
     # The "Undone" toast is raised after the inverse write lands: waiting on it
     # keeps the API read below off a slower runner's race (#411).
     expect(page.locator("#toast")).to_contain_text("Undone")
+    # The Undo's own toast stays up: the tap that raised it must not hide it.
+    expect(page.locator("#toast")).to_be_visible()
     expect(_lane(page, "tomorrow").locator(f".trow[data-id='{bkid}']")).to_be_visible()
     assert _get(base, f"/api/tasks/{bkid}")["due"] == before["due"]
     dismiss_toasts(page)

@@ -91,11 +91,11 @@ function paintState(row, f) {
     state.textContent = f.detail;
     if (f.attention) state.dataset.tone = 'attention';
     else delete state.dataset.tone;
-    if (f.attention) row.dataset.state = 'unavailable';
+    if (f.attention) row.dataset.state = 'error';
   } else if (!f.available) {
     state.textContent = 'On, unavailable here: ' + f.reason;
     state.dataset.tone = 'attention';
-    row.dataset.state = 'unavailable';
+    row.dataset.state = 'error';
     meta.title = f.summary + ' ' + state.textContent;
   } else {
     state.textContent = '';
