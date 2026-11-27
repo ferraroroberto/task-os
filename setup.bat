@@ -9,7 +9,7 @@ REM  Safe to run any number of times; it never overwrites what this PC has
 REM  configured. The work is src\installer.py (docs\install-playbook.md):
 REM    setup.bat            create .venv, install requirements, create missing
 REM                         configs, add keys a settings file lacks (after a
-REM                         backup), end with an ok/missing/unknown checklist
+REM                         backup), end with required and optional checklists
 REM    setup.bat -WhatIf    list every change, make none
 REM    setup.bat -Startup   also start the app at log on
 REM  A batch file, not a .ps1, so the PowerShell execution policy (AllSigned
