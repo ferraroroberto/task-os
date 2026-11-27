@@ -266,6 +266,7 @@ def _row_date_sheet_and_undo(page: Page, base: str, shots: Path, row, sheet, tas
     expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_have_count(0)
     assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "done"
     toast.locator(".toast-action").tap()
+    expect(toast).to_contain_text("Undone")
     expect(page.locator(f"#paneToday .trow[data-id='{task['id']}']")).to_be_visible()
     assert page.request.get(f"{base}/api/tasks/{task['id']}").json()["status"] == "standby"   # Undo puts the status back
     # Let the re-renders the writes kicked off finish before the row's task is

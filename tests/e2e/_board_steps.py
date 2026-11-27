@@ -615,6 +615,7 @@ def _move_verb_apply(page: Page, base: str, sheet, sid: int) -> None:
     expect(moved).to_contain_text("Due ")
     assert _get(base, f"/api/tasks/{sid}")["due"] == tomorrow
     moved.locator(".toast-action").click()
+    expect(page.locator("#toast")).to_contain_text("Undone")
     expect(_today_row(page, "School enrolment forms")).to_be_visible()
     assert _get(base, f"/api/tasks/{sid}")["due"] == E2E_ANCHOR.isoformat()
     dismiss_toasts(page)
