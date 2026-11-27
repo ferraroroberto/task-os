@@ -107,10 +107,10 @@ health_routes = { src = "src/health_routes.py", sha = "732c304a4735d4e654f5acb3b
 restart_check = { src = "src/restart_check.py", sha = "f8c2f66eae7a69f3c834386579702ed5b747d7af", dest = "src/restart_check.py" }
 ratchet_baseline = { src = "scripts/ratchet_baseline.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ratchet_baseline.py" }
 installer = { src = "src/installer.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer.py" }
-installer_migrate = { src = "src/installer_migrate.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_migrate.py" }
-installer_declaration = { src = "src/installer_declaration.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_declaration.py" }
-installer_inplace = { src = "src/installer_inplace.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_inplace.py" }
-install_standard_ratchet = { src = "scripts/install_standard_ratchet.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "scripts/install_standard_ratchet.py" }
+installer_migrate = { src = "src/installer_migrate.py", sha = "87981135d4ea66f76621d9b2f400efc28b68d2d9", dest = "src/installer_migrate.py" }
+installer_declaration = { src = "src/installer_declaration.py", sha = "87981135d4ea66f76621d9b2f400efc28b68d2d9", dest = "src/installer_declaration.py" }
+installer_inplace = { src = "src/installer_inplace.py", sha = "87981135d4ea66f76621d9b2f400efc28b68d2d9", dest = "src/installer_inplace.py" }
+install_standard_ratchet = { src = "scripts/install_standard_ratchet.py", sha = "87981135d4ea66f76621d9b2f400efc28b68d2d9", dest = "scripts/install_standard_ratchet.py" }
 ps_script = { src = "src/ps_script.py", sha = "2d786d295c9b8d545aaf35703889638096f251ad", dest = "src/ps_script.py" }
 
 # [install] -- what `setup.bat` (the vendored src/installer.py) does on this PC; the schema is
@@ -183,7 +183,7 @@ blocks  = "using the app now"
 command = ["{python}", "-m", "src.install", "check", "app-answering"]
 hint    = "start it: tray.bat"
 
-# What `setup.bat -MigrateFrom` and `-InPlace` verify and carry over (docs/install.md, Migrate). The port is
+# What `setup.bat -MigrateFrom`, `-Replace` and `-InPlace` verify and carry over (docs/install.md, Migrate). The port is
 # the one this PC's config sets, else the top-level `port`. A PC with a certificate serves HTTPS under its
 # tailnet name, never 127.0.0.1, so the loopback check accepts any certificate; one without serves plain
 # HTTP, which verify asks second.

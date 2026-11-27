@@ -1,4 +1,4 @@
-"""``setup.bat -InPlace`` / ``-MigrateFrom`` carry what ``.fleet.toml [install.migrate]`` names and nothing else:
+"""``setup.bat -Replace`` / ``-InPlace`` / ``-MigrateFrom`` carry what ``[install.migrate]`` names, nothing else:
 each file the app keeps per PC is declared, each declared one is ignored by git, and the database stays put."""
 
 from __future__ import annotations

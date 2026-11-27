@@ -83,15 +83,20 @@ For a PC that already runs a copy of task-os. What moves is declared in `[instal
 
 The secrets among them are compared by hash, never printed. The database and the usage log are in the `task-os` runtime-data folder (`C:\sqlite\task-os` by default): they stay where they are and both copies open the same ones. `.venv`, the logs, `mirror/` and `config/backups/` are not carried. The installer does the whole move; nothing here or in `setup.bat` deletes the old copy.
 
-**Reinstall in the same folder (the usual case).** It needs the folder to be a git clone with an `origin`. Close any terminal or editor whose current folder is inside it, then from a terminal outside the app:
+**Reinstall in the same folder (the usual case).** It works whatever version the installed copy is, because it runs from a fresh clone and never runs the old copy's code. The installed folder must be a git clone with an `origin`. Close any terminal or editor whose current folder is inside it, then run these in order from `<root>`, the folder that holds `<folder>`:
 
 ```powershell
-cd <parent folder>
-.\<folder>\setup.bat -InPlace -WhatIf    # read the backup name and every step; nothing changes
-.\<folder>\setup.bat -InPlace
+cd <root>
+git clone https://github.com/ferraroroberto/task-os <folder>.incoming   # a fresh clone beside the install; run nothing else in it
+.\<folder>.incoming\setup.bat -Replace <folder> -WhatIf                 # read the backup name and every step; nothing changes
+.\<folder>.incoming\setup.bat -Replace <folder>
 ```
 
-It stops the app, keeps the replaced copy as `<folder>.bak-YYYYMMDD-N`, clones the remote's default branch into the same path, installs, starts the tray and passes only when the new clone serves its own commit. The app is down while the new `.venv` is built. The path is unchanged, so the Startup entry and anything else that stores it need no edit.
+It stops the app, renames `<folder>` to `<folder>.bak-YYYYMMDD-N` (uncommitted edits stay there), moves `<folder>.incoming` to `<folder>`, migrates from the backup, installs, starts the tray and passes only when the new clone serves its own commit. The app is down while the new `.venv` is built. The path is unchanged, so the Startup entry and anything else that stores it need no edit.
+
+- The two copies must have the same `origin`. If the run refuses on it, clone the URL that `git -C <folder> remote get-url origin` prints.
+- A `<folder>.incoming` left over from earlier is used only if it is a clean clone with no `.venv`; otherwise the run refuses and changes nothing.
+- On an install whose `setup.bat` already has `-InPlace`, `.\<folder>\setup.bat -InPlace` does the same and makes the clone itself.
 
 **Beside it (another folder, or an old copy that is not a git clone):**
 
