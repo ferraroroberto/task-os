@@ -1,15 +1,12 @@
-# Install, update and move task-os
+# Install, update and migrate task-os
 
-task-os moves to another Windows PC the way any app in the toolbox does: clone it and run one `setup.bat`. An update is a pull plus a restart. Neither ever resets or overwrites what a PC has configured, so `setup.bat` is safe to run again at any time.
+task-os installs, updates and migrates the way any app in the toolbox does: clone it and run one `setup.bat`. An update is a pull plus a restart. A migration, onto a fresh clone beside an older copy or in its place, is one `setup.bat` call. None of them ever resets or overwrites what a PC has configured.
 
 What `setup.bat` runs is the toolbox's shared installer, `src/installer.py`, driven by the `[install]` table in `.fleet.toml`. The parts that are task-os's own (the config top-up, the folder opener, the sign-in start and the personal checklist items) are the commands in `src/install/`.
 
-## What you need
+## Install
 
-- Windows 10 or 11, **Git**, and **Python 3.14** (python.org, with the `py` launcher). `setup.bat` needs Python 3.11 or newer to start and builds the `.venv` with the interpreter it finds, so install 3.14 first.
-- Optional, by feature: the GitHub CLI `gh` (logged in) or `glab` for issue sync; Tailscale for phone access over HTTPS; a reachable local model hub for voice and AI triage; folder-explorer for folder and email search and Inbox archiving. Node.js and the Playwright browsers are only for the developer gate. Which feature needs what: [Setup and migration](setup-and-migration.md#set-up-a-new-machine).
-
-## Fresh PC
+You need Windows 10 or 11, **Git**, and **Python 3.14** (python.org, with the `py` launcher). `setup.bat` needs Python 3.11 or newer to start and builds the `.venv` with the interpreter it finds, so install 3.14 first. Optional, by feature: the GitHub CLI `gh` (logged in) or `glab` for issue sync; Tailscale for phone access over HTTPS; a reachable local model hub for voice and AI triage; folder-explorer for folder and email search and Inbox archiving. Node.js and the Playwright browsers are only for the developer gate. Which feature needs what: [Setup and migration](setup-and-migration.md#set-up-a-new-machine).
 
 ```powershell
 git clone https://github.com/ferraroroberto/task-os <folder>
@@ -22,7 +19,7 @@ cd <folder>
 
 1. creates `.venv` when it is missing;
 2. installs `requirements.txt`, and later reinstalls only when that file changed (its hash is kept inside `.venv`);
-3. runs the dependency step, `python -m src.install apply`: on a PC that already has a `config/config.json` it adds the keys that change nothing (below), and it registers the `taskos://` folder opener for this user when none is registered. It reruns only when `config/config.sample.json` changed;
+3. runs the dependency step, `python -m src.install apply`: on a PC that already has a `config/config.json` it adds the keys that change nothing (under [Update](#update)), and it registers the `taskos://` folder opener for this user when none is registered. It reruns only when `config/config.sample.json` changed;
 4. creates `config/config.json` and `config/sharepoint-mapping.json` from their `*.sample.json` when they are missing;
 5. ends with two lists: the required items, each `ok`, `missing` or `unknown`, and the optional features, each `available`, `off` or `unknown` with what it unlocks. Setup has succeeded when it ends with `Setup complete` and exits 0; an optional feature that is `off` never changes that.
 
@@ -41,20 +38,28 @@ The optional features that may still want you:
 - **Shared tray helper:** `tray.bat --restart` needs the fleet's `tray_lifecycle.ps1` under `%USERPROFILE%\.claude\tray`. A plain `tray.bat` start works without it.
 - **Start at log on:** run `.\setup.bat -Startup`. It adds a `task-os.bat` to your Startup folder that calls this checkout's `tray.bat`.
 
-`.\setup.bat -WhatIf` reports every change as `would ...` and writes nothing. Its dependency step line only says the step would run; the exact keys are listed by the command above, once a `.venv` exists.
+`.\setup.bat -WhatIf` reports every change as `would ...` and writes nothing. Its dependency step line only says the step would run; the exact keys are listed by `.venv\Scripts\python.exe -m src.install apply -WhatIf`, once a `.venv` exists.
+
+### Uninstall
+
+1. Quit the tray from its icon menu.
+2. Delete `task-os.bat` from your Startup folder (`shell:startup`) if you added it.
+3. Remove the `taskos://` scheme: `.venv\Scripts\python.exe assets\opener\install_opener.py --uninstall`.
+4. Delete the folder. Keep a copy of the files listed under [Migrate](#migrate) first if you may want them back.
+
+The database is **not** in the folder: it is in the runtime-data folder (`C:\sqlite\task-os` by default), and deleting the checkout leaves it. Delete that folder too only if you want every task gone, and copy `tasks.db` somewhere first if you are unsure. The synced mirror and backup folders are yours and are never touched.
 
 ## Update
 
 ```powershell
 git pull --ff-only
+.\setup.bat             # needed when requirements.txt or config.sample.json changed; safe every time
 .\tray.bat --restart
 ```
 
-Nothing else is needed:
-
 - **The tree stays clean.** Every file a run writes is gitignored: configs, `data/`, `.env`, `mirror/`, `webapp/` (certificates and logs), the gate's caches. No tracked file is rewritten at runtime or holds a machine value, so a pull never meets a local edit and always fast-forwards.
-- **`tray.bat --restart`** reclaims the configured port and starts fresh. Check the build with `GET /api/version`: its `git_sha` equals `git rev-parse --short HEAD`. A schema change migrates itself at startup.
-- **After a pull that changed `requirements.txt` or `config/config.sample.json`,** run `.\setup.bat` before the restart. Running it after every pull is safe: a second run reports `unchanged` and writes nothing.
+- **`tray.bat --restart`** reclaims the configured port and starts fresh. Check the build with `GET /api/version`: its `git_sha` equals `git rev-parse --short HEAD`. A schema change migrates itself at startup. Without the shared tray helper, choose Quit from the tray menu and run `.\tray.bat`.
+- A second `setup.bat` run reports `unchanged` and writes nothing.
 
 What `setup.bat` does to a PC that already has its settings:
 
@@ -63,36 +68,51 @@ What `setup.bat` does to a PC that already has its settings:
 - `config/sharepoint-mapping.json` (read only by the one-shot import) is the owner's own list: created when missing, never rewritten.
 - A config that is not valid JSON is left untouched and reported; the run exits 1 so you notice. Fix the JSON, then run `setup.bat` again.
 
-## Migrate from an existing install
+## Migrate
 
-Use this on a PC that already runs an older copy of task-os: one that may not be a git clone, and may live at another path. The old copy keeps running until the new one is verified, and it is deleted only when you say so.
+For a PC that already runs a copy of task-os. What moves is declared in `[install.migrate]` of `.fleet.toml`, and each item is copied only when the old copy has it and the new one does not:
 
-Two things make this different from a copy to a second PC. The old and the new copy on one PC share the same database by default, because it lives outside the checkout, and both default to port 8448. So the old copy is stopped before the new one starts, and the database is not copied at all unless the old copy kept it inside its own folder.
+| Copied | What it is |
+| --- | --- |
+| `config/config.json` | Settings, including the port, the mirror and backup folders and the sign-in secrets. |
+| `config/app_password.json` | The sign-in password hash. |
+| `config/sharepoint-mapping.json` | The column map of the one-shot import. |
+| `.env` | The Notion import token. |
+| `data/avatars/` | Team avatars, team mode only. |
+| `webapp/certificates/` | The HTTPS certificate pair, so phone access keeps working. |
 
-1. **Clone fresh beside it.** `git clone https://github.com/ferraroroberto/task-os <new folder>`; never clone over the old folder.
-2. **Copy this PC's own files across.** From the old folder into the new one, keeping relative paths (all are gitignored, so nothing tracked is touched):
-   - settings and secrets: `config\config.json` (holds the port, the mirror and backup folders, the `auth` and `alerts` secrets and the service addresses);
-   - the sign-in password: `config\app_password.json` when it exists;
-   - the one-shot import's column map, only if you will import again: `config\sharepoint-mapping.json`;
-   - the Notion import token, only if you will import again: `.env` (keys `NOTION_API_TOKEN` and `NOTION_TASKS_DB_ID`);
-   - team avatars, team mode only: `data\avatars\`.
-3. **Check where the database is.** It is `tasks.db` (and `usage.sqlite3` beside it) in the runtime-data folder: `TASKOS_DB_PATH` if that environment variable is set, else `<TASK_OS_DATA_DIR>`, else `<FLEET_DATA_ROOT>\task-os`, else `C:\sqlite\task-os`. If the old copy already uses that folder, copy nothing: the new copy opens the same database. If the old copy kept it at `data\tasks.db` inside its own folder, stop the old app first (step 5), then copy `tasks.db` (alone: the `-wal` and `-shm` files next to it are empty after a clean stop) into `C:\sqlite\task-os\`, creating the folder if needed. `tasks backup` makes a consistent copy while the app runs.
-4. **Top them up.** In the new folder run `.\setup.bat -WhatIf`, read it, then `.\setup.bat`. `config\config.json` gains only the keys it lacks that change nothing; the values you copied stay as they were. Check that the mirror and backup folders in the copied config exist on this PC.
-5. **Stop the old copy.** Tray menu, Quit. If the old copy started at log on, delete its `task-os.bat` from `shell:startup` now: `setup.bat -Startup` keeps any Startup entry that names task-os, and the old one points at the old folder.
-6. **Start the new one.** `.\tray.bat`, and `.\setup.bat -Startup` if it should start at log on.
-7. **Verify it.** `GET http://127.0.0.1:8448/api/version` shows the new checkout's `git_sha` and a `schema_version`; Today and Board show your tasks and the count matches what you had; Settings shows the mirror and backup rows as you expect. If anything is wrong, quit the new tray and start the old one again: it is untouched.
-8. **Retire the old folder, only after you confirm.** Nothing in this playbook or in `setup.bat` deletes the old copy. When you are satisfied, rename it first (for example `<old folder>.retired`), run on the new copy for a while, and delete it yourself once you are sure. An agent working through this playbook asks you before it deletes anything.
+The secrets among them are compared by hash, never printed. The database and the usage log are in the `task-os` runtime-data folder (`C:\sqlite\task-os` by default): they stay where they are and both copies open the same ones. `.venv`, the logs, `mirror/` and `config/backups/` are not carried. The installer does the whole move; nothing here or in `setup.bat` deletes the old copy.
 
-**Do not copy:** `.venv\` (recreated), `data\logs\` and `webapp\*.log` (rebuilt), `mirror\` (rebuilt from the database on the first start), and `webapp\certificates\` (issued for one PC's tailnet name: run `scripts\gen_tailscale_cert.py` on the new one). The `taskos://` folder opener is registered per user, not per folder, so it needs no copy and keeps working. The full table of state, and what to edit after copying the config: [Setup and migration](setup-and-migration.md#migrate-from-an-existing-machine).
+**Reinstall in the same folder (the usual case).** It needs the folder to be a git clone with an `origin`. Close any terminal or editor whose current folder is inside it, then from a terminal outside the app:
 
-## Uninstall
+```powershell
+cd <parent folder>
+.\<folder>\setup.bat -InPlace -WhatIf    # read the backup name and every step; nothing changes
+.\<folder>\setup.bat -InPlace
+```
 
-1. Quit the tray from its icon menu.
-2. Delete `task-os.bat` from your Startup folder (`shell:startup`) if you added it.
-3. Remove the `taskos://` scheme: `.venv\Scripts\python.exe assets\opener\install_opener.py --uninstall`.
-4. Delete the folder. Keep a copy of `config\` first if you may want it back.
+It stops the app, keeps the replaced copy as `<folder>.bak-YYYYMMDD-N`, clones the remote's default branch into the same path, installs, starts the tray and passes only when the new clone serves its own commit. The app is down while the new `.venv` is built. The path is unchanged, so the Startup entry and anything else that stores it need no edit.
 
-The database is **not** in the folder: it is in the runtime-data folder (`C:\sqlite\task-os` by default), and deleting the checkout leaves it. Delete that folder too only if you want every task gone, and copy `tasks.db` somewhere first if you are unsure. The synced mirror and backup folders are yours and are never touched.
+**Beside it (another folder, or an old copy that is not a git clone):**
+
+```powershell
+git clone https://github.com/ferraroroberto/task-os <new folder>
+cd <new folder>
+.\setup.bat -MigrateFrom <old folder> -StopOld
+```
+
+Pass `-StopOld` on the same PC: both copies bind the same port and share one tray lock, so the new one cannot start beside a running old one. `-WhatIf` lists every step and every file first. A path in the copied config that points into the old folder is rewritten to the new one.
+
+Only you can do these steps:
+
+- **Before an in-place reinstall,** push or write down anything else in the old folder that you want in the new one: local branches, stashes, linked worktrees and files outside the table above stay in the backup.
+- **A database inside the old folder** (`data\tasks.db`, from before the runtime-data folder) is not carried. Quit the tray from its menu first, then copy `tasks.db` into `C:\sqlite\task-os\`.
+- **Repoint** whatever stores the old path, after a `-MigrateFrom` into another folder: the run lists what still points at it. For a start at log on, delete the old `task-os.bat` from `shell:startup`, then run `.\setup.bat -Startup` in the new folder.
+- **Check it:** Today and Board show your tasks, and Settings shows the mirror and backup rows as you expect.
+- **Fall back** if verify fails (the report names the step): quit the new tray, rename the new folder away and the backup to the original name, and start it with `.\tray.bat`; it is untouched.
+- **Retire the backup** once you are sure the new copy works, by deleting it yourself. An agent working through this playbook asks you before it deletes anything.
+
+Moving to **another PC** is not this section: the old folder has to be reachable here, the database is not in it, and a certificate is issued for one PC's tailnet name, so reissue it there. The full table of state: [Setup and migration](setup-and-migration.md#migrate-from-an-existing-machine).
 
 ## Execution policy
 

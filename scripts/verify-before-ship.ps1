@@ -86,6 +86,13 @@
                              scripts/windows_only_ratchet_gate.py. Whole tree, never
                              routed; an exit 3 (a test module that cannot be listed, read
                              or parsed) is NOT CONFIRMED and fails, never a pass or a skip.
+     10g. install standard ratchet — no installer module missing, undeclared or behind the
+                             scaffold's, no unparseable [install.migrate] and no missing
+                             Install, Update or Migrate section in docs/install.md beyond
+                             .ratchets/install-standard.json, through
+                             scripts/install_standard_ratchet_gate.py. Whole tree, never
+                             routed; an exit 3 (a module or the playbook that cannot be
+                             read) is NOT CONFIRMED and fails, never a pass or a skip.
      11. pytest (unit)    — hermetic suite, tests/e2e excluded; a runtime write
                              --snapshot is taken first
      12. pytest (e2e)      — diff-proportionate: the browser slice is routed by
@@ -212,6 +219,9 @@ Invoke-Stage "request budget ratchet"  { & $py -m scripts.request_budget_ratchet
 # Same wrapper shape: it maps the windows-only script's exit 3 to NOT CONFIRMED
 # (tests/gates/test_windows_only_ratchet_gate.py pins it). Whole tree, never routed.
 Invoke-Stage "windows only ratchet"    { & $py -m scripts.windows_only_ratchet_gate }
+# Same wrapper shape: it maps the install standard script's exit 3 to NOT CONFIRMED
+# (tests/gates/test_install_standard_ratchet_gate.py pins it). Whole tree, never routed.
+Invoke-Stage "install standard ratchet" { & $py -m scripts.install_standard_ratchet_gate }
 # Runtime write probe, first half: what already sits untracked or ignored under
 # the code folders, so the probe after the tests names only what they wrote.
 $runtimeSnapshot = Join-Path ([IO.Path]::GetTempPath()) "runtime-write-snapshot-$PID.json"

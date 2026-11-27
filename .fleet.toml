@@ -106,7 +106,11 @@ build_info = { src = "src/build_info.py", sha = "1c1007fcd0b65b54342779250cb6697
 health_routes = { src = "src/health_routes.py", sha = "732c304a4735d4e654f5acb3b6f53b7db67d47ef", dest = "src/health_routes.py" }
 restart_check = { src = "src/restart_check.py", sha = "f8c2f66eae7a69f3c834386579702ed5b747d7af", dest = "src/restart_check.py" }
 ratchet_baseline = { src = "scripts/ratchet_baseline.py", sha = "48db2132dab2dfc38b6154948ca17fd1f4b9232f", dest = "scripts/ratchet_baseline.py" }
-installer = { src = "src/installer.py", sha = "f774234582bc8fe2ce2e44804275b690b192f40d", dest = "src/installer.py" }
+installer = { src = "src/installer.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer.py" }
+installer_migrate = { src = "src/installer_migrate.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_migrate.py" }
+installer_declaration = { src = "src/installer_declaration.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_declaration.py" }
+installer_inplace = { src = "src/installer_inplace.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "src/installer_inplace.py" }
+install_standard_ratchet = { src = "scripts/install_standard_ratchet.py", sha = "a40310fe47f82ed7af62835fbfb3ea7ba9e04f8d", dest = "scripts/install_standard_ratchet.py" }
 ps_script = { src = "src/ps_script.py", sha = "2d786d295c9b8d545aaf35703889638096f251ad", dest = "src/ps_script.py" }
 
 # [install] -- what `setup.bat` (the vendored src/installer.py) does on this PC; the schema is
@@ -178,6 +182,26 @@ level   = "optional"
 blocks  = "using the app now"
 command = ["{python}", "-m", "src.install", "check", "app-answering"]
 hint    = "start it: tray.bat"
+
+# What `setup.bat -MigrateFrom` and `-InPlace` verify and carry over (docs/install.md, Migrate). The port is
+# the one this PC's config sets, else the top-level `port`. A PC with a certificate serves HTTPS under its
+# tailnet name, never 127.0.0.1, so the loopback check accepts any certificate; one without serves plain
+# HTTP, which verify asks second.
+[install.endpoint]
+scheme       = "https"
+version_path = "/api/version"
+self_signed  = true
+port_config  = "config/config.json"
+
+# Only this PC's own files: settings, secrets, team avatars and the certificate pair. The database and the
+# usage log live in the `task-os` runtime-data folder, which stays where it is; the mirror, the logs and
+# .venv are rebuilt. `start` is the plain tray start, not the default `--restart`: the old copy is stopped
+# first, and `--restart` needs a tray helper that a PC without the author's other repos does not have.
+[install.migrate]
+copy    = ["config/config.json", "config/app_password.json", "config/sharepoint-mapping.json", ".env", "data/avatars", "webapp/certificates"]
+secrets = ["config/config.json", "config/app_password.json", ".env", "webapp/certificates/key.pem"]
+shared  = ["task-os"]
+start   = ["tray.bat"]
 
 [static_ratchet]
 enabled  = true
@@ -380,6 +404,13 @@ path       = "src/poller.py"
 function   = "Poller._run"
 interval_s = 60
 why        = "issue sync and email capture land work in the Inbox while nobody is viewing; the interval is a setting in minutes, one at the least"
+
+# [install_standard_ratchet] -- scripts/install_standard_ratchet.py fails when an installer module is missing,
+# undeclared or behind the scaffold's, [install.migrate] does not parse, or docs/install.md lacks its Install,
+# Update or Migrate section. Exit 3 fails the gate. Mechanism: project-scaffolding docs/install-standard-ratchet.md.
+[install_standard_ratchet]
+enabled  = true
+baseline = ".ratchets/install-standard.json"
 
 # [windows_only_ratchet] -- the scaffold's Windows-only-test stage. The gate
 # (scripts/verify-before-ship.ps1) runs scripts/windows_only_ratchet.py, which fails when a test
@@ -587,6 +618,9 @@ path = ".ratchets/request-budget.json"
 [[e2e.rule]]
 tier = "none"
 path = ".ratchets/windows-only.json"
+[[e2e.rule]]
+tier = "none"
+path = ".ratchets/install-standard.json"
 [[e2e.rule]]
 tier = "none"
 path = ".ratchets/comment.json"
