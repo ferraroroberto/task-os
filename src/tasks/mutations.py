@@ -557,7 +557,7 @@ def capture_task(
     """Land a task from a capture source, once → ``(task, "created" | "unchanged")`` or ``(None, "dismissed")``.
 
     The rule behind every inbound channel: flagged emails polled from the
-    archiver's index, a WhatsApp message the radar marks, anything later. It is
+    archiver's index, a message another local app marks, anything later. It is
     :func:`import_task`'s one-way twin — an import *reconciles* (a changed
     source field lands on the task), a capture only ever **lands**:
 

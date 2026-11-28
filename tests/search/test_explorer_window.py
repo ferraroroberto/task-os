@@ -56,9 +56,9 @@ def fake() -> Iterator[FakeFolderExplorer]:
 
 
 def test_a_front_window_gives_its_folder(make_client: Callable[..., TestClient], fake: FakeFolderExplorer) -> None:
-    fake.explorer = ("ok", "D:\\Work\\Plans")
+    fake.explorer = ("ok", "C:\\Users\\me\\Plans")
     r = make_client(folder_explorer_url=fake.url).post(PATH)
-    assert r.status_code == 200 and r.json() == {"path": "D:\\Work\\Plans"}
+    assert r.status_code == 200 and r.json() == {"path": "C:\\Users\\me\\Plans"}
     assert "/api/v1/explorer/folder" in fake.requests
 
 
@@ -92,7 +92,7 @@ def test_no_folder_explorer_configured(make_client: Callable[..., TestClient]) -
 def test_a_machine_that_is_not_the_pc_never_reaches_the_window(
     make_client: Callable[..., TestClient], fake: FakeFolderExplorer,
 ) -> None:
-    fake.explorer = ("ok", "D:\\Work\\Plans")
+    fake.explorer = ("ok", "C:\\Users\\me\\Plans")
     client = make_client(folder_explorer_url=fake.url, host=("203.0.113.9", 50000), token=TOKEN)
     auth = {"Authorization": f"Bearer {TOKEN}"}
     r = client.post(PATH, headers=auth)

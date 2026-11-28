@@ -586,13 +586,13 @@ def test_done_window_over_http_orders_newest_first(seeded: TestClient) -> None:
 
 
 def test_external_id_makes_the_create_idempotent(client: TestClient) -> None:
-    """#98's WhatsApp half: whatsapp-radar POSTs a message id, so a retry after
+    """#98's WhatsApp half: a capture source POSTs a message id, so a retry after
     a timeout must return the same task rather than making a second one."""
     body = {
         "title": "Bring the forms on Friday",
         "description": "From WhatsApp: a parent",
         "external_id": "wa:msg-4471",
-        "actor": "whatsapp-radar",
+        "actor": "capture-source",
     }
     first = client.post("/api/tasks", json=body)
     assert first.status_code == 201
@@ -600,7 +600,7 @@ def test_external_id_makes_the_create_idempotent(client: TestClient) -> None:
     # Inbox, and load-bearing since #148: the *create* default is now "todo",
     # so a capture that inherited it would silently stop filling the tray it
     # exists for. `capture_task` names inbox itself; this is what proves it.
-    assert task["status"] == "inbox" and task["created_by"] == "whatsapp-radar"
+    assert task["status"] == "inbox" and task["created_by"] == "capture-source"
 
     replay = client.post("/api/tasks", json=body)
     assert replay.status_code == 200                       # 200, not a second 201

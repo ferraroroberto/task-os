@@ -3,7 +3,7 @@
   "port": 8448,
   "your_name": "",
   "server": "hypercorn",
-  "issues":  { "provider": "github", "owner": "ferraroroberto", "assignee": "@me", "sync_minutes": 10, "host": "" },
+  "issues":  { "provider": "github", "owner": "", "assignee": "@me", "sync_minutes": 10, "host": "" },
   "placeholders": { "onedrive": "E:/onedrive", "user": "sam", "sharepoint": {} },
   "web_roots": {},
   "mirror":  { "dir": "{onedrive}/task-os/mirror", "backup_dir": "{onedrive}/task-os/backup" },

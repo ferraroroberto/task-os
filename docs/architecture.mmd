@@ -11,7 +11,7 @@ flowchart LR
     timeimp["scripts/import_time_prototype.py (#457)<br/>the time prototype's export → one-time import<br/>idempotent on source_id · duration only, no invented range<br/>unknown person / category → exit 2, nothing written"]
     editor["editor · grep · LLM<br/>(reads & edits the .md files)"]
     forge["GitHub (via gh CLI) · GitLab (via glab api)<br/>issues assigned to me"]
-    radar["whatsapp-radar · src/task_os/client.py<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
+    capture_source["external capture source (another local app)<br/>marked message → POST /api/tasks<br/>(external_id = message id, bearer token)"]
     opener["per-PC opener · assets/opener/opener.ps1 → opener.cmd<br/>HKCU taskos:// scheme, launcher shape (install.txt · install_opener.py)<br/>{onedrive} %OneDrive% · {user} · opener.env → Explorer<br/>resume?session=… → ~/.claude/projects → claude --resume (#77)"]
   end
 
@@ -90,7 +90,7 @@ flowchart LR
   subgraph files["Synced folder · config.mirror"]
     mdfiles["mirror.dir/&lt;id&gt;-&lt;slug&gt;.md<br/>frontmatter · Description · Comments · Log"]
     bakfiles["backup_dir/tasks-YYYYMMDD.db"]
-    roots["this PC's synced folders<br/>({onedrive}/Documentos …)"]
+    roots["this PC's synced folders<br/>({onedrive}/…)"]
     feapi["folder-explorer · :8453<br/>/api/v1/search/folders · emails · status<br/>/api/v1/mail/flagged (capture)<br/>search.folder_explorer_url"]
   end
 
@@ -169,7 +169,7 @@ flowchart LR
   issues -->|"gh / glab subprocess"| forge
   issync -->|"create_task · update_task(actor=sync)<br/>set_issue_ref · touch_issue_ref"| repo
   cli -->|"issues sync · issue create (app down)"| issync
-  radar -->|"bearer token"| authmw
+  capture_source -->|"bearer token"| authmw
   pwa -->|fetch| capturer
   capturer --> capture
   pwa -->|"static/voice.js: click-toggle mic → 16 kHz mono WAV → POST<br/>(re-posts the growing take every partial_interval_seconds)"| voicer

@@ -76,7 +76,7 @@ const CARD_HTML = `
         </div>
       </section>
       <section class="settings-sheet-section" id="captureCard" data-sheet="capture" data-surface="settings.capture" hidden>
-        <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over folder-explorer's flagged-mail list (<code>search.folder_explorer_url</code>) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages you mark in the radar arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
+        <p class="card-meta">Flag an email in Outlook and archive it as usual: the next pass over folder-explorer's flagged-mail list (<code>search.folder_explorer_url</code>) lands it in Inbox with the <code>.msg</code> attached. WhatsApp messages marked in an external capture source arrive the same way. Clearing a flag later never removes the task — a captured task is yours.</p>
         <dl class="status-rows" id="captureStatus" aria-live="polite">
           <div class="status-row"><dt>Flagged emails</dt><dd id="statusCapture" class="muted">Loading…</dd></div>
           <div class="status-row"><dt>Last run</dt><dd id="statusCaptureRun" class="muted">–</dd></div>

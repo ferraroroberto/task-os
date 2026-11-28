@@ -48,8 +48,8 @@ def _config(root: Path) -> tuple[dict[str, Any] | None, str]:
     return data, ""
 
 
-#: Keys whose sample value is the author's own (an account, a person, a synced folder): on another PC each needs a
-#: decision before the first start, since Issue sync and the mirror act on them within seconds.
+#: Keys whose sample value is a stand-in (a blank account, an example person, a synced folder): on another PC each
+#: needs a decision before the first start, since Issue sync and the mirror act on them within seconds.
 PERSONAL_KEYS = (
     ("issues", "owner"), ("placeholders", "onedrive"), ("placeholders", "user"), ("mirror", "dir"),
     ("mirror", "backup_dir"), ("team", "people"), ("time", "people"),

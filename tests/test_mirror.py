@@ -685,7 +685,7 @@ def test_committed_sample_never_enables_mirror_or_backup(monkeypatch: pytest.Mon
 
     cfg = load_config(CONFIG_SAMPLE_PATH)
     assert cfg.mirror.dir == "" and cfg.mirror.backup_dir == ""
-    assert cfg.placeholders.get("onedrive") and cfg.issues.owner  # the rest of the sample still loads
+    assert cfg.placeholders.get("onedrive") and cfg.issues.provider == "github"  # the rest of the sample still loads
     monkeypatch.setenv("TASKOS_CONFIG_PATH", str(CONFIG_SAMPLE_PATH))
     assert Mirror(load_config()).reason == "mirror.dir not configured"
 

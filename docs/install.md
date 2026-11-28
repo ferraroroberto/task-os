@@ -23,7 +23,7 @@ cd <folder>
 4. creates `config/config.json` and `config/sharepoint-mapping.json` from their `*.sample.json` when they are missing;
 5. ends with two lists: the required items, each `ok`, `missing` or `unknown`, and the optional features, each `available`, `off` or `unknown` with what it unlocks. Setup has succeeded when it ends with `Setup complete` and exits 0; an optional feature that is `off` never changes that.
 
-**Edit `config/config.json` before the first start.** The sample carries the author's account and synced folders, and issue sync and the mirror act on them within seconds of the first start. The checklist's *Config reviewed for this PC* item stays `unknown` until each such key holds a value of yours; `.venv\Scripts\python.exe -m src.install check config-reviewed` lists them. What to decide for each key: [Setup and migration](setup-and-migration.md#set-up-a-new-machine); every key: [Configuration](configuration.md).
+**Edit `config/config.json` before the first start.** The sample carries stand-in synced folders and a blank `issues.owner`: the mirror acts on the folders within seconds of the first start, and issue sync stays off until an owner is named. The checklist's *Config reviewed for this PC* item stays `unknown` until each such key holds a value of yours; `.venv\Scripts\python.exe -m src.install check config-reviewed` lists them. What to decide for each key: [Setup and migration](setup-and-migration.md#set-up-a-new-machine); every key: [Configuration](configuration.md).
 
 Then start it:
 
@@ -64,7 +64,7 @@ git pull --ff-only
 What `setup.bat` does to a PC that already has its settings:
 
 - `config/config.json`: **every value it holds stays as it is.** A key the sample has and the file lacks is added only when the app runs exactly the same with it as without it, and only after the file is copied to `config/backups/config.<date>-<time>.json`. `setup.bat` shows only that the dependency step ran; `.venv\Scripts\python.exe -m src.install apply -WhatIf` lists the key names it would add and hold back (never a value) before you run it.
-- **Keys whose absence means something are held back** and listed: no `time.people` means the implicit owner, no `mirror` block means no mirror, and the sample's `issues.owner` or `placeholders.onedrive` belong to someone else. Add those by hand if you want them. This is why the toolbox installer's own top-up, which adds every missing key, is not used for this file.
+- **Keys whose absence means something are held back** and listed: no `time.people` means the implicit owner, no `mirror` block means no mirror, and the sample's `placeholders.onedrive` is a stand-in that may not be yours. Add those by hand if you want them. This is why the toolbox installer's own top-up, which adds every missing key, is not used for this file.
 - `config/sharepoint-mapping.json` (read only by the one-shot import) is the owner's own list: created when missing, never rewritten.
 - A config that is not valid JSON is left untouched and reported; the run exits 1 so you notice. Fix the JSON, then run `setup.bat` again.
 

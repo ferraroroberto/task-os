@@ -22,11 +22,11 @@ cd <checkout>
 
 `setup.bat` creates the `.venv`, installs the requirements, copies `config\config.json` from the sample when it is missing (an existing one keeps every value) and registers the folder opener when this user has none. It ends with a checklist; its *config reviewed for this PC* line names the keys below that still hold the sample's values. Details: [Install and update](install.md).
 
-Edit `config\config.json` **before the first run** (the keys are in [Configuration](configuration.md)). The sample carries the author's values, so each of these needs a decision on this machine:
+Edit `config\config.json` **before the first run** (the keys are in [Configuration](configuration.md)). The sample carries stand-in values, so each of these needs a decision on this machine:
 
 - `port`, `your_name`.
 - `placeholders` (what `{onedrive}` and friends expand to here), `mirror.dir` and `mirror.backup_dir`. The sample points them at a synced folder of the author's. The mirror and the daily backup switch on as soon as the folder's parent exists, so a folder that exists here and belongs to another install is written into on the first start.
-- `issues.owner`. The sample names the author's account, and Issue sync runs its first pass seconds after the first start: with `gh` or `glab` logged in, it turns the open issues it can see for that owner into tasks. Set your own account or group, or switch Issue sync off (below).
+- `issues.owner`. The sample leaves it blank, so Issue sync stays off and says why. Set your own account or group to turn it on: with `gh` or `glab` logged in, the first pass runs seconds after the start and turns the open issues it can see for that owner into tasks.
 - Any service address (`search.folder_explorer_url`, `voice`, `enrich`, `ai.base_url`, `calendar.ics_url`) that is not on this machine.
 
 Without a `config.json` the app boots on the committed sample with the mirror and backup off, and Settings cannot save anything.
