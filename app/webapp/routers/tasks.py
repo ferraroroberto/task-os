@@ -334,7 +334,7 @@ def create_task(
 ) -> dict[str, Any]:
     """Create a task — idempotent when the body carries an ``external_id``.
 
-    A capture source (the email poller here, whatsapp-radar over HTTP) posts the
+    A capture source (the email poller here, an external one over HTTP) posts the
     source's own id; the first call creates (**201**), a replay gets the same
     task back **untouched** on **200**, so a retry after a timeout can never
     make a second Inbox task. A replay after that task was deleted is **410**

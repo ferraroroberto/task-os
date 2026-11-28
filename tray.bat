@@ -113,7 +113,7 @@ if not exist "%TRAY_PS%" if not defined WANT_RESTART goto :standalone_start
 if not exist "%TRAY_PS%" (
     echo ERROR: missing shared tray helper "%TRAY_PS%"
     echo        --restart needs it: install fleet-config and run its install.ps1, then retry.
-    echo        See ferraroroberto/fleet-config's README for details.
+    echo        See fleet-config's README for details.
     exit /b 1
 )
 

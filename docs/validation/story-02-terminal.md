@@ -32,15 +32,15 @@ PS> tasks show 2
 #2  Book appointment  (due 2026-09-01)
   in: Renew passport
   type task · status inbox · priority none · due 2026-09-01
-  created 2026-08-17T10:15:09+02:00 by Roberto Ferraro · updated 2026-08-17T10:15:09+02:00
+  created 2026-08-17T10:15:09+02:00 by Owner Name · updated 2026-08-17T10:15:09+02:00
   comments:
-    2026-08-17T10:15:09+02:00  Roberto Ferraro (cli): called the office
+    2026-08-17T10:15:09+02:00  Owner Name (cli): called the office
   activity:
-    2026-08-17T10:15:09+02:00  Roberto Ferraro  due: ∅ → 2026-09-01
-    2026-08-17T10:15:09+02:00  Roberto Ferraro  created: ∅ → Book appointment
+    2026-08-17T10:15:09+02:00  Owner Name  due: ∅ → 2026-09-01
+    2026-08-17T10:15:09+02:00  Owner Name  created: ∅ → Book appointment
 PS> tasks show 2 --json      (activity excerpt)
-[{"id":3,"task_id":2,"ts":"2026-08-17T10:15:09+02:00","actor":"Roberto Ferraro","field":"due","old_value":null,"new_value":"2026-09-01"},
- {"id":2,"task_id":2,"ts":"2026-08-17T10:15:09+02:00","actor":"Roberto Ferraro","field":"created","old_value":null,"new_value":"Book appointment"}]
+[{"id":3,"task_id":2,"ts":"2026-08-17T10:15:09+02:00","actor":"Owner Name","field":"due","old_value":null,"new_value":"2026-09-01"},
+ {"id":2,"task_id":2,"ts":"2026-08-17T10:15:09+02:00","actor":"Owner Name","field":"created","old_value":null,"new_value":"Book appointment"}]
 PS> tasks search office
 #2  Book appointment in Renew passport
     comment: called the [office]
@@ -65,12 +65,12 @@ PS> tasks --local show 2
 #2  Book appointment  (due 2026-09-01)
   in: Renew passport
   type task · status inbox · priority none · due 2026-09-01
-  created 2026-08-17T10:15:17+02:00 by Roberto Ferraro · updated 2026-08-17T10:15:18+02:00
+  created 2026-08-17T10:15:17+02:00 by Owner Name · updated 2026-08-17T10:15:18+02:00
   comments:
-    2026-08-17T10:15:17+02:00  Roberto Ferraro (cli): called the office
+    2026-08-17T10:15:17+02:00  Owner Name (cli): called the office
   activity:
-    2026-08-17T10:15:18+02:00  Roberto Ferraro  due: ∅ → 2026-09-01
-    2026-08-17T10:15:17+02:00  Roberto Ferraro  created: ∅ → Book appointment
+    2026-08-17T10:15:18+02:00  Owner Name  due: ∅ → 2026-09-01
+    2026-08-17T10:15:17+02:00  Owner Name  created: ∅ → Book appointment
 ```
 
 Observed = expected on both legs (2026-08-17 is a Monday, so `fri` → `2026-08-21`).

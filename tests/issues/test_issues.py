@@ -224,6 +224,19 @@ def test_issue_from_task_is_the_one_create_workflow(conn, fake: FakeProvider) ->
 # --------------------------------------------------------- service + provider
 
 
+def test_the_sample_config_names_no_owner_so_the_sync_stays_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh install must not pull someone else's issues: no default owner, and the sync says why it is off."""
+    from src.config import CONFIG_SAMPLE_PATH, IssuesConfig
+
+    monkeypatch.delenv(PROVIDER_ENV, raising=False)
+    config = load_config(CONFIG_SAMPLE_PATH)
+    assert config.issues.owner == "" and IssuesConfig().owner == ""
+    service = IssueSyncService(config)
+    assert not service.enabled and service.reason == "issues.owner is not set in config"
+    service.start()
+    assert service.run_now() is None and service.status()["running"] is False
+
+
 def test_service_not_configured_states(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = load_config()
     monkeypatch.setenv(PROVIDER_ENV, "none")
@@ -329,36 +342,36 @@ def gh(monkeypatch: pytest.MonkeyPatch):
 
 
 SEARCH_JSON = json.dumps([
-    {"number": 9, "title": "Step 8/13 — issues", "url": "https://github.com/ferraroroberto/task-os/issues/9",
+    {"number": 9, "title": "Step 8/13 — issues", "url": "https://github.com/example-owner/task-os/issues/9",
      "state": "open", "labels": [{"name": "enhancement", "color": "a2eeef"}, {"name": "step"}],
      "updatedAt": "2026-08-17T07:56:47Z", "body": "## Summary\n…",
-     "repository": {"name": "task-os", "nameWithOwner": "ferraroroberto/task-os"}},
-    {"number": 227, "title": "brand: icon", "url": "https://github.com/ferraroroberto/project-scaffolding/issues/227",
+     "repository": {"name": "task-os", "nameWithOwner": "example-owner/task-os"}},
+    {"number": 227, "title": "brand: icon", "url": "https://github.com/example-owner/project-scaffolding/issues/227",
      "state": "open", "labels": [], "updatedAt": "2026-08-17T07:00:00Z", "body": None,
-     "repository": {"name": "project-scaffolding", "nameWithOwner": "ferraroroberto/project-scaffolding"}},
+     "repository": {"name": "project-scaffolding", "nameWithOwner": "example-owner/project-scaffolding"}},
 ])
-VIEW_JSON = json.dumps({"number": 9, "title": "Step 8/13 — issues", "url": "https://github.com/ferraroroberto/task-os/issues/9",
+VIEW_JSON = json.dumps({"number": 9, "title": "Step 8/13 — issues", "url": "https://github.com/example-owner/task-os/issues/9",
                         "state": "CLOSED", "labels": [{"name": "enhancement"}], "updatedAt": "2026-08-18T09:00:00Z", "body": "done"})
 
 
 def test_github_provider_over_recorded_gh_json(gh) -> None:
-    p = GitHubProvider("ferraroroberto", "@me")
+    p = GitHubProvider("example-owner", "@me")
     assert p.is_configured() == (True, None)
     gh.answer(_Proc(stdout=SEARCH_JSON))
     issues = p.list_open_assigned()
-    assert gh.calls[0][:9] == ["gh", "search", "issues", "--assignee", "@me", "--state", "open", "--owner", "ferraroroberto"]
+    assert gh.calls[0][:9] == ["gh", "search", "issues", "--assignee", "@me", "--state", "open", "--owner", "example-owner"]
     assert "--json" in gh.calls[0] and "repository" in gh.calls[0][-1]
-    assert [i.ref for i in issues] == ["ferraroroberto/task-os#9", "ferraroroberto/project-scaffolding#227"]
+    assert [i.ref for i in issues] == ["example-owner/task-os#9", "example-owner/project-scaffolding#227"]
     assert issues[0].labels == ("enhancement", "step") and issues[0].state == "open" and issues[0].provider == "github"
     assert issues[1].body is None
     gh.answer(_Proc(stdout=VIEW_JSON))
-    got = p.get("ferraroroberto/task-os", 9)
-    assert gh.calls[1] == ["gh", "issue", "view", "9", "--repo", "ferraroroberto/task-os", "--json", "number,title,url,state,labels,updatedAt,body"]
-    assert got.state == "closed" and got.repo == "ferraroroberto/task-os" and got.labels == ("enhancement",)
+    got = p.get("example-owner/task-os", 9)
+    assert gh.calls[1] == ["gh", "issue", "view", "9", "--repo", "example-owner/task-os", "--json", "number,title,url,state,labels,updatedAt,body"]
+    assert got.state == "closed" and got.repo == "example-owner/task-os" and got.labels == ("enhancement",)
     # create: the URL on stdout → number → one read-back
-    gh.answer(_Proc(stdout="https://github.com/ferraroroberto/task-os/issues/31\n"), _Proc(stdout=VIEW_JSON.replace('"number": 9', '"number": 31').replace("issues/9", "issues/31")))
-    made = p.create("ferraroroberto/task-os", "New from a task", "body text")
-    assert gh.calls[2][:5] == ["gh", "issue", "create", "--repo", "ferraroroberto/task-os"]
+    gh.answer(_Proc(stdout="https://github.com/example-owner/task-os/issues/31\n"), _Proc(stdout=VIEW_JSON.replace('"number": 9', '"number": 31').replace("issues/9", "issues/31")))
+    made = p.create("example-owner/task-os", "New from a task", "body text")
+    assert gh.calls[2][:5] == ["gh", "issue", "create", "--repo", "example-owner/task-os"]
     assert gh.calls[2][gh.calls[2].index("--title") + 1] == "New from a task" and gh.calls[2][-2:] == ["--assignee", "@me"]
     assert made.number == 31 and made.url.endswith("/issues/31")
 
@@ -375,7 +388,7 @@ def test_github_provider_over_recorded_gh_json(gh) -> None:
     ],
 )
 def test_github_provider_names_the_failure(gh, answer: Any, code: str, needle: str) -> None:
-    p = GitHubProvider("ferraroroberto")
+    p = GitHubProvider("example-owner")
     gh.answer(answer)
     with pytest.raises(IssueProviderError) as exc:
         p.list_open_assigned()
@@ -384,7 +397,7 @@ def test_github_provider_names_the_failure(gh, answer: Any, code: str, needle: s
 
 def test_github_provider_not_configured_without_gh(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.issues.github.shutil.which", lambda _: None)
-    assert GitHubProvider("ferraroroberto").is_configured() == (False, "gh not on PATH — install the GitHub CLI")
+    assert GitHubProvider("example-owner").is_configured() == (False, "gh not on PATH — install the GitHub CLI")
 
 
 # ---------------------------------------------------------- routes + CLI

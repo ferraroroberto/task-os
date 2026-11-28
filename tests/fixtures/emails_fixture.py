@@ -99,7 +99,7 @@ EMAILS: list[tuple[str, str, str, str, str, str, str]] = [
      "Jordan Lee <jordan@example.com>", "me@example.com; sam@example.com", "2026-08-14T18:22:00",
      "Reminder: the enrolment forms are due Friday. The kitchen-table copy is signed."),
     ("mail/garden-bot", "2026-08-15 Sensor shipped.msg", "Your soil-moisture sensor has shipped",
-     "shop@example.shop", "me@example.com", "2026-08-15T13:30:00",
+     "shop@example.com", "me@example.com", "2026-08-15T13:30:00",
      "Order 4471: capacitive soil-moisture sensor, arriving in 3-5 days."),
 ]
 

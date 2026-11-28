@@ -31,7 +31,6 @@ default (status todo, priority none, recurrence none) — never silently dropped
 Token: ``NOTION_API_TOKEN`` from the OS env or the ``--env-file`` (default:
 this repo's ``.env``); the database id from ``--database-id`` or
 ``NOTION_TASKS_DB_ID`` (env / env-file). No private identifier lives here.
-REST plumbing (``api()``, token loading) follows the life-os journal script.
 """
 
 from __future__ import annotations

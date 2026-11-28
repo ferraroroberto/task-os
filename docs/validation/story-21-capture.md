@@ -2,7 +2,7 @@
 
 # Story 21 — Capture into the Inbox (#98)
 
-**Story.** Things that need action in other channels land in the Inbox with one gesture, instead of relying on you to remember and search for them. **Flag an email** in Outlook and archive it as usual: the poller reads the archiver's index — read-only, `search.email_db`, the same file search already reads — and the flagged mail becomes an Inbox task titled with its subject, described by sender · date · flag · preview, carrying the `.msg` on the existing opener chip. **Mark a WhatsApp message** in whatsapp-radar and its thin client POSTs `/api/tasks` with the message id; the same idempotency lands it in Inbox. Both are one-way: a replay creates nothing, and clearing the flag later never takes the task away — a captured task, once real, is yours. An install that cannot capture says so with the reason on the card, never a silent "nothing flagged".
+**Story.** Things that need action in other channels land in the Inbox with one gesture, instead of relying on you to remember and search for them. **Flag an email** in Outlook and archive it as usual: the poller reads the archiver's index — read-only, `search.email_db`, the same file search already reads — and the flagged mail becomes an Inbox task titled with its subject, described by sender · date · flag · preview, carrying the `.msg` on the existing opener chip. **Mark a WhatsApp message** in an external capture source and its thin client POSTs `/api/tasks` with the message id; the same idempotency lands it in Inbox. Both are one-way: a replay creates nothing, and clearing the flag later never takes the task away — a captured task, once real, is yours. An install that cannot capture says so with the reason on the card, never a silent "nothing flagged".
 
 ## Steps and expected
 
@@ -14,7 +14,7 @@
 | 4 | Open one drawer (dark) | Description = `From email: <sender> · <date>` + `Flag: Follow up` + the preview; **Links** carries the `.msg` on the mail-glyph chip, whose href is the `taskos://open?ref={onedrive}/…` the per-PC opener handles |
 | 5 | Check again | `{listed: 2, created: 0, unchanged: 2}` — flagging twice is not two tasks |
 | 6 | Clear every flag in the index, check again | `listed: 0`, and **both tasks are still there** — un-flagging never deletes |
-| 7 | The radar's own call: `POST /api/tasks` with `external_id`, then the identical replay | 201 with `status: inbox`, then **200** returning the same `id`; a replay whose title drifted still returns the original untouched. Inbox count 3, not 4 |
+| 7 | The capture source's own call: `POST /api/tasks` with `external_id`, then the identical replay | 201 with `status: inbox`, then **200** returning the same `id`; a replay whose title drifted still returns the original untouched. Inbox count 3, not 4 |
 | 8 | Phone (390×844) → Board | The captured items are ordinary Inbox rows on the one-column board — capture adds a source, not a new row type |
 | 9 | An index from an archiver that never recorded flags | Card reads `off`; the reason names the missing column — *"the email index has no flag_status column — this needs an email-archiver build that records the Outlook follow-up flag while scanning"*; "Check now" disabled; `POST /api/capture/email/run` answers 409 `capture_disabled` with that reason |
 
@@ -32,8 +32,8 @@
 ## What this story does **not** cover
 
 - **The archiver end of the contract.** `flag_status` / `flag_request` do not exist in `email-archiver`'s schema yet; this repo reads them and reports a precise not-configured reason until they do (step 9 is that state). The columns are that repo's own issue — until it ships, **the email half is proven only against the synthetic fixture, never against a real flagged `.msg`**.
-- **A real Outlook flag round-trip** — flagging in Outlook, archiving through the Stream Deck button, and watching the task appear. Owner's checklist.
-- **The radar end.** whatsapp-radar's `src/task_os/client.py` already posts `external_id` (their #307); step 7 walks that exact payload shape against this API, but not the radar UI that produces it.
+- **A real Outlook flag round-trip** — flagging in Outlook, archiving as usual, and watching the task appear. Owner's checklist.
+- **The capture source's end.** It already posts `external_id`; step 7 walks that exact payload shape against this API, but not the UI that produces it.
 
 ## Deliberate limits (from the issue)
 

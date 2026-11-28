@@ -9,57 +9,7 @@
 3. Re-run the same command → tasks created 0 · updated 0 · unchanged N; comments existing N; nothing changes.
 4. `tasks ls` / `tasks show` through the running app → the counts, a long comment thread intact and in order with dates, a task with a person shows the name, recurring cadences set.
 
-**Transcript — 2026-08-17 10:34–10:47 (+02:00), Windows, `scripts/import_notion.py` from the worktree against the live `data/tasks.db` (app on `:8448` running throughout; WAL).** Real data stayed off the repo: this record carries **counts only** — no titles, names, links or ids. The private screenshots / full transcript went to the issue, not here.
-
-*Step 1 — dry run (fetch + map + report, 215 pages, 575 API calls, ~3 min):*
-
-```
-Notion import — DRY RUN (nothing written)
-  pages      : 215
-  status     : todo 111 · done 104   (source: null 109 · Done 104 · not started 2)
-  priority   : none 150 · low 37 · medium 20 · high 8   (source: null 121 · low 37 · backlog 29 · medium 20 · high 8)
-  recurrence : none 194 · weekly 8 · quarterly 5 · monthly 4 · yearly 3 · daily 1
-               (source: null 194 · weekly 8 · three months 5 · monthly 4 · yearly 3 · daily 1)
-  due dates  : 182 set
-  links      : 134 pages with a link
-  body       : 52 pages with content
-  comments   : 281 on 69 pages (longest thread 95)
-  people     : 134 distinct in relations · 143 pages get a person · 0 extra relations → 'also linked' comments
-  notes      : unknown block 9 · empty title 2
-               unknown block: video
-  plan       : tasks create 215 · update 0 · unchanged 0 · comments add 281 (existing 0) · also-linked add 0
-```
-
-DB before: `schema_version 2`, tasks 0 · people 0 · comments 0 · links 0 · activity 0 — unchanged after the dry run (the log said "is at schema v2 (< 3) — plan assumes nothing imported yet"; no migration ran).
-
-*Step 2 — the real import (same command without `--dry-run`):*
-
-```
-ℹ️ db: schema_version 2 → 3
-Notion import — applied
-  … (same counts as the dry run) …
-  result     : tasks created 215 · updated 0 · unchanged 0 · comments added 281 (existing 0) · also-linked 0
-             · links 134 · people created 134 (linked 0)
-```
-
-DB after: `schema_version 3`, tasks 215 · people 134 · comments 281 · links 134 · activity 215 (all `actor = notion-import`, `field = imported` — one per task); 0 duplicate `external_id` in tasks or comments; 0 `done` tasks without `done_at`.
-
-*Step 3 — the second run:*
-
-```
-  result     : tasks created 0 · updated 0 · unchanged 215 · comments added 0 (existing 281) · also-linked 0 · links 0 · people created 0 (linked 0)
-```
-
-Table counts identical to the ones after step 2.
-
-*Step 4 — read back through the running app (`tasks … --json`, `[tasks] via http: http://127.0.0.1:8448`):*
-
-- `tasks ls --status all --json` → 215 tasks: status `todo 111 · done 104`; priority `none 150 · low 37 · medium 20 · high 8`; recurrence `weekly 8 · quarterly 5 · monthly 4 · yearly 3 · daily 1`; 143 with a `person`. `tasks ls --json` (open) → 111. `tasks people --json` → 134 people, 66 with open tasks.
-- `tasks show <longest thread>` → 95 comments, all `origin = notion`, timestamps ascending (first 2024-08, last 2026-08), local ISO with offset; exactly one activity row (`notion-import · imported`); status `todo`, priority `high`, recurrence `weekly`, one link.
-- `tasks show <a task with a person and a recurrence>` → the person's name present, `recurrence = yearly`, `created_at` from 2024 (the source's own timestamp), `external_id` set.
-- `GET /api/version` on the running instance → `schema_version: 3`.
-
-Observed = expected on every step. Two source pages have an empty title (imported as `(untitled)`, reported); nine `video` blocks degraded to their text (reported); no unmapped status / priority / recurrence values in the real data.
+**Walk — 2026-08-17, Windows, `scripts/import_notion.py` against a real database, app running throughout.** All four steps observed as expected: the dry run reported and wrote nothing, the real run migrated the schema and created every page as a task with its fields, comments and person, the second run changed nothing, and the CLI read the same totals back through the running app. Counts and content from that run are not recorded here.
 
 **Result — 2026-08-17: verified.**
 

@@ -67,7 +67,7 @@ After a successful import the file is **re-exported**, so it always converges to
 `src/backup.py` copies `data/tasks.db` to `<mirror.backup_dir>/tasks-YYYYMMDD.db` with SQLite's online backup API (a consistent snapshot while the app keeps writing under WAL), via a temp file + atomic rename, and keeps the **newest 30** dated copies. Two ways to run it:
 
 - **In-app (default):** the webapp runs it **daily at 03:00 local** while it is up, plus once at startup when today's copy is missing (a PC that was off at 03:00 still gets one). Status — last file, next run, last error — in `/api/status` and Settings; `POST /api/backup` runs one now.
-- **From a scheduler:** `tasks backup` does the same from the terminal (over HTTP when the app is up, else against the file directly) — put `E:\automation\task-os\tasks.bat backup` in Windows Task Scheduler / an app-launcher job if you would rather not depend on the app being up at 03:00; the pruning keeps both paths at 30 files.
+- **From a scheduler:** `tasks backup` does the same from the terminal (over HTTP when the app is up, else against the file directly) — put `<root>\task-os\tasks.bat backup` in Windows Task Scheduler / an app-launcher job if you would rather not depend on the app being up at 03:00; the pruning keeps both paths at 30 files.
 
 Point `mirror.backup_dir` at a synced folder (`{onedrive}/task-os/backup`); the database itself stays out of the sync client by design — only the mirror and the dated copies travel.
 

@@ -49,7 +49,7 @@ class IssuesConfig:
     ignores it)."""
 
     provider: str = "github"
-    owner: str = "ferraroroberto"
+    owner: str = ""
     assignee: str = "@me"
     sync_minutes: int = 10
     host: str = ""
