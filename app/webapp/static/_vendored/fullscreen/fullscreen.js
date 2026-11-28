@@ -39,7 +39,7 @@ function storageKey(app) {
 /**
  * Whether full screen is switched on for an app on this device.
  *
- * @param {string} app  the app's localStorage prefix (e.g. 'app-launcher').
+ * @param {string} app  the app's localStorage prefix (e.g. 'my-app').
  * @returns {boolean}
  */
 export function readFullscreen(app) {

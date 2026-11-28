@@ -12,12 +12,12 @@ boots its disposable instance is not.
 The opt-in flag means "I am choosing to act on the already-listening
 instance" — it does not mean "kill it". What "act" means is caller-owned and
 repo-specific: read-only assertions against the live instance (the
-app-launcher `LAUNCHER_E2E_LIVE` precedent — it has never meant kill), or,
+`<APP>_E2E_LIVE` precedent — it has never meant kill), or,
 only where a repo genuinely needs to reclaim the port, a restart performed
 through that repo's own *canonical* restart recipe (e.g. `tray.bat
 --restart`) — never a by-hand `taskkill`/port-kill. On several fleet repos the
-guarded port is a daily-driver process with live state (voice-transcriber's
-tray with live sessions + a whisper connection; app-launcher's Board), so a
+guarded port is a daily-driver process with live state (a tray with live
+sessions and a speech-to-text connection, or a work board), so a
 blanket kill is actively dangerous, and a by-hand kill also misses orphaned
 port holders — itself a cause of the ephemeral-port exhaustion this
 convention exists to prevent (#197). This module must never teach that shape.
