@@ -20,7 +20,7 @@ A managed Android phone runs the fleet's web apps in the work profile's Edge, wh
 3. Paste the row from `fullscreen.html` into a `settings-group` card in your Settings (next to the text-size control), and bind it with your localStorage prefix, the same one `text-size` uses:
    ```js
    import { bindFullscreen } from '/static/_vendored/fullscreen/fullscreen.js';
-   bindFullscreen(document.getElementById('fullscreenRow'), 'app-launcher');
+   bindFullscreen(document.getElementById('fullscreenRow'), 'my-app');
    ```
    Keep the row's `hidden` attribute, the `data-fullscreen-toggle` attribute on the switch and the `.fullscreen-armed` span; labels may be translated. The switch carries `data-track="settings.fullscreen"` like any other control.
 
