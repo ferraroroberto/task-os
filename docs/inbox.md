@@ -32,7 +32,7 @@ The flag is something the **archiver** records while scanning (`flag_status` 2 =
 
 A pass that cannot list creates nothing and leaves the last good result in place; the state, since when, and the last pass that listed are on `GET /api/status` under `capture.source`, and the card and `tasks mirror status` say it in words ("unreachable since …"). A change of state is logged once, and so is the recovery, not every poll. The gesture the capture is built for is *flag in Outlook, then archive as usual*: the index covers archived mail, so a flagged message you never archive is never seen.
 
-**WhatsApp messages.** whatsapp-radar owns its own data and its own UX; when you mark a message it POSTs `/api/tasks` with the message id as `external_id` and the bearer token. task-os just receives.
+**WhatsApp messages.** An external capture source owns its own data and its own UX; when you mark a message there it POSTs `/api/tasks` with the message id as `external_id` and the bearer token. task-os just receives.
 
 **Both dedupe on `external_id`**, and that is the whole contract: `POST /api/tasks` carrying one is idempotent — the first call creates (**201**), every replay returns that same task **untouched** on **200**, so a retry after a timeout cannot make a second Inbox task. The email side keys on `email:` + the `.msg` ref folded onto the placeholders (`email:{onedrive}/mail/house/…msg`) rather than the mail's row id in folder-explorer's index, which reshuffles if the index is ever rebuilt; a mail *moved* inside the archive changes its ref and so captures once more.
 

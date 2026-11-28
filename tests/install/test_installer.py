@@ -339,7 +339,7 @@ def test_a_check_answers_with_the_exit_code_the_installer_reads(checkout: Path,
     assert cli.check(checkout, "your-name") == 2  # no config yet: not established
     shutil.copy(SAMPLE, checkout / "config" / "config.json")
     assert cli.check(checkout, "your-name") == 1  # the sample's name is empty
-    assert cli.check(checkout, "config-reviewed") == 2  # the sample's values are the author's: never ok
+    assert cli.check(checkout, "config-reviewed") == 2  # the sample's stand-in values: never ok
     out = capsys.readouterr().out
     assert "[missing] your name" in out and "issues.owner" in out
     _write(checkout / "config" / "config.json", {"your_name": "Alex"})

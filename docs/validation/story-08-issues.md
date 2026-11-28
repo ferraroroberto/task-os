@@ -23,21 +23,13 @@
 | 5 drawer after Create issue: linked, code, open chip | [story-08-issues-6-desktop.png](../screenshots/story-08-issues-6-desktop.png) |
 | 6 Settings (dark): provider enabled, last sync counts | [story-08-issues-7-desktop.png](../screenshots/story-08-issues-7-desktop.png) |
 
-**Real-provider walk — 2026-08-17 (headed Chromium + the CLI, against a disposable instance of this build over a *scratch copy* of the real database, config `issues.provider = github`, `owner = ferraroroberto`, `gh` authenticated as the owner; screenshots kept off the repo — counts only, no titles)**
-
-| Step | Observed |
-| --- | --- |
-| `tasks issues sync` on a DB with 0 issue refs | `72 open issue(s) · 72 new` in 1.9 s (one `gh search issues` call) — 72 coding tasks in Inbox across 40 repos; Board Inbox count 1 → 73 |
-| `tasks issues sync` again | `73 open · 0 new` — nothing duplicated |
-| `tasks add "test: sync probe (auto-closed)"` → `tasks issue create 288 --repo ferraroroberto/task-os` | `gh issue create` opened **task-os#22** (assigned to the owner), the task became coding, `code task-os#22`, activity `issue ∅ → ferraroroberto/task-os#22`; the drawer's panel showed the chip, `open`, *last synced* |
-| ↻ from the drawer panel right after `gh issue close 22` | *73 open · nothing changed* — GitHub's **search index lags a close by ~30 s** (documented in the README); the task stayed inbox |
-| `tasks issues sync` ~45 s later | `72 open issue(s) · 1 closed · done: #288` — task done, activity `status inbox → done · sync` + `issue_state open → closed · sync` |
+**Real-provider walk — 2026-08-17 (headed Chromium + the CLI, against a disposable instance of this build over a *scratch copy* of a real database, config `issues.provider = github`, `gh` authenticated; screenshots and counts kept off the repo).** `tasks issues sync` landed the open assigned issues as coding tasks in Inbox and a second run duplicated nothing. A probe task became an issue with `tasks issue create` (the task turned coding, with its code and activity row); after `gh issue close` the first sync saw no change, because GitHub's **search index lags a close by ~30 s** (documented in the README), and a sync ~45 s later marked the task done with activity by `sync`.
 
 **Result — 2026-08-17: verified.**
 
 - [x] Automated: `verify-before-ship.ps1` green — byte-compile, ruff, the unit suite (incl. the 22 `test_issues` cases), the routed e2e (full tier: smoke + stories 01, 04, 05, 06, 08).
 - [x] On screen (fake provider): the story test's seven shots above, zero page errors.
-- [x] On screen (real provider): the headed walk in the table above — the owner's real open issues appeared as coding tasks in Inbox after one ↻, a probe issue created **from a task** with the real `gh issue create`, closed on GitHub, and marked done by the next sync with actor `sync`.
+- [x] On screen (real provider): the headed walk above — real open issues appeared as coding tasks in Inbox after one ↻, a probe issue created **from a task** with the real `gh issue create`, closed on GitHub, and marked done by the next sync with actor `sync`.
 - [x] Live app: not restarted from this worktree by design — the orchestrator restarts after the squash-merge; the live sync starts 10 s after that restart and creates the coding tasks in the real database then.
 - Not verified in this step: the 10-minute scheduler tick was not waited for (unit-tested with a short interval; the startup pass was observed); a reopened issue on the real forge (unit-tested against the fake only); the phone rendering of the issue panel (no phone-specific markup was added — the drawer sheet is the Step 4 one); GitLab (Step 11).
 

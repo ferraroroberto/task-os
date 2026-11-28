@@ -9,7 +9,7 @@ enabled / reason / last_run / last_result / last_error ride ``GET /api/status``
 under ``capture``, beside mirror, backup and folders, so the Settings pane and
 ``tasks status`` read the whole install in one call.
 
-The other inbound channel needs no route of its own — whatsapp-radar posts to
+The other inbound channel needs no route of its own — another local app posts to
 ``POST /api/tasks`` with an ``external_id`` and that route's own idempotency
 (``tasks_repo.capture_task``) is the entire contract.
 """

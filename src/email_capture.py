@@ -3,7 +3,7 @@
 The push half of cross-fleet capture: instead of remembering to search
 for the mail that needs action, you flag it in Outlook, archive it as usual,
 and the next pass lands it in Inbox with the ``.msg`` attached. The WhatsApp
-half needs nothing here — whatsapp-radar POSTs ``/api/tasks`` with an
+half needs nothing here — an external capture source POSTs ``/api/tasks`` with an
 ``external_id`` and the router's own idempotency (``tasks_repo.capture_task``)
 does the deduping.
 
@@ -69,7 +69,7 @@ logger = logging.getLogger(__name__)
 
 #: ``created_by`` / activity actor on everything this module lands. Deliberately
 #: not the issue sync's ``sync``: an activity row should say *which* channel
-#: brought the task in, and whatsapp-radar already posts as ``whatsapp-radar``.
+#: brought the task in, and a source posting over HTTP names itself in its own ``actor``.
 CAPTURE_ACTOR = "email-archiver"
 EXTERNAL_ID_PREFIX = "email:"
 INITIAL_DELAY_S = 15.0
